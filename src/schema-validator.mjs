@@ -34,6 +34,7 @@ export function assertSupportedSchema(schema) {
     if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
     if (key === '$schema' || key === '$id' || key === 'pattern') {
       if (typeof value !== 'string') throw new Error(`Schema ${key} must be a string.`);
+      if (key === 'pattern') { try { new RegExp(value); } catch { throw new Error('Schema pattern must be a valid regular expression.'); } }
     } else if (key === 'type') {
       const types = Array.isArray(value) ? value : [value];
       if (!types.length || types.some((item) => typeof item !== 'string' || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error('Schema type must name supported unique types.');
@@ -60,6 +61,7 @@ export function assertSupportedSchema(schema) {
       if (isSchemaObject(value)) assertSupportedSchema(value);
     }
   }
+  if (typeof schema.minimum === 'number' && typeof schema.maximum === 'number' && schema.minimum > schema.maximum) throw new Error('Schema minimum must not exceed maximum.');
 }
 
 /** @param {unknown} value @param {unknown} schema */
@@ -165,9 +167,11 @@ export function validateUniqueStableIds(artifact) {
   const object = /** @type {Record<string, unknown>} */ (artifact);
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [];
-  for (const { path, id } of STABLE_ID_COLLECTIONS) {
+  const seenByNamespace = new Map();
+  for (const { path, id, namespace } of /** @type {any[]} */ (STABLE_ID_COLLECTIONS)) {
+    const seen = seenByNamespace.get(namespace ?? path.join('/')) ?? new Set();
+    seenByNamespace.set(namespace ?? path.join('/'), seen);
     for (const { items, pointer } of findCollections(object, path)) {
-    const seen = new Set();
     items.forEach((item, index) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return;
       const value = /** @type {Record<string, unknown>} */ (item)[id];

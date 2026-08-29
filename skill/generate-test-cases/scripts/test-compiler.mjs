@@ -190,15 +190,18 @@ var STABLE_ID_COLLECTIONS = Object.freeze([
   Object.freeze({ path: Object.freeze(["claims"]), id: "claim_id" }),
   Object.freeze({ path: Object.freeze(["fact_ledger"]), id: "fact_id" }),
   Object.freeze({ path: Object.freeze(["views"]), id: "view_id" }),
-  Object.freeze({ path: Object.freeze(["views", "*", "elements"]), id: "element_id" }),
+  Object.freeze({ path: Object.freeze(["views", "*", "elements"]), id: "element_id", namespace: "elements" }),
   Object.freeze({ path: Object.freeze(["views", "*", "relations"]), id: "relation_id" }),
   Object.freeze({ path: Object.freeze(["interaction_candidates"]), id: "candidate_id" }),
   Object.freeze({ path: Object.freeze(["obligations"]), id: "obligation_id" }),
-  Object.freeze({ path: Object.freeze(["cases"]), id: "case_id" }),
+  Object.freeze({ path: Object.freeze(["cases"]), id: "case_id", namespace: "cases" }),
+  Object.freeze({ path: Object.freeze(["cases", "*", "steps"]), id: "step_id", namespace: "steps" }),
+  Object.freeze({ path: Object.freeze(["cases", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "expectations" }),
   Object.freeze({ path: Object.freeze(["exploratory_candidates"]), id: "exploratory_id" }),
   Object.freeze({ path: Object.freeze(["root_issue_dispositions"]), id: "root_issue_id" }),
-  Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id" }),
-  Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id" }),
+  Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id", namespace: "bundle_cases" }),
+  Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id", namespace: "bundle_cases" }),
+  Object.freeze({ path: Object.freeze(["blockers"]), id: "root_issue_id", namespace: "reply_root_issues" }),
   Object.freeze({ path: Object.freeze(["blocked"]), id: "obligation_id" }),
   Object.freeze({ path: Object.freeze(["exploratory"]), id: "exploratory_id" })
 ]);
@@ -240,6 +243,13 @@ function assertSupportedSchema(schema) {
     if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
     if (key === "$schema" || key === "$id" || key === "pattern") {
       if (typeof value !== "string") throw new Error(`Schema ${key} must be a string.`);
+      if (key === "pattern") {
+        try {
+          new RegExp(value);
+        } catch {
+          throw new Error("Schema pattern must be a valid regular expression.");
+        }
+      }
     } else if (key === "type") {
       const types = Array.isArray(value) ? value : [value];
       if (!types.length || types.some((item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
@@ -266,6 +276,7 @@ function assertSupportedSchema(schema) {
       if (isSchemaObject(value)) assertSupportedSchema(value);
     }
   }
+  if (typeof schema.minimum === "number" && typeof schema.maximum === "number" && schema.minimum > schema.maximum) throw new Error("Schema minimum must not exceed maximum.");
 }
 
 // src/schema-registry.mjs
@@ -294,7 +305,7 @@ var schemaDirectory = path2.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "d30fe95f42e217b4529511781a5518b1f243bca0754d613074c4a0ca111a48fb" : void 0;
+var embeddedManifestDigest = true ? "13b72a279c91c4f403e6e315a0c69a4e6d64437ae679d971ac7db7b93f58e9aa" : void 0;
 var embeddedSchemaVersion = true ? "1.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.1.0" : void 0;
 var emptyRunReply = Object.freeze({

@@ -138,6 +138,8 @@ test('schema grammar rejects malformed supported keyword values before validatio
   assert.throws(() => assertSupportedSchema({ properties: [] }), /properties/);
   assert.throws(() => assertSupportedSchema({ uniqueItems: 'yes' }), /uniqueItems/);
   assert.throws(() => assertSupportedSchema({ additionalProperties: 1 }), /additionalProperties/);
+  assert.throws(() => assertSupportedSchema({ pattern: '[' }), /regular expression/);
+  assert.throws(() => assertSupportedSchema({ minimum: 2, maximum: 1 }), /minimum/);
 });
 
 test('schema validates closed evidence claim forms and source policy metadata', () => {
@@ -152,7 +154,7 @@ test('schema validates closed evidence claim forms and source policy metadata', 
     claims: [
       { claim_id: 'claim_direct', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'Cap total.', source_locator_ids: ['locator_a'], source_id: 'source_a' },
       { claim_id: 'claim_decision', claim_form: 'decision-record', level: 'E1', kind: 'assumption', scope: 'checkout', value: 'Use USD.', decision_id: 'decision_a', authority: 'product-owner', source_locator_ids: ['locator_a'] },
-      { claim_id: 'claim_derived', claim_form: 'derived', level: 'E2', kind: 'test-data', scope: 'checkout', value: '10', derivation_kind: 'boundary', derivation_target: 'test-data', parent_claim_ids: ['claim_direct'], source_locator_ids: ['locator_a'], parameters: { boundary: 'upper', input_domain: 'amount' }, boundary_input: { lower: 1, upper: 10, inclusive: true } }
+      { claim_id: 'claim_derived', claim_form: 'derived', level: 'E2', kind: 'test-data', scope: 'checkout', value: '10', derivation_kind: 'boundary-representative', derivation_target: 'test-data', parent_claim_ids: ['claim_direct'], source_locator_ids: ['locator_a'], parameters: {}, rule_input: { lower: 1, upper: 10 } }
     ],
     fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_direct', status: 'active', source_claim_ids: ['claim_direct'] }]
   };
@@ -160,6 +162,23 @@ test('schema validates closed evidence claim forms and source policy metadata', 
   assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
   assert.deepEqual(validateAgainstSchema(claims, claimsSchema), []);
   assert.equal(validateAgainstSchema({ ...claims, claims: [{ ...claims.claims[0], unknown: true }] }, claimsSchema).some((item) => item.code === 'ADDITIONAL_PROPERTY'), true);
+});
+
+test('evidence schema admits every E2 derivation shape and defers semantic matrix errors', () => {
+  /** @param {string} derivation_kind @param {string} derivation_target @param {Record<string, unknown>} rule_input */
+  const derived = (derivation_kind, derivation_target, rule_input) => ({ claim_id: `claim_${derivation_kind}_${derivation_target}`, claim_form: 'derived', level: 'E2', kind: 'test-data', scope: 'checkout', value: 'derived', source_locator_ids: ['locator_a'], derivation_kind, derivation_target, parent_claim_ids: ['claim_e1'], parameters: {}, rule_input });
+  const artifact = { schema_version: '1.0.0', source_revision: 0, claims: [
+    derived('formula', 'test-data', { formula: 'x+1' }), derived('formula', 'expected-value', { formula: 'x+1' }),
+    derived('decision-table-instance', 'expected-value', { outcome: 'approved' }), derived('decision-table-instance', 'model-element', {}),
+    derived('boundary-representative', 'test-data', { lower: 1, upper: 2 }), derived('enumeration-complement', 'test-data', { closed_world: true }), derived('enumeration-complement', 'model-element', { closed_world: false }),
+    derived('graph-reachability', 'model-element', { from: 'a', to: 'b' }), derived('boundary-representative', 'expected-value', {})
+  ], fact_ledger: [] };
+  assert.deepEqual(validateAgainstSchema(artifact, claimsSchema), []);
+});
+
+test('behavior views allow model-only support pending Task 4 semantic validation', () => {
+  const artifact = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_a', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ relation_id: 'relation_a', kind: 'sequence', from_element_id: 'node_a', to_element_id: 'node_a', sequence: 0, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], interaction_candidates: [] };
+  assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), []);
 });
 
 test('schema validates structured behavior forms and rejects their unknown properties', () => {
@@ -225,6 +244,11 @@ test('schema detects nested rule, candidate, and exploratory duplicate definitio
   assert.deepEqual(validateUniqueStableIds(artifact).map((item) => item.path), [
     '/source_policy/rules/1/rule_id', '/interaction_candidates/1/candidate_id', '/exploratory_candidates/1/exploratory_id'
   ]);
+});
+
+test('artifact-global identity namespaces reject duplicate element and bundle case IDs', () => {
+  const artifact = { views: [{ elements: [{ element_id: 'element_a' }], relations: [] }, { elements: [{ element_id: 'element_a' }], relations: [] }], grounded: [{ case_id: 'case_a' }], conditional: [{ case_id: 'case_a' }] };
+  assert.deepEqual(validateUniqueStableIds(artifact).map((item) => item.path), ['/views/1/elements/0/element_id', '/conditional/0/case_id']);
 });
 
 test('all eight schemas accept hand-derived representative nested fixtures', async () => {
