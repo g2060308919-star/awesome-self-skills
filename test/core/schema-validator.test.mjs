@@ -21,6 +21,8 @@ const claimsSchema = JSON.parse(await readFile(path.join(
 const schemaDirectory = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas');
 const behaviorViewsSchema = JSON.parse(await readFile(path.join(schemaDirectory, 'behavior-views.schema.json'), 'utf8'));
 const replySchema = JSON.parse(await readFile(path.join(schemaDirectory, 'reply.schema.json'), 'utf8'));
+const caseDraftsSchema = JSON.parse(await readFile(path.join(schemaDirectory, 'case-drafts.schema.json'), 'utf8'));
+const testBundleSchema = JSON.parse(await readFile(path.join(schemaDirectory, 'test-bundle.schema.json'), 'utf8'));
 
 /** @returns {any} */
 function minimumSourcePack() {
@@ -43,6 +45,62 @@ function minimumClaims() {
     source_revision: 0,
     claims: [],
     fact_ledger: []
+  };
+}
+
+/** @param {string} [caseId] @returns {any} */
+function completeCase(caseId = 'case_a') {
+  return {
+    case_id: caseId,
+    title: 'Save settings',
+    scope: 'checkout',
+    risk: 'medium',
+    role: { value: 'member', evidence_ref: 'claim_role', support_review: 'supported' },
+    fact_ids: ['fact_a'],
+    obligation_ids: ['obligation_a'],
+    source_claim_ids: ['claim_a'],
+    preconditions: [{ condition: 'Signed in', reachable_from: 'login', source_claim_ids: ['claim_a'], evidence_ref: 'claim_a', support_review: 'supported' }],
+    data: [
+      { name: 'name', value: 'Ada', provenance: { type: 'evidence', ref: 'claim_a' }, support_review: 'supported' },
+      { name: 'boundary', value: '10', provenance: { type: 'derivation', ref: 'claim_e2' }, support_review: 'supported' }
+    ],
+    steps: [{
+      step_id: 'step_save', action: 'Save', action_evidence_ref: 'claim_a', support_review: 'supported',
+      expectations: [
+        { expectation_id: 'expect_value', business_assertion: 'The save confirmation is visible.', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'ui', observation_target: 'toast', oracle: { type: 'value', expected_value: 'Saved', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' },
+        { expectation_id: 'expect_state', business_assertion: 'The profile enters saved state.', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'api', observation_target: 'profile.state', oracle: { type: 'state', expected_state: 'saved', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' },
+        { expectation_id: 'expect_event', business_assertion: 'A profile event is emitted.', preceding_action_id: 'step_save', observer: 'event-reader', observation_surface: 'event-stream', observation_target: 'profile.saved', oracle: { type: 'event', expected_event: 'profile.saved', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' },
+        { expectation_id: 'expect_effect', business_assertion: 'The audit entry is persisted.', preceding_action_id: 'step_save', observer: 'auditor', observation_surface: 'database', observation_target: 'audit_log', oracle: { type: 'side-effect', expected_side_effect: 'one new save entry', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' }
+      ]
+    }],
+    testability_profile: {
+      capabilities: [{ capability: 'browser', status: 'provided', provenance_ref: 'environment_browser' }],
+      observers: [{ observer: 'member', observation_target: 'toast', status: 'verified', provenance_ref: 'claim_a' }],
+      controls: [{ control: 'member-account', status: 'provided', provenance_ref: 'environment_account' }]
+    },
+    post_state: { state: 'saved', evidence_ref: 'claim_a', support_review: 'supported' },
+    cleanup: { required: false, no_cleanup_reason: 'The fixture is isolated.', no_cleanup_evidence_ref: 'claim_a', support_review: 'supported' },
+    evidence_refs: ['claim_a', 'claim_e2', 'claim_role'],
+    execution_signature: { role: 'member', precondition_state: 'signed-in', data_partition: 'valid-boundary', action_path: ['open', 'save'], oracle_refs: ['expect_effect', 'expect_event', 'expect_state', 'expect_value'], test_point_ids: ['obligation_a'] }
+  };
+}
+
+/** @returns {any} */
+function completeBundle() {
+  return {
+    schema_version: '1.0.0', source_revision: 0,
+    grounded: [completeCase('case_grounded')],
+    conditional: [{ ...completeCase('case_conditional'), temporary_assumption: { claim_id: 'claim_e1', invalidation_condition: 'The owner rejects the temporary rule.' } }],
+    blocked: [{ obligation_id: 'obligation_blocked', root_issue_id: 'root_oracle', reason: 'Missing Oracle', risk: 'high', recovery: { missing_type: 'oracle', required_material: 'Expected outcome', question: 'What result is expected?' } }],
+    exploratory: [{ exploratory_id: 'exploratory_retry', title: 'Explore retry behavior', scope: 'checkout', risk: 'low', reason: 'Risk hypothesis only.' }],
+    coverage: {
+      requirements: { total: 1, accounted: 1, entries: [{ fact_id: 'fact_a', status: 'covered' }] },
+      formal: { total: 1, covered: 1, entries: [{ obligation_id: 'obligation_a', status: 'grounded' }] },
+      executable: { total: 1, grounded: 1, entries: [{ obligation_id: 'obligation_a', case_id: 'case_grounded' }] },
+      expert_recall: { status: 'benchmark_only', limits: ['No hidden labels available.'] },
+      not_applicable: []
+    },
+    quality: { delivery_status: 'executable_subset_ready', compiler_version: '0.1.0', schema_version: '1.0.0', lineage: { source_digest: 'a'.repeat(64), case_draft_digest: 'b'.repeat(64) }, limits: ['Expert recall is benchmark-only.'] }
   };
 }
 
@@ -200,6 +258,28 @@ test('schema validates structured behavior forms and rejects their unknown prope
   assert.equal(validateAgainstSchema(artifact, behaviorViewsSchema).some((item) => item.path.endsWith('/unknown') && item.code === 'ADDITIONAL_PROPERTY'), true);
 });
 
+test('case draft schema carries every factual support and Testability gate', () => {
+  const artifact = {
+    schema_version: '1.0.0', source_revision: 0, cases: [completeCase()],
+    obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }],
+    exploratory_candidates: []
+  };
+  assert.deepEqual(validateAgainstSchema(artifact, caseDraftsSchema), []);
+
+  const missingCapabilityStatus = structuredClone(artifact);
+  delete missingCapabilityStatus.cases[0].testability_profile.capabilities[0].status;
+  assert.equal(validateAgainstSchema(missingCapabilityStatus, caseDraftsSchema).some((item) => item.path.endsWith('/status') && item.code === 'REQUIRED_FIELD_MISSING'), true);
+});
+
+test('test bundle stores complete structured Cases and rejects prose summaries', () => {
+  assert.deepEqual(validateAgainstSchema(completeBundle(), testBundleSchema), []);
+
+  const shallowBundle = completeBundle();
+  shallowBundle.grounded = [{ case_id: 'case_shallow', title: 'Summary only', obligation_ids: ['obligation_a'], markdown_sections: ['Unstructured prose'], evidence_refs: ['claim_a'] }];
+  assert.notDeepEqual(validateAgainstSchema(shallowBundle, testBundleSchema), []);
+  assert.equal(validateAgainstSchema(shallowBundle, testBundleSchema).some((item) => item.path.endsWith('/markdown_sections') && item.code === 'ADDITIONAL_PROPERTY'), true);
+});
+
 test('schema requires a non-empty complete clarification blocker ledger', () => {
   const shallow = { status: 'need_user_answers', diagnostics: [], blockers: [] };
   const complete = {
@@ -251,6 +331,16 @@ test('artifact-global identity namespaces reject duplicate element and bundle ca
   assert.deepEqual(validateUniqueStableIds(artifact).map((item) => item.path), ['/views/1/elements/0/element_id', '/conditional/0/case_id']);
 });
 
+test('step and expectation identities are local to a Case but unique within it', () => {
+  const first = completeCase('case_first');
+  const second = completeCase('case_second');
+  assert.deepEqual(validateUniqueStableIds({ cases: [first, second] }), []);
+
+  const duplicateExpectation = structuredClone(first.steps[0].expectations[0]);
+  first.steps.push({ step_id: 'step_verify', action: 'Verify', action_evidence_ref: 'claim_a', support_review: 'supported', expectations: [duplicateExpectation] });
+  assert.deepEqual(validateUniqueStableIds({ cases: [first] }).map((item) => item.path), ['/cases/0/steps/1/expectations/0/expectation_id']);
+});
+
 test('all eight schemas accept hand-derived representative nested fixtures', async () => {
   const schemas = Object.fromEntries(await Promise.all((/** @type {string[]} */ (await readdir(schemaDirectory)))
     .filter((/** @type {string} */ file) => file.endsWith('.schema.json'))
@@ -260,8 +350,8 @@ test('all eight schemas accept hand-derived representative nested fixtures', asy
     'evidence-claims.schema.json': { schema_version: '1.0.0', source_revision: 0, claims: [{ claim_id: 'claim_a', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'Save', source_locator_ids: ['locator_a'], source_id: 'source_a' }], fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_a', status: 'active', source_claim_ids: ['claim_a'] }] },
     'behavior-views.schema.json': { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [{ element_id: 'element_a', kind: 'flow-node', node_type: 'action', label: 'Save', source_claim_ids: ['claim_a'], model_refs: [] }], relations: [] }], interaction_matrix: [{ module_ids: ['checkout'], dimension: 'role', status: 'checked-no-signal' }], interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], formal_view_id: 'view_a' }] },
     'test-obligations.schema.json': { schema_version: '1.0.0', source_revision: 0, obligations: [{ obligation_id: 'obligation_a', kind: 'flow', risk: 'medium', scope: 'checkout', source_claim_ids: ['claim_a'], view_element_refs: ['element_a'], required_oracle_refs: ['oracle_a'], required_capabilities: ['browser'] }], fact_routes: [{ fact_id: 'fact_a', route_type: 'obligations', obligation_ids: ['obligation_a'] }], interaction_routes: [{ candidate_id: 'candidate_a', route_type: 'formal-view', formal_view_id: 'view_a' }] },
-    'case-drafts.schema.json': { schema_version: '1.0.0', source_revision: 0, cases: [{ case_id: 'case_a', title: 'Save settings', scope: 'checkout', risk: 'medium', role: 'member', fact_ids: ['fact_a'], obligation_ids: ['obligation_a'], preconditions: [{ condition: 'Signed in', reachable_from: 'login', source_claim_ids: ['claim_a'] }], data: [{ name: 'name', value: 'Ada', evidence_ref: 'claim_a', derivation_ref: 'claim_a' }], steps: [{ step_id: 'step_save', action: 'Save', expectations: [{ expectation_id: 'expect_a', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'ui', target: 'toast', expected_value: 'Saved', comparison: 'equals', evidence_ref: 'claim_a', support_review: 'supported' }] }], testability_profile: { capabilities: ['browser'], observers: ['ui'], controls: ['account'] }, post_state: { state: 'saved', evidence_ref: 'claim_a' }, cleanup: { required: false, no_cleanup_evidence_ref: 'claim_a' }, evidence_refs: ['claim_a'], execution_signature: { role: 'member', precondition_state: 'ready', data_partition: 'valid', action_path: ['open', 'save'], oracle_refs: ['oracle_a'], test_point_ids: ['obligation_a'] } }], obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }], exploratory_candidates: [{ exploratory_id: 'exploratory_a', title: 'Explore retry', scope: 'checkout', risk: 'low', source_claim_ids: ['claim_a'] }] },
-    'test-bundle.schema.json': { schema_version: '1.0.0', source_revision: 0, grounded: [{ case_id: 'case_a', title: 'Save settings', obligation_ids: ['obligation_a'], markdown_sections: ['Steps'], evidence_refs: ['claim_a'] }], conditional: [], blocked: [{ obligation_id: 'obligation_b', root_issue_id: 'root_a', reason: 'Missing oracle', risk: 'high', recovery: { missing_type: 'oracle', required_material: 'Expected outcome', question: 'What happens?' } }], exploratory: [{ exploratory_id: 'exploratory_a', title: 'Explore retry', scope: 'checkout', risk: 'low', reason: 'Risk observation' }], coverage: { requirements: { total: 1, accounted: 1, entries: [{ fact_id: 'fact_a', status: 'covered' }] }, formal: { total: 2, covered: 1, entries: [{ obligation_id: 'obligation_a', status: 'grounded' }] }, executable: { total: 1, grounded: 1, entries: [{ obligation_id: 'obligation_a', case_id: 'case_a' }] }, expert_recall: { status: 'benchmark_only', limits: ['No labels'] }, not_applicable: [] }, quality: { delivery_status: 'critical_gaps', compiler_version: '0.1.0', schema_version: '1.0.0', lineage: { source_digest: 'a'.repeat(64), case_draft_digest: 'b'.repeat(64) }, limits: ['Missing oracle'] } },
+    'case-drafts.schema.json': { schema_version: '1.0.0', source_revision: 0, cases: [completeCase()], obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }], exploratory_candidates: [{ exploratory_id: 'exploratory_a', title: 'Explore retry', scope: 'checkout', risk: 'low', source_claim_ids: ['claim_a'] }] },
+    'test-bundle.schema.json': completeBundle(),
     'checkpoint.schema.json': { input_digest: 'a'.repeat(64), source_revision: 0, stage: 'source_pack', compiler_version: '0.1.0', schema_version: '1.0.0', accepted_artifact_digests: { source_pack: 'a'.repeat(64) }, clarification_event_seq: 1, asked_root_issue_ids: ['root_a'], root_issue_dispositions: [{ root_issue_id: 'root_a', status: 'asked' }], last_question_set_digest: 'b'.repeat(64), clarification_stop: { reason: 'converged', source_revision: 0 } },
     'reply.schema.json': { status: 'need_artifact', stage: 'source_pack', schema_ref: 'source-pack.schema.json', scope: { source_revision: 0 }, diagnostics: [{ category: 'schema', code: 'EXAMPLE', message: 'Example diagnostic', path: '/sources/0' }] }
   };

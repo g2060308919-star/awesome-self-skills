@@ -28,6 +28,31 @@ function runCompiler(runDirectory, compilerPath = runnerPath) {
   });
 }
 
+/** @param {(schema: any) => void} mutate */
+async function runWithDigestCorrectSchemaMutation(mutate) {
+  const temporarySkill = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-skill-'));
+  const temporaryScripts = path.join(temporarySkill, 'scripts');
+  const temporaryRunner = path.join(temporaryScripts, 'test-compiler.mjs');
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
+  try {
+    await mkdir(temporaryScripts, { recursive: true });
+    await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
+    const schemaPath = path.join(temporaryScripts, 'schemas/source-pack.schema.json');
+    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+    mutate(schema);
+    await writeFile(schemaPath, `${canonicalStringify(schema)}\n`);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.schemas.find((/** @type {any} */ entry) => entry.file === 'source-pack.schema.json').digest = digest(schema);
+    manifest.digest = digest({ compiler_version: manifest.compiler_version, schema_version: manifest.schema_version, schemas: manifest.schemas });
+    await writeFile(path.join(temporaryScripts, 'schema-manifest.json'), `${canonicalStringify(manifest)}\n`);
+    await writeFile(temporaryRunner, (await readFile(runnerPath, 'utf8')).replace(/"[a-f0-9]{64}"/, JSON.stringify(manifest.digest)));
+    return await runCompiler(runDirectory, temporaryRunner);
+  } finally {
+    await rm(temporarySkill, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+}
+
 test('schema registry loads every versioned schema from its manifest', async () => {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const registry = await loadSchemaRegistry(schemaDirectory, manifest.digest);
@@ -157,4 +182,21 @@ test('installed runner rejects a supported-digest schema with malformed keyword 
     await rm(temporarySkill, { recursive: true, force: true });
     await rm(runDirectory, { recursive: true, force: true });
   }
+});
+
+test('installed runner rejects a digest-correct schema with an invalid regular expression', async () => {
+  const result = await runWithDigestCorrectSchemaMutation((schema) => { schema.properties.run_scope.pattern = '['; });
+  const reply = JSON.parse(result.stdout);
+  assert.equal(reply.status, 'fatal');
+  assert.equal(reply.diagnostics[0].code, 'SCHEMA_INTEGRITY_MISMATCH');
+});
+
+test('installed runner rejects a digest-correct schema with contradictory numeric bounds', async () => {
+  const result = await runWithDigestCorrectSchemaMutation((schema) => {
+    schema.properties.source_revision.minimum = 2;
+    schema.properties.source_revision.maximum = 1;
+  });
+  const reply = JSON.parse(result.stdout);
+  assert.equal(reply.status, 'fatal');
+  assert.equal(reply.diagnostics[0].code, 'SCHEMA_INTEGRITY_MISMATCH');
 });

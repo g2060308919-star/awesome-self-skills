@@ -121,6 +121,30 @@ test('case and root stable IDs retain unrelated nested association fields', () =
   assert.notEqual(stableId('root', rootSignature), stableId('root', { ...rootSignature, metadata: { test_point_ids: ['metadata_b'] } }));
 });
 
+test('complete Case sets normalize while steps and cleanup actions remain ordered', () => {
+  const caseRecord = {
+    case_id: 'case_a',
+    preconditions: [{ condition: 'b' }, { condition: 'a' }],
+    data: [{ name: 'b' }, { name: 'a' }],
+    steps: [
+      { step_id: 'step_a', expectations: [{ expectation_id: 'expect_b' }, { expectation_id: 'expect_a' }] },
+      { step_id: 'step_b', expectations: [] }
+    ],
+    testability_profile: { capabilities: [{ capability: 'b' }, { capability: 'a' }], observers: [], controls: [] },
+    cleanup: { steps: ['second', 'first'] }
+  };
+  const reorderedSets = {
+    ...caseRecord,
+    preconditions: [...caseRecord.preconditions].reverse(), data: [...caseRecord.data].reverse(),
+    steps: [{ ...caseRecord.steps[0], expectations: [...caseRecord.steps[0].expectations].reverse() }, caseRecord.steps[1]],
+    testability_profile: { ...caseRecord.testability_profile, capabilities: [...caseRecord.testability_profile.capabilities].reverse() }
+  };
+
+  assert.equal(canonicalStringify({ grounded: [caseRecord] }), canonicalStringify({ grounded: [reorderedSets] }));
+  assert.notEqual(canonicalStringify({ grounded: [caseRecord] }), canonicalStringify({ grounded: [{ ...caseRecord, steps: [...caseRecord.steps].reverse() }] }));
+  assert.notEqual(canonicalStringify({ grounded: [caseRecord] }), canonicalStringify({ grounded: [{ ...caseRecord, cleanup: { steps: ['first', 'second'] } }] }));
+});
+
 test('digest is a lowercase SHA-256 hexadecimal value', () => {
   assert.equal(digest({ a: 1 }), '015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862');
 });

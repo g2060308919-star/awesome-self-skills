@@ -9,7 +9,7 @@ import path from "node:path";
 
 // src/canonical.mjs
 import { createHash } from "node:crypto";
-var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set(["/steps", "/action_path", "/flow", "/flow_sequence", "/sequence", "/transition_order", "/cases/steps", "/cases/execution_signature/action_path", "/execution_signature/action_path"]);
+var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set(["/steps", "/action_path", "/flow", "/flow_sequence", "/sequence", "/transition_order", "/cases/steps", "/grounded/steps", "/conditional/steps", "/cases/cleanup/steps", "/grounded/cleanup/steps", "/conditional/cleanup/steps", "/cases/execution_signature/action_path", "/grounded/execution_signature/action_path", "/conditional/execution_signature/action_path", "/execution_signature/action_path"]);
 var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/source_ids",
   "/supersedes",
@@ -69,7 +69,10 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/cases/source_claim_ids",
   "/cases/fact_ids",
   "/cases/evidence_refs",
+  "/cases/preconditions",
   "/cases/preconditions/source_claim_ids",
+  "/cases/data",
+  "/cases/steps/expectations",
   "/cases/testability_profile/capabilities",
   "/cases/testability_profile/observers",
   "/cases/testability_profile/controls",
@@ -83,10 +86,33 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/exploratory_candidates",
   "/exploratory_candidates/source_claim_ids",
   "/grounded",
+  "/grounded/fact_ids",
   "/grounded/obligation_ids",
+  "/grounded/source_claim_ids",
   "/grounded/evidence_refs",
+  "/grounded/preconditions",
+  "/grounded/preconditions/source_claim_ids",
+  "/grounded/data",
+  "/grounded/steps/expectations",
+  "/grounded/testability_profile/capabilities",
+  "/grounded/testability_profile/observers",
+  "/grounded/testability_profile/controls",
+  "/grounded/execution_signature/oracle_refs",
+  "/grounded/execution_signature/test_point_ids",
   "/conditional",
+  "/conditional/fact_ids",
   "/conditional/obligation_ids",
+  "/conditional/source_claim_ids",
+  "/conditional/evidence_refs",
+  "/conditional/preconditions",
+  "/conditional/preconditions/source_claim_ids",
+  "/conditional/data",
+  "/conditional/steps/expectations",
+  "/conditional/testability_profile/capabilities",
+  "/conditional/testability_profile/observers",
+  "/conditional/testability_profile/controls",
+  "/conditional/execution_signature/oracle_refs",
+  "/conditional/execution_signature/test_point_ids",
   "/blocked",
   "/exploratory",
   "/coverage/not_applicable",
@@ -109,10 +135,13 @@ var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/fact_routes", "fact_id"],
   ["/interaction_routes", "candidate_id"],
   ["/cases", "case_id"],
+  ["/cases/steps/expectations", "expectation_id"],
   ["/obligation_dispositions", "obligation_id"],
   ["/exploratory_candidates", "exploratory_id"],
   ["/grounded", "case_id"],
+  ["/grounded/steps/expectations", "expectation_id"],
   ["/conditional", "case_id"],
+  ["/conditional/steps/expectations", "expectation_id"],
   ["/blocked", "obligation_id"],
   ["/exploratory", "exploratory_id"],
   ["/root_issue_dispositions", "root_issue_id"]
@@ -195,12 +224,16 @@ var STABLE_ID_COLLECTIONS = Object.freeze([
   Object.freeze({ path: Object.freeze(["interaction_candidates"]), id: "candidate_id" }),
   Object.freeze({ path: Object.freeze(["obligations"]), id: "obligation_id" }),
   Object.freeze({ path: Object.freeze(["cases"]), id: "case_id", namespace: "cases" }),
-  Object.freeze({ path: Object.freeze(["cases", "*", "steps"]), id: "step_id", namespace: "steps" }),
-  Object.freeze({ path: Object.freeze(["cases", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "expectations" }),
+  Object.freeze({ path: Object.freeze(["cases", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
+  Object.freeze({ path: Object.freeze(["cases", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
   Object.freeze({ path: Object.freeze(["exploratory_candidates"]), id: "exploratory_id" }),
   Object.freeze({ path: Object.freeze(["root_issue_dispositions"]), id: "root_issue_id" }),
   Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id", namespace: "bundle_cases" }),
   Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id", namespace: "bundle_cases" }),
+  Object.freeze({ path: Object.freeze(["grounded", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
+  Object.freeze({ path: Object.freeze(["conditional", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
+  Object.freeze({ path: Object.freeze(["grounded", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
+  Object.freeze({ path: Object.freeze(["conditional", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
   Object.freeze({ path: Object.freeze(["blockers"]), id: "root_issue_id", namespace: "reply_root_issues" }),
   Object.freeze({ path: Object.freeze(["blocked"]), id: "obligation_id" }),
   Object.freeze({ path: Object.freeze(["exploratory"]), id: "exploratory_id" })
@@ -305,7 +338,7 @@ var schemaDirectory = path2.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "13b72a279c91c4f403e6e315a0c69a4e6d64437ae679d971ac7db7b93f58e9aa" : void 0;
+var embeddedManifestDigest = true ? "59ee014056ad95e9fe1a2dd8ac54b09479b1e1e0de9977e127dd3d9db7bbd3aa" : void 0;
 var embeddedSchemaVersion = true ? "1.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.1.0" : void 0;
 var emptyRunReply = Object.freeze({

@@ -168,17 +168,20 @@ export function validateUniqueStableIds(artifact) {
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [];
   const seenByNamespace = new Map();
-  for (const { path, id, namespace } of /** @type {any[]} */ (STABLE_ID_COLLECTIONS)) {
-    const seen = seenByNamespace.get(namespace ?? path.join('/')) ?? new Set();
-    seenByNamespace.set(namespace ?? path.join('/'), seen);
+  for (const { path, id, namespace, scopeSegments } of /** @type {any[]} */ (STABLE_ID_COLLECTIONS)) {
     for (const { items, pointer } of findCollections(object, path)) {
-    items.forEach((item, index) => {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-      const value = /** @type {Record<string, unknown>} */ (item)[id];
-      if (typeof value !== 'string') return;
-      if (seen.has(value)) diagnostics.push(diagnostic('DUPLICATE_STABLE_ID', `${pointer}/${index}/${id}`, `duplicate stable ID "${value}"`));
-      seen.add(value);
-    });
+      const pointerSegments = pointer.split('/').filter(Boolean);
+      const scopedPointer = typeof scopeSegments === 'number' ? `/${pointerSegments.slice(0, -scopeSegments).join('/')}` : '';
+      const namespaceKey = `${namespace ?? path.join('/')}${scopedPointer}`;
+      const seen = seenByNamespace.get(namespaceKey) ?? new Set();
+      seenByNamespace.set(namespaceKey, seen);
+      items.forEach((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+        const value = /** @type {Record<string, unknown>} */ (item)[id];
+        if (typeof value !== 'string') return;
+        if (seen.has(value)) diagnostics.push(diagnostic('DUPLICATE_STABLE_ID', `${pointer}/${index}/${id}`, `duplicate stable ID "${value}"`));
+        seen.add(value);
+      });
     }
   }
   return diagnostics;
