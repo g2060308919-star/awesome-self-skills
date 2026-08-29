@@ -1,0 +1,32 @@
+{
+  "run_scope": "checkout",
+  "claims": [
+    { "claim_id": "claim_present", "level": "E3", "kind": "requirement", "scope": "checkout" },
+    { "claim_id": "claim_omitted", "level": "E3", "kind": "requirement", "scope": "checkout" },
+    { "claim_id": "claim_external", "level": "E3", "kind": "requirement", "scope": "shipping" }
+  ],
+  "facts": [
+    { "fact_id": "fact_present", "claim_id": "claim_present", "status": "active", "source_claim_ids": ["claim_present"] },
+    { "fact_id": "fact_omitted", "claim_id": "claim_omitted", "status": "active", "source_claim_ids": ["claim_omitted"] },
+    { "fact_id": "fact_external", "claim_id": "claim_external", "status": "active", "source_claim_ids": ["claim_external"] }
+  ],
+  "fact_routes": [],
+  "artifact": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "views": [
+      {
+        "view_id": "view_present",
+        "type": "flow",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_present"],
+        "elements": [
+          { "element_id": "node_present", "kind": "flow-node", "node_type": "action", "label": "Submit", "source_claim_ids": ["claim_present"], "model_refs": [] }
+        ],
+        "relations": []
+      }
+    ],
+    "interaction_matrix": [],
+    "interaction_candidates": []
+  }
+}

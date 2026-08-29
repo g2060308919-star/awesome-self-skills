@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 0,
+  "views": [
+    { "view_id": "view_flow", "type": "flow", "scope": "orders", "source_claim_ids": ["claim_shared"], "elements": [], "relations": [] }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["orders", "payments"], "dimension": "shared-entity", "status": "candidate" },
+    { "module_ids": ["orders", "payments"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["payments", "orders"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "time", "status": "candidate" }
+  ],
+  "interaction_candidates": [
+    { "candidate_id": "candidate_wrong_view", "module_ids": ["orders", "payments"], "dimension": "time", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "formal_view_id": "view_flow" },
+    { "candidate_id": "candidate_no_signal", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "exploratory", "exploratory_id": "exploratory_role" },
+    { "candidate_id": "candidate_orphan", "module_ids": ["orders", "payments"], "dimension": "concurrency", "disposition": "blocker", "blocker_root_issue_id": "root_concurrency" }
+  ]
+}
