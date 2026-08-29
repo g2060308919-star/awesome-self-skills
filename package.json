@@ -1,0 +1,17 @@
+{
+  "name": "generate-test-cases-dev",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node build/build.mjs",
+    "test": "node --test test/**/*.test.mjs",
+    "check": "tsc --noEmit -p jsconfig.json && npm run build && npm test",
+    "benchmark": "node benchmark/score.mjs benchmark/v1/manifest.json"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
