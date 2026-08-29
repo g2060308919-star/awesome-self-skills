@@ -393,6 +393,35 @@ test('malformed input returns bounded stable diagnostics instead of throwing raw
   }));
 });
 
+test('snapshot diagnostics use a canonical bounded top-K independent of property insertion order', () => {
+  /** @param {boolean} reverse */
+  const accessorBomb = (reverse) => {
+    const context = classificationContext();
+    const indices = Array.from({ length: 300 }, (_, index) => index);
+    if (reverse) indices.reverse();
+    let getterCalls = 0;
+    for (const index of indices) {
+      Object.defineProperty(context.caseDrafts.cases[0], `bad_${index.toString().padStart(3, '0')}`, {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          return index;
+        }
+      });
+    }
+    const diagnostics = classifyCaseDrafts(context).diagnostics;
+    assert.equal(getterCalls, 0);
+    return diagnostics;
+  };
+
+  const forward = accessorBomb(false);
+  const reverse = accessorBomb(true);
+  assert.equal(JSON.stringify(forward), JSON.stringify(reverse));
+  assert.equal(forward.length, 256);
+  assert.equal(forward.some((item) => item.code === 'DIAGNOSTICS_TRUNCATED'), true);
+  assert.equal(forward.filter((item) => item.code === 'ACCESSOR_NOT_ALLOWED').length, 255);
+});
+
 test('deep evidence ancestry is evaluated iteratively without call-stack recursion', () => {
   const claims = baseClaims();
   let parent = 'claim_fact';

@@ -350,10 +350,16 @@ test('blocked propagation visits the obligation-to-Case graph linearly while pre
   const cases = [];
   for (let index = 0; index < size - 1; index += 1) {
     const obligationIds = [obligations[index].obligation_id, obligations[index + 1].obligation_id];
-    cases.push(baseCase({
+    const draft = baseCase({
       case_id: `case_${index.toString(16).padStart(16, '0')}`,
       obligation_ids: obligationIds
-    }));
+    });
+    draft.steps[0].expectations.push({
+      ...structuredClone(draft.steps[0].expectations[0]),
+      expectation_id: `expectation_bridge_${index.toString(16).padStart(8, '0')}`
+    });
+    refreshExecutionSignature(draft);
+    cases.push(draft);
   }
   const invalid = baseCase({
     case_id: 'case_ffffffffffffffff',

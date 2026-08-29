@@ -367,6 +367,23 @@ test('Conditional fails closed when the singleton assumption field would hide mu
   assert.equal(result.diagnostics.some((item) => item.code === 'CONDITIONAL_ASSUMPTIONS_AMBIGUOUS'), true);
 });
 
+test('Grounded rejects a stray temporary assumption that is not a consumed downgrade root', () => {
+  const unusedAssumption = acceptedClaim('claim_unused_assumption', 'E1');
+  const context = classificationContext({ claims: [...baseClaims(), unusedAssumption] });
+  context.caseDrafts.cases[0].temporary_assumption = {
+    claim_id: unusedAssumption.claim_id,
+    invalidation_condition: 'The temporary rule is withdrawn.'
+  };
+  const undefinedField = classificationContext();
+  undefinedField.caseDrafts.cases[0].temporary_assumption = undefined;
+
+  for (const candidate of [context, undefinedField]) {
+    const result = classifyCaseDrafts(candidate);
+    assert.equal(result.grounded.length + result.conditional.length + result.blocked.length, 0);
+    assert.equal(result.diagnostics.some((item) => item.code === 'TEMPORARY_ASSUMPTION_UNEXPECTED'), true);
+  }
+});
+
 test('explicit blocker evidence refs must be canonical, known, and related to the formal obligation closure', () => {
   const obligation = baseObligation({ required_oracle_refs: [] });
   const baseDisposition = {
@@ -443,6 +460,112 @@ test('each linked obligation maps every required Oracle to a concrete expectatio
   assert.deepEqual(complete.diagnostics, []);
 });
 
+test('distinct obligations require a complete one-to-one matching to distinct concrete expectations', () => {
+  const secondObligationId = 'obligation_2222222222222222';
+  const secondOracleId = 'claim_oracle_second';
+  const jointOracleId = 'claim_joint_oracle';
+  const secondOracle = acceptedClaim(secondOracleId);
+  const jointOracle = acceptedClaim(jointOracleId, 'E2', {
+    kind: 'expected-value',
+    derivation_kind: 'formula',
+    derivation_target: 'expected-value',
+    parent_claim_ids: ['claim_oracle', secondOracleId],
+    parameters: { formula_id: 'joint-oracle' },
+    rule_input: {
+      formula: 'left + right',
+      inputs: [{ name: 'left', value: 1 }, { name: 'right', value: 1 }]
+    },
+    value: 'accepted'
+  });
+  const secondObligation = baseObligation({
+    obligation_id: secondObligationId,
+    required_oracle_refs: [secondOracleId],
+    view_element_refs: ['view_checkout#edge_second']
+  });
+  const unionDraft = baseCase({ obligation_ids: [IDS.obligation, secondObligationId] });
+  unionDraft.steps[0].expectations[0].evidence_ref = jointOracleId;
+  unionDraft.evidence_refs.push(secondOracleId, jointOracleId);
+  refreshExecutionSignature(unionDraft);
+  /** @param {any} draft */
+  const makeContext = (draft) => {
+    const context = classificationContext({
+      claims: [...baseClaims(), secondOracle, jointOracle],
+      obligations: [baseObligation(), secondObligation],
+      cases: [draft],
+      dispositions: [
+        { obligation_id: IDS.obligation, status: 'case_candidate', case_ids: [draft.case_id] },
+        { obligation_id: secondObligationId, status: 'case_candidate', case_ids: [draft.case_id] }
+      ]
+    });
+    context.obligations.fact_routes[0].obligation_ids.push(secondObligationId);
+    return context;
+  };
+
+  const shared = classifyCaseDrafts(makeContext(unionDraft));
+  assert.equal(shared.grounded.length + shared.conditional.length + shared.blocked.length, 0);
+  assert.equal(shared.diagnostics.some((item) =>
+    item.code === 'OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT'), true);
+
+  const distinctDraft = clone(unionDraft);
+  distinctDraft.steps[0].expectations[0].evidence_ref = 'claim_oracle';
+  distinctDraft.steps[0].expectations.push({
+    ...clone(distinctDraft.steps[0].expectations[0]),
+    expectation_id: 'expectation_second_result',
+    evidence_ref: secondOracleId
+  });
+  distinctDraft.evidence_refs = distinctDraft.evidence_refs.filter((/** @type {string} */ ref) => ref !== jointOracleId);
+  refreshExecutionSignature(distinctDraft);
+  const distinct = classifyCaseDrafts(makeContext(distinctDraft));
+  assert.equal(distinct.grounded.length, 1);
+  assert.deepEqual(distinct.diagnostics, []);
+});
+
+test('Oracle ownership ancestry is indexed once instead of rescanned per expectation', () => {
+  /** @param {number} size */
+  const ancestryGets = (size) => {
+    const chain = [];
+    let parent = 'claim_oracle';
+    for (let index = 0; index < size; index += 1) {
+      const claim = acceptedClaim(`claim_expectation_${index.toString(16).padStart(8, '0')}`, 'E2', {
+        parent_claim_ids: [parent]
+      });
+      chain.push(claim);
+      parent = claim.claim_id;
+    }
+    const context = classificationContext({ claims: [...baseClaims(), ...chain] });
+    const draft = context.caseDrafts.cases[0];
+    const template = clone(draft.steps[0].expectations[0]);
+    draft.steps[0].expectations = chain.map((claim, index) => ({
+      ...clone(template),
+      expectation_id: `expectation_${index.toString(16).padStart(8, '0')}`,
+      evidence_ref: claim.claim_id
+    }));
+    draft.evidence_refs.push(...chain.map((claim) => claim.claim_id));
+    refreshExecutionSignature(draft);
+
+    const nativeGet = Map.prototype.get;
+    let gets = 0;
+    Map.prototype.get = function countedGet(key) {
+      if (new Error().stack?.includes('assessEvidenceRoots')) gets += 1;
+      return nativeGet.call(this, key);
+    };
+    let result;
+    try {
+      result = classifyCaseDrafts(context);
+    } finally {
+      Map.prototype.get = nativeGet;
+    }
+    assert.equal(result.grounded.length, 1);
+    assert.deepEqual(result.diagnostics, []);
+    return gets;
+  };
+
+  const small = ancestryGets(80);
+  const large = ancestryGets(160);
+  assert.equal(large <= small * 2.5 + 20, true,
+    `Oracle ancestry Map#get work grew from ${small} to ${large}`);
+});
+
 test('Case evidence_refs exactly summarize canonical direct evidence roots', () => {
   const omitted = classificationContext();
   omitted.caseDrafts.cases[0].evidence_refs = omitted.caseDrafts.cases[0].evidence_refs
@@ -463,8 +586,11 @@ test('Case evidence_refs exactly summarize canonical direct evidence roots', () 
   }
 });
 
-test('independent blocker evidence must be structurally tied to a named required capability', () => {
-  const capabilityBlocker = acceptedClaim('claim_capability_blocker', 'E3', {
+test('capability blocker state must be structured in a candidate Case instead of inferred from free text', () => {
+  const positiveCapability = acceptedClaim('claim_capability_positive', 'E3', {
+    kind: 'description', value: 'Checkout control is provided and verified; no blocker exists.'
+  });
+  const unavailableCapability = acceptedClaim('claim_capability_unavailable', 'E3', {
     kind: 'description', value: 'Checkout control is unavailable.'
   });
   const unrelated = acceptedClaim('claim_same_scope_unrelated', 'E3', {
@@ -482,13 +608,19 @@ test('independent blocker evidence must be structurally tied to a named required
     }]
   }));
 
-  const positive = classifyBlocker(capabilityBlocker);
-  assert.equal(positive.blocked.length, 1);
-  assert.deepEqual(positive.diagnostics, []);
+  for (const claim of [positiveCapability, unavailableCapability, unrelated]) {
+    const result = classifyBlocker(claim);
+    assert.equal(result.blocked.length, 0, claim.claim_id);
+    assert.equal(result.diagnostics.some((item) => item.code === 'BLOCKER_EVIDENCE_UNRELATED'), true, claim.claim_id);
+  }
 
-  const negative = classifyBlocker(unrelated);
-  assert.equal(negative.blocked.length, 0);
-  assert.equal(negative.diagnostics.some((item) => item.code === 'BLOCKER_EVIDENCE_UNRELATED'), true);
+  const structured = classificationContext();
+  structured.caseDrafts.cases[0].testability_profile.capabilities[0].status = 'unavailable';
+  const structuredResult = classifyCaseDrafts(structured);
+  assert.equal(structuredResult.blocked.length, 1);
+  assert.match(structuredResult.blocked[0].reason, /CAPABILITY_UNAVAILABLE/u);
+  assert.equal(structuredResult.blocked[0].evidence_refs.includes('claim_capability'), true);
+  assert.deepEqual(structuredResult.diagnostics, []);
 });
 
 test('explicit blocker evidence relation is batched instead of rescanning every root per ref', () => {

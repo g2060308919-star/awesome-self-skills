@@ -126,12 +126,18 @@ function resultWithDiagnostics(diagnostics) {
 function snapshotControlled(root) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
+  let diagnosticsTruncated = false;
+  /** @param {Diagnostic} item */
+  const addSnapshotDiagnostic = (item) => {
+    if (diagnostics.length < DIAGNOSTIC_LIMIT - 1) diagnostics.push(item);
+    else diagnosticsTruncated = true;
+  };
   /** @type {unknown} */
   let snapshot;
   /** @type {Array<{source: unknown, path: string, assign: (value: unknown) => void}>} */
   const pending = [{ source: root, path: '', assign(value) { snapshot = value; } }];
   const seen = new Map();
-  while (pending.length > 0 && diagnostics.length < DIAGNOSTIC_LIMIT) {
+  while (pending.length > 0) {
     const { source, path, assign } = /** @type {{source: unknown, path: string, assign: (value: unknown) => void}} */ (pending.pop());
     if (!source || typeof source !== 'object') {
       assign(source);
@@ -143,14 +149,14 @@ function snapshotControlled(root) {
     }
     if (source instanceof Map) {
       if (NATIVE_GET_PROTOTYPE_OF(source) !== Map.prototype) {
-        diagnostics.push(diagnostic(
+        addSnapshotDiagnostic(diagnostic(
           'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'accepted evidence Map must use the built-in Map prototype'
         ));
         assign(null);
         continue;
       }
       if (NATIVE_REFLECT_OWN_KEYS(source).length > 0) {
-        diagnostics.push(diagnostic(
+        addSnapshotDiagnostic(diagnostic(
           'schema', 'MAP_OWN_PROPERTY_INVALID', path || '/', 'accepted evidence Map cannot have own string or symbol properties'
         ));
         assign(null);
@@ -160,7 +166,7 @@ function snapshotControlled(root) {
       try {
         entries = NATIVE_MAP_ENTRIES.call(source);
       } catch {
-        diagnostics.push(diagnostic(
+        addSnapshotDiagnostic(diagnostic(
           'schema', 'MAP_BRAND_INVALID', path || '/', 'accepted evidence Map must have genuine native Map internal slots'
         ));
         assign(null);
@@ -176,24 +182,24 @@ function snapshotControlled(root) {
       const target = new Map();
       seen.set(source, target);
       assign(target);
-      for (let index = capturedEntries.length - 1; index >= 0; index -= 1) {
-        if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
-        const [key, child] = capturedEntries[index];
-        if (typeof key !== 'string') {
-          diagnostics.push(diagnostic('schema', 'CANONICAL_STRING_INVALID', `${path}/invalid-map-key`, 'accepted evidence Map keys must be strings'));
-          continue;
-        }
+      const validEntries = capturedEntries.filter(([key]) => typeof key === 'string')
+        .sort(([left], [right]) => compareCodePoints(String(left), String(right)));
+      if (validEntries.length !== capturedEntries.length) addSnapshotDiagnostic(diagnostic(
+        'schema', 'CANONICAL_STRING_INVALID', `${path}/invalid-map-key`, 'accepted evidence Map keys must be strings'
+      ));
+      for (let index = validEntries.length - 1; index >= 0; index -= 1) {
+        const [key, child] = validEntries[index];
         pending.push({
           source: child,
-          path: `${path}/${pointerPart(key)}`,
-          assign(value) { NATIVE_MAP_SET.call(target, key, value); }
+          path: `${path}/${pointerPart(String(key))}`,
+          assign(value) { NATIVE_MAP_SET.call(target, String(key), value); }
         });
       }
       continue;
     }
     if (NATIVE_ARRAY_IS_ARRAY(source)) {
       if (NATIVE_GET_PROTOTYPE_OF(source) !== Array.prototype) {
-        diagnostics.push(diagnostic(
+        addSnapshotDiagnostic(diagnostic(
           'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled arrays must use the built-in Array prototype'
         ));
         assign(null);
@@ -204,20 +210,22 @@ function snapshotControlled(root) {
       const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value')
         && Number.isSafeInteger(lengthDescriptor.value) ? Number(lengthDescriptor.value) : 0;
       let validOwnKeys = true;
-      for (const key of NATIVE_REFLECT_OWN_KEYS(descriptors)) {
-        if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
+      const ownKeys = NATIVE_REFLECT_OWN_KEYS(descriptors);
+      let hasSymbol = false;
+      for (const key of ownKeys) if (typeof key === 'symbol') hasSymbol = true;
+      if (hasSymbol) {
+        validOwnKeys = false;
+        addSnapshotDiagnostic(diagnostic(
+          'schema', 'ARRAY_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled arrays cannot contain own symbol properties'
+        ));
+      }
+      const stringKeys = ownKeys.filter((key) => typeof key === 'string').sort(compareCodePoints);
+      for (const key of stringKeys) {
         if (key === 'length') continue;
-        if (typeof key === 'symbol') {
-          validOwnKeys = false;
-          diagnostics.push(diagnostic(
-            'schema', 'ARRAY_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled arrays cannot contain own symbol properties'
-          ));
-          continue;
-        }
         const index = Number(key);
         if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
           validOwnKeys = false;
-          diagnostics.push(diagnostic('schema', 'UNKNOWN_KEY', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'));
+          addSnapshotDiagnostic(diagnostic('schema', 'UNKNOWN_KEY', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'));
         }
       }
       if (!validOwnKeys) {
@@ -227,26 +235,28 @@ function snapshotControlled(root) {
       const target = new Array(length);
       seen.set(source, target);
       assign(target);
-      for (let index = length - 1; index >= 0; index -= 1) {
-        if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
+      /** @type {Array<{source: unknown, path: string, assign: (value: unknown) => void}>} */
+      const children = [];
+      for (let index = 0; index < length; index += 1) {
         const descriptor = descriptors[String(index)];
         if (!descriptor) {
-          diagnostics.push(diagnostic('schema', 'ARRAY_HOLE', `${path}/${index}`, 'controlled arrays must be dense'));
+          addSnapshotDiagnostic(diagnostic('schema', 'ARRAY_HOLE', `${path}/${index}`, 'controlled arrays must be dense'));
         } else if (!Object.hasOwn(descriptor, 'value')) {
-          diagnostics.push(diagnostic('schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${index}`, 'controlled values must be own data properties'));
+          addSnapshotDiagnostic(diagnostic('schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${index}`, 'controlled values must be own data properties'));
         } else {
-          pending.push({
+          children.push({
             source: descriptor.value,
             path: `${path}/${index}`,
             assign(value) { target[index] = value; }
           });
         }
       }
+      for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]);
       continue;
     }
     const prototype = NATIVE_GET_PROTOTYPE_OF(source);
     if (prototype !== Object.prototype && prototype !== null) {
-      diagnostics.push(diagnostic(
+      addSnapshotDiagnostic(diagnostic(
         'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled records must use a plain or null prototype'
       ));
       assign(null);
@@ -256,20 +266,22 @@ function snapshotControlled(root) {
     const target = prototype === null ? Object.create(null) : {};
     seen.set(source, target);
     assign(target);
-    for (const key of NATIVE_REFLECT_OWN_KEYS(descriptors)) {
-      if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
-      if (typeof key === 'symbol') {
-        diagnostics.push(diagnostic(
-          'schema', 'RECORD_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled records cannot contain own symbol properties'
-        ));
-        continue;
-      }
+    const ownKeys = NATIVE_REFLECT_OWN_KEYS(descriptors);
+    let hasSymbol = false;
+    for (const key of ownKeys) if (typeof key === 'symbol') hasSymbol = true;
+    if (hasSymbol) addSnapshotDiagnostic(diagnostic(
+      'schema', 'RECORD_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled records cannot contain own symbol properties'
+    ));
+    const stringKeys = ownKeys.filter((key) => typeof key === 'string').sort(compareCodePoints);
+    /** @type {Array<{source: unknown, path: string, assign: (value: unknown) => void}>} */
+    const children = [];
+    for (const key of stringKeys) {
       const descriptor = descriptors[key];
       const childPath = `${path}/${pointerPart(key)}`;
-      if (!Object.hasOwn(descriptor, 'value')) diagnostics.push(diagnostic(
+      if (!Object.hasOwn(descriptor, 'value')) addSnapshotDiagnostic(diagnostic(
         'schema', 'ACCESSOR_NOT_ALLOWED', childPath, 'controlled values must be own data properties'
       ));
-      else pending.push({
+      else children.push({
         source: descriptor.value,
         path: childPath,
         assign(value) {
@@ -277,7 +289,12 @@ function snapshotControlled(root) {
         }
       });
     }
+    for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]);
   }
+  if (diagnosticsTruncated) diagnostics.push(diagnostic(
+    'classification', 'DIAGNOSTICS_TRUNCATED', '/',
+    `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
+  ));
   return { snapshot, diagnostics };
 }
 
@@ -616,6 +633,151 @@ function assessEvidenceRoots(roots, evidence, cache) {
   return result;
 }
 
+/**
+ * Each required Oracle owns one bit. Propagating those bits once from accepted
+ * parents to children makes every expectation-to-Oracle ancestry lookup O(1).
+ * @param {Map<string, ClaimAssessment>} evidence
+ * @param {Record<string, unknown>[]} obligations
+ */
+function buildOracleReachability(evidence, obligations) {
+  const oracleRefs = [...new Set(obligations.flatMap((obligation) =>
+    stringArray(obligation.required_oracle_refs) ?? []))].sort(compareCodePoints);
+  /** @type {Map<string, bigint>} */
+  const bitByOracle = new Map();
+  /** @type {Map<string, bigint>} */
+  const masksByClaim = new Map();
+  for (const [index, oracleRef] of oracleRefs.entries()) {
+    const bit = 1n << BigInt(index);
+    bitByOracle.set(oracleRef, bit);
+    const assessment = evidence.get(oracleRef);
+    if (assessment && assessment.rank > 0 && assessment.reasons.length === 0) masksByClaim.set(oracleRef, bit);
+  }
+
+  /** @type {Map<string, number>} */
+  const indegree = new Map();
+  for (const [claimId, assessment] of evidence) {
+    indegree.set(claimId, assessment.parents.reduce((count, parentId) =>
+      count + (evidence.has(parentId) ? 1 : 0), 0));
+  }
+  const queue = [...indegree].filter(([, count]) => count === 0)
+    .map(([claimId]) => claimId).sort(compareCodePoints);
+  let cursor = 0;
+  while (cursor < queue.length) {
+    const claimId = queue[cursor++];
+    const mask = masksByClaim.get(claimId) ?? 0n;
+    for (const childId of evidence.get(claimId)?.children ?? []) {
+      const child = evidence.get(childId);
+      if (mask !== 0n && child && child.rank > 0 && child.reasons.length === 0) {
+        masksByClaim.set(childId, (masksByClaim.get(childId) ?? 0n) | mask);
+      }
+      const remaining = (indegree.get(childId) ?? 0) - 1;
+      indegree.set(childId, remaining);
+      if (remaining === 0) queue.push(childId);
+    }
+  }
+
+  /** @type {Map<string, bigint>} */
+  const masksByObligation = new Map();
+  for (const obligation of obligations) {
+    let mask = 0n;
+    for (const oracleRef of stringArray(obligation.required_oracle_refs) ?? []) {
+      mask |= bitByOracle.get(oracleRef) ?? 0n;
+    }
+    if (isCanonicalString(obligation.obligation_id)) masksByObligation.set(String(obligation.obligation_id), mask);
+  }
+  return { masksByClaim, masksByObligation };
+}
+
+/**
+ * Deterministic iterative augmenting paths require one independently located
+ * expectation per formal obligation. Every edge already means that one
+ * expectation covers all required Oracles for the obligation.
+ * @param {Record<string, unknown>} draft
+ * @param {Record<string, unknown>[]} obligations
+ * @param {Array<{expectationId: string, evidenceRef: string}>} expectations
+ * @param {{masksByClaim: Map<string, bigint>, masksByObligation: Map<string, bigint>}} reachability
+ * @param {Set<string>} reasons
+ * @param {Diagnostic[]} diagnostics
+ */
+function requireOracleOwnership(draft, obligations, expectations, reachability, reasons, diagnostics) {
+  if (expectations.length === 0) return;
+  const orderedExpectations = [...expectations].sort((left, right) =>
+    compareCodePoints(left.expectationId, right.expectationId));
+  const orderedObligations = obligations.filter((obligation) =>
+    (stringArray(obligation.required_oracle_refs) ?? []).length > 0)
+    .sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id)));
+  /** @type {number[][]} */
+  const edges = [];
+  let missingEdge = false;
+  for (const obligation of orderedObligations) {
+    const obligationId = String(obligation.obligation_id);
+    const requiredMask = reachability.masksByObligation.get(obligationId) ?? 0n;
+    const candidates = [];
+    for (const [expectationIndex, expectation] of orderedExpectations.entries()) {
+      const expectationMask = reachability.masksByClaim.get(expectation.evidenceRef) ?? 0n;
+      if (requiredMask !== 0n && (expectationMask & requiredMask) === requiredMask) candidates.push(expectationIndex);
+    }
+    edges.push(candidates);
+    if (candidates.length === 0) {
+      missingEdge = true;
+      diagnostics.push(diagnostic(
+        'traceability', 'OBLIGATION_ORACLE_EXPECTATION_UNMAPPED',
+        `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/obligations/${pointerPart(obligationId)}/required_oracle_refs`,
+        'one concrete expectation must cover every required Oracle for the formal obligation'
+      ));
+    }
+  }
+  if (missingEdge) {
+    reasons.add('OBLIGATION_ORACLE_EXPECTATION_UNMAPPED');
+    return;
+  }
+
+  const ownerByExpectation = new Array(orderedExpectations.length).fill(-1);
+  const expectationByObligation = new Array(orderedObligations.length).fill(-1);
+  for (let start = 0; start < orderedObligations.length; start += 1) {
+    const obligationQueue = [start];
+    const seenObligations = new Set([start]);
+    const seenExpectations = new Set();
+    const parentObligationByExpectation = new Map();
+    let cursor = 0;
+    let freeExpectation = -1;
+    while (cursor < obligationQueue.length && freeExpectation < 0) {
+      const obligationIndex = obligationQueue[cursor++];
+      for (const expectationIndex of edges[obligationIndex]) {
+        if (seenExpectations.has(expectationIndex)) continue;
+        seenExpectations.add(expectationIndex);
+        parentObligationByExpectation.set(expectationIndex, obligationIndex);
+        const owner = ownerByExpectation[expectationIndex];
+        if (owner < 0) {
+          freeExpectation = expectationIndex;
+          break;
+        }
+        if (!seenObligations.has(owner)) {
+          seenObligations.add(owner);
+          obligationQueue.push(owner);
+        }
+      }
+    }
+    if (freeExpectation < 0) {
+      diagnostics.push(diagnostic(
+        'traceability', 'OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT',
+        `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/obligation_ids`,
+        'linked formal obligations require distinct concrete expectations with complete Oracle coverage'
+      ));
+      reasons.add('OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT');
+      return;
+    }
+    let expectationIndex = freeExpectation;
+    while (expectationIndex >= 0) {
+      const obligationIndex = /** @type {number} */ (parentObligationByExpectation.get(expectationIndex));
+      const previousExpectation = expectationByObligation[obligationIndex];
+      expectationByObligation[obligationIndex] = expectationIndex;
+      ownerByExpectation[expectationIndex] = obligationIndex;
+      expectationIndex = previousExpectation;
+    }
+  }
+}
+
 /** @param {unknown} review @param {Set<string>} reasons */
 function applyReview(review, reasons) {
   if (review === 'contradicted') reasons.add('SUPPORT_REVIEW_CONTRADICTED');
@@ -638,8 +800,8 @@ function applyCapabilityStatus(status, gate, reasons) {
   }
 }
 
-/** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>[]>} routesByFact @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
-function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById, evidence, evidenceCache, conflicts, diagnostics) {
+/** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>[]>} routesByFact @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {{masksByClaim: Map<string, bigint>, masksByObligation: Map<string, bigint>}} oracleReachability @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
+function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById, evidence, evidenceCache, oracleReachability, conflicts, diagnostics) {
   const reasons = new Set();
   const submittedEvidenceRefs = stringArray(draft.evidence_refs, true);
   const evidenceRoots = new Set();
@@ -725,8 +887,8 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const stepIds = new Set();
   /** @type {Set<string>} */
   const expectationIds = new Set();
-  /** @type {string[]} */
-  const expectationEvidenceRefs = [];
+  /** @type {Array<{expectationId: string, evidenceRef: string}>} */
+  const expectationsForOwnership = [];
   /** @type {Array<{observer: string, target: string}>} */
   const requiredObservers = [];
   for (const [stepIndex, step] of steps.entries()) {
@@ -742,20 +904,24 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     const expectations = objectArray(step.expectations) ?? [];
     if (expectations.length === 0) reasons.add('FORMAL_ORACLE_MISSING');
     for (const [expectationIndex, expectation] of expectations.entries()) {
-      if (!isCanonicalString(expectation.expectation_id) || expectationIds.has(expectation.expectation_id)) {
+      const expectationLocatable = isCanonicalString(expectation.expectation_id) && !expectationIds.has(expectation.expectation_id);
+      if (!expectationLocatable) {
         if (expectationIds.has(/** @type {string} */ (expectation.expectation_id))) diagnostics.push(diagnostic(
           'traceability', 'EXPECTATION_ID_DUPLICATE', `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/steps/${stepIndex}/expectations/${expectationIndex}/expectation_id`, 'expectation IDs must be independently locatable'
         ));
         reasons.add('EXPECTATION_GATE_INVALID');
-      } else expectationIds.add(expectation.expectation_id);
+      } else expectationIds.add(/** @type {string} */ (expectation.expectation_id));
       if (expectation.preceding_action_id !== step.step_id) reasons.add('PRECEDING_ACTION_NOT_CONTAINING');
       const expectationFieldsValid = isNonblank(expectation.business_assertion) && isCanonicalString(expectation.preceding_action_id)
         && isNonblank(expectation.observer) && isNonblank(expectation.observation_surface)
         && isNonblank(expectation.observation_target) && isCanonicalString(expectation.evidence_ref);
       if (!expectationFieldsValid) reasons.add('EXPECTATION_GATE_INVALID');
       if (isCanonicalString(expectation.evidence_ref)) evidenceRoots.add(expectation.evidence_ref);
-      if (expectationFieldsValid) {
-        expectationEvidenceRefs.push(/** @type {string} */ (expectation.evidence_ref));
+      if (expectationFieldsValid && expectationLocatable) {
+        expectationsForOwnership.push({
+          expectationId: /** @type {string} */ (expectation.expectation_id),
+          evidenceRef: /** @type {string} */ (expectation.evidence_ref)
+        });
         requiredObservers.push({ observer: String(expectation.observer), target: String(expectation.observation_target) });
       }
       const oracle = isRecord(expectation.oracle) ? expectation.oracle : null;
@@ -776,25 +942,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       if (!stepIds.has(/** @type {string} */ (expectation.preceding_action_id))) reasons.add('PRECEDING_ACTION_UNKNOWN');
     }
   }
-  if (expectationEvidenceRefs.length > 0) {
-    const expectationEvidenceClosure = new Set();
-    for (const expectationRef of expectationEvidenceRefs) {
-      for (const relatedRef of assessEvidenceRoots([expectationRef], evidence, evidenceCache).refs) {
-        expectationEvidenceClosure.add(relatedRef);
-      }
-    }
-    for (const obligation of obligations) {
-      for (const oracleRef of stringArray(obligation.required_oracle_refs) ?? []) {
-        if (expectationEvidenceClosure.has(oracleRef)) continue;
-        diagnostics.push(diagnostic(
-          'traceability', 'OBLIGATION_ORACLE_EXPECTATION_UNMAPPED',
-          `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/obligations/${pointerPart(String(obligation.obligation_id))}/required_oracle_refs/${pointerPart(oracleRef)}`,
-          'every required formal Oracle must map to a concrete expectation evidence closure'
-        ));
-        reasons.add('OBLIGATION_ORACLE_EXPECTATION_UNMAPPED');
-      }
-    }
-  }
+  requireOracleOwnership(draft, obligations, expectationsForOwnership, oracleReachability, reasons, diagnostics);
 
   const profile = isRecord(draft.testability_profile) ? draft.testability_profile : {};
   const capabilities = objectArray(profile.capabilities) ?? [];
@@ -929,6 +1077,14 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       }
     }
   }
+  if (reasons.size === 0 && gate.rank === 2 && Object.hasOwn(draft, 'temporary_assumption')) {
+    diagnostics.push(diagnostic(
+      'classification', 'TEMPORARY_ASSUMPTION_UNEXPECTED',
+      `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/temporary_assumption`,
+      'Grounded Case cannot retain a temporary assumption without a consumed downgrade root'
+    ));
+    reasons.add('TEMPORARY_ASSUMPTION_UNEXPECTED');
+  }
   if (reasons.size > 0) gate.rank = 0;
   return {
     rank: gate.rank,
@@ -989,25 +1145,6 @@ function relatedEvidenceClosure(roots, evidence, ancestryCache, relationCache) {
   }
   relationCache.set(cacheKey, related);
   return related;
-}
-
-/** @param {unknown} value */
-function normalizeCapabilityText(value) {
-  return typeof value === 'string'
-    ? value.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/gu, ' ')
-    : '';
-}
-
-/** @param {ClaimAssessment} assessment @param {Record<string, unknown>} obligation */
-function isCapabilityBlockerEvidence(assessment, obligation) {
-  if (assessment.rank === 0 || assessment.reasons.length > 0
-    || !isCanonicalString(assessment.claim.scope) || !isCanonicalString(obligation.scope)
-    || !scopesIntersect(String(assessment.claim.scope), String(obligation.scope))) return false;
-  const haystack = ` ${normalizeCapabilityText(`${String(assessment.claim.kind ?? '')} ${String(assessment.claim.value ?? '')}`)} `;
-  return (stringArray(obligation.required_capabilities) ?? []).some((capability) => {
-    const normalized = normalizeCapabilityText(capability);
-    return normalized.length > 0 && haystack.includes(` ${normalized} `);
-  });
 }
 
 /** @param {Record<string, unknown>} draft */
@@ -1112,6 +1249,7 @@ export function classifyCaseDrafts(submittedContext) {
     const exploratory = /** @type {Record<string, unknown>[]} */ (draftArtifact.exploratory_candidates);
     const factRoutes = /** @type {Record<string, unknown>[]} */ (obligationArtifact.fact_routes);
     const interactionRoutes = /** @type {Record<string, unknown>[]} */ (obligationArtifact.interaction_routes);
+    const oracleReachability = buildOracleReachability(evidence, obligations);
 
     /** @type {Map<string, Record<string, unknown>>} */
     const factsById = new Map();
@@ -1260,8 +1398,7 @@ export function classifyCaseDrafts(submittedContext) {
               'classification', 'BLOCKER_EVIDENCE_INVALID', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
               'explicit blocker evidence must be accepted before it can justify a blocker'
             ));
-          } else if (!relatedEvidence.has(ref)
-            && !isCapabilityBlockerEvidence(blockerAssessment, obligation)) {
+          } else if (!relatedEvidence.has(ref)) {
             blockerRefsValid = false;
             diagnostics.push(diagnostic(
               'traceability', 'BLOCKER_EVIDENCE_UNRELATED', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
@@ -1331,7 +1468,10 @@ export function classifyCaseDrafts(submittedContext) {
       const routedFactIds = [...new Set(linked.flatMap((obligation) =>
         [...(routedFactsByObligation.get(String(obligation.obligation_id)) ?? [])]
       ))].sort(compareCodePoints);
-      const evaluation = evaluateCase(draft, linked, routedFactIds, routesByFact, factsById, evidence, evidenceCache, conflicts, diagnostics);
+      const evaluation = evaluateCase(
+        draft, linked, routedFactIds, routesByFact, factsById,
+        evidence, evidenceCache, oracleReachability, conflicts, diagnostics
+      );
       if (evaluation.rank === 0) {
         for (const obligation of linked) addBlocked(blocked, obligation, evaluation.reasons, evaluation.evidenceRefs, null);
       } else executable.push({ draft: structuredClone(draft), rank: evaluation.rank });
