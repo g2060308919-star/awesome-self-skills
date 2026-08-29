@@ -248,8 +248,13 @@ test('evidence schema admits every E2 derivation shape and defers semantic matri
   ], fact_ledger: [] };
   assert.deepEqual(validateAgainstSchema(artifact, claimsSchema), []);
 
-  const e0 = { ...artifact, claims: [{ ...artifact.claims[0], claim_form: 'direct', level: 'E0' }] };
-  assert.equal(validateAgainstSchema(e0, claimsSchema).length > 0, true);
+  const e0 = {
+    schema_version: '1.0.0', source_revision: 0, fact_ledger: [],
+    claims: [{ claim_id: 'claim_e0', claim_form: 'direct', level: 'E0', kind: 'requirement', scope: 'checkout', value: 'Speculation', source_locator_ids: ['locator_a'], source_id: 'source_a' }]
+  };
+  assert.deepEqual(validateAgainstSchema(e0, claimsSchema), [{
+    category: 'schema', code: 'ONE_OF_MISMATCH', path: '/claims/0', message: 'must match exactly one schema variant'
+  }]);
 });
 
 test('all seven behavior views allow evidence-only, model-only, and pending support shapes', () => {
@@ -269,8 +274,13 @@ test('all seven behavior views allow evidence-only, model-only, and pending supp
     assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), [], type);
   }
 
-  const modelOnly = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [] }], interaction_matrix: [], interaction_candidates: [] };
+  const relation = { relation_id: 'relation_model', kind: 'sequence', from_element_id: 'node_model', to_element_id: 'node_model', sequence: 0 };
+  const modelOnly = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ ...relation, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], interaction_candidates: [] };
   assert.deepEqual(validateAgainstSchema(modelOnly, behaviorViewsSchema), []);
+
+  const bothEmpty = structuredClone(modelOnly);
+  bothEmpty.views[0].relations[0].model_refs = [];
+  assert.deepEqual(validateAgainstSchema(bothEmpty, behaviorViewsSchema), []);
 });
 
 test('schema validates structured behavior forms and rejects their unknown properties', () => {
@@ -304,15 +314,25 @@ test('case draft schema carries every factual support and Testability gate', () 
   delete missingCapabilityStatus.cases[0].testability_profile.capabilities[0].status;
   assert.equal(validateAgainstSchema(missingCapabilityStatus, caseDraftsSchema).some((item) => item.path.endsWith('/status') && item.code === 'REQUIRED_FIELD_MISSING'), true);
 
-  for (const status of ['provided', 'verified', 'approved-assumption', 'unavailable', 'unknown']) {
-    const statusArtifact = structuredClone(artifact);
-    statusArtifact.cases[0].testability_profile.capabilities[0].status = status;
-    assert.deepEqual(validateAgainstSchema(statusArtifact, caseDraftsSchema), [], status);
+  for (const collection of ['capabilities', 'observers', 'controls']) {
+    for (const status of ['provided', 'verified', 'approved-assumption', 'unavailable', 'unknown']) {
+      const statusArtifact = structuredClone(artifact);
+      statusArtifact.cases[0].testability_profile[collection][0].status = status;
+      assert.deepEqual(validateAgainstSchema(statusArtifact, caseDraftsSchema), [], `${collection}:${status}`);
+    }
   }
 });
 
 test('test bundle stores complete structured Cases and rejects prose summaries', () => {
   assert.deepEqual(validateAgainstSchema(completeBundle(), testBundleSchema), []);
+
+  for (const collection of ['capabilities', 'observers', 'controls']) {
+    for (const status of ['provided', 'verified', 'approved-assumption', 'unavailable', 'unknown']) {
+      const statusBundle = completeBundle();
+      statusBundle.conditional[0].testability_profile[collection][0].status = status;
+      assert.deepEqual(validateAgainstSchema(statusBundle, testBundleSchema), [], `conditional:${collection}:${status}`);
+    }
+  }
 
   const shallowBundle = completeBundle();
   shallowBundle.grounded = [{ case_id: 'case_shallow', title: 'Summary only', obligation_ids: ['obligation_a'], markdown_sections: ['Unstructured prose'], evidence_refs: ['claim_a'] }];
