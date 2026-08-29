@@ -1494,6 +1494,93 @@ console.log(JSON.stringify([500, 1000, 2000].map(run)));
   }
 });
 
+test('clarification validates a many-root Decision through each root own obligations', async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'task9-many-root-decision-'));
+  const probePath = path.join(temporaryDirectory, 'probe.mjs');
+  const clarificationUrl = pathToFileURL(path.join(repositoryRoot, 'src/clarification.mjs')).href;
+  const canonicalUrl = pathToFileURL(path.join(repositoryRoot, 'src/canonical.mjs')).href;
+  await writeFile(probePath, `import { canonicalStringify, digest, stableId } from ${JSON.stringify(canonicalUrl)};
+import { evaluateClarification } from ${JSON.stringify(clarificationUrl)};
+const originalHas = Set.prototype.has;
+let hasCalls = 0;
+Object.defineProperty(Set.prototype, 'has', { configurable: true, writable: true, value(item) {
+  hasCalls += 1;
+  return Reflect.apply(originalHas, this, [item]);
+} });
+function semantic(ids, classification) {
+  const points = ids.map((obligation_id) => ({
+    obligation_id, evidence_level: classification === 'blocked' ? 'E0' : 'E3', classification,
+    blocked_reason: classification === 'blocked' ? 'MISSING_ORACLE' : null
+  }));
+  return { formal_test_points: points, coverage_denominator: ids.length, delivery_sections: {
+    grounded: classification === 'grounded' ? [...ids] : [], conditional: [],
+    blocked: classification === 'blocked' ? [...ids] : [], exploratory: [],
+    coverage: { formal_denominator: ids.length },
+    quality: { delivery_status: classification === 'blocked' ? 'no_deterministic_cases' : 'executable_subset_ready' }
+  } };
+}
+function run(size) {
+  const obligationIds = [];
+  const roots = [];
+  for (let index = 0; index < size; index += 1) {
+    const suffix = String(index).padStart(5, '0');
+    const obligationId = \`obligation_\${suffix}\`;
+    const claimId = \`claim_\${suffix}\`;
+    const signature = { missing_type: 'oracle', semantic_refs: [claimId], scope: 'refund' };
+    obligationIds.push(obligationId);
+    roots.push({
+      root_issue_id: stableId('root', signature), root_issue_key: canonicalStringify(signature), ...signature,
+      affected_obligation_ids: [obligationId],
+      risk_counts: { critical: 0, high: 1, medium: 0, low: 0 },
+      question: 'What should happen?', answerable: true, reasons: ['MISSING_ORACLE'],
+      evidence_refs: [claimId], current: true
+    });
+  }
+  roots.sort((left, right) => left.root_issue_id < right.root_issue_id ? -1 : left.root_issue_id > right.root_issue_id ? 1 : 0);
+  const rootIds = roots.map((root) => root.root_issue_id);
+  const priorSemantic = semantic(obligationIds, 'blocked');
+  const currentSemantic = semantic(obligationIds, 'grounded');
+  const context = { source_revision: 1, blocked_obligations: [], prior_state: {
+    source_revision: 0, clarification_event_seq: 0, asked_root_issue_ids: [...rootIds],
+    root_issue_dispositions: rootIds.map((root_issue_id) => ({ root_issue_id, status: 'asked' })),
+    last_pending_root_issue_ids: [...rootIds], last_question_set_digest: digest(rootIds), clarification_stop: null,
+    semantic_snapshot: priorSemantic, root_snapshot_ledger: roots
+  }, append_batch: { decision_records: [{
+    decision_id: 'decision_final', question_id: stableId('question', { root_issue_ids: rootIds }),
+    root_issue_ids: [...rootIds], affected_obligation_ids: [...obligationIds], clarification_event_seq: 1,
+    confirmer: 'owner', confirmed_at: '2026-08-30', question: 'What should happen?',
+    answer: 'Apply each stated oracle.', disposition: 'final', authority_scope: 'refund',
+    effective_scope: 'refund', evidence_ref: 'locator_decision', evidence_level: 'E3'
+  }], clarification_events: [] }, semantic_snapshot: currentSemantic };
+  hasCalls = 0;
+  const result = evaluateClarification(context, 'pause_for_clarification');
+  return { size, hasCalls, action: result.action, diagnostics: result.diagnostics };
+}
+const measurements = [100, 200, 400, 800].map(run);
+Object.defineProperty(Set.prototype, 'has', { configurable: true, writable: true, value: originalHas });
+console.log(JSON.stringify(measurements));
+`, 'utf8');
+  try {
+    const output = (/** @type {any} */ (childProcess)).execFileSync(process.execPath, [probePath], {
+      encoding: 'utf8', maxBuffer: 10 * 1024 * 1024
+    });
+    const measurements = JSON.parse(output);
+    for (const item of measurements) {
+      assert.equal(item.action, 'deliver', `N=${item.size}`);
+      assert.deepEqual(item.diagnostics, [], `N=${item.size}`);
+      assert.ok(item.hasCalls <= item.size * 80, `N=${item.size}, Set.has=${item.hasCalls}`);
+    }
+    for (let index = 1; index < measurements.length; index += 1) {
+      assert.ok(
+        measurements[index].hasCalls <= measurements[index - 1].hasCalls * 2.6,
+        JSON.stringify(measurements)
+      );
+    }
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('clarification production and test sources contain no fixed iteration fields', async () => {
   const forbidden = [
     ['clarification', 'round'].join('_'),

@@ -1190,13 +1190,14 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
       if (entry.kind === 'decision') {
         const decisionRecord = /** @type {any} */ (entry.item);
         const canProvideEvidence = decisionRecord.disposition === 'final' || decisionRecord.disposition === 'temporary';
+        const decisionAffected = new Set(decisionRecord.affected_obligation_ids);
         for (const rootId of decisionRecord.root_issue_ids) {
           const priorRoot = priorRootById.get(rootId);
           const priorAffected = priorAffectedByRootId.get(rootId);
           let ownGain = false;
           if (canProvideEvidence && priorRoot && priorAffected && !currentRootIds.has(rootId)) {
-            for (const obligationId of decisionRecord.affected_obligation_ids) {
-              if (!priorAffected.has(obligationId)) continue;
+            for (const obligationId of priorAffected) {
+              if (!decisionAffected.has(obligationId)) continue;
               const priorPoint = priorPoints.get(obligationId);
               const currentPoint = pointById.get(obligationId);
               const tupleChanged = priorPoint?.classification === 'blocked' && currentPoint
