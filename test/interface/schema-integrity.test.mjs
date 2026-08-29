@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadSchemaRegistry } from '../../src/schema-registry.mjs';
+import { canonicalStringify, digest } from '../../src/canonical.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const schemaDirectory = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas');
@@ -77,6 +78,54 @@ test('schema tampering is fatal before an empty run is read', async () => {
     assert.equal(result.code, 0, result.stderr);
     assert.equal(reply.status, 'fatal');
     assert.equal(reply.diagnostics[0].code, 'SCHEMA_INTEGRITY_MISMATCH');
+  } finally {
+    await rm(temporarySkill, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('packaged runner binds the frozen compiler version into schema integrity', async () => {
+  const temporarySkill = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-skill-'));
+  const temporaryScripts = path.join(temporarySkill, 'scripts');
+  const temporaryRunner = path.join(temporaryScripts, 'test-compiler.mjs');
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
+  try {
+    await mkdir(temporaryScripts, { recursive: true });
+    await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
+    await cp(manifestPath, path.join(temporaryScripts, 'schema-manifest.json'));
+    await writeFile(temporaryRunner, (await readFile(runnerPath, 'utf8')).replace(/var embeddedCompilerVersion = [^;]+;/, 'var embeddedCompilerVersion = "0.1.1";'));
+    const result = await runCompiler(runDirectory, temporaryRunner);
+
+    assert.equal(JSON.parse(result.stdout).status, 'fatal');
+    assert.equal(JSON.parse(result.stdout).diagnostics[0].code, 'SCHEMA_INTEGRITY_MISMATCH');
+  } finally {
+    await rm(temporarySkill, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('installed runner rejects a supported-digest schema with an unsupported keyword', async () => {
+  const temporarySkill = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-skill-'));
+  const temporaryScripts = path.join(temporarySkill, 'scripts');
+  const temporaryRunner = path.join(temporaryScripts, 'test-compiler.mjs');
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
+  try {
+    await mkdir(temporaryScripts, { recursive: true });
+    await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
+    const schemaPath = path.join(temporaryScripts, 'schemas/source-pack.schema.json');
+    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+    schema.unsupported_keyword = true;
+    await writeFile(schemaPath, `${canonicalStringify(schema)}\n`);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.schemas.find((/** @type {any} */ entry) => entry.file === 'source-pack.schema.json').digest = digest(schema);
+    const base = { compiler_version: manifest.compiler_version, schema_version: manifest.schema_version, schemas: manifest.schemas };
+    manifest.digest = digest(base);
+    await writeFile(path.join(temporaryScripts, 'schema-manifest.json'), `${canonicalStringify(manifest)}\n`);
+    await writeFile(temporaryRunner, (await readFile(runnerPath, 'utf8')).replace(/"[a-f0-9]{64}"/, JSON.stringify(manifest.digest)));
+    const result = await runCompiler(runDirectory, temporaryRunner);
+
+    assert.equal(JSON.parse(result.stdout).status, 'fatal');
+    assert.equal(JSON.parse(result.stdout).diagnostics[0].code, 'SCHEMA_INTEGRITY_MISMATCH');
   } finally {
     await rm(temporarySkill, { recursive: true, force: true });
     await rm(runDirectory, { recursive: true, force: true });

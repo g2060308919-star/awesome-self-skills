@@ -11,7 +11,7 @@ const schemas = await Promise.all(schemaFiles.map(async (/** @type {string} */ f
   const schema = JSON.parse(await readFile(path.join(schemaDirectory, file), 'utf8'));
   return { file, digest: digest(schema) };
 }));
-const manifestBase = { schema_version: schemaVersion, schemas };
+const manifestBase = { compiler_version: compilerVersion, schema_version: schemaVersion, schemas };
 const manifestDigest = digest(manifestBase);
 await writeFile(
   'skill/generate-test-cases/scripts/schema-manifest.json',

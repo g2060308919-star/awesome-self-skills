@@ -16,6 +16,9 @@ const embeddedManifestDigest = typeof __SCHEMA_MANIFEST_DIGEST__ === 'string'
 const embeddedSchemaVersion = typeof __SCHEMA_VERSION__ === 'string'
   ? __SCHEMA_VERSION__
   : undefined;
+const embeddedCompilerVersion = typeof __COMPILER_VERSION__ === 'string'
+  ? __COMPILER_VERSION__
+  : undefined;
 
 const emptyRunReply = Object.freeze({
   status: 'need_artifact',
@@ -32,7 +35,7 @@ const emptyRunReply = Object.freeze({
  */
 export async function advanceStrict(runDirectory) {
   try {
-    const registry = await loadSchemaRegistry(schemaDirectory, embeddedManifestDigest);
+    const registry = await loadSchemaRegistry(schemaDirectory, embeddedManifestDigest, embeddedCompilerVersion);
     if (embeddedSchemaVersion && registry.schemaVersion !== embeddedSchemaVersion) return fatalReply('SCHEMA_INTEGRITY_MISMATCH', 'Bundled schema version does not match the compiler.');
   } catch {
     return fatalReply('SCHEMA_INTEGRITY_MISMATCH', 'Bundled schemas or schema manifest failed integrity verification.');

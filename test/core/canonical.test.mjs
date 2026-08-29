@@ -43,6 +43,33 @@ test('stable id retains semantically different execution signatures', () => {
   assert.notEqual(stableId('case', caseA), stableId('case', { ...caseA, role: 'admin' }));
 });
 
+test('root issue IDs exclude mutable case and Test Point associations only', () => {
+  const rootIssue = { missing_type: 'oracle', scope: 'refund', case_ids: ['case_a'], test_point_ids: ['obligation_a'] };
+
+  assert.equal(
+    stableId('root', rootIssue),
+    stableId('root', { ...rootIssue, case_ids: ['case_b'], test_point_ids: ['obligation_b'] })
+  );
+  assert.notEqual(
+    stableId('root', rootIssue),
+    stableId('root', { ...rootIssue, scope: 'chargeback' })
+  );
+});
+
+test('unrelated identity fields remain distinguishing', () => {
+  assert.notEqual(
+    stableId('fact', { fact_type: 'limit', test_point_ids: ['obligation_a'] }),
+    stableId('fact', { fact_type: 'limit', test_point_ids: ['obligation_b'] })
+  );
+});
+
+test('canonical set ordering is code-point deterministic while ordered transitions remain ordered', () => {
+  assert.equal(
+    canonicalStringify({ source_locator_ids: ['ä', 'z'], transition_order: ['second', 'first'] }),
+    '{"source_locator_ids":["z","ä"],"transition_order":["second","first"]}'
+  );
+});
+
 test('digest is a lowercase SHA-256 hexadecimal value', () => {
   assert.equal(digest({ a: 1 }), '015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862');
 });

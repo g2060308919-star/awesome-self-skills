@@ -21,6 +21,7 @@ export const STABLE_ID_COLLECTIONS = Object.freeze([
   Object.freeze({ collection: 'decision_records', id: 'decision_id' }),
   Object.freeze({ collection: 'clarification_events', id: 'event_id' }),
   Object.freeze({ collection: 'claims', id: 'claim_id' }),
+  Object.freeze({ collection: 'fact_ledger', id: 'fact_id' }),
   Object.freeze({ collection: 'views', id: 'view_id' }),
   Object.freeze({ collection: 'obligations', id: 'obligation_id' }),
   Object.freeze({ collection: 'cases', id: 'case_id' })

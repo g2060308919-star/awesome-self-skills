@@ -9,19 +9,28 @@ import path from "node:path";
 
 // src/canonical.mjs
 import { createHash } from "node:crypto";
-var orderedArrayField = /^(?:steps|action_path|flow|flow_sequence|sequence)$/;
-var setLikeArrayField = /(?:_ids|_refs|root_issue_ids|source_locator_ids|affected_obligation_ids)$/;
-function canonicalize(value, field = "") {
+var ORDERED_ARRAY_FIELDS = /* @__PURE__ */ new Set(["steps", "action_path", "flow", "flow_sequence", "sequence", "transition_order"]);
+var SET_ARRAY_FIELDS = /* @__PURE__ */ new Set(["source_locator_ids", "source_claim_ids", "root_issue_ids", "affected_obligation_ids", "case_ids", "obligation_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "parent_claim_ids"]);
+function compareCodePoints(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function stableSemanticKey(value) {
+  if (typeof value === "string") return `string:${value}`;
+  if (typeof value === "number") return `number:${value}`;
+  if (typeof value === "boolean") return `boolean:${value}`;
+  if (value === null) return "null";
+  return JSON.stringify(canonicalize(value, []));
+}
+function canonicalize(value, path3 = []) {
   if (Array.isArray(value)) {
-    const values = value.map((item) => canonicalize(item));
-    if (orderedArrayField.test(field)) return values;
-    if (setLikeArrayField.test(field)) {
-      return [...values].sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right)));
-    }
+    const field = path3.at(-1) ?? "";
+    const values = value.map((item) => canonicalize(item, path3));
+    if (ORDERED_ARRAY_FIELDS.has(field)) return values;
+    if (SET_ARRAY_FIELDS.has(field)) return [...values].sort((left, right) => compareCodePoints(stableSemanticKey(left), stableSemanticKey(right)));
     return values;
   }
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, canonicalize(item, key)]));
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => compareCodePoints(left, right)).map(([key, item]) => [key, canonicalize(item, [...path3, key])]));
   }
   return value;
 }
@@ -53,6 +62,7 @@ var STABLE_ID_COLLECTIONS = Object.freeze([
   Object.freeze({ collection: "decision_records", id: "decision_id" }),
   Object.freeze({ collection: "clarification_events", id: "event_id" }),
   Object.freeze({ collection: "claims", id: "claim_id" }),
+  Object.freeze({ collection: "fact_ledger", id: "fact_id" }),
   Object.freeze({ collection: "views", id: "view_id" }),
   Object.freeze({ collection: "obligations", id: "obligation_id" }),
   Object.freeze({ collection: "cases", id: "case_id" })
@@ -95,14 +105,14 @@ function assertSupportedSchema(schema) {
 }
 
 // src/schema-registry.mjs
-async function loadSchemaRegistry(schemaDirectory2, embeddedManifestDigest2) {
+async function loadSchemaRegistry(schemaDirectory2, embeddedManifestDigest2, embeddedCompilerVersion2) {
   const manifestPath = path.join(schemaDirectory2, "..", "schema-manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   const expectedManifestDigest = embeddedManifestDigest2 ?? manifest.digest;
-  if (digest({ schema_version: manifest.schema_version, schemas: manifest.schemas }) !== expectedManifestDigest || manifest.digest !== expectedManifestDigest) {
+  if (digest({ compiler_version: manifest.compiler_version, schema_version: manifest.schema_version, schemas: manifest.schemas }) !== expectedManifestDigest || manifest.digest !== expectedManifestDigest) {
     throw new Error("SCHEMA_INTEGRITY_MISMATCH");
   }
-  if (!Array.isArray(manifest.schemas) || typeof manifest.schema_version !== "string") throw new Error("SCHEMA_INTEGRITY_MISMATCH");
+  if (!Array.isArray(manifest.schemas) || typeof manifest.schema_version !== "string" || typeof manifest.compiler_version !== "string" || embeddedCompilerVersion2 && manifest.compiler_version !== embeddedCompilerVersion2) throw new Error("SCHEMA_INTEGRITY_MISMATCH");
   const schemas = /* @__PURE__ */ new Map();
   for (const entry of manifest.schemas) {
     if (!entry || typeof entry !== "object" || typeof entry.file !== "string" || typeof entry.digest !== "string") throw new Error("SCHEMA_INTEGRITY_MISMATCH");
@@ -111,7 +121,7 @@ async function loadSchemaRegistry(schemaDirectory2, embeddedManifestDigest2) {
     assertSupportedSchema(schema);
     schemas.set(entry.file, schema);
   }
-  return { schemaVersion: manifest.schema_version, schemas };
+  return { compilerVersion: manifest.compiler_version, schemaVersion: manifest.schema_version, schemas };
 }
 
 // src/advance-strict.mjs
@@ -120,8 +130,9 @@ var schemaDirectory = path2.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "67f6e180952368c13351d9e036078f2cba9ec393b69a15f9538015daa5e974e9" : void 0;
+var embeddedManifestDigest = true ? "4a0cadaf3e293690481e8a7326100c3f1127280d311ad2d03d819da1a9427d79" : void 0;
 var embeddedSchemaVersion = true ? "1.0.0" : void 0;
+var embeddedCompilerVersion = true ? "0.1.0" : void 0;
 var emptyRunReply = Object.freeze({
   status: "need_artifact",
   stage: "source_pack",
@@ -131,7 +142,7 @@ var emptyRunReply = Object.freeze({
 });
 async function advanceStrict(runDirectory) {
   try {
-    const registry = await loadSchemaRegistry(schemaDirectory, embeddedManifestDigest);
+    const registry = await loadSchemaRegistry(schemaDirectory, embeddedManifestDigest, embeddedCompilerVersion);
     if (embeddedSchemaVersion && registry.schemaVersion !== embeddedSchemaVersion) return fatalReply("SCHEMA_INTEGRITY_MISMATCH", "Bundled schema version does not match the compiler.");
   } catch {
     return fatalReply("SCHEMA_INTEGRITY_MISMATCH", "Bundled schemas or schema manifest failed integrity verification.");
