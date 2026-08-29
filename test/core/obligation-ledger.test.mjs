@@ -7,10 +7,19 @@ import {
   compileObligations, ObligationCompilationError
 } from '../../src/obligations/compile-obligations.mjs';
 import { stableId } from '../../src/canonical.mjs';
+import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { createObligationRegistry } from '../../src/obligations/registry.mjs';
 import { responsibilityKey } from '../../src/obligations/responsibility.mjs';
+import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const sourcePackSchema = JSON.parse(await readFile(path.join(
+  repositoryRoot, 'skill/generate-test-cases/scripts/schemas/source-pack.schema.json'
+), 'utf8'));
+const evidenceClaimsSchema = JSON.parse(await readFile(path.join(
+  repositoryRoot, 'skill/generate-test-cases/scripts/schemas/evidence-claims.schema.json'
+), 'utf8'));
+const digestA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const interactionDimensions = [
   'shared-entity', 'role', 'client', 'interface-event',
   'time', 'concurrency', 'side-effect'
@@ -45,6 +54,8 @@ function customInput(semanticKey, obligation, submittedId) {
     kind: obligation.kind,
     scope: obligation.scope,
     view_element_refs: [...obligation.view_element_refs].sort(),
+    ...(obligation.view_element_refs.length === 0
+      ? { source_claim_ids: [...obligation.source_claim_ids].sort() } : {}),
     semantic_key: semanticKey
   };
   return {
@@ -52,6 +63,67 @@ function customInput(semanticKey, obligation, submittedId) {
     obligation: {
       ...obligation,
       obligation_id: submittedId ?? stableId('obligation', identity)
+    }
+  };
+}
+
+/** @returns {any} */
+function task3SourcePack() {
+  return {
+    schema_version: '1.0.0', source_revision: 7, run_scope: 'checkout',
+    sources: [{
+      source_id: 'source_prd', kind: 'prd', version: '1', status: 'effective',
+      authority: 'owner', content: 'Rule', content_digest: digestA, scope: 'checkout'
+    }],
+    locators: [{
+      locator_id: 'locator_rule', source_id: 'source_prd', type: 'text-range',
+      text_range: { start: 0, end: 4 }, content_digest: digestA, extraction_integrity: 'verified'
+    }],
+    source_policy: {
+      rules: [{
+        rule_id: 'rule_prd', source_ids: ['source_prd'], scope: 'checkout',
+        authority: 'owner', status: 'effective'
+      }]
+    },
+    decision_records: [], clarification_events: []
+  };
+}
+
+function task3DirectEvidence() {
+  return {
+    schema_version: '1.0.0', source_revision: 7,
+    claims: [{
+      claim_id: 'claim_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
+      scope: 'checkout', value: 'approved', source_locator_ids: ['locator_rule'], source_id: 'source_prd'
+    }],
+    fact_ledger: [{
+      fact_id: 'fact_rule', claim_id: 'claim_rule', status: 'active', source_claim_ids: ['claim_rule']
+    }]
+  };
+}
+
+/** @param {'final' | 'temporary'} disposition */
+function task3DecisionEvidence(disposition) {
+  const level = disposition === 'final' ? 'E3' : 'E1';
+  return {
+    packDecision: {
+      decision_id: 'decision_rule', question_id: 'question_rule', root_issue_ids: ['root_rule'],
+      affected_obligation_ids: [], clarification_event_seq: 1, confirmer: 'owner',
+      confirmed_at: '2026-08-30T00:00:00Z', question: 'Result?', answer: 'approved',
+      disposition, authority_scope: 'checkout', effective_scope: 'checkout',
+      evidence_ref: 'locator_rule', evidence_level: level
+    },
+    artifact: {
+      schema_version: '1.0.0', source_revision: 7,
+      claims: [{
+        claim_id: 'claim_rule', claim_form: 'decision-record', level,
+        kind: disposition === 'final' ? 'requirement' : 'assumption', scope: 'checkout',
+        value: 'approved', source_locator_ids: ['locator_rule'],
+        decision_id: 'decision_rule', authority: 'checkout'
+      }],
+      fact_ledger: [{
+        fact_id: 'fact_rule', claim_id: 'claim_rule', status: 'active', source_claim_ids: ['claim_rule']
+      }]
     }
   };
 }
@@ -168,6 +240,28 @@ function compilationError(action) {
   throw new Error('unreachable after assertion failure');
 }
 
+/** @param {string} claimPrefix @param {() => unknown} action */
+function countTaggedMapReads(claimPrefix, action) {
+  const originalGet = Map.prototype.get;
+  let reads = 0;
+  Object.defineProperty(Map.prototype, 'get', {
+    configurable: true,
+    writable: true,
+    value(/** @type {unknown} */ key) {
+      if (typeof key === 'string' && key.startsWith(claimPrefix)) reads += 1;
+      return originalGet.call(this, key);
+    }
+  });
+  try {
+    action();
+  } finally {
+    Object.defineProperty(Map.prototype, 'get', {
+      configurable: true, writable: true, value: originalGet
+    });
+  }
+  return reads;
+}
+
 test('obligation ledger compiles an empty formal scope into the frozen artifact shape', () => {
   const evidenceGraph = {
     claimsById: new Map(),
@@ -198,6 +292,59 @@ test('obligation ledger compiles an empty formal scope into the frozen artifact 
     fact_routes: [],
     interaction_routes: []
   });
+});
+
+test('obligation ledger consumes a real schema-valid Task 3 direct E3 snapshot', async () => {
+  const fixture = await ledgerFixture();
+  const sourcePack = task3SourcePack();
+  const evidenceArtifact = task3DirectEvidence();
+  assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
+  assert.deepEqual(validateAgainstSchema(evidenceArtifact, evidenceClaimsSchema), []);
+  const accepted = validateEvidenceGraph(sourcePack, evidenceArtifact);
+  assert.deepEqual(accepted.diagnostics, []);
+  const acceptedClaim = accepted.claimsById.get('claim_rule');
+  assert.ok(acceptedClaim);
+  assert.equal(Object.hasOwn(/** @type {Record<string, unknown>} */ (acceptedClaim), 'parent_claim_ids'), false);
+
+  const graph = graphFrom(fixture);
+  graph.claimsById = accepted.claimsById;
+  graph.factLedger = structuredClone(evidenceArtifact.fact_ledger);
+  graph.obligationCompilation.sourceRevision = evidenceArtifact.source_revision;
+  graph.obligationCompilation.factRoutes = [];
+  graph.obligationCompilation.notApplicableReviews = [];
+  fixture.behavior_views.source_revision = evidenceArtifact.source_revision;
+
+  const result = /** @type {any} */ (compileObligations(graph, fixture.behavior_views));
+  assert.equal(result.fact_routes.length, 1);
+  assert.equal(result.fact_routes[0].fact_id, 'fact_rule');
+  assert.equal(result.fact_routes[0].route_type, 'obligations');
+
+  for (const disposition of /** @type {const} */ (['final', 'temporary'])) {
+    const decisionFixture = await ledgerFixture();
+    const decisionSourcePack = task3SourcePack();
+    const decisionInput = task3DecisionEvidence(disposition);
+    decisionSourcePack.decision_records.push(decisionInput.packDecision);
+    assert.deepEqual(validateAgainstSchema(decisionSourcePack, sourcePackSchema), []);
+    assert.deepEqual(validateAgainstSchema(decisionInput.artifact, evidenceClaimsSchema), []);
+    const decisionAccepted = validateEvidenceGraph(decisionSourcePack, decisionInput.artifact);
+    assert.deepEqual(decisionAccepted.diagnostics, []);
+    const decisionClaim = decisionAccepted.claimsById.get('claim_rule');
+    assert.ok(decisionClaim);
+    assert.equal(Object.hasOwn(
+      /** @type {Record<string, unknown>} */ (decisionClaim), 'parent_claim_ids'
+    ), false);
+    const decisionGraph = graphFrom(decisionFixture);
+    decisionGraph.claimsById = decisionAccepted.claimsById;
+    decisionGraph.factLedger = structuredClone(decisionInput.artifact.fact_ledger);
+    decisionGraph.obligationCompilation.sourceRevision = decisionInput.artifact.source_revision;
+    decisionGraph.obligationCompilation.factRoutes = [];
+    decisionGraph.obligationCompilation.notApplicableReviews = [];
+    decisionFixture.behavior_views.source_revision = decisionInput.artifact.source_revision;
+    const decisionResult = /** @type {any} */ (compileObligations(
+      decisionGraph, decisionFixture.behavior_views
+    ));
+    assert.equal(decisionResult.fact_routes[0].route_type, 'obligations');
+  }
 });
 
 test('obligation ledger reconciles modeled, Blocked, and NotApplicable fact routes', async () => {
@@ -322,9 +469,12 @@ test('obligation ledger requires an independent supported E3/E2 review before No
   assert.equal(unknownError.diagnostics.some((item) => item.code === 'NOT_APPLICABLE_REVIEW_UNKNOWN'), true);
 
   const derived = graphFrom(fixture);
+  derived.claimsById.set('claim_exclusion_parent', {
+    claim_id: 'claim_exclusion_parent', level: 'E3', kind: 'requirement', scope: 'checkout'
+  });
   Object.assign(derived.claimsById.get('claim_exclusion'), {
     level: 'E2', kind: 'test-data', derivation_kind: 'enumeration-complement',
-    derivation_target: 'test-data'
+    derivation_target: 'test-data', parent_claim_ids: ['claim_exclusion_parent']
   });
   const derivedResult = /** @type {any} */ (compileObligations(derived, fixture.behavior_views));
   assert.equal(derivedResult.fact_routes.some((/** @type {any} */ route) => route.fact_id === 'fact_not_applicable'
@@ -403,7 +553,8 @@ test('obligation ledger normalizes only own accepted claim fields and rejects cy
 
   const missingParents = graphFrom(fixture);
   missingParents.claimsById.set('claim_missing_own_parents', {
-    claim_id: 'claim_missing_own_parents', level: 'E3', kind: 'requirement', scope: 'checkout'
+    claim_id: 'claim_missing_own_parents', level: 'E2', kind: 'model-element', scope: 'checkout',
+    derivation_kind: 'graph-reachability', derivation_target: 'model-element'
   });
   const parentError = compilationError(() => compileObligations(missingParents, fixture.behavior_views));
   assert.equal(parentError.diagnostics.some((item) => item.code === 'EVIDENCE_CLAIM_PARENTS_INVALID'), true);
@@ -419,14 +570,61 @@ test('obligation ledger normalizes only own accepted claim fields and rejects cy
     (item) => item.code === 'EVIDENCE_CLAIM_DERIVATION_INVALID'
   ), true);
 
+  const impossibleDerivation = graphFrom(fixture);
+  impossibleDerivation.claimsById.set('claim_impossible_derivation', {
+    claim_id: 'claim_impossible_derivation', level: 'E2', kind: 'model-element', scope: 'checkout',
+    parent_claim_ids: ['claim_rule'], derivation_kind: 'formula', derivation_target: 'model-element'
+  });
+  const targetError = compilationError(() => compileObligations(impossibleDerivation, fixture.behavior_views));
+  assert.equal(targetError.diagnostics.some(
+    (item) => item.code === 'EVIDENCE_CLAIM_DERIVATION_INVALID'
+  ), true);
+
+  const getterBoom = graphFrom(fixture);
+  const accessorClaim = {
+    claim_id: 'claim_accessor', level: 'E3', kind: 'requirement', parent_claim_ids: []
+  };
+  Object.defineProperty(accessorClaim, 'scope', {
+    enumerable: true,
+    get() {
+      throw new Error('getter boom');
+    }
+  });
+  getterBoom.claimsById.set('claim_accessor', accessorClaim);
+  const getterError = compilationError(() => compileObligations(getterBoom, fixture.behavior_views));
+  assert.equal(getterError.diagnostics.some(
+    (item) => item.code === 'EVIDENCE_CLAIM_DESCRIPTOR_INVALID'
+  ), true);
+
+  const changing = graphFrom(fixture);
+  let scopeReads = 0;
+  const changingClaim = {
+    claim_id: 'claim_changing', level: 'E3', kind: 'requirement', parent_claim_ids: []
+  };
+  Object.defineProperty(changingClaim, 'scope', {
+    enumerable: true,
+    get() {
+      scopeReads += 1;
+      return scopeReads === 1 ? 'checkout' : 'shipping';
+    }
+  });
+  changing.claimsById.set('claim_changing', changingClaim);
+  const changingError = compilationError(() => compileObligations(changing, fixture.behavior_views));
+  assert.equal(changingError.diagnostics.some(
+    (item) => item.code === 'EVIDENCE_CLAIM_DESCRIPTOR_INVALID'
+  ), true);
+  assert.equal(scopeReads, 0);
+
   const cycle = graphFrom(fixture);
   cycle.claimsById.set('claim_cycle_a', {
-    claim_id: 'claim_cycle_a', level: 'E3', kind: 'requirement', scope: 'checkout',
-    parent_claim_ids: ['claim_cycle_b']
+    claim_id: 'claim_cycle_a', level: 'E2', kind: 'model-element', scope: 'checkout',
+    parent_claim_ids: ['claim_cycle_b'], derivation_kind: 'graph-reachability',
+    derivation_target: 'model-element'
   });
   cycle.claimsById.set('claim_cycle_b', {
-    claim_id: 'claim_cycle_b', level: 'E3', kind: 'requirement', scope: 'checkout',
-    parent_claim_ids: ['claim_cycle_a']
+    claim_id: 'claim_cycle_b', level: 'E2', kind: 'model-element', scope: 'checkout',
+    parent_claim_ids: ['claim_cycle_a'], derivation_kind: 'graph-reachability',
+    derivation_target: 'model-element'
   });
   const cycleError = compilationError(() => compileObligations(cycle, fixture.behavior_views));
   assert.equal(cycleError.diagnostics.some((item) => item.code === 'EVIDENCE_CLAIM_CYCLE'), true);
@@ -450,6 +648,11 @@ test('obligation ledger requires an own nonblank unpadded run scope', async () =
 test('obligation ledger merges duplicate signatures without losing gates or leaking into siblings', async () => {
   const fixture = await ledgerFixture();
   const graph = graphFrom(fixture);
+  graph.claimsById.set('claim_rule_expected', {
+    claim_id: 'claim_rule_expected', level: 'E2', kind: 'expected-value', scope: 'checkout',
+    parent_claim_ids: ['claim_rule'], derivation_kind: 'decision-table-instance',
+    derivation_target: 'expected-value'
+  });
   const mergedId = graph.obligationCompilation.customObligations[0].obligation.obligation_id;
   const siblingInput = customInput('sibling-only', {
     kind: 'interaction', risk: 'low', scope: 'checkout',
@@ -461,9 +664,9 @@ test('obligation ledger merges duplicate signatures without losing gates or leak
       kind: 'decision',
       risk: 'medium',
       scope: 'checkout',
-      source_claim_ids: ['claim_rule_parent'],
+      source_claim_ids: ['claim_rule_expected'],
       view_element_refs: ['view_decision#rule_checkout'],
-      required_oracle_refs: ['claim_rule_parent'],
+      required_oracle_refs: ['claim_rule_expected'],
       required_capabilities: ['second-observer']
     }),
     siblingInput
@@ -474,14 +677,17 @@ test('obligation ledger merges duplicate signatures without losing gates or leak
   const sibling = result.obligations.find(
     (/** @type {any} */ item) => item.obligation_id === siblingInput.obligation.obligation_id
   );
-  assert.deepEqual(merged?.source_claim_ids, ['claim_rule', 'claim_rule_parent']);
-  assert.deepEqual(merged?.required_oracle_refs, ['claim_rule', 'claim_rule_parent']);
+  assert.deepEqual(merged?.source_claim_ids, ['claim_rule', 'claim_rule_expected']);
+  assert.deepEqual(merged?.required_oracle_refs, ['claim_rule', 'claim_rule_expected']);
   assert.deepEqual(merged?.required_capabilities, ['custom-observer', 'second-observer']);
   assert.deepEqual(sibling?.source_claim_ids, ['claim_exclusion']);
   assert.deepEqual(sibling?.required_capabilities, ['sibling-only']);
   assert.equal(sibling?.required_capabilities.includes('second-observer'), false);
 
   const reordered = graphFrom(fixture);
+  reordered.claimsById.set(
+    'claim_rule_expected', structuredClone(graph.claimsById.get('claim_rule_expected'))
+  );
   reordered.obligationCompilation.customObligations.push(
     structuredClone(graph.obligationCompilation.customObligations[1]),
     structuredClone(graph.obligationCompilation.customObligations[2])
@@ -585,18 +791,20 @@ test('obligation ledger rejects custom system collisions and conflicting semanti
   ), true);
 
   const sourceOwner = graphFrom(fixture);
-  sourceOwner.obligationCompilation.customObligations.push(
-    customInput('shared-source-owner', {
+  const firstSourceOwner = customInput('shared-source-owner', {
       kind: 'interaction', risk: 'low', scope: 'checkout',
       source_claim_ids: ['claim_exclusion'], view_element_refs: [], required_oracle_refs: [], required_capabilities: []
-    }),
-    customInput('shared-source-owner', {
+    });
+  const secondSourceOwner = customInput('shared-source-owner', {
       kind: 'interaction', risk: 'low', scope: 'checkout',
       source_claim_ids: ['claim_blocked'], view_element_refs: [], required_oracle_refs: [], required_capabilities: []
-    })
-  );
-  const sourceOwnerError = compilationError(() => compileObligations(sourceOwner, fixture.behavior_views));
-  assert.equal(sourceOwnerError.diagnostics.some((item) => item.code === 'CUSTOM_OBLIGATION_OWNER_CONFLICT'), true);
+    });
+  sourceOwner.obligationCompilation.customObligations.push(firstSourceOwner, secondSourceOwner);
+  const sourceOwnerResult = /** @type {any} */ (compileObligations(sourceOwner, fixture.behavior_views));
+  assert.notEqual(firstSourceOwner.obligation.obligation_id, secondSourceOwner.obligation.obligation_id);
+  assert.equal(sourceOwnerResult.obligations.some(
+    (/** @type {any} */ item) => item.obligation_id === secondSourceOwner.obligation.obligation_id
+  ), true);
 });
 
 test('obligation ledger rejects custom evidence poison, invalid Oracles, and unrelated owner ancestry', async () => {
@@ -694,6 +902,34 @@ test('obligation ledger binds custom stable IDs to semantic keys and qualified o
   }, firstOwner.obligation.obligation_id)];
   const ownerError = compilationError(() => compileObligations(secondGraph, ownerFixture.behavior_views));
   assert.equal(ownerError.diagnostics.some((item) => item.code === 'CUSTOM_OBLIGATION_ID_MISMATCH'), true);
+
+  const sourceOwnedA = customInput('source-owned', {
+    kind: 'interaction', risk: 'low', scope: 'checkout', source_claim_ids: ['claim_rule'],
+    view_element_refs: [], required_oracle_refs: ['claim_rule'], required_capabilities: []
+  });
+  const sourceOwnedB = customInput('source-owned', {
+    kind: 'interaction', risk: 'low', scope: 'checkout', source_claim_ids: ['claim_exclusion'],
+    view_element_refs: [], required_oracle_refs: [], required_capabilities: []
+  });
+  assert.notEqual(sourceOwnedA.obligation.obligation_id, sourceOwnedB.obligation.obligation_id);
+  const sourceGraphA = graphFrom(fixture);
+  sourceGraphA.obligationCompilation.customObligations = [sourceOwnedA];
+  const sourceGraphB = graphFrom(fixture);
+  sourceGraphB.obligationCompilation.customObligations = [sourceOwnedB];
+  assert.equal(/** @type {any} */ (compileObligations(sourceGraphA, fixture.behavior_views))
+    .obligations.some((/** @type {any} */ item) => item.obligation_id === sourceOwnedA.obligation.obligation_id), true);
+  assert.equal(/** @type {any} */ (compileObligations(sourceGraphB, fixture.behavior_views))
+    .obligations.some((/** @type {any} */ item) => item.obligation_id === sourceOwnedB.obligation.obligation_id), true);
+
+  const oldSourceId = stableId('obligation', {
+    kind: 'interaction', scope: 'checkout', view_element_refs: [], semantic_key: 'source-owned'
+  });
+  const oldSourceGraph = graphFrom(fixture);
+  oldSourceGraph.obligationCompilation.customObligations = [customInput(
+    'source-owned', structuredClone(sourceOwnedA.obligation), oldSourceId
+  )];
+  const oldSourceError = compilationError(() => compileObligations(oldSourceGraph, fixture.behavior_views));
+  assert.equal(oldSourceError.diagnostics.some((item) => item.code === 'CUSTOM_OBLIGATION_ID_MISMATCH'), true);
 });
 
 test('obligation ledger consumes every audited interaction disposition into one frozen route', async () => {
@@ -914,10 +1150,18 @@ test('obligation ledger rejects padded persisted behavior IDs, refs, and scopes'
   assert.equal(matrixError.diagnostics.some((item) => item.code === 'BEHAVIOR_STRING_INVALID'), true);
 });
 
-test('obligation ledger round-trips qualified refs containing hash and percent characters', async () => {
+test('obligation ledger preserves schema-valid padded free and protocol text', async () => {
   const fixture = await ledgerFixture();
-  const viewId = 'view#decision%owner';
-  const elementId = 'rule#checkout%owner';
+  fixture.behavior_views.views[0].elements[0].result = ' approved result ';
+
+  const result = /** @type {any} */ (compileObligations(graphFrom(fixture), fixture.behavior_views));
+  assert.equal(result.fact_routes.some((/** @type {any} */ route) => route.fact_id === 'fact_rule'), true);
+});
+
+test('obligation ledger round-trips qualified refs containing hash, percent, and NUL characters', async () => {
+  const fixture = await ledgerFixture();
+  const viewId = 'view#decision%owner\0';
+  const elementId = 'rule#checkout%owner\0';
   const qualifiedRef = `${encodeURIComponent(viewId)}#${encodeURIComponent(elementId)}`;
   fixture.behavior_views.views[0].view_id = viewId;
   fixture.behavior_views.views[0].elements[0].element_id = elementId;
@@ -1036,45 +1280,155 @@ test('obligation ledger indexes fact reconciliation instead of rescanning every 
   assert.ok(obligationEntriesScanned <= size * 2, `scanned ${obligationEntriesScanned} obligation entries`);
 });
 
-test('obligation ledger walks custom owner ancestry linearly once per owner', async () => {
+test('obligation ledger batches all obligation source roots into one linear fact-index walk', async () => {
   const fixture = await ledgerFixture();
   /** @param {number} size */
-  const countParentReads = (size) => {
+  const countAncestryReads = (size) => {
     const graph = graphFrom(fixture);
-    let parentReads = 0;
     const sourceClaimIds = ['claim_rule'];
     for (let index = 0; index < size; index += 1) {
-      const claimId = `claim_custom_scale_${index}`;
-      const parentId = index === 0 ? 'claim_rule' : `claim_custom_scale_${index - 1}`;
-      const claim = {
-        claim_id: claimId, level: 'E3', kind: 'requirement', scope: 'checkout'
-      };
-      Object.defineProperty(claim, 'parent_claim_ids', {
-        enumerable: true,
-        get() {
-          parentReads += 1;
-          return [parentId];
-        }
+      const claimId = `claim_fact_index_scale_${index}`;
+      const parentId = index === 0 ? 'claim_rule' : `claim_fact_index_scale_${index - 1}`;
+      graph.claimsById.set(claimId, {
+        claim_id: claimId, level: 'E2', kind: 'model-element', scope: 'checkout',
+        parent_claim_ids: [parentId], derivation_kind: 'graph-reachability',
+        derivation_target: 'model-element'
       });
-      graph.claimsById.set(claimId, claim);
       sourceClaimIds.push(claimId);
     }
-    graph.obligationCompilation.customObligations = [customInput('custom-ancestry-scale', {
+    graph.obligationCompilation.customObligations = [customInput('fact-index-scale', {
       kind: 'decision', risk: 'low', scope: 'checkout', source_claim_ids: sourceClaimIds,
       view_element_refs: ['view_decision#rule_checkout'], required_oracle_refs: ['claim_rule'],
       required_capabilities: []
     })];
-    compileObligations(graph, fixture.behavior_views);
-    return parentReads;
+    return countTaggedMapReads('claim_fact_index_scale_', () => {
+      compileObligations(graph, fixture.behavior_views);
+    });
   };
 
-  const sizes = [500, 1_000, 2_000];
-  const reads = sizes.map(countParentReads);
+  const sizes = [500, 1_000, 2_000, 4_000];
+  const reads = sizes.map(countAncestryReads);
   for (let index = 0; index < sizes.length; index += 1) {
-    assert.ok(reads[index] <= sizes[index] * 3, `${sizes[index]} claims caused ${reads[index]} parent reads`);
+    assert.ok(reads[index] <= sizes[index] * 30, `${sizes[index]} claims caused ${reads[index]} ancestry reads`);
+    if (index > 0) assert.ok(
+      reads[index] <= reads[index - 1] * 2 + 30,
+      `doubling ${sizes[index - 1]} claims changed reads ${reads[index - 1]} -> ${reads[index]}`
+    );
   }
-  assert.ok(reads[1] <= reads[0] * 2 + 4, `doubling 500 claims changed reads ${reads[0]} -> ${reads[1]}`);
-  assert.ok(reads[2] <= reads[1] * 2 + 4, `doubling 1000 claims changed reads ${reads[1]} -> ${reads[2]}`);
+});
+
+test('obligation ledger memoizes one NotApplicable exclusion closure across many facts', () => {
+  const size = 500;
+  /** @type {Map<string, any>} */
+  const claimsById = new Map([['claim_fact_scale', {
+    claim_id: 'claim_fact_scale', level: 'E3', kind: 'requirement', scope: 'checkout'
+  }], ['claim_exclusion_root', {
+    claim_id: 'claim_exclusion_root', level: 'E3', kind: 'requirement', scope: 'checkout'
+  }]]);
+  let exclusionId = 'claim_exclusion_root';
+  for (let index = 0; index < size; index += 1) {
+    const claimId = `claim_na_scale_${index}`;
+    claimsById.set(claimId, {
+      claim_id: claimId, level: 'E2', kind: 'model-element', scope: 'checkout',
+      parent_claim_ids: [exclusionId], derivation_kind: 'graph-reachability',
+      derivation_target: 'model-element'
+    });
+    exclusionId = claimId;
+  }
+  const facts = Array.from({ length: size }, (_, index) => ({
+    fact_id: `fact_na_scale_${index}`, claim_id: 'claim_fact_scale', status: 'active',
+    source_claim_ids: ['claim_fact_scale']
+  }));
+  const behaviorViews = {
+    schema_version: '1.0.0', source_revision: 0, views: [],
+    interaction_matrix: interactionDimensions.map((dimension) => ({
+      module_ids: ['checkout'], dimension, status: 'checked-no-signal'
+    })),
+    interaction_candidates: []
+  };
+  const graph = {
+    claimsById, factLedger: facts, runScope: 'checkout',
+    obligationCompilation: {
+      sourceRevision: 0, contextsByViewId: new Map(), customObligations: [],
+      factRoutes: facts.map((fact) => ({
+        fact_id: fact.fact_id, route_type: 'not_applicable', not_applicable_claim_id: exclusionId
+      })),
+      notApplicableReviews: facts.map((fact) => ({
+        fact_id: fact.fact_id, claim_id: exclusionId, support_review: 'supported'
+      }))
+    }
+  };
+
+  const reads = countTaggedMapReads('claim_na_scale_', () => {
+    const result = /** @type {any} */ (compileObligations(graph, behaviorViews));
+    assert.equal(result.fact_routes.length, size);
+  });
+  assert.ok(reads <= size * 30, `${size} shared exclusions caused ${reads} ancestry reads`);
+});
+
+test('obligation ledger batch-checks thousands of independent custom owners without scans', async () => {
+  const fixture = await ledgerFixture();
+  const size = 8_000;
+  const behaviorViews = structuredClone(fixture.behavior_views);
+  const view = behaviorViews.views[0];
+  const claimIds = Array.from({ length: size }, (_, index) => `claim_owner_scale_${index}`);
+  const elementIds = Array.from({ length: size }, (_, index) => `rule_owner_scale_${index}`);
+  view.source_claim_ids = [...claimIds];
+  view.elements = elementIds.map((elementId, index) => ({
+    element_id: elementId, kind: 'decision-rule', conditions: [`condition ${index}`],
+    result: `result ${index}`, priority: index, source_claim_ids: [claimIds[index]], model_refs: []
+  }));
+  view.relations = [];
+  const graph = {
+    claimsById: new Map(claimIds.map((claimId) => [claimId, {
+      claim_id: claimId, level: 'E3', kind: 'requirement', scope: 'checkout'
+    }])),
+    factLedger: [], runScope: 'checkout',
+    obligationCompilation: {
+      sourceRevision: behaviorViews.source_revision,
+      contextsByViewId: new Map([['view_decision', {
+        riskByElementId: Object.fromEntries(elementIds.map((elementId) => [elementId, 'low'])),
+        requiredOracleRefsByElementId: Object.fromEntries(elementIds.map((elementId) => [elementId, []])),
+        requiredCapabilitiesByElementId: Object.fromEntries(elementIds.map((elementId) => [elementId, []]))
+      }]]),
+      factRoutes: [], notApplicableReviews: [],
+      customObligations: [customInput('independent-owner-scale', {
+        kind: 'decision', risk: 'medium', scope: 'checkout', source_claim_ids: [...claimIds],
+        view_element_refs: elementIds.map((elementId) => `view_decision#${elementId}`),
+        required_oracle_refs: [], required_capabilities: []
+      })]
+    }
+  };
+  const originalFind = Array.prototype.find;
+  const originalHas = Set.prototype.has;
+  let elementScans = 0;
+  let relationChecks = 0;
+  Object.defineProperty(Array.prototype, 'find', {
+    configurable: true, writable: true,
+    value(/** @type {any} */ predicate, /** @type {any} */ thisArg) {
+      if (this.length === size && this[0]?.element_id?.startsWith('rule_owner_scale_')) elementScans += 1;
+      return originalFind.call(this, predicate, thisArg);
+    }
+  });
+  Object.defineProperty(Set.prototype, 'has', {
+    configurable: true, writable: true,
+    value(/** @type {unknown} */ value) {
+      if (typeof value === 'string' && value.startsWith('claim_owner_scale_')) relationChecks += 1;
+      return originalHas.call(this, value);
+    }
+  });
+  try {
+    compileObligations(graph, behaviorViews);
+  } finally {
+    Object.defineProperty(Array.prototype, 'find', {
+      configurable: true, writable: true, value: originalFind
+    });
+    Object.defineProperty(Set.prototype, 'has', {
+      configurable: true, writable: true, value: originalHas
+    });
+  }
+  assert.ok(elementScans <= 2, `${size} owners caused ${elementScans} element-array scans`);
+  assert.ok(relationChecks <= size * 50, `${size} owners caused ${relationChecks} relation checks`);
 });
 
 test('obligation ledger joins a formal fact to an obligation through a directed E2 model child', async () => {
@@ -1110,7 +1464,13 @@ test('obligation ledger rejects NotApplicable evidence in either dependency dire
     && item.path === '/facts/fact_not_applicable'), true);
 
   const reverseDependency = graphFrom(fixture);
-  reverseDependency.claimsById.get('claim_not_applicable').parent_claim_ids = ['claim_exclusion'];
+  reverseDependency.claimsById.set('claim_fact_dependency', {
+    claim_id: 'claim_fact_dependency', level: 'E2', kind: 'model-element', scope: 'checkout',
+    parent_claim_ids: ['claim_exclusion'], derivation_kind: 'graph-reachability',
+    derivation_target: 'model-element'
+  });
+  reverseDependency.factLedger.find((/** @type {any} */ fact) => fact.fact_id === 'fact_not_applicable')
+    .source_claim_ids.push('claim_fact_dependency');
   const reverseError = compilationError(() => compileObligations(reverseDependency, fixture.behavior_views));
   assert.equal(reverseError.diagnostics.some((item) => item.code === 'NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT'), true);
   assert.equal(reverseError.diagnostics.some((item) => item.code === 'NORMATIVE_FACT_UNMODELED'
@@ -1120,12 +1480,20 @@ test('obligation ledger rejects NotApplicable evidence in either dependency dire
 test('obligation ledger rejects sibling custom evidence that only shares a parent with its owner', async () => {
   const fixture = await ledgerFixture();
   fixture.claims.push(
-    { claim_id: 'claim_common', level: 'E3', kind: 'requirement', scope: 'checkout', parent_claim_ids: [] },
-    { claim_id: 'claim_owner_a', level: 'E3', kind: 'requirement', scope: 'checkout', parent_claim_ids: ['claim_common'] },
-    { claim_id: 'claim_owner_b', level: 'E3', kind: 'requirement', scope: 'checkout', parent_claim_ids: ['claim_common'] }
+    { claim_id: 'claim_common', level: 'E3', kind: 'requirement', scope: 'checkout' },
+    {
+      claim_id: 'claim_owner_a', level: 'E2', kind: 'model-element', scope: 'checkout',
+      parent_claim_ids: ['claim_common'], derivation_kind: 'graph-reachability',
+      derivation_target: 'model-element'
+    },
+    {
+      claim_id: 'claim_owner_b', level: 'E2', kind: 'expected-value', scope: 'checkout',
+      parent_claim_ids: ['claim_common'], derivation_kind: 'decision-table-instance',
+      derivation_target: 'expected-value'
+    }
   );
   fixture.behavior_views.views[0].source_claim_ids.push('claim_owner_a');
-  fixture.behavior_views.views[0].elements[0].source_claim_ids = ['claim_rule', 'claim_owner_a'];
+  fixture.behavior_views.views[0].elements[0].model_refs = ['claim_owner_a'];
   fixture.custom_obligations.push(customInput('shared-parent-sibling', {
     kind: 'decision', risk: 'low', scope: 'checkout',
     source_claim_ids: ['claim_owner_b'], view_element_refs: ['view_decision#rule_checkout'],

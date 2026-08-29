@@ -2,6 +2,7 @@ import behaviorViewsSchema from '../../skill/generate-test-cases/scripts/schemas
 import testObligationsSchema from '../../skill/generate-test-cases/scripts/schemas/test-obligations.schema.json' with { type: 'json' };
 import { canonicalStringify, stableId } from '../canonical.mjs';
 import { scopeContains } from '../decision-record.mjs';
+import { E2_TARGETS } from '../evidence.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../schema-validator.mjs';
 import { auditInteractionMatrix } from '../views/interaction-matrix.mjs';
 import { validateBehaviorViews } from '../views/validate-views.mjs';
@@ -12,7 +13,7 @@ import { compile as compileIntegration } from './integration.mjs';
 import { compile as compileRole } from './role.mjs';
 import {
   compareCodePoints, createObligationRegistry, elementEvidenceRefs, isOracleEvidence,
-  parseQualifiedViewElementRef
+  parseQualifiedViewElementRef, qualifyViewElementRef
 } from './registry.mjs';
 import { compile as compileState } from './state.mjs';
 import { compile as compileTiming } from './timing.mjs';
@@ -135,31 +136,41 @@ function sparseBehaviorDiagnostics(artifact) {
   return diagnostics;
 }
 
-/**
- * The frozen schema only requires non-empty strings. Persisted identifiers,
- * references, scopes, and other string values must additionally be canonical:
- * callers must not be able to make two identities differ only by padding.
- * @param {Record<string, unknown>} artifact
- */
+const CANONICAL_BEHAVIOR_FIELDS = new Set([
+  'scope', 'state', 'from_state', 'to_state', 'timing_event',
+  'permissions', 'transition_order'
+]);
+
+/** @param {string} field */
+function isCanonicalBehaviorField(field) {
+  return CANONICAL_BEHAVIOR_FIELDS.has(field)
+    || field.endsWith('_id') || field.endsWith('_ids') || field.endsWith('_refs');
+}
+
+/** @param {Record<string, unknown>} artifact */
 function behaviorStringDiagnostics(artifact) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
-  /** @type {Array<{value: unknown, path: string}>} */
-  const pending = [{ value: artifact, path: '' }];
+  /** @type {Array<{value: unknown, path: string, canonical: boolean}>} */
+  const pending = [{ value: artifact, path: '', canonical: false }];
   const visited = new Set();
   while (pending.length > 0) {
-    const { value, path } = /** @type {{value: unknown, path: string}} */ (pending.pop());
+    const { value, path, canonical } = /** @type {{value: unknown, path: string, canonical: boolean}} */ (pending.pop());
     if (typeof value === 'string') {
-      if (!isNonblankUnpadded(value)) diagnostics.push(diagnostic(
+      if (canonical && !isNonblankUnpadded(value)) diagnostics.push(diagnostic(
         'schema', 'BEHAVIOR_STRING_INVALID', path,
-        'persisted behavior strings must be nonblank and unpadded'
+        'persisted behavior identifiers, references, scopes, and capabilities must be nonblank and unpadded'
       ));
       continue;
     }
     if (!value || typeof value !== 'object' || visited.has(value)) continue;
     visited.add(value);
     for (const [key, child] of Object.entries(value)) {
-      pending.push({ value: child, path: `${path}/${pointerPart(key)}` });
+      pending.push({
+        value: child,
+        path: `${path}/${pointerPart(key)}`,
+        canonical: Array.isArray(value) ? canonical : isCanonicalBehaviorField(key)
+      });
     }
   }
   return diagnostics;
@@ -254,11 +265,6 @@ const CLAIM_KINDS_BY_LEVEL = new Map([
   ['E2', new Set(['test-data', 'expected-value', 'model-element'])],
   ['E3', new Set(['requirement', 'description', 'example', 'diagnostic'])]
 ]);
-const DERIVATION_KINDS = new Set([
-  'formula', 'decision-table-instance', 'boundary-representative',
-  'enumeration-complement', 'graph-reachability'
-]);
-const DERIVATION_TARGETS = new Set(['test-data', 'expected-value', 'model-element']);
 
 /**
  * Validate Task 3's accepted in-memory graph without coercing an invalid graph
@@ -294,13 +300,33 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
         ));
         continue;
       }
-      if (!Object.hasOwn(claim, 'claim_id') || claim.claim_id !== key || !isNonblankUnpadded(claim.claim_id)) {
+      let descriptors;
+      try {
+        descriptors = Object.getOwnPropertyDescriptors(claim);
+      } catch {
+        diagnostics.push(diagnostic(
+          'schema', 'EVIDENCE_CLAIM_DESCRIPTOR_INVALID', path,
+          'accepted claim fields must be readable own data properties'
+        ));
+        continue;
+      }
+      const requiredDataFields = ['claim_id', 'level', 'kind', 'scope'];
+      if (requiredDataFields.some((field) => !descriptors[field]
+        || !Object.hasOwn(descriptors[field], 'value'))) {
+        diagnostics.push(diagnostic(
+          'schema', 'EVIDENCE_CLAIM_DESCRIPTOR_INVALID', path,
+          'accepted claim fields must be readable own data properties'
+        ));
+        continue;
+      }
+      const claimId = descriptors.claim_id.value;
+      const level = descriptors.level.value;
+      const kind = descriptors.kind.value;
+      const scope = descriptors.scope.value;
+      if (claimId !== key || !isNonblankUnpadded(claimId)) {
         diagnostics.push(diagnostic('reference', 'EVIDENCE_CLAIM_KEY_MISMATCH', `${path}/claim_id`, 'claim Map key must exactly match its own claim_id'));
         continue;
       }
-      const level = Object.hasOwn(claim, 'level') ? claim.level : undefined;
-      const kind = Object.hasOwn(claim, 'kind') ? claim.kind : undefined;
-      const scope = Object.hasOwn(claim, 'scope') ? claim.scope : undefined;
       if (!isNonblankUnpadded(level) || !isNonblankUnpadded(kind) || !isNonblankUnpadded(scope)
         || !CLAIM_KINDS_BY_LEVEL.get(level)?.has(kind)) {
         diagnostics.push(diagnostic(
@@ -309,24 +335,62 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
         ));
         continue;
       }
-      const parentClaimIds = Object.hasOwn(claim, 'parent_claim_ids') ? claim.parent_claim_ids : undefined;
-      if (!isDenseUniqueStringArray(parentClaimIds)) {
-        diagnostics.push(diagnostic('schema', 'EVIDENCE_CLAIM_PARENTS_INVALID', `${path}/parent_claim_ids`, 'claim parent IDs must be a dense unique array of nonblank unpadded IDs'));
-        continue;
+      /** @type {string[]} */
+      let parentClaimIds = [];
+      let derivationKind;
+      let derivationTarget;
+      if (level === 'E2') {
+        const e2Fields = ['derivation_kind', 'derivation_target'];
+        if (e2Fields.some((field) => !descriptors[field]
+          || !Object.hasOwn(descriptors[field], 'value'))) {
+          diagnostics.push(diagnostic(
+            'schema', 'EVIDENCE_CLAIM_DESCRIPTOR_INVALID', path,
+            'accepted E2 derivation fields must be own data properties'
+          ));
+          continue;
+        }
+        if (!descriptors.parent_claim_ids) {
+          diagnostics.push(diagnostic(
+            'schema', 'EVIDENCE_CLAIM_PARENTS_INVALID', `${path}/parent_claim_ids`,
+            'accepted E2 parent IDs must be an own nonempty dense unique array'
+          ));
+          continue;
+        }
+        if (!Object.hasOwn(descriptors.parent_claim_ids, 'value')) {
+          diagnostics.push(diagnostic(
+            'schema', 'EVIDENCE_CLAIM_DESCRIPTOR_INVALID', path,
+            'accepted E2 derivation fields must be own data properties'
+          ));
+          continue;
+        }
+        derivationKind = descriptors.derivation_kind.value;
+        derivationTarget = descriptors.derivation_target.value;
+        const submittedParentClaimIds = descriptors.parent_claim_ids.value;
+        if (!isDenseUniqueStringArray(submittedParentClaimIds, true)) {
+          diagnostics.push(diagnostic(
+            'schema', 'EVIDENCE_CLAIM_PARENTS_INVALID', `${path}/parent_claim_ids`,
+            'accepted E2 parent IDs must be a nonempty dense unique array of nonblank unpadded IDs'
+          ));
+          continue;
+        }
+        parentClaimIds = [...submittedParentClaimIds];
+        const allowedTargets = typeof derivationKind === 'string'
+          ? E2_TARGETS[/** @type {keyof typeof E2_TARGETS} */ (derivationKind)] : undefined;
+        if (typeof derivationTarget !== 'string' || !allowedTargets?.includes(derivationTarget)
+          || kind !== derivationTarget) {
+          diagnostics.push(diagnostic(
+            'schema', 'EVIDENCE_CLAIM_DERIVATION_INVALID', path,
+            'accepted E2 claims must match the frozen derivation kind/target matrix and claim kind'
+          ));
+          continue;
+        }
       }
-      if (level === 'E2' && (!Object.hasOwn(claim, 'derivation_kind')
-        || !Object.hasOwn(claim, 'derivation_target')
-        || typeof claim.derivation_kind !== 'string'
-        || typeof claim.derivation_target !== 'string'
-        || !DERIVATION_KINDS.has(claim.derivation_kind)
-        || !DERIVATION_TARGETS.has(claim.derivation_target))) {
-        diagnostics.push(diagnostic(
-          'schema', 'EVIDENCE_CLAIM_DERIVATION_INVALID', path,
-          'accepted E2 claims require own frozen derivation_kind and derivation_target values'
-        ));
-        continue;
-      }
-      claimsById.set(key, { ...claim, parent_claim_ids: [...parentClaimIds] });
+      claimsById.set(key, {
+        claim_id: claimId, level, kind, scope, parent_claim_ids: [...parentClaimIds],
+        ...(level === 'E2' ? {
+          derivation_kind: derivationKind, derivation_target: derivationTarget
+        } : {})
+      });
     }
   }
   for (const [claimId, claim] of claimsById) {
@@ -612,6 +676,22 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
   }, testObligationsSchema)));
   /** @type {Map<Record<string, unknown>, string>} */
   const ownerBySeed = new Map();
+  /** @type {Map<string, {view: Record<string, unknown>, element: Record<string, unknown>, roots: string[]}>} */
+  const ownerElementsByRef = new Map();
+  for (const [viewId, view] of viewsById) {
+    for (const element of objectArray(view.elements)) {
+      const elementId = typeof element.element_id === 'string' ? element.element_id : '';
+      const ref = qualifyViewElementRef(viewId, elementId);
+      if (ownerElementsByRef.has(ref)) {
+        diagnostics.push(diagnostic(
+          'reference', 'CUSTOM_OBLIGATION_VIEW_ELEMENT_COLLISION', `/views/${pointerPart(viewId)}/elements/${pointerPart(elementId)}`,
+          `qualified view element reference "${ref}" is not unique`
+        ));
+        continue;
+      }
+      ownerElementsByRef.set(ref, { view, element, roots: elementEvidenceRefs(element) });
+    }
+  }
   /** @type {Record<string, unknown>[]} */
   const seeds = [];
   inputs.customObligations.forEach((entry, index) => {
@@ -643,6 +723,9 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       kind: seed.kind,
       scope: seed.scope,
       view_element_refs: [...stringArray(seed.view_element_refs)].sort(compareCodePoints),
+      ...(stringArray(seed.view_element_refs).length === 0 ? {
+        source_claim_ids: [...stringArray(seed.source_claim_ids)].sort(compareCodePoints)
+      } : {}),
       semantic_key: entry.semantic_key
     };
     const expectedId = stableId('obligation', identity);
@@ -699,27 +782,26 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
     }
 
-    /** @type {Array<{ref: string, related: Set<string>}>} */
+    /** @type {Array<{ref: string, roots: string[]}>} */
     const owners = [];
     for (const viewElementRef of stringArray(seed.view_element_refs)) {
       const parsedRef = parseQualifiedViewElementRef(viewElementRef);
       const viewId = parsedRef?.viewId ?? '';
       const elementId = parsedRef?.elementId ?? '';
-      const view = viewsById.get(viewId);
-      const element = objectArray(view?.elements).find((item) => item.element_id === elementId);
-      if (!isNonblankUnpadded(viewId) || !isNonblankUnpadded(elementId) || !view || !element) {
+      const ownerElement = ownerElementsByRef.get(viewElementRef);
+      if (!isNonblankUnpadded(viewId) || !isNonblankUnpadded(elementId) || !ownerElement) {
         diagnostics.push(diagnostic(
         'reference', 'CUSTOM_OBLIGATION_VIEW_ELEMENT_DANGLING', `${path}/view_element_refs`,
         `custom obligation references unknown view element "${viewElementRef}"`
         ));
         continue;
       }
+      const { view, roots } = ownerElement;
       if (!isNonblankUnpadded(view.scope) || !isNonblankUnpadded(seed.scope)
         || !scopeContains(String(view.scope), String(seed.scope))) diagnostics.push(diagnostic(
         'classification', 'CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH', `${path}/scope`,
         `view element owner "${viewElementRef}" does not contain custom obligation scope "${String(seed.scope)}"`
       ));
-      const roots = elementEvidenceRefs(element);
       if (roots.length === 0 || roots.some((claimId) => !claimsById.has(claimId))) {
         diagnostics.push(diagnostic(
           'traceability', 'CUSTOM_OBLIGATION_OWNER_EVIDENCE_INVALID', `${path}/view_element_refs`,
@@ -727,28 +809,32 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         ));
         continue;
       }
-      owners.push({ ref: viewElementRef, related: directionallyRelatedClaims(relations, roots) });
+      owners.push({ ref: viewElementRef, roots });
     }
-    if (stringArray(seed.view_element_refs).length === 0) {
-      if (sourceIds.length > 0 && sourceIds.every((claimId) => claimsById.has(claimId))) owners.push({
-        ref: '', related: directionallyRelatedClaims(relations, sourceIds)
-      });
+    if (stringArray(seed.view_element_refs).length === 0
+      && sourceIds.length > 0 && sourceIds.every((claimId) => claimsById.has(claimId))) {
+      owners.push({ ref: '', roots: sourceIds });
     }
 
+    const relatedToAnyOwner = directionallyRelatedClaims(
+      relations, owners.flatMap((owner) => owner.roots)
+    );
+    const relatedToAnySource = directionallyRelatedClaims(relations, sourceIds);
+
     for (const claimId of sourceIds) {
-      if (claimsById.has(claimId) && !owners.some((owner) => owner.related.has(claimId))) diagnostics.push(diagnostic(
+      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic(
         'traceability', 'CUSTOM_OBLIGATION_SOURCE_UNRELATED', `${path}/source_claim_ids`,
         `source claim "${claimId}" is not an ancestor or descendant of any custom obligation owner`
       ));
     }
     for (const claimId of oracleIds) {
-      if (claimsById.has(claimId) && !owners.some((owner) => owner.related.has(claimId))) diagnostics.push(diagnostic(
+      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic(
         'traceability', 'CUSTOM_OBLIGATION_ORACLE_UNRELATED', `${path}/required_oracle_refs`,
         `Oracle claim "${claimId}" is not an ancestor or descendant of any custom obligation owner`
       ));
     }
     for (const owner of owners) {
-      if (!sourceIds.some((claimId) => owner.related.has(claimId))) diagnostics.push(diagnostic(
+      if (!owner.roots.some((claimId) => relatedToAnySource.has(claimId))) diagnostics.push(diagnostic(
         'traceability', 'CUSTOM_OBLIGATION_OWNER_UNSUPPORTED', `${path}/view_element_refs`,
         `custom obligation owner "${owner.ref}" has no directionally related source evidence`
       ));
@@ -982,6 +1068,8 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   }
   /** @type {Map<string, Record<string, unknown>>} */
   const routes = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const relatedClaimsByExclusionId = new Map();
   const notApplicableFactIds = new Set();
   for (const [factId, submittedRoutes] of [...routesByFactId].sort(([left], [right]) => compareCodePoints(left, right))) {
     const path = `/obligationCompilation/factRoutes/${factId || 'invalid'}`;
@@ -1051,7 +1139,11 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     }
     const fact = /** @type {Record<string, unknown>} */ (factsById.get(factId));
     const factClaimIds = new Set([String(fact.claim_id), ...stringArray(fact.source_claim_ids)]);
-    const relatedToExclusion = directionallyRelatedClaims(relations, [exclusionId]);
+    let relatedToExclusion = relatedClaimsByExclusionId.get(exclusionId);
+    if (!relatedToExclusion) {
+      relatedToExclusion = directionallyRelatedClaims(relations, [exclusionId]);
+      relatedClaimsByExclusionId.set(exclusionId, relatedToExclusion);
+    }
     if ([...factClaimIds].some((claimId) => relatedToExclusion.has(claimId))) {
       diagnostics.push(diagnostic('classification', 'NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT', `${path}/not_applicable_claim_id`, 'NotApplicable exclusion must be independent from the fact claim and its sources'));
       continue;
@@ -1101,15 +1193,16 @@ function indexObligationsByViewAndClaim(obligations, relations) {
         claims = new Map();
         index.set(viewId, claims);
       }
-      for (const sourceClaimId of stringArray(obligation.source_claim_ids)) {
-        for (const claimId of reachableClaims(relations.parentsById, [sourceClaimId])) {
-          let obligationIds = claims.get(claimId);
-          if (!obligationIds) {
-            obligationIds = new Set();
-            claims.set(claimId, obligationIds);
-          }
-          obligationIds.add(String(obligation.obligation_id));
+      const ancestorClaimIds = reachableClaims(
+        relations.parentsById, stringArray(obligation.source_claim_ids)
+      );
+      for (const claimId of ancestorClaimIds) {
+        let obligationIds = claims.get(claimId);
+        if (!obligationIds) {
+          obligationIds = new Set();
+          claims.set(claimId, obligationIds);
         }
+        obligationIds.add(String(obligation.obligation_id));
       }
     }
   }
