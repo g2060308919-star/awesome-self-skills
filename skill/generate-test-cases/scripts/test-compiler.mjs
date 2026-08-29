@@ -9,44 +9,91 @@ import path from "node:path";
 
 // src/canonical.mjs
 import { createHash } from "node:crypto";
-var ORDERED_ARRAY_FIELDS = /* @__PURE__ */ new Set(["steps", "action_path", "flow", "flow_sequence", "sequence", "transition_order"]);
-var SET_ARRAY_FIELDS = /* @__PURE__ */ new Set([
-  "source_ids",
-  "supersedes",
-  "source_locator_ids",
-  "source_claim_ids",
-  "parent_claim_ids",
-  "root_issue_ids",
-  "affected_obligation_ids",
-  "module_ids",
-  "view_element_refs",
-  "required_oracle_refs",
-  "required_capabilities",
-  "obligation_ids",
-  "case_ids",
-  "oracle_refs",
-  "test_point_ids",
-  "asked_root_issue_ids",
-  "sources",
-  "locators",
-  "decision_records",
-  "clarification_events",
-  "claims",
-  "fact_ledger",
-  "views",
-  "obligations",
-  "interaction_candidates",
-  "fact_routes",
-  "interaction_routes",
-  "obligation_dispositions",
-  "cases",
-  "exploratory_candidates",
-  "grounded",
-  "conditional",
-  "blocked",
-  "exploratory"
+var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set(["/steps", "/action_path", "/flow", "/flow_sequence", "/sequence", "/transition_order", "/cases/steps", "/cases/execution_signature/action_path", "/execution_signature/action_path"]);
+var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
+  "/source_ids",
+  "/supersedes",
+  "/source_locator_ids",
+  "/source_claim_ids",
+  "/parent_claim_ids",
+  "/root_issue_ids",
+  "/affected_obligation_ids",
+  "/module_ids",
+  "/view_element_refs",
+  "/required_oracle_refs",
+  "/required_capabilities",
+  "/obligation_ids",
+  "/case_ids",
+  "/oracle_refs",
+  "/test_point_ids",
+  "/asked_root_issue_ids",
+  "/sources",
+  "/locators",
+  "/source_policy/rules",
+  "/source_policy/rules/source_ids",
+  "/source_policy/rules/supersedes",
+  "/decision_records",
+  "/decision_records/root_issue_ids",
+  "/decision_records/affected_obligation_ids",
+  "/clarification_events",
+  "/clarification_events/root_issue_ids",
+  "/claims",
+  "/claims/source_locator_ids",
+  "/claims/parent_claim_ids",
+  "/fact_ledger",
+  "/views",
+  "/views/elements",
+  "/views/elements/source_claim_ids",
+  "/interaction_matrix",
+  "/interaction_matrix/module_ids",
+  "/interaction_candidates",
+  "/interaction_candidates/module_ids",
+  "/obligations",
+  "/obligations/source_claim_ids",
+  "/obligations/view_element_refs",
+  "/obligations/required_oracle_refs",
+  "/obligations/required_capabilities",
+  "/fact_routes",
+  "/fact_routes/obligation_ids",
+  "/interaction_routes",
+  "/cases",
+  "/cases/obligation_ids",
+  "/cases/source_claim_ids",
+  "/cases/execution_signature/oracle_refs",
+  "/cases/execution_signature/test_point_ids",
+  "/execution_signature/oracle_refs",
+  "/execution_signature/test_point_ids",
+  "/obligation_dispositions",
+  "/obligation_dispositions/case_ids",
+  "/exploratory_candidates",
+  "/grounded",
+  "/conditional",
+  "/blocked",
+  "/exploratory",
+  "/root_issue_dispositions"
 ]);
-var STABLE_SEMANTIC_KEY_FIELDS = ["source_id", "locator_id", "decision_id", "event_id", "claim_id", "fact_id", "view_id", "obligation_id", "case_id", "candidate_id", "exploratory_id", "rule_id", "root_issue_id"];
+var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
+  ["/sources", "source_id"],
+  ["/locators", "locator_id"],
+  ["/source_policy/rules", "rule_id"],
+  ["/decision_records", "decision_id"],
+  ["/clarification_events", "event_id"],
+  ["/claims", "claim_id"],
+  ["/fact_ledger", "fact_id"],
+  ["/views", "view_id"],
+  ["/interaction_candidates", "candidate_id"],
+  ["/obligations", "obligation_id"],
+  ["/fact_routes", "fact_id"],
+  ["/interaction_routes", "candidate_id"],
+  ["/cases", "case_id"],
+  ["/obligation_dispositions", "obligation_id"],
+  ["/exploratory_candidates", "exploratory_id"],
+  ["/grounded", "case_id"],
+  ["/conditional", "case_id"],
+  ["/blocked", "obligation_id"],
+  ["/exploratory", "exploratory_id"],
+  ["/root_issue_dispositions", "root_issue_id"]
+]);
 function compareCodePoints(left, right) {
   const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
   const rightPoints = Array.from(right, (character) => character.codePointAt(0) ?? 0);
@@ -56,7 +103,10 @@ function compareCodePoints(left, right) {
   }
   return leftPoints.length - rightPoints.length;
 }
-function stableSemanticKey(value) {
+function pathKey(path3) {
+  return `/${path3.join("/")}`;
+}
+function stableSemanticKey(path3, value) {
   if (typeof value === "string") return `string:${value}`;
   if (typeof value === "number") return `number:${value}`;
   if (typeof value === "boolean") return `boolean:${value}`;
@@ -66,18 +116,19 @@ function stableSemanticKey(value) {
       /** @type {Record<string, unknown>} */
       value
     );
-    for (const field of STABLE_SEMANTIC_KEY_FIELDS) {
-      if (typeof object[field] === "string") return `id:${object[field]}`;
-    }
+    const collectionPath = pathKey(path3);
+    const idField = COLLECTION_ID_FIELDS.get(collectionPath);
+    if (idField && typeof object[idField] === "string") return `id:${object[idField]}`;
+    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object.dimension, module_ids: object.module_ids })}`;
   }
   return JSON.stringify(canonicalize(value, []));
 }
 function canonicalize(value, path3 = []) {
   if (Array.isArray(value)) {
-    const field = path3.at(-1) ?? "";
     const values = value.map((item) => canonicalize(item, path3));
-    if (ORDERED_ARRAY_FIELDS.has(field)) return values;
-    if (SET_ARRAY_FIELDS.has(field)) return [...values].sort((left, right) => compareCodePoints(stableSemanticKey(left), stableSemanticKey(right)));
+    const currentPath = pathKey(path3);
+    if (ORDERED_ARRAY_PATHS.has(currentPath)) return values;
+    if (SET_ARRAY_PATHS.has(currentPath)) return [...values].sort((left, right) => compareCodePoints(stableSemanticKey(path3, left), stableSemanticKey(path3, right)));
     return values;
   }
   if (value && typeof value === "object") {

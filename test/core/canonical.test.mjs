@@ -87,6 +87,32 @@ test('case stable IDs normalize direct and nested execution-signature Test Point
   assert.notEqual(stableId('case', nested), stableId('case', { ...nested, execution_signature: { ...direct, role: 'admin' } }));
 });
 
+test('canonical contracts normalize policy, interaction, and checkpoint unordered collections', () => {
+  const policy = { source_policy: { rules: [{ rule_id: 'rule_b', source_ids: ['source_b', 'source_a'], scope: 'all' }, { rule_id: 'rule_a', source_ids: ['source_a'], scope: 'all' }] } };
+  const interactions = { interaction_matrix: [{ module_ids: ['billing', 'orders'], dimension: 'time', status: 'candidate' }, { module_ids: ['accounts'], dimension: 'role', status: 'checked-no-signal' }] };
+  const checkpoint = { root_issue_dispositions: [{ root_issue_id: 'root_b', status: 'asked' }, { root_issue_id: 'root_a', status: 'open' }] };
+
+  assert.equal(canonicalStringify(policy), canonicalStringify({ source_policy: { rules: [...policy.source_policy.rules].reverse() } }));
+  assert.equal(canonicalStringify(interactions), canonicalStringify({ interaction_matrix: [...interactions.interaction_matrix].reverse() }));
+  assert.equal(canonicalStringify(checkpoint), canonicalStringify({ root_issue_dispositions: [...checkpoint.root_issue_dispositions].reverse() }));
+});
+
+test('same-named arrays outside declared paths retain their input order', () => {
+  assert.notEqual(
+    canonicalStringify({ metadata: { source_ids: ['source_b', 'source_a'] } }),
+    canonicalStringify({ metadata: { source_ids: ['source_a', 'source_b'] } })
+  );
+});
+
+test('case and root stable IDs retain unrelated nested association fields', () => {
+  const caseSignature = { role: 'member', execution_signature: { role: 'member', test_point_ids: ['obligation_a'] }, metadata: { test_point_ids: ['metadata_a'], obligation_ids: ['metadata_obligation_a'] } };
+  const rootSignature = { missing_type: 'oracle', scope: 'checkout', test_point_ids: ['obligation_a'], metadata: { test_point_ids: ['metadata_a'] } };
+
+  assert.notEqual(stableId('case', caseSignature), stableId('case', { ...caseSignature, metadata: { test_point_ids: ['metadata_b'], obligation_ids: ['metadata_obligation_a'] } }));
+  assert.notEqual(stableId('case', caseSignature), stableId('case', { ...caseSignature, metadata: { test_point_ids: ['metadata_a'], obligation_ids: ['metadata_obligation_b'] } }));
+  assert.notEqual(stableId('root', rootSignature), stableId('root', { ...rootSignature, metadata: { test_point_ids: ['metadata_b'] } }));
+});
+
 test('digest is a lowercase SHA-256 hexadecimal value', () => {
   assert.equal(digest({ a: 1 }), '015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862');
 });
