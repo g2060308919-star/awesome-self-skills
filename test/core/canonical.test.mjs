@@ -70,6 +70,23 @@ test('canonical set ordering is code-point deterministic while ordered transitio
   );
 });
 
+test('canonical set ordering uses true Unicode code points and retains duplicate set values', () => {
+  assert.equal(
+    canonicalStringify({ source_ids: ['\u{10000}', '\uE000', '\uE000'], steps: ['first', 'second'] }),
+    '{"source_ids":["","","𐀀"],"steps":["first","second"]}'
+  );
+  assert.notEqual(canonicalStringify({}), canonicalStringify({ source_ids: [] }));
+});
+
+test('case stable IDs normalize direct and nested execution-signature Test Point sets', () => {
+  const direct = { role: 'member', action_path: ['open', 'save'], oracle_refs: ['oracle_b', 'oracle_a'], test_point_ids: ['obligation_b', 'obligation_a'] };
+  const nested = { title: 'Save settings', execution_signature: direct };
+
+  assert.equal(stableId('case', direct), stableId('case', { ...direct, test_point_ids: ['obligation_a', 'obligation_b'] }));
+  assert.equal(stableId('case', nested), stableId('case', { ...nested, execution_signature: { ...direct, test_point_ids: ['obligation_a', 'obligation_b'] } }));
+  assert.notEqual(stableId('case', nested), stableId('case', { ...nested, execution_signature: { ...direct, role: 'admin' } }));
+});
+
 test('digest is a lowercase SHA-256 hexadecimal value', () => {
   assert.equal(digest({ a: 1 }), '015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862');
 });

@@ -10,15 +10,66 @@ import path from "node:path";
 // src/canonical.mjs
 import { createHash } from "node:crypto";
 var ORDERED_ARRAY_FIELDS = /* @__PURE__ */ new Set(["steps", "action_path", "flow", "flow_sequence", "sequence", "transition_order"]);
-var SET_ARRAY_FIELDS = /* @__PURE__ */ new Set(["source_locator_ids", "source_claim_ids", "root_issue_ids", "affected_obligation_ids", "case_ids", "obligation_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "parent_claim_ids"]);
+var SET_ARRAY_FIELDS = /* @__PURE__ */ new Set([
+  "source_ids",
+  "supersedes",
+  "source_locator_ids",
+  "source_claim_ids",
+  "parent_claim_ids",
+  "root_issue_ids",
+  "affected_obligation_ids",
+  "module_ids",
+  "view_element_refs",
+  "required_oracle_refs",
+  "required_capabilities",
+  "obligation_ids",
+  "case_ids",
+  "oracle_refs",
+  "test_point_ids",
+  "asked_root_issue_ids",
+  "sources",
+  "locators",
+  "decision_records",
+  "clarification_events",
+  "claims",
+  "fact_ledger",
+  "views",
+  "obligations",
+  "interaction_candidates",
+  "fact_routes",
+  "interaction_routes",
+  "obligation_dispositions",
+  "cases",
+  "exploratory_candidates",
+  "grounded",
+  "conditional",
+  "blocked",
+  "exploratory"
+]);
+var STABLE_SEMANTIC_KEY_FIELDS = ["source_id", "locator_id", "decision_id", "event_id", "claim_id", "fact_id", "view_id", "obligation_id", "case_id", "candidate_id", "exploratory_id", "rule_id", "root_issue_id"];
 function compareCodePoints(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
+  const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const rightPoints = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
+  }
+  return leftPoints.length - rightPoints.length;
 }
 function stableSemanticKey(value) {
   if (typeof value === "string") return `string:${value}`;
   if (typeof value === "number") return `number:${value}`;
   if (typeof value === "boolean") return `boolean:${value}`;
   if (value === null) return "null";
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const object = (
+      /** @type {Record<string, unknown>} */
+      value
+    );
+    for (const field of STABLE_SEMANTIC_KEY_FIELDS) {
+      if (typeof object[field] === "string") return `id:${object[field]}`;
+    }
+  }
   return JSON.stringify(canonicalize(value, []));
 }
 function canonicalize(value, path3 = []) {
