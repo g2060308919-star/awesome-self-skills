@@ -226,6 +226,74 @@ test('interaction matrix preserves a formal candidate whose source is proven thr
   assert.equal(result.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), true);
 });
 
+test('interaction matrix rejects duplicate state and nested class identities in formal targets deterministically', async () => {
+  const duplicateState = await fixture('interaction-valid.json');
+  duplicateState.views[0] = {
+    view_id: 'view_orders', type: 'state', scope: 'orders', source_claim_ids: ['claim_shared'],
+    elements: [
+      { element_id: 'state_ready_a', kind: 'state', state: 'ready', source_claim_ids: ['claim_shared'], model_refs: [] },
+      { element_id: 'state_ready_b', kind: 'state', state: 'ready', source_claim_ids: ['claim_shared'], model_refs: [] },
+      { element_id: 'transition_retry', kind: 'transition', from_state: 'ready', event: 'retry', to_state: 'ready', condition: 'Retry', transition_order: ['retry'], source_claim_ids: ['claim_shared'], model_refs: [] }
+    ], relations: []
+  };
+  assert.deepEqual(validateAgainstSchema(duplicateState, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(duplicateState), []);
+  const stateResult = auditInteractionMatrix(duplicateState);
+  assert.equal(stateResult.diagnostics.some((item) => item.code === 'STATE_NAME_DUPLICATE'
+    && item.path === '/views/view_orders/state_names/ready'), true);
+  assert.equal(stateResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
+  assert.equal(stateResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
+    && item.message.includes('shared-entity')), true);
+  const reversedState = structuredClone(duplicateState);
+  reversedState.views[0].elements.reverse();
+  assert.deepEqual(auditInteractionMatrix(reversedState), stateResult);
+
+  const duplicateClass = await fixture('interaction-valid.json');
+  duplicateClass.views[0] = {
+    view_id: 'view_orders', type: 'input-domain', scope: 'orders', source_claim_ids: ['claim_shared'],
+    elements: [{
+      element_id: 'input_primary', kind: 'input-domain', domain: 'amount',
+      classes: [{ class_id: 'class_shared', label: 'first' }, { class_id: 'class_shared', label: 'second' }],
+      bounds: { lower: 1, upper: 10, inclusive: true }, source_claim_ids: ['claim_shared'], model_refs: []
+    }], relations: []
+  };
+  assert.deepEqual(validateAgainstSchema(duplicateClass, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(duplicateClass), []);
+  const classResult = auditInteractionMatrix(duplicateClass);
+  assert.equal(classResult.diagnostics.some((item) => item.code === 'INPUT_CLASS_ID_DUPLICATE'
+    && item.path === '/views/view_orders/elements/input_primary/classes/class_shared'), true);
+  assert.equal(classResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
+  const reversedClass = structuredClone(duplicateClass);
+  reversedClass.views[0].elements[0].classes.reverse();
+  assert.deepEqual(auditInteractionMatrix(reversedClass), classResult);
+});
+
+test('interaction matrix accepts a unique state self-transition and class IDs reused across input elements', async () => {
+  const selfTransition = await fixture('interaction-valid.json');
+  selfTransition.views[0] = {
+    view_id: 'view_orders', type: 'state', scope: 'orders', source_claim_ids: ['claim_shared'],
+    elements: [
+      { element_id: 'state_ready', kind: 'state', state: 'ready', source_claim_ids: ['claim_shared'], model_refs: [] },
+      { element_id: 'transition_retry', kind: 'transition', from_state: 'ready', event: 'retry', to_state: 'ready', condition: 'Retry', transition_order: ['retry'], source_claim_ids: ['claim_shared'], model_refs: [] }
+    ], relations: []
+  };
+  assert.deepEqual(validateAgainstSchema(selfTransition, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(selfTransition), []);
+  assert.deepEqual(auditInteractionMatrix(selfTransition).diagnostics, []);
+
+  const localClasses = await fixture('interaction-valid.json');
+  localClasses.views[0] = {
+    view_id: 'view_orders', type: 'input-domain', scope: 'orders', source_claim_ids: ['claim_shared'],
+    elements: [
+      { element_id: 'input_primary', kind: 'input-domain', domain: 'amount', classes: [{ class_id: 'class_shared', label: 'primary' }], bounds: { lower: 1, upper: 10, inclusive: true }, source_claim_ids: ['claim_shared'], model_refs: [] },
+      { element_id: 'input_secondary', kind: 'input-domain', domain: 'quantity', classes: [{ class_id: 'class_shared', label: 'secondary' }], bounds: { lower: 1, upper: 5, inclusive: true }, source_claim_ids: ['claim_shared'], model_refs: [] }
+    ], relations: []
+  };
+  assert.deepEqual(validateAgainstSchema(localClasses, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(localClasses), []);
+  assert.deepEqual(auditInteractionMatrix(localClasses).diagnostics, []);
+});
+
 test('interaction matrix module universe comes only from declared matrix and candidate module IDs', async () => {
   const artifact = await fixture('interaction-no-signal.json');
   artifact.views.push({ view_id: 'view_wholly_omitted', type: 'flow', scope: 'shipping', source_claim_ids: [], elements: [], relations: [] });

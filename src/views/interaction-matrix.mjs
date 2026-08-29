@@ -76,6 +76,16 @@ function escapePointerSegment(value) {
   return value.replaceAll('~', '~0').replaceAll('/', '~1');
 }
 
+/** @param {string[]} values */
+function duplicateStrings(values) {
+  const counts = new Map();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([value]) => value)
+    .sort(compareCodePoints);
+}
+
 /** @param {string[]} moduleIds @param {string} dimension */
 function cellPath(moduleIds, dimension) {
   return `/interaction_matrix/${escapePointerSegment(cellKey(moduleIds, dimension))}`;
@@ -121,7 +131,35 @@ function relationEndpointKind(viewType) {
 }
 
 /** @param {Record<string, unknown>} view */
+function formalViewIdentityDiagnostics(view) {
+  const viewId = typeof view.view_id === 'string' ? view.view_id : '';
+  const viewPath = `/views/${escapePointerSegment(viewId)}`;
+  const elements = objectArray(view.elements);
+  const diagnostics = [];
+  if (view.type === 'state') {
+    const stateNames = elements.flatMap((element) => element.kind === 'state' && typeof element.state === 'string'
+      ? [element.state] : []);
+    for (const stateName of duplicateStrings(stateNames)) diagnostics.push(diagnostic(
+      'schema', 'STATE_NAME_DUPLICATE', `${viewPath}/state_names/${escapePointerSegment(stateName)}`,
+      `state name "${stateName}" must be unique within its state view`
+    ));
+  }
+  for (const element of elements) {
+    if (element.kind !== 'input-domain') continue;
+    const elementId = typeof element.element_id === 'string' ? element.element_id : '';
+    const classIds = objectArray(element.classes).flatMap((item) => typeof item.class_id === 'string' ? [item.class_id] : []);
+    for (const classId of duplicateStrings(classIds)) diagnostics.push(diagnostic(
+      'schema', 'INPUT_CLASS_ID_DUPLICATE',
+      `${viewPath}/elements/${escapePointerSegment(elementId)}/classes/${escapePointerSegment(classId)}`,
+      `input-domain class_id "${classId}" must be unique within element "${elementId}"`
+    ));
+  }
+  return diagnostics;
+}
+
+/** @param {Record<string, unknown>} view */
 function formalViewStructureValid(view) {
+  if (formalViewIdentityDiagnostics(view).length > 0) return false;
   const type = typeof view.type === 'string' ? view.type : '';
   const legalKinds = VIEW_ELEMENT_KINDS[/** @type {keyof typeof VIEW_ELEMENT_KINDS} */ (type)];
   if (!legalKinds || typeof view.scope !== 'string' || view.scope.length === 0) return false;
@@ -317,11 +355,15 @@ export function auditInteractionMatrix(artifact) {
         valid = false;
       } else {
         const view = matchingViews[0];
+        const identityDiagnostics = formalViewIdentityDiagnostics(view);
         if (typeof view.type !== 'string' || !FORMAL_VIEW_TYPES.has(view.type)) {
           diagnostics.push(diagnostic('classification', 'FORMAL_INTERACTION_VIEW_TYPE_INVALID', `${path}/formal_view_id`, 'a formal interaction candidate must route to one of the seven formal behavior views'));
           valid = false;
         } else if (objectArray(view.elements).length + objectArray(view.relations).length === 0) {
           diagnostics.push(diagnostic('traceability', 'FORMAL_INTERACTION_VIEW_EMPTY', `${path}/formal_view_id`, 'a formal interaction candidate must route to a nonempty behavior view'));
+          valid = false;
+        } else if (identityDiagnostics.length > 0) {
+          diagnostics.push(...identityDiagnostics);
           valid = false;
         } else if (!formalViewStructureValid(view)) {
           diagnostics.push(diagnostic('traceability', 'FORMAL_INTERACTION_VIEW_INVALID', `${path}/formal_view_id`, 'the formal interaction target is not a valid behavior-view graph'));

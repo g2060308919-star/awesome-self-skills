@@ -110,6 +110,21 @@ function escapePointerSegment(value) {
   return value.replaceAll('~', '~0').replaceAll('/', '~1');
 }
 
+/** @param {string[]} values */
+function duplicateStrings(values) {
+  const counts = new Map();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([value]) => value)
+    .sort(compareCodePoints);
+}
+
+/** @param {string} left @param {string} right */
+function scopesOverlap(left, right) {
+  return scopeContains(left, right) || scopeContains(right, left);
+}
+
 /**
  * Validate evidence support and complete normative-fact routing for adaptive views.
  * The evidence graph supplies only claims already accepted by the Task 3 gate.
@@ -185,6 +200,13 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
       diagnostics.push(diagnostic('classification', 'VIEW_TYPE_UNSUPPORTED', `${path}/type`, `view type "${type}" is outside the closed behavior-view set`));
       valid = false;
     }
+    if (runScope !== null && scope.length > 0 && !scopesOverlap(runScope, scope)) {
+      diagnostics.push(diagnostic(
+        'classification', 'VIEW_SCOPE_DISJOINT', `${path}/scope`,
+        `view scope "${scope}" does not overlap run scope "${runScope}"`
+      ));
+      valid = false;
+    }
     for (const [claimIndex, claimId] of stringArray(view.source_claim_ids).entries()) {
       const claim = claimsById.get(claimId);
       const claimPath = `${path}/source_claim_ids/${escapePointerSegment(claimId || String(claimIndex))}`;
@@ -223,6 +245,16 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
       const support = validateSupport(element, elementPath, scope, 'VIEW_ELEMENT_SUPPORT_REQUIRED');
       if (!support.valid) valid = false;
       modeledItems.push({ claims: support.claimIds });
+      if (kind === 'input-domain') {
+        const classIds = objectArray(element.classes).flatMap((item) => typeof item.class_id === 'string' ? [item.class_id] : []);
+        for (const classId of duplicateStrings(classIds)) {
+          diagnostics.push(diagnostic(
+            'schema', 'INPUT_CLASS_ID_DUPLICATE', `${elementPath}/classes/${escapePointerSegment(classId)}`,
+            `input-domain class_id "${classId}" must be unique within element "${elementId}"`
+          ));
+          valid = false;
+        }
+      }
     });
 
     elements.forEach((element, elementIndex) => {
@@ -243,8 +275,16 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
     });
 
     if (type === 'state') {
-      const declaredStates = new Set(elements.flatMap((element) => element.kind === 'state' && typeof element.state === 'string'
-        ? [element.state] : []));
+      const stateNames = elements.flatMap((element) => element.kind === 'state' && typeof element.state === 'string'
+        ? [element.state] : []);
+      const declaredStates = new Set(stateNames);
+      for (const stateName of duplicateStrings(stateNames)) {
+        diagnostics.push(diagnostic(
+          'schema', 'STATE_NAME_DUPLICATE', `${path}/state_names/${escapePointerSegment(stateName)}`,
+          `state name "${stateName}" must be unique within its state view`
+        ));
+        valid = false;
+      }
       elements.forEach((element, elementIndex) => {
         if (element.kind !== 'transition') return;
         const elementId = typeof element.element_id === 'string' ? element.element_id : '';
@@ -350,7 +390,7 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
     if (viewIds.length === 0) {
       const claimScope = typeof primaryClaim.scope === 'string' ? primaryClaim.scope : '';
       const overlapsRun = runScope === null || claimScope.length === 0
-        || scopeContains(runScope, claimScope) || scopeContains(claimScope, runScope);
+        || scopesOverlap(runScope, claimScope);
       diagnostics.push(diagnostic(
         'traceability', overlapsRun ? 'NORMATIVE_FACT_UNMODELED' : 'OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED', `/facts/${factId}`,
         overlapsRun
