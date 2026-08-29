@@ -6,6 +6,15 @@ export const INTERACTION_DIMENSIONS = Object.freeze([
 const DIMENSION_SET = new Set(INTERACTION_DIMENSIONS);
 const CELL_STATUSES = new Set(['checked-no-signal', 'candidate']);
 const FORMAL_VIEW_TYPES = new Set(['flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration']);
+const VIEW_ELEMENT_KINDS = Object.freeze({
+  flow: Object.freeze(['flow-node', 'flow-edge']),
+  decision: Object.freeze(['decision-rule']),
+  state: Object.freeze(['state', 'transition']),
+  'input-domain': Object.freeze(['input-domain']),
+  role: Object.freeze(['role-permission']),
+  timing: Object.freeze(['timing-rule']),
+  integration: Object.freeze(['integration-contract'])
+});
 const DISPOSITION_FIELDS = Object.freeze([
   'formal_view_id', 'blocker_root_issue_id', 'exploratory_id'
 ]);
@@ -46,25 +55,115 @@ function diagnostic(category, code, path, message) {
 /** @param {Array<{category: string, code: string, path: string, message: string}>} diagnostics */
 function sortDiagnostics(diagnostics) {
   const unique = new Map();
-  for (const item of diagnostics) unique.set(`${item.category}\0${item.code}\0${item.path}\0${item.message}`, item);
-  return [...unique.values()].sort((left, right) => compareCodePoints(
-    `${left.category}\0${left.code}\0${left.path}\0${left.message}`,
-    `${right.category}\0${right.code}\0${right.path}\0${right.message}`
-  ));
+  for (const item of diagnostics) unique.set(JSON.stringify([item.category, item.code, item.path, item.message]), item);
+  return [...unique.entries()]
+    .sort(([left], [right]) => compareCodePoints(left, right))
+    .map(([, item]) => item);
 }
 
 /** @param {string[]} moduleIds @param {string} dimension */
 function cellKey(moduleIds, dimension) {
-  return `${moduleIds.join('\0')}\0${dimension}`;
+  return JSON.stringify([moduleIds, dimension]);
 }
 
 /** @param {string[]} moduleIds */
 function moduleLabel(moduleIds) {
-  return moduleIds.join(',');
+  return JSON.stringify(moduleIds);
+}
+
+/** @param {string} value */
+function escapePointerSegment(value) {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+
+/** @param {string[]} moduleIds @param {string} dimension */
+function cellPath(moduleIds, dimension) {
+  return `/interaction_matrix/${escapePointerSegment(cellKey(moduleIds, dimension))}`;
+}
+
+/** @param {Record<string, unknown>} candidate */
+function candidateSemanticKey(candidate) {
+  return JSON.stringify([
+    typeof candidate.candidate_id === 'string' ? candidate.candidate_id : '',
+    normalizedStrings(candidate.module_ids),
+    typeof candidate.dimension === 'string' ? candidate.dimension : '',
+    typeof candidate.disposition === 'string' ? candidate.disposition : '',
+    DISPOSITION_FIELDS.map((field) => typeof candidate[field] === 'string' ? candidate[field] : ''),
+    normalizedStrings(candidate.source_claim_ids)
+  ]);
+}
+
+/** @param {Record<string, unknown>} candidate */
+function candidatePath(candidate) {
+  const candidateId = typeof candidate.candidate_id === 'string' && candidate.candidate_id.length > 0
+    ? candidate.candidate_id : candidateSemanticKey(candidate);
+  return `/interaction_candidates/${escapePointerSegment(candidateId)}`;
+}
+
+/** @param {Record<string, unknown>} view */
+function modeledSupport(view) {
+  const claimIds = new Set();
+  let hasModelRefs = false;
+  for (const item of [...objectArray(view.elements), ...objectArray(view.relations)]) {
+    const modelRefs = normalizedStrings(item.model_refs);
+    if (modelRefs.length > 0) hasModelRefs = true;
+    for (const claimId of [...normalizedStrings(item.source_claim_ids), ...modelRefs]) claimIds.add(claimId);
+  }
+  return { claimIds, hasModelRefs };
+}
+
+/** @param {string} viewType */
+function relationEndpointKind(viewType) {
+  if (viewType === 'flow') return 'flow-node';
+  if (viewType === 'state') return 'state';
+  const kinds = VIEW_ELEMENT_KINDS[/** @type {keyof typeof VIEW_ELEMENT_KINDS} */ (viewType)];
+  return kinds?.length === 1 ? kinds[0] : null;
+}
+
+/** @param {Record<string, unknown>} view */
+function formalViewStructureValid(view) {
+  const type = typeof view.type === 'string' ? view.type : '';
+  const legalKinds = VIEW_ELEMENT_KINDS[/** @type {keyof typeof VIEW_ELEMENT_KINDS} */ (type)];
+  if (!legalKinds || typeof view.scope !== 'string' || view.scope.length === 0) return false;
+  const elements = objectArray(view.elements);
+  const relations = objectArray(view.relations);
+  const kindsById = new Map();
+  for (const element of elements) {
+    const elementId = typeof element.element_id === 'string' ? element.element_id : '';
+    const kind = typeof element.kind === 'string' ? element.kind : '';
+    if (elementId.length === 0 || kindsById.has(elementId) || !legalKinds.includes(kind)) return false;
+    if (normalizedStrings(element.source_claim_ids).length + normalizedStrings(element.model_refs).length === 0) return false;
+    kindsById.set(elementId, kind);
+  }
+  for (const element of elements) {
+    if (element.kind !== 'flow-edge') continue;
+    if (typeof element.from_element_id !== 'string' || kindsById.get(element.from_element_id) !== 'flow-node') return false;
+    if (typeof element.to_element_id !== 'string' || kindsById.get(element.to_element_id) !== 'flow-node') return false;
+  }
+  if (type === 'state') {
+    const states = new Set(elements.flatMap((element) => element.kind === 'state' && typeof element.state === 'string' ? [element.state] : []));
+    for (const element of elements) {
+      if (element.kind !== 'transition') continue;
+      if (typeof element.from_state !== 'string' || !states.has(element.from_state)) return false;
+      if (typeof element.to_state !== 'string' || !states.has(element.to_state)) return false;
+    }
+  }
+  const expectedRelationKind = relationEndpointKind(type);
+  for (const relation of relations) {
+    if (normalizedStrings(relation.source_claim_ids).length + normalizedStrings(relation.model_refs).length === 0) return false;
+    if (typeof relation.from_element_id !== 'string' || !kindsById.has(relation.from_element_id)) return false;
+    if (typeof relation.to_element_id !== 'string' || !kindsById.has(relation.to_element_id)) return false;
+    if (expectedRelationKind !== null && (kindsById.get(relation.from_element_id) !== expectedRelationKind
+      || kindsById.get(relation.to_element_id) !== expectedRelationKind)) return false;
+  }
+  return true;
 }
 
 /**
  * Reconcile the fixed cross-module signal audit without interpreting business semantics.
+ * The frozen artifact has no authoritative module registry. Therefore the seven-dimension
+ * grid is complete relative only to the universe declared by matrix and candidate module_ids;
+ * a wholly omitted module is intentionally not inferred from behavior-view scope.
  * @param {unknown} artifact
  */
 export function auditInteractionMatrix(artifact) {
@@ -72,7 +171,14 @@ export function auditInteractionMatrix(artifact) {
   const matrix = objectArray(input.interaction_matrix);
   const submittedCandidates = objectArray(input.interaction_candidates);
   const views = objectArray(input.views);
-  const viewsById = new Map(views.flatMap((view) => typeof view.view_id === 'string' ? [[view.view_id, view]] : []));
+  /** @type {Map<string, Record<string, unknown>[]>} */
+  const viewsById = new Map();
+  for (const view of views) {
+    if (typeof view.view_id !== 'string') continue;
+    const matches = viewsById.get(view.view_id) ?? [];
+    matches.push(view);
+    viewsById.set(view.view_id, matches);
+  }
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [];
 
@@ -86,38 +192,39 @@ export function auditInteractionMatrix(artifact) {
   }
   const modules = [...moduleIds].sort(compareCodePoints);
 
-  /** @type {Array<{index: number, record: Record<string, unknown>, modules: string[], dimension: string, status: string, key: string}>} */
+  /** @type {Array<{record: Record<string, unknown>, modules: string[], dimension: string, status: string, key: string}>} */
   const cells = [];
-  matrix.forEach((record, index) => {
+  for (const record of matrix) {
     const modulesForCell = normalizedStrings(record.module_ids);
     const rawModuleCount = Array.isArray(record.module_ids) ? record.module_ids.length : 0;
     const dimension = typeof record.dimension === 'string' ? record.dimension : '';
     const status = typeof record.status === 'string' ? record.status : '';
+    const path = cellPath(modulesForCell, dimension);
     let valid = true;
     if (modulesForCell.length !== rawModuleCount || modulesForCell.length === 0) {
-      diagnostics.push(diagnostic('schema', 'INTERACTION_MODULE_SET_INVALID', `/interaction_matrix/${index}/module_ids`, 'module_ids must contain unique nonblank module IDs'));
+      diagnostics.push(diagnostic('schema', 'INTERACTION_MODULE_SET_INVALID', `${path}/module_ids`, 'module_ids must contain unique nonblank module IDs'));
       valid = false;
     }
     if (!DIMENSION_SET.has(dimension)) {
-      diagnostics.push(diagnostic('schema', 'INTERACTION_DIMENSION_INVALID', `/interaction_matrix/${index}/dimension`, 'dimension is not in the fixed interaction matrix'));
+      diagnostics.push(diagnostic('schema', 'INTERACTION_DIMENSION_INVALID', `${path}/dimension`, 'dimension is not in the fixed interaction matrix'));
       valid = false;
     }
     if (!CELL_STATUSES.has(status)) {
-      diagnostics.push(diagnostic('schema', 'INTERACTION_STATUS_INVALID', `/interaction_matrix/${index}/status`, 'status must be checked-no-signal or candidate'));
+      diagnostics.push(diagnostic('schema', 'INTERACTION_STATUS_INVALID', `${path}/status`, 'status must be checked-no-signal or candidate'));
       valid = false;
     }
-    if (valid) cells.push({ index, record, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
-  });
+    if (valid) cells.push({ record, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
+  }
 
-  /** @type {Set<string>} */
-  const expectedKeys = new Set();
+  /** @type {Map<string, {modules: string[], dimension: string}>} */
+  const expectedCells = new Map();
   if (modules.length === 1) {
-    for (const dimension of INTERACTION_DIMENSIONS) expectedKeys.add(cellKey(modules, dimension));
+    for (const dimension of INTERACTION_DIMENSIONS) expectedCells.set(cellKey(modules, dimension), { modules, dimension });
   } else if (modules.length >= 2) {
     for (let left = 0; left < modules.length; left += 1) {
       for (let right = left + 1; right < modules.length; right += 1) {
         const pair = [modules[left], modules[right]];
-        for (const dimension of INTERACTION_DIMENSIONS) expectedKeys.add(cellKey(pair, dimension));
+        for (const dimension of INTERACTION_DIMENSIONS) expectedCells.set(cellKey(pair, dimension), { modules: pair, dimension });
       }
     }
   }
@@ -126,9 +233,10 @@ export function auditInteractionMatrix(artifact) {
   const cellsByKey = new Map();
   for (const cell of cells) {
     const expectedModuleCount = modules.length === 1 ? 1 : 2;
-    if (cell.modules.length !== expectedModuleCount || !expectedKeys.has(cell.key)) {
+    const path = cellPath(cell.modules, cell.dimension);
+    if (cell.modules.length !== expectedModuleCount || !expectedCells.has(cell.key)) {
       diagnostics.push(diagnostic(
-        'coverage', 'INTERACTION_CELL_EXTRA', `/interaction_matrix/${cell.index}`,
+        'coverage', 'INTERACTION_CELL_EXTRA', path,
         `cell ${moduleLabel(cell.modules)} / ${cell.dimension} is outside the required audit grid`
       ));
       continue;
@@ -137,39 +245,50 @@ export function auditInteractionMatrix(artifact) {
     matches.push(cell);
     cellsByKey.set(cell.key, matches);
     if (matches.length > 1) diagnostics.push(diagnostic(
-      'coverage', 'INTERACTION_CELL_DUPLICATE', `/interaction_matrix/${cell.index}`,
+      'coverage', 'INTERACTION_CELL_DUPLICATE', path,
       `cell ${moduleLabel(cell.modules)} / ${cell.dimension} appears more than once`
     ));
   }
 
-  for (const key of [...expectedKeys].sort(compareCodePoints)) {
+  for (const [key, expected] of [...expectedCells.entries()].sort(([left], [right]) => compareCodePoints(left, right))) {
     if (cellsByKey.has(key)) continue;
-    const parts = key.split('\0');
-    const dimension = /** @type {string} */ (parts.pop());
     diagnostics.push(diagnostic(
-      'coverage', 'INTERACTION_CELL_MISSING', '/interaction_matrix',
-      `missing interaction cell for ${parts.join(',')} / ${dimension}`
+      'coverage', 'INTERACTION_CELL_MISSING', cellPath(expected.modules, expected.dimension),
+      `missing interaction cell for ${moduleLabel(expected.modules)} / ${expected.dimension}`
     ));
   }
 
-  const seenCandidateIds = new Set();
-  /** @type {Map<string, Array<{index: number, record: Record<string, unknown>}>>} */
+  const candidateIdCounts = new Map();
+  for (const candidate of submittedCandidates) {
+    const candidateId = typeof candidate.candidate_id === 'string' ? candidate.candidate_id : '';
+    candidateIdCounts.set(candidateId, (candidateIdCounts.get(candidateId) ?? 0) + 1);
+  }
+  for (const [candidateId, count] of [...candidateIdCounts.entries()].sort(([left], [right]) => compareCodePoints(left, right))) {
+    if (candidateId.length === 0 || count < 2) continue;
+    diagnostics.push(diagnostic(
+      'schema', 'INTERACTION_CANDIDATE_ID_INVALID',
+      `/interaction_candidates/${escapePointerSegment(candidateId)}/candidate_id`,
+      'candidate_id must be nonblank and unique'
+    ));
+  }
+
+  /** @type {Map<string, Record<string, unknown>[]>} */
   const candidatesByCell = new Map();
   /** @type {Record<string, unknown>[]} */
   const candidates = [];
-  submittedCandidates.forEach((candidate, index) => {
-    const path = `/interaction_candidates/${index}`;
+  const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints(candidateSemanticKey(left), candidateSemanticKey(right)));
+  for (const candidate of orderedCandidates) {
+    const path = candidatePath(candidate);
     const candidateId = typeof candidate.candidate_id === 'string' ? candidate.candidate_id : '';
     const modulesForCandidate = normalizedStrings(candidate.module_ids);
     const rawModuleCount = Array.isArray(candidate.module_ids) ? candidate.module_ids.length : 0;
     const dimension = typeof candidate.dimension === 'string' ? candidate.dimension : '';
     const disposition = typeof candidate.disposition === 'string' ? candidate.disposition : '';
     let valid = true;
-    if (candidateId.length === 0 || seenCandidateIds.has(candidateId)) {
+    if (candidateId.length === 0) {
       diagnostics.push(diagnostic('schema', 'INTERACTION_CANDIDATE_ID_INVALID', `${path}/candidate_id`, 'candidate_id must be nonblank and unique'));
       valid = false;
-    }
-    seenCandidateIds.add(candidateId);
+    } else if ((candidateIdCounts.get(candidateId) ?? 0) > 1) valid = false;
     if (modulesForCandidate.length !== rawModuleCount || modulesForCandidate.length === 0 || !DIMENSION_SET.has(dimension)) {
       diagnostics.push(diagnostic('reference', 'INTERACTION_CANDIDATE_CELL_INVALID', path, 'candidate must name one valid audit cell'));
       valid = false;
@@ -189,13 +308,34 @@ export function auditInteractionMatrix(artifact) {
         valid = false;
       }
       const viewId = typeof candidate.formal_view_id === 'string' ? candidate.formal_view_id : '';
-      const view = viewsById.get(viewId);
-      if (!view) {
+      const matchingViews = viewsById.get(viewId) ?? [];
+      if (matchingViews.length === 0) {
         diagnostics.push(diagnostic('reference', 'FORMAL_INTERACTION_VIEW_DANGLING', `${path}/formal_view_id`, `formal interaction view "${viewId}" does not exist`));
         valid = false;
-      } else if (typeof view.type !== 'string' || !FORMAL_VIEW_TYPES.has(view.type)) {
-        diagnostics.push(diagnostic('classification', 'FORMAL_INTERACTION_VIEW_TYPE_INVALID', `${path}/formal_view_id`, 'a formal interaction candidate must route to one of the seven formal behavior views'));
+      } else if (matchingViews.length !== 1) {
+        diagnostics.push(diagnostic('reference', 'FORMAL_INTERACTION_VIEW_AMBIGUOUS', `${path}/formal_view_id`, `formal interaction view "${viewId}" is not uniquely defined`));
         valid = false;
+      } else {
+        const view = matchingViews[0];
+        if (typeof view.type !== 'string' || !FORMAL_VIEW_TYPES.has(view.type)) {
+          diagnostics.push(diagnostic('classification', 'FORMAL_INTERACTION_VIEW_TYPE_INVALID', `${path}/formal_view_id`, 'a formal interaction candidate must route to one of the seven formal behavior views'));
+          valid = false;
+        } else if (objectArray(view.elements).length + objectArray(view.relations).length === 0) {
+          diagnostics.push(diagnostic('traceability', 'FORMAL_INTERACTION_VIEW_EMPTY', `${path}/formal_view_id`, 'a formal interaction candidate must route to a nonempty behavior view'));
+          valid = false;
+        } else if (!formalViewStructureValid(view)) {
+          diagnostics.push(diagnostic('traceability', 'FORMAL_INTERACTION_VIEW_INVALID', `${path}/formal_view_id`, 'the formal interaction target is not a valid behavior-view graph'));
+          valid = false;
+        } else {
+          const support = modeledSupport(view);
+          // Evidence ancestry is unavailable in this frozen function signature. A model ref
+          // can therefore support an ancestor candidate claim; validateBehaviorViews proves
+          // the actual closure and claim scope against the accepted evidence graph.
+          if (!support.hasModelRefs && sourceClaimIds.some((claimId) => !support.claimIds.has(claimId))) {
+            diagnostics.push(diagnostic('traceability', 'FORMAL_INTERACTION_VIEW_SUPPORT_MISMATCH', `${path}/formal_view_id`, 'the formal interaction view does not model every candidate source claim'));
+            valid = false;
+          }
+        }
       }
     }
 
@@ -203,13 +343,18 @@ export function auditInteractionMatrix(artifact) {
     const matchingCells = cellsByKey.get(key) ?? [];
     if (matchingCells.length === 0) {
       diagnostics.push(diagnostic('traceability', 'INTERACTION_CANDIDATE_WITHOUT_CELL', path, `candidate ${candidateId} does not match an audited cell`));
+      valid = false;
     } else {
-      const matches = candidatesByCell.get(key) ?? [];
-      matches.push({ index, record: candidate });
-      candidatesByCell.set(key, matches);
-      if (matchingCells.every((cell) => cell.status === 'checked-no-signal')) diagnostics.push(diagnostic(
-        'classification', 'INTERACTION_CANDIDATE_ON_NO_SIGNAL', path, `candidate ${candidateId} is attached to a checked-no-signal cell`
-      ));
+      if (matchingCells.every((cell) => cell.status === 'checked-no-signal')) {
+        diagnostics.push(diagnostic(
+          'classification', 'INTERACTION_CANDIDATE_ON_NO_SIGNAL', path, `candidate ${candidateId} is attached to a checked-no-signal cell`
+        ));
+        valid = false;
+      }
+      if (matchingCells.length !== 1) {
+        diagnostics.push(diagnostic('traceability', 'INTERACTION_CANDIDATE_CELL_AMBIGUOUS', path, `candidate ${candidateId} does not match exactly one audited cell`));
+        valid = false;
+      }
     }
 
     if (valid) {
@@ -217,21 +362,25 @@ export function auditInteractionMatrix(artifact) {
       const normalized = { ...candidate, module_ids: modulesForCandidate };
       if (Array.isArray(candidate.source_claim_ids)) normalized.source_claim_ids = normalizedStrings(candidate.source_claim_ids);
       candidates.push(normalized);
+      const matches = candidatesByCell.get(key) ?? [];
+      matches.push(normalized);
+      candidatesByCell.set(key, matches);
     }
-  });
+  }
 
   for (const [key, matchingCells] of cellsByKey) {
     const candidateCells = matchingCells.filter((cell) => cell.status === 'candidate');
     if (candidateCells.length === 0) continue;
     const dispositions = candidatesByCell.get(key) ?? [];
     const sample = candidateCells[0];
+    const path = cellPath(sample.modules, sample.dimension);
     if (dispositions.length === 0) diagnostics.push(diagnostic(
-      'traceability', 'INTERACTION_CANDIDATE_MISSING', `/interaction_matrix/${sample.index}`,
-      `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has no disposition`
+      'traceability', 'INTERACTION_CANDIDATE_MISSING', path,
+      `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has no valid disposition`
     ));
     else if (dispositions.length > 1) diagnostics.push(diagnostic(
-      'traceability', 'INTERACTION_CANDIDATE_MULTIPLE', `/interaction_matrix/${sample.index}`,
-      `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has more than one disposition`
+      'traceability', 'INTERACTION_CANDIDATE_MULTIPLE', path,
+      `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has more than one valid disposition`
     ));
   }
 

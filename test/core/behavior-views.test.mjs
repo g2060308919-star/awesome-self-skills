@@ -4,7 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateBehaviorViews } from '../../src/views/validate-views.mjs';
-import { validateAgainstSchema } from '../../src/schema-validator.mjs';
+import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const behaviorViewsSchema = JSON.parse(await readFile(path.join(
@@ -22,7 +22,6 @@ function evidenceGraph(input) {
   return {
     claimsById: new Map(input.claims.map((/** @type {any} */ claim) => [claim.claim_id, claim])),
     factLedger: input.facts,
-    factRoutes: input.fact_routes,
     runScope: input.run_scope
   };
 }
@@ -31,6 +30,7 @@ test('behavior view fixtures stay inside the frozen schema-valid boundary', asyn
   for (const name of ['view-validation-valid.json', 'view-validation-invalid.json']) {
     const input = await fixture(name);
     assert.deepEqual(validateAgainstSchema(input.artifact, behaviorViewsSchema), [], name);
+    assert.deepEqual(validateUniqueStableIds(input.artifact), [], name);
   }
 });
 
@@ -44,9 +44,7 @@ test('behavior view validation accepts all seven closed view kinds and derives c
     'view_decision', 'view_flow', 'view_input', 'view_integration', 'view_role', 'view_state', 'view_timing'
   ]);
   assert.deepEqual(result.factRoutes, [
-    { fact_id: 'fact_conflict', route_type: 'blocked', blocker_root_issue_id: 'root_payment_conflict' },
     { fact_id: 'fact_decision', route_type: 'views', view_ids: ['view_decision'] },
-    { fact_id: 'fact_external', route_type: 'not_applicable', not_applicable_claim_id: 'claim_exclusion' },
     { fact_id: 'fact_flow', route_type: 'views', view_ids: ['view_flow'] },
     { fact_id: 'fact_input', route_type: 'views', view_ids: ['view_input'] },
     { fact_id: 'fact_integration', route_type: 'views', view_ids: ['view_integration'] },
@@ -57,27 +55,39 @@ test('behavior view validation accepts all seven closed view kinds and derives c
   ]);
 });
 
-test('behavior view validation rejects an omitted normative fact and an unsupported out-of-scope exclusion', async () => {
+test('behavior view validation diagnoses every unmodeled fact and classifies scope by hierarchical overlap', async () => {
   const input = await fixture('view-validation-invalid.json');
 
   const result = validateBehaviorViews(evidenceGraph(input), input.artifact);
 
-  assert.equal(result.diagnostics.some((item) => item.code === 'NORMATIVE_FACT_UNMODELED' && item.path === '/facts/fact_omitted'), true);
-  assert.equal(result.diagnostics.some((item) => item.code === 'OUT_OF_SCOPE_FACT_EXCLUSION_REQUIRED' && item.path === '/facts/fact_external'), true);
-  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_present'), false);
-
-  const routed = structuredClone(input);
-  routed.claims.push({ claim_id: 'claim_e1_exclusion', level: 'E1', kind: 'assumption', scope: 'checkout' });
-  routed.fact_routes.push({ fact_id: 'fact_external', route_type: 'not_applicable', not_applicable_claim_id: 'claim_e1_exclusion' });
-  const unsupported = validateBehaviorViews(evidenceGraph(routed), routed.artifact);
-  assert.equal(unsupported.diagnostics.some((item) => item.code === 'NOT_APPLICABLE_EVIDENCE_INVALID'), true);
-
-  const wrongScope = structuredClone(input);
-  wrongScope.claims.push({ claim_id: 'claim_wrong_scope', level: 'E3', kind: 'requirement', scope: 'shipping' });
-  wrongScope.fact_routes.push({ fact_id: 'fact_external', route_type: 'not_applicable', not_applicable_claim_id: 'claim_wrong_scope' });
-  assert.equal(validateBehaviorViews(evidenceGraph(wrongScope), wrongScope.artifact).diagnostics.some(
-    (item) => item.code === 'NOT_APPLICABLE_SCOPE_MISMATCH'
+  for (const factId of ['fact_broad', 'fact_global', 'fact_narrow']) assert.equal(result.diagnostics.some(
+    (item) => item.code === 'NORMATIVE_FACT_UNMODELED' && item.path === `/facts/${factId}`
+  ), true, factId);
+  assert.equal(result.diagnostics.some(
+    (item) => item.code === 'OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED' && item.path === '/facts/fact_disjoint'
   ), true);
+  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_present'), false);
+  assert.deepEqual(result.factRoutes, [{ fact_id: 'fact_present', route_type: 'views', view_ids: ['view_present'] }]);
+});
+
+test('behavior view validation ignores unfrozen submitted fact routes including E2 test-data exclusions', async () => {
+  const input = await fixture('view-validation-invalid.json');
+  input.claims.push({ claim_id: 'claim_test_data', level: 'E2', kind: 'test-data', derivation_target: 'test-data', scope: 'shipping' });
+  const graph = {
+    ...evidenceGraph(input),
+    factRoutes: [
+      { fact_id: 'fact_broad', route_type: 'blocked', blocker_root_issue_id: 'root_broad' },
+      { fact_id: 'fact_disjoint', route_type: 'not_applicable', not_applicable_claim_id: 'claim_test_data' }
+    ],
+    fact_routes: [{ fact_id: 'fact_narrow', route_type: 'blocked', blocker_root_issue_id: 'root_narrow' }]
+  };
+
+  const result = validateBehaviorViews(graph, input.artifact);
+
+  assert.equal(result.factRoutes.some((route) => route.fact_id !== 'fact_present'), false);
+  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_broad'), true);
+  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_narrow'), true);
+  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_disjoint'), true);
 });
 
 test('behavior view validation requires claim or valid E2 model-element support for every modeled element and relation', async () => {
@@ -86,7 +96,7 @@ test('behavior view validation requires claim or valid E2 model-element support 
   const decisionElement = dangling.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_decision').elements[0];
   decisionElement.source_claim_ids = ['claim_missing'];
   assert.equal(validateBehaviorViews(evidenceGraph(dangling), dangling.artifact).diagnostics.some(
-    (item) => item.code === 'SOURCE_CLAIM_DANGLING' && item.path.endsWith('/source_claim_ids/0')
+    (item) => item.code === 'SOURCE_CLAIM_DANGLING' && item.path.endsWith('/source_claim_ids/claim_missing')
   ), true);
 
   const wrongModelType = structuredClone(input);
@@ -134,18 +144,34 @@ test('behavior view validation rejects unsupported view kinds, cross-kind elemen
   ), true);
 });
 
-test('behavior view validation rejects a fact with competing modeled and explicit routes', async () => {
+test('behavior view validation enforces flow-node, state-name, and relation endpoint graph semantics', async () => {
   const input = await fixture('view-validation-valid.json');
-  input.fact_routes.push({ fact_id: 'fact_flow', route_type: 'blocked', blocker_root_issue_id: 'root_flow' });
 
-  const result = validateBehaviorViews(evidenceGraph(input), input.artifact);
+  const edgeToEdge = structuredClone(input);
+  const flow = edgeToEdge.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_flow');
+  flow.elements.find((/** @type {any} */ element) => element.kind === 'flow-edge').to_element_id = 'flow_submit';
+  assert.deepEqual(validateAgainstSchema(edgeToEdge.artifact, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(edgeToEdge.artifact), []);
+  assert.equal(validateBehaviorViews(evidenceGraph(edgeToEdge), edgeToEdge.artifact).diagnostics.some(
+    (item) => item.code === 'FLOW_EDGE_ENDPOINT_TYPE_INVALID'
+  ), true);
 
-  assert.equal(result.diagnostics.some((item) => item.code === 'FACT_ROUTE_NOT_EXACT'), true);
+  const transitionToMissingState = structuredClone(input);
+  transitionToMissingState.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_state')
+    .elements.find((/** @type {any} */ element) => element.kind === 'transition').to_state = 'missing';
+  assert.deepEqual(validateAgainstSchema(transitionToMissingState.artifact, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(transitionToMissingState.artifact), []);
+  assert.equal(validateBehaviorViews(evidenceGraph(transitionToMissingState), transitionToMissingState.artifact).diagnostics.some(
+    (item) => item.code === 'STATE_TRANSITION_STATE_DANGLING'
+  ), true);
 
-  const crossType = await fixture('view-validation-valid.json');
-  crossType.fact_routes[0].not_applicable_claim_id = 'claim_exclusion';
-  assert.equal(validateBehaviorViews(evidenceGraph(crossType), crossType.artifact).diagnostics.some(
-    (item) => item.code === 'FACT_EXPLICIT_ROUTE_INVALID'
+  const relationToEdge = structuredClone(input);
+  relationToEdge.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_flow')
+    .relations[0].to_element_id = 'flow_submit';
+  assert.deepEqual(validateAgainstSchema(relationToEdge.artifact, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(relationToEdge.artifact), []);
+  assert.equal(validateBehaviorViews(evidenceGraph(relationToEdge), relationToEdge.artifact).diagnostics.some(
+    (item) => item.code === 'VIEW_RELATION_ENDPOINT_TYPE_INVALID'
   ), true);
 });
 
@@ -163,30 +189,109 @@ test('behavior view validation treats an accepted E1 assumption as a formal fact
 
 test('behavior view validation is deterministic when set-like inputs are reordered', async () => {
   const input = await fixture('view-validation-valid.json');
+  const frozenInput = structuredClone(input);
   const reordered = structuredClone(input);
   reordered.claims.reverse();
   reordered.facts.reverse();
-  reordered.fact_routes.reverse();
   reordered.artifact.views.reverse();
   for (const view of reordered.artifact.views) {
     view.source_claim_ids.reverse();
     view.elements.reverse();
     view.relations.reverse();
+    for (const element of view.elements) {
+      element.source_claim_ids.reverse();
+      element.model_refs.reverse();
+      if (Array.isArray(element.conditions)) element.conditions.reverse();
+      if (Array.isArray(element.permissions)) element.permissions.reverse();
+      if (Array.isArray(element.classes)) element.classes.reverse();
+      if (Array.isArray(element.side_effects)) element.side_effects.reverse();
+    }
+    for (const relation of view.relations) {
+      relation.source_claim_ids.reverse();
+      relation.model_refs.reverse();
+    }
   }
 
   const originalResult = validateBehaviorViews(evidenceGraph(input), input.artifact);
   const reorderedResult = validateBehaviorViews(evidenceGraph(reordered), reordered.artifact);
 
-  assert.deepEqual([...reorderedResult.viewsById.keys()], [...originalResult.viewsById.keys()]);
+  assert.deepEqual([...reorderedResult.viewsById], [...originalResult.viewsById]);
   assert.deepEqual(reorderedResult.factRoutes, originalResult.factRoutes);
   assert.deepEqual(reorderedResult.diagnostics, originalResult.diagnostics);
+  assert.deepEqual(input, frozenInput);
 });
 
-test('behavior view validation checks formal interaction evidence against the accepted graph', async () => {
+test('behavior view diagnostics are stable when invalid set-like definitions and references are reordered', async () => {
+  const input = await fixture('view-validation-valid.json');
+  const flow = input.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_flow');
+  flow.elements.find((/** @type {any} */ element) => element.element_id === 'flow_start')
+    .source_claim_ids = ['claim_z_missing', 'claim_a_missing'];
+  flow.relations[0].model_refs = ['model_z_missing', 'model_a_missing'];
+  const decision = input.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_decision');
+  decision.source_claim_ids = ['claim_decision_secondary', 'claim_z_missing', 'claim_decision'];
+  assert.deepEqual(validateAgainstSchema(input.artifact, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(input.artifact), []);
+
+  const reversed = structuredClone(input);
+  reversed.claims.reverse();
+  reversed.facts.reverse();
+  reversed.artifact.views.reverse();
+  for (const view of reversed.artifact.views) {
+    view.source_claim_ids.reverse();
+    view.elements.reverse();
+    view.relations.reverse();
+    for (const element of view.elements) {
+      element.source_claim_ids.reverse();
+      element.model_refs.reverse();
+    }
+    for (const relation of view.relations) {
+      relation.source_claim_ids.reverse();
+      relation.model_refs.reverse();
+    }
+  }
+
+  assert.deepEqual(
+    validateBehaviorViews(evidenceGraph(reversed), reversed.artifact).diagnostics,
+    validateBehaviorViews(evidenceGraph(input), input.artifact).diagnostics
+  );
+});
+
+test('behavior view validation binds a formal interaction candidate to a valid modeled claim closure and covering scope', async () => {
   const artifact = await fixture('interaction-valid.json');
   const graph = { claimsById: new Map([['claim_shared', { claim_id: 'claim_shared', level: 'E3', kind: 'requirement', scope: '*' }]]) };
   assert.deepEqual(validateBehaviorViews(graph, artifact).diagnostics, []);
 
-  artifact.interaction_candidates[0].source_claim_ids = ['claim_missing'];
-  assert.equal(validateBehaviorViews(graph, artifact).diagnostics.some((item) => item.code === 'SOURCE_CLAIM_DANGLING'), true);
+  const dangling = structuredClone(artifact);
+  dangling.interaction_candidates[0].source_claim_ids = ['claim_missing'];
+  assert.equal(validateBehaviorViews(graph, dangling).diagnostics.some((item) => item.code === 'SOURCE_CLAIM_DANGLING'), true);
+
+  const empty = structuredClone(artifact);
+  empty.views[0].elements = [];
+  assert.equal(validateBehaviorViews(graph, empty).diagnostics.some(
+    (item) => item.code === 'FORMAL_INTERACTION_VIEW_EMPTY'
+  ), true);
+
+  const unrelated = structuredClone(artifact);
+  unrelated.views[0].elements[0].source_claim_ids = ['claim_other'];
+  unrelated.views[0].source_claim_ids = ['claim_other'];
+  const unrelatedGraph = { claimsById: new Map([
+    ['claim_shared', { claim_id: 'claim_shared', level: 'E3', kind: 'requirement', scope: '*' }],
+    ['claim_other', { claim_id: 'claim_other', level: 'E3', kind: 'requirement', scope: '*' }]
+  ]) };
+  assert.equal(validateBehaviorViews(unrelatedGraph, unrelated).diagnostics.some(
+    (item) => item.code === 'FORMAL_CANDIDATE_CLAIM_UNMODELED'
+  ), true);
+
+  const narrowScope = structuredClone(artifact);
+  narrowScope.interaction_candidates[0].source_claim_ids = ['claim_narrow'];
+  narrowScope.views[0].elements[0].model_refs = ['claim_model'];
+  narrowScope.views[0].elements[0].source_claim_ids = [];
+  const narrowGraph = { claimsById: new Map([
+    ['claim_shared', { claim_id: 'claim_shared', level: 'E3', kind: 'requirement', scope: '*' }],
+    ['claim_narrow', { claim_id: 'claim_narrow', level: 'E3', kind: 'requirement', scope: 'orders.child' }],
+    ['claim_model', { claim_id: 'claim_model', level: 'E2', kind: 'model-element', derivation_target: 'model-element', scope: 'orders', parent_claim_ids: ['claim_narrow'] }]
+  ]) };
+  assert.equal(validateBehaviorViews(narrowGraph, narrowScope).diagnostics.some(
+    (item) => item.code === 'FORMAL_CANDIDATE_SCOPE_MISMATCH'
+  ), true);
 });

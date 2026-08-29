@@ -2,7 +2,28 @@
   "schema_version": "1.0.0",
   "source_revision": 0,
   "views": [
-    { "view_id": "view_orders", "type": "integration", "scope": "orders", "source_claim_ids": ["claim_shared"], "elements": [], "relations": [] },
+    {
+      "view_id": "view_orders",
+      "type": "integration",
+      "scope": "orders",
+      "source_claim_ids": ["claim_shared"],
+      "elements": [
+        {
+          "element_id": "integration_shared_order",
+          "kind": "integration-contract",
+          "request": { "target": "payments", "payload": "order id" },
+          "response": { "status": "accepted", "body": "payment id" },
+          "persistence": { "operation": "update", "target": "orders" },
+          "event": { "name": "order.payment-linked", "direction": "publish" },
+          "callback": { "target": "orders", "event": "payment.accepted" },
+          "compensation": { "action": "unlink payment", "trigger": "payment failure" },
+          "side_effects": [{ "kind": "order-write", "target": "orders" }],
+          "source_claim_ids": ["claim_shared"],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    },
     { "view_id": "view_payments", "type": "integration", "scope": "payments", "source_claim_ids": ["claim_shared"], "elements": [], "relations": [] }
   ],
   "interaction_matrix": [
