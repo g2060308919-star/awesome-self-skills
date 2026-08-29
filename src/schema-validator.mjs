@@ -25,6 +25,16 @@ function diagnostic(code, path, message) {
   return { category: 'schema', code, path, message };
 }
 
+/** @param {string} segment */
+function escapePointerSegment(segment) {
+  return segment.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+
+/** @param {string} path @param {string} segment */
+function childPointer(path, segment) {
+  return `${path}/${escapePointerSegment(segment)}`;
+}
+
 /** @param {unknown} schema */
 export function assertSupportedSchema(schema) {
   if (!isSchemaObject(schema)) {
@@ -112,20 +122,20 @@ function validate(value, schema, path) {
       ? /** @type {Record<string, Record<string, unknown>>} */ (schema.properties) : {};
     if (Array.isArray(schema.required)) {
       for (const key of schema.required) {
-        if (typeof key === 'string' && !Object.hasOwn(object, key)) diagnostics.push(diagnostic('REQUIRED_FIELD_MISSING', `${path}/${key}`, 'required field is missing'));
+        if (typeof key === 'string' && !Object.hasOwn(object, key)) diagnostics.push(diagnostic('REQUIRED_FIELD_MISSING', childPointer(path, key), 'required field is missing'));
       }
     }
     if (schema.additionalProperties === false) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) diagnostics.push(diagnostic('ADDITIONAL_PROPERTY', `${path}/${key}`, 'additional properties are not allowed'));
+        if (!Object.hasOwn(properties, key)) diagnostics.push(diagnostic('ADDITIONAL_PROPERTY', childPointer(path, key), 'additional properties are not allowed'));
       }
     } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object' && !Array.isArray(schema.additionalProperties)) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) diagnostics.push(...validate(object[key], /** @type {Record<string, unknown>} */ (schema.additionalProperties), `${path}/${key}`));
+        if (!Object.hasOwn(properties, key)) diagnostics.push(...validate(object[key], /** @type {Record<string, unknown>} */ (schema.additionalProperties), childPointer(path, key)));
       }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) diagnostics.push(...validate(object[key], childSchema, `${path}/${key}`));
+      if (Object.hasOwn(object, key)) diagnostics.push(...validate(object[key], childSchema, childPointer(path, key)));
     }
   }
   if (Array.isArray(schema.allOf)) for (const child of schema.allOf) diagnostics.push(...validate(value, /** @type {Record<string, unknown>} */ (child), path));

@@ -1,22 +1,35 @@
 import { createHash } from 'node:crypto';
 
 const VOLATILE_FIELDS = new Set(['source_revision', 'created_at', 'updated_at', 'confirmed_at', 'event_at', 'timestamp', 'position', 'index', 'array_index']);
-const ORDERED_ARRAY_PATHS = new Set(['/steps', '/action_path', '/flow', '/flow_sequence', '/sequence', '/transition_order', '/cases/steps', '/grounded/steps', '/conditional/steps', '/cases/cleanup/steps', '/grounded/cleanup/steps', '/conditional/cleanup/steps', '/cases/execution_signature/action_path', '/grounded/execution_signature/action_path', '/conditional/execution_signature/action_path', '/execution_signature/action_path']);
+const ORDERED_ARRAY_PATHS = new Set([
+  '/steps', '/action_path', '/flow', '/flow_sequence', '/sequence', '/transition_order', '/cleanup/steps',
+  '/cases/steps', '/grounded/steps', '/conditional/steps', '/cases/cleanup/steps', '/grounded/cleanup/steps', '/conditional/cleanup/steps',
+  '/cases/execution_signature/action_path', '/grounded/execution_signature/action_path', '/conditional/execution_signature/action_path', '/execution_signature/action_path',
+  '/views/elements/transition_order', '/elements/transition_order'
+]);
 const SET_ARRAY_PATHS = new Set([
   '/source_ids', '/supersedes', '/source_locator_ids', '/source_claim_ids', '/parent_claim_ids', '/root_issue_ids', '/affected_obligation_ids', '/module_ids', '/view_element_refs', '/required_oracle_refs', '/required_capabilities', '/obligation_ids', '/case_ids', '/oracle_refs', '/test_point_ids', '/asked_root_issue_ids',
   '/sources', '/locators', '/source_policy/rules', '/source_policy/rules/source_ids', '/source_policy/rules/supersedes', '/decision_records/root_issue_ids', '/decision_records/affected_obligation_ids', '/clarification_events/root_issue_ids',
-  '/claims', '/claims/source_locator_ids', '/claims/parent_claim_ids', '/claims/closed_world_input/enumerated_values', '/claims/formula_input/inputs', '/fact_ledger', '/fact_ledger/source_claim_ids',
-  '/views', '/views/elements', '/views/source_claim_ids', '/views/elements/source_claim_ids', '/views/elements/model_refs', '/views/elements/permissions', '/views/relations', '/views/relations/source_claim_ids', '/views/relations/model_refs', '/interaction_matrix', '/interaction_matrix/module_ids', '/interaction_candidates', '/interaction_candidates/module_ids', '/interaction_candidates/source_claim_ids',
+  '/claims', '/claims/source_locator_ids', '/claims/parent_claim_ids', '/claims/closed_world_input/enumerated_values', '/claims/formula_input/inputs', '/claims/rule_input/inputs', '/claims/rule_input/enumerated_values', '/fact_ledger', '/fact_ledger/source_claim_ids',
+  '/views', '/views/elements', '/views/source_claim_ids', '/views/elements/source_claim_ids', '/views/elements/model_refs', '/views/elements/permissions', '/views/elements/conditions', '/views/elements/classes', '/views/elements/side_effects', '/elements/permissions', '/elements/conditions', '/elements/classes', '/elements/side_effects', '/views/relations', '/views/relations/source_claim_ids', '/views/relations/model_refs', '/interaction_matrix', '/interaction_matrix/module_ids', '/interaction_candidates', '/interaction_candidates/module_ids', '/interaction_candidates/source_claim_ids',
   '/obligations', '/obligations/source_claim_ids', '/obligations/view_element_refs', '/obligations/required_oracle_refs', '/obligations/required_capabilities', '/fact_routes', '/fact_routes/obligation_ids', '/interaction_routes',
-  '/cases', '/cases/obligation_ids', '/cases/source_claim_ids', '/cases/fact_ids', '/cases/evidence_refs', '/cases/preconditions', '/cases/preconditions/source_claim_ids', '/cases/data', '/cases/steps/expectations', '/cases/testability_profile/capabilities', '/cases/testability_profile/observers', '/cases/testability_profile/controls', '/cases/execution_signature/oracle_refs', '/cases/execution_signature/test_point_ids', '/execution_signature/oracle_refs', '/execution_signature/test_point_ids', '/obligation_dispositions', '/obligation_dispositions/case_ids', '/obligation_dispositions/evidence_refs', '/exploratory_candidates', '/exploratory_candidates/source_claim_ids',
+  '/cases', '/cases/obligation_ids', '/cases/source_claim_ids', '/cases/fact_ids', '/cases/evidence_refs', '/cases/preconditions', '/cases/preconditions/source_claim_ids', '/cases/data', '/cases/steps/expectations', '/cases/testability_profile/capabilities', '/cases/testability_profile/observers', '/cases/testability_profile/controls', '/cases/execution_signature/oracle_refs', '/cases/execution_signature/test_point_ids',
+  '/fact_ids', '/evidence_refs', '/preconditions', '/preconditions/source_claim_ids', '/data', '/steps/expectations', '/testability_profile/capabilities', '/testability_profile/observers', '/testability_profile/controls', '/execution_signature/oracle_refs', '/execution_signature/test_point_ids',
+  '/obligation_dispositions', '/obligation_dispositions/case_ids', '/obligation_dispositions/evidence_refs', '/exploratory_candidates', '/exploratory_candidates/source_claim_ids',
   '/grounded', '/grounded/fact_ids', '/grounded/obligation_ids', '/grounded/source_claim_ids', '/grounded/evidence_refs', '/grounded/preconditions', '/grounded/preconditions/source_claim_ids', '/grounded/data', '/grounded/steps/expectations', '/grounded/testability_profile/capabilities', '/grounded/testability_profile/observers', '/grounded/testability_profile/controls', '/grounded/execution_signature/oracle_refs', '/grounded/execution_signature/test_point_ids',
   '/conditional', '/conditional/fact_ids', '/conditional/obligation_ids', '/conditional/source_claim_ids', '/conditional/evidence_refs', '/conditional/preconditions', '/conditional/preconditions/source_claim_ids', '/conditional/data', '/conditional/steps/expectations', '/conditional/testability_profile/capabilities', '/conditional/testability_profile/observers', '/conditional/testability_profile/controls', '/conditional/execution_signature/oracle_refs', '/conditional/execution_signature/test_point_ids',
-  '/blocked', '/exploratory', '/coverage/not_applicable', '/root_issue_dispositions', '/blockers/affected_obligation_ids'
+  '/blocked', '/exploratory', '/coverage/requirements/entries', '/coverage/formal/entries', '/coverage/executable/entries', '/coverage/expert_recall/limits', '/coverage/not_applicable', '/quality/limits',
+  '/requirements/entries', '/formal/entries', '/executable/entries', '/expert_recall/limits', '/not_applicable', '/root_issue_dispositions', '/blockers/affected_obligation_ids'
 ]);
 const ROOT_ISSUE_ASSOCIATIONS = new Set(['case_ids', 'case_id', 'test_point_ids', 'test_point_id', 'obligation_ids', 'obligation_id']);
 const EXECUTION_SIGNATURE_ASSOCIATIONS = new Set(['test_point_ids', 'test_point_id', 'obligation_ids', 'obligation_id']);
 const COLLECTION_ID_FIELDS = new Map([
-  ['/sources', 'source_id'], ['/locators', 'locator_id'], ['/source_policy/rules', 'rule_id'], ['/decision_records', 'decision_id'], ['/clarification_events', 'event_id'], ['/claims', 'claim_id'], ['/fact_ledger', 'fact_id'], ['/views', 'view_id'], ['/views/elements', 'element_id'], ['/views/relations', 'relation_id'], ['/interaction_candidates', 'candidate_id'], ['/obligations', 'obligation_id'], ['/fact_routes', 'fact_id'], ['/interaction_routes', 'candidate_id'], ['/cases', 'case_id'], ['/cases/steps/expectations', 'expectation_id'], ['/obligation_dispositions', 'obligation_id'], ['/exploratory_candidates', 'exploratory_id'], ['/grounded', 'case_id'], ['/grounded/steps/expectations', 'expectation_id'], ['/conditional', 'case_id'], ['/conditional/steps/expectations', 'expectation_id'], ['/blocked', 'obligation_id'], ['/exploratory', 'exploratory_id'], ['/root_issue_dispositions', 'root_issue_id']
+  ['/sources', 'source_id'], ['/locators', 'locator_id'], ['/source_policy/rules', 'rule_id'], ['/decision_records', 'decision_id'], ['/clarification_events', 'event_id'], ['/claims', 'claim_id'], ['/fact_ledger', 'fact_id'], ['/views', 'view_id'], ['/views/elements', 'element_id'], ['/views/elements/classes', 'class_id'], ['/elements', 'element_id'], ['/elements/classes', 'class_id'], ['/views/relations', 'relation_id'], ['/interaction_candidates', 'candidate_id'], ['/obligations', 'obligation_id'], ['/fact_routes', 'fact_id'], ['/interaction_routes', 'candidate_id'],
+  ['/cases', 'case_id'], ['/cases/data', 'name'], ['/cases/steps/expectations', 'expectation_id'], ['/cases/testability_profile/capabilities', 'capability'], ['/cases/testability_profile/observers', 'observer'], ['/cases/testability_profile/controls', 'control'],
+  ['/data', 'name'], ['/steps/expectations', 'expectation_id'], ['/testability_profile/capabilities', 'capability'], ['/testability_profile/observers', 'observer'], ['/testability_profile/controls', 'control'],
+  ['/obligation_dispositions', 'obligation_id'], ['/exploratory_candidates', 'exploratory_id'], ['/grounded', 'case_id'], ['/grounded/data', 'name'], ['/grounded/steps/expectations', 'expectation_id'], ['/grounded/testability_profile/capabilities', 'capability'], ['/grounded/testability_profile/observers', 'observer'], ['/grounded/testability_profile/controls', 'control'], ['/conditional', 'case_id'], ['/conditional/data', 'name'], ['/conditional/steps/expectations', 'expectation_id'], ['/conditional/testability_profile/capabilities', 'capability'], ['/conditional/testability_profile/observers', 'observer'], ['/conditional/testability_profile/controls', 'control'],
+  ['/coverage/requirements/entries', 'fact_id'], ['/coverage/formal/entries', 'obligation_id'], ['/coverage/executable/entries', 'obligation_id'], ['/coverage/not_applicable', 'obligation_id'], ['/requirements/entries', 'fact_id'], ['/formal/entries', 'obligation_id'], ['/executable/entries', 'obligation_id'], ['/not_applicable', 'obligation_id'],
+  ['/blocked', 'obligation_id'], ['/exploratory', 'exploratory_id'], ['/root_issue_dispositions', 'root_issue_id']
 ]);
 
 /** @param {string} left @param {string} right */
@@ -45,10 +58,10 @@ function stableSemanticKey(path, value) {
     const object = /** @type {Record<string, unknown>} */ (value);
     const collectionPath = pathKey(path);
     const idField = COLLECTION_ID_FIELDS.get(collectionPath);
-    if (idField && typeof object[idField] === 'string') return `id:${object[idField]}`;
-    if (collectionPath === '/interaction_matrix') return `interaction:${JSON.stringify({ dimension: object.dimension, module_ids: object.module_ids })}`;
+    if (idField && typeof object[idField] === 'string') return `id:${object[idField]}:${JSON.stringify(object)}`;
+    if (collectionPath === '/interaction_matrix') return `interaction:${JSON.stringify({ dimension: object.dimension, module_ids: object.module_ids })}:${JSON.stringify(object)}`;
   }
-  return JSON.stringify(canonicalize(value, []));
+  return JSON.stringify(value);
 }
 
 /** @param {unknown} value @param {string[]} [path] @returns {unknown} */

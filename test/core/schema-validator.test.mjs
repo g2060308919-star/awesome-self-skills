@@ -120,6 +120,15 @@ test('schema reports a missing required claim field at its JSON pointer', () => 
   }]);
 });
 
+test('schema diagnostics escape user-controlled JSON Pointer segments', () => {
+  const schema = { type: 'object', properties: {}, additionalProperties: false };
+
+  assert.deepEqual(validateAgainstSchema({ 'a/b': true, 'c~d': true }, schema), [
+    { category: 'schema', code: 'ADDITIONAL_PROPERTY', path: '/a~1b', message: 'additional properties are not allowed' },
+    { category: 'schema', code: 'ADDITIONAL_PROPERTY', path: '/c~0d', message: 'additional properties are not allowed' }
+  ]);
+});
+
 test('schema rejects an unknown schema version', () => {
   const artifact = minimumSourcePack();
   artifact.schema_version = '9.0.0';
@@ -225,18 +234,43 @@ test('schema validates closed evidence claim forms and source policy metadata', 
 test('evidence schema admits every E2 derivation shape and defers semantic matrix errors', () => {
   /** @param {string} derivation_kind @param {string} derivation_target @param {Record<string, unknown>} rule_input */
   const derived = (derivation_kind, derivation_target, rule_input) => ({ claim_id: `claim_${derivation_kind}_${derivation_target}`, claim_form: 'derived', level: 'E2', kind: 'test-data', scope: 'checkout', value: 'derived', source_locator_ids: ['locator_a'], derivation_kind, derivation_target, parent_claim_ids: ['claim_e1'], parameters: {}, rule_input });
+  const formula = derived('formula', 'expected-value', {
+    formula: 'subtotal * tax_rate',
+    inputs: [{ name: 'subtotal', value: 10, unit: 'USD' }, { name: 'tax_rate', value: 0.2 }],
+    unit: 'USD', precision: 2, rounding: 'half-up'
+  });
+  formula.parameters = { formula_id: 'tax_total', unit: 'USD', precision: 2, rounding: 'half-up' };
   const artifact = { schema_version: '1.0.0', source_revision: 0, claims: [
-    derived('formula', 'test-data', { formula: 'x+1' }), derived('formula', 'expected-value', { formula: 'x+1' }),
+    derived('formula', 'test-data', { formula: 'x+1' }), formula,
     derived('decision-table-instance', 'expected-value', { outcome: 'approved' }), derived('decision-table-instance', 'model-element', {}),
-    derived('boundary-representative', 'test-data', { lower: 1, upper: 2 }), derived('enumeration-complement', 'test-data', { closed_world: true }), derived('enumeration-complement', 'model-element', { closed_world: false }),
+    derived('boundary-representative', 'test-data', { lower: 1, upper: 2, inclusive: true }), derived('enumeration-complement', 'test-data', { enumerated_values: ['draft', 'saved'], closed_world: true }), derived('enumeration-complement', 'model-element', { closed_world: false }),
     derived('graph-reachability', 'model-element', { from: 'a', to: 'b' }), derived('boundary-representative', 'expected-value', {})
   ], fact_ledger: [] };
   assert.deepEqual(validateAgainstSchema(artifact, claimsSchema), []);
+
+  const e0 = { ...artifact, claims: [{ ...artifact.claims[0], claim_form: 'direct', level: 'E0' }] };
+  assert.equal(validateAgainstSchema(e0, claimsSchema).length > 0, true);
 });
 
-test('behavior views allow model-only support pending Task 4 semantic validation', () => {
-  const artifact = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_a', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ relation_id: 'relation_a', kind: 'sequence', from_element_id: 'node_a', to_element_id: 'node_a', sequence: 0, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], interaction_candidates: [] };
-  assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), []);
+test('all seven behavior views allow evidence-only, model-only, and pending support shapes', () => {
+  const common = { source_claim_ids: [], model_refs: [] };
+  const fixtures = [
+    ['flow', { element_id: 'flow_a', kind: 'flow-node', node_type: 'action', label: 'Open', ...common }],
+    ['decision', { element_id: 'decision_a', kind: 'decision-rule', conditions: ['member', 'valid'], result: 'approved', priority: 0, ...common }],
+    ['state', { element_id: 'state_a', kind: 'state', state: 'saved', ...common }],
+    ['input-domain', { element_id: 'domain_a', kind: 'input-domain', domain: 'quantity', classes: [{ class_id: 'valid', label: 'Valid' }], bounds: { lower: 1, upper: 10, inclusive: true }, ...common }],
+    ['role', { element_id: 'role_a', kind: 'role-permission', role: 'member', permissions: ['save'], ...common }],
+    ['timing', { element_id: 'timing_a', kind: 'timing-rule', timing_event: 'timeout', threshold: 30, order: 0, ...common }],
+    ['integration', { element_id: 'integration_a', kind: 'integration-contract', request: { target: 'profile', payload: '{}' }, response: { status: '200', body: '{}' }, persistence: { operation: 'update', target: 'profile' }, event: { name: 'profile.saved', direction: 'publish' }, callback: { target: 'audit', event: 'saved' }, compensation: { action: 'restore', trigger: 'failure' }, side_effects: [{ kind: 'audit', target: 'audit_log' }], ...common }]
+  ];
+
+  for (const [type, element] of fixtures) {
+    const artifact = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: `view_${type}`, type, scope: 'checkout', source_claim_ids: [], elements: [element], relations: [] }], interaction_matrix: [], interaction_candidates: [] };
+    assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), [], type);
+  }
+
+  const modelOnly = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [] }], interaction_matrix: [], interaction_candidates: [] };
+  assert.deepEqual(validateAgainstSchema(modelOnly, behaviorViewsSchema), []);
 });
 
 test('schema validates structured behavior forms and rejects their unknown properties', () => {
@@ -269,6 +303,12 @@ test('case draft schema carries every factual support and Testability gate', () 
   const missingCapabilityStatus = structuredClone(artifact);
   delete missingCapabilityStatus.cases[0].testability_profile.capabilities[0].status;
   assert.equal(validateAgainstSchema(missingCapabilityStatus, caseDraftsSchema).some((item) => item.path.endsWith('/status') && item.code === 'REQUIRED_FIELD_MISSING'), true);
+
+  for (const status of ['provided', 'verified', 'approved-assumption', 'unavailable', 'unknown']) {
+    const statusArtifact = structuredClone(artifact);
+    statusArtifact.cases[0].testability_profile.capabilities[0].status = status;
+    assert.deepEqual(validateAgainstSchema(statusArtifact, caseDraftsSchema), [], status);
+  }
 });
 
 test('test bundle stores complete structured Cases and rejects prose summaries', () => {

@@ -141,8 +141,42 @@ test('complete Case sets normalize while steps and cleanup actions remain ordere
   };
 
   assert.equal(canonicalStringify({ grounded: [caseRecord] }), canonicalStringify({ grounded: [reorderedSets] }));
+  assert.equal(stableId('case', caseRecord), stableId('case', reorderedSets));
   assert.notEqual(canonicalStringify({ grounded: [caseRecord] }), canonicalStringify({ grounded: [{ ...caseRecord, steps: [...caseRecord.steps].reverse() }] }));
   assert.notEqual(canonicalStringify({ grounded: [caseRecord] }), canonicalStringify({ grounded: [{ ...caseRecord, cleanup: { steps: ['first', 'second'] } }] }));
+  assert.notEqual(stableId('case', caseRecord), stableId('case', { ...caseRecord, cleanup: { steps: ['first', 'second'] } }));
+});
+
+test('coverage ledgers and nested model sets normalize without flattening ordered sequences', () => {
+  const coverage = {
+    coverage: {
+      requirements: { entries: [{ fact_id: 'fact_b', status: 'covered' }, { fact_id: 'fact_a', status: 'covered' }] },
+      formal: { entries: [{ obligation_id: 'obligation_b', status: 'grounded' }, { obligation_id: 'obligation_a', status: 'grounded' }] },
+      executable: { entries: [{ obligation_id: 'obligation_b', case_id: 'case_b' }, { obligation_id: 'obligation_a', case_id: 'case_a' }] },
+      not_applicable: [{ obligation_id: 'obligation_d' }, { obligation_id: 'obligation_c' }]
+    }
+  };
+  const reorderedCoverage = /** @type {any} */ (structuredClone(coverage));
+  for (const ledger of ['requirements', 'formal', 'executable']) reorderedCoverage.coverage[ledger].entries.reverse();
+  reorderedCoverage.coverage.not_applicable.reverse();
+  assert.equal(canonicalStringify(coverage), canonicalStringify(reorderedCoverage));
+
+  const models = { views: [{ view_id: 'view_a', elements: [
+    { element_id: 'domain_a', kind: 'input-domain', classes: [{ class_id: 'class_b', label: 'B' }, { class_id: 'class_a', label: 'A' }] },
+    { element_id: 'decision_a', kind: 'decision-rule', conditions: ['member', 'valid'] },
+    { element_id: 'integration_a', kind: 'integration-contract', side_effects: [{ kind: 'event', target: 'b' }, { kind: 'audit', target: 'a' }] },
+    { element_id: 'transition_a', kind: 'transition', transition_order: ['validate', 'save'] }
+  ] }] };
+  const reorderedModels = /** @type {any} */ (structuredClone(models));
+  reorderedModels.views[0].elements.reverse();
+  reorderedModels.views[0].elements.find((/** @type {any} */ item) => item.element_id === 'domain_a').classes.reverse();
+  reorderedModels.views[0].elements.find((/** @type {any} */ item) => item.element_id === 'decision_a').conditions.reverse();
+  reorderedModels.views[0].elements.find((/** @type {any} */ item) => item.element_id === 'integration_a').side_effects.reverse();
+  assert.equal(canonicalStringify(models), canonicalStringify(reorderedModels));
+
+  const reorderedTransition = /** @type {any} */ (structuredClone(models));
+  reorderedTransition.views[0].elements.find((/** @type {any} */ item) => item.element_id === 'transition_a').transition_order.reverse();
+  assert.notEqual(canonicalStringify(models), canonicalStringify(reorderedTransition));
 });
 
 test('digest is a lowercase SHA-256 hexadecimal value', () => {

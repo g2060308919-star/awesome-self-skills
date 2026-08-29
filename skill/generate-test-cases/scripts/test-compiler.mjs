@@ -9,7 +9,27 @@ import path from "node:path";
 
 // src/canonical.mjs
 import { createHash } from "node:crypto";
-var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set(["/steps", "/action_path", "/flow", "/flow_sequence", "/sequence", "/transition_order", "/cases/steps", "/grounded/steps", "/conditional/steps", "/cases/cleanup/steps", "/grounded/cleanup/steps", "/conditional/cleanup/steps", "/cases/execution_signature/action_path", "/grounded/execution_signature/action_path", "/conditional/execution_signature/action_path", "/execution_signature/action_path"]);
+var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set([
+  "/steps",
+  "/action_path",
+  "/flow",
+  "/flow_sequence",
+  "/sequence",
+  "/transition_order",
+  "/cleanup/steps",
+  "/cases/steps",
+  "/grounded/steps",
+  "/conditional/steps",
+  "/cases/cleanup/steps",
+  "/grounded/cleanup/steps",
+  "/conditional/cleanup/steps",
+  "/cases/execution_signature/action_path",
+  "/grounded/execution_signature/action_path",
+  "/conditional/execution_signature/action_path",
+  "/execution_signature/action_path",
+  "/views/elements/transition_order",
+  "/elements/transition_order"
+]);
 var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/source_ids",
   "/supersedes",
@@ -40,6 +60,8 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/claims/parent_claim_ids",
   "/claims/closed_world_input/enumerated_values",
   "/claims/formula_input/inputs",
+  "/claims/rule_input/inputs",
+  "/claims/rule_input/enumerated_values",
   "/fact_ledger",
   "/fact_ledger/source_claim_ids",
   "/views",
@@ -48,6 +70,13 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/views/elements/source_claim_ids",
   "/views/elements/model_refs",
   "/views/elements/permissions",
+  "/views/elements/conditions",
+  "/views/elements/classes",
+  "/views/elements/side_effects",
+  "/elements/permissions",
+  "/elements/conditions",
+  "/elements/classes",
+  "/elements/side_effects",
   "/views/relations",
   "/views/relations/source_claim_ids",
   "/views/relations/model_refs",
@@ -78,6 +107,15 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/cases/testability_profile/controls",
   "/cases/execution_signature/oracle_refs",
   "/cases/execution_signature/test_point_ids",
+  "/fact_ids",
+  "/evidence_refs",
+  "/preconditions",
+  "/preconditions/source_claim_ids",
+  "/data",
+  "/steps/expectations",
+  "/testability_profile/capabilities",
+  "/testability_profile/observers",
+  "/testability_profile/controls",
   "/execution_signature/oracle_refs",
   "/execution_signature/test_point_ids",
   "/obligation_dispositions",
@@ -115,7 +153,17 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/conditional/execution_signature/test_point_ids",
   "/blocked",
   "/exploratory",
+  "/coverage/requirements/entries",
+  "/coverage/formal/entries",
+  "/coverage/executable/entries",
+  "/coverage/expert_recall/limits",
   "/coverage/not_applicable",
+  "/quality/limits",
+  "/requirements/entries",
+  "/formal/entries",
+  "/executable/entries",
+  "/expert_recall/limits",
+  "/not_applicable",
   "/root_issue_dispositions",
   "/blockers/affected_obligation_ids"
 ]);
@@ -129,19 +177,47 @@ var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/fact_ledger", "fact_id"],
   ["/views", "view_id"],
   ["/views/elements", "element_id"],
+  ["/views/elements/classes", "class_id"],
+  ["/elements", "element_id"],
+  ["/elements/classes", "class_id"],
   ["/views/relations", "relation_id"],
   ["/interaction_candidates", "candidate_id"],
   ["/obligations", "obligation_id"],
   ["/fact_routes", "fact_id"],
   ["/interaction_routes", "candidate_id"],
   ["/cases", "case_id"],
+  ["/cases/data", "name"],
   ["/cases/steps/expectations", "expectation_id"],
+  ["/cases/testability_profile/capabilities", "capability"],
+  ["/cases/testability_profile/observers", "observer"],
+  ["/cases/testability_profile/controls", "control"],
+  ["/data", "name"],
+  ["/steps/expectations", "expectation_id"],
+  ["/testability_profile/capabilities", "capability"],
+  ["/testability_profile/observers", "observer"],
+  ["/testability_profile/controls", "control"],
   ["/obligation_dispositions", "obligation_id"],
   ["/exploratory_candidates", "exploratory_id"],
   ["/grounded", "case_id"],
+  ["/grounded/data", "name"],
   ["/grounded/steps/expectations", "expectation_id"],
+  ["/grounded/testability_profile/capabilities", "capability"],
+  ["/grounded/testability_profile/observers", "observer"],
+  ["/grounded/testability_profile/controls", "control"],
   ["/conditional", "case_id"],
+  ["/conditional/data", "name"],
   ["/conditional/steps/expectations", "expectation_id"],
+  ["/conditional/testability_profile/capabilities", "capability"],
+  ["/conditional/testability_profile/observers", "observer"],
+  ["/conditional/testability_profile/controls", "control"],
+  ["/coverage/requirements/entries", "fact_id"],
+  ["/coverage/formal/entries", "obligation_id"],
+  ["/coverage/executable/entries", "obligation_id"],
+  ["/coverage/not_applicable", "obligation_id"],
+  ["/requirements/entries", "fact_id"],
+  ["/formal/entries", "obligation_id"],
+  ["/executable/entries", "obligation_id"],
+  ["/not_applicable", "obligation_id"],
   ["/blocked", "obligation_id"],
   ["/exploratory", "exploratory_id"],
   ["/root_issue_dispositions", "root_issue_id"]
@@ -170,10 +246,10 @@ function stableSemanticKey(path3, value) {
     );
     const collectionPath = pathKey(path3);
     const idField = COLLECTION_ID_FIELDS.get(collectionPath);
-    if (idField && typeof object[idField] === "string") return `id:${object[idField]}`;
-    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object.dimension, module_ids: object.module_ids })}`;
+    if (idField && typeof object[idField] === "string") return `id:${object[idField]}:${JSON.stringify(object)}`;
+    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object.dimension, module_ids: object.module_ids })}:${JSON.stringify(object)}`;
   }
-  return JSON.stringify(canonicalize(value, []));
+  return JSON.stringify(value);
 }
 function canonicalize(value, path3 = []) {
   if (Array.isArray(value)) {
@@ -338,7 +414,7 @@ var schemaDirectory = path2.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "59ee014056ad95e9fe1a2dd8ac54b09479b1e1e0de9977e127dd3d9db7bbd3aa" : void 0;
+var embeddedManifestDigest = true ? "75c7363283064eb598d474e7329d4da01dcb5b7d429cdea44ec4b6d9b2190891" : void 0;
 var embeddedSchemaVersion = true ? "1.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.1.0" : void 0;
 var emptyRunReply = Object.freeze({
