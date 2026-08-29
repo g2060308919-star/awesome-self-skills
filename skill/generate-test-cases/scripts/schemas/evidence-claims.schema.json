@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "evidence-claims.schema.json", "type": "object",
+  "required": ["schema_version", "source_revision", "claims", "fact_ledger"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" }, "source_revision": { "type": "integer", "minimum": 0 },
+    "claims": { "type": "array", "items": { "type": "object", "required": ["claim_id", "source_locator_ids"], "properties": { "claim_id": { "type": "string", "minLength": 1 }, "source_locator_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }, "level": { "enum": ["E0", "E1", "E2", "E3"] }, "kind": { "type": "string" }, "scope": { "type": "string" }, "value": { "type": "string" }, "parent_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true } }, "additionalProperties": false } },
+    "fact_ledger": { "type": "array", "items": { "type": "object", "required": ["fact_id", "claim_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "claim_id": { "type": "string", "minLength": 1 }, "status": { "type": "string" } }, "additionalProperties": false } }
+  }, "additionalProperties": false
+}

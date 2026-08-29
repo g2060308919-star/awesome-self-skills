@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "test-bundle.schema.json", "type": "object",
+  "required": ["schema_version", "source_revision", "grounded", "conditional", "blocked", "exploratory", "coverage", "quality"],
+  "properties": { "schema_version": { "const": "1.0.0" }, "source_revision": { "type": "integer", "minimum": 0 }, "grounded": { "type": "array" }, "conditional": { "type": "array" }, "blocked": { "type": "array" }, "exploratory": { "type": "array" }, "coverage": { "type": "object" }, "quality": { "type": "object" } }, "additionalProperties": false
+}

@@ -1,5 +1,21 @@
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadSchemaRegistry } from './schema-registry.mjs';
+
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+const schemaDirectory = path.resolve(
+  moduleDirectory,
+  typeof __SCHEMA_DIRECTORY__ === 'string'
+    ? __SCHEMA_DIRECTORY__
+    : '../skill/generate-test-cases/scripts/schemas'
+);
+const embeddedManifestDigest = typeof __SCHEMA_MANIFEST_DIGEST__ === 'string'
+  ? __SCHEMA_MANIFEST_DIGEST__
+  : undefined;
+const embeddedSchemaVersion = typeof __SCHEMA_VERSION__ === 'string'
+  ? __SCHEMA_VERSION__
+  : undefined;
 
 const emptyRunReply = Object.freeze({
   status: 'need_artifact',
@@ -15,6 +31,13 @@ const emptyRunReply = Object.freeze({
  * @param {string} runDirectory
  */
 export async function advanceStrict(runDirectory) {
+  try {
+    const registry = await loadSchemaRegistry(schemaDirectory, embeddedManifestDigest);
+    if (embeddedSchemaVersion && registry.schemaVersion !== embeddedSchemaVersion) return fatalReply('SCHEMA_INTEGRITY_MISMATCH', 'Bundled schema version does not match the compiler.');
+  } catch {
+    return fatalReply('SCHEMA_INTEGRITY_MISMATCH', 'Bundled schemas or schema manifest failed integrity verification.');
+  }
+
   if (!path.isAbsolute(runDirectory)) {
     return fatalReply('run_directory_absolute', 'Run directory must be an absolute path.');
   }
