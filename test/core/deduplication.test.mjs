@@ -159,6 +159,13 @@ function exactDuplicateContext() {
     source_claim_ids: ['claim_fact_secondary'],
     evidence_refs: [...baseCase().evidence_refs, 'claim_fact_secondary']
   });
+  for (const draft of [firstCase, secondCase]) {
+    draft.steps[0].expectations.push({
+      ...structuredClone(draft.steps[0].expectations[0]),
+      expectation_id: 'expectation_secondary_result'
+    });
+    refreshExecutionSignature(draft);
+  }
   const context = classificationContext({
     claims,
     obligations: [firstObligation, secondObligation],
@@ -193,6 +200,71 @@ test('exact signatures merge without losing fact, evidence, or obligation refere
   assert.equal(merged.evidence_refs.includes('claim_fact'), true);
   assert.equal(merged.evidence_refs.includes('claim_fact_secondary'), true);
   assert.deepEqual(context, before);
+});
+
+test('same-signature merge preserves complete Oracle ownership and remains valid on replay', () => {
+  const secondObligationId = 'obligation_2222222222222222';
+  const secondCaseId = 'case_2222222222222222';
+  const obligations = [
+    baseObligation(),
+    baseObligation({
+      obligation_id: secondObligationId,
+      view_element_refs: ['view_checkout#edge_secondary']
+    })
+  ];
+  /** @param {any[]} cases */
+  const makeContext = (cases) => {
+    const context = classificationContext({
+      obligations,
+      cases,
+      dispositions: obligations.map((obligation, index) => ({
+        obligation_id: obligation.obligation_id,
+        status: 'case_candidate',
+        case_ids: [cases[Math.min(index, cases.length - 1)].case_id]
+      }))
+    });
+    context.obligations.fact_routes[0].obligation_ids.push(secondObligationId);
+    return context;
+  };
+
+  const insufficientFirst = baseCase();
+  const insufficientSecond = baseCase({
+    case_id: secondCaseId,
+    obligation_ids: [secondObligationId]
+  });
+  const insufficient = classifyCaseDrafts(makeContext([insufficientFirst, insufficientSecond]));
+  assert.equal(insufficient.grounded.length + insufficient.conditional.length + insufficient.blocked.length, 0);
+  assert.equal(insufficient.diagnostics.some((item) =>
+    item.code === 'OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT'), true);
+
+  const sufficientFirst = baseCase();
+  sufficientFirst.steps[0].expectations.push({
+    ...structuredClone(sufficientFirst.steps[0].expectations[0]),
+    expectation_id: 'expectation_secondary_result'
+  });
+  refreshExecutionSignature(sufficientFirst);
+  const sufficientSecond = structuredClone(sufficientFirst);
+  sufficientSecond.case_id = secondCaseId;
+  sufficientSecond.obligation_ids = [secondObligationId];
+  refreshExecutionSignature(sufficientSecond);
+  const firstPass = classifyCaseDrafts(makeContext([sufficientFirst, sufficientSecond]));
+  assert.equal(firstPass.grounded.length, 1);
+  assert.deepEqual(firstPass.diagnostics, []);
+
+  const merged = firstPass.grounded[0];
+  const replay = classificationContext({
+    obligations,
+    cases: [merged],
+    dispositions: obligations.map((obligation) => ({
+      obligation_id: obligation.obligation_id,
+      status: 'case_candidate',
+      case_ids: [merged.case_id]
+    }))
+  });
+  replay.obligations.fact_routes[0].obligation_ids.push(secondObligationId);
+  const secondPass = classifyCaseDrafts(replay);
+  assert.equal(secondPass.grounded.length, 1);
+  assert.deepEqual(secondPass.diagnostics, []);
 });
 
 test('deduplication and merged ID are stable under input reordering', () => {

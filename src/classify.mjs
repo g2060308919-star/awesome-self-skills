@@ -220,28 +220,41 @@ function snapshotControlled(root) {
         ));
       }
       const stringKeys = ownKeys.filter((key) => typeof key === 'string').sort(compareCodePoints);
+      /** @type {number[]} */
+      const numericKeys = [];
       for (const key of stringKeys) {
         if (key === 'length') continue;
         const index = Number(key);
         if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
           validOwnKeys = false;
           addSnapshotDiagnostic(diagnostic('schema', 'UNKNOWN_KEY', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'));
-        }
+        } else numericKeys.push(index);
       }
       if (!validOwnKeys) {
         assign(null);
         continue;
       }
+      numericKeys.sort((left, right) => left - right);
       const target = new Array(length);
       seen.set(source, target);
       assign(target);
+      const holeCount = length - numericKeys.length;
+      if (holeCount > 0) {
+        let firstHole = 0;
+        for (const index of numericKeys) {
+          if (index !== firstHole) break;
+          firstHole += 1;
+        }
+        addSnapshotDiagnostic(diagnostic(
+          'schema', 'ARRAY_HOLE', `${path}/${firstHole}`, 'controlled arrays must be dense'
+        ));
+        if (holeCount > 1) diagnosticsTruncated = true;
+      }
       /** @type {Array<{source: unknown, path: string, assign: (value: unknown) => void}>} */
       const children = [];
-      for (let index = 0; index < length; index += 1) {
+      for (const index of numericKeys) {
         const descriptor = descriptors[String(index)];
-        if (!descriptor) {
-          addSnapshotDiagnostic(diagnostic('schema', 'ARRAY_HOLE', `${path}/${index}`, 'controlled arrays must be dense'));
-        } else if (!Object.hasOwn(descriptor, 'value')) {
+        if (!Object.hasOwn(descriptor, 'value')) {
           addSnapshotDiagnostic(diagnostic('schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${index}`, 'controlled values must be own data properties'));
         } else {
           children.push({
@@ -634,23 +647,22 @@ function assessEvidenceRoots(roots, evidence, cache) {
 }
 
 /**
- * Each required Oracle owns one bit. Propagating those bits once from accepted
- * parents to children makes every expectation-to-Oracle ancestry lookup O(1).
+ * Propagate sparse required-Oracle labels once from accepted parents to
+ * children. Independent Oracle relations retain one label each; shared and
+ * dense ancestry stores only the reachability relations that actually exist.
  * @param {Map<string, ClaimAssessment>} evidence
  * @param {Record<string, unknown>[]} obligations
  */
 function buildOracleReachability(evidence, obligations) {
   const oracleRefs = [...new Set(obligations.flatMap((obligation) =>
     stringArray(obligation.required_oracle_refs) ?? []))].sort(compareCodePoints);
-  /** @type {Map<string, bigint>} */
-  const bitByOracle = new Map();
-  /** @type {Map<string, bigint>} */
-  const masksByClaim = new Map();
-  for (const [index, oracleRef] of oracleRefs.entries()) {
-    const bit = 1n << BigInt(index);
-    bitByOracle.set(oracleRef, bit);
+  /** @type {Map<string, Set<string>>} */
+  const oracleRefsByClaim = new Map();
+  for (const oracleRef of oracleRefs) {
     const assessment = evidence.get(oracleRef);
-    if (assessment && assessment.rank > 0 && assessment.reasons.length === 0) masksByClaim.set(oracleRef, bit);
+    if (assessment && assessment.rank > 0 && assessment.reasons.length === 0) {
+      oracleRefsByClaim.set(oracleRef, new Set([oracleRef]));
+    }
   }
 
   /** @type {Map<string, number>} */
@@ -664,11 +676,16 @@ function buildOracleReachability(evidence, obligations) {
   let cursor = 0;
   while (cursor < queue.length) {
     const claimId = queue[cursor++];
-    const mask = masksByClaim.get(claimId) ?? 0n;
+    const reachableOracles = oracleRefsByClaim.get(claimId);
     for (const childId of evidence.get(claimId)?.children ?? []) {
       const child = evidence.get(childId);
-      if (mask !== 0n && child && child.rank > 0 && child.reasons.length === 0) {
-        masksByClaim.set(childId, (masksByClaim.get(childId) ?? 0n) | mask);
+      if (reachableOracles && child && child.rank > 0 && child.reasons.length === 0) {
+        let childOracles = oracleRefsByClaim.get(childId);
+        if (!childOracles) {
+          childOracles = new Set();
+          oracleRefsByClaim.set(childId, childOracles);
+        }
+        for (const oracleRef of reachableOracles) childOracles.add(oracleRef);
       }
       const remaining = (indegree.get(childId) ?? 0) - 1;
       indegree.set(childId, remaining);
@@ -676,16 +693,15 @@ function buildOracleReachability(evidence, obligations) {
     }
   }
 
-  /** @type {Map<string, bigint>} */
-  const masksByObligation = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const oracleRefsByObligation = new Map();
   for (const obligation of obligations) {
-    let mask = 0n;
-    for (const oracleRef of stringArray(obligation.required_oracle_refs) ?? []) {
-      mask |= bitByOracle.get(oracleRef) ?? 0n;
-    }
-    if (isCanonicalString(obligation.obligation_id)) masksByObligation.set(String(obligation.obligation_id), mask);
+    if (isCanonicalString(obligation.obligation_id)) oracleRefsByObligation.set(
+      String(obligation.obligation_id),
+      new Set(stringArray(obligation.required_oracle_refs) ?? [])
+    );
   }
-  return { masksByClaim, masksByObligation };
+  return { oracleRefsByClaim, oracleRefsByObligation };
 }
 
 /**
@@ -695,7 +711,7 @@ function buildOracleReachability(evidence, obligations) {
  * @param {Record<string, unknown>} draft
  * @param {Record<string, unknown>[]} obligations
  * @param {Array<{expectationId: string, evidenceRef: string}>} expectations
- * @param {{masksByClaim: Map<string, bigint>, masksByObligation: Map<string, bigint>}} reachability
+ * @param {{oracleRefsByClaim: Map<string, Set<string>>, oracleRefsByObligation: Map<string, Set<string>>}} reachability
  * @param {Set<string>} reasons
  * @param {Diagnostic[]} diagnostics
  */
@@ -711,11 +727,17 @@ function requireOracleOwnership(draft, obligations, expectations, reachability, 
   let missingEdge = false;
   for (const obligation of orderedObligations) {
     const obligationId = String(obligation.obligation_id);
-    const requiredMask = reachability.masksByObligation.get(obligationId) ?? 0n;
+    const requiredOracles = reachability.oracleRefsByObligation.get(obligationId) ?? new Set();
     const candidates = [];
     for (const [expectationIndex, expectation] of orderedExpectations.entries()) {
-      const expectationMask = reachability.masksByClaim.get(expectation.evidenceRef) ?? 0n;
-      if (requiredMask !== 0n && (expectationMask & requiredMask) === requiredMask) candidates.push(expectationIndex);
+      const expectationOracles = reachability.oracleRefsByClaim.get(expectation.evidenceRef);
+      let coversAll = requiredOracles.size > 0 && Boolean(expectationOracles);
+      if (expectationOracles) {
+        for (const oracleRef of requiredOracles) {
+          if (!expectationOracles.has(oracleRef)) coversAll = false;
+        }
+      }
+      if (coversAll) candidates.push(expectationIndex);
     }
     edges.push(candidates);
     if (candidates.length === 0) {
@@ -800,7 +822,7 @@ function applyCapabilityStatus(status, gate, reasons) {
   }
 }
 
-/** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>[]>} routesByFact @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {{masksByClaim: Map<string, bigint>, masksByObligation: Map<string, bigint>}} oracleReachability @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
+/** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>[]>} routesByFact @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {{oracleRefsByClaim: Map<string, Set<string>>, oracleRefsByObligation: Map<string, Set<string>>}} oracleReachability @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
 function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById, evidence, evidenceCache, oracleReachability, conflicts, diagnostics) {
   const reasons = new Set();
   const submittedEvidenceRefs = stringArray(draft.evidence_refs, true);
@@ -1177,8 +1199,25 @@ function mergeExactCases(drafts) {
   return merged;
 }
 
-/** @param {Array<{draft: Record<string, unknown>, rank: number}>} executable @param {Diagnostic[]} diagnostics */
-function deduplicateCases(executable, diagnostics) {
+/** @param {Record<string, unknown>} draft */
+function ownershipExpectations(draft) {
+  /** @type {Array<{expectationId: string, evidenceRef: string}>} */
+  const expectations = [];
+  for (const step of objectArray(draft.steps) ?? []) {
+    for (const expectation of objectArray(step.expectations) ?? []) {
+      if (isCanonicalString(expectation.expectation_id) && isCanonicalString(expectation.evidence_ref)) {
+        expectations.push({
+          expectationId: String(expectation.expectation_id),
+          evidenceRef: String(expectation.evidence_ref)
+        });
+      }
+    }
+  }
+  return expectations;
+}
+
+/** @param {Array<{draft: Record<string, unknown>, rank: number}>} executable @param {Map<string, Record<string, unknown>>} obligationsById @param {{oracleRefsByClaim: Map<string, Set<string>>, oracleRefsByObligation: Map<string, Set<string>>}} oracleReachability @param {Diagnostic[]} diagnostics */
+function deduplicateCases(executable, obligationsById, oracleReachability, diagnostics) {
   /** @type {Map<string, Array<{draft: Record<string, unknown>, rank: number}>>} */
   const groups = new Map();
   for (const item of executable) {
@@ -1205,6 +1244,16 @@ function deduplicateCases(executable, diagnostics) {
       continue;
     }
     const merged = mergeExactCases(items.map((item) => item.draft));
+    const mergedObligations = (stringArray(merged.obligation_ids, true) ?? []).flatMap((obligationId) => {
+      const obligation = obligationsById.get(obligationId);
+      return obligation ? [obligation] : [];
+    });
+    const ownershipReasons = new Set();
+    requireOracleOwnership(
+      merged, mergedObligations, ownershipExpectations(merged),
+      oracleReachability, ownershipReasons, diagnostics
+    );
+    if (ownershipReasons.size > 0) continue;
     (items[0].rank === 2 ? grounded : conditional).push(merged);
   }
   grounded.sort((left, right) => compareCodePoints(String(left.case_id), String(right.case_id)));
@@ -1578,7 +1627,9 @@ export function classifyCaseDrafts(submittedContext) {
       }
       if (valid) exploratoryOutput.push(structuredClone(candidate));
     }
-    const deduplicated = deduplicateCases(uniquelyExecutable, diagnostics);
+    const deduplicated = deduplicateCases(
+      uniquelyExecutable, obligationsById, oracleReachability, diagnostics
+    );
     if (diagnostics.length > 0) return resultWithDiagnostics(diagnostics);
     return {
       grounded: deduplicated.grounded,

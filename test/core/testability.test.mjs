@@ -422,6 +422,40 @@ test('snapshot diagnostics use a canonical bounded top-K independent of property
   assert.equal(forward.filter((item) => item.code === 'ACCESSOR_NOT_ALLOWED').length, 255);
 });
 
+test('very large sparse arrays derive canonical holes from own descriptors without scanning declared length', () => {
+  /** @param {number[]} indices */
+  const sparseDiagnostics = (indices) => {
+    const context = classificationContext();
+    const sparse = new Array(1_000_000);
+    for (const index of indices) sparse[index] = baseCase({ case_id: `case_${index.toString(16).padStart(16, '0')}` });
+    context.caseDrafts.cases = sparse;
+
+    const nativeString = globalThis.String;
+    let numericConversions = 0;
+    globalThis.String = /** @type {StringConstructor} */ (new Proxy(nativeString, {
+      apply(target, thisArg, args) {
+        numericConversions += 1;
+        return Reflect.apply(target, thisArg, args);
+      }
+    }));
+    let diagnostics;
+    try {
+      diagnostics = classifyCaseDrafts(context).diagnostics;
+    } finally {
+      globalThis.String = nativeString;
+    }
+    assert.equal(numericConversions < 5_000, true,
+      `sparse snapshot performed ${numericConversions} String conversions for ${indices.length} own entries`);
+    assert.equal(diagnostics.some((item) => item.code === 'ARRAY_HOLE'), true);
+    assert.equal(diagnostics.some((item) => item.code === 'DIAGNOSTICS_TRUNCATED'), true);
+    return diagnostics;
+  };
+
+  const forward = sparseDiagnostics([2, 7, 999_999]);
+  const reverse = sparseDiagnostics([999_999, 7, 2]);
+  assert.equal(JSON.stringify(forward), JSON.stringify(reverse));
+});
+
 test('deep evidence ancestry is evaluated iteratively without call-stack recursion', () => {
   const claims = baseClaims();
   let parent = 'claim_fact';

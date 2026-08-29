@@ -566,6 +566,39 @@ test('Oracle ownership ancestry is indexed once instead of rescanned per expecta
     `Oracle ancestry Map#get work grew from ${small} to ${large}`);
 });
 
+test('independent Oracle reachability is sparse and never allocates BigInt one-hot widths', () => {
+  const size = 256;
+  const oracleClaims = Array.from({ length: size }, (_, index) =>
+    acceptedClaim(`claim_width_oracle_${index.toString(16).padStart(8, '0')}`));
+  const obligations = oracleClaims.map((claim, index) => baseObligation({
+    obligation_id: `obligation_${index.toString(16).padStart(16, '0')}`,
+    required_oracle_refs: [claim.claim_id],
+    view_element_refs: [`view_checkout#edge_${index}`]
+  }));
+  const context = classificationContext({
+    claims: [...baseClaims(), ...oracleClaims],
+    obligations,
+    cases: [],
+    dispositions: []
+  });
+  context.obligations.fact_routes[0].obligation_ids = obligations.map((item) => item.obligation_id);
+
+  const nativeBigInt = globalThis.BigInt;
+  let oneHotWidths = 0;
+  globalThis.BigInt = /** @type {BigIntConstructor} */ (function countedBigInt(value) {
+    oneHotWidths += 1;
+    return nativeBigInt(value);
+  });
+  let result;
+  try {
+    result = classifyCaseDrafts(context);
+  } finally {
+    globalThis.BigInt = nativeBigInt;
+  }
+  assert.equal(result.diagnostics.length > 0, true);
+  assert.equal(oneHotWidths, 0, `Oracle reachability allocated ${oneHotWidths} BigInt one-hot widths`);
+});
+
 test('Case evidence_refs exactly summarize canonical direct evidence roots', () => {
   const omitted = classificationContext();
   omitted.caseDrafts.cases[0].evidence_refs = omitted.caseDrafts.cases[0].evidence_refs
