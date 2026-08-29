@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 6,
+  "views": [
+    {
+      "view_id": "view_amount_input",
+      "type": "input-domain",
+      "scope": "checkout.amount",
+      "source_claim_ids": ["claim_amount_domain"],
+      "elements": [
+        {
+          "element_id": "input_amount",
+          "kind": "input-domain",
+          "domain": "purchase amount",
+          "classes": [
+            { "class_id": "class_standard", "label": "amount from 1 through 100" },
+            { "class_id": "class_zero", "label": "zero is invalid" }
+          ],
+          "bounds": { "lower": 1, "upper": 100, "inclusive": true },
+          "source_claim_ids": ["claim_amount_domain"],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}

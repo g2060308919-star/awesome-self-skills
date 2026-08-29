@@ -1,0 +1,38 @@
+{
+  "parameters": {
+    "interaction_risk": "high",
+    "domains": [
+      { "name": "a", "values": [0, 1] },
+      { "name": "b", "values": [0, 1] },
+      { "name": "c", "values": [0, 1] }
+    ],
+    "oracle_mappings": [
+      {
+        "assignments": [
+          { "parameter": "a", "value": 0 },
+          { "parameter": "b", "value": 0 },
+          { "parameter": "c", "value": 0 }
+        ],
+        "required_oracle_refs": ["claim_oracle_000"]
+      },
+      {
+        "assignments": [
+          { "parameter": "a", "value": 0 },
+          { "parameter": "b", "value": 1 },
+          { "parameter": "c", "value": 1 }
+        ],
+        "required_oracle_refs": ["claim_oracle_011"]
+      }
+    ]
+  },
+  "strength": 2,
+  "constraints": [
+    {
+      "forbidden": [
+        { "parameter": "a", "value": 1 },
+        { "parameter": "b", "value": 1 }
+      ]
+    }
+  ],
+  "maxCandidates": 8
+}
