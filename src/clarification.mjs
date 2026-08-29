@@ -803,8 +803,9 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
     ));
   }
   if (combined.length === 0) {
-    if (sourceRevision < prior.source_revision) arrayPush(diagnostics, diagnostic(
-      'classification', 'APPEND_REVISION_INVALID', '/source_revision', 'an empty append batch cannot move to a stale source revision'
+    if (prior.semantic_snapshot !== null && sourceRevision !== prior.source_revision) arrayPush(diagnostics, diagnostic(
+      'classification', 'APPEND_REVISION_INVALID', '/source_revision',
+      'an empty append batch must replay the exact prior immutable source revision'
     ));
   } else if (sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic(
     'classification', 'APPEND_REVISION_INVALID', '/source_revision', 'one append batch must create exactly the next immutable source revision'
@@ -965,9 +966,8 @@ function rootSnapshot(root, current) {
  * @param {ReturnType<typeof normalizeRootLedger>} priorLedger
  * @param {any[]} roots
  * @param {Diagnostic[]} diagnostics
- * @param {Set<string>} [carryForwardRootIds]
  */
-function nextRootLedger(priorLedger, roots, diagnostics, carryForwardRootIds = new Set()) {
+function nextRootLedger(priorLedger, roots, diagnostics) {
   const byId = new Map();
   for (const prior of priorLedger) byId.set(prior.root_issue_id, { ...structuredClone(prior), current: false });
   for (const root of roots) {
@@ -979,18 +979,7 @@ function nextRootLedger(priorLedger, roots, diagnostics, carryForwardRootIds = n
       ));
       continue;
     }
-    const current = rootSnapshot(root, true);
-    if (prior && carryForwardRootIds.has(root.root_issue_id)) {
-      current.affected_obligation_ids = arraySort(
-        [...new Set([...prior.affected_obligation_ids, ...current.affected_obligation_ids])], compareCodePoints
-      );
-      current.reasons = arraySort([...new Set([...prior.reasons, ...current.reasons])], compareCodePoints);
-      current.evidence_refs = arraySort(
-        [...new Set([...prior.evidence_refs, ...current.evidence_refs])], compareCodePoints
-      );
-      current.risk_counts = { ...prior.risk_counts };
-    }
-    byId.set(root.root_issue_id, current);
+    byId.set(root.root_issue_id, rootSnapshot(root, true));
   }
   return arraySort([...byId.values()], (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
 }
@@ -1089,7 +1078,7 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
       arrayFilter(prior.root_issue_dispositions, (item) => isRetainedGateStatus(item.status)),
       (item) => item.root_issue_id
     ));
-    const replayLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics, replayGateRootIds);
+    const replayLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics);
     /** @type {Map<string, any[]>} */
     const retainedRootsByObligation = new Map();
     for (const root of prior.root_snapshot_ledger) {
@@ -1310,7 +1299,7 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     const nextEventSeq = combined.length > 0 ? combined[combined.length - 1].seq : prior.clarification_event_seq;
     const dispositionOutput = arrayMap([...dispositions], ([root_issue_id, status]) => ({ root_issue_id, status }));
     arraySort(dispositionOutput, (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
-    const nextLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics, gateRootIds);
+    const nextLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics);
     validateRootPartition(nextLedger, dispositions, deliveredSemantics, diagnostics, '/state');
     if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics, sourceRevision);
     const state = {
