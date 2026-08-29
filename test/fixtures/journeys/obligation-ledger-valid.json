@@ -120,14 +120,17 @@
   ],
   "custom_obligations": [
     {
-      "obligation_id": "obligation_0123456789abcdef",
-      "kind": "decision",
-      "risk": "medium",
-      "scope": "checkout",
-      "source_claim_ids": ["claim_rule"],
-      "view_element_refs": ["view_decision#rule_checkout"],
-      "required_oracle_refs": ["claim_rule"],
-      "required_capabilities": ["custom-observer"]
+      "semantic_key": "custom-checkout-observer",
+      "obligation": {
+        "obligation_id": "obligation_287414283b7c588d",
+        "kind": "decision",
+        "risk": "medium",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_rule"],
+        "view_element_refs": ["view_decision#rule_checkout"],
+        "required_oracle_refs": ["claim_rule"],
+        "required_capabilities": ["custom-observer"]
+      }
     }
   ]
 }

@@ -172,9 +172,30 @@ export function acceptedOracleRelevance(claimsById, roots, targetIds) {
   return new Map(roots.map((root) => [root, reachesTarget.get(root) === true]));
 }
 
+/** @param {string} viewId @param {string} elementId */
+export function qualifyViewElementRef(viewId, elementId) {
+  return `${encodeURIComponent(viewId)}#${encodeURIComponent(elementId)}`;
+}
+
+/** @param {unknown} ref */
+export function parseQualifiedViewElementRef(ref) {
+  if (typeof ref !== 'string') return null;
+  const separator = ref.indexOf('#');
+  if (separator <= 0 || separator !== ref.lastIndexOf('#') || separator === ref.length - 1) return null;
+  try {
+    const viewId = decodeURIComponent(ref.slice(0, separator));
+    const elementId = decodeURIComponent(ref.slice(separator + 1));
+    if (viewId.length === 0 || elementId.length === 0
+      || qualifyViewElementRef(viewId, elementId) !== ref) return null;
+    return { viewId, elementId };
+  } catch {
+    return null;
+  }
+}
+
 /** @param {Record<string, unknown>} view @param {Record<string, unknown>} element */
 function qualifiedElementRef(view, element) {
-  return `${String(view.view_id)}#${String(element.element_id)}`;
+  return qualifyViewElementRef(String(view.view_id), String(element.element_id));
 }
 
 /**
