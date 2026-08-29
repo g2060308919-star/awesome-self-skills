@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 11,
+  "views": [
+    {
+      "view_id": "view_discount_decision",
+      "type": "decision",
+      "scope": "checkout.discount",
+      "source_claim_ids": ["claim_discount_none", "claim_discount_priority", "claim_discount_standard", "claim_discount_vip"],
+      "elements": [
+        {
+          "element_id": "rule_vip",
+          "kind": "decision-rule",
+          "conditions": ["customer is VIP", "subtotal is at least 100"],
+          "result": "apply 20 percent discount",
+          "priority": 0,
+          "source_claim_ids": ["claim_discount_priority", "claim_discount_vip"],
+          "model_refs": ["model_vip_rule"]
+        },
+        {
+          "element_id": "rule_standard",
+          "kind": "decision-rule",
+          "conditions": ["customer is not VIP", "subtotal is at least 100"],
+          "result": "apply 10 percent discount",
+          "priority": 1,
+          "source_claim_ids": ["claim_discount_standard"],
+          "model_refs": []
+        },
+        {
+          "element_id": "rule_none",
+          "kind": "decision-rule",
+          "conditions": ["subtotal is below 100"],
+          "result": "apply no discount",
+          "priority": 2,
+          "source_claim_ids": ["claim_discount_none"],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}
