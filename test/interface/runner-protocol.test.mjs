@@ -14,15 +14,21 @@ const runnerPath = path.join(
   repositoryRoot,
   'skill/generate-test-cases/scripts/test-compiler.mjs'
 );
+const unsupportedRuntimePreloadPath = path.join(
+  repositoryRoot,
+  'test/fixtures/unsupported-node-runtime.cjs'
+);
 
 /**
  * @param {string} runDirectory
+ * @param {{ env?: Record<string, string | undefined> }} [options]
  * @returns {Promise<{code: number | null, stdout: string, stderr: string}>}
  */
-function runCompiler(runDirectory) {
+function runCompiler(runDirectory, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [runnerPath, runDirectory], {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, ...options.env }
     });
     let stdout = '';
     let stderr = '';
@@ -70,4 +76,18 @@ test('absolute run directory is required and a relative path does not write file
   assert.equal(result.code, 0, result.stderr);
   assert.equal(parseSingleJsonValue(result.stdout).status, 'fatal');
   await assert.rejects(readdir(path.join(repositoryRoot, relativeRunDirectory)));
+});
+
+test('unsupported runtime returns a fatal JSON reply', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
+  try {
+    const result = await runCompiler(runDirectory, {
+      env: { NODE_OPTIONS: `--require ${unsupportedRuntimePreloadPath}` }
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(parseSingleJsonValue(result.stdout).status, 'fatal');
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
 });
