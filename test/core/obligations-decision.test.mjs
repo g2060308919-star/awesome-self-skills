@@ -47,7 +47,7 @@ function oracleSourcePack() {
       }
     ],
     source_policy: { rules: [{
-      rule_id: 'rule_oracle_source', source_ids: ['source_oracle'], scope: 'checkout', authority: 'owner', status: 'effective'
+      rule_id: 'rule_oracle_source', source_ids: ['source_oracle'], scope: ' * ', authority: 'owner', status: 'effective'
     }] },
     decision_records: [], clarification_events: []
   };
@@ -59,7 +59,7 @@ function oracleEvidenceClaims() {
     claims: [
       {
         claim_id: 'claim_total_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
-        scope: 'checkout.total', value: '12.50', source_locator_ids: ['locator_formula'], source_id: 'source_oracle'
+        scope: ' all ', value: '12.50', source_locator_ids: ['locator_formula'], source_id: 'source_oracle'
       },
       {
         claim_id: 'claim_total', claim_form: 'derived', level: 'E2', kind: 'expected-value',
@@ -73,7 +73,7 @@ function oracleEvidenceClaims() {
       },
       {
         claim_id: 'model_total_rule', claim_form: 'derived', level: 'E2', kind: 'model-element',
-        scope: 'checkout.total', value: '12.50', source_locator_ids: ['locator_formula'],
+        scope: 'checkout', value: '12.50', source_locator_ids: ['locator_formula'],
         derivation_kind: 'decision-table-instance', derivation_target: 'model-element', parent_claim_ids: ['claim_total_rule'],
         parameters: { table_id: 'table_total_model' },
         rule_input: { conditions: ['total calculated'], outcome: '12.50' }
@@ -87,7 +87,7 @@ function oracleEvidenceClaims() {
       },
       {
         claim_id: 'claim_review_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
-        scope: 'checkout.total', value: 'manual review', source_locator_ids: ['locator_table'], source_id: 'source_oracle'
+        scope: 'checkout', value: 'manual review', source_locator_ids: ['locator_table'], source_id: 'source_oracle'
       },
       {
         claim_id: 'claim_review_result', claim_form: 'derived', level: 'E2', kind: 'expected-value',
@@ -101,11 +101,11 @@ function oracleEvidenceClaims() {
   };
 }
 
-/** @param {string} claimId @param {string[]} parentClaimIds */
-function expectedOracleClaim(claimId, parentClaimIds) {
+/** @param {string} claimId @param {string[]} parentClaimIds @param {string} [scope] */
+function expectedOracleClaim(claimId, parentClaimIds, scope = 'checkout.total') {
   return {
     claim_id: claimId, claim_form: 'derived', level: 'E2', kind: 'expected-value',
-    scope: 'checkout.total', value: '1', source_locator_ids: ['locator_formula'],
+    scope, value: '1', source_locator_ids: ['locator_formula'],
     derivation_kind: 'formula', derivation_target: 'expected-value', parent_claim_ids: parentClaimIds,
     parameters: { unit: 'count', precision: 0, rounding: 'half-up' },
     rule_input: {
@@ -115,8 +115,12 @@ function expectedOracleClaim(claimId, parentClaimIds) {
   };
 }
 
-/** @param {any} [submittedEvidence] @returns {Promise<{view: any, claimsById: Map<string, any>, artifact: any, sourcePack: any}>} */
-async function validatedOracleDecision(submittedEvidence = oracleEvidenceClaims()) {
+/**
+ * @param {any} [submittedEvidence]
+ * @param {string} [viewScope]
+ * @returns {Promise<{view: any, claimsById: Map<string, any>, artifact: any, sourcePack: any}>}
+ */
+async function validatedOracleDecision(submittedEvidence = oracleEvidenceClaims(), viewScope = 'checkout.total') {
   const sourcePack = oracleSourcePack();
   const evidenceClaims = submittedEvidence;
   assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
@@ -129,7 +133,7 @@ async function validatedOracleDecision(submittedEvidence = oracleEvidenceClaims(
   const artifact = await decisionFixture();
   artifact.source_revision = 0;
   artifact.views[0] = {
-    view_id: 'view_total_decision', type: 'decision', scope: 'checkout.total',
+    view_id: 'view_total_decision', type: 'decision', scope: viewScope,
     source_claim_ids: ['claim_review_rule', 'model_total_rule'],
     elements: [
       {
@@ -261,6 +265,114 @@ test('decision obligations accept Task 3 expected-value Oracles through source a
   };
   assert.deepEqual(validateAgainstSchema(obligationsArtifact, testObligationsSchema), []);
   assert.deepEqual(validateUniqueStableIds(obligationsArtifact), []);
+});
+
+test('decision obligations accept a mapped E3 Oracle that is an ancestor of model-only element evidence', async () => {
+  const { view, claimsById } = await validatedOracleDecision();
+  const actual = compileDecision(view, {
+    claimsById,
+    riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', ['claim_total_rule']], ['rule_review', ['claim_review_rule']]
+    ]),
+    requiredCapabilitiesByElementId: new Map([
+      ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+    ])
+  });
+
+  assert.equal(actual.length, 2);
+  assert.deepEqual(
+    actual.find((seed) => seed.view_element_refs.includes('view_total_decision#rule_total'))?.required_oracle_refs,
+    ['claim_total_rule']
+  );
+  assert.deepEqual(
+    actual.find((seed) => seed.view_element_refs.includes('view_total_decision#rule_review'))?.required_oracle_refs,
+    ['claim_review_rule']
+  );
+});
+
+test('decision obligations find a mapped ancestor through a long accepted model-ref chain independent of claim order', async () => {
+  const submitted = oracleEvidenceClaims();
+  let parentClaimId = 'claim_total_rule';
+  for (let index = 0; index < 4000; index += 1) {
+    const claimId = `claim_z_model_ancestor_${String(index).padStart(4, '0')}`;
+    submitted.claims.push(expectedOracleClaim(claimId, [parentClaimId]));
+    parentClaimId = claimId;
+  }
+  const modelClaim = /** @type {any} */ (submitted.claims.find((claim) => claim.claim_id === 'model_total_rule'));
+  assert.ok(modelClaim);
+  modelClaim.scope = 'checkout.total';
+  modelClaim.value = '1';
+  modelClaim.parent_claim_ids = [parentClaimId];
+  modelClaim.rule_input.outcome = '1';
+
+  /** @param {any} evidenceClaims */
+  const compileAncestor = async (evidenceClaims) => {
+    const { view, claimsById } = await validatedOracleDecision(evidenceClaims);
+    return compileDecision(view, {
+      claimsById,
+      riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+      requiredOracleRefsByElementId: new Map([
+        ['rule_total', ['claim_total_rule']], ['rule_review', ['claim_review_rule']]
+      ]),
+      requiredCapabilitiesByElementId: new Map([
+        ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+      ])
+    });
+  };
+
+  const ordered = await compileAncestor(submitted);
+  const reversedEvidence = structuredClone(submitted);
+  reversedEvidence.claims.reverse();
+  const reversed = await compileAncestor(reversedEvidence);
+
+  assert.deepEqual(reversed, ordered);
+  assert.equal(ordered.find((seed) => seed.view_element_refs.includes('view_total_decision#rule_total'))
+    ?.required_oracle_refs[0], 'claim_total_rule');
+});
+
+test('decision obligations require an Oracle scope to cover the view after accepted shared ancestry', async () => {
+  const submitted = oracleEvidenceClaims();
+  submitted.claims.push(
+    expectedOracleClaim('claim_scope_broad', ['claim_total_rule'], ' checkout '),
+    expectedOracleClaim('claim_scope_exact', ['claim_total_rule'], 'checkout.total'),
+    expectedOracleClaim('claim_scope_universal', ['claim_total_rule'], ' all '),
+    expectedOracleClaim('claim_scope_disjoint', ['claim_total_rule'], 'checkout.shipping')
+  );
+  const { view, claimsById } = await validatedOracleDecision(submitted);
+  /** @param {string} oracleId */
+  const compileWithOracle = (oracleId) => compileDecision(view, {
+    claimsById,
+    riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', [oracleId]], ['rule_review', ['claim_review_rule']]
+    ]),
+    requiredCapabilitiesByElementId: new Map([
+      ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+    ])
+  });
+
+  for (const oracleId of ['claim_scope_broad', 'claim_scope_exact', 'claim_scope_universal']) {
+    assert.equal(compileWithOracle(oracleId).some((seed) => seed.required_oracle_refs.includes(oracleId)), true);
+  }
+  assert.throws(() => compileWithOracle('claim_scope_disjoint'), /Oracle claim/);
+});
+
+test('decision obligations reject a narrow Oracle for a broader validated view', async () => {
+  const submitted = oracleEvidenceClaims();
+  submitted.claims.push(expectedOracleClaim('claim_scope_narrow', ['claim_total_rule'], 'checkout.total'));
+  const { view, claimsById } = await validatedOracleDecision(submitted, 'checkout');
+
+  assert.throws(() => compileDecision(view, {
+    claimsById,
+    riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', ['claim_scope_narrow']], ['rule_review', ['claim_review_rule']]
+    ]),
+    requiredCapabilitiesByElementId: new Map([
+      ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+    ])
+  }), /Oracle claim/);
 });
 
 test('decision obligations reject accepted unrelated and non-Oracle claims after every contract gate', async () => {

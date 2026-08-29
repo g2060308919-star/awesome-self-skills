@@ -1,4 +1,5 @@
 import { stableId } from '../canonical.mjs';
+import { scopeContains } from '../decision-record.mjs';
 
 const RISK_LEVELS = new Set(['critical', 'high', 'medium', 'low']);
 
@@ -121,8 +122,8 @@ function acceptedClaimClosure(claimsById, roots) {
 
 /**
  * Check all indirect Oracle roots in one cycle-safe walk. A root is relevant only
- * when one of its accepted parents reaches the primary element's evidence closure;
- * same-scope membership and the Oracle root itself are not sufficient.
+ * when it or one of its accepted parents reaches the primary element's evidence
+ * closure; scope overlap without accepted ancestry is not sufficient.
  * @param {Map<string, Record<string, unknown>>} claimsById
  * @param {string[]} roots
  * @param {Set<string>} targetIds
@@ -143,8 +144,8 @@ function acceptedOracleRelevance(claimsById, roots, targetIds) {
     while (stack.length > 0) {
       const frame = /** @type {{claimId: string, parents: string[], next: number}} */ (stack.at(-1));
       if (frame.next >= frame.parents.length) {
-        reachesTarget.set(frame.claimId, frame.parents.some(
-          (parentId) => targetIds.has(parentId) || reachesTarget.get(parentId) === true
+        reachesTarget.set(frame.claimId, targetIds.has(frame.claimId) || frame.parents.some(
+          (parentId) => reachesTarget.get(parentId) === true
         ));
         state.set(frame.claimId, 2);
         stack.pop();
@@ -204,6 +205,9 @@ export function buildObligationSeed(input) {
     const claim = claimsById.get(claimId);
     if (!claim || !isOracleEvidence(claim)) {
       throw new TypeError(`Oracle claim "${claimId}" is not accepted Oracle evidence for element "${primaryId}"`);
+    }
+    if (typeof claim.scope !== 'string' || !scopeContains(claim.scope, String(view.scope))) {
+      throw new TypeError(`Oracle claim "${claimId}" does not cover obligation scope "${String(view.scope)}"`);
     }
     if (primaryEvidenceClosure === null) {
       throw new TypeError(`Oracle claim "${claimId}" cannot use malformed evidence ancestry for element "${primaryId}"`);
