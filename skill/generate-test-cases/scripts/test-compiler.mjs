@@ -32,22 +32,30 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/source_policy/rules",
   "/source_policy/rules/source_ids",
   "/source_policy/rules/supersedes",
-  "/decision_records",
   "/decision_records/root_issue_ids",
   "/decision_records/affected_obligation_ids",
-  "/clarification_events",
   "/clarification_events/root_issue_ids",
   "/claims",
   "/claims/source_locator_ids",
   "/claims/parent_claim_ids",
+  "/claims/closed_world_input/enumerated_values",
+  "/claims/formula_input/inputs",
   "/fact_ledger",
+  "/fact_ledger/source_claim_ids",
   "/views",
   "/views/elements",
+  "/views/source_claim_ids",
   "/views/elements/source_claim_ids",
+  "/views/elements/model_refs",
+  "/views/elements/permissions",
+  "/views/relations",
+  "/views/relations/source_claim_ids",
+  "/views/relations/model_refs",
   "/interaction_matrix",
   "/interaction_matrix/module_ids",
   "/interaction_candidates",
   "/interaction_candidates/module_ids",
+  "/interaction_candidates/source_claim_ids",
   "/obligations",
   "/obligations/source_claim_ids",
   "/obligations/view_element_refs",
@@ -59,18 +67,31 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/cases",
   "/cases/obligation_ids",
   "/cases/source_claim_ids",
+  "/cases/fact_ids",
+  "/cases/evidence_refs",
+  "/cases/preconditions/source_claim_ids",
+  "/cases/testability_profile/capabilities",
+  "/cases/testability_profile/observers",
+  "/cases/testability_profile/controls",
   "/cases/execution_signature/oracle_refs",
   "/cases/execution_signature/test_point_ids",
   "/execution_signature/oracle_refs",
   "/execution_signature/test_point_ids",
   "/obligation_dispositions",
   "/obligation_dispositions/case_ids",
+  "/obligation_dispositions/evidence_refs",
   "/exploratory_candidates",
+  "/exploratory_candidates/source_claim_ids",
   "/grounded",
+  "/grounded/obligation_ids",
+  "/grounded/evidence_refs",
   "/conditional",
+  "/conditional/obligation_ids",
   "/blocked",
   "/exploratory",
-  "/root_issue_dispositions"
+  "/coverage/not_applicable",
+  "/root_issue_dispositions",
+  "/blockers/affected_obligation_ids"
 ]);
 var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/sources", "source_id"],
@@ -81,6 +102,8 @@ var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/claims", "claim_id"],
   ["/fact_ledger", "fact_id"],
   ["/views", "view_id"],
+  ["/views/elements", "element_id"],
+  ["/views/relations", "relation_id"],
   ["/interaction_candidates", "candidate_id"],
   ["/obligations", "obligation_id"],
   ["/fact_routes", "fact_id"],
@@ -159,15 +182,25 @@ var DIAGNOSTIC_CATEGORY = Object.freeze([
   "classification"
 ]);
 var STABLE_ID_COLLECTIONS = Object.freeze([
-  Object.freeze({ collection: "sources", id: "source_id" }),
-  Object.freeze({ collection: "locators", id: "locator_id" }),
-  Object.freeze({ collection: "decision_records", id: "decision_id" }),
-  Object.freeze({ collection: "clarification_events", id: "event_id" }),
-  Object.freeze({ collection: "claims", id: "claim_id" }),
-  Object.freeze({ collection: "fact_ledger", id: "fact_id" }),
-  Object.freeze({ collection: "views", id: "view_id" }),
-  Object.freeze({ collection: "obligations", id: "obligation_id" }),
-  Object.freeze({ collection: "cases", id: "case_id" })
+  Object.freeze({ path: Object.freeze(["sources"]), id: "source_id" }),
+  Object.freeze({ path: Object.freeze(["locators"]), id: "locator_id" }),
+  Object.freeze({ path: Object.freeze(["source_policy", "rules"]), id: "rule_id" }),
+  Object.freeze({ path: Object.freeze(["decision_records"]), id: "decision_id" }),
+  Object.freeze({ path: Object.freeze(["clarification_events"]), id: "event_id" }),
+  Object.freeze({ path: Object.freeze(["claims"]), id: "claim_id" }),
+  Object.freeze({ path: Object.freeze(["fact_ledger"]), id: "fact_id" }),
+  Object.freeze({ path: Object.freeze(["views"]), id: "view_id" }),
+  Object.freeze({ path: Object.freeze(["views", "*", "elements"]), id: "element_id" }),
+  Object.freeze({ path: Object.freeze(["views", "*", "relations"]), id: "relation_id" }),
+  Object.freeze({ path: Object.freeze(["interaction_candidates"]), id: "candidate_id" }),
+  Object.freeze({ path: Object.freeze(["obligations"]), id: "obligation_id" }),
+  Object.freeze({ path: Object.freeze(["cases"]), id: "case_id" }),
+  Object.freeze({ path: Object.freeze(["exploratory_candidates"]), id: "exploratory_id" }),
+  Object.freeze({ path: Object.freeze(["root_issue_dispositions"]), id: "root_issue_id" }),
+  Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id" }),
+  Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id" }),
+  Object.freeze({ path: Object.freeze(["blocked"]), id: "obligation_id" }),
+  Object.freeze({ path: Object.freeze(["exploratory"]), id: "exploratory_id" })
 ]);
 
 // src/schema-validator.mjs
@@ -190,18 +223,47 @@ var supportedKeywords = /* @__PURE__ */ new Set([
   "uniqueItems",
   "additionalProperties"
 ]);
+var supportedTypes = /* @__PURE__ */ new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
+function isSchemaObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function assertStringArray(value, keyword) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string") || new Set(value).size !== value.length) {
+    throw new Error(`Schema ${keyword} must be an array of unique strings.`);
+  }
+}
 function assertSupportedSchema(schema) {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+  if (!isSchemaObject(schema)) {
     throw new Error("Schema must be an object.");
   }
   for (const [key, value] of Object.entries(schema)) {
     if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
-    if (key === "properties" && value && typeof value === "object" && !Array.isArray(value)) {
+    if (key === "$schema" || key === "$id" || key === "pattern") {
+      if (typeof value !== "string") throw new Error(`Schema ${key} must be a string.`);
+    } else if (key === "type") {
+      const types = Array.isArray(value) ? value : [value];
+      if (!types.length || types.some((item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
+    } else if (key === "required") {
+      assertStringArray(value, "required");
+    } else if (key === "properties") {
+      if (!isSchemaObject(value)) throw new Error("Schema properties must be an object.");
       for (const child of Object.values(value)) assertSupportedSchema(child);
     } else if (key === "items") {
       assertSupportedSchema(value);
-    } else if ((key === "oneOf" || key === "allOf") && Array.isArray(value)) {
+    } else if (key === "oneOf" || key === "allOf") {
+      if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
       for (const child of value) assertSupportedSchema(child);
+    } else if (key === "enum") {
+      if (!Array.isArray(value) || value.length === 0 || new Set(value.map((item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
+    } else if (key === "minItems" || key === "minLength") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
+    } else if (key === "minimum" || key === "maximum") {
+      if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
+    } else if (key === "uniqueItems") {
+      if (typeof value !== "boolean") throw new Error("Schema uniqueItems must be boolean.");
+    } else if (key === "additionalProperties") {
+      if (typeof value !== "boolean" && !isSchemaObject(value)) throw new Error("Schema additionalProperties must be boolean or a schema object.");
+      if (isSchemaObject(value)) assertSupportedSchema(value);
     }
   }
 }
@@ -232,7 +294,7 @@ var schemaDirectory = path2.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "4a0cadaf3e293690481e8a7326100c3f1127280d311ad2d03d819da1a9427d79" : void 0;
+var embeddedManifestDigest = true ? "d30fe95f42e217b4529511781a5518b1f243bca0754d613074c4a0ca111a48fb" : void 0;
 var embeddedSchemaVersion = true ? "1.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.1.0" : void 0;
 var emptyRunReply = Object.freeze({

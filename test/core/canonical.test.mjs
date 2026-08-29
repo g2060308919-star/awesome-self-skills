@@ -97,6 +97,14 @@ test('canonical contracts normalize policy, interaction, and checkpoint unordere
   assert.equal(canonicalStringify(checkpoint), canonicalStringify({ root_issue_dispositions: [...checkpoint.root_issue_dispositions].reverse() }));
 });
 
+test('append-only clarification histories preserve their written order', () => {
+  const decisions = { decision_records: [{ decision_id: 'decision_a', clarification_event_seq: 1 }, { decision_id: 'decision_b', clarification_event_seq: 2 }] };
+  const events = { clarification_events: [{ event_id: 'event_a', clarification_event_seq: 1 }, { event_id: 'event_b', clarification_event_seq: 2 }] };
+
+  assert.notEqual(canonicalStringify(decisions), canonicalStringify({ decision_records: [...decisions.decision_records].reverse() }));
+  assert.notEqual(canonicalStringify(events), canonicalStringify({ clarification_events: [...events.clarification_events].reverse() }));
+});
+
 test('same-named arrays outside declared paths retain their input order', () => {
   assert.notEqual(
     canonicalStringify({ metadata: { source_ids: ['source_b', 'source_a'] } }),

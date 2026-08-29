@@ -16,13 +16,23 @@ export const DIAGNOSTIC_CATEGORY = Object.freeze([
 
 /** Definition collections are intentionally local to one artifact. */
 export const STABLE_ID_COLLECTIONS = Object.freeze([
-  Object.freeze({ collection: 'sources', id: 'source_id' }),
-  Object.freeze({ collection: 'locators', id: 'locator_id' }),
-  Object.freeze({ collection: 'decision_records', id: 'decision_id' }),
-  Object.freeze({ collection: 'clarification_events', id: 'event_id' }),
-  Object.freeze({ collection: 'claims', id: 'claim_id' }),
-  Object.freeze({ collection: 'fact_ledger', id: 'fact_id' }),
-  Object.freeze({ collection: 'views', id: 'view_id' }),
-  Object.freeze({ collection: 'obligations', id: 'obligation_id' }),
-  Object.freeze({ collection: 'cases', id: 'case_id' })
+  Object.freeze({ path: Object.freeze(['sources']), id: 'source_id' }),
+  Object.freeze({ path: Object.freeze(['locators']), id: 'locator_id' }),
+  Object.freeze({ path: Object.freeze(['source_policy', 'rules']), id: 'rule_id' }),
+  Object.freeze({ path: Object.freeze(['decision_records']), id: 'decision_id' }),
+  Object.freeze({ path: Object.freeze(['clarification_events']), id: 'event_id' }),
+  Object.freeze({ path: Object.freeze(['claims']), id: 'claim_id' }),
+  Object.freeze({ path: Object.freeze(['fact_ledger']), id: 'fact_id' }),
+  Object.freeze({ path: Object.freeze(['views']), id: 'view_id' }),
+  Object.freeze({ path: Object.freeze(['views', '*', 'elements']), id: 'element_id' }),
+  Object.freeze({ path: Object.freeze(['views', '*', 'relations']), id: 'relation_id' }),
+  Object.freeze({ path: Object.freeze(['interaction_candidates']), id: 'candidate_id' }),
+  Object.freeze({ path: Object.freeze(['obligations']), id: 'obligation_id' }),
+  Object.freeze({ path: Object.freeze(['cases']), id: 'case_id' }),
+  Object.freeze({ path: Object.freeze(['exploratory_candidates']), id: 'exploratory_id' }),
+  Object.freeze({ path: Object.freeze(['root_issue_dispositions']), id: 'root_issue_id' }),
+  Object.freeze({ path: Object.freeze(['grounded']), id: 'case_id' }),
+  Object.freeze({ path: Object.freeze(['conditional']), id: 'case_id' }),
+  Object.freeze({ path: Object.freeze(['blocked']), id: 'obligation_id' }),
+  Object.freeze({ path: Object.freeze(['exploratory']), id: 'exploratory_id' })
 ]);

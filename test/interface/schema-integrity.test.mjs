@@ -131,3 +131,30 @@ test('installed runner rejects a supported-digest schema with an unsupported key
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
+
+test('installed runner rejects a supported-digest schema with malformed keyword grammar', async () => {
+  const temporarySkill = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-skill-'));
+  const temporaryScripts = path.join(temporarySkill, 'scripts');
+  const temporaryRunner = path.join(temporaryScripts, 'test-compiler.mjs');
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
+  try {
+    await mkdir(temporaryScripts, { recursive: true });
+    await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
+    const schemaPath = path.join(temporaryScripts, 'schemas/source-pack.schema.json');
+    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+    schema.type = 'not-a-json-schema-type';
+    await writeFile(schemaPath, `${canonicalStringify(schema)}\n`);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.schemas.find((/** @type {any} */ entry) => entry.file === 'source-pack.schema.json').digest = digest(schema);
+    manifest.digest = digest({ compiler_version: manifest.compiler_version, schema_version: manifest.schema_version, schemas: manifest.schemas });
+    await writeFile(path.join(temporaryScripts, 'schema-manifest.json'), `${canonicalStringify(manifest)}\n`);
+    await writeFile(temporaryRunner, (await readFile(runnerPath, 'utf8')).replace(/"[a-f0-9]{64}"/, JSON.stringify(manifest.digest)));
+    const result = await runCompiler(runDirectory, temporaryRunner);
+
+    assert.equal(JSON.parse(result.stdout).status, 'fatal');
+    assert.equal(JSON.parse(result.stdout).diagnostics[0].code, 'SCHEMA_INTEGRITY_MISMATCH');
+  } finally {
+    await rm(temporarySkill, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});

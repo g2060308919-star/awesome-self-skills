@@ -6,6 +6,19 @@ const supportedKeywords = new Set([
   'oneOf', 'allOf', 'minItems', 'minLength', 'pattern', 'minimum', 'maximum',
   'uniqueItems', 'additionalProperties'
 ]);
+const supportedTypes = new Set(['array', 'boolean', 'integer', 'null', 'number', 'object', 'string']);
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isSchemaObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** @param {unknown} value @param {string} keyword */
+function assertStringArray(value, keyword) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string') || new Set(value).size !== value.length) {
+    throw new Error(`Schema ${keyword} must be an array of unique strings.`);
+  }
+}
 
 /** @param {string} code @param {string} path @param {string} message */
 function diagnostic(code, path, message) {
@@ -14,17 +27,37 @@ function diagnostic(code, path, message) {
 
 /** @param {unknown} schema */
 export function assertSupportedSchema(schema) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
+  if (!isSchemaObject(schema)) {
     throw new Error('Schema must be an object.');
   }
   for (const [key, value] of Object.entries(schema)) {
     if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
-    if (key === 'properties' && value && typeof value === 'object' && !Array.isArray(value)) {
+    if (key === '$schema' || key === '$id' || key === 'pattern') {
+      if (typeof value !== 'string') throw new Error(`Schema ${key} must be a string.`);
+    } else if (key === 'type') {
+      const types = Array.isArray(value) ? value : [value];
+      if (!types.length || types.some((item) => typeof item !== 'string' || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error('Schema type must name supported unique types.');
+    } else if (key === 'required') {
+      assertStringArray(value, 'required');
+    } else if (key === 'properties') {
+      if (!isSchemaObject(value)) throw new Error('Schema properties must be an object.');
       for (const child of Object.values(value)) assertSupportedSchema(child);
     } else if (key === 'items') {
       assertSupportedSchema(value);
-    } else if ((key === 'oneOf' || key === 'allOf') && Array.isArray(value)) {
+    } else if (key === 'oneOf' || key === 'allOf') {
+      if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
       for (const child of value) assertSupportedSchema(child);
+    } else if (key === 'enum') {
+      if (!Array.isArray(value) || value.length === 0 || new Set(value.map((item) => canonicalStringify(item))).size !== value.length) throw new Error('Schema enum must be a non-empty array of unique values.');
+    } else if (key === 'minItems' || key === 'minLength') {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
+    } else if (key === 'minimum' || key === 'maximum') {
+      if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
+    } else if (key === 'uniqueItems') {
+      if (typeof value !== 'boolean') throw new Error('Schema uniqueItems must be boolean.');
+    } else if (key === 'additionalProperties') {
+      if (typeof value !== 'boolean' && !isSchemaObject(value)) throw new Error('Schema additionalProperties must be boolean or a schema object.');
+      if (isSchemaObject(value)) assertSupportedSchema(value);
     }
   }
 }
@@ -84,6 +117,10 @@ function validate(value, schema, path) {
       for (const key of Object.keys(object)) {
         if (!Object.hasOwn(properties, key)) diagnostics.push(diagnostic('ADDITIONAL_PROPERTY', `${path}/${key}`, 'additional properties are not allowed'));
       }
+    } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object' && !Array.isArray(schema.additionalProperties)) {
+      for (const key of Object.keys(object)) {
+        if (!Object.hasOwn(properties, key)) diagnostics.push(...validate(object[key], /** @type {Record<string, unknown>} */ (schema.additionalProperties), `${path}/${key}`));
+      }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
       if (Object.hasOwn(object, key)) diagnostics.push(...validate(object[key], childSchema, `${path}/${key}`));
@@ -91,10 +128,25 @@ function validate(value, schema, path) {
   }
   if (Array.isArray(schema.allOf)) for (const child of schema.allOf) diagnostics.push(...validate(value, /** @type {Record<string, unknown>} */ (child), path));
   if (Array.isArray(schema.oneOf)) {
-    const matching = schema.oneOf.filter((child) => validate(value, /** @type {Record<string, unknown>} */ (child), path).length === 0);
-    if (matching.length !== 1) diagnostics.push(diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
+    const variants = schema.oneOf.map((child) => /** @type {Record<string, unknown>} */ (child));
+    const matching = variants.filter((child) => validate(value, child, path).length === 0);
+    if (matching.length !== 1) {
+      const discriminated = variants.filter((child) => matchesDiscriminator(value, child));
+      if (matching.length === 0 && discriminated.length === 1) diagnostics.push(...validate(value, discriminated[0], path));
+      else diagnostics.push(diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
+    }
   }
   return diagnostics;
+}
+
+/** @param {unknown} value @param {Record<string, unknown>} schema */
+function matchesDiscriminator(value, schema) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const properties = schema.properties;
+  if (!isSchemaObject(properties)) return false;
+  /** @type {Array<[string, Record<string, unknown>]>} */
+  const constants = Object.entries(properties).flatMap(([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, 'const') ? [[key, candidate]] : []);
+  return constants.length > 0 && constants.every(([key, candidate]) => canonicalStringify(/** @type {Record<string, unknown>} */ (value)[key]) === canonicalStringify(candidate.const));
 }
 
 /** @param {unknown} value @param {unknown} type @returns {boolean} */
@@ -113,17 +165,30 @@ export function validateUniqueStableIds(artifact) {
   const object = /** @type {Record<string, unknown>} */ (artifact);
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [];
-  for (const { collection, id } of STABLE_ID_COLLECTIONS) {
-    const items = object[collection];
-    if (!Array.isArray(items)) continue;
+  for (const { path, id } of STABLE_ID_COLLECTIONS) {
+    for (const { items, pointer } of findCollections(object, path)) {
     const seen = new Set();
     items.forEach((item, index) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return;
       const value = /** @type {Record<string, unknown>} */ (item)[id];
       if (typeof value !== 'string') return;
-      if (seen.has(value)) diagnostics.push(diagnostic('DUPLICATE_STABLE_ID', `/${collection}/${index}/${id}`, `duplicate stable ID "${value}"`));
+      if (seen.has(value)) diagnostics.push(diagnostic('DUPLICATE_STABLE_ID', `${pointer}/${index}/${id}`, `duplicate stable ID "${value}"`));
       seen.add(value);
     });
+    }
   }
   return diagnostics;
+}
+
+/** @param {unknown} value @param {readonly string[]} segments @param {string} [pointer] @returns {Array<{items: unknown[], pointer: string}>} */
+function findCollections(value, segments, pointer = '') {
+  if (segments.length === 0) return Array.isArray(value) ? [{ items: value, pointer }] : [];
+  const [segment, ...rest] = segments;
+  if (segment === '*') {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item, index) => item && typeof item === 'object' && !Array.isArray(item)
+      ? findCollections(/** @type {Record<string, unknown>} */ (item), rest, `${pointer}/${index}`) : []);
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, segment)) return [];
+  return findCollections(/** @type {Record<string, unknown>} */ (value)[segment], rest, `${pointer}/${segment}`);
 }
