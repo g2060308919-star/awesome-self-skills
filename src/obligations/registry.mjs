@@ -2,6 +2,10 @@ import { stableId } from '../canonical.mjs';
 import { scopeContains } from '../decision-record.mjs';
 
 const RISK_LEVELS = new Set(['critical', 'high', 'medium', 'low']);
+export const OBLIGATION_VIEW_TYPES = Object.freeze([
+  'flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration'
+]);
+const OBLIGATION_VIEW_TYPE_SET = new Set(OBLIGATION_VIEW_TYPES);
 
 /**
  * @typedef {object} ObligationSeed
@@ -55,7 +59,7 @@ export function claimsByIdFrom(context) {
 /** @param {unknown} container @param {string} key @returns {unknown} */
 function keyedValue(container, key) {
   if (container instanceof Map) return container.get(key);
-  return isObject(container) ? container[key] : undefined;
+  return isObject(container) && Object.hasOwn(container, key) ? container[key] : undefined;
 }
 
 /** @param {Record<string, unknown>} element */
@@ -67,7 +71,7 @@ export function elementEvidenceRefs(element) {
 }
 
 /** @param {Record<string, unknown>} claim */
-function isOracleEvidence(claim) {
+export function isOracleEvidence(claim) {
   if (claim.level === 'E3' && claim.kind === 'requirement') return true;
   if (claim.level === 'E1' && claim.kind === 'assumption') return true;
   return claim.level === 'E2' && claim.kind === 'expected-value'
@@ -81,7 +85,7 @@ function isOracleEvidence(claim) {
  * @param {Map<string, Record<string, unknown>>} claimsById
  * @param {string[]} roots
  */
-function acceptedClaimClosure(claimsById, roots) {
+export function acceptedClaimClosure(claimsById, roots) {
   const closure = new Set();
   const state = new Map();
   for (const root of roots) {
@@ -128,7 +132,7 @@ function acceptedClaimClosure(claimsById, roots) {
  * @param {string[]} roots
  * @param {Set<string>} targetIds
  */
-function acceptedOracleRelevance(claimsById, roots, targetIds) {
+export function acceptedOracleRelevance(claimsById, roots, targetIds) {
   const state = new Map();
   const reachesTarget = new Map();
   for (const root of roots) {
@@ -280,6 +284,7 @@ export function createObligationRegistry() {
     /** @param {string} viewType @param {ObligationCompiler} compile */
     registerObligationStrategy(viewType, compile) {
       if (typeof viewType !== 'string' || viewType.length === 0) throw new TypeError('obligation strategy view type must be nonblank');
+      if (!OBLIGATION_VIEW_TYPE_SET.has(viewType)) throw new TypeError(`unsupported obligation strategy view type "${viewType}"`);
       if (typeof compile !== 'function') throw new TypeError(`obligation strategy for view type "${viewType}" must be a function`);
       if (strategies.has(viewType)) throw new TypeError(`duplicate obligation strategy for view type "${viewType}"`);
       strategies.set(viewType, compile);

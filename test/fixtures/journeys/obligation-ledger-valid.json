@@ -1,8 +1,16 @@
 {
+  "source_revision": 4,
   "run_scope": "checkout",
   "claims": [
     {
       "claim_id": "claim_rule",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": ["claim_rule_parent"]
+    },
+    {
+      "claim_id": "claim_rule_parent",
       "level": "E3",
       "kind": "requirement",
       "scope": "checkout",
@@ -103,9 +111,16 @@
       "not_applicable_claim_id": "claim_exclusion"
     }
   ],
+  "not_applicable_reviews": [
+    {
+      "fact_id": "fact_not_applicable",
+      "claim_id": "claim_exclusion",
+      "support_review": "supported"
+    }
+  ],
   "custom_obligations": [
     {
-      "obligation_id": "obligation_custom_checkout",
+      "obligation_id": "obligation_0123456789abcdef",
       "kind": "decision",
       "risk": "medium",
       "scope": "checkout",
