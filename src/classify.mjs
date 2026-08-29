@@ -238,18 +238,26 @@ function snapshotControlled(root) {
       const target = new Array(length);
       seen.set(source, target);
       assign(target);
-      const holeCount = length - numericKeys.length;
-      if (holeCount > 0) {
-        let firstHole = 0;
-        for (const index of numericKeys) {
-          if (index !== firstHole) break;
-          firstHole += 1;
-        }
-        addSnapshotDiagnostic(diagnostic(
-          'schema', 'ARRAY_HOLE', `${path}/${firstHole}`, 'controlled arrays must be dense'
+      let nextExpectedIndex = 0;
+      let holesTruncated = false;
+      /** @param {number} start @param {number} end */
+      const emitHoleGap = (start, end) => {
+        if (holesTruncated || start >= end) return;
+        const available = Math.max(0, DIAGNOSTIC_LIMIT - 1 - diagnostics.length);
+        const emitCount = Math.min(end - start, available);
+        for (let offset = 0; offset < emitCount; offset += 1) addSnapshotDiagnostic(diagnostic(
+          'schema', 'ARRAY_HOLE', `${path}/${start + offset}`, 'controlled arrays must be dense'
         ));
-        if (holeCount > 1) diagnosticsTruncated = true;
+        if (emitCount < end - start) {
+          diagnosticsTruncated = true;
+          holesTruncated = true;
+        }
+      };
+      for (const index of numericKeys) {
+        emitHoleGap(nextExpectedIndex, index);
+        nextExpectedIndex = index + 1;
       }
+      emitHoleGap(nextExpectedIndex, length);
       /** @type {Array<{source: unknown, path: string, assign: (value: unknown) => void}>} */
       const children = [];
       for (const index of numericKeys) {
@@ -1192,9 +1200,8 @@ function mergeExactCases(drafts) {
   const signature = JSON.parse(executionSignature(merged));
   merged.case_id = stableId('case', signature);
   if (isRecord(merged.execution_signature)) {
-    merged.execution_signature.test_point_ids = [...new Set(sorted.flatMap((draft) =>
-      isRecord(draft.execution_signature) ? stringArray(draft.execution_signature.test_point_ids) ?? [] : []
-    ))].sort(compareCodePoints);
+    merged.execution_signature.test_point_ids = [...(stringArray(merged.obligation_ids, true) ?? [])]
+      .sort(compareCodePoints);
   }
   return merged;
 }

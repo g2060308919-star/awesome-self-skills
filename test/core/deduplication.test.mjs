@@ -267,6 +267,76 @@ test('same-signature merge preserves complete Oracle ownership and remains valid
   assert.deepEqual(secondPass.diagnostics, []);
 });
 
+test('merged Case derives complete test_point_ids when optional inputs are omitted or mixed', () => {
+  const obligationIds = [IDS.obligation, 'obligation_2222222222222222'];
+  const caseIds = [IDS.case, 'case_2222222222222222'];
+  const baseObligations = [
+    baseObligation(),
+    baseObligation({
+      obligation_id: obligationIds[1],
+      view_element_refs: ['view_checkout#edge_second']
+    })
+  ];
+  /** @param {'omitted' | 'mixed'} mode @param {boolean} reverse */
+  const makeContext = (mode, reverse = false) => {
+    const cases = caseIds.map((caseId, index) => {
+      const draft = baseCase({ case_id: caseId, obligation_ids: [obligationIds[index]] });
+      draft.steps[0].expectations.push({
+        ...structuredClone(draft.steps[0].expectations[0]),
+        expectation_id: 'expectation_second_result'
+      });
+      refreshExecutionSignature(draft);
+      if (mode === 'omitted' || index === 0) delete draft.execution_signature.test_point_ids;
+      return draft;
+    });
+    const obligations = structuredClone(baseObligations);
+    const dispositions = obligationIds.map((obligationId, index) => ({
+      obligation_id: obligationId,
+      status: 'case_candidate',
+      case_ids: [caseIds[index]]
+    }));
+    if (reverse) {
+      cases.reverse();
+      obligations.reverse();
+      dispositions.reverse();
+    }
+    const context = classificationContext({ obligations, cases, dispositions });
+    context.obligations.fact_routes[0].obligation_ids = [...obligationIds].reverse();
+    return context;
+  };
+  /** @param {any} merged */
+  const replay = (merged) => {
+    const context = classificationContext({
+      obligations: structuredClone(baseObligations),
+      cases: [merged],
+      dispositions: obligationIds.map((obligationId) => ({
+        obligation_id: obligationId,
+        status: 'case_candidate',
+        case_ids: [merged.case_id]
+      }))
+    });
+    context.obligations.fact_routes[0].obligation_ids = [...obligationIds];
+    return classifyCaseDrafts(context);
+  };
+
+  const allOmitted = classifyCaseDrafts(makeContext('omitted'));
+  assert.equal(allOmitted.grounded.length, 1);
+  assert.deepEqual(allOmitted.diagnostics, []);
+  const allOmittedMerged = /** @type {any} */ (allOmitted.grounded[0]);
+  assert.deepEqual(allOmittedMerged.obligation_ids, obligationIds);
+  assert.deepEqual(allOmittedMerged.execution_signature.test_point_ids, obligationIds);
+  const replayed = replay(allOmittedMerged);
+  assert.equal(replayed.grounded.length, 1);
+  assert.deepEqual(replayed.diagnostics, []);
+
+  const mixedForward = classifyCaseDrafts(makeContext('mixed'));
+  const mixedReverse = classifyCaseDrafts(makeContext('mixed', true));
+  assert.equal(mixedForward.grounded.length, 1);
+  const mixedMerged = /** @type {any} */ (mixedForward.grounded[0]);
+  assert.deepEqual(mixedMerged.execution_signature.test_point_ids, obligationIds);
+  assert.deepEqual(mixedReverse, mixedForward);
+});
+
 test('deduplication and merged ID are stable under input reordering', () => {
   const forward = exactDuplicateContext();
   const reversed = exactDuplicateContext();

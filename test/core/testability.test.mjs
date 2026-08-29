@@ -456,6 +456,33 @@ test('very large sparse arrays derive canonical holes from own descriptors witho
   assert.equal(JSON.stringify(forward), JSON.stringify(reverse));
 });
 
+test('sparse hole diagnostics consume only the real remaining budget before truncating', () => {
+  /** @param {number} length */
+  const holes = (length) => {
+    const context = classificationContext();
+    context.caseDrafts.cases = new Array(length);
+    return classifyCaseDrafts(context).diagnostics;
+  };
+
+  const small = holes(2);
+  assert.deepEqual(small.map((item) => [item.code, item.path]), [
+    ['ARRAY_HOLE', '/caseDrafts/cases/0'],
+    ['ARRAY_HOLE', '/caseDrafts/cases/1']
+  ]);
+
+  const exact = holes(255);
+  assert.equal(exact.length, 255);
+  assert.equal(exact.every((item) => item.code === 'ARRAY_HOLE'), true);
+  assert.equal(exact.some((item) => item.code === 'DIAGNOSTICS_TRUNCATED'), false);
+  assert.equal(exact.at(-1)?.path, '/caseDrafts/cases/99');
+
+  const over = holes(256);
+  assert.equal(over.length, 256);
+  assert.equal(over.filter((item) => item.code === 'ARRAY_HOLE').length, 255);
+  assert.equal(over.some((item) => item.code === 'DIAGNOSTICS_TRUNCATED'), true);
+  assert.equal(over.some((item) => item.path === '/caseDrafts/cases/255'), false);
+});
+
 test('deep evidence ancestry is evaluated iteratively without call-stack recursion', () => {
   const claims = baseClaims();
   let parent = 'claim_fact';
