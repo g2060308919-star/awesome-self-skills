@@ -1,3 +1,4 @@
+import { scopeContains, validateDecisionRecords } from './decision-record.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
 
 export const E2_TARGETS = Object.freeze({
@@ -35,11 +36,9 @@ function diagnostic(category, code, path, message) {
   return { category, code, path, message };
 }
 
-/** @param {string} container @param {string} candidate */
-function scopeContains(container, candidate) {
-  const left = container.trim();
-  const right = candidate.trim();
-  return left === '*' || left === 'all' || left === right || right.startsWith(`${left}.`) || right.startsWith(`${left}/`);
+/** @param {string} left @param {string} right */
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /** @param {string} left @param {string} right */
@@ -47,71 +46,101 @@ function scopesIntersect(left, right) {
   return scopeContains(left, right) || scopeContains(right, left);
 }
 
-/** @param {Map<string, Record<string, unknown>>} claims */
-function findE2Cycles(claims) {
-  const visiting = new Set();
-  const visited = new Set();
-  const cyclic = new Set();
-
-  /** @param {string} claimId @param {string[]} trail */
-  function visit(claimId, trail) {
-    const claim = claims.get(claimId);
-    if (!claim || claim.level !== 'E2') return;
-    if (visiting.has(claimId)) {
-      const start = trail.indexOf(claimId);
-      for (const member of trail.slice(start)) cyclic.add(member);
-      cyclic.add(claimId);
-      return;
-    }
-    if (visited.has(claimId)) return;
-    visiting.add(claimId);
-    for (const parentId of stringArray(claim.parent_claim_ids)) visit(parentId, [...trail, claimId]);
-    visiting.delete(claimId);
-    visited.add(claimId);
-  }
-
-  for (const claimId of claims.keys()) visit(claimId, []);
-  return cyclic;
+/** @param {bigint} value */
+function absoluteBigInt(value) {
+  return value < 0n ? -value : value;
 }
 
-/** @param {string} expression @param {Map<string, number>} variables */
+/** @param {bigint} left @param {bigint} right */
+function greatestCommonDivisor(left, right) {
+  let a = absoluteBigInt(left);
+  let b = absoluteBigInt(right);
+  while (b !== 0n) [a, b] = [b, a % b];
+  return a;
+}
+
+/** @typedef {{numerator: bigint, denominator: bigint}} Rational */
+
+/** @param {bigint} numerator @param {bigint} denominator @returns {Rational} */
+function rational(numerator, denominator = 1n) {
+  if (denominator === 0n) throw new Error('formula divides by zero');
+  const sign = denominator < 0n ? -1n : 1n;
+  const divisor = greatestCommonDivisor(numerator, denominator);
+  return { numerator: sign * numerator / divisor, denominator: sign * denominator / divisor };
+}
+
+/** @param {string} value @returns {Rational} */
+function parseDecimal(value) {
+  const match = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/.exec(value.trim());
+  if (!match) throw new Error(`formula value "${value}" is not an exact decimal`);
+  const fraction = match[3] ?? match[4] ?? '';
+  const integer = match[2] ?? '0';
+  const digits = `${integer}${fraction}`.replace(/^0+(?=\d)/, '');
+  const exponent = Number(match[5] ?? '0');
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > 10000) throw new Error('formula exponent is out of range');
+  const scale = fraction.length - exponent;
+  let numerator = BigInt(digits);
+  let denominator = 1n;
+  if (scale >= 0) denominator = 10n ** BigInt(scale);
+  else numerator *= 10n ** BigInt(-scale);
+  if (match[1] === '-') numerator = -numerator;
+  return rational(numerator, denominator);
+}
+
+/** @param {Rational} left @param {Rational} right @param {string} operator @returns {Rational} */
+function applyBinary(left, right, operator) {
+  if (operator === '+') return rational(left.numerator * right.denominator + right.numerator * left.denominator, left.denominator * right.denominator);
+  if (operator === '-') return rational(left.numerator * right.denominator - right.numerator * left.denominator, left.denominator * right.denominator);
+  if (operator === '*') return rational(left.numerator * right.numerator, left.denominator * right.denominator);
+  return rational(left.numerator * right.denominator, left.denominator * right.numerator);
+}
+
+/** @param {string} expression @param {Map<string, Rational>} variables @returns {Rational} */
 function evaluateFormula(expression, variables) {
+  const trimmed = expression.trim();
+  if (trimmed.length === 0) throw new Error('formula is empty');
   /** @type {string[]} */
   const tokens = [];
   let offset = 0;
-  const tokenPattern = /\s*([A-Za-z_][A-Za-z0-9_]*|(?:\d+(?:\.\d*)?|\.\d+)|[()+\-*/])/y;
-  while (offset < expression.length) {
+  const tokenPattern = /(?:[A-Za-z_][A-Za-z0-9_]*|(?:(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|[()+\-*/])/y;
+  while (offset < trimmed.length) {
+    while (/\s/.test(trimmed[offset] ?? '')) offset += 1;
+    if (offset >= trimmed.length) break;
     tokenPattern.lastIndex = offset;
-    const match = tokenPattern.exec(expression);
+    const match = tokenPattern.exec(trimmed);
     if (!match) throw new Error('formula contains an unsupported token');
-    tokens.push(match[1]);
+    tokens.push(match[0]);
     offset = tokenPattern.lastIndex;
   }
-  if (tokens.length === 0) throw new Error('formula is empty');
 
   /** @type {string[]} */
   const output = [];
   /** @type {string[]} */
   const operators = [];
-  const precedence = new Map([['+', 1], ['-', 1], ['*', 2], ['/', 2]]);
+  const precedence = new Map([['+', 1], ['-', 1], ['*', 2], ['/', 2], ['u+', 3], ['u-', 3]]);
+  const rightAssociative = new Set(['u+', 'u-']);
   let expectsOperand = true;
-  for (const token of tokens) {
-    if (/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(token) || /^[A-Za-z_]/.test(token)) {
+  for (const rawToken of tokens) {
+    if (/^(?:(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/.test(rawToken) || /^[A-Za-z_]/.test(rawToken)) {
       if (!expectsOperand) throw new Error('formula is missing an operator');
-      output.push(token);
+      output.push(rawToken);
       expectsOperand = false;
-    } else if (token === '(') {
+    } else if (rawToken === '(') {
       if (!expectsOperand) throw new Error('formula is missing an operator before parenthesis');
-      operators.push(token);
-    } else if (token === ')') {
+      operators.push(rawToken);
+    } else if (rawToken === ')') {
       if (expectsOperand) throw new Error('formula has an empty or incomplete parenthesis');
       while (operators.length > 0 && operators.at(-1) !== '(') output.push(/** @type {string} */ (operators.pop()));
       if (operators.pop() !== '(') throw new Error('formula has unmatched parenthesis');
       expectsOperand = false;
     } else {
-      if (expectsOperand) throw new Error('formula has an operator without a left operand');
-      while (operators.length > 0 && operators.at(-1) !== '('
-        && /** @type {number} */ (precedence.get(/** @type {string} */ (operators.at(-1)))) >= /** @type {number} */ (precedence.get(token))) {
+      const token = expectsOperand && (rawToken === '+' || rawToken === '-') ? `u${rawToken}` : rawToken;
+      if (expectsOperand && token !== 'u+' && token !== 'u-') throw new Error('formula has an operator without a left operand');
+      const tokenPrecedence = /** @type {number} */ (precedence.get(token));
+      while (operators.length > 0 && operators.at(-1) !== '(') {
+        const top = /** @type {string} */ (operators.at(-1));
+        const topPrecedence = /** @type {number} */ (precedence.get(top));
+        if (topPrecedence < tokenPrecedence || (topPrecedence === tokenPrecedence && rightAssociative.has(token))) break;
         output.push(/** @type {string} */ (operators.pop()));
       }
       operators.push(token);
@@ -125,77 +154,89 @@ function evaluateFormula(expression, variables) {
     output.push(operator);
   }
 
-  /** @type {number[]} */
+  /** @type {Rational[]} */
   const values = [];
   for (const token of output) {
-    if (precedence.has(token)) {
+    if (token === 'u+' || token === 'u-') {
+      const value = values.pop();
+      if (!value) throw new Error('formula is incomplete');
+      values.push(token === 'u-' ? { numerator: -value.numerator, denominator: value.denominator } : value);
+    } else if (precedence.has(token)) {
       const right = values.pop();
       const left = values.pop();
-      if (left === undefined || right === undefined) throw new Error('formula is incomplete');
-      if (token === '+') values.push(left + right);
-      if (token === '-') values.push(left - right);
-      if (token === '*') values.push(left * right);
-      if (token === '/') {
-        if (right === 0) throw new Error('formula divides by zero');
-        values.push(left / right);
-      }
-    } else if (/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(token)) {
-      values.push(Number(token));
+      if (!left || !right) throw new Error('formula is incomplete');
+      values.push(applyBinary(left, right, token));
+    } else if (/^(?:(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/.test(token)) {
+      values.push(parseDecimal(token));
     } else {
       const value = variables.get(token);
-      if (value === undefined) throw new Error(`formula input "${token}" is missing`);
+      if (!value) throw new Error(`formula input "${token}" is missing`);
       values.push(value);
     }
   }
-  if (values.length !== 1 || !Number.isFinite(values[0])) throw new Error('formula did not produce one finite number');
+  if (values.length !== 1) throw new Error('formula did not produce one number');
   return values[0];
 }
 
-/** @param {number} value @param {number} precision @param {string} rule */
+/** @param {Rational} value @param {number} precision @param {string} rule */
 function roundValue(value, precision, rule) {
-  const factor = 10 ** precision;
-  const scaled = value * factor;
-  let rounded;
-  if (rule === 'floor') rounded = Math.floor(scaled);
-  else if (rule === 'ceiling') rounded = Math.ceil(scaled);
-  else if (rule === 'truncate') rounded = Math.trunc(scaled);
-  else if (rule === 'half-even') {
-    const lower = Math.floor(scaled);
-    const fraction = scaled - lower;
-    if (Math.abs(fraction - 0.5) < Number.EPSILON * Math.max(1, Math.abs(scaled))) rounded = lower % 2 === 0 ? lower : lower + 1;
-    else rounded = Math.round(scaled);
-  } else {
-    rounded = Math.sign(scaled) * Math.round(Math.abs(scaled) + Number.EPSILON);
+  const scale = 10n ** BigInt(precision);
+  const negative = value.numerator < 0n;
+  const scaledNumerator = absoluteBigInt(value.numerator) * scale;
+  let magnitude = scaledNumerator / value.denominator;
+  const remainder = scaledNumerator % value.denominator;
+  if (remainder !== 0n) {
+    if (rule === 'floor' && negative) magnitude += 1n;
+    else if (rule === 'ceiling' && !negative) magnitude += 1n;
+    else if (rule === 'half-up' && remainder * 2n >= value.denominator) magnitude += 1n;
+    else if (rule === 'half-even') {
+      const doubled = remainder * 2n;
+      if (doubled > value.denominator || (doubled === value.denominator && magnitude % 2n !== 0n)) magnitude += 1n;
+    }
   }
-  return (rounded / factor).toFixed(precision);
+  const signed = negative && magnitude !== 0n ? -magnitude : magnitude;
+  const absolute = absoluteBigInt(signed).toString().padStart(precision + 1, '0');
+  if (precision === 0) return `${signed < 0n ? '-' : ''}${absolute}`;
+  return `${signed < 0n ? '-' : ''}${absolute.slice(0, -precision)}.${absolute.slice(-precision)}`;
 }
 
 /**
  * @param {Record<string, unknown>} claim
- * @param {Map<string, Record<string, unknown>>} rawClaims
+ * @param {Map<string, Record<string, unknown>>} acceptedClaims
  * @returns {{value: string} | {code: string, message: string}}
  */
-function recomputeDerivedValue(claim, rawClaims) {
+function recomputeDerivedValue(claim, acceptedClaims) {
   const parameters = isObject(claim.parameters) ? claim.parameters : {};
   const ruleInput = isObject(claim.rule_input) ? claim.rule_input : {};
   if (claim.derivation_kind === 'formula') {
+    for (const field of ['unit', 'precision', 'rounding']) {
+      if (field in parameters && field in ruleInput && parameters[field] !== ruleInput[field]) {
+        return { code: 'E2_FORMULA_METADATA_MISMATCH', message: `formula ${field} disagrees between parameters and rule input` };
+      }
+    }
     const formula = typeof ruleInput.formula === 'string' ? ruleInput.formula : null;
     const inputs = objectArray(ruleInput.inputs);
     const unit = typeof ruleInput.unit === 'string' ? ruleInput.unit : typeof parameters.unit === 'string' ? parameters.unit : null;
     const precision = typeof ruleInput.precision === 'number' ? ruleInput.precision : parameters.precision;
     const rounding = typeof ruleInput.rounding === 'string' ? ruleInput.rounding : parameters.rounding;
-    if (formula === null || inputs.length === 0 || unit === null || !Number.isInteger(precision) || /** @type {number} */ (precision) < 0
+    if (formula === null || inputs.length === 0 || unit === null || unit.length === 0
+      || !Number.isInteger(precision) || /** @type {number} */ (precision) < 0 || /** @type {number} */ (precision) > 1000
       || typeof rounding !== 'string' || !ROUNDING_RULES.has(rounding)) {
       return { code: 'E2_FORMULA_INPUT_INCOMPLETE', message: 'formula derivation requires formula, inputs, unit, precision, and a supported rounding rule' };
     }
+    /** @type {Map<string, Rational>} */
     const variables = new Map();
     for (const input of inputs) {
-      if (typeof input.name !== 'string' || (typeof input.value !== 'number' && typeof input.value !== 'string')) {
+      if (typeof input.name !== 'string' || input.name.length === 0 || (typeof input.value !== 'number' && typeof input.value !== 'string')) {
         return { code: 'E2_FORMULA_INPUT_INCOMPLETE', message: 'every formula input requires a name and numeric value' };
       }
-      const numericValue = typeof input.value === 'number' ? input.value : Number(input.value);
-      if (!Number.isFinite(numericValue)) return { code: 'E2_FORMULA_INPUT_INVALID', message: `formula input "${input.name}" is not numeric` };
-      variables.set(input.name, numericValue);
+      if (variables.has(input.name)) return { code: 'E2_FORMULA_VARIABLE_DUPLICATE', message: `formula input "${input.name}" is duplicated` };
+      try {
+        const serialized = typeof input.value === 'number' ? String(input.value) : input.value;
+        variables.set(input.name, parseDecimal(serialized));
+      } catch (error) {
+        return { code: 'E2_FORMULA_INPUT_INVALID', message: error instanceof Error ? error.message : `formula input "${input.name}" is invalid` };
+      }
     }
     try {
       return { value: roundValue(evaluateFormula(formula, variables), /** @type {number} */ (precision), rounding) };
@@ -207,7 +248,7 @@ function recomputeDerivedValue(claim, rawClaims) {
     if (typeof ruleInput.outcome !== 'string' || ruleInput.outcome.length === 0) {
       return { code: 'E2_OUTCOME_REQUIRED', message: 'decision-table derivation requires an explicit outcome' };
     }
-    const sourceBacked = stringArray(claim.parent_claim_ids).some((parentId) => rawClaims.get(parentId)?.value === ruleInput.outcome);
+    const sourceBacked = stringArray(claim.parent_claim_ids).some((parentId) => acceptedClaims.get(parentId)?.value === ruleInput.outcome);
     if (!sourceBacked) return { code: 'E2_OUTCOME_NOT_SOURCE_BACKED', message: 'decision-table outcome must equal an explicit parent claim value' };
     return { value: ruleInput.outcome };
   }
@@ -237,13 +278,21 @@ function recomputeDerivedValue(claim, rawClaims) {
       return { code: 'E2_GRAPH_INPUT_INVALID', message: 'graph reachability requires from and to nodes' };
     }
     const edges = stringArray(claim.parent_claim_ids).flatMap((parentId) => {
-      const value = rawClaims.get(parentId)?.value;
+      const value = acceptedClaims.get(parentId)?.value;
       if (typeof value !== 'string') return [];
       const match = /^\s*(.+?)\s*->\s*(.+?)\s*$/.exec(value);
       return match ? [[match[1], match[2]]] : [];
     });
     const graph = new Map();
-    for (const [from, to] of edges) graph.set(from, [...(graph.get(from) ?? []), to]);
+    const nodes = new Set();
+    for (const [from, to] of edges) {
+      nodes.add(from);
+      nodes.add(to);
+      graph.set(from, [...(graph.get(from) ?? []), to]);
+    }
+    if (!nodes.has(ruleInput.from) || !nodes.has(ruleInput.to)) {
+      return { code: 'E2_GRAPH_NODE_UNKNOWN', message: 'graph reachability endpoints must exist in the parent edge graph' };
+    }
     const pending = [ruleInput.from];
     const visited = new Set();
     let reachable = false;
@@ -260,8 +309,48 @@ function recomputeDerivedValue(claim, rawClaims) {
   return { code: 'E2_DERIVATION_KIND_INVALID', message: 'derivation kind is not allowed' };
 }
 
+/** @param {Map<string, Record<string, unknown>>} claims */
+function findE2Cycles(claims) {
+  const state = new Map();
+  const cyclic = new Set();
+  const parentsById = new Map([...claims].flatMap(([claimId, claim]) => claim.level === 'E2'
+    ? [[claimId, stringArray(claim.parent_claim_ids).filter((id) => claims.get(id)?.level === 'E2')]] : []));
+  for (const [start, startClaim] of claims) {
+    if (startClaim.level !== 'E2' || (state.get(start) ?? 0) !== 0) continue;
+    /** @type {Array<{id: string, next: number}>} */
+    const stack = [{ id: start, next: 0 }];
+    const pathPosition = new Map([[start, 0]]);
+    state.set(start, 1);
+    while (stack.length > 0) {
+      const frame = /** @type {{id: string, next: number}} */ (stack.at(-1));
+      const parents = parentsById.get(frame.id) ?? [];
+      if (frame.next >= parents.length) {
+        state.set(frame.id, 2);
+        pathPosition.delete(frame.id);
+        stack.pop();
+        continue;
+      }
+      const next = parents[frame.next];
+      frame.next += 1;
+      const nextState = state.get(next) ?? 0;
+      if (nextState === 0) {
+        state.set(next, 1);
+        pathPosition.set(next, stack.length);
+        stack.push({ id: next, next: 0 });
+      } else if (nextState === 1) {
+        const cycleStart = pathPosition.get(next);
+        if (cycleStart !== undefined) {
+          for (let index = cycleStart; index < stack.length; index += 1) cyclic.add(stack[index].id);
+        }
+      }
+    }
+  }
+  return cyclic;
+}
+
 /**
  * Validate cross-artifact evidence references and the E3/E2/E1 gates.
+ * JS proves structured scope/provenance ancestry; semantic support remains an independent review gate.
  * @param {unknown} sourcePack
  * @param {unknown} evidenceClaims
  */
@@ -269,10 +358,18 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
   const pack = isObject(sourcePack) ? sourcePack : {};
   const artifact = isObject(evidenceClaims) ? evidenceClaims : {};
   const claims = objectArray(artifact.claims);
-  const rawClaims = new Map(claims.flatMap((claim) => typeof claim.claim_id === 'string' ? [[claim.claim_id, claim]] : []));
+  /** @type {Map<string, Record<string, unknown>>} */
+  const rawClaims = new Map();
+  const claimIndexById = new Map();
+  claims.forEach((claim, index) => {
+    if (typeof claim.claim_id === 'string') {
+      rawClaims.set(claim.claim_id, claim);
+      claimIndexById.set(claim.claim_id, index);
+    }
+  });
   const sources = new Map(objectArray(pack.sources).flatMap((source) => typeof source.source_id === 'string' ? [[source.source_id, source]] : []));
   const locators = new Map(objectArray(pack.locators).flatMap((locator) => typeof locator.locator_id === 'string' ? [[locator.locator_id, locator]] : []));
-  const decisions = new Map(objectArray(pack.decision_records).flatMap((decision) => typeof decision.decision_id === 'string' ? [[decision.decision_id, decision]] : []));
+  const decisionValidation = validateDecisionRecords(pack);
   const factLedger = objectArray(artifact.fact_ledger);
   const conflictedFactScopes = factLedger.filter((entry) => entry.status === 'conflicted').flatMap((entry) =>
     stringArray(entry.source_claim_ids).flatMap((claimId) => {
@@ -282,11 +379,10 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
   const policy = resolveSourcePolicy(pack);
   const cyclicClaims = findE2Cycles(rawClaims);
   /** @type {Map<string, Record<string, unknown>>} */
-  const claimsById = new Map();
+  const acceptedClaims = new Map();
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [...policy.diagnostics];
   const validated = new Set();
-  const validating = new Set();
 
   /** @param {Record<string, unknown>} claim @param {number} index */
   function validateLocatorReferences(claim, index) {
@@ -296,19 +392,18 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
       if (!locator) {
         diagnostics.push(diagnostic('reference', 'SOURCE_LOCATOR_DANGLING', `/claims/${index}/source_locator_ids/${locatorIndex}`, `claim references unknown locator "${locatorId}"`));
         valid = false;
+      } else if (typeof locator.source_id !== 'string' || !sources.has(locator.source_id)) {
+        valid = false;
       }
     }
     return valid;
   }
 
   /** @param {string} claimId */
-  function validateClaim(claimId) {
-    if (validated.has(claimId)) return claimsById.has(claimId);
-    if (validating.has(claimId)) return false;
+  function evaluateClaim(claimId) {
     const claim = rawClaims.get(claimId);
-    if (!claim) return false;
-    const index = claims.indexOf(claim);
-    validating.add(claimId);
+    if (!claim || validated.has(claimId)) return;
+    const index = claimIndexById.get(claimId) ?? 0;
     let valid = validateLocatorReferences(claim, index);
 
     if (claim.level === 'E0') {
@@ -356,22 +451,17 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
       }
     } else if (claim.claim_form === 'decision-record') {
       const decisionId = typeof claim.decision_id === 'string' ? claim.decision_id : '';
-      const decision = decisions.get(decisionId);
+      const decision = decisionValidation.decisionsById.get(decisionId);
       if (!decision) {
         diagnostics.push(diagnostic('reference', 'DECISION_RECORD_DANGLING', `/claims/${index}/decision_id`, `claim references unknown Decision Record "${decisionId}"`));
         valid = false;
       } else {
-        if (typeof decision.evidence_ref !== 'string' || !locators.has(decision.evidence_ref)) {
-          diagnostics.push(diagnostic('reference', 'DECISION_EVIDENCE_DANGLING', `/claims/${index}/decision_id`, 'Decision Record must reference existing evidence'));
-          valid = false;
-        } else if (!stringArray(claim.source_locator_ids).includes(decision.evidence_ref)) {
+        const sharedValid = claim.level === 'E3' ? decisionValidation.validFinalDecisionIds.has(decisionId)
+          : claim.level === 'E1' ? decisionValidation.validTemporaryDecisionIds.has(decisionId) : false;
+        if (!sharedValid) valid = false;
+        if (typeof decision.evidence_ref === 'string' && locators.has(decision.evidence_ref)
+          && !stringArray(claim.source_locator_ids).includes(decision.evidence_ref)) {
           diagnostics.push(diagnostic('reference', 'DECISION_EVIDENCE_MISMATCH', `/claims/${index}/source_locator_ids`, 'Decision Record evidence must be included in the claim locator references'));
-          valid = false;
-        }
-        const expectedLevel = decision.disposition === 'final' && decision.evidence_level === 'E3' ? 'E3'
-          : decision.disposition === 'temporary' && decision.evidence_level === 'E1' ? 'E1' : null;
-        if (expectedLevel === null || claim.level !== expectedLevel) {
-          diagnostics.push(diagnostic('classification', 'DECISION_EVIDENCE_LEVEL_INVALID', `/claims/${index}/level`, 'Decision Record disposition and evidence level do not authorize this claim level'));
           valid = false;
         }
         if (claim.authority !== decision.authority_scope) {
@@ -416,6 +506,7 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
         diagnostics.push(diagnostic('classification', 'E2_KIND_TARGET_MISMATCH', `/claims/${index}/kind`, 'derived claim kind must equal its derivation target'));
         valid = false;
       }
+      const parentLocatorIds = new Set();
       for (const [parentIndex, parentId] of stringArray(claim.parent_claim_ids).entries()) {
         const parent = rawClaims.get(parentId);
         if (!parent) {
@@ -424,13 +515,27 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
         } else if (parent.level !== 'E3' && parent.level !== 'E2') {
           diagnostics.push(diagnostic('classification', 'E2_PARENT_LEVEL_INVALID', `/claims/${index}/parent_claim_ids/${parentIndex}`, 'E2 parents must be E3 or E2'));
           valid = false;
-        } else if (!cyclicClaims.has(claimId) && !validateClaim(parentId)) {
+        } else if (!acceptedClaims.has(parentId)) {
           diagnostics.push(diagnostic('classification', 'E2_CHAIN_NOT_GROUNDED', `/claims/${index}/parent_claim_ids/${parentIndex}`, 'every E2 chain must end at accepted E3 evidence'));
           valid = false;
+        } else {
+          const acceptedParent = /** @type {Record<string, unknown>} */ (acceptedClaims.get(parentId));
+          if (typeof acceptedParent.scope !== 'string' || typeof claim.scope !== 'string' || !scopeContains(acceptedParent.scope, claim.scope)) {
+            diagnostics.push(diagnostic('classification', 'E2_PARENT_SCOPE_MISMATCH', `/claims/${index}/parent_claim_ids/${parentIndex}`, 'every accepted parent scope must contain the derived claim scope'));
+            valid = false;
+          }
+          for (const locatorId of stringArray(acceptedParent.source_locator_ids)) parentLocatorIds.add(locatorId);
+        }
+      }
+      for (const locatorId of stringArray(claim.source_locator_ids)) {
+        if (!parentLocatorIds.has(locatorId)) {
+          diagnostics.push(diagnostic('classification', 'E2_PROVENANCE_ANCHOR_NOT_IN_PARENTS', `/claims/${index}/source_locator_ids`, 'derived provenance anchors must be inherited from accepted parents'));
+          valid = false;
+          break;
         }
       }
       if (valid) {
-        const recomputed = recomputeDerivedValue(claim, rawClaims);
+        const recomputed = recomputeDerivedValue(claim, acceptedClaims);
         if ('code' in recomputed) {
           diagnostics.push(diagnostic('classification', recomputed.code, `/claims/${index}/rule_input`, recomputed.message));
           valid = false;
@@ -444,13 +549,35 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
       valid = false;
     }
 
-    validating.delete(claimId);
     validated.add(claimId);
-    if (valid) claimsById.set(claimId, claim);
-    return valid;
+    if (valid) acceptedClaims.set(claimId, claim);
   }
 
-  for (const claim of claims) if (typeof claim.claim_id === 'string') validateClaim(claim.claim_id);
+  /** @param {string} rootId */
+  function validateIteratively(rootId) {
+    /** @type {Array<{id: string, expanded: boolean}>} */
+    const stack = [{ id: rootId, expanded: false }];
+    while (stack.length > 0) {
+      const frame = /** @type {{id: string, expanded: boolean}} */ (stack.pop());
+      if (validated.has(frame.id) || !rawClaims.has(frame.id)) continue;
+      const claim = /** @type {Record<string, unknown>} */ (rawClaims.get(frame.id));
+      if (!frame.expanded && claim.claim_form === 'derived' && claim.level === 'E2' && !cyclicClaims.has(frame.id)) {
+        stack.push({ id: frame.id, expanded: true });
+        const parents = stringArray(claim.parent_claim_ids);
+        for (let index = parents.length - 1; index >= 0; index -= 1) {
+          const parentId = parents[index];
+          const parent = rawClaims.get(parentId);
+          if (parent && (parent.level === 'E3' || parent.level === 'E2') && !validated.has(parentId)) {
+            stack.push({ id: parentId, expanded: false });
+          }
+        }
+      } else {
+        evaluateClaim(frame.id);
+      }
+    }
+  }
+
+  for (const claimId of rawClaims.keys()) validateIteratively(claimId);
 
   factLedger.forEach((entry, entryIndex) => {
     if (typeof entry.claim_id === 'string' && !rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic(
@@ -463,10 +590,10 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
     });
   });
 
-  diagnostics.sort((left, right) => {
-    const leftKey = `${left.category}\0${left.code}\0${left.path}`;
-    const rightKey = `${right.category}\0${right.code}\0${right.path}`;
-    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-  });
-  return { claimsById, diagnostics };
+  const uniqueDiagnostics = new Map();
+  for (const item of diagnostics) uniqueDiagnostics.set(`${item.category}\0${item.code}\0${item.path}\0${item.message}`, item);
+  const sortedDiagnostics = [...uniqueDiagnostics.values()].sort((left, right) =>
+    compareStrings(`${left.category}\0${left.code}\0${left.path}`, `${right.category}\0${right.code}\0${right.path}`));
+  const claimsById = new Map([...acceptedClaims].sort(([left], [right]) => compareStrings(left, right)));
+  return { claimsById, diagnostics: sortedDiagnostics };
 }

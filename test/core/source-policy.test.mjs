@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { stableId } from '../../src/canonical.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -10,6 +11,15 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 /** @param {string} relativePath */
 async function fixture(relativePath) {
   return JSON.parse(await readFile(path.join(repositoryRoot, 'test/fixtures', relativePath), 'utf8'));
+}
+
+function paymentConflictRootId() {
+  return stableId('root', {
+    missing_type: 'source-conflict',
+    rule_ids: ['rule_payment_new', 'rule_payment_old'],
+    scope: 'checkout.payment',
+    source_ids: ['source_payment_new', 'source_payment_old']
+  });
 }
 
 test('source policy isolates an absent-supersedes conflict to its intersecting scope', async () => {
@@ -21,6 +31,7 @@ test('source policy isolates an absent-supersedes conflict to its intersecting s
   assert.equal(result.conflicts.length, 1);
   assert.deepEqual(result.conflicts[0], {
     conflict_id: 'source_conflict_8d43da2c21f3048f',
+    root_issue_id: paymentConflictRootId(),
     scope: 'checkout.payment',
     rule_ids: ['rule_payment_new', 'rule_payment_old'],
     source_ids: ['source_payment_new', 'source_payment_old']
@@ -53,6 +64,23 @@ test('source policy applies explicit supersedes without using document recency a
   assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_payment_new']);
 });
 
+test('source policy retains a broad superseded rule outside the newer narrow scope', async () => {
+  const sourcePack = await fixture('adversarial/source-conflict-superseded.json');
+  sourcePack.sources[0].status = 'effective';
+  sourcePack.sources[0].scope = 'checkout';
+  sourcePack.source_policy.rules[0].status = 'effective';
+  sourcePack.source_policy.rules[0].scope = 'checkout';
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(result.effectiveClaims, [
+    { claim_id: 'rule_payment_new', claim_form: 'source-policy', source_ids: ['source_payment_new'], scope: 'checkout.payment', authority: 'payments-owner', excluded_scopes: [] },
+    { claim_id: 'rule_payment_old', claim_form: 'source-policy', source_ids: ['source_payment_old'], scope: 'checkout', authority: 'payments-owner', excluded_scopes: ['checkout.payment'] }
+  ]);
+});
+
 test('source policy reports dangling supersedes and cycles rather than guessing precedence', async () => {
   const sourcePack = await fixture('adversarial/source-conflict-superseded.json');
   sourcePack.source_policy.rules[1].supersedes = ['rule_missing'];
@@ -67,6 +95,22 @@ test('source policy reports dangling supersedes and cycles rather than guessing 
   assert.deepEqual(cyclic.effectiveClaims, []);
 });
 
+test('source policy preserves unrelated effective rules beside malformed graph components', async () => {
+  const sourcePack = await fixture('adversarial/source-conflict-local.json');
+  sourcePack.source_policy.rules[0].supersedes = ['rule_payment_new'];
+  sourcePack.source_policy.rules[1].supersedes = ['rule_payment_old'];
+
+  const cyclic = resolveSourcePolicy(sourcePack);
+  assert.equal(cyclic.diagnostics.some((item) => item.code === 'SOURCE_POLICY_CYCLE'), true);
+  assert.deepEqual(cyclic.effectiveClaims.map((claim) => claim.claim_id), ['rule_shipping']);
+
+  delete sourcePack.source_policy.rules[0].supersedes;
+  sourcePack.source_policy.rules[1].supersedes = ['rule_missing'];
+  const dangling = resolveSourcePolicy(sourcePack);
+  assert.equal(dangling.diagnostics.some((item) => item.code === 'SOURCE_POLICY_SUPERSEDES_DANGLING'), true);
+  assert.deepEqual(dangling.effectiveClaims.map((claim) => claim.claim_id), ['rule_shipping']);
+});
+
 test('source policy accepts only a scoped final Decision Record as automatic conflict resolution', async () => {
   const sourcePack = await fixture('adversarial/source-conflict-local.json');
   sourcePack.locators.push({
@@ -74,7 +118,7 @@ test('source policy accepts only a scoped final Decision Record as automatic con
     content_digest: 'b'.repeat(64), extraction_integrity: 'verified'
   });
   sourcePack.decision_records.push({
-    decision_id: 'decision_payment', question_id: 'question_payment', root_issue_ids: ['root_payment'], affected_obligation_ids: [],
+    decision_id: 'decision_payment', question_id: 'question_payment', root_issue_ids: [paymentConflictRootId()], affected_obligation_ids: [],
     clarification_event_seq: 1, confirmer: 'payments-owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Which settlement rule applies?', answer: 'Use two days.',
     disposition: 'final', authority_scope: 'checkout.payment', effective_scope: 'checkout.payment', evidence_ref: 'locator_decision', evidence_level: 'E3'
   });
@@ -88,6 +132,25 @@ test('source policy accepts only a scoped final Decision Record as automatic con
   const temporary = resolveSourcePolicy(sourcePack);
   assert.equal(temporary.conflicts.length, 1);
   assert.equal(temporary.effectiveClaims.some((claim) => claim.claim_id === 'decision_payment'), false);
+});
+
+test('source policy requires a final decision to name the specific conflict root issue', async () => {
+  const sourcePack = await fixture('adversarial/source-conflict-local.json');
+  sourcePack.locators.push({
+    locator_id: 'locator_decision', source_id: 'source_payment_new', type: 'text-range', text_range: { start: 0, end: 8 },
+    content_digest: 'b'.repeat(64), extraction_integrity: 'verified'
+  });
+  sourcePack.decision_records.push({
+    decision_id: 'decision_shipping', question_id: 'question_shipping', root_issue_ids: ['root_shipping'], affected_obligation_ids: [],
+    clarification_event_seq: 1, confirmer: 'payments-owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Shipping?', answer: 'Use two days.',
+    disposition: 'final', authority_scope: 'checkout', effective_scope: 'checkout.payment', evidence_ref: 'locator_decision', evidence_level: 'E3'
+  });
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(result.conflicts[0].root_issue_id, paymentConflictRootId());
+  assert.equal(result.effectiveClaims.some((claim) => claim.claim_id === 'decision_shipping'), true);
 });
 
 test('source policy refuses a final Decision Record with dangling evidence', async () => {
@@ -121,4 +184,38 @@ test('source policy does not apply a Decision Record outside its declared author
 
   assert.equal(result.conflicts.length, 1);
   assert.equal(result.effectiveClaims.some((claim) => claim.claim_id === 'decision_payment'), false);
+});
+
+test('source policy validates every locator source even when the locator is unused', async () => {
+  const sourcePack = await fixture('adversarial/source-conflict-superseded.json');
+  sourcePack.locators.push({
+    locator_id: 'locator_unused', source_id: 'source_missing', type: 'text-range', text_range: { start: 0, end: 1 },
+    content_digest: 'd'.repeat(64), extraction_integrity: 'verified'
+  });
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.equal(result.diagnostics.some((item) => item.code === 'LOCATOR_SOURCE_DANGLING' && item.path === '/locators/0/source_id'), true);
+});
+
+test('source policy handles a reversed 5000-rule supersedes chain without recursion failure', () => {
+  const count = 5000;
+  const sources = Array.from({ length: count }, (_, index) => ({
+    source_id: `source_${index}`, kind: 'formal-rule', version: String(index), status: 'effective', authority: 'owner',
+    content: `Rule ${index}`, content_digest: index.toString(16).padStart(64, '0'), scope: 'checkout'
+  }));
+  const rules = Array.from({ length: count }, (_, index) => ({
+    rule_id: `rule_${index}`, source_ids: [`source_${index}`], ...(index === 0 ? {} : { supersedes: [`rule_${index - 1}`] }),
+    scope: 'checkout', authority: 'owner', status: 'effective'
+  }));
+  const sourcePack = {
+    schema_version: '1.0.0', source_revision: 0, run_scope: 'checkout', sources, locators: [],
+    source_policy: { rules: [...rules].reverse() }, decision_records: [], clarification_events: []
+  };
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_4999']);
 });

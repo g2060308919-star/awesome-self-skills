@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { E2_TARGETS, validateEvidenceGraph } from '../../src/evidence.mjs';
+import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const digestA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -47,6 +48,46 @@ function derived(overrides = {}) {
 /** @param {Array<Record<string, unknown>>} claims @returns {any} */
 function artifact(claims) {
   return { schema_version: '1.0.0', source_revision: 0, claims, fact_ledger: [] };
+}
+
+/** @param {'final' | 'temporary'} disposition @returns {any} */
+function decisionRecord(disposition) {
+  return {
+    decision_id: 'decision_review', question_id: 'question_review', root_issue_ids: ['root_review'], affected_obligation_ids: [], clarification_event_seq: 1,
+    confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Result?', answer: 'approved', disposition,
+    authority_scope: 'checkout', effective_scope: 'checkout', evidence_ref: 'locator_rule', evidence_level: disposition === 'final' ? 'E3' : 'E1'
+  };
+}
+
+/** @param {'final' | 'temporary'} disposition @returns {any} */
+function decisionClaim(disposition) {
+  return {
+    claim_id: 'claim_decision', claim_form: 'decision-record', level: disposition === 'final' ? 'E3' : 'E1',
+    kind: disposition === 'final' ? 'requirement' : 'assumption', scope: 'checkout', value: 'approved', source_locator_ids: ['locator_rule'],
+    decision_id: 'decision_review', authority: 'checkout'
+  };
+}
+
+/** @param {string} family @returns {{parent: any, claim: any}} */
+function derivationFamily(family) {
+  if (family === 'formula') return {
+    parent: direct({ value: 'subtotal + tax', scope: 'checkout.payment' }),
+    claim: derived({ derivation_kind: 'formula', derivation_target: 'expected-value', kind: 'expected-value', scope: 'checkout.payment', value: '12.50',
+      rule_input: { formula: 'subtotal + tax', inputs: [{ name: 'subtotal', value: 10 }, { name: 'tax', value: 2.5 }], unit: 'USD', precision: 2, rounding: 'half-up' } })
+  };
+  if (family === 'decision-table-instance') return {
+    parent: direct({ value: 'approved', scope: 'checkout.payment' }),
+    claim: derived({ derivation_kind: family, derivation_target: 'expected-value', kind: 'expected-value', scope: 'checkout.payment', value: 'approved', rule_input: { conditions: ['paid'], outcome: 'approved' } })
+  };
+  if (family === 'enumeration-complement') return {
+    parent: direct({ scope: 'checkout.payment' }),
+    claim: derived({ derivation_kind: family, scope: 'checkout.payment', value: 'archived', rule_input: { enumerated_values: ['draft', 'saved'], closed_world: true } })
+  };
+  if (family === 'graph-reachability') return {
+    parent: direct({ value: 'draft->approved', scope: 'checkout.payment' }),
+    claim: derived({ derivation_kind: family, derivation_target: 'model-element', kind: 'model-element', scope: 'checkout.payment', value: 'draft->approved', rule_input: { from: 'draft', to: 'approved' } })
+  };
+  return { parent: direct({ scope: 'checkout.payment' }), claim: derived({ scope: 'checkout.payment' }) };
 }
 
 test('evidence accepts verified authoritative E3 and a temporary Decision Record as E1', () => {
@@ -95,6 +136,32 @@ test('evidence rejects a final Decision Record claim outside declared authority 
 
   assert.equal(result.diagnostics.some((item) => item.code === 'DECISION_AUTHORITY_SCOPE_MISMATCH'), true);
   assert.equal(result.claimsById.has('claim_final'), false);
+});
+
+test('source policy and evidence share strict Decision Record validation', () => {
+  /** @type {Array<{name: string, disposition: string, mutate: (pack: any) => void, code: string}>} */
+  const cases = [
+    { name: 'final empty answer', disposition: 'final', mutate: (pack) => { pack.decision_records[0].answer = '   '; }, code: 'DECISION_ANSWER_EMPTY' },
+    { name: 'temporary empty answer', disposition: 'temporary', mutate: (pack) => { pack.decision_records[0].answer = ''; }, code: 'DECISION_ANSWER_EMPTY' },
+    { name: 'missing locator', disposition: 'final', mutate: (pack) => { pack.decision_records[0].evidence_ref = 'locator_missing'; }, code: 'DECISION_EVIDENCE_DANGLING' },
+    { name: 'locator source missing', disposition: 'temporary', mutate: (pack) => { pack.locators[0].source_id = 'source_missing'; }, code: 'LOCATOR_SOURCE_DANGLING' },
+    { name: 'final uncertain locator', disposition: 'final', mutate: (pack) => { pack.locators[0].extraction_integrity = 'uncertain'; }, code: 'DECISION_EVIDENCE_UNCERTAIN' },
+    { name: 'temporary uncertain locator', disposition: 'temporary', mutate: (pack) => { pack.locators[0].extraction_integrity = 'uncertain'; }, code: 'DECISION_EVIDENCE_UNCERTAIN' },
+    { name: 'authority does not contain effective scope', disposition: 'final', mutate: (pack) => { pack.decision_records[0].authority_scope = 'checkout.shipping'; }, code: 'DECISION_AUTHORITY_SCOPE_MISMATCH' },
+    { name: 'empty authority scope', disposition: 'temporary', mutate: (pack) => { pack.decision_records[0].authority_scope = ''; }, code: 'DECISION_AUTHORITY_SCOPE_MISMATCH' },
+    { name: 'empty effective scope', disposition: 'final', mutate: (pack) => { pack.decision_records[0].effective_scope = '   '; }, code: 'DECISION_AUTHORITY_SCOPE_MISMATCH' }
+  ];
+
+  for (const item of cases) {
+    const pack = sourcePack();
+    pack.decision_records.push(decisionRecord(/** @type {'final' | 'temporary'} */ (item.disposition)));
+    item.mutate(pack);
+    const policy = resolveSourcePolicy(pack);
+    const evidence = validateEvidenceGraph(pack, artifact([decisionClaim(/** @type {'final' | 'temporary'} */ (item.disposition))]));
+    assert.equal(policy.diagnostics.some((diagnostic) => diagnostic.code === item.code), true, `${item.name}: source policy`);
+    assert.equal(evidence.diagnostics.some((diagnostic) => diagnostic.code === item.code), true, `${item.name}: evidence`);
+    assert.equal(evidence.claimsById.has('claim_decision'), false, item.name);
+  }
 });
 
 test('evidence blocks uncertain extraction and diagnostic current behavior from E3', () => {
@@ -152,6 +219,94 @@ test('evidence accepts every allowed E2 target only with a recomputable rule inp
     assert.deepEqual(result.diagnostics, [], item.name);
     assert.equal(result.claimsById.has('claim_e2'), true, item.name);
   }
+});
+
+test('every E2 family requires parent scope containment and inherited provenance anchors', () => {
+  const families = ['formula', 'decision-table-instance', 'boundary-representative', 'enumeration-complement', 'graph-reachability'];
+  for (const family of families) {
+    const differentAnchor = derivationFamily(family);
+    differentAnchor.claim.source_locator_ids = ['locator_formula'];
+    const anchorResult = validateEvidenceGraph(sourcePack(), artifact([differentAnchor.parent, differentAnchor.claim]));
+    assert.equal(anchorResult.diagnostics.some((item) => item.code === 'E2_PROVENANCE_ANCHOR_NOT_IN_PARENTS'), true, `${family}: anchor`);
+    assert.equal(anchorResult.claimsById.has('claim_e2'), false, `${family}: anchor`);
+
+    const crossScope = derivationFamily(family);
+    crossScope.claim.scope = 'checkout.shipping';
+    const scopeResult = validateEvidenceGraph(sourcePack(), artifact([crossScope.parent, crossScope.claim]));
+    assert.equal(scopeResult.diagnostics.some((item) => item.code === 'E2_PARENT_SCOPE_MISMATCH'), true, `${family}: scope`);
+    assert.equal(scopeResult.claimsById.has('claim_e2'), false, `${family}: scope`);
+  }
+});
+
+test('formula recomputation uses exact signed decimal rounding and safe parser behavior', () => {
+  const cases = [
+    { name: 'positive half-up tie', formula: 'amount', inputs: [{ name: 'amount', value: '1.005' }], rounding: 'half-up', want: '1.01' },
+    { name: 'positive half-even tie', formula: 'amount', inputs: [{ name: 'amount', value: '1.005' }], rounding: 'half-even', want: '1.00' },
+    { name: 'negative half-up tie', formula: '-amount', inputs: [{ name: 'amount', value: '1.005' }], rounding: 'half-up', want: '-1.01' },
+    { name: 'negative half-even tie', formula: '-amount', inputs: [{ name: 'amount', value: '1.005' }], rounding: 'half-even', want: '-1.00' },
+    { name: 'positive floor', formula: 'amount', inputs: [{ name: 'amount', value: '1.009' }], rounding: 'floor', want: '1.00' },
+    { name: 'positive ceiling', formula: 'amount', inputs: [{ name: 'amount', value: '1.001' }], rounding: 'ceiling', want: '1.01' },
+    { name: 'positive truncate', formula: 'amount', inputs: [{ name: 'amount', value: '1.009' }], rounding: 'truncate', want: '1.00' },
+    { name: 'negative floor', formula: '-amount', inputs: [{ name: 'amount', value: '1.001' }], rounding: 'floor', want: '-1.01' },
+    { name: 'negative ceiling', formula: '-amount', inputs: [{ name: 'amount', value: '1.009' }], rounding: 'ceiling', want: '-1.00' },
+    { name: 'negative truncate', formula: '-amount', inputs: [{ name: 'amount', value: '1.009' }], rounding: 'truncate', want: '-1.00' },
+    { name: 'unary and trailing whitespace', formula: ' -amount / divisor   ', inputs: [{ name: 'amount', value: '1' }, { name: 'divisor', value: '2' }], rounding: 'half-up', want: '-0.50' }
+  ];
+
+  for (const item of cases) {
+    const parent = direct({ value: item.formula });
+    const claim = derived({ derivation_kind: 'formula', derivation_target: 'expected-value', kind: 'expected-value', value: item.want,
+      parameters: { unit: 'USD', precision: 2, rounding: item.rounding },
+      rule_input: { formula: item.formula, inputs: item.inputs, unit: 'USD', precision: 2, rounding: item.rounding } });
+    const result = validateEvidenceGraph(sourcePack(), artifact([parent, claim]));
+    assert.deepEqual(result.diagnostics, [], item.name);
+    assert.equal(result.claimsById.has('claim_e2'), true, item.name);
+  }
+});
+
+test('formula recomputation rejects duplicate variables, metadata disagreement, and zero division', () => {
+  const cases = [
+    { name: 'duplicate variables', parameters: { unit: 'USD', precision: 2, rounding: 'half-up' },
+      input: { formula: 'amount', inputs: [{ name: 'amount', value: 1 }, { name: 'amount', value: 2 }], unit: 'USD', precision: 2, rounding: 'half-up' }, code: 'E2_FORMULA_VARIABLE_DUPLICATE' },
+    { name: 'metadata mismatch', parameters: { unit: 'USD', precision: 2, rounding: 'half-up' },
+      input: { formula: 'amount', inputs: [{ name: 'amount', value: 1 }], unit: 'EUR', precision: 2, rounding: 'half-up' }, code: 'E2_FORMULA_METADATA_MISMATCH' },
+    { name: 'division by zero', parameters: { unit: 'USD', precision: 2, rounding: 'half-up' },
+      input: { formula: 'amount / zero', inputs: [{ name: 'amount', value: 1 }, { name: 'zero', value: 0 }], unit: 'USD', precision: 2, rounding: 'half-up' }, code: 'E2_FORMULA_INVALID' }
+  ];
+  for (const item of cases) {
+    const parent = direct({ value: item.input.formula });
+    const claim = derived({ derivation_kind: 'formula', derivation_target: 'expected-value', kind: 'expected-value', value: '1.00', parameters: item.parameters, rule_input: item.input });
+    const result = validateEvidenceGraph(sourcePack(), artifact([parent, claim]));
+    assert.equal(result.diagnostics.some((diagnostic) => diagnostic.code === item.code), true, item.name);
+    assert.equal(result.claimsById.has('claim_e2'), false, item.name);
+  }
+});
+
+test('graph reachability validates node existence, multi-hop paths, cycles, and reflexive paths', () => {
+  const edges = [
+    direct({ claim_id: 'claim_ab', value: 'A->B' }),
+    direct({ claim_id: 'claim_bc', value: 'B->C' }),
+    direct({ claim_id: 'claim_ca', value: 'C->A' })
+  ];
+  /** @param {string} claimId @param {string} from @param {string} to */
+  const graphClaim = (claimId, from, to) => derived({
+    claim_id: claimId, derivation_kind: 'graph-reachability', derivation_target: 'model-element', kind: 'model-element',
+    parent_claim_ids: edges.map((edge) => edge.claim_id), value: `${from}->${to}`, rule_input: { from, to }
+  });
+
+  const valid = validateEvidenceGraph(sourcePack(), artifact([...edges, graphClaim('claim_path', 'A', 'C'), graphClaim('claim_reflexive', 'A', 'A')]));
+  assert.deepEqual(valid.diagnostics, []);
+  assert.equal(valid.claimsById.has('claim_path'), true);
+  assert.equal(valid.claimsById.has('claim_reflexive'), true);
+
+  const unknown = validateEvidenceGraph(sourcePack(), artifact([...edges, graphClaim('claim_unknown', 'A', 'Z')]));
+  assert.equal(unknown.diagnostics.some((item) => item.code === 'E2_GRAPH_NODE_UNKNOWN'), true);
+  assert.equal(unknown.claimsById.has('claim_unknown'), false);
+
+  const noNodes = derived({ claim_id: 'claim_no_nodes', derivation_kind: 'graph-reachability', derivation_target: 'model-element', kind: 'model-element',
+    parent_claim_ids: ['claim_root'], value: 'Z->Z', rule_input: { from: 'Z', to: 'Z' } });
+  const reflexiveUnknown = validateEvidenceGraph(sourcePack(), artifact([direct(), noNodes]));
+  assert.equal(reflexiveUnknown.diagnostics.some((item) => item.code === 'E2_GRAPH_NODE_UNKNOWN'), true);
 });
 
 test('evidence rejects dangling parents, cycles, and chains through E1 or E0', () => {
@@ -232,4 +387,34 @@ test('evidence does not let E1 override a conflicted fact backed by E3 claims', 
   assert.equal(result.claimsById.has('claim_temp'), false);
   assert.equal(result.claimsById.has('claim_approved'), true);
   assert.equal(result.claimsById.has('claim_rejected'), true);
+});
+
+test('evidence returns claimsById in stable claim_id order independent of artifact order', () => {
+  const claims = [direct({ claim_id: 'claim_z' }), direct({ claim_id: 'claim_a' })];
+  const forward = validateEvidenceGraph(sourcePack(), artifact(claims));
+  const reversed = validateEvidenceGraph(sourcePack(), artifact([...claims].reverse()));
+
+  assert.deepEqual(forward.diagnostics, []);
+  assert.deepEqual(reversed.diagnostics, []);
+  assert.deepEqual([...forward.claimsById.keys()], ['claim_a', 'claim_z']);
+  assert.deepEqual([...reversed.claimsById.keys()], ['claim_a', 'claim_z']);
+});
+
+test('evidence handles a reversed 4000-claim E2 chain without recursion failure or depth caps', () => {
+  const count = 4000;
+  /** @type {Array<Record<string, unknown>>} */
+  const claims = [direct({ claim_id: 'claim_0000' })];
+  for (let index = 1; index < count; index += 1) {
+    claims.push(derived({
+      claim_id: `claim_${String(index).padStart(4, '0')}`,
+      parent_claim_ids: [`claim_${String(index - 1).padStart(4, '0')}`]
+    }));
+  }
+
+  const result = validateEvidenceGraph(sourcePack(), artifact([...claims].reverse()));
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.claimsById.size, count);
+  assert.equal([...result.claimsById.keys()][0], 'claim_0000');
+  assert.equal([...result.claimsById.keys()].at(-1), 'claim_3999');
 });
