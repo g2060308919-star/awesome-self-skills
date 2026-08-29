@@ -1,4 +1,4 @@
-import { stableId } from '../../src/canonical.mjs';
+import { canonicalStringify, stableId } from '../../src/canonical.mjs';
 
 export const IDS = Object.freeze({
   fact: 'fact_checkout',
@@ -6,6 +6,66 @@ export const IDS = Object.freeze({
   case: 'case_1111111111111111',
   expectation: 'expectation_result'
 });
+
+/** @param {unknown} value */
+function normalizeSemanticString(value) {
+  return typeof value === 'string' ? value.normalize('NFC').trim().replace(/\s+/gu, ' ') : '';
+}
+
+/** @param {string} left @param {string} right */
+function compareCodePoints(left, right) {
+  const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const rightPoints = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
+  }
+  return leftPoints.length - rightPoints.length;
+}
+
+/** @param {Record<string, unknown>[]} entries */
+function canonicalSetProjection(entries) {
+  const unique = new Map(entries.map((entry) => [canonicalStringify(entry), entry]));
+  return canonicalStringify([...unique].sort(([left], [right]) => compareCodePoints(left, right)).map(([, entry]) => entry));
+}
+
+/** @param {any} caseDraft */
+export function expectedPreconditionProjection(caseDraft) {
+  const preconditions = /** @type {any[]} */ (caseDraft.preconditions);
+  return canonicalSetProjection(preconditions.map((item) => ({
+    condition: normalizeSemanticString(item.condition),
+    reachable_from: normalizeSemanticString(item.reachable_from)
+  })));
+}
+
+/** @param {any} caseDraft */
+export function expectedDataProjection(caseDraft) {
+  const data = /** @type {any[]} */ (caseDraft.data);
+  return canonicalSetProjection(data.map((item) => ({
+    name: normalizeSemanticString(item.name),
+    value: normalizeSemanticString(item.value),
+    provenance: {
+      type: normalizeSemanticString(item.provenance?.type),
+      ref: normalizeSemanticString(item.provenance?.ref)
+    }
+  })));
+}
+
+/** @param {any} caseDraft */
+export function refreshExecutionSignature(caseDraft) {
+  const steps = /** @type {any[]} */ (caseDraft.steps);
+  caseDraft.execution_signature = {
+    role: normalizeSemanticString(caseDraft.role?.value),
+    precondition_state: expectedPreconditionProjection(caseDraft),
+    data_partition: expectedDataProjection(caseDraft),
+    action_path: steps.map((step) => normalizeSemanticString(step.action)),
+    oracle_refs: [...new Set(steps.flatMap((step) =>
+      (/** @type {any[]} */ (step.expectations)).map((expectation) => normalizeSemanticString(expectation.expectation_id))
+    ))].sort(compareCodePoints),
+    test_point_ids: [...caseDraft.obligation_ids]
+  };
+  return caseDraft;
+}
 
 /** @param {string} id @param {string} [level] @param {Record<string, unknown>} [overrides] @returns {any} */
 export function acceptedClaim(id, level = 'E3', overrides = {}) {
@@ -148,9 +208,7 @@ export function baseCase(overrides = {}) {
     },
     ...overrides
   };
-  if (Object.hasOwn(overrides, 'obligation_ids') && !Object.hasOwn(overrides, 'execution_signature')) {
-    draft.execution_signature.test_point_ids = [...draft.obligation_ids];
-  }
+  if (!Object.hasOwn(overrides, 'execution_signature')) refreshExecutionSignature(draft);
   return draft;
 }
 
@@ -196,13 +254,15 @@ export function classificationContext(options = {}) {
 
 /** @param {ReturnType<typeof baseCase>} caseDraft */
 export function expectedCanonicalCaseId(caseDraft) {
-  const signature = {
-    role: caseDraft.execution_signature.role,
-    precondition_state: caseDraft.execution_signature.precondition_state,
-    data_partition: caseDraft.execution_signature.data_partition,
-    action_path: caseDraft.execution_signature.action_path,
-    oracle_refs: caseDraft.execution_signature.oracle_refs
-  };
+  const steps = /** @type {any[]} */ (caseDraft.steps);
+  const signature = JSON.parse(canonicalStringify({
+    role: normalizeSemanticString(caseDraft.role.value),
+    precondition_state: expectedPreconditionProjection(caseDraft),
+    data_partition: expectedDataProjection(caseDraft),
+    action_path: steps.map((step) => normalizeSemanticString(step.action)),
+    oracle_refs: [...new Set(steps.flatMap((step) =>
+      (/** @type {any[]} */ (step.expectations)).map((item) => item.expectation_id)))].sort(compareCodePoints)
+  }));
   return stableId('case', signature);
 }
 

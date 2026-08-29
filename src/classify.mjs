@@ -20,6 +20,7 @@ const COMPARISONS = new Set(['equals', 'contains', 'matches', 'within']);
 const ORACLE_FIELDS = Object.freeze({
   value: 'expected_value', state: 'expected_state', event: 'expected_event', 'side-effect': 'expected_side_effect'
 });
+const NATIVE_MAP_ENTRIES = Map.prototype.entries;
 const KEYS = Object.freeze({
   context: ['sourceRevision', 'evidence', 'obligations', 'caseDrafts'],
   evidence: ['claimsById', 'factLedger', 'conflicts'],
@@ -133,7 +134,22 @@ function safetyDiagnostics(root) {
         ));
         continue;
       }
-      for (const [key, child] of value) {
+      if (Reflect.ownKeys(value).length > 0) {
+        diagnostics.push(diagnostic(
+          'schema', 'MAP_OWN_PROPERTY_INVALID', path || '/', 'accepted evidence Map cannot have own string or symbol properties'
+        ));
+        continue;
+      }
+      let entries;
+      try {
+        entries = NATIVE_MAP_ENTRIES.call(value);
+      } catch {
+        diagnostics.push(diagnostic(
+          'schema', 'MAP_BRAND_INVALID', path || '/', 'accepted evidence Map must have genuine native Map internal slots'
+        ));
+        continue;
+      }
+      for (const [key, child] of entries) {
         if (typeof key !== 'string') {
           diagnostics.push(diagnostic('schema', 'CANONICAL_STRING_INVALID', `${path}/invalid-map-key`, 'accepted evidence Map keys must be strings'));
           continue;
@@ -215,6 +231,38 @@ function normalizeSemanticString(value) {
   return value.normalize('NFC').trim().replace(/\s+/gu, ' ');
 }
 
+/** @param {Record<string, unknown>[]} entries */
+function canonicalSetProjection(entries) {
+  const byCanonicalValue = new Map();
+  for (const entry of entries) byCanonicalValue.set(canonicalStringify(entry), entry);
+  return canonicalStringify([...byCanonicalValue]
+    .sort(([left], [right]) => compareCodePoints(left, right))
+    .map(([, entry]) => entry));
+}
+
+/** @param {Record<string, unknown>} draft */
+function derivePreconditionState(draft) {
+  return canonicalSetProjection((objectArray(draft.preconditions) ?? []).map((item) => ({
+    condition: normalizeSemanticString(item.condition),
+    reachable_from: normalizeSemanticString(item.reachable_from)
+  })));
+}
+
+/** @param {Record<string, unknown>} draft */
+function deriveDataPartition(draft) {
+  return canonicalSetProjection((objectArray(draft.data) ?? []).map((item) => {
+    const provenance = isRecord(item.provenance) ? item.provenance : {};
+    return {
+      name: normalizeSemanticString(item.name),
+      value: normalizeSemanticString(item.value),
+      provenance: {
+        type: normalizeSemanticString(provenance.type),
+        ref: normalizeSemanticString(provenance.ref)
+      }
+    };
+  }));
+}
+
 /**
  * Build the exact, NUL-safe execution signature. Oracle references are a set;
  * the action path is an ordered sequence and is deliberately never sorted.
@@ -223,7 +271,6 @@ function normalizeSemanticString(value) {
 export function executionSignature(caseDraft) {
   try {
     const draft = isRecord(caseDraft) ? caseDraft : {};
-    const submitted = isRecord(draft.execution_signature) ? draft.execution_signature : {};
     const role = isRecord(draft.role) ? normalizeSemanticString(draft.role.value) : '';
     const steps = objectArray(draft.steps) ?? [];
     const actionPath = steps.map((step) => normalizeSemanticString(step.action));
@@ -232,8 +279,8 @@ export function executionSignature(caseDraft) {
     ))].sort(compareCodePoints);
     return canonicalStringify({
       role,
-      precondition_state: normalizeSemanticString(submitted.precondition_state),
-      data_partition: normalizeSemanticString(submitted.data_partition),
+      precondition_state: derivePreconditionState(draft),
+      data_partition: deriveDataPartition(draft),
       action_path: actionPath,
       oracle_refs: oracleRefs
     });
@@ -283,7 +330,7 @@ function validateClosedShape(context, diagnostics) {
     diagnostics.push(diagnostic('classification', 'SOURCE_REVISION_MISMATCH', '/', 'all classification inputs must share source_revision'));
   }
 
-  for (const [claimId, claim] of evidence.claimsById) {
+  for (const [claimId, claim] of NATIVE_MAP_ENTRIES.call(evidence.claimsById)) {
     checkCanonical(claimId, `/evidence/claimsById/${pointerPart(String(claimId))}`, diagnostics);
     if (!isRecord(claim)) continue;
     const form = claim.claim_form;
@@ -374,7 +421,7 @@ function validateClosedShape(context, diagnostics) {
   drafts.exploratory_candidates.forEach((candidate, index) => checkKeys(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics));
 }
 
-/** @typedef {{claim: Record<string, unknown>, rank: number, reasons: string[], parents: string[]}} ClaimAssessment */
+/** @typedef {{claim: Record<string, unknown>, rank: number, reasons: string[], parents: string[], children: string[]}} ClaimAssessment */
 
 /**
  * Snapshot and index accepted evidence once. Kahn processing marks cycles and
@@ -389,7 +436,7 @@ function buildEvidenceIndex(submitted, diagnostics) {
   const children = new Map();
   /** @type {Map<string, number>} */
   const indegree = new Map();
-  for (const [mapKey, value] of submitted) {
+  for (const [mapKey, value] of NATIVE_MAP_ENTRIES.call(submitted)) {
     if (typeof mapKey !== 'string' || !isRecord(value) || value.claim_id !== mapKey) {
       diagnostics.push(diagnostic('reference', 'EVIDENCE_MAP_IDENTITY_INVALID', `/evidence/claimsById/${pointerPart(String(mapKey))}`, 'accepted evidence Map key must equal an own claim_id'));
       continue;
@@ -407,9 +454,17 @@ function buildEvidenceIndex(submitted, diagnostics) {
         rank = 0;
       }
     }
-    assessments.set(mapKey, { claim: structuredClone(value), rank, reasons, parents });
+    assessments.set(mapKey, { claim: structuredClone(value), rank, reasons, parents, children: [] });
     indegree.set(mapKey, parents.length);
-    for (const parent of parents) children.set(parent, [...(children.get(parent) ?? []), mapKey]);
+    for (const parent of parents) {
+      const bucket = children.get(parent);
+      if (bucket) bucket.push(mapKey);
+      else children.set(parent, [mapKey]);
+    }
+  }
+  for (const [parentId, childIds] of children) {
+    const assessment = assessments.get(parentId);
+    if (assessment) assessment.children = [...childIds].sort(compareCodePoints);
   }
   for (const [claimId, assessment] of assessments) {
     if (assessment.claim.level !== 'E2') continue;
@@ -502,10 +557,12 @@ function applyCapabilityStatus(status, gate, reasons) {
   }
 }
 
-/** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
-function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, evidenceCache, conflicts, diagnostics) {
+/** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>[]>} routesByFact @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
+function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById, evidence, evidenceCache, conflicts, diagnostics) {
   const reasons = new Set();
   const evidenceRoots = new Set(stringArray(draft.evidence_refs, true) ?? []);
+  const formalEvidenceRoots = new Set();
+  const downgradeRoots = new Set();
   const gate = { rank: 2 };
   const requiredFieldsValid = isCanonicalString(draft.case_id) && isNonblank(draft.title) && isCanonicalString(draft.scope)
     && RISKS.has(/** @type {string} */ (draft.risk)) && isRecord(draft.role)
@@ -522,8 +579,17 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
     applyReview(draft.role.support_review, reasons);
   }
 
-  for (const ref of stringArray(draft.source_claim_ids, true) ?? []) evidenceRoots.add(ref);
+  const sourceClaimIds = draft.source_claim_ids === undefined ? [] : stringArray(draft.source_claim_ids);
+  if (!sourceClaimIds) reasons.add('CASE_GATE_INVALID');
+  for (const ref of sourceClaimIds ?? []) evidenceRoots.add(ref);
   const factIds = stringArray(draft.fact_ids, true) ?? [];
+  const obligationIds = new Set(stringArray(draft.obligation_ids, true) ?? []);
+  for (const factId of factIds) {
+    const routes = routesByFact.get(factId) ?? [];
+    const validRoute = routes.length === 1 && routes[0].route_type === 'obligations'
+      && (stringArray(routes[0].obligation_ids, true) ?? []).some((id) => obligationIds.has(id));
+    if (!validRoute) reasons.add('CASE_FACT_ROUTE_INVALID');
+  }
   for (const routedFactId of routedFactIds) if (!factIds.includes(routedFactId)) reasons.add('FACT_ROUTE_LINK_MISSING');
   for (const factId of new Set([...factIds, ...routedFactIds])) {
     const fact = factsById.get(factId);
@@ -532,8 +598,14 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
       continue;
     }
     if (fact.status === 'conflicted' || fact.status === 'ambiguous') reasons.add('FACT_UNRESOLVED');
-    if (isCanonicalString(fact.claim_id)) evidenceRoots.add(fact.claim_id);
-    for (const ref of stringArray(fact.source_claim_ids) ?? []) evidenceRoots.add(ref);
+    if (isCanonicalString(fact.claim_id)) {
+      evidenceRoots.add(fact.claim_id);
+      formalEvidenceRoots.add(fact.claim_id);
+    }
+    for (const ref of stringArray(fact.source_claim_ids) ?? []) {
+      evidenceRoots.add(ref);
+      formalEvidenceRoots.add(ref);
+    }
   }
 
   /** @type {Set<string>} */
@@ -542,7 +614,10 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
     const sources = stringArray(obligation.source_claim_ids, true) ?? [];
     const oracles = stringArray(obligation.required_oracle_refs) ?? [];
     if (oracles.length === 0) reasons.add('FORMAL_ORACLE_MISSING');
-    for (const ref of [...sources, ...oracles]) evidenceRoots.add(ref);
+    for (const ref of [...sources, ...oracles]) {
+      evidenceRoots.add(ref);
+      formalEvidenceRoots.add(ref);
+    }
     for (const capability of stringArray(obligation.required_capabilities) ?? []) requiredCapabilities.add(capability);
   }
 
@@ -589,6 +664,7 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
         ));
         reasons.add('EXPECTATION_GATE_INVALID');
       } else expectationIds.add(expectation.expectation_id);
+      if (expectation.preceding_action_id !== step.step_id) reasons.add('PRECEDING_ACTION_NOT_CONTAINING');
       if (!isNonblank(expectation.business_assertion) || !isCanonicalString(expectation.preceding_action_id)
         || !isNonblank(expectation.observer) || !isNonblank(expectation.observation_surface)
         || !isNonblank(expectation.observation_target) || !isCanonicalString(expectation.evidence_ref)) reasons.add('EXPECTATION_GATE_INVALID');
@@ -621,19 +697,28 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
     if (!isCanonicalString(capability.capability) || !CAPABILITY_STATUSES.has(/** @type {string} */ (capability.status))) reasons.add('CAPABILITY_MISSING');
     else providedCapabilities.add(capability.capability);
     applyCapabilityStatus(capability.status, gate, reasons);
-    if (isCanonicalString(capability.provenance_ref)) evidenceRoots.add(capability.provenance_ref);
+    if (isCanonicalString(capability.provenance_ref)) {
+      evidenceRoots.add(capability.provenance_ref);
+      if (capability.status === 'approved-assumption') downgradeRoots.add(capability.provenance_ref);
+    }
     else reasons.add('CAPABILITY_PROVENANCE_MISSING');
   }
   for (const observer of observers) {
     if (!isNonblank(observer.observer) || !isNonblank(observer.observation_target)) reasons.add('OBSERVER_MISSING');
     applyCapabilityStatus(observer.status, gate, reasons);
-    if (isCanonicalString(observer.provenance_ref)) evidenceRoots.add(observer.provenance_ref);
+    if (isCanonicalString(observer.provenance_ref)) {
+      evidenceRoots.add(observer.provenance_ref);
+      if (observer.status === 'approved-assumption') downgradeRoots.add(observer.provenance_ref);
+    }
     else reasons.add('CAPABILITY_PROVENANCE_MISSING');
   }
   for (const control of controls) {
     if (!isNonblank(control.control)) reasons.add('CONTROL_MISSING');
     applyCapabilityStatus(control.status, gate, reasons);
-    if (isCanonicalString(control.provenance_ref)) evidenceRoots.add(control.provenance_ref);
+    if (isCanonicalString(control.provenance_ref)) {
+      evidenceRoots.add(control.provenance_ref);
+      if (control.status === 'approved-assumption') downgradeRoots.add(control.provenance_ref);
+    }
     else reasons.add('CAPABILITY_PROVENANCE_MISSING');
   }
   for (const required of requiredCapabilities) if (!providedCapabilities.has(required)) reasons.add('REQUIRED_CAPABILITY_MISSING');
@@ -665,10 +750,8 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
   const submittedTestPoints = stringArray(signature.test_point_ids, true);
   const actualTestPoints = [...(stringArray(draft.obligation_ids, true) ?? [])].sort(compareCodePoints);
   const actualSignature = JSON.parse(executionSignature(draft));
-  const preconditionState = normalizeSemanticString(signature.precondition_state);
-  const dataPartition = normalizeSemanticString(signature.data_partition);
-  if (!preconditionState || !preconditions.some((item) => normalizeSemanticString(item.condition) === preconditionState)
-    || !dataPartition) {
+  if (signature.precondition_state !== actualSignature.precondition_state
+    || signature.data_partition !== actualSignature.data_partition) {
     reasons.add('EXECUTION_SIGNATURE_MISMATCH');
   }
   if (submittedRole !== actualSignature.role
@@ -680,26 +763,38 @@ function evaluateCase(draft, obligations, routedFactIds, factsById, evidence, ev
   }
 
   const evidenceResult = assessEvidenceRoots([...evidenceRoots], evidence, evidenceCache);
+  const formalEvidenceResult = assessEvidenceRoots([...formalEvidenceRoots], evidence, evidenceCache);
+  for (const ref of sourceClaimIds ?? []) {
+    if (!formalEvidenceResult.refs.has(ref)) reasons.add('CASE_SOURCE_CLAIM_OUTSIDE_CLOSURE');
+  }
   gate.rank = Math.min(gate.rank, evidenceResult.rank);
   for (const reason of evidenceResult.reasons) reasons.add(reason);
+  for (const ref of evidenceResult.refs) if (evidence.get(ref)?.claim.level === 'E1') downgradeRoots.add(ref);
   for (const conflict of conflicts) {
     const scope = typeof conflict.scope === 'string' ? conflict.scope : '';
     const sourceIds = new Set(stringArray(conflict.source_ids) ?? []);
     if (isCanonicalString(draft.scope) && isCanonicalString(scope) && scopesIntersect(draft.scope, scope)
       && [...evidenceResult.sourceIds].some((sourceId) => sourceIds.has(sourceId))) reasons.add('UNRESOLVED_CONFLICT');
   }
-  if (reasons.size > 0) gate.rank = 0;
-  if (gate.rank === 1) {
+  if (reasons.size === 0 && gate.rank === 1) {
+    const orderedDowngradeRoots = [...downgradeRoots].sort(compareCodePoints);
+    if (orderedDowngradeRoots.length > 1) {
+      diagnostics.push(diagnostic(
+        'classification', 'CONDITIONAL_ASSUMPTIONS_AMBIGUOUS', `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/temporary_assumption`,
+        `singleton temporary_assumption cannot represent downgrade roots ${orderedDowngradeRoots.join(', ')}`
+      ));
+      reasons.add('CONDITIONAL_ASSUMPTIONS_AMBIGUOUS');
+    }
     const assumption = isRecord(draft.temporary_assumption) ? draft.temporary_assumption : null;
     if (!assumption) reasons.add('TEMPORARY_ASSUMPTION_MISSING');
     else {
-      const referenced = evidenceResult.refs.has(/** @type {string} */ (assumption.claim_id));
-      const claim = evidence.get(/** @type {string} */ (assumption.claim_id));
       if (!isCanonicalString(assumption.claim_id) || !isNonblank(assumption.invalidation_condition)
-        || !referenced || claim?.claim.level !== 'E1') reasons.add('TEMPORARY_ASSUMPTION_INVALID');
+        || orderedDowngradeRoots.length !== 1 || assumption.claim_id !== orderedDowngradeRoots[0]) {
+        reasons.add('TEMPORARY_ASSUMPTION_INVALID');
+      }
     }
-    if (reasons.size > 0) gate.rank = 0;
   }
+  if (reasons.size > 0) gate.rank = 0;
   return {
     rank: gate.rank,
     reasons: [...reasons].sort(compareCodePoints),
@@ -777,7 +872,9 @@ function deduplicateCases(executable, diagnostics) {
   const groups = new Map();
   for (const item of executable) {
     const signature = executionSignature(item.draft);
-    groups.set(signature, [...(groups.get(signature) ?? []), item]);
+    const bucket = groups.get(signature);
+    if (bucket) bucket.push(item);
+    else groups.set(signature, [item]);
   }
   /** @type {Record<string, unknown>[]} */
   const grounded = [];
@@ -856,8 +953,13 @@ export function classifyCaseDrafts(submittedContext) {
     }
     /** @type {Map<string, Set<string>>} */
     const routedFactsByObligation = new Map();
+    /** @type {Map<string, Record<string, unknown>[]>} */
+    const routesByFact = new Map();
     for (const [routeIndex, route] of factRoutes.entries()) {
       const factId = typeof route.fact_id === 'string' ? route.fact_id : '';
+      const routeBucket = routesByFact.get(factId);
+      if (routeBucket) routeBucket.push(route);
+      else routesByFact.set(factId, [route]);
       if (!factsById.has(factId)) diagnostics.push(diagnostic(
         'reference', 'FACT_ROUTE_FACT_UNKNOWN', `/obligations/fact_routes/${routeIndex}/fact_id`, 'fact route references an unknown fact'
       ));
@@ -958,6 +1060,32 @@ export function classifyCaseDrafts(submittedContext) {
           })
         ];
         const evidenceResult = assessEvidenceRoots(roots, evidence, evidenceCache);
+        const blockerEvidenceRefs = stringArray(disposition.evidence_refs, true);
+        if (!blockerEvidenceRefs) {
+          diagnostics.push(diagnostic(
+            'classification', 'BLOCKER_EVIDENCE_REFS_INVALID', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs`,
+            'explicit blocker evidence_refs must be a dense, unique array of canonical nonblank references'
+          ));
+          continue;
+        }
+        let blockerRefsValid = true;
+        for (const ref of blockerEvidenceRefs) {
+          if (!evidence.has(ref)) {
+            blockerRefsValid = false;
+            diagnostics.push(diagnostic(
+              'reference', 'BLOCKER_EVIDENCE_UNKNOWN', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
+              'explicit blocker references unknown accepted evidence'
+            ));
+          } else if (!evidenceResult.refs.has(ref)
+            && !roots.some((root) => reachesEvidence(ref, root, evidence) || reachesEvidence(root, ref, evidence))) {
+            blockerRefsValid = false;
+            diagnostics.push(diagnostic(
+              'traceability', 'BLOCKER_EVIDENCE_UNRELATED', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
+              'explicit blocker evidence must be related to the formal obligation evidence closure'
+            ));
+          }
+        }
+        if (!blockerRefsValid) continue;
         const oracles = stringArray(obligation.required_oracle_refs) ?? [];
         const capabilities = stringArray(obligation.required_capabilities) ?? [];
         if (oracles.length > 0 && capabilities.length === 0 && evidenceResult.rank === 2 && evidenceResult.reasons.size === 0) {
@@ -971,7 +1099,7 @@ export function classifyCaseDrafts(submittedContext) {
           : evidenceResult.reasons.size > 0 ? [...evidenceResult.reasons].sort(compareCodePoints) : ['EXPLICIT_BLOCKER'];
         addBlocked(
           blocked, obligation, reasons,
-          stringArray(disposition.evidence_refs) ?? [],
+          blockerEvidenceRefs,
           isCanonicalString(disposition.blocker_root_issue_id) ? String(disposition.blocker_root_issue_id) : null
         );
       } else if (disposition.status === 'not_applicable') {
@@ -1019,30 +1147,58 @@ export function classifyCaseDrafts(submittedContext) {
       const routedFactIds = [...new Set(linked.flatMap((obligation) =>
         [...(routedFactsByObligation.get(String(obligation.obligation_id)) ?? [])]
       ))].sort(compareCodePoints);
-      const evaluation = evaluateCase(draft, linked, routedFactIds, factsById, evidence, evidenceCache, conflicts, diagnostics);
+      const evaluation = evaluateCase(draft, linked, routedFactIds, routesByFact, factsById, evidence, evidenceCache, conflicts, diagnostics);
       if (evaluation.rank === 0) {
         for (const obligation of linked) addBlocked(blocked, obligation, evaluation.reasons, evaluation.evidenceRefs, null);
       } else executable.push({ draft: structuredClone(draft), rank: evaluation.rank });
     }
 
-    // A formal Test Point has exactly one final lane. If any candidate for it is
-    // blocked, every Case sharing that Test Point is withheld as a unit.
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const item of executable) {
-        const linked = (stringArray(item.draft.obligation_ids, true) ?? []).flatMap((id) =>
-          obligationsById.has(id) ? [/** @type {Record<string, unknown>} */ (obligationsById.get(id))] : []);
-        if (!linked.some((obligation) => blocked.has(String(obligation.obligation_id)))) continue;
-        for (const obligation of linked) {
-          const id = String(obligation.obligation_id);
-          if (!blocked.has(id)) changed = true;
+    // Traverse the obligation↔Case graph once. A blocked Test Point invalidates
+    // every Case that contains it, which may transitively block other Test Points.
+    const executableObligationIds = executable.map((item) => stringArray(item.draft.obligation_ids, true) ?? []);
+    /** @type {Map<string, number[]>} */
+    const executableCasesByObligation = new Map();
+    for (const [caseIndex, obligationIds] of executableObligationIds.entries()) {
+      for (const obligationId of obligationIds) {
+        const bucket = executableCasesByObligation.get(obligationId);
+        if (bucket) bucket.push(caseIndex);
+        else executableCasesByObligation.set(obligationId, [caseIndex]);
+      }
+    }
+    const blockedQueue = [...blocked.keys()].sort(compareCodePoints);
+    const invalidExecutableCases = new Set();
+    let blockedCursor = 0;
+    while (blockedCursor < blockedQueue.length) {
+      const blockedObligationId = blockedQueue[blockedCursor++];
+      for (const caseIndex of executableCasesByObligation.get(blockedObligationId) ?? []) {
+        if (invalidExecutableCases.has(caseIndex)) continue;
+        invalidExecutableCases.add(caseIndex);
+        for (const obligationId of executableObligationIds[caseIndex]) {
+          const obligation = obligationsById.get(obligationId);
+          if (!obligation) continue;
+          const alreadyBlocked = blocked.has(obligationId);
           addBlocked(blocked, obligation, ['CASE_SHARES_BLOCKED_OBLIGATION'], [], null);
+          if (!alreadyBlocked) blockedQueue.push(obligationId);
         }
       }
     }
-    const uniquelyExecutable = executable.filter((item) =>
-      !(stringArray(item.draft.obligation_ids, true) ?? []).some((id) => blocked.has(id)));
+    const uniquelyExecutable = executable.filter((_, index) => !invalidExecutableCases.has(index));
+
+    /** @type {Map<string, Set<number>>} */
+    const executableRanksByObligation = new Map();
+    for (const item of uniquelyExecutable) {
+      for (const obligationId of stringArray(item.draft.obligation_ids, true) ?? []) {
+        const ranks = executableRanksByObligation.get(obligationId) ?? new Set();
+        ranks.add(item.rank);
+        executableRanksByObligation.set(obligationId, ranks);
+      }
+    }
+    for (const [obligationId, ranks] of executableRanksByObligation) {
+      if (ranks.size > 1) diagnostics.push(diagnostic(
+        'classification', 'OBLIGATION_EXECUTABLE_LANE_CONFLICT', `/obligations/${pointerPart(obligationId)}`,
+        'formal obligation has candidates in both Grounded and Conditional lanes'
+      ));
+    }
 
     const exploratoryRouteIds = new Set(interactionRoutes.flatMap((route) =>
       route.route_type === 'exploratory' && isCanonicalString(route.exploratory_id) ? [String(route.exploratory_id)] : []));
@@ -1056,6 +1212,17 @@ export function classifyCaseDrafts(submittedContext) {
       }
     }
     const formalEvidence = assessEvidenceRoots([...formalRoots], evidence, evidenceCache).refs;
+    const formalDependence = new Set(formalEvidence);
+    const dependenceQueue = [...formalEvidence].sort(compareCodePoints);
+    let dependenceCursor = 0;
+    while (dependenceCursor < dependenceQueue.length) {
+      const claimId = dependenceQueue[dependenceCursor++];
+      for (const childId of evidence.get(claimId)?.children ?? []) {
+        if (formalDependence.has(childId)) continue;
+        formalDependence.add(childId);
+        dependenceQueue.push(childId);
+      }
+    }
     /** @type {Record<string, unknown>[]} */
     const exploratoryOutput = [];
     for (const candidate of [...exploratory].sort((left, right) =>
@@ -1077,7 +1244,7 @@ export function classifyCaseDrafts(submittedContext) {
           'reference', 'EXPLORATORY_EVIDENCE_UNKNOWN', `/exploratory/${pointerPart(String(candidate.exploratory_id))}/source_claim_ids/${pointerPart(ref)}`,
           'Exploratory candidate references unknown risk evidence'
           ));
-        } else if (formalEvidence.has(ref)) {
+        } else if (formalDependence.has(ref)) {
           valid = false;
           diagnostics.push(diagnostic(
             'classification', 'EXPLORATORY_FORMAL_EVIDENCE_OVERLAP', `/exploratory/${pointerPart(candidateId)}/source_claim_ids/${pointerPart(ref)}`,

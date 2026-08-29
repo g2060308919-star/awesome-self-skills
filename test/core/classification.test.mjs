@@ -5,7 +5,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { classifyCaseDrafts } from '../../src/classify.mjs';
 import {
-  IDS, acceptedClaim, baseCase, baseClaims, baseObligation, classificationContext, clone
+  IDS, acceptedClaim, baseCase, baseClaims, baseObligation, classificationContext, clone,
+  refreshExecutionSignature
 } from '../helpers/classification-context.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -283,6 +284,144 @@ test('one failed candidate makes a formal Test Point Blocked instead of also exe
   assert.equal(result.grounded.length + result.conditional.length, 0);
   assert.equal(result.blocked.length, 1);
   assert.match(result.blocked[0].reason, /ORACLE_INVALID/u);
+});
+
+test('one formal obligation cannot enter Grounded and Conditional through different candidates', () => {
+  const grounded = baseCase();
+  const conditional = baseCase({ case_id: 'case_2222222222222222' });
+  conditional.role.evidence_ref = 'claim_assumption';
+  conditional.evidence_refs.push('claim_assumption');
+  conditional.temporary_assumption = {
+    claim_id: 'claim_assumption', invalidation_condition: 'The delegated role is formally approved.'
+  };
+  conditional.data[0].value = '99.99';
+  refreshExecutionSignature(conditional);
+  const context = classificationContext({
+    claims: [...baseClaims(), acceptedClaim('claim_assumption', 'E1')],
+    cases: [grounded, conditional],
+    dispositions: [{
+      obligation_id: IDS.obligation, status: 'case_candidate', case_ids: [grounded.case_id, conditional.case_id]
+    }]
+  });
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.grounded.length + result.conditional.length, 0);
+  assert.equal(result.diagnostics.some((item) => item.code === 'OBLIGATION_EXECUTABLE_LANE_CONFLICT'), true);
+});
+
+test('every Case fact must route formally to one of that Case’s linked obligations', () => {
+  const claim = acceptedClaim('claim_unrouted_fact');
+  const fact = {
+    fact_id: 'fact_unrouted', claim_id: claim.claim_id, status: 'active', source_claim_ids: [claim.claim_id]
+  };
+  const missingRoute = classificationContext({
+    claims: [...baseClaims(), claim],
+    facts: [classificationContext().evidence.factLedger[0], fact]
+  });
+  missingRoute.caseDrafts.cases[0].fact_ids.push(fact.fact_id);
+  missingRoute.caseDrafts.cases[0].evidence_refs.push(claim.claim_id);
+
+  const terminalRoute = clone(missingRoute);
+  terminalRoute.obligations.fact_routes.push({
+    fact_id: fact.fact_id, route_type: 'blocked', blocker_root_issue_id: 'root_unrouted_fact'
+  });
+
+  for (const context of [missingRoute, terminalRoute]) {
+    const result = classifyCaseDrafts(context);
+    assert.equal(result.grounded.length + result.conditional.length, 0);
+    assert.match(result.blocked[0].reason, /CASE_FACT_ROUTE_INVALID/u);
+  }
+});
+
+test('optional Case source claims are restricted to the linked formal evidence closure', () => {
+  const unrelated = acceptedClaim('claim_unrelated');
+  const context = classificationContext({ claims: [...baseClaims(), unrelated] });
+  context.caseDrafts.cases[0].source_claim_ids.push(unrelated.claim_id);
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.grounded.length + result.conditional.length, 0);
+  assert.match(result.blocked[0].reason, /CASE_SOURCE_CLAIM_OUTSIDE_CLOSURE/u);
+});
+
+test('Conditional fails closed when the singleton assumption field would hide multiple downgrade roots', () => {
+  const context = classificationContext({
+    claims: [
+      ...baseClaims().filter((claim) => claim.claim_id !== 'claim_role'),
+      acceptedClaim('claim_role', 'E1'),
+      acceptedClaim('claim_second_assumption', 'E1')
+    ]
+  });
+  const draft = context.caseDrafts.cases[0];
+  draft.data[0].provenance = { type: 'evidence', ref: 'claim_second_assumption' };
+  draft.evidence_refs.push('claim_second_assumption');
+  draft.temporary_assumption = {
+    claim_id: 'claim_role', invalidation_condition: 'The role is approved.'
+  };
+  refreshExecutionSignature(draft);
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.grounded.length + result.conditional.length + result.blocked.length, 0);
+  assert.equal(result.diagnostics.some((item) => item.code === 'CONDITIONAL_ASSUMPTIONS_AMBIGUOUS'), true);
+});
+
+test('explicit blocker evidence refs must be canonical, known, and related to the formal obligation closure', () => {
+  const obligation = baseObligation({ required_oracle_refs: [] });
+  const baseDisposition = {
+    obligation_id: IDS.obligation,
+    status: 'blocker',
+    blocker_root_issue_id: 'root_missing_oracle',
+    evidence_refs: ['claim_fact']
+  };
+  const dangling = classificationContext({
+    obligations: [obligation], cases: [], dispositions: [{ ...baseDisposition, evidence_refs: ['claim_missing'] }]
+  });
+  const unrelated = classificationContext({
+    claims: [...baseClaims(), acceptedClaim('claim_unrelated')], obligations: [obligation], cases: [],
+    dispositions: [{ ...baseDisposition, evidence_refs: ['claim_unrelated'] }]
+  });
+  const padded = classificationContext({
+    obligations: [obligation], cases: [], dispositions: [{ ...baseDisposition, evidence_refs: [' claim_fact'] }]
+  });
+  const duplicate = classificationContext({
+    obligations: [obligation], cases: [], dispositions: [{ ...baseDisposition, evidence_refs: ['claim_fact', 'claim_fact'] }]
+  });
+
+  for (const [context, code] of [
+    [dangling, 'BLOCKER_EVIDENCE_UNKNOWN'],
+    [unrelated, 'BLOCKER_EVIDENCE_UNRELATED'],
+    [padded, 'BLOCKER_EVIDENCE_REFS_INVALID'],
+    [duplicate, 'BLOCKER_EVIDENCE_REFS_INVALID']
+  ]) {
+    const result = classifyCaseDrafts(context);
+    assert.equal(result.blocked.length, 0, code);
+    assert.equal(result.diagnostics.some((item) => item.code === code), true, code);
+  }
+});
+
+test('a derived child of formal evidence cannot masquerade as an independent Exploratory risk', () => {
+  const derivedRisk = acceptedClaim('claim_formal_child', 'E2', {
+    kind: 'model-element',
+    derivation_kind: 'graph-reachability',
+    derivation_target: 'model-element',
+    value: 'derived risk node',
+    parent_claim_ids: ['claim_fact'],
+    rule_input: { from: 'formal', to: 'risk' }
+  });
+  const candidate = {
+    exploratory_id: 'exploratory_formal_child',
+    title: 'Explore a derived formal child',
+    scope: 'checkout',
+    risk: 'medium',
+    source_claim_ids: [derivedRisk.claim_id]
+  };
+  const context = classificationContext({ claims: [...baseClaims(), derivedRisk], exploratory: [candidate] });
+  context.obligations.interaction_routes = [{
+    candidate_id: 'candidate_formal_child', route_type: 'exploratory', exploratory_id: candidate.exploratory_id
+  }];
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.exploratory.length, 0);
+  assert.equal(result.diagnostics.some((item) => item.code === 'EXPLORATORY_FORMAL_EVIDENCE_OVERLAP'), true);
 });
 
 test('formal obligations have exactly one known disposition and known candidate cases', () => {

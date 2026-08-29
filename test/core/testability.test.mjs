@@ -54,6 +54,31 @@ test('preceding actions and independently located expectations must resolve exac
   assert.equal(duplicateResult.diagnostics.some((item) => item.code === 'EXPECTATION_ID_DUPLICATE'), true);
 });
 
+test('an expectation must point to its containing action rather than any future or neighboring step', () => {
+  const context = classificationContext();
+  const draft = context.caseDrafts.cases[0];
+  draft.steps.push({
+    step_id: 'step_confirm',
+    action: 'Confirm checkout',
+    action_evidence_ref: 'claim_action',
+    support_review: 'supported',
+    expectations: [{
+      ...structuredClone(draft.steps[0].expectations[0]),
+      expectation_id: 'expectation_confirmation',
+      preceding_action_id: 'step_confirm'
+    }]
+  });
+  draft.steps[0].expectations[0].preceding_action_id = 'step_confirm';
+  const steps = /** @type {any[]} */ (draft.steps);
+  draft.execution_signature.action_path = steps.map((step) => step.action);
+  draft.execution_signature.oracle_refs = steps.flatMap((step) =>
+    (/** @type {any[]} */ (step.expectations)).map((expectation) => expectation.expectation_id));
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.grounded.length + result.conditional.length, 0);
+  assert.match(result.blocked[0].reason, /PRECEDING_ACTION_NOT_CONTAINING/u);
+});
+
 test('observation_target never substitutes for an independently provided tester observer', () => {
   const context = classificationContext();
   context.caseDrafts.cases[0].testability_profile.observers = [];
@@ -99,6 +124,19 @@ test('capability status uses the lowest status across capabilities, observers, a
       assert.match(blockedReason(blocked), new RegExp(`CAPABILITY_${status.toUpperCase()}`, 'u'), `${collection}:${status}`);
     }
   }
+});
+
+test('a sole approved-assumption provenance root matches the singleton temporary assumption regardless of evidence level', () => {
+  const context = classificationContext();
+  const draft = context.caseDrafts.cases[0];
+  draft.testability_profile.capabilities[0].status = 'approved-assumption';
+  draft.temporary_assumption = {
+    claim_id: 'claim_capability', invalidation_condition: 'The environment access is verified.'
+  };
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.conditional.length, 1);
+  assert.equal(result.blocked.length + result.diagnostics.length, 0);
 });
 
 test('the lowest evidence level propagates through every fact and obligation closure member', () => {
@@ -207,6 +245,22 @@ test('closed records reject unknown keys, custom prototypes, accessors, sparse a
   customMap.evidence.claimsById = new SubmittedMap(customMap.evidence.claimsById);
   assert.equal(classifyCaseDrafts(customMap).diagnostics.some((item) => item.code === 'RECORD_PROTOTYPE_INVALID'), true);
   assert.equal(iteratorReads, 0);
+
+  let ownIteratorReads = 0;
+  const ownIterator = classificationContext();
+  Object.defineProperty(ownIterator.evidence.claimsById, Symbol.iterator, {
+    value() {
+      ownIteratorReads += 1;
+      return Map.prototype.entries.call(this);
+    }
+  });
+  const ownIteratorResult = classifyCaseDrafts(ownIterator);
+  assert.equal(ownIteratorResult.diagnostics.some((item) => item.code === 'MAP_OWN_PROPERTY_INVALID'), true);
+  assert.equal(ownIteratorReads, 0);
+
+  const fakeMap = classificationContext();
+  fakeMap.evidence.claimsById = Object.create(Map.prototype);
+  assert.equal(classifyCaseDrafts(fakeMap).diagnostics.some((item) => item.code === 'MAP_BRAND_INVALID'), true);
 
   const sparse = classificationContext();
   delete sparse.caseDrafts.cases[0].steps[0].expectations[0];
