@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { digest } from '../../src/canonical.mjs';
 import { evaluateClarification } from '../../src/clarification.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -32,22 +31,46 @@ test('record only skips the pause while preserving the complete formal semantic 
     obligation_id: 'obligation_refund_failure', evidence_level: 'E0', classification: 'blocked', blocked_reason: 'MISSING_ORACLE'
   }]);
   assert.equal(recorded.semantic_snapshot.coverage_denominator, 1);
+  assert.deepEqual(recorded.state.asked_root_issue_ids, []);
+  assert.deepEqual(recorded.state.last_pending_root_issue_ids, []);
+  assert.equal(recorded.state.root_issue_dispositions[0].status, 'suppressed_deferred');
   assert.deepEqual(context, before);
+
+  const replay = baseContext();
+  replay.prior_state = structuredClone(recorded.state);
+  const replayed = evaluateClarification(replay, 'record_only');
+  assert.deepEqual(replayed.diagnostics, []);
+  assert.equal(replayed.action, 'deliver');
+  assert.deepEqual(replayed.state, recorded.state);
+});
+
+test('record only converts a strict pending state into replayable suppression without forging history', () => {
+  const strictContext = baseContext();
+  const strict = evaluateClarification(strictContext, 'pause_for_clarification');
+  assert.equal(strict.action, 'need_user_answers');
+
+  const recordContext = baseContext();
+  recordContext.prior_state = structuredClone(strict.state);
+  const recorded = evaluateClarification(recordContext, 'record_only');
+  assert.deepEqual(recorded.diagnostics, []);
+  assert.equal(recorded.action, 'deliver');
+  assert.deepEqual(recorded.state.last_pending_root_issue_ids, []);
+  assert.deepEqual(recorded.state.asked_root_issue_ids, [ROOT_ORACLE]);
+  assert.equal(recorded.state.root_issue_dispositions[0].status, 'suppressed_deferred');
+
+  const replayContext = baseContext();
+  replayContext.prior_state = structuredClone(recorded.state);
+  const replayed = evaluateClarification(replayContext, 'record_only');
+  assert.deepEqual(replayed.diagnostics, []);
+  assert.equal(replayed.action, 'deliver');
+  assert.deepEqual(replayed.state, recorded.state);
 });
 
 test('record only and strict user-requested delivery preserve the same six semantic sections', () => {
   const strictContext = baseContext();
+  const initiallyAsked = evaluateClarification(strictContext, 'pause_for_clarification');
   strictContext.source_revision = 1;
-  strictContext.prior_state = {
-    source_revision: 0,
-    clarification_event_seq: 0,
-    asked_root_issue_ids: [ROOT_ORACLE],
-    root_issue_dispositions: [{ root_issue_id: ROOT_ORACLE, status: 'asked' }],
-    last_pending_root_issue_ids: [ROOT_ORACLE],
-    last_question_set_digest: digest([ROOT_ORACLE]),
-    clarification_stop: null,
-    semantic_snapshot: structuredClone(strictContext.semantic_snapshot)
-  };
+  strictContext.prior_state = initiallyAsked.state;
   strictContext.append_batch.clarification_events = [{
     event_id: 'event_deliver', clarification_event_seq: 1, type: 'request_delivery', actor: 'owner',
     event_at: '2026-08-30', root_issue_ids: [ROOT_ORACLE]

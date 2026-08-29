@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import * as nodeUrl from 'node:url';
-import { digest, stableId } from '../../src/canonical.mjs';
+import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
 import { evaluateClarification } from '../../src/clarification.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(nodeUrl.fileURLToPath(import.meta.url)), '../..');
@@ -95,8 +95,49 @@ function setCurrent(context, descriptors, points = descriptors.map((item) =>
   return context;
 }
 
-/** @param {any} semantic @param {Array<{root_issue_id:string,status:string}>} [dispositions] @param {string[]} [pending] */
-function priorState(semantic, dispositions = [{ root_issue_id: ROOT_ORACLE, status: 'asked' }], pending = [ROOT_ORACLE]) {
+/** @param {any[]} descriptors */
+function rootLedger(descriptors) {
+  const groups = new Map();
+  for (const item of descriptors) {
+    const signature = {
+      missing_type: item.missing_type,
+      semantic_refs: sortedIds(item.semantic_refs),
+      scope: item.scope
+    };
+    const rootId = stableId('root', signature);
+    let root = groups.get(rootId);
+    if (!root) {
+      root = {
+        root_issue_id: rootId,
+        root_issue_key: canonicalStringify(signature),
+        missing_type: item.missing_type,
+        semantic_refs: sortedIds(item.semantic_refs),
+        scope: item.scope,
+        affected_obligation_ids: [],
+        risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+        question: item.question,
+        answerable: item.answerable,
+        reasons: [],
+        evidence_refs: [],
+        current: true
+      };
+      groups.set(rootId, root);
+    }
+    root.affected_obligation_ids.push(item.obligation_id);
+    root.risk_counts[item.risk] += 1;
+    root.reasons.push(item.reason);
+    root.evidence_refs.push(...item.evidence_refs);
+  }
+  for (const root of groups.values()) {
+    root.affected_obligation_ids = sortedIds([...new Set(root.affected_obligation_ids)]);
+    root.reasons = sortedIds([...new Set(root.reasons)]);
+    root.evidence_refs = sortedIds([...new Set(root.evidence_refs)]);
+  }
+  return [...groups.values()].sort((left, right) => left.root_issue_id.localeCompare(right.root_issue_id));
+}
+
+/** @param {any} semantic @param {Array<{root_issue_id:string,status:string}>} [dispositions] @param {string[]} [pending] @param {any[]} [descriptors] */
+function priorState(semantic, dispositions = [{ root_issue_id: ROOT_ORACLE, status: 'asked' }], pending = [ROOT_ORACLE], descriptors = [blocker()]) {
   const asked = dispositions.filter((item) => item.status !== 'open').map((item) => item.root_issue_id);
   return {
     source_revision: 0,
@@ -106,7 +147,8 @@ function priorState(semantic, dispositions = [{ root_issue_id: ROOT_ORACLE, stat
     last_pending_root_issue_ids: [...pending],
     last_question_set_digest: pendingDigest(pending),
     clarification_stop: null,
-    semantic_snapshot: structuredClone(semantic)
+    semantic_snapshot: structuredClone(semantic),
+    root_snapshot_ledger: rootLedger(descriptors)
   };
 }
 
@@ -177,6 +219,24 @@ test('clarification groups one semantic root across twelve formal Test Points an
   later.blocked_obligations.forEach((/** @type {any} */ item, /** @type {number} */ index) => { item.obligation_id = `obligation_later_${index}`; });
   setCurrent(later, later.blocked_obligations);
   assert.equal(evaluateClarification(later, 'pause_for_clarification').pending_root_issues[0].root_issue_id, ROOT_ORACLE);
+});
+
+test('clarification state freezes the current root semantics and formal obligation associations', () => {
+  const result = evaluateClarification(baseContext(), 'pause_for_clarification');
+  assert.deepEqual(result.state.root_snapshot_ledger, [{
+    root_issue_id: ROOT_ORACLE,
+    root_issue_key: '{"missing_type":"oracle","scope":"refund","semantic_refs":["claim_refund","view_refund#failure"]}',
+    missing_type: 'oracle',
+    semantic_refs: ['claim_refund', 'view_refund#failure'],
+    scope: 'refund',
+    affected_obligation_ids: ['obligation_refund_failure'],
+    risk_counts: { critical: 0, high: 1, medium: 0, low: 0 },
+    question: 'What state and side effects must follow a failed refund?',
+    answerable: true,
+    reasons: ['MISSING_ORACLE'],
+    evidence_refs: ['claim_refund'],
+    current: true
+  }]);
 });
 
 test('clarification returns every fresh root in one batch and risk changes ordering only', () => {
@@ -300,6 +360,16 @@ test('clarification answer plus delivery defers both the answered root and roots
   assert.equal(result.action, 'deliver');
   assert.equal(result.state.root_issue_dispositions.find((/** @type {any} */ item) => item.root_issue_id === ROOT_ORACLE).status, 'suppressed_deferred');
   assert.equal(result.state.root_issue_dispositions.find((/** @type {any} */ item) => item.root_issue_id === ROOT_NEW).status, 'suppressed_deferred');
+  assert.deepEqual(result.state.asked_root_issue_ids, [ROOT_ORACLE]);
+  assert.deepEqual(result.semantic_snapshot.formal_test_points, [
+    formalPoint('obligation_new'),
+    formalPoint('obligation_refund_failure')
+  ]);
+  assert.deepEqual(result.semantic_snapshot.delivery_sections.grounded, []);
+  assert.deepEqual(result.semantic_snapshot.delivery_sections.conditional, []);
+  assert.deepEqual(result.semantic_snapshot.delivery_sections.blocked, [
+    'obligation_new', 'obligation_refund_failure'
+  ]);
 });
 
 test('clarification request_delivery overrides an ineffective same-batch answer that remains Blocked', () => {
@@ -324,7 +394,7 @@ test('clarification no-information-gain suppresses invalid answers and unanswere
   context.prior_state = priorState(priorSemantic, [
     { root_issue_id: ROOT_ORACLE, status: 'asked' },
     { root_issue_id: ROOT_CAPABILITY, status: 'asked' }
-  ], [ROOT_ORACLE, ROOT_CAPABILITY]);
+  ], [ROOT_ORACLE, ROOT_CAPABILITY], [blocker(), second]);
   context.append_batch.decision_records = [decision(1, 'final', [ROOT_ORACLE], ['obligation_refund_failure'])];
   const result = evaluateClarification(context, 'pause_for_clarification');
   assert.equal(result.action, 'deliver');
@@ -333,6 +403,58 @@ test('clarification no-information-gain suppresses invalid answers and unanswere
     result.state.root_issue_dispositions.find((/** @type {any} */ item) => item.root_issue_id === rootId).status,
     'suppressed_deferred'
   );
+  assert.deepEqual(result.state.asked_root_issue_ids, [ROOT_CAPABILITY, ROOT_ORACLE]);
+});
+
+test('clarification does not forge asked history for a newly revealed root suppressed without display', () => {
+  const context = baseContext();
+  const newlyRevealed = blocker({ obligation_id: 'obligation_new', semantic_refs: ['claim_new'] });
+  context.source_revision = 1;
+  context.prior_state = priorState(context.semantic_snapshot);
+  setCurrent(context, [blocker(), newlyRevealed]);
+  context.append_batch.decision_records = [decision(
+    1, 'final', [ROOT_ORACLE], ['obligation_refund_failure']
+  )];
+  const result = evaluateClarification(context, 'pause_for_clarification');
+  assert.equal(result.action, 'deliver');
+  assert.equal(result.state.clarification_stop.reason, 'no_information_gain');
+  assert.deepEqual(result.state.asked_root_issue_ids, [ROOT_ORACLE]);
+  assert.equal(result.state.root_issue_dispositions.find(
+    (/** @type {any} */ item) => item.root_issue_id === ROOT_NEW
+  ).status, 'suppressed_deferred');
+});
+
+test('clarification no-information-gain keeps every affected formal Test Point Blocked', () => {
+  const initial = baseContext();
+  setCurrent(initial, [
+    blocker(),
+    blocker({ obligation_id: 'obligation_refund_second' })
+  ]);
+  const first = evaluateClarification(initial, 'pause_for_clarification');
+  assert.equal(first.action, 'need_user_answers');
+
+  const context = baseContext();
+  context.source_revision = 1;
+  context.prior_state = first.state;
+  setCurrent(context, [blocker()], [
+    formalPoint('obligation_refund_failure'),
+    formalPoint('obligation_refund_second', 'grounded', 'E3', null)
+  ]);
+  context.append_batch.decision_records = [decision(
+    1, 'final', [ROOT_ORACLE], ['obligation_refund_second']
+  )];
+  const result = evaluateClarification(context, 'pause_for_clarification');
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.action, 'deliver');
+  assert.equal(result.state.clarification_stop.reason, 'no_information_gain');
+  assert.deepEqual(result.semantic_snapshot.formal_test_points, [
+    formalPoint('obligation_refund_failure'),
+    formalPoint('obligation_refund_second')
+  ]);
+  assert.deepEqual(result.semantic_snapshot.delivery_sections.grounded, []);
+  assert.deepEqual(result.semantic_snapshot.delivery_sections.blocked, [
+    'obligation_refund_failure', 'obligation_refund_second'
+  ]);
 });
 
 test('clarification computes information gain per decided root from its formal semantic changes', () => {
@@ -354,7 +476,7 @@ test('clarification computes information gain per decided root from its formal s
     { root_issue_id: ROOT_ORACLE, status: 'asked' },
     { root_issue_id: ROOT_CAPABILITY, status: 'asked' },
     { root_issue_id: rootThird, status: 'asked' }
-  ], [ROOT_ORACLE, ROOT_CAPABILITY, rootThird]);
+  ], [ROOT_ORACLE, ROOT_CAPABILITY, rootThird], priorDescriptors);
   setCurrent(context, [capabilityBlocker(), third], [
     formalPoint('obligation_refund_failure', 'grounded', 'E3', null),
     formalPoint('obligation_refund_observation'),
@@ -375,7 +497,35 @@ test('clarification computes information gain per decided root from its formal s
   assert.equal(result.state.clarification_stop.reason, 'converged');
 });
 
-test('clarification ignores delivery metadata and requires the exact decided root to disappear', () => {
+test('clarification cannot authorize one decided root with another root own obligation change', () => {
+  const context = baseContext();
+  const priorDescriptors = [blocker(), capabilityBlocker()];
+  const priorSemantic = semanticSnapshot([
+    formalPoint('obligation_refund_failure'),
+    formalPoint('obligation_refund_observation', 'blocked', 'E0', 'CAPABILITY_UNKNOWN')
+  ]);
+  context.source_revision = 1;
+  context.prior_state = priorState(priorSemantic, [
+    { root_issue_id: ROOT_ORACLE, status: 'asked' },
+    { root_issue_id: ROOT_CAPABILITY, status: 'asked' }
+  ], [ROOT_ORACLE, ROOT_CAPABILITY], priorDescriptors);
+  setCurrent(context, [], [
+    formalPoint('obligation_refund_failure', 'grounded', 'E3', null),
+    formalPoint('obligation_refund_observation', 'grounded', 'E3', null)
+  ]);
+  context.append_batch.decision_records = [decision(
+    1, 'final', [ROOT_ORACLE, ROOT_CAPABILITY], ['obligation_refund_failure']
+  )];
+  const result = evaluateClarification(context, 'pause_for_clarification');
+  assert.deepEqual(result.diagnostics, []);
+  const statuses = new Map(result.state.root_issue_dispositions.map((/** @type {any} */ item) => [item.root_issue_id, item.status]));
+  assert.equal(statuses.get(ROOT_ORACLE), 'resolved_final');
+  assert.equal(statuses.get(ROOT_CAPABILITY), 'suppressed_deferred');
+  assert.equal(result.state.clarification_stop.reason, 'converged');
+  assert.equal(priorDescriptors.length, 2);
+});
+
+test('clarification ignores delivery metadata and treats a materially changed same-obligation root as gain', () => {
   const unchanged = baseContext();
   unchanged.source_revision = 1;
   unchanged.prior_state = priorState(unchanged.semantic_snapshot);
@@ -393,10 +543,40 @@ test('clarification ignores delivery metadata and requires the exact decided roo
   changedCause.append_batch.decision_records = [decision(1, 'final', [ROOT_ORACLE], ['obligation_refund_failure'])];
   const changedCauseResult = evaluateClarification(changedCause, 'pause_for_clarification');
   assert.deepEqual(changedCauseResult.diagnostics, []);
-  assert.equal(changedCauseResult.state.clarification_stop.reason, 'no_information_gain');
+  assert.equal(changedCauseResult.action, 'need_user_answers');
   const changedStatuses = new Map(changedCauseResult.state.root_issue_dispositions.map((/** @type {any} */ item) => [item.root_issue_id, item.status]));
-  assert.equal(changedStatuses.get(ROOT_ORACLE), 'suppressed_deferred');
-  assert.equal(changedStatuses.get(ROOT_NEW), 'suppressed_deferred');
+  assert.equal(changedStatuses.get(ROOT_ORACLE), 'resolved_final');
+  assert.equal(changedStatuses.get(ROOT_NEW), 'asked');
+  assert.deepEqual(changedCauseResult.pending_root_issues.map((/** @type {any} */ root) => root.root_issue_id), [ROOT_NEW]);
+});
+
+test('clarification same-revision replay binds both root and six-section semantic snapshots', () => {
+  const firstContext = baseContext();
+  const first = evaluateClarification(firstContext, 'pause_for_clarification');
+
+  const replay = baseContext();
+  replay.prior_state = structuredClone(first.state);
+  const replayResult = evaluateClarification(replay, 'pause_for_clarification');
+  assert.deepEqual(replayResult.diagnostics, []);
+  assert.equal(replayResult.action, 'need_user_answers');
+
+  const rootDrift = baseContext();
+  rootDrift.prior_state = structuredClone(first.state);
+  rootDrift.blocked_obligations[0].risk = 'low';
+  const rootDriftResult = evaluateClarification(rootDrift, 'pause_for_clarification');
+  assert.equal(rootDriftResult.action, 'need_revision');
+  assert.equal(rootDriftResult.diagnostics.some(
+    (/** @type {any} */ item) => item.code === 'IMMUTABLE_ROOT_SNAPSHOT_MISMATCH'
+  ), true);
+
+  const semanticDrift = baseContext();
+  semanticDrift.prior_state = structuredClone(first.state);
+  semanticDrift.semantic_snapshot.delivery_sections.quality.delivery_status = 'critical_gaps';
+  const semanticDriftResult = evaluateClarification(semanticDrift, 'pause_for_clarification');
+  assert.equal(semanticDriftResult.action, 'need_revision');
+  assert.equal(semanticDriftResult.diagnostics.some(
+    (/** @type {any} */ item) => item.code === 'IMMUTABLE_SEMANTIC_SNAPSHOT_MISMATCH'
+  ), true);
 });
 
 test('clarification preserves a causally effective disposition while asking a genuinely new root', () => {
@@ -522,7 +702,10 @@ test('clarification binds prior pending roots, dispositions, asked history, and 
       context.prior_state.last_pending_root_issue_ids = [];
       context.prior_state.last_question_set_digest = '';
       context.prior_state.asked_root_issue_ids = [];
-    }, 'PRIOR_DISPOSITION_HISTORY_MISMATCH']
+    }, 'PRIOR_DISPOSITION_HISTORY_MISMATCH'],
+    ['forged root obligation association', (context) => {
+      context.prior_state.root_snapshot_ledger[0].affected_obligation_ids = ['obligation_forged'];
+    }, 'PRIOR_ROOT_ASSOCIATION_INVALID']
   ];
   for (const [name, mutate, code] of cases) {
     const context = baseContext();
@@ -593,7 +776,17 @@ context.semantic_snapshot.formal_test_points.push({ obligation_id: 'obligation_s
 context.semantic_snapshot.coverage_denominator = 2;
 context.semantic_snapshot.delivery_sections.blocked.push('obligation_second');
 context.semantic_snapshot.delivery_sections.coverage.formal_denominator = 2;
-console.log(JSON.stringify(evaluateClarification(context, 'pause_for_clarification')));\n`, 'utf8');
+const intraRevision = evaluateClarification(context, 'pause_for_clarification');
+const firstContext = JSON.parse(await readFile(${JSON.stringify(fixturePath)}, 'utf8'));
+const first = evaluateClarification(firstContext, 'pause_for_clarification');
+const next = JSON.parse(await readFile(${JSON.stringify(fixturePath)}, 'utf8'));
+next.source_revision = 1;
+next.prior_state = first.state;
+next.blocked_obligations[0].semantic_refs = ['claim_distinct'];
+next.blocked_obligations[0].evidence_refs = ['claim_distinct'];
+next.append_batch.clarification_events = [{ event_id: 'event_1_delivery', clarification_event_seq: 1, type: 'request_delivery', actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_forced_collision'] }];
+const crossRevision = evaluateClarification(next, 'pause_for_clarification');
+console.log(JSON.stringify({ intraRevision, crossRevision }));\n`, 'utf8');
   try {
     const output = (/** @type {any} */ (childProcess)).execFileSync(
       process.execPath, [`--experimental-loader=${pathToFileURL(loaderPath).href}`, probePath], {
@@ -601,8 +794,10 @@ console.log(JSON.stringify(evaluateClarification(context, 'pause_for_clarificati
       }
     );
     const result = JSON.parse(output);
-    assert.equal(result.action, 'need_revision');
-    assert.equal(result.diagnostics.some((/** @type {any} */ item) => item.code === 'ROOT_ISSUE_ID_COLLISION'), true);
+    for (const actual of [result.intraRevision, result.crossRevision]) {
+      assert.equal(actual.action, 'need_revision');
+      assert.equal(actual.diagnostics.some((/** @type {any} */ item) => item.code === 'ROOT_ISSUE_ID_COLLISION'), true);
+    }
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
@@ -708,6 +903,56 @@ test('clarification snapshot traversal discloses overflow and never executes lat
   assert.equal(iteratorResult.action, 'need_revision');
   assert.equal(iteratorCalls, 0);
   assert.equal(iteratorResult.diagnostics.some((/** @type {any} */ item) => item.code === 'ARRAY_SYMBOL_PROPERTY_INVALID'), true);
+});
+
+test('clarification snapshot never reads an inherited replacement for a missing own field', () => {
+  const context = baseContext();
+  delete (/** @type {any} */ (context)).source_revision;
+  let reads = 0;
+  Object.defineProperty(Object.prototype, 'source_revision', {
+    configurable: true,
+    get() { reads += 1; return 0; }
+  });
+  /** @type {any} */
+  let result;
+  try {
+    result = evaluateClarification(context, 'pause_for_clarification');
+  } finally {
+    delete (/** @type {any} */ (Object.prototype)).source_revision;
+  }
+  assert.equal(reads, 0);
+  assert.equal(result.action, 'need_revision');
+  assert.equal(result.diagnostics.some(
+    (/** @type {any} */ item) => item.code === 'INTEGER_INVALID'
+  ), true);
+});
+
+test('clarification normalization captures Array entries and has no direct mutable-array method calls', async () => {
+  const context = baseContext();
+  let calls = 0;
+  const original = Object.getOwnPropertyDescriptor(Array.prototype, 'entries');
+  if (!original || typeof original.value !== 'function') throw new Error('Array.prototype.entries must exist');
+  Object.defineProperty(Array.prototype, 'entries', {
+    ...original,
+    /** @param {...any} args */
+    value: function (...args) {
+      calls += 1;
+      return Reflect.apply(/** @type {Function} */ (original.value), this, args);
+    }
+  });
+  /** @type {any} */
+  let result;
+  try {
+    result = evaluateClarification(context, 'pause_for_clarification');
+  } finally {
+    Object.defineProperty(Array.prototype, 'entries', original);
+  }
+  assert.equal(result.action, 'need_user_answers');
+  assert.equal(calls, 0);
+  const source = await readFile(path.join(repositoryRoot, 'src/clarification.mjs'), 'utf8');
+  for (const method of ['entries', 'map', 'filter', 'sort', 'some', 'at', 'push', 'pop', 'slice', 'includes']) {
+    assert.equal(new RegExp(`\\.${method}\\(`, 'u').test(source), false, method);
+  }
 });
 
 test('clarification sparse arrays derive bounded hole diagnostics from own descriptors', async () => {

@@ -19,7 +19,62 @@ const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
 const NATIVE_GET_PROTOTYPE_OF = Object.getPrototypeOf;
 const NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
 const NATIVE_REFLECT_OWN_KEYS = Reflect.ownKeys;
+const NATIVE_REFLECT_APPLY = Reflect.apply;
 const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+const NATIVE_ARRAY_ENTRIES = Array.prototype.entries;
+const NATIVE_ARRAY_MAP = Array.prototype.map;
+const NATIVE_ARRAY_FILTER = Array.prototype.filter;
+const NATIVE_ARRAY_SORT = Array.prototype.sort;
+const NATIVE_ARRAY_SOME = Array.prototype.some;
+const NATIVE_ARRAY_PUSH = Array.prototype.push;
+const NATIVE_ARRAY_POP = Array.prototype.pop;
+const NATIVE_ARRAY_SLICE = Array.prototype.slice;
+const NATIVE_ARRAY_INCLUDES = Array.prototype.includes;
+
+/** @param {any[]} value @param {(...args:any[])=>any} callback */
+function arrayMap(value, callback) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_MAP, value, [callback]);
+}
+
+/** @param {any[]} value @param {(...args:any[])=>any} callback */
+function arrayFilter(value, callback) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_FILTER, value, [callback]);
+}
+
+/** @param {any[]} value @param {(...args:any[])=>any} callback */
+function arraySome(value, callback) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SOME, value, [callback]);
+}
+
+/** @param {any[]} value @param {(...args:any[])=>any} callback */
+function arraySort(value, callback) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, value, [callback]);
+}
+
+/** @param {any[]} value @param {...any} items */
+function arrayPush(value, ...items) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_PUSH, value, items);
+}
+
+/** @param {any[]} value */
+function arrayEntries(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_ENTRIES, value, []);
+}
+
+/** @param {any[]} value */
+function arrayPop(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_POP, value, []);
+}
+
+/** @param {any[]} value @param {number} start @param {number} [end] */
+function arraySlice(value, start, end) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SLICE, value, end === undefined ? [start] : [start, end]);
+}
+
+/** @param {any[]} value @param {any} item */
+function arrayIncludes(value, item) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_INCLUDES, value, [item]);
+}
 
 /** @typedef {{category:string,code:string,path:string,message:string}} Diagnostic */
 
@@ -56,10 +111,10 @@ function finalizeDiagnostics(diagnostics) {
     );
     unique.set(`${truncated.category}\0${truncated.code}\0${truncated.path}\0${truncated.message}`, truncated);
   }
-  return [...unique.values()].sort((left, right) => compareCodePoints(
+  return arraySlice(arraySort([...unique.values()], (left, right) => compareCodePoints(
     `${left.category}\0${left.code}\0${left.path}\0${left.message}`,
     `${right.category}\0${right.code}\0${right.path}\0${right.message}`
-  )).slice(0, DIAGNOSTIC_LIMIT);
+  )), 0, DIAGNOSTIC_LIMIT);
 }
 
 /**
@@ -73,7 +128,7 @@ function snapshotControlled(root) {
   let diagnosticsTruncated = false;
   /** @param {Diagnostic} item */
   const addDiagnostic = (item) => {
-    if (diagnostics.length < DIAGNOSTIC_LIMIT) diagnostics.push(item);
+    if (diagnostics.length < DIAGNOSTIC_LIMIT) arrayPush(diagnostics, item);
     else diagnosticsTruncated = true;
   };
   /** @type {unknown} */
@@ -82,7 +137,7 @@ function snapshotControlled(root) {
   const pending = [{ source: root, path: '', assign(value) { snapshot = value; } }];
   const seen = new Set();
   while (pending.length > 0) {
-    const { source, path, assign } = /** @type {{source:unknown,path:string,assign:(value:unknown)=>void}} */ (pending.pop());
+    const { source, path, assign } = /** @type {{source:unknown,path:string,assign:(value:unknown)=>void}} */ (arrayPop(pending));
     if (!source || typeof source !== 'object') {
       assign(source);
       continue;
@@ -111,7 +166,7 @@ function snapshotControlled(root) {
       }
       const keys = NATIVE_REFLECT_OWN_KEYS(descriptors);
       let invalidOwnKeys = false;
-      if (keys.some((key) => typeof key === 'symbol')) {
+      if (arraySome(keys, (key) => typeof key === 'symbol')) {
         invalidOwnKeys = true;
         addDiagnostic(diagnostic(
           'schema', 'ARRAY_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled arrays cannot contain symbol properties'
@@ -120,8 +175,9 @@ function snapshotControlled(root) {
       const lengthDescriptor = descriptors.length;
       const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
         ? Number(lengthDescriptor.value) : 0;
+      /** @type {number[]} */
       const numeric = [];
-      for (const key of keys.filter((item) => typeof item === 'string').sort(compareCodePoints)) {
+      for (const key of arraySort(arrayFilter(keys, (item) => typeof item === 'string'), compareCodePoints)) {
         if (key === 'length') continue;
         const index = Number(key);
         if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
@@ -130,13 +186,14 @@ function snapshotControlled(root) {
             'schema', 'ARRAY_NAMED_PROPERTY_INVALID', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'
           ));
         }
-        else numeric.push(index);
+        else arrayPush(numeric, index);
       }
       if (invalidOwnKeys) {
         assign(null);
         continue;
       }
-      numeric.sort((left, right) => left - right);
+      arraySort(numeric, (left, right) => left - right);
+      /** @type {unknown[]} */
       const target = new Array(length);
       assign(target);
       let nextExpectedIndex = 0;
@@ -166,9 +223,13 @@ function snapshotControlled(root) {
         if (!descriptor || !Object.hasOwn(descriptor, 'value')) addDiagnostic(diagnostic(
           'schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${index}`, 'controlled input must use own data properties'
         ));
-        else children.push({ source: descriptor.value, path: `${path}/${index}`, assign(value) { target[index] = value; } });
+        else arrayPush(children, {
+          source: descriptor.value, path: `${path}/${index}`,
+          /** @param {unknown} value */
+          assign(value) { target[index] = value; }
+        });
       }
-      for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]);
+      for (let index = children.length - 1; index >= 0; index -= 1) arrayPush(pending, children[index]);
       continue;
     }
     if (prototype !== Object.prototype && prototype !== null) {
@@ -177,28 +238,30 @@ function snapshotControlled(root) {
       continue;
     }
     const keys = NATIVE_REFLECT_OWN_KEYS(descriptors);
-    if (keys.some((key) => typeof key === 'symbol')) addDiagnostic(diagnostic(
+    if (arraySome(keys, (key) => typeof key === 'symbol')) addDiagnostic(diagnostic(
       'schema', 'RECORD_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled records cannot contain symbol properties'
     ));
-    const target = {};
+    /** @type {Record<string, unknown>} */
+    const target = Object.create(null);
     assign(target);
     /** @type {Array<{source:unknown,path:string,assign:(value:unknown)=>void}>} */
     const children = [];
-    for (const key of keys.filter((item) => typeof item === 'string').sort(compareCodePoints)) {
+    for (const key of arraySort(arrayFilter(keys, (item) => typeof item === 'string'), compareCodePoints)) {
       const descriptor = descriptors[key];
       const childPath = `${path}/${pointerPart(key)}`;
       if (!descriptor || !Object.hasOwn(descriptor, 'value')) addDiagnostic(diagnostic(
         'schema', 'ACCESSOR_NOT_ALLOWED', childPath, 'controlled input must use own data properties'
       ));
-      else children.push({
+      else arrayPush(children, {
         source: descriptor.value,
         path: childPath,
+        /** @param {unknown} value */
         assign(value) { NATIVE_DEFINE_PROPERTY(target, key, { value, enumerable: true, writable: true, configurable: true }); }
       });
     }
-    for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]);
+    for (let index = children.length - 1; index >= 0; index -= 1) arrayPush(pending, children[index]);
   }
-  if (diagnosticsTruncated) diagnostics.push(diagnostic(
+  if (diagnosticsTruncated) arrayPush(diagnostics, diagnostic(
     'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
   ));
   return { snapshot, diagnostics };
@@ -217,7 +280,7 @@ function normalizeText(value) {
 /** @param {Record<string, unknown>} value @param {string[]} allowed @param {string} path @param {Diagnostic[]} diagnostics */
 function checkKeys(value, allowed, path, diagnostics) {
   const permitted = new Set(allowed);
-  for (const key of Object.keys(value)) if (!permitted.has(key)) diagnostics.push(diagnostic(
+  for (const key of Object.keys(value)) if (!permitted.has(key)) arrayPush(diagnostics, diagnostic(
     'schema', 'UNKNOWN_KEY', `${path}/${pointerPart(key)}`, 'unknown controlled clarification field is not allowed'
   ));
 }
@@ -225,14 +288,14 @@ function checkKeys(value, allowed, path, diagnostics) {
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
 function record(value, path, diagnostics) {
   if (isRecord(value)) return value;
-  diagnostics.push(diagnostic('schema', 'RECORD_REQUIRED', path, 'controlled clarification value must be a record'));
+  arrayPush(diagnostics, diagnostic('schema', 'RECORD_REQUIRED', path, 'controlled clarification value must be a record'));
   return {};
 }
 
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
 function array(value, path, diagnostics) {
   if (Array.isArray(value)) return value;
-  diagnostics.push(diagnostic('schema', 'ARRAY_REQUIRED', path, 'controlled clarification value must be an array'));
+  arrayPush(diagnostics, diagnostic('schema', 'ARRAY_REQUIRED', path, 'controlled clarification value must be an array'));
   return [];
 }
 
@@ -240,7 +303,7 @@ function array(value, path, diagnostics) {
 function canonicalString(value, path, diagnostics, allowEmpty = false) {
   if (typeof value !== 'string' || (!allowEmpty && normalizeText(value).length === 0)
     || value !== value.normalize('NFC') || value !== value.trim()) {
-    diagnostics.push(diagnostic('schema', 'CANONICAL_STRING_INVALID', path, 'value must be a canonical nonpadded string'));
+    arrayPush(diagnostics, diagnostic('schema', 'CANONICAL_STRING_INVALID', path, 'value must be a canonical nonpadded string'));
     return '';
   }
   return value;
@@ -249,25 +312,26 @@ function canonicalString(value, path, diagnostics, allowEmpty = false) {
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics @param {boolean} [nonempty] */
 function stringSet(value, path, diagnostics, nonempty = false) {
   const input = array(value, path, diagnostics);
+  /** @type {string[]} */
   const output = [];
   const seen = new Set();
   for (let index = 0; index < input.length; index += 1) {
     const item = canonicalString(input[index], `${path}/${index}`, diagnostics);
     if (!item) continue;
-    if (seen.has(item)) diagnostics.push(diagnostic('schema', 'SET_VALUE_DUPLICATE', `${path}/${index}`, 'set-like values must be unique'));
+    if (seen.has(item)) arrayPush(diagnostics, diagnostic('schema', 'SET_VALUE_DUPLICATE', `${path}/${index}`, 'set-like values must be unique'));
     else {
       seen.add(item);
-      output.push(item);
+      arrayPush(output, item);
     }
   }
-  if (nonempty && output.length === 0) diagnostics.push(diagnostic('schema', 'NONEMPTY_ARRAY_REQUIRED', path, 'set-like array must not be empty'));
-  return output.sort(compareCodePoints);
+  if (nonempty && output.length === 0) arrayPush(diagnostics, diagnostic('schema', 'NONEMPTY_ARRAY_REQUIRED', path, 'set-like array must not be empty'));
+  return arraySort(output, compareCodePoints);
 }
 
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics @param {number} minimum */
 function integer(value, path, diagnostics, minimum) {
   if (!Number.isSafeInteger(value) || Number(value) < minimum) {
-    diagnostics.push(diagnostic('schema', 'INTEGER_INVALID', path, `value must be an integer at least ${minimum}`));
+    arrayPush(diagnostics, diagnostic('schema', 'INTEGER_INVALID', path, `value must be an integer at least ${minimum}`));
     return minimum;
   }
   return Number(value);
@@ -276,7 +340,7 @@ function integer(value, path, diagnostics, minimum) {
 /** @param {unknown} value @param {Set<string>} allowed @param {string} path @param {Diagnostic[]} diagnostics */
 function enumeration(value, allowed, path, diagnostics) {
   if (typeof value !== 'string' || !allowed.has(value)) {
-    diagnostics.push(diagnostic('schema', 'ENUM_INVALID', path, 'value is outside the closed clarification enumeration'));
+    arrayPush(diagnostics, diagnostic('schema', 'ENUM_INVALID', path, 'value is outside the closed clarification enumeration'));
     return '';
   }
   return value;
@@ -286,9 +350,10 @@ function enumeration(value, allowed, path, diagnostics) {
 function normalizeSemanticSnapshot(value, path, diagnostics) {
   const snapshot = record(value, path, diagnostics);
   checkKeys(snapshot, ['formal_test_points', 'coverage_denominator', 'delivery_sections'], path, diagnostics);
+  /** @type {Array<{obligation_id:string,evidence_level:string,classification:string,blocked_reason:string|null}>} */
   const points = [];
   const pointIds = new Set();
-  for (const [index, raw] of array(snapshot.formal_test_points, `${path}/formal_test_points`, diagnostics).entries()) {
+  for (const [index, raw] of arrayEntries(array(snapshot.formal_test_points, `${path}/formal_test_points`, diagnostics))) {
     const point = record(raw, `${path}/formal_test_points/${index}`, diagnostics);
     checkKeys(point, ['obligation_id', 'evidence_level', 'classification', 'blocked_reason'], `${path}/formal_test_points/${index}`, diagnostics);
     const obligationId = canonicalString(point.obligation_id, `${path}/formal_test_points/${index}/obligation_id`, diagnostics);
@@ -296,21 +361,21 @@ function normalizeSemanticSnapshot(value, path, diagnostics) {
     const classification = enumeration(point.classification, CLASSIFICATIONS, `${path}/formal_test_points/${index}/classification`, diagnostics);
     let blockedReason = null;
     if (point.blocked_reason !== null) blockedReason = canonicalString(point.blocked_reason, `${path}/formal_test_points/${index}/blocked_reason`, diagnostics);
-    if (classification === 'blocked' && !blockedReason) diagnostics.push(diagnostic(
+    if (classification === 'blocked' && !blockedReason) arrayPush(diagnostics, diagnostic(
       'classification', 'BLOCKED_REASON_REQUIRED', `${path}/formal_test_points/${index}/blocked_reason`, 'Blocked formal Test Point requires a reason'
     ));
-    if (classification !== 'blocked' && point.blocked_reason !== null) diagnostics.push(diagnostic(
+    if (classification !== 'blocked' && point.blocked_reason !== null) arrayPush(diagnostics, diagnostic(
       'classification', 'BLOCKED_REASON_UNEXPECTED', `${path}/formal_test_points/${index}/blocked_reason`, 'non-Blocked formal Test Point cannot carry a blocked reason'
     ));
-    if (pointIds.has(obligationId)) diagnostics.push(diagnostic(
+    if (pointIds.has(obligationId)) arrayPush(diagnostics, diagnostic(
       'reference', 'FORMAL_TEST_POINT_DUPLICATE', `${path}/formal_test_points/${index}/obligation_id`, 'formal Test Point IDs must be unique'
     ));
     pointIds.add(obligationId);
-    points.push({ obligation_id: obligationId, evidence_level: evidenceLevel, classification, blocked_reason: blockedReason });
+    arrayPush(points, { obligation_id: obligationId, evidence_level: evidenceLevel, classification, blocked_reason: blockedReason });
   }
-  points.sort((left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
+  arraySort(points, (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
   const denominator = integer(snapshot.coverage_denominator, `${path}/coverage_denominator`, diagnostics, 0);
-  if (denominator !== points.length) diagnostics.push(diagnostic(
+  if (denominator !== points.length) arrayPush(diagnostics, diagnostic(
     'coverage', 'FORMAL_DENOMINATOR_MISMATCH', `${path}/coverage_denominator`, 'formal coverage denominator must equal the formal Test Point count'
   ));
   const delivery = record(snapshot.delivery_sections, `${path}/delivery_sections`, diagnostics);
@@ -322,15 +387,15 @@ function normalizeSemanticSnapshot(value, path, diagnostics) {
   const coverage = record(delivery.coverage, `${path}/delivery_sections/coverage`, diagnostics);
   checkKeys(coverage, ['formal_denominator'], `${path}/delivery_sections/coverage`, diagnostics);
   const deliveryDenominator = integer(coverage.formal_denominator, `${path}/delivery_sections/coverage/formal_denominator`, diagnostics, 0);
-  if (deliveryDenominator !== denominator) diagnostics.push(diagnostic(
+  if (deliveryDenominator !== denominator) arrayPush(diagnostics, diagnostic(
     'coverage', 'DELIVERY_DENOMINATOR_MISMATCH', `${path}/delivery_sections/coverage/formal_denominator`, 'delivery coverage denominator must match the semantic snapshot'
   ));
   const quality = record(delivery.quality, `${path}/delivery_sections/quality`, diagnostics);
   checkKeys(quality, ['delivery_status'], `${path}/delivery_sections/quality`, diagnostics);
   const deliveryStatus = enumeration(quality.delivery_status, DELIVERY_STATUSES, `${path}/delivery_sections/quality/delivery_status`, diagnostics);
   for (const [lane, submitted] of [['grounded', grounded], ['conditional', conditional], ['blocked', blocked]]) {
-    const expected = points.filter((point) => point.classification === lane).map((point) => point.obligation_id);
-    if (canonicalStringify(submitted) !== canonicalStringify(expected)) diagnostics.push(diagnostic(
+    const expected = arrayMap(arrayFilter(points, (point) => point.classification === lane), (point) => point.obligation_id);
+    if (canonicalStringify(submitted) !== canonicalStringify(expected)) arrayPush(diagnostics, diagnostic(
       'traceability', 'DELIVERY_LANE_MISMATCH', `${path}/delivery_sections/${lane}`, 'delivery lane IDs must exactly project formal Test Point classifications'
     ));
   }
@@ -346,9 +411,10 @@ function normalizeSemanticSnapshot(value, path, diagnostics) {
 
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
 function normalizeBlocked(value, path, diagnostics) {
+  /** @type {any[]} */
   const output = [];
   const obligationIds = new Set();
-  for (const [index, raw] of array(value, path, diagnostics).entries()) {
+  for (const [index, raw] of arrayEntries(array(value, path, diagnostics))) {
     const currentPath = `${path}/${index}`;
     const item = record(raw, currentPath, diagnostics);
     checkKeys(item, [
@@ -357,33 +423,98 @@ function normalizeBlocked(value, path, diagnostics) {
     ], currentPath, diagnostics);
     const obligationId = canonicalString(item.obligation_id, `${currentPath}/obligation_id`, diagnostics);
     const missingType = canonicalString(item.missing_type, `${currentPath}/missing_type`, diagnostics);
-    if (missingType && !/^[a-z][a-z0-9-]*$/u.test(missingType)) diagnostics.push(diagnostic(
+    if (missingType && !/^[a-z][a-z0-9-]*$/u.test(missingType)) arrayPush(diagnostics, diagnostic(
       'schema', 'MISSING_TYPE_INVALID', `${currentPath}/missing_type`, 'missing_type must use canonical lowercase kebab form'
     ));
     const semanticRefs = stringSet(item.semantic_refs, `${currentPath}/semantic_refs`, diagnostics, true);
     const rawScope = canonicalString(item.scope, `${currentPath}/scope`, diagnostics);
     const scope = rawScope ? normalizeScope(rawScope) : '';
-    if (rawScope && rawScope !== scope) diagnostics.push(diagnostic(
+    if (rawScope && rawScope !== scope) arrayPush(diagnostics, diagnostic(
       'schema', 'SCOPE_CANONICAL_INVALID', `${currentPath}/scope`, 'scope must already be normalized'
     ));
     const risk = enumeration(item.risk, RISKS, `${currentPath}/risk`, diagnostics);
     const reason = canonicalString(item.reason, `${currentPath}/reason`, diagnostics);
     const evidenceRefs = stringSet(item.evidence_refs, `${currentPath}/evidence_refs`, diagnostics);
-    if (typeof item.answerable !== 'boolean') diagnostics.push(diagnostic(
+    if (typeof item.answerable !== 'boolean') arrayPush(diagnostics, diagnostic(
       'schema', 'BOOLEAN_INVALID', `${currentPath}/answerable`, 'answerable must be boolean'
     ));
     const question = canonicalString(item.question, `${currentPath}/question`, diagnostics);
-    if (obligationIds.has(obligationId)) diagnostics.push(diagnostic(
+    if (obligationIds.has(obligationId)) arrayPush(diagnostics, diagnostic(
       'reference', 'BLOCKED_OBLIGATION_DUPLICATE', `${currentPath}/obligation_id`, 'Blocked formal obligation IDs must be unique'
     ));
     obligationIds.add(obligationId);
-    output.push({
+    arrayPush(output, {
       obligation_id: obligationId, missing_type: missingType, semantic_refs: semanticRefs,
       scope, risk, reason, evidence_refs: evidenceRefs, answerable: item.answerable === true, question
     });
   }
-  output.sort((left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
+  arraySort(output, (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
   return output;
+}
+
+/** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
+function normalizeRootLedger(value, path, diagnostics) {
+  /** @type {any[]} */
+  const output = [];
+  const ids = new Set();
+  for (const [index, raw] of arrayEntries(array(value, path, diagnostics))) {
+    const itemPath = `${path}/${index}`;
+    const item = record(raw, itemPath, diagnostics);
+    checkKeys(item, [
+      'root_issue_id', 'root_issue_key', 'missing_type', 'semantic_refs', 'scope',
+      'affected_obligation_ids', 'risk_counts', 'question', 'answerable', 'reasons',
+      'evidence_refs', 'current'
+    ], itemPath, diagnostics);
+    const missingType = canonicalString(item.missing_type, `${itemPath}/missing_type`, diagnostics);
+    const semanticRefs = stringSet(item.semantic_refs, `${itemPath}/semantic_refs`, diagnostics, true);
+    const scope = canonicalString(item.scope, `${itemPath}/scope`, diagnostics);
+    const signature = { missing_type: missingType, semantic_refs: semanticRefs, scope };
+    const expectedKey = canonicalStringify(signature);
+    const rootIssueId = canonicalString(item.root_issue_id, `${itemPath}/root_issue_id`, diagnostics);
+    const rootIssueKey = canonicalString(item.root_issue_key, `${itemPath}/root_issue_key`, diagnostics);
+    if (rootIssueKey !== expectedKey) arrayPush(diagnostics, diagnostic(
+      'traceability', 'ROOT_ISSUE_KEY_MISMATCH', `${itemPath}/root_issue_key`,
+      'root snapshot key must exactly encode its normalized semantic root fields'
+    ));
+    if (rootIssueId !== stableId('root', signature)) arrayPush(diagnostics, diagnostic(
+      'traceability', 'ROOT_ISSUE_ID_MISMATCH', `${itemPath}/root_issue_id`,
+      'root snapshot identity must derive from its canonical semantic key'
+    ));
+    const riskRecord = record(item.risk_counts, `${itemPath}/risk_counts`, diagnostics);
+    checkKeys(riskRecord, ['critical', 'high', 'medium', 'low'], `${itemPath}/risk_counts`, diagnostics);
+    const riskCounts = {
+      critical: integer(riskRecord.critical, `${itemPath}/risk_counts/critical`, diagnostics, 0),
+      high: integer(riskRecord.high, `${itemPath}/risk_counts/high`, diagnostics, 0),
+      medium: integer(riskRecord.medium, `${itemPath}/risk_counts/medium`, diagnostics, 0),
+      low: integer(riskRecord.low, `${itemPath}/risk_counts/low`, diagnostics, 0)
+    };
+    if (typeof item.answerable !== 'boolean') arrayPush(diagnostics, diagnostic(
+      'schema', 'BOOLEAN_INVALID', `${itemPath}/answerable`, 'answerable must be boolean'
+    ));
+    if (typeof item.current !== 'boolean') arrayPush(diagnostics, diagnostic(
+      'schema', 'BOOLEAN_INVALID', `${itemPath}/current`, 'current must be boolean'
+    ));
+    if (ids.has(rootIssueId)) arrayPush(diagnostics, diagnostic(
+      'reference', 'ROOT_SNAPSHOT_DUPLICATE', `${itemPath}/root_issue_id`,
+      'root snapshot ledger IDs must be unique'
+    ));
+    ids.add(rootIssueId);
+    arrayPush(output, {
+      root_issue_id: rootIssueId,
+      root_issue_key: rootIssueKey,
+      missing_type: missingType,
+      semantic_refs: semanticRefs,
+      scope,
+      affected_obligation_ids: stringSet(item.affected_obligation_ids, `${itemPath}/affected_obligation_ids`, diagnostics, true),
+      risk_counts: riskCounts,
+      question: canonicalString(item.question, `${itemPath}/question`, diagnostics),
+      answerable: item.answerable === true,
+      reasons: stringSet(item.reasons, `${itemPath}/reasons`, diagnostics, true),
+      evidence_refs: stringSet(item.evidence_refs, `${itemPath}/evidence_refs`, diagnostics),
+      current: item.current === true
+    });
+  }
+  return arraySort(output, (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
 }
 
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
@@ -391,27 +522,29 @@ function normalizePriorState(value, path, diagnostics) {
   const prior = record(value, path, diagnostics);
   checkKeys(prior, [
     'source_revision', 'clarification_event_seq', 'asked_root_issue_ids', 'root_issue_dispositions',
-    'last_pending_root_issue_ids', 'last_question_set_digest', 'clarification_stop', 'semantic_snapshot'
+    'last_pending_root_issue_ids', 'last_question_set_digest', 'clarification_stop', 'semantic_snapshot',
+    'root_snapshot_ledger'
   ], path, diagnostics);
   const sourceRevision = integer(prior.source_revision, `${path}/source_revision`, diagnostics, 0);
   const eventSeq = integer(prior.clarification_event_seq, `${path}/clarification_event_seq`, diagnostics, 0);
   const asked = stringSet(prior.asked_root_issue_ids, `${path}/asked_root_issue_ids`, diagnostics);
   const pending = stringSet(prior.last_pending_root_issue_ids, `${path}/last_pending_root_issue_ids`, diagnostics);
+  /** @type {any[]} */
   const dispositions = [];
   const dispositionIds = new Set();
-  for (const [index, raw] of array(prior.root_issue_dispositions, `${path}/root_issue_dispositions`, diagnostics).entries()) {
+  for (const [index, raw] of arrayEntries(array(prior.root_issue_dispositions, `${path}/root_issue_dispositions`, diagnostics))) {
     const itemPath = `${path}/root_issue_dispositions/${index}`;
     const item = record(raw, itemPath, diagnostics);
     checkKeys(item, ['root_issue_id', 'status'], itemPath, diagnostics);
     const rootIssueId = canonicalString(item.root_issue_id, `${itemPath}/root_issue_id`, diagnostics);
     const status = enumeration(item.status, ROOT_STATUSES, `${itemPath}/status`, diagnostics);
-    if (dispositionIds.has(rootIssueId)) diagnostics.push(diagnostic(
+    if (dispositionIds.has(rootIssueId)) arrayPush(diagnostics, diagnostic(
       'reference', 'ROOT_DISPOSITION_DUPLICATE', `${itemPath}/root_issue_id`, 'root issue disposition IDs must be unique'
     ));
     dispositionIds.add(rootIssueId);
-    dispositions.push({ root_issue_id: rootIssueId, status });
+    arrayPush(dispositions, { root_issue_id: rootIssueId, status });
   }
-  dispositions.sort((left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
+  arraySort(dispositions, (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
   const lastDigest = canonicalString(prior.last_question_set_digest, `${path}/last_question_set_digest`, diagnostics, true);
   let stop = null;
   if (prior.clarification_stop !== null) {
@@ -424,52 +557,87 @@ function normalizePriorState(value, path, diagnostics) {
   }
   const semantic = prior.semantic_snapshot === null ? null
     : normalizeSemanticSnapshot(prior.semantic_snapshot, `${path}/semantic_snapshot`, diagnostics);
+  const ledger = normalizeRootLedger(prior.root_snapshot_ledger, `${path}/root_snapshot_ledger`, diagnostics);
   return {
     source_revision: sourceRevision, clarification_event_seq: eventSeq,
     asked_root_issue_ids: asked, root_issue_dispositions: dispositions,
     last_pending_root_issue_ids: pending, last_question_set_digest: lastDigest,
-    clarification_stop: stop, semantic_snapshot: semantic
+    clarification_stop: stop, semantic_snapshot: semantic, root_snapshot_ledger: ledger
   };
 }
 
 /** @param {ReturnType<typeof normalizePriorState>} prior @param {Diagnostic[]} diagnostics */
 function validatePriorState(prior, diagnostics) {
-  const dispositionById = new Map(prior.root_issue_dispositions.map((item) => [item.root_issue_id, item.status]));
+  const dispositionById = new Map(arrayMap(prior.root_issue_dispositions, (item) => [item.root_issue_id, item.status]));
+  const ledgerById = new Map(arrayMap(prior.root_snapshot_ledger, (item) => [item.root_issue_id, item]));
   const askedHistory = new Set(prior.asked_root_issue_ids);
-  const askedDispositions = prior.root_issue_dispositions
-    .filter((item) => item.status === 'asked').map((item) => item.root_issue_id);
-  if (!sameSet(prior.last_pending_root_issue_ids, askedDispositions)) diagnostics.push(diagnostic(
+  const askedDispositions = arrayMap(
+    arrayFilter(prior.root_issue_dispositions, (item) => item.status === 'asked'),
+    (item) => item.root_issue_id
+  );
+  if (!sameSet(prior.last_pending_root_issue_ids, askedDispositions)) arrayPush(diagnostics, diagnostic(
     'classification', 'PRIOR_PENDING_DISPOSITION_MISMATCH', '/prior_state/last_pending_root_issue_ids',
     'prior pending roots must exactly equal dispositions whose status is asked'
   ));
-  for (const rootId of prior.last_pending_root_issue_ids) if (!askedHistory.has(rootId)) diagnostics.push(diagnostic(
+  for (const rootId of prior.last_pending_root_issue_ids) if (!askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic(
     'classification', 'PRIOR_PENDING_NOT_ASKED', `/prior_state/last_pending_root_issue_ids/${pointerPart(rootId)}`,
     'every prior pending root must appear in the cumulative asked history'
   ));
   for (const { root_issue_id: rootId, status } of prior.root_issue_dispositions) {
-    if (status === 'open' && askedHistory.has(rootId)) diagnostics.push(diagnostic(
+    if (status === 'open' && askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic(
       'classification', 'PRIOR_LIFECYCLE_STATE_INVALID', `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
       'an open prior root cannot already appear in asked history without an append-only reopen event'
     ));
-    if (status !== 'open' && !askedHistory.has(rootId)) diagnostics.push(diagnostic(
+    if (status !== 'open' && status !== 'suppressed_deferred' && !askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic(
       'classification', 'PRIOR_DISPOSITION_HISTORY_MISMATCH', `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
-      'asked, resolved, and suppressed dispositions must appear in cumulative asked history'
+      'asked, resolved, and unknown-suppressed dispositions must appear in cumulative asked history'
+    ));
+    if (!ledgerById.has(rootId)) arrayPush(diagnostics, diagnostic(
+      'traceability', 'PRIOR_ROOT_SNAPSHOT_MISSING', `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
+      'every lifecycle disposition must retain its canonical root snapshot'
     ));
   }
-  for (const rootId of prior.asked_root_issue_ids) if (!dispositionById.has(rootId)) diagnostics.push(diagnostic(
+  for (const rootId of prior.asked_root_issue_ids) if (!dispositionById.has(rootId)) arrayPush(diagnostics, diagnostic(
     'classification', 'PRIOR_DISPOSITION_HISTORY_MISMATCH', `/prior_state/asked_root_issue_ids/${pointerPart(rootId)}`,
     'every cumulative asked root must retain one lifecycle disposition'
   ));
+  const priorPointById = new Map(arrayMap(
+    prior.semantic_snapshot?.formal_test_points ?? [], (point) => [point.obligation_id, point]
+  ));
+  for (const root of prior.root_snapshot_ledger) {
+    if (!dispositionById.has(root.root_issue_id)) arrayPush(diagnostics, diagnostic(
+      'traceability', 'PRIOR_ROOT_DISPOSITION_MISSING', `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}`,
+      'every retained root snapshot must retain one lifecycle disposition'
+    ));
+    for (const obligationId of root.affected_obligation_ids) {
+      const point = priorPointById.get(obligationId);
+      if (!point || (root.current && (
+        point.classification !== 'blocked' || !arrayIncludes(root.reasons, point.blocked_reason)
+      ))) arrayPush(diagnostics, diagnostic(
+        'traceability', 'PRIOR_ROOT_ASSOCIATION_INVALID',
+        `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}/affected_obligation_ids/${pointerPart(obligationId)}`,
+        'a current prior root must retain its own Blocked formal obligation and reason association'
+      ));
+    }
+  }
+  for (const rootId of prior.last_pending_root_issue_ids) if (!ledgerById.get(rootId)?.current) arrayPush(
+    diagnostics,
+    diagnostic(
+      'traceability', 'PRIOR_PENDING_ROOT_SNAPSHOT_INVALID',
+      `/prior_state/last_pending_root_issue_ids/${pointerPart(rootId)}`,
+      'every pending root must identify a current canonical prior root snapshot'
+    )
+  );
   const expectedDigest = prior.last_pending_root_issue_ids.length === 0
-    ? '' : digest([...prior.last_pending_root_issue_ids].sort(compareCodePoints));
-  if (prior.last_question_set_digest !== expectedDigest) diagnostics.push(diagnostic(
+    ? '' : digest(arraySort([...prior.last_pending_root_issue_ids], compareCodePoints));
+  if (prior.last_question_set_digest !== expectedDigest) arrayPush(diagnostics, diagnostic(
     'traceability', 'PRIOR_PENDING_DIGEST_MISMATCH', '/prior_state/last_question_set_digest',
     'prior question-set digest must be derived from the exact sorted pending root set'
   ));
   if (prior.clarification_stop && (
     prior.last_pending_root_issue_ids.length > 0
     || prior.clarification_stop.source_revision !== prior.source_revision
-  )) diagnostics.push(diagnostic(
+  )) arrayPush(diagnostics, diagnostic(
     'classification', 'PRIOR_STOP_STATE_INVALID', '/prior_state/clarification_stop',
     'prior clarification stop must belong to its exact revision and have no pending roots'
   ));
@@ -479,9 +647,10 @@ function validatePriorState(prior, diagnostics) {
 function normalizeAppendBatch(value, path, diagnostics) {
   const batch = record(value, path, diagnostics);
   checkKeys(batch, ['decision_records', 'clarification_events'], path, diagnostics);
+  /** @type {any[]} */
   const decisions = [];
   const decisionIds = new Set();
-  for (const [index, raw] of array(batch.decision_records, `${path}/decision_records`, diagnostics).entries()) {
+  for (const [index, raw] of arrayEntries(array(batch.decision_records, `${path}/decision_records`, diagnostics))) {
     const itemPath = `${path}/decision_records/${index}`;
     const item = record(raw, itemPath, diagnostics);
     checkKeys(item, [
@@ -490,14 +659,14 @@ function normalizeAppendBatch(value, path, diagnostics) {
       'evidence_ref', 'evidence_level'
     ], itemPath, diagnostics);
     const decisionId = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
-    if (decisionIds.has(decisionId)) diagnostics.push(diagnostic('reference', 'DECISION_ID_DUPLICATE', `${itemPath}/decision_id`, 'append Decision Record IDs must be unique'));
+    if (decisionIds.has(decisionId)) arrayPush(diagnostics, diagnostic('reference', 'DECISION_ID_DUPLICATE', `${itemPath}/decision_id`, 'append Decision Record IDs must be unique'));
     decisionIds.add(decisionId);
     const disposition = enumeration(item.disposition, DECISION_DISPOSITIONS, `${itemPath}/disposition`, diagnostics);
     const answer = canonicalString(item.answer, `${itemPath}/answer`, diagnostics, disposition === 'unknown' || disposition === 'deferred');
     const evidenceLevel = enumeration(item.evidence_level, new Set(['E1', 'E3']), `${itemPath}/evidence_level`, diagnostics);
-    if (disposition === 'final' && evidenceLevel !== 'E3') diagnostics.push(diagnostic('classification', 'DECISION_EVIDENCE_LEVEL_INVALID', `${itemPath}/evidence_level`, 'final Decision Record must be E3'));
-    if (disposition === 'temporary' && evidenceLevel !== 'E1') diagnostics.push(diagnostic('classification', 'DECISION_EVIDENCE_LEVEL_INVALID', `${itemPath}/evidence_level`, 'temporary Decision Record must be E1'));
-    decisions.push({
+    if (disposition === 'final' && evidenceLevel !== 'E3') arrayPush(diagnostics, diagnostic('classification', 'DECISION_EVIDENCE_LEVEL_INVALID', `${itemPath}/evidence_level`, 'final Decision Record must be E3'));
+    if (disposition === 'temporary' && evidenceLevel !== 'E1') arrayPush(diagnostics, diagnostic('classification', 'DECISION_EVIDENCE_LEVEL_INVALID', `${itemPath}/evidence_level`, 'temporary Decision Record must be E1'));
+    arrayPush(decisions, {
       decision_id: decisionId,
       question_id: canonicalString(item.question_id, `${itemPath}/question_id`, diagnostics),
       root_issue_ids: stringSet(item.root_issue_ids, `${itemPath}/root_issue_ids`, diagnostics, true),
@@ -513,16 +682,17 @@ function normalizeAppendBatch(value, path, diagnostics) {
       evidence_level: evidenceLevel
     });
   }
+  /** @type {any[]} */
   const events = [];
   const eventIds = new Set();
-  for (const [index, raw] of array(batch.clarification_events, `${path}/clarification_events`, diagnostics).entries()) {
+  for (const [index, raw] of arrayEntries(array(batch.clarification_events, `${path}/clarification_events`, diagnostics))) {
     const itemPath = `${path}/clarification_events/${index}`;
     const item = record(raw, itemPath, diagnostics);
     checkKeys(item, ['event_id', 'clarification_event_seq', 'type', 'actor', 'event_at', 'root_issue_ids'], itemPath, diagnostics);
     const eventId = canonicalString(item.event_id, `${itemPath}/event_id`, diagnostics);
-    if (eventIds.has(eventId)) diagnostics.push(diagnostic('reference', 'CONTROL_EVENT_ID_DUPLICATE', `${itemPath}/event_id`, 'append control event IDs must be unique'));
+    if (eventIds.has(eventId)) arrayPush(diagnostics, diagnostic('reference', 'CONTROL_EVENT_ID_DUPLICATE', `${itemPath}/event_id`, 'append control event IDs must be unique'));
     eventIds.add(eventId);
-    events.push({
+    arrayPush(events, {
       event_id: eventId,
       clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
       type: enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics),
@@ -536,7 +706,7 @@ function normalizeAppendBatch(value, path, diagnostics) {
 
 /** @param {string[]} left @param {string[]} right */
 function sameSet(left, right) {
-  return canonicalStringify([...left].sort(compareCodePoints)) === canonicalStringify([...right].sort(compareCodePoints));
+  return canonicalStringify(arraySort([...left], compareCodePoints)) === canonicalStringify(arraySort([...right], compareCodePoints));
 }
 
 /** @param {Record<string, unknown>[]} entries @param {string} key */
@@ -549,86 +719,87 @@ function strictlyIncreasing(entries, key) {
 
 /** @param {ReturnType<typeof normalizePriorState>} prior @param {ReturnType<typeof normalizeAppendBatch>} batch @param {number} sourceRevision @param {ReturnType<typeof normalizeSemanticSnapshot>} semantics @param {Diagnostic[]} diagnostics */
 function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
-  if (!strictlyIncreasing(batch.decision_records, 'clarification_event_seq')) diagnostics.push(diagnostic(
+  if (!strictlyIncreasing(batch.decision_records, 'clarification_event_seq')) arrayPush(diagnostics, diagnostic(
     'classification', 'CLARIFICATION_EVENT_SEQUENCE_NONMONOTONE', '/append_batch/decision_records', 'Decision Record append order must be strictly monotonic'
   ));
-  if (!strictlyIncreasing(batch.clarification_events, 'clarification_event_seq')) diagnostics.push(diagnostic(
+  if (!strictlyIncreasing(batch.clarification_events, 'clarification_event_seq')) arrayPush(diagnostics, diagnostic(
     'classification', 'CLARIFICATION_EVENT_SEQUENCE_NONMONOTONE', '/append_batch/clarification_events', 'control event append order must be strictly monotonic'
   ));
   const combined = [
-    ...batch.decision_records.map((item) => ({ kind: 'decision', seq: item.clarification_event_seq, item })),
-    ...batch.clarification_events.map((item) => ({ kind: 'control', seq: item.clarification_event_seq, item }))
-  ].sort((left, right) => left.seq - right.seq || compareCodePoints(left.kind, right.kind));
+    ...arrayMap(batch.decision_records, (item) => ({ kind: 'decision', seq: item.clarification_event_seq, item })),
+    ...arrayMap(batch.clarification_events, (item) => ({ kind: 'control', seq: item.clarification_event_seq, item }))
+  ];
+  arraySort(combined, (left, right) => left.seq - right.seq || compareCodePoints(left.kind, right.kind));
   const seenSeq = new Set();
   for (const entry of combined) {
-    if (seenSeq.has(entry.seq)) diagnostics.push(diagnostic(
+    if (seenSeq.has(entry.seq)) arrayPush(diagnostics, diagnostic(
       'classification', 'CLARIFICATION_EVENT_SEQUENCE_DUPLICATE', '/append_batch', 'Decision Records and control events share one unique sequence'
     ));
     seenSeq.add(entry.seq);
   }
   for (let index = 0; index < combined.length; index += 1) {
-    if (combined[index].seq !== prior.clarification_event_seq + index + 1) diagnostics.push(diagnostic(
+    if (combined[index].seq !== prior.clarification_event_seq + index + 1) arrayPush(diagnostics, diagnostic(
       'classification', 'CLARIFICATION_EVENT_SEQUENCE_GAP', '/append_batch', 'append sequence must continue the prior sequence without gaps'
     ));
   }
   if (combined.length === 0) {
-    if (sourceRevision !== prior.source_revision) diagnostics.push(diagnostic(
+    if (sourceRevision !== prior.source_revision) arrayPush(diagnostics, diagnostic(
       'classification', 'APPEND_REVISION_INVALID', '/source_revision', 'revision can advance only with one nonempty append batch'
     ));
-  } else if (sourceRevision !== prior.source_revision + 1) diagnostics.push(diagnostic(
+  } else if (sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic(
     'classification', 'APPEND_REVISION_INVALID', '/source_revision', 'one append batch must create exactly the next immutable source revision'
   ));
-  const formalIds = new Set(semantics.formal_test_points.map((point) => point.obligation_id));
+  const formalIds = new Set(arrayMap(semantics.formal_test_points, (point) => point.obligation_id));
   const pending = new Set(prior.last_pending_root_issue_ids);
   const decidedRoots = new Set();
-  for (const [index, item] of batch.decision_records.entries()) {
-    const expectedQuestionId = stableId('question', { root_issue_ids: [...item.root_issue_ids].sort(compareCodePoints) });
-    if (item.question_id !== expectedQuestionId) diagnostics.push(diagnostic(
+  for (const [index, item] of arrayEntries(batch.decision_records)) {
+    const expectedQuestionId = stableId('question', { root_issue_ids: arraySort([...item.root_issue_ids], compareCodePoints) });
+    if (item.question_id !== expectedQuestionId) arrayPush(diagnostics, diagnostic(
       'traceability', 'DECISION_QUESTION_ID_MISMATCH', `/append_batch/decision_records/${index}/question_id`,
       'Decision question identity must be derived only from its sorted root issue set'
     ));
     for (const rootId of item.root_issue_ids) {
-      if (!pending.has(rootId)) diagnostics.push(diagnostic(
+      if (!pending.has(rootId)) arrayPush(diagnostics, diagnostic(
         'reference', 'DECISION_ROOT_UNKNOWN', `/append_batch/decision_records/${index}/root_issue_ids/${pointerPart(rootId)}`,
         'Decision Record must resolve a root from the prior complete pending set'
       ));
-      if (decidedRoots.has(rootId)) diagnostics.push(diagnostic(
+      if (decidedRoots.has(rootId)) arrayPush(diagnostics, diagnostic(
         'classification', 'DECISION_ROOT_DUPLICATE', `/append_batch/decision_records/${index}/root_issue_ids/${pointerPart(rootId)}`,
         'one append batch cannot decide the same root more than once'
       ));
       decidedRoots.add(rootId);
     }
-    for (const obligationId of item.affected_obligation_ids) if (!formalIds.has(obligationId)) diagnostics.push(diagnostic(
+    for (const obligationId of item.affected_obligation_ids) if (!formalIds.has(obligationId)) arrayPush(diagnostics, diagnostic(
       'reference', 'DECISION_OBLIGATION_UNKNOWN', `/append_batch/decision_records/${index}/affected_obligation_ids/${pointerPart(obligationId)}`,
       'Decision Record affected Test Point must exist in the current formal snapshot'
     ));
   }
-  const priorDisposition = new Map(prior.root_issue_dispositions.map((item) => [item.root_issue_id, item.status]));
+  const priorDisposition = new Map(arrayMap(prior.root_issue_dispositions, (item) => [item.root_issue_id, item.status]));
   const reopened = new Set();
   let requestDeliveryCount = 0;
-  for (const [index, event] of batch.clarification_events.entries()) {
+  for (const [index, event] of arrayEntries(batch.clarification_events)) {
     if (event.type === 'request_delivery') {
       requestDeliveryCount += 1;
-      if (!sameSet(event.root_issue_ids, prior.last_pending_root_issue_ids)) diagnostics.push(diagnostic(
+      if (!sameSet(event.root_issue_ids, prior.last_pending_root_issue_ids)) arrayPush(diagnostics, diagnostic(
         'classification', 'REQUEST_DELIVERY_PENDING_SET_MISMATCH', `/append_batch/clarification_events/${index}/root_issue_ids`,
         'request_delivery must exactly equal the prior complete pending root set'
       ));
-      if (combined.at(-1)?.seq !== event.clarification_event_seq) diagnostics.push(diagnostic(
+      if (combined[combined.length - 1]?.seq !== event.clarification_event_seq) arrayPush(diagnostics, diagnostic(
         'classification', 'REQUEST_DELIVERY_ORDER_INVALID', `/append_batch/clarification_events/${index}`,
         'request_delivery must be the final item in its append batch'
       ));
     } else if (event.type === 'reopen_root_issues') {
       for (const rootId of event.root_issue_ids) {
         const status = priorDisposition.get(rootId);
-        if (!status) diagnostics.push(diagnostic(
+        if (!status) arrayPush(diagnostics, diagnostic(
           'reference', 'REOPEN_ROOT_UNKNOWN', `/append_batch/clarification_events/${index}/root_issue_ids/${pointerPart(rootId)}`,
           'reopen event references an unknown prior root issue'
         ));
-        else if (status !== 'suppressed_unknown' && status !== 'suppressed_deferred') diagnostics.push(diagnostic(
+        else if (status !== 'suppressed_unknown' && status !== 'suppressed_deferred') arrayPush(diagnostics, diagnostic(
           'classification', 'REOPEN_STATUS_INVALID', `/append_batch/clarification_events/${index}/root_issue_ids/${pointerPart(rootId)}`,
           'only suppressed unknown or deferred roots may be reopened'
         ));
-        if (reopened.has(rootId)) diagnostics.push(diagnostic(
+        if (reopened.has(rootId)) arrayPush(diagnostics, diagnostic(
           'classification', 'REOPEN_ROOT_DUPLICATE', `/append_batch/clarification_events/${index}/root_issue_ids/${pointerPart(rootId)}`,
           'one append batch cannot reopen the same root twice'
         ));
@@ -636,10 +807,10 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
       }
     }
   }
-  if (requestDeliveryCount > 1) diagnostics.push(diagnostic(
+  if (requestDeliveryCount > 1) arrayPush(diagnostics, diagnostic(
     'classification', 'REQUEST_DELIVERY_DUPLICATE', '/append_batch/clarification_events', 'one append batch may contain at most one delivery request'
   ));
-  if (requestDeliveryCount > 0 && reopened.size > 0) diagnostics.push(diagnostic(
+  if (requestDeliveryCount > 0 && reopened.size > 0) arrayPush(diagnostics, diagnostic(
     'classification', 'CONTROL_EVENT_CONFLICT', '/append_batch/clarification_events', 'delivery and reopen controls cannot share one append batch'
   ));
   return combined;
@@ -670,29 +841,29 @@ function buildRootIssues(blocked, sourceRevision, diagnostics) {
       batch_id: null
     });
     else if (existing.root_issue_key !== rootIssueKey) {
-      diagnostics.push(diagnostic(
+      arrayPush(diagnostics, diagnostic(
         'traceability', 'ROOT_ISSUE_ID_COLLISION', `/blocked_obligations/${pointerPart(item.obligation_id)}`,
         'distinct semantic root keys cannot share one stable root issue ID'
       ));
       continue;
     } else {
-      if (existing.question !== item.question || existing.answerable !== item.answerable) diagnostics.push(diagnostic(
+      if (existing.question !== item.question || existing.answerable !== item.answerable) arrayPush(diagnostics, diagnostic(
         'classification', 'ROOT_DESCRIPTOR_CONFLICT', `/blocked_obligations/${pointerPart(item.obligation_id)}`,
         'one semantic root must have one answerability and question contract'
       ));
-      existing.affected_obligation_ids.push(item.obligation_id);
-      existing.reasons.push(item.reason);
-      existing.evidence_refs.push(...item.evidence_refs);
+      arrayPush(existing.affected_obligation_ids, item.obligation_id);
+      arrayPush(existing.reasons, item.reason);
+      arrayPush(existing.evidence_refs, ...item.evidence_refs);
     }
     groups.get(rootIssueId).risk_counts[item.risk] += 1;
   }
   const output = [...groups.values()];
   for (const root of output) {
-    root.affected_obligation_ids = [...new Set(root.affected_obligation_ids)].sort(compareCodePoints);
-    root.reasons = [...new Set(root.reasons)].sort(compareCodePoints);
-    root.evidence_refs = [...new Set(root.evidence_refs)].sort(compareCodePoints);
+    root.affected_obligation_ids = arraySort([...new Set(root.affected_obligation_ids)], compareCodePoints);
+    root.reasons = arraySort([...new Set(root.reasons)], compareCodePoints);
+    root.evidence_refs = arraySort([...new Set(root.evidence_refs)], compareCodePoints);
   }
-  return output.sort((left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
+  return arraySort(output, (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
 }
 
 /** @param {any} left @param {any} right */
@@ -707,9 +878,95 @@ function riskOrder(left, right) {
 
 /** @param {any[]} roots */
 function pendingWithBatch(roots) {
-  const sortedIds = roots.map((root) => root.root_issue_id).sort(compareCodePoints);
+  const sortedIds = arraySort(arrayMap(roots, (root) => root.root_issue_id), compareCodePoints);
   const batchId = stableId('batch', { root_issue_ids: sortedIds });
-  return roots.map((root) => ({ ...structuredClone(root), batch_id: batchId }));
+  return arrayMap(roots, (root) => ({ ...structuredClone(root), batch_id: batchId }));
+}
+
+/** @param {any} root @param {boolean} current */
+function rootSnapshot(root, current) {
+  return {
+    root_issue_id: root.root_issue_id,
+    root_issue_key: root.root_issue_key,
+    missing_type: root.missing_type,
+    semantic_refs: [...root.semantic_refs],
+    scope: root.scope,
+    affected_obligation_ids: [...root.affected_obligation_ids],
+    risk_counts: { ...root.risk_counts },
+    question: root.question,
+    answerable: root.answerable,
+    reasons: [...root.reasons],
+    evidence_refs: [...root.evidence_refs],
+    current
+  };
+}
+
+/**
+ * @param {ReturnType<typeof normalizeRootLedger>} priorLedger
+ * @param {any[]} roots
+ * @param {Diagnostic[]} diagnostics
+ */
+function nextRootLedger(priorLedger, roots, diagnostics) {
+  const byId = new Map();
+  for (const prior of priorLedger) byId.set(prior.root_issue_id, { ...structuredClone(prior), current: false });
+  for (const root of roots) {
+    const prior = byId.get(root.root_issue_id);
+    if (prior && prior.root_issue_key !== root.root_issue_key) {
+      arrayPush(diagnostics, diagnostic(
+        'traceability', 'ROOT_ISSUE_ID_COLLISION', `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}`,
+        'a current root cannot reuse a historical ID for a different canonical semantic key'
+      ));
+      continue;
+    }
+    byId.set(root.root_issue_id, rootSnapshot(root, true));
+  }
+  return arraySort([...byId.values()], (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
+}
+
+/** @param {ReturnType<typeof normalizeSemanticSnapshot>} semantics */
+function projectDeliveryLanes(semantics) {
+  /** @param {string} classification */
+  const lane = (classification) => arrayMap(
+    arrayFilter(semantics.formal_test_points, (point) => point.classification === classification),
+    (point) => point.obligation_id
+  );
+  semantics.delivery_sections.grounded = lane('grounded');
+  semantics.delivery_sections.conditional = lane('conditional');
+  semantics.delivery_sections.blocked = lane('blocked');
+  const executable = semantics.delivery_sections.grounded.length + semantics.delivery_sections.conditional.length;
+  semantics.delivery_sections.quality.delivery_status = semantics.formal_test_points.length === 0
+    ? 'no_applicable_formal_test_points'
+    : executable === 0 && semantics.delivery_sections.blocked.length > 0
+      ? 'no_deterministic_cases'
+      : 'executable_subset_ready';
+  return semantics;
+}
+
+/**
+ * Keep every obligation behind a delivery/no-gain root fail-closed.
+ * @param {ReturnType<typeof normalizeSemanticSnapshot>} semantics
+ * @param {ReturnType<typeof normalizeSemanticSnapshot>|null} priorSemantics
+ * @param {Set<string>} obligationIds
+ * @param {Diagnostic[]} diagnostics
+ */
+function projectBlockedSemantics(semantics, priorSemantics, obligationIds, diagnostics) {
+  const output = structuredClone(semantics);
+  const priorPoints = new Map(arrayMap(priorSemantics?.formal_test_points ?? [], (point) => [point.obligation_id, point]));
+  for (const point of output.formal_test_points) {
+    if (!obligationIds.has(point.obligation_id) || point.classification === 'blocked') continue;
+    const priorPoint = priorPoints.get(point.obligation_id);
+    if (priorPoint?.classification !== 'blocked') {
+      arrayPush(diagnostics, diagnostic(
+        'classification', 'BLOCKED_PROJECTION_UNAVAILABLE', `/semantic_snapshot/formal_test_points/${pointerPart(point.obligation_id)}`,
+        'delivery suppression requires a retained prior Blocked formal tuple'
+      ));
+      continue;
+    }
+    point.classification = 'blocked';
+    point.evidence_level = priorPoint.evidence_level;
+    point.blocked_reason = priorPoint.blocked_reason;
+  }
+  return projectDeliveryLanes(output);
 }
 
 /** @param {string} policy @param {Diagnostic[]} diagnostics @param {number} sourceRevision */
@@ -734,11 +991,11 @@ function invalidDecision(policy, diagnostics, sourceRevision = 0) {
 export function evaluateClarification(submittedContext, interactionPolicy) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
-  if (!POLICIES.has(interactionPolicy)) diagnostics.push(diagnostic(
+  if (!POLICIES.has(interactionPolicy)) arrayPush(diagnostics, diagnostic(
     'classification', 'INTERACTION_POLICY_INVALID', '/interaction_policy', 'internal interaction policy is outside the closed two-value contract'
   ));
   const captured = snapshotControlled(submittedContext);
-  diagnostics.push(...captured.diagnostics);
+  arrayPush(diagnostics, ...captured.diagnostics);
   if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics);
   try {
     const context = record(captured.snapshot, '/', diagnostics);
@@ -748,24 +1005,69 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     const prior = normalizePriorState(context.prior_state, '/prior_state', diagnostics);
     const batch = normalizeAppendBatch(context.append_batch, '/append_batch', diagnostics);
     const semantics = normalizeSemanticSnapshot(context.semantic_snapshot, '/semantic_snapshot', diagnostics);
-    const blockedIds = blocked.map((item) => item.obligation_id);
-    const semanticBlockedIds = semantics.formal_test_points.filter((point) => point.classification === 'blocked')
-      .map((point) => point.obligation_id);
-    if (!sameSet(blockedIds, semanticBlockedIds)) diagnostics.push(diagnostic(
-      'traceability', 'BLOCKED_DESCRIPTOR_SET_MISMATCH', '/blocked_obligations',
-      'every current Blocked formal Test Point must have exactly one root descriptor'
-    ));
     validatePriorState(prior, diagnostics);
     const combined = validateHistory(prior, batch, sourceRevision, semantics, diagnostics);
     const roots = buildRootIssues(blocked, sourceRevision, diagnostics);
+    const nextLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics);
+    const pointById = new Map(arrayMap(semantics.formal_test_points, (point) => [point.obligation_id, point]));
+    const descriptorIds = new Set(arrayMap(blocked, (item) => item.obligation_id));
+    const priorDispositionById = new Map(arrayMap(
+      prior.root_issue_dispositions, (item) => [item.root_issue_id, item.status]
+    ));
+    for (const obligationId of descriptorIds) if (pointById.get(obligationId)?.classification !== 'blocked') arrayPush(
+      diagnostics,
+      diagnostic(
+        'traceability', 'BLOCKED_DESCRIPTOR_SET_MISMATCH', '/blocked_obligations',
+        'every current root descriptor must identify a Blocked formal Test Point'
+      )
+    );
+    for (const point of semantics.formal_test_points) if (point.classification === 'blocked' && !descriptorIds.has(point.obligation_id)) {
+      let retainedSuppression = false;
+      for (const root of prior.root_snapshot_ledger) if (arrayIncludes(root.affected_obligation_ids, point.obligation_id)) {
+        const status = priorDispositionById.get(root.root_issue_id);
+        if (status === 'suppressed_deferred' || status === 'suppressed_unknown') retainedSuppression = true;
+      }
+      if (!retainedSuppression) arrayPush(diagnostics, diagnostic(
+        'traceability', 'BLOCKED_DESCRIPTOR_SET_MISMATCH', '/blocked_obligations',
+        'every current Blocked formal Test Point must have a current or retained suppressed root descriptor'
+      ));
+    }
+    if (combined.length === 0 && sourceRevision === prior.source_revision && prior.semantic_snapshot !== null) {
+      const currentSnapshots = arrayMap(roots, (root) => rootSnapshot(root, true));
+      const priorCurrentSnapshots = arrayFilter(prior.root_snapshot_ledger, (root) => root.current);
+      if (canonicalStringify(currentSnapshots) !== canonicalStringify(priorCurrentSnapshots)) arrayPush(
+        diagnostics,
+        diagnostic(
+          'traceability', 'IMMUTABLE_ROOT_SNAPSHOT_MISMATCH', '/blocked_obligations',
+          'one immutable revision must replay the exact same canonical root snapshot'
+        )
+      );
+      if (canonicalStringify(semantics) !== canonicalStringify(prior.semantic_snapshot)) arrayPush(
+        diagnostics,
+        diagnostic(
+          'traceability', 'IMMUTABLE_SEMANTIC_SNAPSHOT_MISMATCH', '/semantic_snapshot',
+          'one immutable revision must replay the exact same six-section semantic snapshot'
+        )
+      );
+    }
     if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics, sourceRevision);
 
-    const dispositions = new Map(prior.root_issue_dispositions.map((item) => [item.root_issue_id, item.status]));
+    const dispositions = new Map(arrayMap(prior.root_issue_dispositions, (item) => [item.root_issue_id, item.status]));
     for (const root of roots) if (!dispositions.has(root.root_issue_id)) dispositions.set(root.root_issue_id, 'open');
-    const currentRootIds = new Set(roots.map((root) => root.root_issue_id));
-    const priorPoints = new Map((prior.semantic_snapshot?.formal_test_points ?? [])
-      .map((point) => [point.obligation_id, point]));
-    const currentPoints = new Map(semantics.formal_test_points.map((point) => [point.obligation_id, point]));
+    const currentRootIds = new Set(arrayMap(roots, (root) => root.root_issue_id));
+    const currentRootById = new Map(arrayMap(roots, (root) => [root.root_issue_id, root]));
+    const priorRootById = new Map(arrayMap(prior.root_snapshot_ledger, (root) => [root.root_issue_id, root]));
+    /** @type {Map<string, any[]>} */
+    const currentRootsByObligation = new Map();
+    for (const root of roots) for (const obligationId of root.affected_obligation_ids) {
+      const bucket = currentRootsByObligation.get(obligationId) ?? [];
+      arrayPush(bucket, root);
+      currentRootsByObligation.set(obligationId, bucket);
+    }
+    const priorPoints = new Map(arrayMap(
+      prior.semantic_snapshot?.formal_test_points ?? [], (point) => [point.obligation_id, point]
+    ));
+    const currentPoints = new Map(arrayMap(semantics.formal_test_points, (point) => [point.obligation_id, point]));
     /** @param {any} point */
     const formalTuple = (point) => canonicalStringify({
       classification: point.classification,
@@ -780,14 +1082,24 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
       if (entry.kind === 'decision') {
         const decisionRecord = /** @type {any} */ (entry.item);
         const canProvideEvidence = decisionRecord.disposition === 'final' || decisionRecord.disposition === 'temporary';
-        const changedBlockedPoint = canProvideEvidence && decisionRecord.affected_obligation_ids.some((/** @type {string} */ obligationId) => {
-          const priorPoint = priorPoints.get(obligationId);
-          const currentPoint = currentPoints.get(obligationId);
-          return priorPoint?.classification === 'blocked' && currentPoint
-            && formalTuple(priorPoint) !== formalTuple(currentPoint);
-        });
         for (const rootId of decisionRecord.root_issue_ids) {
-          const effective = canProvideEvidence && !currentRootIds.has(rootId) && changedBlockedPoint;
+          const priorRoot = priorRootById.get(rootId);
+          let ownGain = false;
+          if (canProvideEvidence && priorRoot && !currentRootIds.has(rootId)) {
+            for (const obligationId of decisionRecord.affected_obligation_ids) {
+              if (!arrayIncludes(priorRoot.affected_obligation_ids, obligationId)) continue;
+              const priorPoint = priorPoints.get(obligationId);
+              const currentPoint = currentPoints.get(obligationId);
+              const tupleChanged = priorPoint?.classification === 'blocked' && currentPoint
+                && formalTuple(priorPoint) !== formalTuple(currentPoint);
+              const replacement = priorPoint?.classification === 'blocked'
+                && arraySome(currentRootsByObligation.get(obligationId) ?? [], (currentRoot) => (
+                  currentRoot.root_issue_id !== rootId && currentRoot.root_issue_key !== priorRoot.root_issue_key
+                ));
+              if (tupleChanged || replacement) ownGain = true;
+            }
+          }
+          const effective = canProvideEvidence && ownGain;
           const status = effective
             ? (decisionRecord.disposition === 'final' ? 'resolved_final' : 'resolved_temporary')
             : decisionRecord.disposition === 'unknown' ? 'suppressed_unknown' : 'suppressed_deferred';
@@ -811,29 +1123,46 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     let action = 'deliver';
     /** @type {any[]} */
     let pendingRoots = [];
+    const gateRootIds = new Set();
     if (requestDelivery) {
-      for (const rootId of prior.last_pending_root_issue_ids) dispositions.set(rootId, 'suppressed_deferred');
+      for (const rootId of prior.last_pending_root_issue_ids) {
+        dispositions.set(rootId, 'suppressed_deferred');
+        gateRootIds.add(rootId);
+      }
       for (const root of roots) {
         const status = dispositions.get(root.root_issue_id);
         if (root.answerable && (status === 'open' || status === 'asked'
-          || decidedKinds.has(root.root_issue_id))) dispositions.set(root.root_issue_id, 'suppressed_deferred');
+          || decidedKinds.has(root.root_issue_id))) {
+          dispositions.set(root.root_issue_id, 'suppressed_deferred');
+          gateRootIds.add(root.root_issue_id);
+        }
       }
       stop = { reason: 'user_requested_delivery', source_revision: sourceRevision };
     } else if (batch.decision_records.length > 0 && !hasReopen && !hasEffectiveDecision) {
+      for (const rootId of prior.last_pending_root_issue_ids) gateRootIds.add(rootId);
       for (const root of roots) {
         const status = dispositions.get(root.root_issue_id);
         if (root.answerable && (status === 'open' || status === 'asked')) {
           dispositions.set(root.root_issue_id, 'suppressed_deferred');
+          gateRootIds.add(root.root_issue_id);
         }
       }
       stop = { reason: 'no_information_gain', source_revision: sourceRevision };
+    } else if (interactionPolicy === 'record_only') {
+      for (const rootId of prior.last_pending_root_issue_ids) gateRootIds.add(rootId);
+      for (const root of roots) {
+        const status = dispositions.get(root.root_issue_id);
+        if (status === 'open' || status === 'asked') dispositions.set(root.root_issue_id, 'suppressed_deferred');
+        gateRootIds.add(root.root_issue_id);
+      }
     } else if (interactionPolicy === 'pause_for_clarification') {
       const idempotentPending = combined.length === 0 && sourceRevision === prior.source_revision
         ? new Set(prior.last_pending_root_issue_ids) : null;
-      pendingRoots = roots.filter((root) => root.answerable && (
+      pendingRoots = arrayFilter(roots, (root) => root.answerable && (
         dispositions.get(root.root_issue_id) === 'open'
         || (idempotentPending?.has(root.root_issue_id) && dispositions.get(root.root_issue_id) === 'asked')
-      )).sort(riskOrder);
+      ));
+      arraySort(pendingRoots, riskOrder);
       if (pendingRoots.length > 0) {
         action = 'need_user_answers';
         for (const root of pendingRoots) dispositions.set(root.root_issue_id, 'asked');
@@ -845,28 +1174,38 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     }
 
     const pendingOutput = action === 'need_user_answers' ? pendingWithBatch(pendingRoots) : [];
-    const pendingIds = pendingOutput.map((root) => root.root_issue_id).sort(compareCodePoints);
+    const pendingIds = arraySort(arrayMap(pendingOutput, (root) => root.root_issue_id), compareCodePoints);
     const askedIds = new Set(prior.asked_root_issue_ids);
-    for (const [rootId, status] of dispositions) if (status !== 'open') askedIds.add(rootId);
-    if (interactionPolicy === 'record_only') for (const rootId of askedIds) {
-      if (dispositions.get(rootId) === 'open') dispositions.set(rootId, 'suppressed_deferred');
+    for (const rootId of pendingIds) askedIds.add(rootId);
+    const blockedObligationIds = new Set();
+    for (const rootId of gateRootIds) {
+      const priorRoot = priorRootById.get(rootId);
+      const currentRoot = currentRootById.get(rootId);
+      for (const obligationId of priorRoot?.affected_obligation_ids ?? []) blockedObligationIds.add(obligationId);
+      for (const obligationId of currentRoot?.affected_obligation_ids ?? []) blockedObligationIds.add(obligationId);
     }
+    const deliveredSemantics = blockedObligationIds.size > 0
+      ? projectBlockedSemantics(semantics, prior.semantic_snapshot, blockedObligationIds, diagnostics)
+      : structuredClone(semantics);
+    if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics, sourceRevision);
     const nextEventSeq = combined.length > 0 ? combined[combined.length - 1].seq : prior.clarification_event_seq;
+    const dispositionOutput = arrayMap([...dispositions], ([root_issue_id, status]) => ({ root_issue_id, status }));
+    arraySort(dispositionOutput, (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
     const state = {
       source_revision: sourceRevision,
       clarification_event_seq: nextEventSeq,
-      asked_root_issue_ids: [...askedIds].sort(compareCodePoints),
-      root_issue_dispositions: [...dispositions].map(([root_issue_id, status]) => ({ root_issue_id, status }))
-        .sort((left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id)),
+      asked_root_issue_ids: arraySort([...askedIds], compareCodePoints),
+      root_issue_dispositions: dispositionOutput,
       last_pending_root_issue_ids: pendingIds,
       last_question_set_digest: pendingIds.length > 0 ? digest(pendingIds) : '',
       clarification_stop: interactionPolicy === 'record_only' ? null : stop,
-      semantic_snapshot: structuredClone(semantics)
+      semantic_snapshot: structuredClone(deliveredSemantics),
+      root_snapshot_ledger: structuredClone(nextLedger)
     };
     return {
       action, source_revision: sourceRevision,
       root_issues: structuredClone(roots), pending_root_issues: pendingOutput,
-      state, semantic_snapshot: structuredClone(semantics),
+      state, semantic_snapshot: structuredClone(deliveredSemantics),
       interaction: { policy: interactionPolicy, paused: action === 'need_user_answers' },
       diagnostics: []
     };

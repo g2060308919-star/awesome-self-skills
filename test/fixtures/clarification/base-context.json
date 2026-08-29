@@ -21,7 +21,8 @@
     "last_pending_root_issue_ids": [],
     "last_question_set_digest": "",
     "clarification_stop": null,
-    "semantic_snapshot": null
+    "semantic_snapshot": null,
+    "root_snapshot_ledger": []
   },
   "append_batch": {
     "decision_records": [],
