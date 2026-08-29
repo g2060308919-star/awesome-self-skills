@@ -348,6 +348,153 @@ test('t-wise selection enforces the closed finite-domain and declarative-constra
   delete taskGlobal.__task6ConstraintExecuted;
 });
 
+// Break caught: sparse direct-input arrays bypass map/forEach validation and leak undefined into selection or sorting.
+test('t-wise selection rejects holes on every exported array surface', () => {
+  const base = {
+    interaction_risk: 'high',
+    domains: [
+      { name: 'a', values: [0, 1] }, { name: 'b', values: [0, 1] }, { name: 'c', values: [0, 1] }
+    ],
+    oracle_mappings: []
+  };
+  /** @param {(input: any) => void} mutate @param {any[]} [constraints] */
+  function rejectsHole(mutate, constraints = []) {
+    const parameters = structuredClone(base);
+    mutate(parameters);
+    assert.throws(() => selectTWiseVectors(parameters, 2, constraints, 8), /dense array/);
+  }
+
+  rejectsHole((input) => { delete input.domains[1]; });
+  rejectsHole((input) => { delete input.domains[0].values[1]; });
+  rejectsHole((input) => { input.oracle_mappings = new Array(1); });
+  const sparseConstraints = new Array(1);
+  assert.throws(() => selectTWiseVectors(base, 2, sparseConstraints, 8), /dense array/);
+  const sparseForbidden = [{ forbidden: [
+    { parameter: 'a', value: 0 }, { parameter: 'b', value: 0 }
+  ] }];
+  delete sparseForbidden[0].forbidden[1];
+  assert.throws(() => selectTWiseVectors(base, 2, sparseForbidden, 8), /dense array/);
+
+  const sparseAssignments = /** @type {any} */ (structuredClone(base));
+  sparseAssignments.oracle_mappings = [{
+    assignments: [
+      { parameter: 'a', value: 0 }, { parameter: 'b', value: 0 }, { parameter: 'c', value: 0 }
+    ],
+    required_oracle_refs: ['claim_000']
+  }];
+  delete sparseAssignments.oracle_mappings[0].assignments[1];
+  assert.throws(() => selectTWiseVectors(sparseAssignments, 2, [], 8), /dense array/);
+
+  const sparseOracleRefs = /** @type {any} */ (structuredClone(base));
+  sparseOracleRefs.oracle_mappings = [{
+    assignments: [
+      { parameter: 'a', value: 0 }, { parameter: 'b', value: 0 }, { parameter: 'c', value: 0 }
+    ],
+    required_oracle_refs: ['claim_000', 'claim_backup']
+  }];
+  delete sparseOracleRefs.oracle_mappings[0].required_oracle_refs[0];
+  assert.throws(() => selectTWiseVectors(sparseOracleRefs, 2, [], 8), /dense array/);
+});
+
+// Break caught: recursive Cartesian traversal overflows the JavaScript call stack even for one trivial valid vector.
+test('t-wise selection iteratively enumerates twelve thousand singleton domains', () => {
+  const domainCount = 12_000;
+  const parameters = {
+    interaction_risk: 'low',
+    domains: Array.from({ length: domainCount }, (_, index) => ({
+      name: `p${String(index).padStart(5, '0')}`, values: [0]
+    })),
+    oracle_mappings: []
+  };
+  const started = performance.now();
+
+  const actual = selectTWiseVectors(parameters, 2, [], 1);
+  const elapsed = performance.now() - started;
+
+  assert.equal(actual.status, 'selected');
+  if (actual.status === 'selected') assert.equal(Object.keys(actual.vectors[0].values).length, domainCount);
+  assert.equal(elapsed < 2_000, true, `iterative singleton enumeration took ${elapsed.toFixed(1)}ms`);
+});
+
+// Break caught: unary impossibility on the final search domain exhausts a large prefix product before discovering no vector.
+test('t-wise selection preprocesses unary exclusions before searching a large unsatisfiable product', () => {
+  const parameters = {
+    interaction_risk: 'high',
+    domains: [
+      ...Array.from({ length: 23 }, (_, index) => ({
+        name: `p${String(index).padStart(2, '0')}`, values: [0, 1]
+      })),
+      { name: 'z_final', values: [0, 1] }
+    ],
+    oracle_mappings: []
+  };
+  const constraints = [0, 1].map((value) => ({
+    forbidden: [{ parameter: 'z_final', value }]
+  }));
+  const started = performance.now();
+
+  const actual = selectTWiseVectors(parameters, 2, constraints, 1);
+  const elapsed = performance.now() - started;
+
+  assert.deepEqual(actual, {
+    status: 'blocked', reason: 'no_valid_candidates', max_candidates: 1
+  });
+  assert.equal(elapsed < 500, true, `unary impossibility detection took ${elapsed.toFixed(1)}ms`);
+});
+
+// Break caught: equal-cardinality search falls back to names and explores an exponential unconstrained prefix before a final impossible pair.
+test('t-wise selection prioritizes constrained domains before a twenty-four-domain impossible pair', () => {
+  const parameters = {
+    interaction_risk: 'high',
+    domains: [
+      ...Array.from({ length: 22 }, (_, index) => ({
+        name: `p${String(index).padStart(2, '0')}`, values: [0, 1]
+      })),
+      { name: 'z1', values: [0, 1] }, { name: 'z2', values: [0, 1] }
+    ],
+    oracle_mappings: []
+  };
+  const constraints = [0, 1].flatMap((left) => [0, 1].map((right) => ({ forbidden: [
+    { parameter: 'z1', value: left }, { parameter: 'z2', value: right }
+  ] })));
+  const started = performance.now();
+
+  const actual = selectTWiseVectors(parameters, 2, constraints, 1);
+  const elapsed = performance.now() - started;
+
+  assert.deepEqual(actual, {
+    status: 'blocked', reason: 'no_valid_candidates', max_candidates: 1
+  });
+  assert.equal(elapsed < 500, true, `fail-first pair pruning took ${elapsed.toFixed(1)}ms`);
+});
+
+// Break caught: exact DP repeats identical match-mask transitions per domain and becomes impractical above 64 selected vectors.
+test('t-wise selection compresses repeated BigInt match masks with exact binomial multiplicities', () => {
+  /** @param {number} domainCount @param {number} binaryCount @param {number} strength */
+  function run(domainCount, binaryCount, strength) {
+    const parameters = {
+      interaction_risk: 'critical',
+      domains: Array.from({ length: domainCount }, (_, index) => ({
+        name: `p${String(index).padStart(2, '0')}`, values: index < binaryCount ? [0, 1] : [0]
+      })),
+      oracle_mappings: []
+    };
+    const started = performance.now();
+    const actual = selectTWiseVectors(parameters, strength, [], 2 ** binaryCount);
+    return { actual, elapsed: performance.now() - started };
+  }
+
+  const above64 = run(30, 7, 15);
+  assert.equal(above64.actual.status, 'selected');
+  if (above64.actual.status === 'selected') assert.equal(above64.actual.vectors.length, 128);
+  assert.equal(above64.elapsed < 2_500, true, `30d/128 exact selection took ${above64.elapsed.toFixed(1)}ms`);
+
+  const wide = run(50, 6, 25);
+  assert.equal(wide.actual.status, 'selected');
+  if (wide.actual.status === 'selected') assert.equal(wide.actual.vectors.length, 64);
+  assert.equal(wide.elapsed < 2_500, true, `50d/64 exact selection took ${wide.elapsed.toFixed(1)}ms`);
+});
+
 // Break caught: Oracle mappings are partial/non-independent, inferred from neighbors, or allowed to target forbidden/unrelated vectors.
 test('t-wise selection validates full vector Oracle mappings and leaves every omitted vector Oracle-empty', async () => {
   const input = await fixture();

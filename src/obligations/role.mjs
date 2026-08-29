@@ -1,6 +1,5 @@
-import {
-  assertViewType, buildObligationSeed, finishObligationSeeds, objectArray, sortedStrings
-} from './registry.mjs';
+import { assertViewType, objectArray, sortedStrings } from './registry.mjs';
+import { compileResponsibilitySeeds, responsibilityKey } from './responsibility.mjs';
 
 /**
  * Compile every sourced role-permission combination. In particular, deny entries
@@ -11,12 +10,16 @@ import {
 export function compile(view, context) {
   assertViewType(view, 'role');
   const roles = objectArray(view.elements).filter((element) => element.kind === 'role-permission');
-  const seeds = roles.flatMap((role) => sortedStrings(role.permissions).map((permission) => buildObligationSeed({
-    view, primaryElement: role, supportingElements: [role], context,
+  const descriptors = roles.flatMap((role) => sortedStrings(role.permissions).map((permission) => ({
+    key: responsibilityKey('role', String(role.element_id), {
+      responsibility: 'permission', permission
+    }),
+    element: role,
+    required: true,
     identity: {
       kind: 'role', responsibility: 'permission', scope: view.scope,
       role: role.role, permission
     }
   })));
-  return finishObligationSeeds(seeds, 'role');
+  return compileResponsibilitySeeds(view, context, descriptors, 'role');
 }

@@ -6,7 +6,10 @@
       "view_id": "view_session_timing",
       "type": "timing",
       "scope": "session.expiry",
-      "source_claim_ids": ["claim_expiry_threshold", "claim_timeout_signal", "claim_retry_signal"],
+      "source_claim_ids": [
+        "claim_expiry_before", "claim_expiry_equal", "claim_expiry_after",
+        "claim_timeout_signal", "claim_retry_signal"
+      ],
       "elements": [
         {
           "element_id": "timing_expiry",
@@ -14,7 +17,10 @@
           "timing_event": "session access",
           "threshold": 30,
           "order": 0,
-          "source_claim_ids": ["claim_expiry_threshold"],
+          "source_claim_ids": [
+            "claim_expiry_before", "claim_expiry_equal", "claim_expiry_after",
+            "claim_timeout_signal", "claim_retry_signal"
+          ],
           "model_refs": []
         }
       ],

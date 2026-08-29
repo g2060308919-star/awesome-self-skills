@@ -7,7 +7,14 @@
       "type": "integration",
       "scope": "checkout.payment.integration",
       "source_claim_ids": [
-        "claim_integration_contract",
+        "claim_integration_request",
+        "claim_integration_response",
+        "claim_integration_persistence",
+        "claim_integration_event",
+        "claim_integration_callback",
+        "claim_integration_compensation",
+        "claim_integration_ledger",
+        "claim_integration_notification",
         "claim_balance_invariant",
         "claim_contract_compatibility",
         "claim_concurrency_signal",
@@ -28,7 +35,13 @@
             { "kind": "ledger", "target": "merchant balance" },
             { "kind": "notification", "target": "buyer receipt" }
           ],
-          "source_claim_ids": ["claim_integration_contract"],
+          "source_claim_ids": [
+            "claim_integration_request", "claim_integration_response", "claim_integration_persistence",
+            "claim_integration_event", "claim_integration_callback", "claim_integration_compensation",
+            "claim_integration_ledger", "claim_integration_notification", "claim_balance_invariant",
+            "claim_contract_compatibility", "claim_concurrency_signal", "claim_idempotency_signal",
+            "claim_security_signal"
+          ],
           "model_refs": []
         }
       ],

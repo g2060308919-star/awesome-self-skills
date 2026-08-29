@@ -6,7 +6,9 @@
       "view_id": "view_amount_input",
       "type": "input-domain",
       "scope": "checkout.amount",
-      "source_claim_ids": ["claim_amount_domain"],
+      "source_claim_ids": [
+        "claim_amount_standard", "claim_amount_zero", "claim_amount_lower", "claim_amount_upper"
+      ],
       "elements": [
         {
           "element_id": "input_amount",
@@ -17,7 +19,9 @@
             { "class_id": "class_zero", "label": "zero is invalid" }
           ],
           "bounds": { "lower": 1, "upper": 100, "inclusive": true },
-          "source_claim_ids": ["claim_amount_domain"],
+          "source_claim_ids": [
+            "claim_amount_standard", "claim_amount_zero", "claim_amount_lower", "claim_amount_upper"
+          ],
           "model_refs": []
         }
       ],

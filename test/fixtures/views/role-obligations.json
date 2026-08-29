@@ -6,14 +6,14 @@
       "view_id": "view_order_roles",
       "type": "role",
       "scope": "orders.permissions",
-      "source_claim_ids": ["claim_cashier_permissions", "claim_auditor_permissions"],
+      "source_claim_ids": ["claim_cashier_create", "claim_cashier_refund_deny", "claim_auditor_view"],
       "elements": [
         {
           "element_id": "role_cashier",
           "kind": "role-permission",
           "role": "cashier",
           "permissions": ["allow:create", "deny:refund"],
-          "source_claim_ids": ["claim_cashier_permissions"],
+          "source_claim_ids": ["claim_cashier_create", "claim_cashier_refund_deny"],
           "model_refs": []
         },
         {
@@ -21,7 +21,7 @@
           "kind": "role-permission",
           "role": "auditor",
           "permissions": ["allow:view"],
-          "source_claim_ids": ["claim_auditor_permissions"],
+          "source_claim_ids": ["claim_auditor_view"],
           "model_refs": []
         }
       ],

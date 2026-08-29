@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { compile as compileInput } from '../../src/obligations/input-domain.mjs';
 import { compile as compileRole } from '../../src/obligations/role.mjs';
+import { responsibilityKey } from '../../src/obligations/responsibility.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 import { auditInteractionMatrix } from '../../src/views/interaction-matrix.mjs';
 import { validateBehaviorViews } from '../../src/views/validate-views.mjs';
@@ -30,15 +31,16 @@ async function fixture(name) {
   return JSON.parse(await readFile(path.join(repositoryRoot, `test/fixtures/views/${name}-obligations.json`), 'utf8'));
 }
 
-/** Task 3, Schema, stable-ID, and Task 4 gates are real; strategies never consume raw submitted evidence. @param {any} artifact @returns {any} */
-function acceptedView(artifact) {
+/** Task 3, Schema, stable-ID, and Task 4 gates are real; strategies never consume raw submitted evidence. @param {any} artifact @param {Array<{claim_id: string, scope: string}>} [extraClaims] @returns {any} */
+function acceptedView(artifact, extraClaims = []) {
   assert.deepEqual(validateAgainstSchema(artifact, behaviorSchema), []);
   assert.deepEqual(validateUniqueStableIds(artifact), []);
   assert.deepEqual(auditInteractionMatrix(artifact).diagnostics, []);
   const view = artifact.views[0];
   const claimIds = [...new Set([
     ...view.source_claim_ids,
-    ...view.elements.flatMap((/** @type {any} */ element) => [...element.source_claim_ids, ...element.model_refs])
+    ...view.elements.flatMap((/** @type {any} */ element) => [...element.source_claim_ids, ...element.model_refs]),
+    ...extraClaims.map(({ claim_id: claimId }) => claimId)
   ])];
   const sourcePack = {
     schema_version: '1.0.0', source_revision: artifact.source_revision, run_scope: view.scope,
@@ -60,6 +62,9 @@ function acceptedView(artifact) {
     claims: claimIds.map((claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement', scope: view.scope,
       value: claimId, source_locator_ids: ['locator_task6'], source_id: 'source_task6'
+    })).map((claim) => ({
+      ...claim,
+      scope: extraClaims.find(({ claim_id: claimId }) => claimId === claim.claim_id)?.scope ?? claim.scope
     })),
     fact_ledger: []
   };
@@ -79,9 +84,28 @@ function acceptedView(artifact) {
 function inputContext(claimsById) {
   return {
     claimsById,
-    riskByElementId: new Map([['input_amount', 'high']]),
-    requiredOracleRefsByElementId: new Map([['input_amount', ['claim_amount_domain']]]),
-    requiredCapabilitiesByElementId: new Map([['input_amount', ['amount-control', 'amount-observer']]])
+    responsibilityBindings: [
+      binding(
+        responsibilityKey('input-domain', 'input_amount', {
+          responsibility: 'equivalence-class', class_id: 'class_standard'
+        }), 'medium', ['claim_amount_standard'], ['claim_amount_standard'], ['standard-observer']
+      ),
+      binding(
+        responsibilityKey('input-domain', 'input_amount', {
+          responsibility: 'equivalence-class', class_id: 'class_zero'
+        }), 'high', ['claim_amount_zero'], [], ['invalid-observer']
+      ),
+      binding(
+        responsibilityKey('input-domain', 'input_amount', {
+          responsibility: 'boundary', boundary: 'lower'
+        }), 'critical', ['claim_amount_lower'], ['claim_amount_lower'], ['lower-control']
+      ),
+      binding(
+        responsibilityKey('input-domain', 'input_amount', {
+          responsibility: 'boundary', boundary: 'upper'
+        }), 'low', ['claim_amount_upper'], [], ['upper-control']
+      )
+    ]
   };
 }
 
@@ -89,15 +113,31 @@ function inputContext(claimsById) {
 function roleContext(claimsById) {
   return {
     claimsById,
-    riskByElementId: new Map([['role_cashier', 'high'], ['role_auditor', 'medium']]),
-    requiredOracleRefsByElementId: new Map([
-      ['role_cashier', ['claim_cashier_permissions']],
-      ['role_auditor', ['claim_auditor_permissions']]
-    ]),
-    requiredCapabilitiesByElementId: new Map([
-      ['role_cashier', ['permission-observer']],
-      ['role_auditor', ['permission-observer']]
-    ])
+    responsibilityBindings: [
+      binding(
+        responsibilityKey('role', 'role_cashier', { responsibility: 'permission', permission: 'allow:create' }),
+        'critical', ['claim_cashier_create'], ['claim_cashier_create'], ['create-observer']
+      ),
+      binding(
+        responsibilityKey('role', 'role_cashier', { responsibility: 'permission', permission: 'deny:refund' }),
+        'high', ['claim_cashier_refund_deny'], [], ['refund-denial-observer']
+      ),
+      binding(
+        responsibilityKey('role', 'role_auditor', { responsibility: 'permission', permission: 'allow:view' }),
+        'low', ['claim_auditor_view'], ['claim_auditor_view'], ['view-observer']
+      )
+    ]
+  };
+}
+
+/** @param {string} responsibilityKeyValue @param {string} risk @param {string[]} sourceClaimIds @param {string[]} oracleRefs @param {string[]} capabilities */
+function binding(responsibilityKeyValue, risk, sourceClaimIds, oracleRefs, capabilities) {
+  return {
+    responsibility_key: responsibilityKeyValue,
+    risk,
+    source_claim_ids: sourceClaimIds,
+    required_oracle_refs: oracleRefs,
+    required_capabilities: capabilities
   };
 }
 
@@ -122,7 +162,16 @@ test('input role obligations hand-count two explicit classes plus inclusive lowe
 
   assert.equal(actual.length, 4);
   assert.deepEqual(actual.map((seed) => seed.obligation_id), inputIds);
-  assert.deepEqual(new Set(actual.flatMap((seed) => seed.required_oracle_refs)), new Set(['claim_amount_domain']));
+  assert.deepEqual(actual.map((seed) => seed.source_claim_ids).sort(), [
+    ['claim_amount_lower'], ['claim_amount_standard'], ['claim_amount_upper'], ['claim_amount_zero']
+  ]);
+  assert.deepEqual(new Set(actual.flatMap((seed) => seed.required_oracle_refs)), new Set([
+    'claim_amount_lower', 'claim_amount_standard'
+  ]));
+  assert.deepEqual(new Set(actual.map((seed) => seed.risk)), new Set(['critical', 'high', 'low', 'medium']));
+  assert.deepEqual(new Set(actual.flatMap((seed) => seed.required_capabilities)), new Set([
+    'invalid-observer', 'lower-control', 'standard-observer', 'upper-control'
+  ]));
   assert.equal(actual.every((seed) => seed.view_element_refs[0] === 'view_amount_input#input_amount'), true);
   assert.equal(actual.some((seed) => seed.source_claim_ids.some((id) => id.includes('generic'))), false);
   assert.equal(JSON.stringify(view), before);
@@ -140,8 +189,9 @@ test('input role obligations preserve every sourced role-permission combination 
 
   assert.equal(actual.length, 3);
   assert.deepEqual(actual.map((seed) => seed.obligation_id), roleIds);
-  assert.equal(actual.filter((seed) => seed.source_claim_ids.includes('claim_cashier_permissions')).length, 2);
-  assert.equal(actual.filter((seed) => seed.source_claim_ids.includes('claim_auditor_permissions')).length, 1);
+  assert.deepEqual(actual.map((seed) => seed.source_claim_ids).sort(), [
+    ['claim_auditor_view'], ['claim_cashier_create'], ['claim_cashier_refund_deny']
+  ]);
   assert.equal(actual.every((seed) => seed.required_oracle_refs.every((id) => !id.includes('generic-denial'))), true);
   assert.deepEqual(validateAgainstSchema({
     schema_version: '1.0.0', source_revision: 6, obligations: actual, fact_routes: [], interaction_routes: []
@@ -152,19 +202,115 @@ test('input role obligations preserve every sourced role-permission combination 
 test('input role obligations retain formal invalid and deny responsibilities with empty Oracle refs when the Oracle mapping is absent', async () => {
   const input = acceptedView(await fixture('input'));
   const role = acceptedView(await fixture('role'));
-  const inputMissing = inputContext(input.claimsById);
-  inputMissing.requiredOracleRefsByElementId.set('input_amount', []);
-  const roleMissing = roleContext(role.claimsById);
-  roleMissing.requiredOracleRefsByElementId.set('role_cashier', []);
-
-  const inputSeeds = compileInput(input.view, inputMissing);
-  const roleSeeds = compileRole(role.view, roleMissing);
+  const inputSeeds = compileInput(input.view, inputContext(input.claimsById));
+  const roleSeeds = compileRole(role.view, roleContext(role.claimsById));
 
   assert.equal(inputSeeds.length, 4);
-  assert.equal(inputSeeds.every((seed) => seed.required_oracle_refs.length === 0), true);
-  assert.equal(roleSeeds.filter((seed) => seed.source_claim_ids.includes('claim_cashier_permissions'))
-    .every((seed) => seed.required_oracle_refs.length === 0), true);
+  assert.equal(inputSeeds.filter((seed) => seed.required_oracle_refs.length === 0).length, 2);
+  assert.equal(roleSeeds.find((seed) => seed.source_claim_ids.includes('claim_cashier_refund_deny'))
+    ?.required_oracle_refs.length, 0);
   assert.equal(roleSeeds.length, 3);
+});
+
+// Break caught: missing/unknown/duplicate responsibility declarations are guessed, ignored, or overwrite one another.
+test('input role obligations require one closed binding for every base responsibility and reject unknown or duplicate keys', async () => {
+  const input = acceptedView(await fixture('input'));
+  const missing = inputContext(input.claimsById);
+  missing.responsibilityBindings.pop();
+  assert.throws(() => compileInput(input.view, missing), /missing responsibility binding/);
+
+  const unknown = inputContext(input.claimsById);
+  unknown.responsibilityBindings.push(binding(
+    responsibilityKey('input-domain', 'input_amount', { responsibility: 'boundary', boundary: 'outside' }),
+    'low', ['claim_amount_lower'], [], []
+  ));
+  assert.throws(() => compileInput(input.view, unknown), /unknown responsibility binding/);
+
+  const duplicate = inputContext(input.claimsById);
+  duplicate.responsibilityBindings.push(structuredClone(duplicate.responsibilityBindings[0]));
+  assert.throws(() => compileInput(input.view, duplicate), /duplicate responsibility binding/);
+
+  for (const field of [
+    'responsibility_key', 'source_claim_ids', 'required_oracle_refs', 'required_capabilities'
+  ]) {
+    const padded = inputContext(input.claimsById);
+    const paddedBinding = /** @type {any} */ (padded.responsibilityBindings[0]);
+    if (field === 'responsibility_key') paddedBinding[field] = '   ';
+    else paddedBinding[field] = ['   '];
+    assert.throws(() => compileInput(input.view, padded), /nonblank/);
+  }
+  assert.throws(() => responsibilityKey('   ', 'input_amount', { responsibility: 'boundary' }), /requires/);
+  assert.throws(() => responsibilityKey('input-domain', '   ', { responsibility: 'boundary' }), /requires/);
+  for (const field of [
+    'responsibility_key', 'source_claim_ids', 'required_oracle_refs', 'required_capabilities'
+  ]) {
+    const padded = inputContext(input.claimsById);
+    const paddedBinding = /** @type {any} */ (padded.responsibilityBindings[0]);
+    const value = field === 'responsibility_key' ? paddedBinding[field] : paddedBinding[field][0];
+    if (field === 'responsibility_key') paddedBinding[field] = ` ${value} `;
+    else paddedBinding[field] = [` ${value} `];
+    assert.throws(() => compileInput(input.view, padded), /unpadded/);
+  }
+  assert.throws(() => responsibilityKey(' input-domain', 'input_amount', { responsibility: 'boundary' }), /requires/);
+  assert.throws(() => responsibilityKey('input-domain', 'input_amount ', { responsibility: 'boundary' }), /requires/);
+});
+
+// Break caught: the same owning evidence closure is rebuilt once per responsibility, making one large element quadratic.
+test('input role obligations compute one local owning ancestry closure for two thousand responsibilities', () => {
+  const permissionCount = 2_000;
+  let parentReads = 0;
+  const permissions = Array.from({ length: permissionCount }, (_, index) => `allow:p${String(index).padStart(4, '0')}`);
+  const claimIds = permissions.map((_, index) => `claim_role_large_${String(index).padStart(4, '0')}`);
+  const claimsById = new Map(claimIds.map((claimId) => {
+    const claim = {
+      claim_id: claimId, level: 'E3', kind: 'requirement', scope: 'role.large'
+    };
+    Object.defineProperty(claim, 'parent_claim_ids', {
+      enumerable: true,
+      get() {
+        parentReads += 1;
+        return [];
+      }
+    });
+    return [claimId, claim];
+  }));
+  const view = {
+    view_id: 'view_role_large', type: 'role', scope: 'role.large',
+    elements: [{
+      element_id: 'role_large', kind: 'role-permission', role: 'large', permissions,
+      source_claim_ids: claimIds, model_refs: []
+    }]
+  };
+  const context = {
+    claimsById,
+    responsibilityBindings: permissions.map((permission, index) => binding(
+      responsibilityKey('role', 'role_large', { responsibility: 'permission', permission }),
+      'low', [claimIds[index]], [], []
+    ))
+  };
+  const started = performance.now();
+
+  const actual = compileRole(view, context);
+  const elapsed = performance.now() - started;
+
+  assert.equal(actual.length, permissionCount);
+  assert.equal(parentReads <= permissionCount * 3, true, `owning ancestry read ${parentReads} claim parents`);
+  assert.equal(elapsed < 1_500, true, `two-thousand-responsibility compile took ${elapsed.toFixed(1)}ms`);
+});
+
+// Break caught: a same-scope accepted claim unrelated to the owning element is promoted into responsibility evidence.
+test('input role obligations require binding evidence to belong to the owning element accepted ancestry', async () => {
+  const input = acceptedView(await fixture('input'), [{
+    claim_id: 'claim_same_scope_unrelated', scope: 'checkout.amount'
+  }]);
+  const unrelated = inputContext(input.claimsById);
+  unrelated.responsibilityBindings[0].source_claim_ids = ['claim_same_scope_unrelated'];
+  unrelated.responsibilityBindings[0].required_oracle_refs = [];
+  assert.throws(() => compileInput(input.view, unrelated), /not validated support of owning element/);
+
+  const siblingOracle = inputContext(input.claimsById);
+  siblingOracle.responsibilityBindings[0].required_oracle_refs = ['claim_amount_zero'];
+  assert.throws(() => compileInput(input.view, siblingOracle), /not validated evidence/);
 });
 
 // Break caught: using collection position or locale sorting changes IDs/output after semantically irrelevant reordering.
@@ -180,7 +326,9 @@ test('input role obligations are code-point deterministic, fresh, and non-mutati
 
   const firstInput = compileInput(input.view, inputContext(input.claimsById));
   const secondInput = compileInput(input.view, inputContext(input.claimsById));
-  const firstRole = compileRole(role.view, roleContext(role.claimsById));
+  const reorderedRoleContext = roleContext(role.claimsById);
+  reorderedRoleContext.responsibilityBindings.reverse();
+  const firstRole = compileRole(role.view, reorderedRoleContext);
 
   assert.deepEqual(firstInput.map((seed) => seed.obligation_id), inputIds);
   assert.deepEqual(firstRole.map((seed) => seed.obligation_id), roleIds);

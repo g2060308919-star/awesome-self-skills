@@ -1,8 +1,5 @@
-import { scopeContains } from '../decision-record.mjs';
-import {
-  assertViewType, buildObligationSeed, claimsByIdFrom, elementEvidenceRefs,
-  finishObligationSeeds, isObject, objectArray, sortedStrings
-} from './registry.mjs';
+import { assertViewType, isObject, objectArray } from './registry.mjs';
+import { compileResponsibilitySeeds, responsibilityKey } from './responsibility.mjs';
 
 const SPECIAL_TYPES = new Set(['timeout', 'retry']);
 
@@ -12,14 +9,6 @@ function keyedValue(container, key) {
   return isObject(container) ? container[key] : undefined;
 }
 
-/** @param {Record<string, unknown>} claim @param {string} scope */
-function isAcceptedSignal(claim, scope) {
-  const accepted = (claim.level === 'E3' && claim.kind === 'requirement')
-    || (claim.level === 'E1' && claim.kind === 'assumption')
-    || (claim.level === 'E2' && claim.kind === 'model-element');
-  return accepted && typeof claim.scope === 'string' && scopeContains(claim.scope, scope);
-}
-
 /** @param {unknown} context @param {string} elementId */
 function specialResponsibilities(context, elementId) {
   if (!isObject(context)) return [];
@@ -27,38 +16,7 @@ function specialResponsibilities(context, elementId) {
 }
 
 /**
- * Give an evidence-backed special responsibility an independent Oracle mapping
- * while retaining the real validated view element as its only view reference.
- * @param {unknown} context
- * @param {Record<string, unknown>} element
- * @param {Record<string, unknown>} special
- */
-function specialInput(context, element, special) {
-  if (!isObject(context)) throw new TypeError('obligation compilation context must be an object');
-  const baseId = String(element.element_id);
-  const signal = String(special.signal);
-  const syntheticId = `${baseId}::${String(special.type)}:${signal}`;
-  const sourceClaimIds = sortedStrings(special.source_claim_ids, true);
-  const oracleRefs = sortedStrings(special.required_oracle_refs, true);
-  const primaryElement = {
-    ...element,
-    element_id: syntheticId,
-    source_claim_ids: sortedStrings([...elementEvidenceRefs(element), ...sourceClaimIds], true),
-    model_refs: []
-  };
-  const specialContext = {
-    ...context,
-    riskByElementId: new Map([[syntheticId, keyedValue(context.riskByElementId, baseId)]]),
-    requiredOracleRefsByElementId: new Map([[syntheticId, oracleRefs]]),
-    requiredCapabilitiesByElementId: new Map([[
-      syntheticId, keyedValue(context.requiredCapabilitiesByElementId, baseId)
-    ]])
-  };
-  return { primaryElement, specialContext, sourceClaimIds };
-}
-
-/**
- * Compile before/equal/after threshold semantics and only explicitly evidenced
+ * Compile before/equal/after threshold semantics and only independently bound
  * timeout/retry signals. No concrete neighboring time value is invented.
  * @param {Record<string, unknown>} view
  * @param {unknown} context
@@ -66,41 +24,44 @@ function specialInput(context, element, special) {
 export function compile(view, context) {
   assertViewType(view, 'timing');
   const elements = objectArray(view.elements).filter((element) => element.kind === 'timing-rule');
-  const claimsById = claimsByIdFrom(context);
-  /** @type {import('./registry.mjs').ObligationSeed[]} */
-  const seeds = [];
+  /** @type {import('./responsibility.mjs').ResponsibilityDescriptor[]} */
+  const descriptors = [];
 
   for (const element of elements) {
+    const elementId = String(element.element_id);
     for (const relation of ['before', 'equal', 'after']) {
-      seeds.push(buildObligationSeed({
-        view, primaryElement: element, supportingElements: [element], context,
+      descriptors.push({
+        key: responsibilityKey('timing', elementId, {
+          responsibility: 'threshold', threshold_relation: relation
+        }),
+        element,
+        required: true,
         identity: {
           kind: 'timing', responsibility: 'threshold', scope: view.scope,
+          timing_element_id: elementId, order: element.order,
           timing_event: element.timing_event, threshold: element.threshold,
           threshold_relation: relation
         }
-      }));
+      });
     }
 
-    for (const special of specialResponsibilities(context, String(element.element_id))) {
+    for (const special of specialResponsibilities(context, elementId)) {
       if (typeof special.type !== 'string' || !SPECIAL_TYPES.has(special.type)
-        || typeof special.signal !== 'string'
-        || special.signal.length === 0) continue;
-      const sourceClaimIds = sortedStrings(special.source_claim_ids, true);
-      if (sourceClaimIds.length === 0 || sourceClaimIds.some((claimId) => {
-        const claim = claimsById.get(claimId);
-        return !claim || !isAcceptedSignal(claim, String(view.scope));
-      })) continue;
-      const { primaryElement, specialContext } = specialInput(context, element, special);
-      seeds.push(buildObligationSeed({
-        view, primaryElement, supportingElements: [element], context: specialContext,
-        extraSourceClaimIds: sourceClaimIds,
+        || typeof special.signal !== 'string' || special.signal.length === 0) continue;
+      descriptors.push({
+        key: responsibilityKey('timing', elementId, {
+          responsibility: special.type, signal: special.signal
+        }),
+        element,
+        required: false,
         identity: {
           kind: 'timing', responsibility: special.type, scope: view.scope,
-          timing_event: element.timing_event, threshold: element.threshold, signal: special.signal
+          timing_element_id: elementId, order: element.order,
+          timing_event: element.timing_event, threshold: element.threshold,
+          signal: special.signal
         }
-      }));
+      });
     }
   }
-  return finishObligationSeeds(seeds, 'timing');
+  return compileResponsibilitySeeds(view, context, descriptors, 'timing');
 }
