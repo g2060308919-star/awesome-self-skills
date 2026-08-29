@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { stableId } from '../../src/canonical.mjs';
 import { evaluateClarification } from '../../src/clarification.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -64,6 +65,59 @@ test('record only converts a strict pending state into replayable suppression wi
   assert.deepEqual(replayed.diagnostics, []);
   assert.equal(replayed.action, 'deliver');
   assert.deepEqual(replayed.state, recorded.state);
+});
+
+test('record only and strict preserve an effective answer and both replay the same revision', () => {
+  const initial = evaluateClarification(baseContext(), 'pause_for_clarification');
+  const answered = baseContext();
+  answered.source_revision = 1;
+  answered.prior_state = structuredClone(initial.state);
+  answered.blocked_obligations = [];
+  answered.semantic_snapshot.formal_test_points[0] = {
+    obligation_id: 'obligation_refund_failure', evidence_level: 'E3',
+    classification: 'grounded', blocked_reason: null
+  };
+  answered.semantic_snapshot.delivery_sections.grounded = ['obligation_refund_failure'];
+  answered.semantic_snapshot.delivery_sections.blocked = [];
+  answered.semantic_snapshot.delivery_sections.quality.delivery_status = 'executable_subset_ready';
+  answered.append_batch.decision_records = [{
+    decision_id: 'decision_effective',
+    question_id: stableId('question', { root_issue_ids: [ROOT_ORACLE] }),
+    root_issue_ids: [ROOT_ORACLE],
+    affected_obligation_ids: ['obligation_refund_failure'],
+    clarification_event_seq: 1,
+    confirmer: 'refund-owner',
+    confirmed_at: '2026-08-30',
+    question: 'What should happen?',
+    answer: 'The refund failure is final and observable.',
+    disposition: 'final',
+    authority_scope: 'refund',
+    effective_scope: 'refund',
+    evidence_ref: 'locator_decision_effective',
+    evidence_level: 'E3'
+  }];
+
+  const strict = evaluateClarification(structuredClone(answered), 'pause_for_clarification');
+  const recorded = evaluateClarification(structuredClone(answered), 'record_only');
+  assert.deepEqual(recorded.diagnostics, []);
+  assert.deepEqual(recorded.semantic_snapshot, strict.semantic_snapshot);
+  assert.deepEqual(recorded.semantic_snapshot.formal_test_points, [{
+    obligation_id: 'obligation_refund_failure', evidence_level: 'E3',
+    classification: 'grounded', blocked_reason: null
+  }]);
+  assert.equal(recorded.state.root_issue_dispositions[0].status, 'resolved_final');
+
+  for (const [policy, result] of [
+    ['pause_for_clarification', strict], ['record_only', recorded]
+  ]) {
+    const replay = structuredClone(answered);
+    replay.prior_state = structuredClone(result.state);
+    replay.append_batch = { decision_records: [], clarification_events: [] };
+    const replayed = evaluateClarification(replay, /** @type {any} */ (policy));
+    assert.deepEqual(replayed.diagnostics, [], policy);
+    assert.equal(replayed.action, 'deliver', policy);
+    assert.deepEqual(replayed.semantic_snapshot, result.semantic_snapshot, policy);
+  }
 });
 
 test('record only and strict user-requested delivery preserve the same six semantic sections', () => {
