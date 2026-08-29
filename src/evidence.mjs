@@ -1,4 +1,5 @@
 import { scopeContains, validateDecisionRecords } from './decision-record.mjs';
+import { stableId } from './canonical.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
 
 export const E2_TARGETS = Object.freeze({
@@ -219,7 +220,7 @@ function recomputeDerivedValue(claim, acceptedClaims) {
     const unit = typeof ruleInput.unit === 'string' ? ruleInput.unit : typeof parameters.unit === 'string' ? parameters.unit : null;
     const precision = typeof ruleInput.precision === 'number' ? ruleInput.precision : parameters.precision;
     const rounding = typeof ruleInput.rounding === 'string' ? ruleInput.rounding : parameters.rounding;
-    if (formula === null || inputs.length === 0 || unit === null || unit.length === 0
+    if (formula === null || inputs.length === 0 || unit === null || unit.trim().length === 0
       || !Number.isInteger(precision) || /** @type {number} */ (precision) < 0 || /** @type {number} */ (precision) > 1000
       || typeof rounding !== 'string' || !ROUNDING_RULES.has(rounding)) {
       return { code: 'E2_FORMULA_INPUT_INCOMPLETE', message: 'formula derivation requires formula, inputs, unit, precision, and a supported rounding rule' };
@@ -230,6 +231,11 @@ function recomputeDerivedValue(claim, acceptedClaims) {
       if (typeof input.name !== 'string' || input.name.length === 0 || (typeof input.value !== 'number' && typeof input.value !== 'string')) {
         return { code: 'E2_FORMULA_INPUT_INCOMPLETE', message: 'every formula input requires a name and numeric value' };
       }
+      if ('unit' in input && (typeof input.unit !== 'string' || input.unit.trim().length === 0)) {
+        return { code: 'E2_FORMULA_INPUT_INCOMPLETE', message: 'an optional formula input unit must be nonblank when present' };
+      }
+      // This deterministic gate validates field presence only. Unit compatibility and
+      // dimensional analysis remain semantic/model-review responsibilities.
       if (variables.has(input.name)) return { code: 'E2_FORMULA_VARIABLE_DUPLICATE', message: `formula input "${input.name}" is duplicated` };
       try {
         const serialized = typeof input.value === 'number' ? String(input.value) : input.value;
@@ -283,12 +289,15 @@ function recomputeDerivedValue(claim, acceptedClaims) {
       const match = /^\s*(.+?)\s*->\s*(.+?)\s*$/.exec(value);
       return match ? [[match[1], match[2]]] : [];
     });
+    /** @type {Map<string, string[]>} */
     const graph = new Map();
     const nodes = new Set();
     for (const [from, to] of edges) {
       nodes.add(from);
       nodes.add(to);
-      graph.set(from, [...(graph.get(from) ?? []), to]);
+      const neighbors = graph.get(from);
+      if (neighbors) neighbors.push(to);
+      else graph.set(from, [to]);
     }
     if (!nodes.has(ruleInput.from) || !nodes.has(ruleInput.to)) {
       return { code: 'E2_GRAPH_NODE_UNKNOWN', message: 'graph reachability endpoints must exist in the parent edge graph' };
@@ -301,7 +310,7 @@ function recomputeDerivedValue(claim, acceptedClaims) {
       if (current === ruleInput.to) { reachable = true; break; }
       if (current === undefined || visited.has(current)) continue;
       visited.add(current);
-      pending.push(...(graph.get(current) ?? []));
+      for (const neighbor of graph.get(current) ?? []) pending.push(neighbor);
     }
     if (!reachable) return { code: 'E2_GRAPH_NOT_REACHABLE', message: 'parent claims do not establish graph reachability' };
     return { value: `${ruleInput.from}->${ruleInput.to}` };
@@ -371,11 +380,20 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
   const locators = new Map(objectArray(pack.locators).flatMap((locator) => typeof locator.locator_id === 'string' ? [[locator.locator_id, locator]] : []));
   const decisionValidation = validateDecisionRecords(pack);
   const factLedger = objectArray(artifact.fact_ledger);
-  const conflictedFactScopes = factLedger.filter((entry) => entry.status === 'conflicted').flatMap((entry) =>
-    stringArray(entry.source_claim_ids).flatMap((claimId) => {
-      const scope = rawClaims.get(claimId)?.scope;
-      return typeof scope === 'string' ? [scope] : [];
-    }));
+  const factConflicts = factLedger.filter((entry) => entry.status === 'conflicted').flatMap((entry) => {
+    const sourceClaimIds = stringArray(entry.source_claim_ids).sort();
+    const scope = typeof entry.claim_id === 'string' ? rawClaims.get(entry.claim_id)?.scope : null;
+    if (typeof scope !== 'string') return [];
+    return [{
+      root_issue_id: stableId('root', {
+        missing_type: 'fact-conflict',
+        fact_id: typeof entry.fact_id === 'string' ? entry.fact_id : '',
+        source_claim_ids: sourceClaimIds,
+        scope
+      }),
+      scope
+    }];
+  });
   const policy = resolveSourcePolicy(pack);
   const cyclicClaims = findE2Cycles(rawClaims);
   /** @type {Map<string, Record<string, unknown>>} */
@@ -456,8 +474,27 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
         diagnostics.push(diagnostic('reference', 'DECISION_RECORD_DANGLING', `/claims/${index}/decision_id`, `claim references unknown Decision Record "${decisionId}"`));
         valid = false;
       } else {
-        const sharedValid = claim.level === 'E3' ? decisionValidation.validFinalDecisionIds.has(decisionId)
-          : claim.level === 'E1' ? decisionValidation.validTemporaryDecisionIds.has(decisionId) : false;
+        const evidenceDisposition = decision.disposition === 'final' || decision.disposition === 'temporary';
+        const expectedClaimLevel = decision.disposition === 'final' ? 'E3' : decision.disposition === 'temporary' ? 'E1' : null;
+        if (!evidenceDisposition) {
+          diagnostics.push(diagnostic(
+            'classification',
+            'DECISION_DISPOSITION_NOT_EVIDENCE',
+            `/claims/${index}/decision_id`,
+            'unknown and deferred Decision Records cannot supply evidence'
+          ));
+          valid = false;
+        } else if (claim.level !== expectedClaimLevel) {
+          diagnostics.push(diagnostic(
+            'classification',
+            'DECISION_CLAIM_LEVEL_MISMATCH',
+            `/claims/${index}/level`,
+            `${decision.disposition} Decision Record requires a ${expectedClaimLevel} claim`
+          ));
+          valid = false;
+        }
+        const sharedValid = decision.disposition === 'final' ? decisionValidation.validFinalDecisionIds.has(decisionId)
+          : decision.disposition === 'temporary' ? decisionValidation.validTemporaryDecisionIds.has(decisionId) : false;
         if (!sharedValid) valid = false;
         if (typeof decision.evidence_ref === 'string' && locators.has(decision.evidence_ref)
           && !stringArray(claim.source_locator_ids).includes(decision.evidence_ref)) {
@@ -481,11 +518,12 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
           valid = false;
         }
         const claimScope = typeof claim.scope === 'string' ? claim.scope : null;
-        const overlapsUnresolvedConflict = claimScope !== null && (
-          policy.conflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope))
-          || conflictedFactScopes.some((scope) => scopesIntersect(scope, claimScope))
+        const decisionRootIds = new Set(stringArray(decision.root_issue_ids));
+        const namesOverlappingConflict = claimScope !== null && (
+          policy.conflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope) && decisionRootIds.has(conflict.root_issue_id))
+          || factConflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope) && decisionRootIds.has(conflict.root_issue_id))
         );
-        if (claim.level === 'E1' && overlapsUnresolvedConflict) {
+        if (decision.disposition === 'temporary' && sharedValid && claim.level === 'E1' && namesOverlappingConflict) {
           diagnostics.push(diagnostic('classification', 'E1_CANNOT_OVERRIDE_CONFLICT', `/claims/${index}`, 'temporary evidence cannot override an unresolved E3/E2 source conflict'));
           valid = false;
         }
@@ -580,12 +618,20 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
   for (const claimId of rawClaims.keys()) validateIteratively(claimId);
 
   factLedger.forEach((entry, entryIndex) => {
-    if (typeof entry.claim_id === 'string' && !rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic(
-      'reference', 'FACT_CLAIM_DANGLING', `/fact_ledger/${entryIndex}/claim_id`, `fact references unknown claim "${entry.claim_id}"`
-    ));
+    if (typeof entry.claim_id === 'string') {
+      if (!rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic(
+        'reference', 'FACT_CLAIM_DANGLING', `/fact_ledger/${entryIndex}/claim_id`, `fact references unknown claim "${entry.claim_id}"`
+      ));
+      else if (!acceptedClaims.has(entry.claim_id)) diagnostics.push(diagnostic(
+        'classification', 'FACT_CLAIM_NOT_ACCEPTED', `/fact_ledger/${entryIndex}/claim_id`, `fact references rejected claim "${entry.claim_id}"`
+      ));
+    }
     stringArray(entry.source_claim_ids).forEach((claimId, sourceIndex) => {
       if (!rawClaims.has(claimId)) diagnostics.push(diagnostic(
         'reference', 'FACT_SOURCE_CLAIM_DANGLING', `/fact_ledger/${entryIndex}/source_claim_ids/${sourceIndex}`, `fact references unknown source claim "${claimId}"`
+      ));
+      else if (!acceptedClaims.has(claimId)) diagnostics.push(diagnostic(
+        'classification', 'FACT_SOURCE_CLAIM_NOT_ACCEPTED', `/fact_ledger/${entryIndex}/source_claim_ids/${sourceIndex}`, `fact references rejected source claim "${claimId}"`
       ));
     });
   });

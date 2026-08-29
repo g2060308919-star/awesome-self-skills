@@ -64,6 +64,74 @@ test('source policy applies explicit supersedes without using document recency a
   assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_payment_new']);
 });
 
+test('source policy carries scoped precedence through a valid inactive intermediate rule', () => {
+  const sourcePack = {
+    sources: [
+      { source_id: 'source_new', status: 'effective' },
+      { source_id: 'source_middle', status: 'superseded' },
+      { source_id: 'source_old', status: 'effective' }
+    ],
+    locators: [], decision_records: [],
+    source_policy: { rules: [
+      { rule_id: 'rule_new', source_ids: ['source_new'], supersedes: ['rule_middle'], scope: 'checkout.payment', authority: 'owner', status: 'effective' },
+      { rule_id: 'rule_middle', source_ids: ['source_middle'], supersedes: ['rule_old'], scope: 'checkout.payment', authority: 'owner', status: 'superseded' },
+      { rule_id: 'rule_old', source_ids: ['source_old'], scope: 'checkout.payment', authority: 'owner', status: 'effective' }
+    ] }
+  };
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_new']);
+});
+
+test('source policy does not carry precedence through a dangling inactive intermediate rule', () => {
+  const sourcePack = {
+    sources: [
+      { source_id: 'source_new', status: 'effective' },
+      { source_id: 'source_middle', status: 'superseded' },
+      { source_id: 'source_old', status: 'effective' }
+    ],
+    locators: [], decision_records: [],
+    source_policy: { rules: [
+      { rule_id: 'rule_new', source_ids: ['source_new'], supersedes: ['rule_middle'], scope: 'checkout.payment', authority: 'owner', status: 'effective' },
+      { rule_id: 'rule_middle', source_ids: ['source_middle'], supersedes: ['rule_old', 'rule_missing'], scope: 'checkout.payment', authority: 'owner', status: 'superseded' },
+      { rule_id: 'rule_old', source_ids: ['source_old'], scope: 'checkout.payment', authority: 'owner', status: 'effective' }
+    ] }
+  };
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.equal(result.diagnostics.some((entry) => entry.code === 'SOURCE_POLICY_SUPERSEDES_DANGLING'), true);
+  assert.equal(result.conflicts.length, 1);
+  assert.deepEqual(result.effectiveClaims, []);
+});
+
+test('source policy does not carry precedence through an intermediate scope that excludes the queried scope', () => {
+  for (const intermediateScope of ['checkout.shipping', 'checkout.payment.card']) {
+    const sourcePack = {
+      sources: [
+        { source_id: 'source_new', status: 'effective' },
+        { source_id: 'source_middle', status: 'superseded' },
+        { source_id: 'source_old', status: 'effective' }
+      ],
+      locators: [], decision_records: [],
+      source_policy: { rules: [
+        { rule_id: 'rule_new', source_ids: ['source_new'], supersedes: ['rule_middle'], scope: 'checkout.payment', authority: 'owner', status: 'effective' },
+        { rule_id: 'rule_middle', source_ids: ['source_middle'], supersedes: ['rule_old'], scope: intermediateScope, authority: 'owner', status: 'superseded' },
+        { rule_id: 'rule_old', source_ids: ['source_old'], scope: 'checkout.payment', authority: 'owner', status: 'effective' }
+      ] }
+    };
+
+    const result = resolveSourcePolicy(sourcePack);
+
+    assert.equal(result.conflicts.length, 1, intermediateScope);
+    assert.equal(result.conflicts[0].scope, 'checkout.payment', intermediateScope);
+    assert.deepEqual(result.effectiveClaims, [], intermediateScope);
+  }
+});
+
 test('source policy retains a broad superseded rule outside the newer narrow scope', async () => {
   const sourcePack = await fixture('adversarial/source-conflict-superseded.json');
   sourcePack.sources[0].status = 'effective';
@@ -218,4 +286,31 @@ test('source policy handles a reversed 5000-rule supersedes chain without recurs
   assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(result.conflicts, []);
   assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_4999']);
+});
+
+test('source policy uses sparse scoped reachability for a high-fanout inactive graph', { timeout: 3000 }, () => {
+  const bridgeCount = 15000;
+  const bridgeIds = Array.from({ length: bridgeCount }, (_, index) => `rule_bridge_${index}`);
+  const sourcePack = {
+    sources: [
+      { source_id: 'source_new', status: 'effective' },
+      { source_id: 'source_bridge', status: 'superseded' },
+      { source_id: 'source_old', status: 'effective' }
+    ],
+    locators: [], decision_records: [],
+    source_policy: { rules: [
+      { rule_id: 'rule_new', source_ids: ['source_new'], supersedes: bridgeIds, scope: 'checkout', authority: 'owner', status: 'effective' },
+      ...bridgeIds.map((ruleId, index) => ({
+        rule_id: ruleId, source_ids: ['source_bridge'], ...(index === bridgeCount - 1 ? { supersedes: ['rule_old'] } : {}),
+        scope: 'checkout', authority: 'owner', status: 'superseded'
+      })),
+      { rule_id: 'rule_old', source_ids: ['source_old'], scope: 'checkout', authority: 'owner', status: 'effective' }
+    ] }
+  };
+
+  const result = resolveSourcePolicy(sourcePack);
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_new']);
 });

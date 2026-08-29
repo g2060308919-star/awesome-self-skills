@@ -70,53 +70,157 @@ function findCyclicRuleIds(graph) {
   return cyclic;
 }
 
+// Dense closure is an optimization, not a semantic limit. Its typed-array payload and
+// number of scope variants are bounded; larger graphs use iterative sparse traversal.
+const REACHABILITY_BITSET_BUDGET_BYTES = 8 * 1024 * 1024;
+const REACHABILITY_SCOPE_CACHE_LIMIT = 16;
+const SPARSE_SCOPE_CACHE_LIMIT = 64;
+const SPARSE_REACHABILITY_CACHE_LIMIT = 2048;
+
 /**
- * Build compact transitive reachability for the acyclic, usable rule graph.
+ * Build scope-aware reachability for an acyclic graph. Every node on an accepted
+ * path, including inactive intermediates, must contain the queried intersection.
  * @param {Map<string, string[]>} graph
+ * @param {Map<string, string>} scopesById
  */
-function buildReachability(graph) {
+function buildScopedReachability(graph, scopesById) {
   const ids = [...graph.keys()].sort();
-  const indexById = new Map(ids.map((id, index) => [id, index]));
-  const indegree = new Uint32Array(ids.length);
+  const globalIndegree = new Uint32Array(ids.length);
+  const globalIndexById = new Map(ids.map((id, index) => [id, index]));
   for (const neighbors of graph.values()) {
     for (const neighbor of neighbors) {
-      const index = indexById.get(neighbor);
-      if (index !== undefined) indegree[index] += 1;
+      const index = globalIndexById.get(neighbor);
+      if (index !== undefined) globalIndegree[index] += 1;
     }
   }
   /** @type {string[]} */
-  const ready = [];
-  for (let index = 0; index < ids.length; index += 1) if (indegree[index] === 0) ready.push(ids[index]);
-  /** @type {string[]} */
-  const topological = [];
-  for (let offset = 0; offset < ready.length; offset += 1) {
-    const id = ready[offset];
-    topological.push(id);
+  const globalReady = [];
+  for (let index = 0; index < ids.length; index += 1) if (globalIndegree[index] === 0) globalReady.push(ids[index]);
+  /** @type {Map<string, number>} */
+  const rankById = new Map();
+  for (let offset = 0; offset < globalReady.length; offset += 1) {
+    const id = globalReady[offset];
+    rankById.set(id, offset);
     for (const neighbor of graph.get(id) ?? []) {
-      const index = /** @type {number} */ (indexById.get(neighbor));
-      indegree[index] -= 1;
-      if (indegree[index] === 0) ready.push(neighbor);
+      const index = /** @type {number} */ (globalIndexById.get(neighbor));
+      globalIndegree[index] -= 1;
+      if (globalIndegree[index] === 0) globalReady.push(neighbor);
     }
   }
-  const words = Math.ceil(ids.length / 32);
-  const descendants = new Map(ids.map((id) => [id, new Uint32Array(words)]));
-  for (let order = topological.length - 1; order >= 0; order -= 1) {
-    const id = topological[order];
-    const bits = /** @type {Uint32Array} */ (descendants.get(id));
-    for (const neighbor of graph.get(id) ?? []) {
-      const neighborIndex = /** @type {number} */ (indexById.get(neighbor));
-      bits[neighborIndex >>> 5] |= 1 << (neighborIndex & 31);
-      const neighborBits = /** @type {Uint32Array} */ (descendants.get(neighbor));
-      for (let word = 0; word < words; word += 1) bits[word] |= neighborBits[word];
+  /** @type {Map<string, {indexById: Map<string, number>, descendants: Map<string, Uint32Array>}>} */
+  const denseByScope = new Map();
+  /** @type {Map<string, boolean>} */
+  const sparseResults = new Map();
+  const sparseScopes = new Set();
+  let allocatedBitsetBytes = 0;
+
+  /** @param {string} scope */
+  function markSparseScope(scope) {
+    sparseScopes.add(scope);
+    if (sparseScopes.size > SPARSE_SCOPE_CACHE_LIMIT) {
+      const oldestScope = sparseScopes.values().next().value;
+      if (typeof oldestScope === 'string') sparseScopes.delete(oldestScope);
     }
   }
+
+  /** @param {string} scope */
+  function maybeBuildDense(scope) {
+    if (denseByScope.has(scope)) return denseByScope.get(scope);
+    if (sparseScopes.has(scope)) return null;
+    if (denseByScope.size >= REACHABILITY_SCOPE_CACHE_LIMIT) {
+      markSparseScope(scope);
+      return null;
+    }
+    const eligibleIds = ids.filter((id) => scopeContains(scopesById.get(id) ?? '', scope));
+    const words = Math.ceil(eligibleIds.length / 32);
+    const estimatedBytes = eligibleIds.length * words * Uint32Array.BYTES_PER_ELEMENT;
+    if (allocatedBitsetBytes + estimatedBytes > REACHABILITY_BITSET_BUDGET_BYTES) {
+      markSparseScope(scope);
+      return null;
+    }
+    const indexById = new Map(eligibleIds.map((id, index) => [id, index]));
+    const indegree = new Uint32Array(eligibleIds.length);
+    for (const id of eligibleIds) {
+      for (const neighbor of graph.get(id) ?? []) {
+        const index = indexById.get(neighbor);
+        if (index !== undefined) indegree[index] += 1;
+      }
+    }
+    /** @type {string[]} */
+    const ready = [];
+    for (let index = 0; index < eligibleIds.length; index += 1) if (indegree[index] === 0) ready.push(eligibleIds[index]);
+    /** @type {string[]} */
+    const topological = [];
+    for (let offset = 0; offset < ready.length; offset += 1) {
+      const id = ready[offset];
+      topological.push(id);
+      for (const neighbor of graph.get(id) ?? []) {
+        const index = indexById.get(neighbor);
+        if (index === undefined) continue;
+        indegree[index] -= 1;
+        if (indegree[index] === 0) ready.push(neighbor);
+      }
+    }
+    const descendants = new Map(eligibleIds.map((id) => [id, new Uint32Array(words)]));
+    for (let order = topological.length - 1; order >= 0; order -= 1) {
+      const id = topological[order];
+      const bits = /** @type {Uint32Array} */ (descendants.get(id));
+      for (const neighbor of graph.get(id) ?? []) {
+        const neighborIndex = indexById.get(neighbor);
+        if (neighborIndex === undefined) continue;
+        bits[neighborIndex >>> 5] |= 1 << (neighborIndex & 31);
+        const neighborBits = /** @type {Uint32Array} */ (descendants.get(neighbor));
+        for (let word = 0; word < words; word += 1) bits[word] |= neighborBits[word];
+      }
+    }
+    const closure = { indexById, descendants };
+    denseByScope.set(scope, closure);
+    allocatedBitsetBytes += estimatedBytes;
+    return closure;
+  }
+
+  /** @param {string} cacheKey @param {boolean} result */
+  function cacheSparseResult(cacheKey, result) {
+    sparseResults.set(cacheKey, result);
+    if (sparseResults.size > SPARSE_REACHABILITY_CACHE_LIMIT) {
+      const oldestKey = sparseResults.keys().next().value;
+      if (typeof oldestKey === 'string') sparseResults.delete(oldestKey);
+    }
+    return result;
+  }
+
   return {
-    /** @param {string} start @param {string} target */
-    reaches(start, target) {
-      const targetIndex = indexById.get(target);
-      const bits = descendants.get(start);
-      return targetIndex !== undefined && bits !== undefined
-        && (bits[targetIndex >>> 5] & (1 << (targetIndex & 31))) !== 0;
+    /** @param {string} ruleId */
+    rank(ruleId) {
+      return rankById.get(ruleId) ?? Number.MAX_SAFE_INTEGER;
+    },
+    /** @param {string} start @param {string} target @param {string} scope */
+    reaches(start, target, scope) {
+      if (!graph.has(start) || !graph.has(target)
+        || !scopeContains(scopesById.get(start) ?? '', scope)
+        || !scopeContains(scopesById.get(target) ?? '', scope)) return false;
+      const dense = maybeBuildDense(scope);
+      if (dense) {
+        const targetIndex = dense.indexById.get(target);
+        const bits = dense.descendants.get(start);
+        return targetIndex !== undefined && bits !== undefined
+          && (bits[targetIndex >>> 5] & (1 << (targetIndex & 31))) !== 0;
+      }
+      const cacheKey = `${scope}\0${start}\0${target}`;
+      const cached = sparseResults.get(cacheKey);
+      if (cached !== undefined) return cached;
+      const pending = [start];
+      const visited = new Set();
+      while (pending.length > 0) {
+        const current = pending.pop();
+        if (current === target) return cacheSparseResult(cacheKey, true);
+        if (current === undefined || visited.has(current)) continue;
+        visited.add(current);
+        for (const neighbor of graph.get(current) ?? []) {
+          if (scopeContains(scopesById.get(neighbor) ?? '', scope) && !visited.has(neighbor)) pending.push(neighbor);
+        }
+      }
+      return cacheSparseResult(cacheKey, false);
     }
   };
 }
@@ -134,6 +238,7 @@ export function resolveSourcePolicy(sourcePack) {
   const rules = objectArray(policy.rules);
   const ruleById = new Map(rules.flatMap((rule) => typeof rule.rule_id === 'string' ? [[rule.rule_id, rule]] : []));
   const invalidRuleIds = new Set();
+  const danglingEdgeRuleIds = new Set();
   /** @type {Map<string, string[]>} */
   const declaredGraph = new Map();
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
@@ -155,6 +260,7 @@ export function resolveSourcePolicy(sourcePack) {
     });
     supersedes.forEach((supersededId, edgeIndex) => {
       if (!ruleById.has(supersededId)) {
+        danglingEdgeRuleIds.add(/** @type {string} */ (rule.rule_id));
         diagnostics.push(diagnostic(
           'SOURCE_POLICY_SUPERSEDES_DANGLING',
           `/source_policy/rules/${ruleIndex}/supersedes/${edgeIndex}`,
@@ -172,29 +278,35 @@ export function resolveSourcePolicy(sourcePack) {
   ));
   for (const ruleId of cyclicIds) invalidRuleIds.add(ruleId);
 
-  const activeRules = rules.filter((rule) => rule.status === 'effective'
-    && typeof rule.rule_id === 'string' && typeof rule.scope === 'string'
+  const eligibleRules = rules.filter((rule) => typeof rule.rule_id === 'string'
+    && typeof rule.scope === 'string' && rule.scope.trim().length > 0
     && !invalidRuleIds.has(rule.rule_id));
-  const activeIds = new Set(activeRules.map((rule) => /** @type {string} */ (rule.rule_id)));
-  const graph = new Map(activeRules.map((rule) => {
+  const transitRules = eligibleRules.filter((rule) => !danglingEdgeRuleIds.has(/** @type {string} */ (rule.rule_id)));
+  const transitIds = new Set(transitRules.map((rule) => /** @type {string} */ (rule.rule_id)));
+  const graph = new Map(transitRules.map((rule) => {
     const id = /** @type {string} */ (rule.rule_id);
-    return [id, (declaredGraph.get(id) ?? []).filter((target) => activeIds.has(target))];
+    return [id, (declaredGraph.get(id) ?? []).filter((target) => transitIds.has(target))];
   }));
-  const reachability = buildReachability(graph);
+  const scopesById = new Map(transitRules.map((rule) => [
+    /** @type {string} */ (rule.rule_id),
+    /** @type {string} */ (rule.scope)
+  ]));
+  const reachability = buildScopedReachability(graph, scopesById);
+  const activeRules = eligibleRules.filter((rule) => rule.status === 'effective');
   const decisionValidation = validateDecisionRecords(pack);
   diagnostics.push(...decisionValidation.diagnostics);
 
   /** @type {Map<string, Set<string>>} */
   const precedenceExclusions = new Map();
   const fullySuperseded = new Set();
+  const precedenceCandidates = [...activeRules].sort((left, right) =>
+    reachability.rank(/** @type {string} */ (left.rule_id)) - reachability.rank(/** @type {string} */ (right.rule_id)));
   for (const loser of activeRules) {
     const loserId = /** @type {string} */ (loser.rule_id);
-    for (let winnerIndex = activeRules.length - 1; winnerIndex >= 0; winnerIndex -= 1) {
-      const winner = activeRules[winnerIndex];
+    for (const winner of precedenceCandidates) {
       const winnerId = /** @type {string} */ (winner.rule_id);
-      if (winnerId === loserId || !reachability.reaches(winnerId, loserId)) continue;
       const scope = intersectScopes(/** @type {string} */ (winner.scope), /** @type {string} */ (loser.scope));
-      if (scope !== null) {
+      if (winnerId !== loserId && scope !== null && reachability.reaches(winnerId, loserId, scope)) {
         const exclusions = precedenceExclusions.get(loserId) ?? new Set();
         exclusions.add(scope);
         precedenceExclusions.set(loserId, exclusions);
@@ -218,7 +330,7 @@ export function resolveSourcePolicy(sourcePack) {
       const leftId = /** @type {string} */ (left.rule_id);
       const rightId = /** @type {string} */ (right.rule_id);
       const scope = intersectScopes(/** @type {string} */ (left.scope), /** @type {string} */ (right.scope));
-      if (scope === null || reachability.reaches(leftId, rightId) || reachability.reaches(rightId, leftId)) continue;
+      if (scope === null || reachability.reaches(leftId, rightId, scope) || reachability.reaches(rightId, leftId, scope)) continue;
       if ([...(precedenceExclusions.get(leftId) ?? [])].some((excluded) => scopeContains(excluded, scope))
         || [...(precedenceExclusions.get(rightId) ?? [])].some((excluded) => scopeContains(excluded, scope))) continue;
       const leftSources = stringArray(left.source_ids).sort();

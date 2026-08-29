@@ -3,11 +3,30 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { stableId } from '../../src/canonical.mjs';
 import { E2_TARGETS, validateEvidenceGraph } from '../../src/evidence.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const digestA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+function paymentConflictRootId() {
+  return stableId('root', {
+    missing_type: 'source-conflict',
+    rule_ids: ['rule_payment_new', 'rule_payment_old'],
+    scope: 'checkout.payment',
+    source_ids: ['source_payment_new', 'source_payment_old']
+  });
+}
+
+function factResultConflictRootId() {
+  return stableId('root', {
+    missing_type: 'fact-conflict',
+    fact_id: 'fact_result',
+    source_claim_ids: ['claim_approved', 'claim_rejected'],
+    scope: 'checkout'
+  });
+}
 
 /** @param {string} relativePath */
 async function fixture(relativePath) {
@@ -164,6 +183,52 @@ test('source policy and evidence share strict Decision Record validation', () =>
   }
 });
 
+test('Decision Record claims emit local diagnostics for every disposition and claim-level pairing', () => {
+  const cases = [
+    { disposition: 'final', level: 'E3', accepted: true },
+    { disposition: 'final', level: 'E1', accepted: false },
+    { disposition: 'temporary', level: 'E1', accepted: true },
+    { disposition: 'temporary', level: 'E3', accepted: false }
+  ];
+  for (const item of cases) {
+    const pack = sourcePack();
+    pack.decision_records.push(decisionRecord(/** @type {'final' | 'temporary'} */ (item.disposition)));
+    const claim = decisionClaim(/** @type {'final' | 'temporary'} */ (item.disposition));
+    claim.level = item.level;
+    claim.kind = item.level === 'E3' ? 'requirement' : 'assumption';
+
+    const result = validateEvidenceGraph(pack, artifact([claim]));
+
+    assert.equal(result.claimsById.has('claim_decision'), item.accepted, `${item.disposition}/${item.level}`);
+    assert.equal(result.diagnostics.some((entry) => entry.code === 'DECISION_CLAIM_LEVEL_MISMATCH'), !item.accepted, `${item.disposition}/${item.level}`);
+  }
+});
+
+test('unknown and deferred Decision Records are diagnosed as non-evidence', () => {
+  for (const disposition of ['unknown', 'deferred']) {
+    const pack = sourcePack();
+    const record = decisionRecord('final');
+    record.disposition = disposition;
+    pack.decision_records.push(record);
+    const claim = decisionClaim('final');
+
+    const result = validateEvidenceGraph(pack, artifact([claim]));
+
+    assert.equal(result.diagnostics.some((entry) => entry.code === 'DECISION_DISPOSITION_NOT_EVIDENCE'), true, disposition);
+    assert.equal(result.claimsById.has('claim_decision'), false, disposition);
+  }
+});
+
+test('fact ledger diagnoses raw claims that failed evidence acceptance', () => {
+  const claims = artifact([direct({ claim_id: 'claim_bad', level: 'E1' })]);
+  claims.fact_ledger.push({ fact_id: 'fact_bad', claim_id: 'claim_bad', status: 'grounded', source_claim_ids: ['claim_bad'] });
+
+  const result = validateEvidenceGraph(sourcePack(), claims);
+
+  assert.equal(result.diagnostics.some((entry) => entry.code === 'FACT_CLAIM_NOT_ACCEPTED'), true);
+  assert.equal(result.diagnostics.some((entry) => entry.code === 'FACT_SOURCE_CLAIM_NOT_ACCEPTED'), true);
+});
+
 test('evidence blocks uncertain extraction and diagnostic current behavior from E3', () => {
   const uncertain = validateEvidenceGraph(sourcePack('uncertain'), artifact([direct()]));
   assert.deepEqual(uncertain.diagnostics.map((item) => item.code), ['E3_EXTRACTION_UNCERTAIN']);
@@ -282,6 +347,29 @@ test('formula recomputation rejects duplicate variables, metadata disagreement, 
   }
 });
 
+test('formula recomputation requires nonblank output and optional input units', () => {
+  const cases = [
+    { name: 'blank rule output unit', parameters: {}, unit: '   ', inputUnit: undefined },
+    { name: 'blank parameter output unit', parameters: { unit: '\t', precision: 2, rounding: 'half-up' }, unit: undefined, inputUnit: undefined },
+    { name: 'blank optional input unit', parameters: {}, unit: 'USD', inputUnit: '  ' }
+  ];
+  for (const item of cases) {
+    const input = { name: 'amount', value: '1', ...(item.inputUnit === undefined ? {} : { unit: item.inputUnit }) };
+    const ruleInput = {
+      formula: 'amount', inputs: [input], ...(item.unit === undefined ? {} : { unit: item.unit }), precision: 2, rounding: 'half-up'
+    };
+    const claim = derived({
+      derivation_kind: 'formula', derivation_target: 'expected-value', kind: 'expected-value', value: '1.00',
+      parameters: item.parameters, rule_input: ruleInput
+    });
+
+    const result = validateEvidenceGraph(sourcePack(), artifact([direct({ value: 'amount' }), claim]));
+
+    assert.equal(result.diagnostics.some((entry) => entry.code === 'E2_FORMULA_INPUT_INCOMPLETE'), true, item.name);
+    assert.equal(result.claimsById.has('claim_e2'), false, item.name);
+  }
+});
+
 test('graph reachability validates node existence, multi-hop paths, cycles, and reflexive paths', () => {
   const edges = [
     direct({ claim_id: 'claim_ab', value: 'A->B' }),
@@ -307,6 +395,24 @@ test('graph reachability validates node existence, multi-hop paths, cycles, and 
     parent_claim_ids: ['claim_root'], value: 'Z->Z', rule_input: { from: 'Z', to: 'Z' } });
   const reflexiveUnknown = validateEvidenceGraph(sourcePack(), artifact([direct(), noNodes]));
   assert.equal(reflexiveUnknown.diagnostics.some((item) => item.code === 'E2_GRAPH_NODE_UNKNOWN'), true);
+});
+
+test('graph reachability handles high fanout without adjacency copying or argument expansion', { timeout: 5000 }, () => {
+  const edgeCount = 125000;
+  const edges = Array.from({ length: edgeCount }, (_, index) => direct({
+    claim_id: `claim_edge_${String(index).padStart(5, '0')}`,
+    value: `hub->node_${index}`
+  }));
+  const claim = derived({
+    claim_id: 'claim_high_fanout', derivation_kind: 'graph-reachability', derivation_target: 'model-element', kind: 'model-element',
+    parent_claim_ids: edges.map((edge) => edge.claim_id), value: `hub->node_${edgeCount - 1}`,
+    rule_input: { from: 'hub', to: `node_${edgeCount - 1}` }
+  });
+
+  const result = validateEvidenceGraph(sourcePack(), artifact([...edges, claim]));
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.claimsById.has('claim_high_fanout'), true);
 });
 
 test('evidence rejects dangling parents, cycles, and chains through E1 or E0', () => {
@@ -353,7 +459,7 @@ test('evidence does not let E1 override an unresolved higher-evidence source con
   const pack = await fixture('adversarial/source-conflict-local.json');
   pack.locators.push({ locator_id: 'locator_rule', source_id: 'source_payment_new', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: digestA, extraction_integrity: 'verified' });
   pack.decision_records.push({
-    decision_id: 'decision_temp', question_id: 'question_temp', root_issue_ids: ['root_payment'], affected_obligation_ids: [], clarification_event_seq: 1,
+    decision_id: 'decision_temp', question_id: 'question_temp', root_issue_ids: [paymentConflictRootId()], affected_obligation_ids: [], clarification_event_seq: 1,
     confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Temporary settlement?', answer: 'Use two days.', disposition: 'temporary',
     authority_scope: 'checkout.payment', effective_scope: 'checkout.payment', evidence_ref: 'locator_rule', evidence_level: 'E1'
   });
@@ -365,13 +471,29 @@ test('evidence does not let E1 override an unresolved higher-evidence source con
   assert.equal(result.claimsById.has('claim_temp'), false);
 });
 
+test('evidence accepts overlapping E1 when it names no matching source-conflict root', async () => {
+  const pack = await fixture('adversarial/source-conflict-local.json');
+  pack.locators.push({ locator_id: 'locator_rule', source_id: 'source_payment_new', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: digestA, extraction_integrity: 'verified' });
+  pack.decision_records.push({
+    decision_id: 'decision_temp', question_id: 'question_temp', root_issue_ids: ['root_shipping'], affected_obligation_ids: [], clarification_event_seq: 1,
+    confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Temporary settlement?', answer: 'Use two days.', disposition: 'temporary',
+    authority_scope: 'checkout.payment', effective_scope: 'checkout.payment', evidence_ref: 'locator_rule', evidence_level: 'E1'
+  });
+  const claim = { claim_id: 'claim_temp', claim_form: 'decision-record', level: 'E1', kind: 'assumption', scope: 'checkout.payment', value: 'Use two days.', source_locator_ids: ['locator_rule'], decision_id: 'decision_temp', authority: 'checkout.payment' };
+
+  const result = validateEvidenceGraph(pack, artifact([claim]));
+
+  assert.equal(result.diagnostics.some((item) => item.code === 'E1_CANNOT_OVERRIDE_CONFLICT'), false);
+  assert.equal(result.claimsById.has('claim_temp'), true);
+});
+
 test('evidence does not let E1 override a conflicted fact backed by E3 claims', () => {
   const pack = sourcePack();
   pack.sources.push({ source_id: 'source_rule', kind: 'formal-rule', version: '1', status: 'effective', authority: 'owner', content: 'Rejected', content_digest: 'b'.repeat(64), scope: 'checkout' });
   pack.locators.push({ locator_id: 'locator_second', source_id: 'source_rule', type: 'text-range', text_range: { start: 0, end: 8 }, content_digest: 'b'.repeat(64), extraction_integrity: 'verified' });
   pack.source_policy.rules[0].source_ids.push('source_rule');
   pack.decision_records.push({
-    decision_id: 'decision_temp', question_id: 'question_temp', root_issue_ids: ['root_result'], affected_obligation_ids: [], clarification_event_seq: 1,
+    decision_id: 'decision_temp', question_id: 'question_temp', root_issue_ids: [factResultConflictRootId()], affected_obligation_ids: [], clarification_event_seq: 1,
     confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Temporary result?', answer: 'Use approved.', disposition: 'temporary',
     authority_scope: 'checkout', effective_scope: 'checkout', evidence_ref: 'locator_rule', evidence_level: 'E1'
   });
@@ -387,6 +509,28 @@ test('evidence does not let E1 override a conflicted fact backed by E3 claims', 
   assert.equal(result.claimsById.has('claim_temp'), false);
   assert.equal(result.claimsById.has('claim_approved'), true);
   assert.equal(result.claimsById.has('claim_rejected'), true);
+});
+
+test('evidence accepts overlapping E1 when it names no matching fact-conflict root', () => {
+  const pack = sourcePack();
+  pack.sources.push({ source_id: 'source_rule', kind: 'formal-rule', version: '1', status: 'effective', authority: 'owner', content: 'Rejected', content_digest: 'b'.repeat(64), scope: 'checkout' });
+  pack.locators.push({ locator_id: 'locator_second', source_id: 'source_rule', type: 'text-range', text_range: { start: 0, end: 8 }, content_digest: 'b'.repeat(64), extraction_integrity: 'verified' });
+  pack.source_policy.rules[0].source_ids.push('source_rule');
+  pack.decision_records.push({
+    decision_id: 'decision_temp', question_id: 'question_temp', root_issue_ids: ['root_unrelated'], affected_obligation_ids: [], clarification_event_seq: 1,
+    confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Temporary result?', answer: 'Use approved.', disposition: 'temporary',
+    authority_scope: 'checkout', effective_scope: 'checkout', evidence_ref: 'locator_rule', evidence_level: 'E1'
+  });
+  const first = direct({ claim_id: 'claim_approved', value: 'approved' });
+  const second = direct({ claim_id: 'claim_rejected', value: 'rejected', source_id: 'source_rule', source_locator_ids: ['locator_second'] });
+  const temporary = { claim_id: 'claim_temp', claim_form: 'decision-record', level: 'E1', kind: 'assumption', scope: 'checkout', value: 'Use approved.', source_locator_ids: ['locator_rule'], decision_id: 'decision_temp', authority: 'checkout' };
+  const claims = artifact([first, second, temporary]);
+  claims.fact_ledger.push({ fact_id: 'fact_result', claim_id: 'claim_approved', status: 'conflicted', source_claim_ids: ['claim_approved', 'claim_rejected'] });
+
+  const result = validateEvidenceGraph(pack, claims);
+
+  assert.equal(result.diagnostics.some((item) => item.code === 'E1_CANNOT_OVERRIDE_CONFLICT'), false);
+  assert.equal(result.claimsById.has('claim_temp'), true);
 });
 
 test('evidence returns claimsById in stable claim_id order independent of artifact order', () => {
