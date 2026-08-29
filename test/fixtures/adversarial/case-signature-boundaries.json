@@ -1,0 +1,7 @@
+[
+  { "dimension": "role", "value": "approver" },
+  { "dimension": "precondition_state", "value": "cart is locked" },
+  { "dimension": "data_partition", "value": "total=99.99 interior" },
+  { "dimension": "action_path", "value": ["Review checkout", "Submit checkout"] },
+  { "dimension": "oracle_refs", "value": ["expectation_audit"] }
+]
