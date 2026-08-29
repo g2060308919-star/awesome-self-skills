@@ -499,7 +499,59 @@ function claimRelations(claimsById) {
       childrenById.get(parentId)?.add(claimId);
     }
   }
-  return { parentsById, childrenById };
+  const componentById = new Map();
+  let componentId = 0;
+  for (const rootId of [...claimsById.keys()].sort(compareCodePoints)) {
+    if (componentById.has(rootId)) continue;
+    const pending = [rootId];
+    componentById.set(rootId, componentId);
+    while (pending.length > 0) {
+      const claimId = /** @type {string} */ (pending.pop());
+      const neighbors = new Set([
+        ...(parentsById.get(claimId) ?? []),
+        ...(childrenById.get(claimId) ?? [])
+      ]);
+      for (const neighborId of neighbors) {
+        if (componentById.has(neighborId)) continue;
+        componentById.set(neighborId, componentId);
+        pending.push(neighborId);
+      }
+    }
+    componentId += 1;
+  }
+  /** @type {Map<string, {entry: number, exit: number}>} */
+  const forestIntervalsById = new Map();
+  const isSingleParentForest = [...parentsById.values()].every((parents) => parents.size <= 1);
+  if (isSingleParentForest) {
+    let sequence = 0;
+    const roots = [...claimsById.keys()].filter((claimId) => parentsById.get(claimId)?.size === 0)
+      .sort(compareCodePoints);
+    for (const rootId of roots) {
+      /** @type {Array<{claimId: string, exiting: boolean}>} */
+      const pending = [{ claimId: rootId, exiting: false }];
+      while (pending.length > 0) {
+        const item = /** @type {{claimId: string, exiting: boolean}} */ (pending.pop());
+        if (item.exiting) {
+          const interval = forestIntervalsById.get(item.claimId);
+          if (interval) interval.exit = sequence++;
+          continue;
+        }
+        forestIntervalsById.set(item.claimId, { entry: sequence++, exit: -1 });
+        pending.push({ claimId: item.claimId, exiting: true });
+        const children = [...(childrenById.get(item.claimId) ?? [])].sort(compareCodePoints).reverse();
+        for (const childId of children) pending.push({ claimId: childId, exiting: false });
+      }
+    }
+  }
+  return {
+    parentsById,
+    childrenById,
+    componentById,
+    forestIntervalsById,
+    pairRelationCache: new Map(),
+    directionalByRootSet: new Map(),
+    descendantsByRootSet: new Map()
+  };
 }
 
 /** @param {Map<string, Set<string>>} adjacency @param {Iterable<string>} roots */
@@ -517,13 +569,87 @@ function reachableClaims(adjacency, roots) {
   return reached;
 }
 
+/** @param {Iterable<string>} roots */
+function canonicalRootSet(roots) {
+  return [...new Set(roots)].sort(compareCodePoints);
+}
+
+/**
+ * @param {Map<string, Set<string>>} adjacency
+ * @param {Iterable<string>} roots
+ * @param {Map<string, Set<string>>} cache
+ */
+function cachedReachableClaims(adjacency, roots, cache) {
+  const rootIds = canonicalRootSet(roots);
+  const cacheKey = canonicalStringify(rootIds);
+  let reached = cache.get(cacheKey);
+  if (!reached) {
+    reached = reachableClaims(adjacency, rootIds);
+    cache.set(cacheKey, reached);
+  }
+  return reached;
+}
+
 /** @param {ReturnType<typeof claimRelations>} relations @param {Iterable<string>} roots */
 function directionallyRelatedClaims(relations, roots) {
-  const rootIds = [...new Set(roots)];
-  return new Set([
-    ...reachableClaims(relations.parentsById, rootIds),
-    ...reachableClaims(relations.childrenById, rootIds)
-  ]);
+  const rootIds = canonicalRootSet(roots);
+  const cacheKey = canonicalStringify(rootIds);
+  let related = relations.directionalByRootSet.get(cacheKey);
+  if (!related) {
+    related = new Set([
+      ...reachableClaims(relations.parentsById, rootIds),
+      ...reachableClaims(relations.childrenById, rootIds)
+    ]);
+    relations.directionalByRootSet.set(cacheKey, related);
+  }
+  return related;
+}
+
+/**
+ * @param {Map<string, Set<string>>} adjacency
+ * @param {string} startId
+ * @param {string} targetId
+ */
+function reachesClaim(adjacency, startId, targetId) {
+  const visited = new Set([startId]);
+  const pending = [startId];
+  while (pending.length > 0) {
+    const claimId = /** @type {string} */ (pending.pop());
+    for (const relatedId of adjacency.get(claimId) ?? []) {
+      if (relatedId === targetId) return true;
+      if (visited.has(relatedId)) continue;
+      visited.add(relatedId);
+      pending.push(relatedId);
+    }
+  }
+  return false;
+}
+
+/**
+ * @param {ReturnType<typeof claimRelations>} relations
+ * @param {string} leftId
+ * @param {string} rightId
+ */
+function claimsDirectionallyRelated(relations, leftId, rightId) {
+  if (leftId === rightId) return true;
+  const pairKey = canonicalStringify([leftId, rightId].sort(compareCodePoints));
+  const cached = relations.pairRelationCache.get(pairKey);
+  if (cached !== undefined) return cached;
+  let related = relations.componentById.get(leftId) === relations.componentById.get(rightId);
+  if (related) {
+    const left = relations.forestIntervalsById.get(leftId);
+    const right = relations.forestIntervalsById.get(rightId);
+    if (left && right) {
+      const leftContainsRight = left.entry <= right.entry && right.exit <= left.exit;
+      const rightContainsLeft = right.entry <= left.entry && left.exit <= right.exit;
+      related = leftContainsRight || rightContainsLeft;
+    } else {
+      related = reachesClaim(relations.parentsById, leftId, rightId)
+        || reachesClaim(relations.parentsById, rightId, leftId);
+    }
+  }
+  relations.pairRelationCache.set(pairKey, related);
+  return related;
 }
 
 const OBLIGATION_SET_FIELDS = [
@@ -1068,8 +1194,6 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   }
   /** @type {Map<string, Record<string, unknown>>} */
   const routes = new Map();
-  /** @type {Map<string, Set<string>>} */
-  const relatedClaimsByExclusionId = new Map();
   const notApplicableFactIds = new Set();
   for (const [factId, submittedRoutes] of [...routesByFactId].sort(([left], [right]) => compareCodePoints(left, right))) {
     const path = `/obligationCompilation/factRoutes/${factId || 'invalid'}`;
@@ -1139,12 +1263,9 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     }
     const fact = /** @type {Record<string, unknown>} */ (factsById.get(factId));
     const factClaimIds = new Set([String(fact.claim_id), ...stringArray(fact.source_claim_ids)]);
-    let relatedToExclusion = relatedClaimsByExclusionId.get(exclusionId);
-    if (!relatedToExclusion) {
-      relatedToExclusion = directionallyRelatedClaims(relations, [exclusionId]);
-      relatedClaimsByExclusionId.set(exclusionId, relatedToExclusion);
-    }
-    if ([...factClaimIds].some((claimId) => relatedToExclusion.has(claimId))) {
+    if ([...factClaimIds].some((claimId) => claimsDirectionallyRelated(
+      relations, exclusionId, claimId
+    ))) {
       diagnostics.push(diagnostic('classification', 'NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT', `${path}/not_applicable_claim_id`, 'NotApplicable exclusion must be independent from the fact claim and its sources'));
       continue;
     }
@@ -1173,12 +1294,12 @@ function isResolvedTask4FactDiagnostic(item, terminalFactIds) {
 }
 
 /**
- * Build the evidence-to-obligation join once. A modeled fact then visits only
- * the selected view/evidence buckets instead of rescanning the full ledger.
+ * Bucket exact obligation sources once. A modeled fact expands only its own
+ * descendants and reads the selected view buckets, so repeated obligations do
+ * not each materialize the same ancestry closure.
  * @param {Record<string, unknown>[]} obligations
- * @param {ReturnType<typeof claimRelations>} relations
  */
-function indexObligationsByViewAndClaim(obligations, relations) {
+function indexObligationsByViewAndDirectClaim(obligations) {
   /** @type {Map<string, Map<string, Set<string>>>} */
   const index = new Map();
   for (const obligation of obligations) {
@@ -1193,10 +1314,7 @@ function indexObligationsByViewAndClaim(obligations, relations) {
         claims = new Map();
         index.set(viewId, claims);
       }
-      const ancestorClaimIds = reachableClaims(
-        relations.parentsById, stringArray(obligation.source_claim_ids)
-      );
-      for (const claimId of ancestorClaimIds) {
+      for (const claimId of stringArray(obligation.source_claim_ids)) {
         let obligationIds = claims.get(claimId);
         if (!obligationIds) {
           obligationIds = new Set();
@@ -1213,7 +1331,7 @@ function indexObligationsByViewAndClaim(obligations, relations) {
 function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, relations, diagnostics) {
   const viewsByFact = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === 'string'
     ? [[route.fact_id, new Set(stringArray(route.view_ids))]] : []));
-  const obligationIndex = indexObligationsByViewAndClaim(obligations, relations);
+  const obligationIndex = indexObligationsByViewAndDirectClaim(obligations);
   const routes = [];
   for (const fact of facts) {
     const factId = String(fact.fact_id);
@@ -1231,12 +1349,15 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
       diagnostics.push(diagnostic('traceability', 'FACT_ROUTE_MISSING', `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
       continue;
     }
-    const claimIds = new Set([String(fact.claim_id), ...stringArray(fact.source_claim_ids)]);
+    const claimIds = [String(fact.claim_id), ...stringArray(fact.source_claim_ids)];
+    const descendantClaimIds = cachedReachableClaims(
+      relations.childrenById, claimIds, relations.descendantsByRootSet
+    );
     const obligationIds = new Set();
     for (const viewId of viewIds) {
       const claims = obligationIndex.get(viewId);
       if (!claims) continue;
-      for (const claimId of claimIds) {
+      for (const claimId of descendantClaimIds) {
         for (const obligationId of claims.get(claimId) ?? []) obligationIds.add(obligationId);
       }
     }

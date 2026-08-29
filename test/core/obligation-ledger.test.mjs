@@ -1317,6 +1317,46 @@ test('obligation ledger batches all obligation source roots into one linear fact
   }
 });
 
+test('obligation ledger reuses shared custom roots and joins facts from direct-source buckets', async () => {
+  const fixture = await ledgerFixture();
+  /** @param {number} size */
+  const countSharedRootReads = (size) => {
+    const graph = graphFrom(fixture);
+    let sourceClaimId = 'claim_rule';
+    for (let index = 0; index < size; index += 1) {
+      const claimId = `claim_shared_root_scale_${index}`;
+      graph.claimsById.set(claimId, {
+        claim_id: claimId, level: 'E2', kind: 'model-element', scope: 'checkout',
+        parent_claim_ids: [sourceClaimId], derivation_kind: 'graph-reachability',
+        derivation_target: 'model-element'
+      });
+      sourceClaimId = claimId;
+    }
+    graph.obligationCompilation.customObligations = Array.from({ length: size }, (_, index) => (
+      customInput(`shared-root-responsibility-${index}`, {
+        kind: 'decision', risk: 'low', scope: 'checkout', source_claim_ids: [sourceClaimId],
+        view_element_refs: ['view_decision#rule_checkout'], required_oracle_refs: [],
+        required_capabilities: []
+      })
+    ));
+    return countTaggedMapReads('claim_shared_root_scale_', () => {
+      const compiled = /** @type {any} */ (compileObligations(graph, fixture.behavior_views));
+      const route = compiled.fact_routes.find((/** @type {any} */ item) => item.fact_id === 'fact_rule');
+      assert.ok(route.obligation_ids.length >= size);
+    });
+  };
+
+  const sizes = [100, 200, 400, 800];
+  const reads = sizes.map(countSharedRootReads);
+  for (let index = 0; index < sizes.length; index += 1) {
+    assert.ok(reads[index] <= sizes[index] * 100, `${sizes[index]} shared roots caused ${reads[index]} Map reads`);
+    if (index > 0) assert.ok(
+      reads[index] <= reads[index - 1] * 2 + 200,
+      `doubling ${sizes[index - 1]} shared roots changed reads ${reads[index - 1]} -> ${reads[index]}`
+    );
+  }
+});
+
 test('obligation ledger memoizes one NotApplicable exclusion closure across many facts', () => {
   const size = 500;
   /** @type {Map<string, any>} */
@@ -1364,6 +1404,119 @@ test('obligation ledger memoizes one NotApplicable exclusion closure across many
     assert.equal(result.fact_routes.length, size);
   });
   assert.ok(reads <= size * 30, `${size} shared exclusions caused ${reads} ancestry reads`);
+});
+
+test('obligation ledger answers distinct independent NotApplicable exclusions without per-claim closures', () => {
+  /** @param {number} size */
+  const countDistinctExclusionReads = (size) => {
+    /** @type {Map<string, any>} */
+    const claimsById = new Map([['claim_distinct_na_fact', {
+      claim_id: 'claim_distinct_na_fact', level: 'E3', kind: 'requirement', scope: 'checkout'
+    }], ['claim_distinct_na_scale_0', {
+      claim_id: 'claim_distinct_na_scale_0', level: 'E3', kind: 'requirement', scope: 'checkout'
+    }]]);
+    const exclusionIds = ['claim_distinct_na_scale_0'];
+    for (let index = 1; index < size; index += 1) {
+      const claimId = `claim_distinct_na_scale_${index}`;
+      claimsById.set(claimId, {
+        claim_id: claimId, level: 'E2', kind: 'model-element', scope: 'checkout',
+        parent_claim_ids: [exclusionIds[index - 1]], derivation_kind: 'graph-reachability',
+        derivation_target: 'model-element'
+      });
+      exclusionIds.push(claimId);
+    }
+    const facts = exclusionIds.map((_, index) => ({
+      fact_id: `fact_distinct_na_scale_${index}`, claim_id: 'claim_distinct_na_fact',
+      status: 'active', source_claim_ids: ['claim_distinct_na_fact']
+    }));
+    const behaviorViews = {
+      schema_version: '1.0.0', source_revision: 0, views: [],
+      interaction_matrix: interactionDimensions.map((dimension) => ({
+        module_ids: ['checkout'], dimension, status: 'checked-no-signal'
+      })),
+      interaction_candidates: []
+    };
+    const graph = {
+      claimsById, factLedger: facts, runScope: 'checkout',
+      obligationCompilation: {
+        sourceRevision: 0, contextsByViewId: new Map(), customObligations: [],
+        factRoutes: facts.map((fact, index) => ({
+          fact_id: fact.fact_id, route_type: 'not_applicable',
+          not_applicable_claim_id: exclusionIds[index]
+        })),
+        notApplicableReviews: facts.map((fact, index) => ({
+          fact_id: fact.fact_id, claim_id: exclusionIds[index], support_review: 'supported'
+        }))
+      }
+    };
+    return countTaggedMapReads('claim_distinct_na_scale_', () => {
+      const result = /** @type {any} */ (compileObligations(graph, behaviorViews));
+      assert.equal(result.fact_routes.length, size);
+    });
+  };
+
+  const sizes = [100, 200, 400, 800];
+  const reads = sizes.map(countDistinctExclusionReads);
+  for (let index = 0; index < sizes.length; index += 1) {
+    assert.ok(reads[index] <= sizes[index] * 100, `${sizes[index]} exclusions caused ${reads[index]} Map reads`);
+    if (index > 0) assert.ok(
+      reads[index] <= reads[index - 1] * 2 + 200,
+      `doubling ${sizes[index - 1]} exclusions changed reads ${reads[index - 1]} -> ${reads[index]}`
+    );
+  }
+});
+
+test('obligation ledger keeps related NotApplicable rejection deterministic under route reorder', () => {
+  const claims = [
+    { claim_id: 'claim_na_related_fact', level: 'E3', kind: 'requirement', scope: 'checkout' },
+    {
+      claim_id: 'claim_na_related_child_a', level: 'E2', kind: 'model-element', scope: 'checkout',
+      parent_claim_ids: ['claim_na_related_fact'], derivation_kind: 'graph-reachability',
+      derivation_target: 'model-element'
+    },
+    {
+      claim_id: 'claim_na_related_child_b', level: 'E2', kind: 'model-element', scope: 'checkout',
+      parent_claim_ids: ['claim_na_related_child_a'], derivation_kind: 'graph-reachability',
+      derivation_target: 'model-element'
+    }
+  ];
+  const facts = ['a', 'b'].map((suffix) => ({
+    fact_id: `fact_na_related_${suffix}`, claim_id: 'claim_na_related_fact',
+    status: 'active', source_claim_ids: ['claim_na_related_fact']
+  }));
+  const behaviorViews = {
+    schema_version: '1.0.0', source_revision: 0, views: [],
+    interaction_matrix: interactionDimensions.map((dimension) => ({
+      module_ids: ['checkout'], dimension, status: 'checked-no-signal'
+    })),
+    interaction_candidates: []
+  };
+  const exclusionByFactId = new Map([
+    ['fact_na_related_a', 'claim_na_related_child_a'],
+    ['fact_na_related_b', 'claim_na_related_child_b']
+  ]);
+  const makeGraph = (/** @type {boolean} */ reversed) => ({
+    claimsById: new Map((reversed ? [...claims].reverse() : claims).map((claim) => [claim.claim_id, claim])),
+    factLedger: reversed ? [...facts].reverse() : facts,
+    runScope: 'checkout',
+    obligationCompilation: {
+      sourceRevision: 0, contextsByViewId: new Map(), customObligations: [],
+      factRoutes: (reversed ? [...facts].reverse() : facts).map((fact) => ({
+        fact_id: fact.fact_id, route_type: 'not_applicable',
+        not_applicable_claim_id: exclusionByFactId.get(fact.fact_id)
+      })),
+      notApplicableReviews: (reversed ? [...facts].reverse() : facts).map((fact) => ({
+        fact_id: fact.fact_id,
+        claim_id: exclusionByFactId.get(fact.fact_id),
+        support_review: 'supported'
+      }))
+    }
+  });
+
+  const forward = compilationError(() => compileObligations(makeGraph(false), behaviorViews));
+  const reversed = compilationError(() => compileObligations(makeGraph(true), behaviorViews));
+  assert.equal(forward.diagnostics.some((item) => item.code === 'NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT'), true);
+  assert.deepEqual(reversed.diagnostics, forward.diagnostics);
 });
 
 test('obligation ledger batch-checks thousands of independent custom owners without scans', async () => {
