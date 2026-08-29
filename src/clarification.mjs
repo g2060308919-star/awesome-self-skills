@@ -50,14 +50,16 @@ function finalizeDiagnostics(diagnostics) {
   for (const item of diagnostics) unique.set(
     `${item.category}\0${item.code}\0${item.path}\0${item.message}`, item
   );
-  const sorted = [...unique.values()].sort((left, right) => compareCodePoints(
+  if (unique.size > DIAGNOSTIC_LIMIT) {
+    const truncated = diagnostic(
+      'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
+    );
+    unique.set(`${truncated.category}\0${truncated.code}\0${truncated.path}\0${truncated.message}`, truncated);
+  }
+  return [...unique.values()].sort((left, right) => compareCodePoints(
     `${left.category}\0${left.code}\0${left.path}\0${left.message}`,
     `${right.category}\0${right.code}\0${right.path}\0${right.message}`
-  ));
-  if (sorted.length <= DIAGNOSTIC_LIMIT) return sorted;
-  return [...sorted.slice(0, DIAGNOSTIC_LIMIT - 1), diagnostic(
-    'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
-  )];
+  )).slice(0, DIAGNOSTIC_LIMIT);
 }
 
 /**
@@ -68,19 +70,25 @@ function finalizeDiagnostics(diagnostics) {
 function snapshotControlled(root) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
+  let diagnosticsTruncated = false;
+  /** @param {Diagnostic} item */
+  const addDiagnostic = (item) => {
+    if (diagnostics.length < DIAGNOSTIC_LIMIT) diagnostics.push(item);
+    else diagnosticsTruncated = true;
+  };
   /** @type {unknown} */
   let snapshot;
   /** @type {Array<{source:unknown,path:string,assign:(value:unknown)=>void}>} */
   const pending = [{ source: root, path: '', assign(value) { snapshot = value; } }];
   const seen = new Set();
-  while (pending.length > 0 && diagnostics.length < DIAGNOSTIC_LIMIT) {
+  while (pending.length > 0) {
     const { source, path, assign } = /** @type {{source:unknown,path:string,assign:(value:unknown)=>void}} */ (pending.pop());
     if (!source || typeof source !== 'object') {
       assign(source);
       continue;
     }
     if (seen.has(source)) {
-      diagnostics.push(diagnostic('schema', 'CYCLIC_INPUT_INVALID', path || '/', 'clarification context must be acyclic'));
+      addDiagnostic(diagnostic('schema', 'CYCLIC_INPUT_INVALID', path || '/', 'clarification context must be acyclic'));
       assign(null);
       continue;
     }
@@ -91,20 +99,24 @@ function snapshotControlled(root) {
       prototype = NATIVE_GET_PROTOTYPE_OF(source);
       descriptors = NATIVE_GET_OWN_PROPERTY_DESCRIPTORS(source);
     } catch {
-      diagnostics.push(diagnostic('schema', 'INPUT_DESCRIPTOR_UNREADABLE', path || '/', 'clarification input descriptors could not be captured'));
+      addDiagnostic(diagnostic('schema', 'INPUT_DESCRIPTOR_UNREADABLE', path || '/', 'clarification input descriptors could not be captured'));
       assign(null);
       continue;
     }
     if (NATIVE_ARRAY_IS_ARRAY(source)) {
       if (prototype !== Array.prototype) {
-        diagnostics.push(diagnostic('schema', 'ARRAY_PROTOTYPE_INVALID', path || '/', 'controlled arrays must use Array.prototype'));
+        addDiagnostic(diagnostic('schema', 'ARRAY_PROTOTYPE_INVALID', path || '/', 'controlled arrays must use Array.prototype'));
         assign(null);
         continue;
       }
       const keys = NATIVE_REFLECT_OWN_KEYS(descriptors);
-      if (keys.some((key) => typeof key === 'symbol')) diagnostics.push(diagnostic(
-        'schema', 'ARRAY_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled arrays cannot contain symbol properties'
-      ));
+      let invalidOwnKeys = false;
+      if (keys.some((key) => typeof key === 'symbol')) {
+        invalidOwnKeys = true;
+        addDiagnostic(diagnostic(
+          'schema', 'ARRAY_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled arrays cannot contain symbol properties'
+        ));
+      }
       const lengthDescriptor = descriptors.length;
       const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
         ? Number(lengthDescriptor.value) : 0;
@@ -112,23 +124,46 @@ function snapshotControlled(root) {
       for (const key of keys.filter((item) => typeof item === 'string').sort(compareCodePoints)) {
         if (key === 'length') continue;
         const index = Number(key);
-        if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) diagnostics.push(diagnostic(
-          'schema', 'ARRAY_NAMED_PROPERTY_INVALID', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'
-        ));
+        if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
+          invalidOwnKeys = true;
+          addDiagnostic(diagnostic(
+            'schema', 'ARRAY_NAMED_PROPERTY_INVALID', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'
+          ));
+        }
         else numeric.push(index);
       }
-      numeric.sort((left, right) => left - right);
-      for (let index = 0; index < length; index += 1) if (numeric[index] !== index) {
-        diagnostics.push(diagnostic('schema', 'ARRAY_HOLE', `${path}/${index}`, 'controlled arrays must be dense'));
-        break;
+      if (invalidOwnKeys) {
+        assign(null);
+        continue;
       }
+      numeric.sort((left, right) => left - right);
       const target = new Array(length);
       assign(target);
+      let nextExpectedIndex = 0;
+      let holesTruncated = false;
+      /** @param {number} start @param {number} end */
+      const emitHoleGap = (start, end) => {
+        if (holesTruncated || start >= end) return;
+        const available = Math.max(0, DIAGNOSTIC_LIMIT - diagnostics.length);
+        const emitCount = Math.min(end - start, available);
+        for (let offset = 0; offset < emitCount; offset += 1) addDiagnostic(diagnostic(
+          'schema', 'ARRAY_HOLE', `${path}/${start + offset}`, 'controlled arrays must be dense'
+        ));
+        if (emitCount < end - start) {
+          diagnosticsTruncated = true;
+          holesTruncated = true;
+        }
+      };
+      for (const index of numeric) {
+        emitHoleGap(nextExpectedIndex, index);
+        nextExpectedIndex = index + 1;
+      }
+      emitHoleGap(nextExpectedIndex, length);
       /** @type {Array<{source:unknown,path:string,assign:(value:unknown)=>void}>} */
       const children = [];
       for (const index of numeric) {
         const descriptor = descriptors[String(index)];
-        if (!descriptor || !Object.hasOwn(descriptor, 'value')) diagnostics.push(diagnostic(
+        if (!descriptor || !Object.hasOwn(descriptor, 'value')) addDiagnostic(diagnostic(
           'schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${index}`, 'controlled input must use own data properties'
         ));
         else children.push({ source: descriptor.value, path: `${path}/${index}`, assign(value) { target[index] = value; } });
@@ -137,12 +172,12 @@ function snapshotControlled(root) {
       continue;
     }
     if (prototype !== Object.prototype && prototype !== null) {
-      diagnostics.push(diagnostic('schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled records must use a plain or null prototype'));
+      addDiagnostic(diagnostic('schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled records must use a plain or null prototype'));
       assign(null);
       continue;
     }
     const keys = NATIVE_REFLECT_OWN_KEYS(descriptors);
-    if (keys.some((key) => typeof key === 'symbol')) diagnostics.push(diagnostic(
+    if (keys.some((key) => typeof key === 'symbol')) addDiagnostic(diagnostic(
       'schema', 'RECORD_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled records cannot contain symbol properties'
     ));
     const target = {};
@@ -152,7 +187,7 @@ function snapshotControlled(root) {
     for (const key of keys.filter((item) => typeof item === 'string').sort(compareCodePoints)) {
       const descriptor = descriptors[key];
       const childPath = `${path}/${pointerPart(key)}`;
-      if (!descriptor || !Object.hasOwn(descriptor, 'value')) diagnostics.push(diagnostic(
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')) addDiagnostic(diagnostic(
         'schema', 'ACCESSOR_NOT_ALLOWED', childPath, 'controlled input must use own data properties'
       ));
       else children.push({
@@ -163,7 +198,10 @@ function snapshotControlled(root) {
     }
     for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]);
   }
-  return { snapshot, diagnostics: finalizeDiagnostics(diagnostics) };
+  if (diagnosticsTruncated) diagnostics.push(diagnostic(
+    'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
+  ));
+  return { snapshot, diagnostics };
 }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -394,6 +432,49 @@ function normalizePriorState(value, path, diagnostics) {
   };
 }
 
+/** @param {ReturnType<typeof normalizePriorState>} prior @param {Diagnostic[]} diagnostics */
+function validatePriorState(prior, diagnostics) {
+  const dispositionById = new Map(prior.root_issue_dispositions.map((item) => [item.root_issue_id, item.status]));
+  const askedHistory = new Set(prior.asked_root_issue_ids);
+  const askedDispositions = prior.root_issue_dispositions
+    .filter((item) => item.status === 'asked').map((item) => item.root_issue_id);
+  if (!sameSet(prior.last_pending_root_issue_ids, askedDispositions)) diagnostics.push(diagnostic(
+    'classification', 'PRIOR_PENDING_DISPOSITION_MISMATCH', '/prior_state/last_pending_root_issue_ids',
+    'prior pending roots must exactly equal dispositions whose status is asked'
+  ));
+  for (const rootId of prior.last_pending_root_issue_ids) if (!askedHistory.has(rootId)) diagnostics.push(diagnostic(
+    'classification', 'PRIOR_PENDING_NOT_ASKED', `/prior_state/last_pending_root_issue_ids/${pointerPart(rootId)}`,
+    'every prior pending root must appear in the cumulative asked history'
+  ));
+  for (const { root_issue_id: rootId, status } of prior.root_issue_dispositions) {
+    if (status === 'open' && askedHistory.has(rootId)) diagnostics.push(diagnostic(
+      'classification', 'PRIOR_LIFECYCLE_STATE_INVALID', `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
+      'an open prior root cannot already appear in asked history without an append-only reopen event'
+    ));
+    if (status !== 'open' && !askedHistory.has(rootId)) diagnostics.push(diagnostic(
+      'classification', 'PRIOR_DISPOSITION_HISTORY_MISMATCH', `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
+      'asked, resolved, and suppressed dispositions must appear in cumulative asked history'
+    ));
+  }
+  for (const rootId of prior.asked_root_issue_ids) if (!dispositionById.has(rootId)) diagnostics.push(diagnostic(
+    'classification', 'PRIOR_DISPOSITION_HISTORY_MISMATCH', `/prior_state/asked_root_issue_ids/${pointerPart(rootId)}`,
+    'every cumulative asked root must retain one lifecycle disposition'
+  ));
+  const expectedDigest = prior.last_pending_root_issue_ids.length === 0
+    ? '' : digest([...prior.last_pending_root_issue_ids].sort(compareCodePoints));
+  if (prior.last_question_set_digest !== expectedDigest) diagnostics.push(diagnostic(
+    'traceability', 'PRIOR_PENDING_DIGEST_MISMATCH', '/prior_state/last_question_set_digest',
+    'prior question-set digest must be derived from the exact sorted pending root set'
+  ));
+  if (prior.clarification_stop && (
+    prior.last_pending_root_issue_ids.length > 0
+    || prior.clarification_stop.source_revision !== prior.source_revision
+  )) diagnostics.push(diagnostic(
+    'classification', 'PRIOR_STOP_STATE_INVALID', '/prior_state/clarification_stop',
+    'prior clarification stop must belong to its exact revision and have no pending roots'
+  ));
+}
+
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
 function normalizeAppendBatch(value, path, diagnostics) {
   const batch = record(value, path, diagnostics);
@@ -501,6 +582,11 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
   const pending = new Set(prior.last_pending_root_issue_ids);
   const decidedRoots = new Set();
   for (const [index, item] of batch.decision_records.entries()) {
+    const expectedQuestionId = stableId('question', { root_issue_ids: [...item.root_issue_ids].sort(compareCodePoints) });
+    if (item.question_id !== expectedQuestionId) diagnostics.push(diagnostic(
+      'traceability', 'DECISION_QUESTION_ID_MISMATCH', `/append_batch/decision_records/${index}/question_id`,
+      'Decision question identity must be derived only from its sorted root issue set'
+    ));
     for (const rootId of item.root_issue_ids) {
       if (!pending.has(rootId)) diagnostics.push(diagnostic(
         'reference', 'DECISION_ROOT_UNKNOWN', `/append_batch/decision_records/${index}/root_issue_ids/${pointerPart(rootId)}`,
@@ -566,10 +652,11 @@ function buildRootIssues(blocked, sourceRevision, diagnostics) {
   for (const item of blocked) {
     const signature = { missing_type: item.missing_type, semantic_refs: item.semantic_refs, scope: item.scope };
     const rootIssueId = stableId('root', signature);
+    const rootIssueKey = canonicalStringify(signature);
     const existing = groups.get(rootIssueId);
     if (!existing) groups.set(rootIssueId, {
       root_issue_id: rootIssueId,
-      root_issue_key: canonicalStringify(signature),
+      root_issue_key: rootIssueKey,
       missing_type: item.missing_type,
       semantic_refs: [...item.semantic_refs],
       scope: item.scope,
@@ -582,7 +669,13 @@ function buildRootIssues(blocked, sourceRevision, diagnostics) {
       evidence_refs: [...item.evidence_refs],
       batch_id: null
     });
-    else {
+    else if (existing.root_issue_key !== rootIssueKey) {
+      diagnostics.push(diagnostic(
+        'traceability', 'ROOT_ISSUE_ID_COLLISION', `/blocked_obligations/${pointerPart(item.obligation_id)}`,
+        'distinct semantic root keys cannot share one stable root issue ID'
+      ));
+      continue;
+    } else {
       if (existing.question !== item.question || existing.answerable !== item.answerable) diagnostics.push(diagnostic(
         'classification', 'ROOT_DESCRIPTOR_CONFLICT', `/blocked_obligations/${pointerPart(item.obligation_id)}`,
         'one semantic root must have one answerability and question contract'
@@ -662,12 +755,23 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
       'traceability', 'BLOCKED_DESCRIPTOR_SET_MISMATCH', '/blocked_obligations',
       'every current Blocked formal Test Point must have exactly one root descriptor'
     ));
+    validatePriorState(prior, diagnostics);
     const combined = validateHistory(prior, batch, sourceRevision, semantics, diagnostics);
     const roots = buildRootIssues(blocked, sourceRevision, diagnostics);
     if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics, sourceRevision);
 
     const dispositions = new Map(prior.root_issue_dispositions.map((item) => [item.root_issue_id, item.status]));
     for (const root of roots) if (!dispositions.has(root.root_issue_id)) dispositions.set(root.root_issue_id, 'open');
+    const currentRootIds = new Set(roots.map((root) => root.root_issue_id));
+    const priorPoints = new Map((prior.semantic_snapshot?.formal_test_points ?? [])
+      .map((point) => [point.obligation_id, point]));
+    const currentPoints = new Map(semantics.formal_test_points.map((point) => [point.obligation_id, point]));
+    /** @param {any} point */
+    const formalTuple = (point) => canonicalStringify({
+      classification: point.classification,
+      evidence_level: point.evidence_level,
+      blocked_reason: point.blocked_reason
+    });
     const decidedKinds = new Map();
     let hasEffectiveDecision = false;
     let hasReopen = false;
@@ -675,11 +779,19 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     for (const entry of combined) {
       if (entry.kind === 'decision') {
         const decisionRecord = /** @type {any} */ (entry.item);
-        const status = decisionRecord.disposition === 'final' ? 'resolved_final'
-          : decisionRecord.disposition === 'temporary' ? 'resolved_temporary'
-            : decisionRecord.disposition === 'unknown' ? 'suppressed_unknown' : 'suppressed_deferred';
-        if (decisionRecord.disposition === 'final' || decisionRecord.disposition === 'temporary') hasEffectiveDecision = true;
+        const canProvideEvidence = decisionRecord.disposition === 'final' || decisionRecord.disposition === 'temporary';
+        const changedBlockedPoint = canProvideEvidence && decisionRecord.affected_obligation_ids.some((/** @type {string} */ obligationId) => {
+          const priorPoint = priorPoints.get(obligationId);
+          const currentPoint = currentPoints.get(obligationId);
+          return priorPoint?.classification === 'blocked' && currentPoint
+            && formalTuple(priorPoint) !== formalTuple(currentPoint);
+        });
         for (const rootId of decisionRecord.root_issue_ids) {
+          const effective = canProvideEvidence && !currentRootIds.has(rootId) && changedBlockedPoint;
+          const status = effective
+            ? (decisionRecord.disposition === 'final' ? 'resolved_final' : 'resolved_temporary')
+            : decisionRecord.disposition === 'unknown' ? 'suppressed_unknown' : 'suppressed_deferred';
+          if (effective) hasEffectiveDecision = true;
           dispositions.set(rootId, status);
           decidedKinds.set(rootId, decisionRecord.disposition);
         }
@@ -691,31 +803,28 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
         } else requestDelivery = true;
       }
     }
-    if (combined.length > 0 && !requestDelivery) {
+    if (combined.length > 0) {
       for (const rootId of prior.last_pending_root_issue_ids) if (!decidedKinds.has(rootId)) dispositions.set(rootId, 'suppressed_deferred');
     }
-    const currentAnswerableIds = roots.filter((root) => root.answerable).map((root) => root.root_issue_id).sort(compareCodePoints);
-    const semanticChanged = prior.semantic_snapshot !== null
-      && canonicalStringify(prior.semantic_snapshot) !== canonicalStringify(semantics);
-    const rootSetChanged = !sameSet(currentAnswerableIds, prior.last_pending_root_issue_ids);
-    const informationGain = hasEffectiveDecision && (semanticChanged || rootSetChanged);
 
     let stop = null;
     let action = 'deliver';
     /** @type {any[]} */
     let pendingRoots = [];
     if (requestDelivery) {
+      for (const rootId of prior.last_pending_root_issue_ids) dispositions.set(rootId, 'suppressed_deferred');
       for (const root of roots) {
         const status = dispositions.get(root.root_issue_id);
-        if (status === 'open' || status === 'asked') dispositions.set(root.root_issue_id, 'suppressed_deferred');
+        if (root.answerable && (status === 'open' || status === 'asked'
+          || decidedKinds.has(root.root_issue_id))) dispositions.set(root.root_issue_id, 'suppressed_deferred');
       }
       stop = { reason: 'user_requested_delivery', source_revision: sourceRevision };
-    } else if (batch.decision_records.length > 0 && !hasReopen && !informationGain) {
+    } else if (batch.decision_records.length > 0 && !hasReopen && !hasEffectiveDecision) {
       for (const root of roots) {
         const status = dispositions.get(root.root_issue_id);
-        const decidedKind = decidedKinds.get(root.root_issue_id);
-        if (status === 'open' || status === 'asked'
-          || decidedKind === 'final' || decidedKind === 'temporary') dispositions.set(root.root_issue_id, 'suppressed_deferred');
+        if (root.answerable && (status === 'open' || status === 'asked')) {
+          dispositions.set(root.root_issue_id, 'suppressed_deferred');
+        }
       }
       stop = { reason: 'no_information_gain', source_revision: sourceRevision };
     } else if (interactionPolicy === 'pause_for_clarification') {
@@ -738,7 +847,10 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     const pendingOutput = action === 'need_user_answers' ? pendingWithBatch(pendingRoots) : [];
     const pendingIds = pendingOutput.map((root) => root.root_issue_id).sort(compareCodePoints);
     const askedIds = new Set(prior.asked_root_issue_ids);
-    for (const rootId of pendingIds) askedIds.add(rootId);
+    for (const [rootId, status] of dispositions) if (status !== 'open') askedIds.add(rootId);
+    if (interactionPolicy === 'record_only') for (const rootId of askedIds) {
+      if (dispositions.get(rootId) === 'open') dispositions.set(rootId, 'suppressed_deferred');
+    }
     const nextEventSeq = combined.length > 0 ? combined[combined.length - 1].seq : prior.clarification_event_seq;
     const state = {
       source_revision: sourceRevision,

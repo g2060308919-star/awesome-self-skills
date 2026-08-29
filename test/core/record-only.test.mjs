@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { digest } from '../../src/canonical.mjs';
 import { evaluateClarification } from '../../src/clarification.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -43,7 +44,7 @@ test('record only and strict user-requested delivery preserve the same six seman
     asked_root_issue_ids: [ROOT_ORACLE],
     root_issue_dispositions: [{ root_issue_id: ROOT_ORACLE, status: 'asked' }],
     last_pending_root_issue_ids: [ROOT_ORACLE],
-    last_question_set_digest: 'prior-question-digest',
+    last_question_set_digest: digest([ROOT_ORACLE]),
     clarification_stop: null,
     semantic_snapshot: structuredClone(strictContext.semantic_snapshot)
   };
