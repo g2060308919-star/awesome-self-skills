@@ -21,6 +21,13 @@ const ORACLE_FIELDS = Object.freeze({
   value: 'expected_value', state: 'expected_state', event: 'expected_event', 'side-effect': 'expected_side_effect'
 });
 const NATIVE_MAP_ENTRIES = Map.prototype.entries;
+const NATIVE_MAP_SET = Map.prototype.set;
+const NATIVE_MAP_ITERATOR_NEXT = Object.getPrototypeOf(NATIVE_MAP_ENTRIES.call(new Map())).next;
+const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
+const NATIVE_GET_PROTOTYPE_OF = Object.getPrototypeOf;
+const NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
+const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+const NATIVE_REFLECT_OWN_KEYS = Reflect.ownKeys;
 const KEYS = Object.freeze({
   context: ['sourceRevision', 'evidence', 'obligations', 'caseDrafts'],
   evidence: ['claimsById', 'factLedger', 'conflicts'],
@@ -61,7 +68,7 @@ function compareCodePoints(left, right) {
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Map);
+  return Boolean(value) && typeof value === 'object' && !NATIVE_ARRAY_IS_ARRAY(value) && !(value instanceof Map);
 }
 
 /** @param {unknown} value @returns {value is string} */
@@ -112,86 +119,166 @@ function resultWithDiagnostics(diagnostics) {
 }
 
 /**
- * Inspect descriptors before reading submitted values. This rejects getters,
- * custom prototypes, sparse arrays, and non-index array properties without
- * executing untrusted accessors.
+ * Build one trusted deep snapshot exclusively from captured own descriptors and
+ * native Map entries. Classification never reads the submitted graph again.
  * @param {unknown} root
  */
-function safetyDiagnostics(root) {
+function snapshotControlled(root) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
-  /** @type {Array<{value: unknown, path: string}>} */
-  const pending = [{ value: root, path: '' }];
-  const seen = new Set();
-  while (pending.length > 0 && diagnostics.length <= DIAGNOSTIC_LIMIT) {
-    const { value, path } = /** @type {{value: unknown, path: string}} */ (pending.pop());
-    if (!value || typeof value !== 'object' || seen.has(value)) continue;
-    seen.add(value);
-    if (value instanceof Map) {
-      if (Object.getPrototypeOf(value) !== Map.prototype) {
+  /** @type {unknown} */
+  let snapshot;
+  /** @type {Array<{source: unknown, path: string, assign: (value: unknown) => void}>} */
+  const pending = [{ source: root, path: '', assign(value) { snapshot = value; } }];
+  const seen = new Map();
+  while (pending.length > 0 && diagnostics.length < DIAGNOSTIC_LIMIT) {
+    const { source, path, assign } = /** @type {{source: unknown, path: string, assign: (value: unknown) => void}} */ (pending.pop());
+    if (!source || typeof source !== 'object') {
+      assign(source);
+      continue;
+    }
+    if (seen.has(source)) {
+      assign(seen.get(source));
+      continue;
+    }
+    if (source instanceof Map) {
+      if (NATIVE_GET_PROTOTYPE_OF(source) !== Map.prototype) {
         diagnostics.push(diagnostic(
           'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'accepted evidence Map must use the built-in Map prototype'
         ));
+        assign(null);
         continue;
       }
-      if (Reflect.ownKeys(value).length > 0) {
+      if (NATIVE_REFLECT_OWN_KEYS(source).length > 0) {
         diagnostics.push(diagnostic(
           'schema', 'MAP_OWN_PROPERTY_INVALID', path || '/', 'accepted evidence Map cannot have own string or symbol properties'
         ));
+        assign(null);
         continue;
       }
       let entries;
       try {
-        entries = NATIVE_MAP_ENTRIES.call(value);
+        entries = NATIVE_MAP_ENTRIES.call(source);
       } catch {
         diagnostics.push(diagnostic(
           'schema', 'MAP_BRAND_INVALID', path || '/', 'accepted evidence Map must have genuine native Map internal slots'
         ));
+        assign(null);
         continue;
       }
-      for (const [key, child] of entries) {
+      /** @type {Array<[unknown, unknown]>} */
+      const capturedEntries = [];
+      while (true) {
+        const next = NATIVE_MAP_ITERATOR_NEXT.call(entries);
+        if (next.done) break;
+        capturedEntries.push(next.value);
+      }
+      const target = new Map();
+      seen.set(source, target);
+      assign(target);
+      for (let index = capturedEntries.length - 1; index >= 0; index -= 1) {
+        if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
+        const [key, child] = capturedEntries[index];
         if (typeof key !== 'string') {
           diagnostics.push(diagnostic('schema', 'CANONICAL_STRING_INVALID', `${path}/invalid-map-key`, 'accepted evidence Map keys must be strings'));
           continue;
         }
-        pending.push({ value: child, path: `${path}/${pointerPart(key)}` });
+        pending.push({
+          source: child,
+          path: `${path}/${pointerPart(key)}`,
+          assign(value) { NATIVE_MAP_SET.call(target, key, value); }
+        });
       }
       continue;
     }
-    if (Array.isArray(value)) {
-      const descriptors = Object.getOwnPropertyDescriptors(value);
-      for (let index = 0; index < value.length; index += 1) {
+    if (NATIVE_ARRAY_IS_ARRAY(source)) {
+      if (NATIVE_GET_PROTOTYPE_OF(source) !== Array.prototype) {
+        diagnostics.push(diagnostic(
+          'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled arrays must use the built-in Array prototype'
+        ));
+        assign(null);
+        continue;
+      }
+      const descriptors = NATIVE_GET_OWN_PROPERTY_DESCRIPTORS(source);
+      const lengthDescriptor = /** @type {PropertyDescriptor | undefined} */ (descriptors['length']);
+      const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value')
+        && Number.isSafeInteger(lengthDescriptor.value) ? Number(lengthDescriptor.value) : 0;
+      let validOwnKeys = true;
+      for (const key of NATIVE_REFLECT_OWN_KEYS(descriptors)) {
+        if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
+        if (key === 'length') continue;
+        if (typeof key === 'symbol') {
+          validOwnKeys = false;
+          diagnostics.push(diagnostic(
+            'schema', 'ARRAY_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled arrays cannot contain own symbol properties'
+          ));
+          continue;
+        }
+        const index = Number(key);
+        if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
+          validOwnKeys = false;
+          diagnostics.push(diagnostic('schema', 'UNKNOWN_KEY', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'));
+        }
+      }
+      if (!validOwnKeys) {
+        assign(null);
+        continue;
+      }
+      const target = new Array(length);
+      seen.set(source, target);
+      assign(target);
+      for (let index = length - 1; index >= 0; index -= 1) {
+        if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
         const descriptor = descriptors[String(index)];
         if (!descriptor) {
           diagnostics.push(diagnostic('schema', 'ARRAY_HOLE', `${path}/${index}`, 'controlled arrays must be dense'));
         } else if (!Object.hasOwn(descriptor, 'value')) {
           diagnostics.push(diagnostic('schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${index}`, 'controlled values must be own data properties'));
         } else {
-          pending.push({ value: descriptor.value, path: `${path}/${index}` });
-        }
-      }
-      for (const key of Object.keys(descriptors)) {
-        if (key === 'length') continue;
-        const index = Number(key);
-        if (!Number.isSafeInteger(index) || index < 0 || index >= value.length || String(index) !== key) {
-          diagnostics.push(diagnostic('schema', 'UNKNOWN_KEY', `${path}/${pointerPart(key)}`, 'controlled arrays cannot contain named properties'));
+          pending.push({
+            source: descriptor.value,
+            path: `${path}/${index}`,
+            assign(value) { target[index] = value; }
+          });
         }
       }
       continue;
     }
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) diagnostics.push(diagnostic(
-      'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled records must use a plain or null prototype'
-    ));
-    for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+    const prototype = NATIVE_GET_PROTOTYPE_OF(source);
+    if (prototype !== Object.prototype && prototype !== null) {
+      diagnostics.push(diagnostic(
+        'schema', 'RECORD_PROTOTYPE_INVALID', path || '/', 'controlled records must use a plain or null prototype'
+      ));
+      assign(null);
+      continue;
+    }
+    const descriptors = NATIVE_GET_OWN_PROPERTY_DESCRIPTORS(source);
+    const target = prototype === null ? Object.create(null) : {};
+    seen.set(source, target);
+    assign(target);
+    for (const key of NATIVE_REFLECT_OWN_KEYS(descriptors)) {
+      if (diagnostics.length >= DIAGNOSTIC_LIMIT) break;
+      if (typeof key === 'symbol') {
+        diagnostics.push(diagnostic(
+          'schema', 'RECORD_SYMBOL_PROPERTY_INVALID', path || '/', 'controlled records cannot contain own symbol properties'
+        ));
+        continue;
+      }
+      const descriptor = descriptors[key];
       const childPath = `${path}/${pointerPart(key)}`;
       if (!Object.hasOwn(descriptor, 'value')) diagnostics.push(diagnostic(
         'schema', 'ACCESSOR_NOT_ALLOWED', childPath, 'controlled values must be own data properties'
       ));
-      else pending.push({ value: descriptor.value, path: childPath });
+      else pending.push({
+        source: descriptor.value,
+        path: childPath,
+        assign(value) {
+          NATIVE_DEFINE_PROPERTY(target, key, { value, enumerable: true, writable: true, configurable: true });
+        }
+      });
     }
   }
-  return diagnostics;
+  return { snapshot, diagnostics };
 }
 
 /** @param {unknown} value @param {readonly string[]} allowed @param {string} path @param {Diagnostic[]} diagnostics */
@@ -250,17 +337,10 @@ function derivePreconditionState(draft) {
 
 /** @param {Record<string, unknown>} draft */
 function deriveDataPartition(draft) {
-  return canonicalSetProjection((objectArray(draft.data) ?? []).map((item) => {
-    const provenance = isRecord(item.provenance) ? item.provenance : {};
-    return {
-      name: normalizeSemanticString(item.name),
-      value: normalizeSemanticString(item.value),
-      provenance: {
-        type: normalizeSemanticString(provenance.type),
-        ref: normalizeSemanticString(provenance.ref)
-      }
-    };
-  }));
+  return canonicalSetProjection((objectArray(draft.data) ?? []).map((item) => ({
+    name: normalizeSemanticString(item.name),
+    value: normalizeSemanticString(item.value)
+  })));
 }
 
 /**
@@ -270,7 +350,8 @@ function deriveDataPartition(draft) {
  */
 export function executionSignature(caseDraft) {
   try {
-    const draft = isRecord(caseDraft) ? caseDraft : {};
+    const trusted = snapshotControlled(caseDraft);
+    const draft = trusted.diagnostics.length === 0 && isRecord(trusted.snapshot) ? trusted.snapshot : {};
     const role = isRecord(draft.role) ? normalizeSemanticString(draft.role.value) : '';
     const steps = objectArray(draft.steps) ?? [];
     const actionPath = steps.map((step) => normalizeSemanticString(step.action));
@@ -560,7 +641,8 @@ function applyCapabilityStatus(status, gate, reasons) {
 /** @param {Record<string, unknown>} draft @param {Record<string, unknown>[]} obligations @param {string[]} routedFactIds @param {Map<string, Record<string, unknown>[]>} routesByFact @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} evidenceCache @param {Record<string, unknown>[]} conflicts @param {Diagnostic[]} diagnostics */
 function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById, evidence, evidenceCache, conflicts, diagnostics) {
   const reasons = new Set();
-  const evidenceRoots = new Set(stringArray(draft.evidence_refs, true) ?? []);
+  const submittedEvidenceRefs = stringArray(draft.evidence_refs, true);
+  const evidenceRoots = new Set();
   const formalEvidenceRoots = new Set();
   const downgradeRoots = new Set();
   const gate = { rank: 2 };
@@ -569,13 +651,13 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     && (stringArray(draft.fact_ids, true) !== null) && (stringArray(draft.obligation_ids, true) !== null)
     && (objectArray(draft.preconditions)?.length ?? 0) > 0 && (objectArray(draft.data)?.length ?? 0) > 0
     && (objectArray(draft.steps)?.length ?? 0) > 0 && isRecord(draft.testability_profile)
-    && isRecord(draft.post_state) && isRecord(draft.cleanup) && (stringArray(draft.evidence_refs, true) !== null)
+    && isRecord(draft.post_state) && isRecord(draft.cleanup) && submittedEvidenceRefs !== null
     && isRecord(draft.execution_signature);
   if (!requiredFieldsValid) reasons.add('CASE_GATE_INVALID');
 
   if (isRecord(draft.role)) {
     if (!isNonblank(draft.role.value) || !isCanonicalString(draft.role.evidence_ref)) reasons.add('CASE_GATE_INVALID');
-    else evidenceRoots.add(draft.role.evidence_ref);
+    if (isCanonicalString(draft.role.evidence_ref)) evidenceRoots.add(draft.role.evidence_ref);
     applyReview(draft.role.support_review, reasons);
   }
 
@@ -643,6 +725,8 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const stepIds = new Set();
   /** @type {Set<string>} */
   const expectationIds = new Set();
+  /** @type {string[]} */
+  const expectationEvidenceRefs = [];
   /** @type {Array<{observer: string, target: string}>} */
   const requiredObservers = [];
   for (const [stepIndex, step] of steps.entries()) {
@@ -653,7 +737,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       reasons.add('CASE_GATE_INVALID');
     } else stepIds.add(step.step_id);
     if (!isNonblank(step.action) || !isCanonicalString(step.action_evidence_ref)) reasons.add('CASE_GATE_INVALID');
-    else evidenceRoots.add(step.action_evidence_ref);
+    if (isCanonicalString(step.action_evidence_ref)) evidenceRoots.add(step.action_evidence_ref);
     applyReview(step.support_review, reasons);
     const expectations = objectArray(step.expectations) ?? [];
     if (expectations.length === 0) reasons.add('FORMAL_ORACLE_MISSING');
@@ -665,22 +749,50 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         reasons.add('EXPECTATION_GATE_INVALID');
       } else expectationIds.add(expectation.expectation_id);
       if (expectation.preceding_action_id !== step.step_id) reasons.add('PRECEDING_ACTION_NOT_CONTAINING');
-      if (!isNonblank(expectation.business_assertion) || !isCanonicalString(expectation.preceding_action_id)
-        || !isNonblank(expectation.observer) || !isNonblank(expectation.observation_surface)
-        || !isNonblank(expectation.observation_target) || !isCanonicalString(expectation.evidence_ref)) reasons.add('EXPECTATION_GATE_INVALID');
-      else {
-        evidenceRoots.add(expectation.evidence_ref);
+      const expectationFieldsValid = isNonblank(expectation.business_assertion) && isCanonicalString(expectation.preceding_action_id)
+        && isNonblank(expectation.observer) && isNonblank(expectation.observation_surface)
+        && isNonblank(expectation.observation_target) && isCanonicalString(expectation.evidence_ref);
+      if (!expectationFieldsValid) reasons.add('EXPECTATION_GATE_INVALID');
+      if (isCanonicalString(expectation.evidence_ref)) evidenceRoots.add(expectation.evidence_ref);
+      if (expectationFieldsValid) {
+        expectationEvidenceRefs.push(/** @type {string} */ (expectation.evidence_ref));
         requiredObservers.push({ observer: String(expectation.observer), target: String(expectation.observation_target) });
       }
       const oracle = isRecord(expectation.oracle) ? expectation.oracle : null;
       const expectedField = oracle ? ORACLE_FIELDS[/** @type {keyof typeof ORACLE_FIELDS} */ (oracle.type)] : null;
-      if (!oracle || !expectedField || !isNonblank(oracle[expectedField]) || !COMPARISONS.has(/** @type {string} */ (oracle.comparison))) reasons.add('ORACLE_INVALID');
+      const comparisonValid = oracle && COMPARISONS.has(/** @type {string} */ (oracle.comparison));
+      const toleranceValid = !oracle || oracle.tolerance === undefined
+        || (typeof oracle.tolerance === 'number' && Number.isFinite(oracle.tolerance) && oracle.tolerance >= 0);
+      const windowValid = !oracle || oracle.window === undefined || isNonblank(oracle.window);
+      const withinBounded = !oracle || oracle.comparison !== 'within'
+        || (oracle.tolerance !== undefined && toleranceValid) || (oracle.window !== undefined && windowValid);
+      if (!oracle || !expectedField || !isNonblank(oracle[expectedField]) || !comparisonValid
+        || !toleranceValid || !windowValid || !withinBounded) reasons.add('ORACLE_INVALID');
       applyReview(expectation.support_review, reasons);
     }
   }
   for (const step of steps) {
     for (const expectation of objectArray(step.expectations) ?? []) {
       if (!stepIds.has(/** @type {string} */ (expectation.preceding_action_id))) reasons.add('PRECEDING_ACTION_UNKNOWN');
+    }
+  }
+  if (expectationEvidenceRefs.length > 0) {
+    const expectationEvidenceClosure = new Set();
+    for (const expectationRef of expectationEvidenceRefs) {
+      for (const relatedRef of assessEvidenceRoots([expectationRef], evidence, evidenceCache).refs) {
+        expectationEvidenceClosure.add(relatedRef);
+      }
+    }
+    for (const obligation of obligations) {
+      for (const oracleRef of stringArray(obligation.required_oracle_refs) ?? []) {
+        if (expectationEvidenceClosure.has(oracleRef)) continue;
+        diagnostics.push(diagnostic(
+          'traceability', 'OBLIGATION_ORACLE_EXPECTATION_UNMAPPED',
+          `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/obligations/${pointerPart(String(obligation.obligation_id))}/required_oracle_refs/${pointerPart(oracleRef)}`,
+          'every required formal Oracle must map to a concrete expectation evidence closure'
+        ));
+        reasons.add('OBLIGATION_ORACLE_EXPECTATION_UNMAPPED');
+      }
     }
   }
 
@@ -728,18 +840,41 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
 
   if (isRecord(draft.post_state)) {
     if (!isNonblank(draft.post_state.state) || !isCanonicalString(draft.post_state.evidence_ref)) reasons.add('CASE_GATE_INVALID');
-    else evidenceRoots.add(draft.post_state.evidence_ref);
+    if (isCanonicalString(draft.post_state.evidence_ref)) evidenceRoots.add(draft.post_state.evidence_ref);
     applyReview(draft.post_state.support_review, reasons);
   }
   if (isRecord(draft.cleanup)) {
     if (draft.cleanup.required === true) {
       if (stringArray(draft.cleanup.steps, true) === null || !isCanonicalString(draft.cleanup.evidence_ref)) reasons.add('CASE_GATE_INVALID');
-      else evidenceRoots.add(draft.cleanup.evidence_ref);
+      if (isCanonicalString(draft.cleanup.evidence_ref)) evidenceRoots.add(draft.cleanup.evidence_ref);
     } else if (draft.cleanup.required === false) {
       if (!isNonblank(draft.cleanup.no_cleanup_reason) || !isCanonicalString(draft.cleanup.no_cleanup_evidence_ref)) reasons.add('CASE_GATE_INVALID');
-      else evidenceRoots.add(draft.cleanup.no_cleanup_evidence_ref);
+      if (isCanonicalString(draft.cleanup.no_cleanup_evidence_ref)) evidenceRoots.add(draft.cleanup.no_cleanup_evidence_ref);
     } else reasons.add('CASE_GATE_INVALID');
     applyReview(draft.cleanup.support_review, reasons);
+  }
+
+  const evidenceSummaryPath = `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/evidence_refs`;
+  if (!submittedEvidenceRefs) {
+    diagnostics.push(diagnostic(
+      'classification', 'CASE_EVIDENCE_SUMMARY_INVALID', evidenceSummaryPath,
+      'Case evidence_refs must be a dense, unique array of canonical direct evidence roots'
+    ));
+    reasons.add('CASE_EVIDENCE_SUMMARY_INVALID');
+  } else {
+    const actualDirectRefs = [...evidenceRoots].sort(compareCodePoints);
+    const submittedDirectRefs = [...submittedEvidenceRefs].sort(compareCodePoints);
+    if (canonicalStringify(actualDirectRefs) !== canonicalStringify(submittedDirectRefs)) {
+      const actualSet = new Set(actualDirectRefs);
+      const submittedSet = new Set(submittedDirectRefs);
+      const missing = actualDirectRefs.filter((ref) => !submittedSet.has(ref));
+      const extra = submittedDirectRefs.filter((ref) => !actualSet.has(ref));
+      diagnostics.push(diagnostic(
+        'traceability', 'CASE_EVIDENCE_SUMMARY_MISMATCH', evidenceSummaryPath,
+        `Case evidence_refs direct-root summary differs; missing=[${missing.join(', ')}], extra=[${extra.join(', ')}]`
+      ));
+      reasons.add('CASE_EVIDENCE_SUMMARY_MISMATCH');
+    }
   }
 
   const signature = isRecord(draft.execution_signature) ? draft.execution_signature : {};
@@ -836,6 +971,45 @@ function reachesEvidence(root, target, evidence) {
   return false;
 }
 
+/** @param {string[]} roots @param {Map<string, ClaimAssessment>} evidence @param {Map<string, EvidenceResult>} ancestryCache @param {Map<string, Set<string>>} relationCache */
+function relatedEvidenceClosure(roots, evidence, ancestryCache, relationCache) {
+  const cacheKey = canonicalStringify([...new Set(roots)].sort(compareCodePoints));
+  const cached = relationCache.get(cacheKey);
+  if (cached) return cached;
+  const related = new Set(assessEvidenceRoots(roots, evidence, ancestryCache).refs);
+  const pending = [...new Set(roots)].sort(compareCodePoints);
+  const seenDescendants = new Set();
+  let cursor = 0;
+  while (cursor < pending.length) {
+    const claimId = pending[cursor++];
+    if (seenDescendants.has(claimId)) continue;
+    seenDescendants.add(claimId);
+    related.add(claimId);
+    for (const childId of evidence.get(claimId)?.children ?? []) pending.push(childId);
+  }
+  relationCache.set(cacheKey, related);
+  return related;
+}
+
+/** @param {unknown} value */
+function normalizeCapabilityText(value) {
+  return typeof value === 'string'
+    ? value.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/gu, ' ')
+    : '';
+}
+
+/** @param {ClaimAssessment} assessment @param {Record<string, unknown>} obligation */
+function isCapabilityBlockerEvidence(assessment, obligation) {
+  if (assessment.rank === 0 || assessment.reasons.length > 0
+    || !isCanonicalString(assessment.claim.scope) || !isCanonicalString(obligation.scope)
+    || !scopesIntersect(String(assessment.claim.scope), String(obligation.scope))) return false;
+  const haystack = ` ${normalizeCapabilityText(`${String(assessment.claim.kind ?? '')} ${String(assessment.claim.value ?? '')}`)} `;
+  return (stringArray(obligation.required_capabilities) ?? []).some((capability) => {
+    const normalized = normalizeCapabilityText(capability);
+    return normalized.length > 0 && haystack.includes(` ${normalized} `);
+  });
+}
+
 /** @param {Record<string, unknown>} draft */
 function comparableCase(draft) {
   const copy = structuredClone(draft);
@@ -911,23 +1085,25 @@ function deduplicateCases(executable, diagnostics) {
  */
 export function classifyCaseDrafts(submittedContext) {
   try {
-    const unsafe = safetyDiagnostics(submittedContext);
-    if (unsafe.length > 0) return resultWithDiagnostics(unsafe);
-    if (!isRecord(submittedContext)) return resultWithDiagnostics([
+    const trusted = snapshotControlled(submittedContext);
+    if (trusted.diagnostics.length > 0) return resultWithDiagnostics(trusted.diagnostics);
+    if (!isRecord(trusted.snapshot)) return resultWithDiagnostics([
       diagnostic('classification', 'CONTEXT_INVALID', '/', 'classification context must be a closed own-data record')
     ]);
     /** @type {Diagnostic[]} */
     const diagnostics = [];
-    validateClosedShape(submittedContext, diagnostics);
+    validateClosedShape(trusted.snapshot, diagnostics);
     if (diagnostics.length > 0) return resultWithDiagnostics(diagnostics);
 
-    const context = submittedContext;
+    const context = trusted.snapshot;
     const evidenceContext = /** @type {Record<string, unknown>} */ (context.evidence);
     const obligationArtifact = /** @type {Record<string, unknown>} */ (context.obligations);
     const draftArtifact = /** @type {Record<string, unknown>} */ (context.caseDrafts);
     const evidence = buildEvidenceIndex(/** @type {Map<unknown, unknown>} */ (evidenceContext.claimsById), diagnostics);
     /** @type {Map<string, EvidenceResult>} */
     const evidenceCache = new Map();
+    /** @type {Map<string, Set<string>>} */
+    const relatedEvidenceCache = new Map();
     const facts = /** @type {Record<string, unknown>[]} */ (evidenceContext.factLedger);
     const conflicts = /** @type {Record<string, unknown>[]} */ (evidenceContext.conflicts);
     const obligations = /** @type {Record<string, unknown>[]} */ (obligationArtifact.obligations);
@@ -1060,6 +1236,7 @@ export function classifyCaseDrafts(submittedContext) {
           })
         ];
         const evidenceResult = assessEvidenceRoots(roots, evidence, evidenceCache);
+        const relatedEvidence = relatedEvidenceClosure(roots, evidence, evidenceCache, relatedEvidenceCache);
         const blockerEvidenceRefs = stringArray(disposition.evidence_refs, true);
         if (!blockerEvidenceRefs) {
           diagnostics.push(diagnostic(
@@ -1070,14 +1247,21 @@ export function classifyCaseDrafts(submittedContext) {
         }
         let blockerRefsValid = true;
         for (const ref of blockerEvidenceRefs) {
-          if (!evidence.has(ref)) {
+          const blockerAssessment = evidence.get(ref);
+          if (!blockerAssessment) {
             blockerRefsValid = false;
             diagnostics.push(diagnostic(
               'reference', 'BLOCKER_EVIDENCE_UNKNOWN', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
               'explicit blocker references unknown accepted evidence'
             ));
-          } else if (!evidenceResult.refs.has(ref)
-            && !roots.some((root) => reachesEvidence(ref, root, evidence) || reachesEvidence(root, ref, evidence))) {
+          } else if (blockerAssessment.rank === 0 || blockerAssessment.reasons.length > 0) {
+            blockerRefsValid = false;
+            diagnostics.push(diagnostic(
+              'classification', 'BLOCKER_EVIDENCE_INVALID', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
+              'explicit blocker evidence must be accepted before it can justify a blocker'
+            ));
+          } else if (!relatedEvidence.has(ref)
+            && !isCapabilityBlockerEvidence(blockerAssessment, obligation)) {
             blockerRefsValid = false;
             diagnostics.push(diagnostic(
               'traceability', 'BLOCKER_EVIDENCE_UNRELATED', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
@@ -1267,7 +1451,7 @@ export function classifyCaseDrafts(submittedContext) {
   } catch (error) {
     return resultWithDiagnostics([diagnostic(
       'classification', 'CLASSIFICATION_INPUT_UNREADABLE', '/',
-      error instanceof Error ? `classification input could not be read: ${error.message}` : 'classification input could not be read'
+      'classification input could not be read from trusted own data'
     )]);
   }
 }

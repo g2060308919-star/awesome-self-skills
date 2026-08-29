@@ -33,6 +33,40 @@ test('every key expectation requires all frozen Oracle and observation fields', 
   }
 });
 
+test('Oracle tolerance and window bounds are valid for every comparison and required by within', () => {
+  /** @param {(oracle: any) => void} mutate */
+  const classifyOracle = (mutate) => {
+    const context = classificationContext();
+    mutate(context.caseDrafts.cases[0].steps[0].expectations[0].oracle);
+    return classifyCaseDrafts(context);
+  };
+  /** @type {Array<(oracle: any) => void>} */
+  const positives = [
+    (oracle) => { oracle.comparison = 'within'; oracle.tolerance = 0; },
+    (oracle) => { oracle.comparison = 'within'; oracle.window = '2 seconds'; },
+    (oracle) => { oracle.comparison = 'equals'; oracle.tolerance = 1.5; oracle.window = 'eventually'; }
+  ];
+  for (const mutate of positives) {
+    const result = classifyOracle(mutate);
+    assert.equal(result.grounded.length, 1);
+  }
+
+  /** @type {Array<(oracle: any) => void>} */
+  const negatives = [
+    (oracle) => { oracle.comparison = 'within'; },
+    (oracle) => { oracle.comparison = 'within'; oracle.tolerance = -1; },
+    (oracle) => { oracle.comparison = 'within'; oracle.tolerance = Number.NaN; },
+    (oracle) => { oracle.comparison = 'within'; oracle.tolerance = Number.POSITIVE_INFINITY; },
+    (oracle) => { oracle.comparison = 'equals'; oracle.tolerance = Number.NEGATIVE_INFINITY; },
+    (oracle) => { oracle.comparison = 'equals'; oracle.window = '   '; }
+  ];
+  for (const mutate of negatives) {
+    const result = classifyOracle(mutate);
+    assert.equal(result.grounded.length + result.conditional.length, 0);
+    assert.match(result.blocked[0].reason, /ORACLE_INVALID/u);
+  }
+});
+
 test('preceding actions and independently located expectations must resolve exactly', () => {
   const dangling = classificationContext();
   dangling.caseDrafts.cases[0].steps[0].expectations[0].preceding_action_id = 'step_missing';
@@ -98,7 +132,10 @@ test('missing or empty observer, control, capability, and required capability al
     ['required capability', (draft) => { draft.testability_profile.capabilities[0].capability = 'other-control'; }, /REQUIRED_CAPABILITY_MISSING/u],
     ['capability provenance', (draft) => { delete draft.testability_profile.capabilities[0].provenance_ref; }, /CAPABILITY_PROVENANCE_MISSING/u],
     ['observer provenance', (draft) => { draft.testability_profile.observers[0].provenance_ref = ''; }, /CAPABILITY_PROVENANCE_MISSING/u],
-    ['control provenance', (draft) => { draft.testability_profile.controls[0].provenance_ref = 'claim_missing'; }, /EVIDENCE_REFERENCE_UNKNOWN/u]
+    ['control provenance', (draft) => {
+      draft.testability_profile.controls[0].provenance_ref = 'claim_missing';
+      draft.evidence_refs.push('claim_missing');
+    }, /EVIDENCE_REFERENCE_UNKNOWN/u]
   ];
   for (const [name, mutate, expected] of mutations) {
     const context = classificationContext();
@@ -144,6 +181,7 @@ test('the lowest evidence level propagates through every fact and obligation clo
   const assumption = acceptedClaim('claim_fact_parent', 'E1');
   context.evidence.claimsById.set('claim_fact_parent', assumption);
   context.evidence.factLedger[0].source_claim_ids.push('claim_fact_parent');
+  context.caseDrafts.cases[0].evidence_refs.push('claim_fact_parent');
   context.caseDrafts.cases[0].temporary_assumption = {
     claim_id: 'claim_fact_parent', invalidation_condition: 'The parent business rule is finalized.'
   };
@@ -200,17 +238,29 @@ test('all required Case fields remain enforced at the classifier seam', () => {
     (draft) => { draft.title = ''; },
     (draft) => { draft.fact_ids = []; },
     (draft) => { draft.preconditions = []; },
-    (draft) => { draft.data = []; },
-    (draft) => { draft.steps = []; },
+    (draft) => {
+      draft.data = [];
+      draft.evidence_refs = draft.evidence_refs.filter((/** @type {string} */ ref) => ref !== 'claim_data');
+    },
+    (draft) => {
+      draft.steps = [];
+      draft.evidence_refs = draft.evidence_refs.filter((/** @type {string} */ ref) => ref !== 'claim_action');
+    },
     (draft) => { draft.post_state.state = ''; },
-    (draft) => { delete draft.cleanup; },
-    (draft) => { draft.evidence_refs = []; }
+    (draft) => {
+      delete draft.cleanup;
+      draft.evidence_refs = draft.evidence_refs.filter((/** @type {string} */ ref) => ref !== 'claim_cleanup');
+    }
   ];
   for (const mutate of mutations) {
     const context = classificationContext();
     mutate(context.caseDrafts.cases[0]);
     assert.match(blockedReason(context), /CASE_GATE_INVALID|FORMAL_ORACLE_MISSING/u);
   }
+  const noEvidenceSummary = classificationContext();
+  noEvidenceSummary.caseDrafts.cases[0].evidence_refs = [];
+  assert.equal(classifyCaseDrafts(noEvidenceSummary).diagnostics.some((item) =>
+    item.code === 'CASE_EVIDENCE_SUMMARY_INVALID'), true);
   const invalidScope = classificationContext();
   invalidScope.caseDrafts.cases[0].scope = '';
   assert.equal(classifyCaseDrafts(invalidScope).diagnostics.some((item) => item.code === 'CANONICAL_STRING_INVALID'), true);
@@ -271,6 +321,57 @@ test('closed records reject unknown keys, custom prototypes, accessors, sparse a
   assert.equal(classifyCaseDrafts(padded).diagnostics.some((item) => item.code === 'CANONICAL_STRING_INVALID'), true);
 });
 
+test('controlled arrays reject own symbol and named properties without executing a submitted iterator', () => {
+  const symbolContext = classificationContext();
+  let iteratorCalls = 0;
+  Object.defineProperty(symbolContext.caseDrafts.obligation_dispositions, Symbol.iterator, {
+    value() {
+      iteratorCalls += 1;
+      return Array.prototype[Symbol.iterator].call(this);
+    }
+  });
+  const symbolResult = classifyCaseDrafts(symbolContext);
+  assert.equal(iteratorCalls, 0);
+  assert.equal(symbolResult.diagnostics.some((item) => item.code === 'ARRAY_SYMBOL_PROPERTY_INVALID'), true);
+
+  const namedContext = classificationContext();
+  namedContext.caseDrafts.cases.extra = true;
+  const namedResult = classifyCaseDrafts(namedContext);
+  assert.equal(namedResult.diagnostics.some((item) => item.code === 'UNKNOWN_KEY'), true);
+});
+
+test('classification uses one trusted descriptor snapshot and never reads a getter injected after Map capture', () => {
+  const context = classificationContext();
+  const claims = context.evidence.claimsById;
+  const target = claims.get('claim_action');
+  let accessorReads = 0;
+  let injected = false;
+  const poison = acceptedClaim('claim_poison');
+  Object.defineProperty(poison, 'claim_form', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      accessorReads += 1;
+      return 'direct';
+    }
+  });
+  claims.set('claim_action', new Proxy(target, {
+    getPrototypeOf(value) {
+      if (!injected) {
+        injected = true;
+        claims.set('claim_poison', poison);
+      }
+      return Reflect.getPrototypeOf(value);
+    }
+  }));
+
+  const result = classifyCaseDrafts(context);
+  assert.equal(injected, true);
+  assert.equal(accessorReads, 0);
+  assert.equal(result.grounded.length, 1);
+  assert.deepEqual(result.diagnostics, []);
+});
+
 test('malformed input returns bounded stable diagnostics instead of throwing raw errors', () => {
   assert.doesNotThrow(() => classifyCaseDrafts({}));
   const empty = classifyCaseDrafts({});
@@ -309,7 +410,7 @@ test('deep evidence ancestry is evaluated iteratively without call-stack recursi
   }
   const draft = baseCase();
   draft.role.evidence_ref = parent;
-  draft.evidence_refs.push(parent);
+  draft.evidence_refs = draft.evidence_refs.map((/** @type {string} */ ref) => ref === 'claim_role' ? parent : ref);
   const result = classifyCaseDrafts(classificationContext({ claims, cases: [draft] }));
 
   assert.equal(result.grounded.length, 1);

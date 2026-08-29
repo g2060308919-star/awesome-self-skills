@@ -31,7 +31,7 @@ function contextForMutation(mutation) {
     };
   } else if (mutation === 'unknown-evidence') {
     caseDraft.role.evidence_ref = 'risk_e0';
-    caseDraft.evidence_refs.push('risk_e0');
+    caseDraft.evidence_refs = caseDraft.evidence_refs.map((/** @type {string} */ ref) => ref === 'claim_role' ? 'risk_e0' : ref);
   } else if (mutation === 'uncertain-review') {
     caseDraft.steps[0].expectations[0].support_review = 'uncertain';
   } else if (mutation === 'unavailable-capability') {
@@ -263,6 +263,7 @@ test('formal fact routes participate in the obligation evidence closure even whe
   context.obligations.fact_routes.push({
     fact_id: 'fact_hidden', route_type: 'obligations', obligation_ids: [IDS.obligation]
   });
+  context.caseDrafts.cases[0].evidence_refs.push('claim_hidden');
   const result = classifyCaseDrafts(context);
 
   assert.equal(result.grounded.length + result.conditional.length, 0);
@@ -290,7 +291,7 @@ test('one formal obligation cannot enter Grounded and Conditional through differ
   const grounded = baseCase();
   const conditional = baseCase({ case_id: 'case_2222222222222222' });
   conditional.role.evidence_ref = 'claim_assumption';
-  conditional.evidence_refs.push('claim_assumption');
+  conditional.evidence_refs = conditional.evidence_refs.map((/** @type {string} */ ref) => ref === 'claim_role' ? 'claim_assumption' : ref);
   conditional.temporary_assumption = {
     claim_id: 'claim_assumption', invalidation_condition: 'The delegated role is formally approved.'
   };
@@ -337,6 +338,7 @@ test('optional Case source claims are restricted to the linked formal evidence c
   const unrelated = acceptedClaim('claim_unrelated');
   const context = classificationContext({ claims: [...baseClaims(), unrelated] });
   context.caseDrafts.cases[0].source_claim_ids.push(unrelated.claim_id);
+  context.caseDrafts.cases[0].evidence_refs.push(unrelated.claim_id);
   const result = classifyCaseDrafts(context);
 
   assert.equal(result.grounded.length + result.conditional.length, 0);
@@ -353,7 +355,8 @@ test('Conditional fails closed when the singleton assumption field would hide mu
   });
   const draft = context.caseDrafts.cases[0];
   draft.data[0].provenance = { type: 'evidence', ref: 'claim_second_assumption' };
-  draft.evidence_refs.push('claim_second_assumption');
+  draft.evidence_refs = draft.evidence_refs.map((/** @type {string} */ ref) =>
+    ref === 'claim_data' ? 'claim_second_assumption' : ref);
   draft.temporary_assumption = {
     claim_id: 'claim_role', invalidation_condition: 'The role is approved.'
   };
@@ -396,6 +399,176 @@ test('explicit blocker evidence refs must be canonical, known, and related to th
     assert.equal(result.blocked.length, 0, code);
     assert.equal(result.diagnostics.some((item) => item.code === code), true, code);
   }
+});
+
+test('each linked obligation maps every required Oracle to a concrete expectation evidence closure', () => {
+  const secondObligationId = 'obligation_2222222222222222';
+  const secondOracleId = 'claim_oracle_second';
+  const secondObligation = baseObligation({
+    obligation_id: secondObligationId,
+    required_oracle_refs: [secondOracleId],
+    view_element_refs: ['view_checkout#edge_second']
+  });
+  const draft = baseCase({ obligation_ids: [IDS.obligation, secondObligationId] });
+  draft.evidence_refs.push(secondOracleId);
+  refreshExecutionSignature(draft);
+  /** @param {any} caseDraft */
+  const makeContext = (caseDraft) => {
+    const context = classificationContext({
+      claims: [...baseClaims(), acceptedClaim(secondOracleId)],
+      obligations: [baseObligation(), secondObligation],
+      cases: [caseDraft],
+      dispositions: [
+        { obligation_id: IDS.obligation, status: 'case_candidate', case_ids: [caseDraft.case_id] },
+        { obligation_id: secondObligationId, status: 'case_candidate', case_ids: [caseDraft.case_id] }
+      ]
+    });
+    context.obligations.fact_routes[0].obligation_ids.push(secondObligationId);
+    return context;
+  };
+
+  const missing = classifyCaseDrafts(makeContext(draft));
+  assert.equal(missing.grounded.length + missing.conditional.length + missing.blocked.length, 0);
+  assert.equal(missing.diagnostics.some((item) => item.code === 'OBLIGATION_ORACLE_EXPECTATION_UNMAPPED'), true);
+
+  const completeDraft = clone(draft);
+  completeDraft.steps[0].expectations.push({
+    ...clone(completeDraft.steps[0].expectations[0]),
+    expectation_id: 'expectation_second_result',
+    evidence_ref: secondOracleId
+  });
+  refreshExecutionSignature(completeDraft);
+  const complete = classifyCaseDrafts(makeContext(completeDraft));
+  assert.equal(complete.grounded.length, 1);
+  assert.deepEqual(complete.diagnostics, []);
+});
+
+test('Case evidence_refs exactly summarize canonical direct evidence roots', () => {
+  const omitted = classificationContext();
+  omitted.caseDrafts.cases[0].evidence_refs = omitted.caseDrafts.cases[0].evidence_refs
+    .filter((/** @type {string} */ ref) => ref !== 'claim_action');
+  const extra = classificationContext({ claims: [...baseClaims(), acceptedClaim('claim_unrelated')] });
+  extra.caseDrafts.cases[0].evidence_refs.push('claim_unrelated');
+  const padded = classificationContext();
+  padded.caseDrafts.cases[0].evidence_refs.push(' claim_action');
+
+  for (const [context, code] of [
+    [omitted, 'CASE_EVIDENCE_SUMMARY_MISMATCH'],
+    [extra, 'CASE_EVIDENCE_SUMMARY_MISMATCH'],
+    [padded, 'CASE_EVIDENCE_SUMMARY_INVALID']
+  ]) {
+    const result = classifyCaseDrafts(context);
+    assert.equal(result.grounded.length + result.conditional.length + result.blocked.length, 0, code);
+    assert.equal(result.diagnostics.some((item) => item.code === code), true, code);
+  }
+});
+
+test('independent blocker evidence must be structurally tied to a named required capability', () => {
+  const capabilityBlocker = acceptedClaim('claim_capability_blocker', 'E3', {
+    kind: 'description', value: 'Checkout control is unavailable.'
+  });
+  const unrelated = acceptedClaim('claim_same_scope_unrelated', 'E3', {
+    kind: 'description', value: 'Payment routing is unavailable.'
+  });
+  /** @param {any} claim */
+  const classifyBlocker = (claim) => classifyCaseDrafts(classificationContext({
+    claims: [...baseClaims(), claim],
+    cases: [],
+    dispositions: [{
+      obligation_id: IDS.obligation,
+      status: 'blocker',
+      blocker_root_issue_id: 'root_capability_unavailable',
+      evidence_refs: [claim.claim_id]
+    }]
+  }));
+
+  const positive = classifyBlocker(capabilityBlocker);
+  assert.equal(positive.blocked.length, 1);
+  assert.deepEqual(positive.diagnostics, []);
+
+  const negative = classifyBlocker(unrelated);
+  assert.equal(negative.blocked.length, 0);
+  assert.equal(negative.diagnostics.some((item) => item.code === 'BLOCKER_EVIDENCE_UNRELATED'), true);
+});
+
+test('explicit blocker evidence relation is batched instead of rescanning every root per ref', () => {
+  /** @param {number} size */
+  const relationVisits = (size) => {
+    const roots = Array.from({ length: size }, (_, index) =>
+      acceptedClaim(`claim_root_${index.toString(16).padStart(8, '0')}`));
+    const children = roots.map((root, index) => acceptedClaim(
+      `claim_child_${index.toString(16).padStart(8, '0')}`,
+      'E2',
+      { parent_claim_ids: [root.claim_id] }
+    ));
+    const obligation = baseObligation({
+      source_claim_ids: roots.map((item) => item.claim_id),
+      required_oracle_refs: [],
+      required_capabilities: []
+    });
+    const context = classificationContext({
+      claims: [...baseClaims(), ...roots, ...children],
+      obligations: [obligation],
+      cases: [],
+      dispositions: [{
+        obligation_id: obligation.obligation_id,
+        status: 'blocker',
+        blocker_root_issue_id: 'root_missing_oracle',
+        evidence_refs: children.map((item) => item.claim_id)
+      }]
+    });
+    const nativeSome = Array.prototype.some;
+    let visits = 0;
+    Array.prototype.some = function countedSome(callback, thisArg) {
+      return nativeSome.call(this, (value, index, array) => {
+        if (new Error().stack?.includes('classifyCaseDrafts')) visits += 1;
+        return callback.call(thisArg, value, index, array);
+      });
+    };
+    let result;
+    try {
+      result = classifyCaseDrafts(context);
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+    assert.equal(result.blocked.length, 1);
+    assert.deepEqual(result.diagnostics, []);
+    return visits;
+  };
+
+  const small = relationVisits(80);
+  const large = relationVisits(160);
+  assert.equal(large <= small * 2.5 + 10, true,
+    `blocker relation visits grew from ${small} to ${large}`);
+});
+
+test('blocker evidence relation includes ancestors and descendants but excludes a sibling sharing only a parent', () => {
+  const sharedParent = acceptedClaim('claim_shared_parent');
+  const formalChild = acceptedClaim('claim_formal_child', 'E2', {
+    parent_claim_ids: [sharedParent.claim_id]
+  });
+  const sibling = acceptedClaim('claim_sibling_child', 'E2', {
+    parent_claim_ids: [sharedParent.claim_id]
+  });
+  const obligation = baseObligation({
+    source_claim_ids: [formalChild.claim_id],
+    required_oracle_refs: [],
+    required_capabilities: []
+  });
+  const result = classifyCaseDrafts(classificationContext({
+    claims: [...baseClaims(), sharedParent, formalChild, sibling],
+    obligations: [obligation],
+    cases: [],
+    dispositions: [{
+      obligation_id: obligation.obligation_id,
+      status: 'blocker',
+      blocker_root_issue_id: 'root_sibling_is_not_related',
+      evidence_refs: [sibling.claim_id]
+    }]
+  }));
+
+  assert.equal(result.blocked.length, 0);
+  assert.equal(result.diagnostics.some((item) => item.code === 'BLOCKER_EVIDENCE_UNRELATED'), true);
 });
 
 test('a derived child of formal evidence cannot masquerade as an independent Exploratory risk', () => {

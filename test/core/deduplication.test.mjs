@@ -117,6 +117,29 @@ test('precondition and data signature dimensions are derived from actual Case se
   }
 });
 
+test('data provenance is not an execution partition and provenance-only variants never remain separate executable Cases', () => {
+  const first = baseCase();
+  const second = baseCase({ case_id: 'case_2222222222222222' });
+  second.data[0].provenance.ref = 'claim_data_equivalent';
+  second.evidence_refs = second.evidence_refs.map((/** @type {string} */ ref) =>
+    ref === 'claim_data' ? 'claim_data_equivalent' : ref);
+  refreshExecutionSignature(second);
+
+  assert.equal(executionSignature(first), executionSignature(second));
+
+  const result = classifyCaseDrafts(classificationContext({
+    claims: [...baseClaims(), acceptedClaim('claim_data_equivalent', 'E2')],
+    cases: [first, second],
+    dispositions: [{
+      obligation_id: IDS.obligation,
+      status: 'case_candidate',
+      case_ids: [first.case_id, second.case_id]
+    }]
+  }));
+  assert.equal(result.grounded.length + result.conditional.length, 0);
+  assert.equal(result.diagnostics.some((item) => item.code === 'DUPLICATE_SIGNATURE_SEMANTIC_CONFLICT'), true);
+});
+
 function exactDuplicateContext() {
   const secondObligationId = 'obligation_2222222222222222';
   const secondCaseId = 'case_2222222222222222';

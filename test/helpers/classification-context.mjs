@@ -43,11 +43,7 @@ export function expectedDataProjection(caseDraft) {
   const data = /** @type {any[]} */ (caseDraft.data);
   return canonicalSetProjection(data.map((item) => ({
     name: normalizeSemanticString(item.name),
-    value: normalizeSemanticString(item.value),
-    provenance: {
-      type: normalizeSemanticString(item.provenance?.type),
-      ref: normalizeSemanticString(item.provenance?.ref)
-    }
+    value: normalizeSemanticString(item.value)
   })));
 }
 
