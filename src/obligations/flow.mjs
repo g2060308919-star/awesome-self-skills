@@ -7,6 +7,7 @@ import {
 function nodeIdentity(node) {
   return {
     kind: 'flow-node',
+    element_id: node.element_id,
     node_type: node.node_type,
     label: node.label
   };

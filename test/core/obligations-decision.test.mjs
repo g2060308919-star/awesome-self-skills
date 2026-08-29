@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { compile as compileDecision } from '../../src/obligations/decision.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 import { auditInteractionMatrix } from '../../src/views/interaction-matrix.mjs';
@@ -12,13 +13,142 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const behaviorViewsSchema = JSON.parse(await readFile(path.join(
   repositoryRoot, 'skill/generate-test-cases/scripts/schemas/behavior-views.schema.json'
 ), 'utf8'));
+const sourcePackSchema = JSON.parse(await readFile(path.join(
+  repositoryRoot, 'skill/generate-test-cases/scripts/schemas/source-pack.schema.json'
+), 'utf8'));
+const evidenceClaimsSchema = JSON.parse(await readFile(path.join(
+  repositoryRoot, 'skill/generate-test-cases/scripts/schemas/evidence-claims.schema.json'
+), 'utf8'));
 const testObligationsSchema = JSON.parse(await readFile(path.join(
   repositoryRoot, 'skill/generate-test-cases/scripts/schemas/test-obligations.schema.json'
 ), 'utf8'));
+const sourceDigest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 /** @returns {Promise<any>} */
 async function decisionFixture() {
   return JSON.parse(await readFile(path.join(repositoryRoot, 'test/fixtures/views/decision-obligations.json'), 'utf8'));
+}
+
+function oracleSourcePack() {
+  return {
+    schema_version: '1.0.0', source_revision: 0, run_scope: 'checkout',
+    sources: [{
+      source_id: 'source_oracle', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
+      content: 'Oracle rules', content_digest: sourceDigest, scope: 'checkout'
+    }],
+    locators: [
+      {
+        locator_id: 'locator_formula', source_id: 'source_oracle', type: 'text-range',
+        text_range: { start: 0, end: 7 }, content_digest: sourceDigest, extraction_integrity: 'verified'
+      },
+      {
+        locator_id: 'locator_table', source_id: 'source_oracle', type: 'text-range',
+        text_range: { start: 8, end: 14 }, content_digest: sourceDigest, extraction_integrity: 'verified'
+      }
+    ],
+    source_policy: { rules: [{
+      rule_id: 'rule_oracle_source', source_ids: ['source_oracle'], scope: 'checkout', authority: 'owner', status: 'effective'
+    }] },
+    decision_records: [], clarification_events: []
+  };
+}
+
+function oracleEvidenceClaims() {
+  return {
+    schema_version: '1.0.0', source_revision: 0,
+    claims: [
+      {
+        claim_id: 'claim_total_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
+        scope: 'checkout.total', value: '12.50', source_locator_ids: ['locator_formula'], source_id: 'source_oracle'
+      },
+      {
+        claim_id: 'claim_total', claim_form: 'derived', level: 'E2', kind: 'expected-value',
+        scope: 'checkout.total', value: '12.50', source_locator_ids: ['locator_formula'],
+        derivation_kind: 'formula', derivation_target: 'expected-value', parent_claim_ids: ['claim_total_rule'],
+        parameters: { unit: 'USD', precision: 2, rounding: 'half-up' },
+        rule_input: {
+          formula: 'subtotal + tax', inputs: [{ name: 'subtotal', value: 10 }, { name: 'tax', value: 2.5 }],
+          unit: 'USD', precision: 2, rounding: 'half-up'
+        }
+      },
+      {
+        claim_id: 'model_total_rule', claim_form: 'derived', level: 'E2', kind: 'model-element',
+        scope: 'checkout.total', value: '12.50', source_locator_ids: ['locator_formula'],
+        derivation_kind: 'decision-table-instance', derivation_target: 'model-element', parent_claim_ids: ['claim_total_rule'],
+        parameters: { table_id: 'table_total_model' },
+        rule_input: { conditions: ['total calculated'], outcome: '12.50' }
+      },
+      {
+        claim_id: 'claim_total_boundary', claim_form: 'derived', level: 'E2', kind: 'test-data',
+        scope: 'checkout.total', value: '1', source_locator_ids: ['locator_formula'],
+        derivation_kind: 'boundary-representative', derivation_target: 'test-data', parent_claim_ids: ['claim_total_rule'],
+        parameters: { domain_id: 'domain_total' },
+        rule_input: { lower: 1, upper: 2, inclusive: true }
+      },
+      {
+        claim_id: 'claim_review_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
+        scope: 'checkout.total', value: 'manual review', source_locator_ids: ['locator_table'], source_id: 'source_oracle'
+      },
+      {
+        claim_id: 'claim_review_result', claim_form: 'derived', level: 'E2', kind: 'expected-value',
+        scope: 'checkout.total', value: 'manual review', source_locator_ids: ['locator_table'],
+        derivation_kind: 'decision-table-instance', derivation_target: 'expected-value', parent_claim_ids: ['claim_review_rule'],
+        parameters: { table_id: 'table_review' },
+        rule_input: { conditions: ['total above review threshold'], outcome: 'manual review' }
+      }
+    ],
+    fact_ledger: []
+  };
+}
+
+/** @param {string} claimId @param {string[]} parentClaimIds */
+function expectedOracleClaim(claimId, parentClaimIds) {
+  return {
+    claim_id: claimId, claim_form: 'derived', level: 'E2', kind: 'expected-value',
+    scope: 'checkout.total', value: '1', source_locator_ids: ['locator_formula'],
+    derivation_kind: 'formula', derivation_target: 'expected-value', parent_claim_ids: parentClaimIds,
+    parameters: { unit: 'count', precision: 0, rounding: 'half-up' },
+    rule_input: {
+      formula: 'constant', inputs: [{ name: 'constant', value: 1 }],
+      unit: 'count', precision: 0, rounding: 'half-up'
+    }
+  };
+}
+
+/** @param {any} [submittedEvidence] @returns {Promise<{view: any, claimsById: Map<string, any>, artifact: any, sourcePack: any}>} */
+async function validatedOracleDecision(submittedEvidence = oracleEvidenceClaims()) {
+  const sourcePack = oracleSourcePack();
+  const evidenceClaims = submittedEvidence;
+  assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
+  assert.deepEqual(validateUniqueStableIds(sourcePack), []);
+  assert.deepEqual(validateAgainstSchema(evidenceClaims, evidenceClaimsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(evidenceClaims), []);
+  const evidence = validateEvidenceGraph(sourcePack, evidenceClaims);
+  assert.deepEqual(evidence.diagnostics, []);
+
+  const artifact = await decisionFixture();
+  artifact.source_revision = 0;
+  artifact.views[0] = {
+    view_id: 'view_total_decision', type: 'decision', scope: 'checkout.total',
+    source_claim_ids: ['claim_review_rule', 'model_total_rule'],
+    elements: [
+      {
+        element_id: 'rule_total', kind: 'decision-rule', conditions: ['total is calculated'], result: 'total is 12.50', priority: 0,
+        source_claim_ids: [], model_refs: ['model_total_rule']
+      },
+      {
+        element_id: 'rule_review', kind: 'decision-rule', conditions: ['total above review threshold'], result: 'manual review', priority: 1,
+        source_claim_ids: ['claim_review_rule'], model_refs: []
+      }
+    ],
+    relations: []
+  };
+  assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(artifact), []);
+  assert.deepEqual(auditInteractionMatrix(artifact).diagnostics, []);
+  const views = validateBehaviorViews({ claimsById: evidence.claimsById, factLedger: [], runScope: sourcePack.run_scope }, artifact);
+  assert.deepEqual(views.diagnostics, []);
+  return { view: views.viewsById.get('view_total_decision'), claimsById: evidence.claimsById, artifact, sourcePack };
 }
 
 /** @param {any} artifact */
@@ -101,6 +231,154 @@ test('decision obligations hand-count each explicit valid rule once with priorit
   assert.deepEqual(validateAgainstSchema(obligationsArtifact, testObligationsSchema), []);
   assert.deepEqual(validateUniqueStableIds(obligationsArtifact), []);
   assert.equal(new Set(actual.map((seed) => seed.obligation_id)).size, 3);
+});
+
+test('decision obligations accept Task 3 expected-value Oracles through source and model-ref ancestry', async () => {
+  const { view, claimsById } = await validatedOracleDecision();
+  const context = {
+    claimsById,
+    riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', ['claim_total']], ['rule_review', ['claim_review_result']]
+    ]),
+    requiredCapabilitiesByElementId: new Map([
+      ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+    ])
+  };
+
+  const actual = compileDecision(view, context);
+
+  assert.equal(actual.length, 2);
+  assert.deepEqual(actual.map((seed) => seed.required_oracle_refs).sort(), [
+    ['claim_review_result'], ['claim_total']
+  ]);
+  assert.deepEqual(
+    actual.find((seed) => seed.required_oracle_refs.includes('claim_total'))?.source_claim_ids,
+    ['claim_total', 'model_total_rule']
+  );
+  const obligationsArtifact = {
+    schema_version: '1.0.0', source_revision: 0, obligations: actual, fact_routes: [], interaction_routes: []
+  };
+  assert.deepEqual(validateAgainstSchema(obligationsArtifact, testObligationsSchema), []);
+  assert.deepEqual(validateUniqueStableIds(obligationsArtifact), []);
+});
+
+test('decision obligations reject accepted unrelated and non-Oracle claims after every contract gate', async () => {
+  const { view, claimsById } = await validatedOracleDecision();
+  const baseContext = {
+    claimsById,
+    riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', ['claim_total']], ['rule_review', ['claim_review_result']]
+    ]),
+    requiredCapabilitiesByElementId: new Map([
+      ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+    ])
+  };
+  const cases = [
+    { name: 'same-scope sibling with no shared atomic support', elementId: 'rule_review', oracle: 'claim_total' },
+    { name: 'E2 test data is not an Oracle', elementId: 'rule_total', oracle: 'claim_total_boundary' },
+    { name: 'E2 model element is not an Oracle', elementId: 'rule_total', oracle: 'model_total_rule' }
+  ];
+
+  for (const item of cases) {
+    const context = {
+      ...baseContext,
+      requiredOracleRefsByElementId: new Map([
+        ...baseContext.requiredOracleRefsByElementId,
+        [item.elementId, [item.oracle]]
+      ])
+    };
+    assert.throws(() => compileDecision(view, context), /Oracle claim/, item.name);
+  }
+});
+
+test('decision obligations consume only Task 3 accepted output for cyclic and dangling Oracle claims', async () => {
+  const sourcePack = oracleSourcePack();
+  const baseEvidence = oracleEvidenceClaims();
+  const { view, artifact } = await validatedOracleDecision(baseEvidence);
+  const cases = [
+    {
+      name: 'cyclic expected-value ancestry', oracle: 'claim_cycle_a', code: 'E2_CYCLE',
+      claims: [
+        expectedOracleClaim('claim_cycle_a', ['claim_total_rule', 'claim_cycle_b']),
+        expectedOracleClaim('claim_cycle_b', ['claim_cycle_a'])
+      ]
+    },
+    {
+      name: 'dangling expected-value ancestry', oracle: 'claim_dangling_expected', code: 'E2_PARENT_DANGLING',
+      claims: [expectedOracleClaim('claim_dangling_expected', ['claim_total_rule', 'claim_missing_parent'])]
+    }
+  ];
+
+  for (const item of cases) {
+    const submitted = structuredClone(baseEvidence);
+    submitted.claims.push(...item.claims);
+    assert.deepEqual(validateAgainstSchema(submitted, evidenceClaimsSchema), [], item.name);
+    assert.deepEqual(validateUniqueStableIds(submitted), [], item.name);
+    const evidence = validateEvidenceGraph(sourcePack, submitted);
+    assert.equal(evidence.diagnostics.some((diagnostic) => diagnostic.code === item.code), true, item.name);
+    assert.equal(evidence.claimsById.has(item.oracle), false, item.name);
+    const views = validateBehaviorViews(
+      { claimsById: evidence.claimsById, factLedger: [], runScope: sourcePack.run_scope }, artifact
+    );
+    assert.deepEqual(views.diagnostics, [], item.name);
+    const context = {
+      claimsById: evidence.claimsById,
+      riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+      requiredOracleRefsByElementId: new Map([
+        ['rule_total', [item.oracle]], ['rule_review', ['claim_review_result']]
+      ]),
+      requiredCapabilitiesByElementId: new Map([
+        ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+      ])
+    };
+    assert.throws(() => compileDecision(view, context), /Oracle claim/, item.name);
+  }
+});
+
+test('decision obligations traverse deep shared accepted Oracle ancestry once per seed', async () => {
+  const submitted = oracleEvidenceClaims();
+  const oracleIds = [];
+  let parentClaimId = 'claim_total_rule';
+  for (let index = 0; index < 4000; index += 1) {
+    const claimId = `claim_z_expected_${String(index).padStart(4, '0')}`;
+    submitted.claims.push(expectedOracleClaim(claimId, [parentClaimId]));
+    oracleIds.push(claimId);
+    parentClaimId = claimId;
+  }
+  const { view, claimsById } = await validatedOracleDecision(submitted);
+  const baseContext = {
+    claimsById,
+    riskByElementId: new Map([['rule_total', 'high'], ['rule_review', 'medium']]),
+    requiredCapabilitiesByElementId: new Map([
+      ['rule_total', ['calculator']], ['rule_review', ['review-queue']]
+    ])
+  };
+
+  const deepStarted = performance.now();
+  const deep = compileDecision(view, {
+    ...baseContext,
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', [parentClaimId]], ['rule_review', ['claim_review_result']]
+    ])
+  });
+  const deepElapsed = performance.now() - deepStarted;
+  assert.equal(deep.find((seed) => seed.view_element_refs.includes('view_total_decision#rule_total'))
+    ?.required_oracle_refs[0], 'claim_z_expected_3999');
+  assert.equal(deepElapsed < 2000, true, `deep Oracle traversal took ${deepElapsed.toFixed(1)}ms`);
+
+  const sharedStarted = performance.now();
+  const shared = compileDecision(view, {
+    ...baseContext,
+    requiredOracleRefsByElementId: new Map([
+      ['rule_total', oracleIds], ['rule_review', ['claim_review_result']]
+    ])
+  });
+  const sharedElapsed = performance.now() - sharedStarted;
+  assert.equal(shared.find((seed) => seed.view_element_refs.includes('view_total_decision#rule_total'))
+    ?.required_oracle_refs.length, 4000);
+  assert.equal(sharedElapsed < 1000, true, `shared Oracle traversal took ${sharedElapsed.toFixed(1)}ms`);
 });
 
 test('decision obligations preserve semantic IDs under rule and condition reorder with code-point deterministic output', async () => {

@@ -65,6 +65,108 @@ export function elementEvidenceRefs(element) {
   ], true);
 }
 
+/** @param {Record<string, unknown>} claim */
+function isOracleEvidence(claim) {
+  if (claim.level === 'E3' && claim.kind === 'requirement') return true;
+  if (claim.level === 'E1' && claim.kind === 'assumption') return true;
+  return claim.level === 'E2' && claim.kind === 'expected-value'
+    && claim.derivation_target === 'expected-value'
+    && (claim.derivation_kind === 'formula' || claim.derivation_kind === 'decision-table-instance');
+}
+
+/**
+ * Resolve only accepted parent ancestry. A null result marks a dangling edge or cycle.
+ * The iterative color walk visits each reachable claim at most once per seed set.
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ * @param {string[]} roots
+ */
+function acceptedClaimClosure(claimsById, roots) {
+  const closure = new Set();
+  const state = new Map();
+  for (const root of roots) {
+    if (state.get(root) === 2) continue;
+    if (!claimsById.has(root)) return null;
+    /** @type {Array<{claimId: string, parents: string[], next: number}>} */
+    const stack = [{
+      claimId: root,
+      parents: sortedStrings(claimsById.get(root)?.parent_claim_ids, true),
+      next: 0
+    }];
+    state.set(root, 1);
+    closure.add(root);
+    while (stack.length > 0) {
+      const frame = /** @type {{claimId: string, parents: string[], next: number}} */ (stack.at(-1));
+      if (frame.next >= frame.parents.length) {
+        state.set(frame.claimId, 2);
+        stack.pop();
+        continue;
+      }
+      const parentId = frame.parents[frame.next];
+      frame.next += 1;
+      if (!claimsById.has(parentId)) return null;
+      closure.add(parentId);
+      const parentState = state.get(parentId) ?? 0;
+      if (parentState === 1) return null;
+      if (parentState === 2) continue;
+      state.set(parentId, 1);
+      stack.push({
+        claimId: parentId,
+        parents: sortedStrings(claimsById.get(parentId)?.parent_claim_ids, true),
+        next: 0
+      });
+    }
+  }
+  return closure;
+}
+
+/**
+ * Check all indirect Oracle roots in one cycle-safe walk. A root is relevant only
+ * when one of its accepted parents reaches the primary element's evidence closure;
+ * same-scope membership and the Oracle root itself are not sufficient.
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ * @param {string[]} roots
+ * @param {Set<string>} targetIds
+ */
+function acceptedOracleRelevance(claimsById, roots, targetIds) {
+  const state = new Map();
+  const reachesTarget = new Map();
+  for (const root of roots) {
+    if (state.get(root) === 2) continue;
+    if (!claimsById.has(root)) return null;
+    /** @type {Array<{claimId: string, parents: string[], next: number}>} */
+    const stack = [{
+      claimId: root,
+      parents: sortedStrings(claimsById.get(root)?.parent_claim_ids, true),
+      next: 0
+    }];
+    state.set(root, 1);
+    while (stack.length > 0) {
+      const frame = /** @type {{claimId: string, parents: string[], next: number}} */ (stack.at(-1));
+      if (frame.next >= frame.parents.length) {
+        reachesTarget.set(frame.claimId, frame.parents.some(
+          (parentId) => targetIds.has(parentId) || reachesTarget.get(parentId) === true
+        ));
+        state.set(frame.claimId, 2);
+        stack.pop();
+        continue;
+      }
+      const parentId = frame.parents[frame.next];
+      frame.next += 1;
+      if (!claimsById.has(parentId)) return null;
+      const parentState = state.get(parentId) ?? 0;
+      if (parentState === 1) return null;
+      if (parentState === 2) continue;
+      state.set(parentId, 1);
+      stack.push({
+        claimId: parentId,
+        parents: sortedStrings(claimsById.get(parentId)?.parent_claim_ids, true),
+        next: 0
+      });
+    }
+  }
+  return new Map(roots.map((root) => [root, reachesTarget.get(root) === true]));
+}
+
 /** @param {Record<string, unknown>} view @param {Record<string, unknown>} element */
 function qualifiedElementRef(view, element) {
   return `${String(view.view_id)}#${String(element.element_id)}`;
@@ -92,9 +194,26 @@ export function buildObligationSeed(input) {
   }
   const oracleRefs = sortedStrings(keyedValue(context.requiredOracleRefsByElementId, primaryId), true);
   const capabilities = sortedStrings(keyedValue(context.requiredCapabilitiesByElementId, primaryId), true);
-  const primaryEvidenceRefs = new Set(elementEvidenceRefs(primaryElement));
+  const claimsById = claimsByIdFrom(context);
+  const primaryEvidenceRefs = elementEvidenceRefs(primaryElement);
+  const primaryEvidenceSet = new Set(primaryEvidenceRefs);
+  const primaryEvidenceClosure = acceptedClaimClosure(claimsById, primaryEvidenceRefs);
+  /** @type {string[]} */
+  const indirectOracleRefs = [];
   for (const claimId of oracleRefs) {
-    if (!primaryEvidenceRefs.has(claimId)) {
+    const claim = claimsById.get(claimId);
+    if (!claim || !isOracleEvidence(claim)) {
+      throw new TypeError(`Oracle claim "${claimId}" is not accepted Oracle evidence for element "${primaryId}"`);
+    }
+    if (primaryEvidenceClosure === null) {
+      throw new TypeError(`Oracle claim "${claimId}" cannot use malformed evidence ancestry for element "${primaryId}"`);
+    }
+    if (!primaryEvidenceSet.has(claimId)) indirectOracleRefs.push(claimId);
+  }
+  const oracleRelevance = primaryEvidenceClosure === null ? null
+    : acceptedOracleRelevance(claimsById, indirectOracleRefs, primaryEvidenceClosure);
+  for (const claimId of indirectOracleRefs) {
+    if (oracleRelevance === null || oracleRelevance.get(claimId) !== true) {
       throw new TypeError(`Oracle claim "${claimId}" is not validated evidence for element "${primaryId}"`);
     }
   }
@@ -104,7 +223,6 @@ export function buildObligationSeed(input) {
     ...oracleRefs,
     ...(input.extraSourceClaimIds ?? [])
   ], true);
-  const claimsById = claimsByIdFrom(context);
   for (const claimId of [...sourceClaimIds, ...oracleRefs]) {
     if (!claimsById.has(claimId)) throw new TypeError(`compilation evidence context does not contain claim "${claimId}"`);
   }
