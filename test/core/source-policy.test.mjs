@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { stableId } from '../../src/canonical.mjs';
+import { normalizeScope } from '../../src/decision-record.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -313,4 +314,56 @@ test('source policy uses sparse scoped reachability for a high-fanout inactive g
   assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(result.conflicts, []);
   assert.deepEqual(result.effectiveClaims.map((claim) => claim.claim_id), ['rule_new']);
+});
+
+test('source policy canonicalizes universal scopes before conflict identity and Decision resolution', () => {
+  assert.equal(normalizeScope(' all '), '*');
+  assert.equal(normalizeScope(' * '), '*');
+  assert.equal(normalizeScope(' checkout.payment '), 'checkout.payment');
+
+  const canonicalRoot = stableId('root', {
+    missing_type: 'source-conflict',
+    rule_ids: ['rule_alpha', 'rule_beta'],
+    scope: '*',
+    source_ids: ['source_alpha', 'source_beta']
+  });
+  /** @param {boolean} reversed @returns {any} */
+  const makePack = (reversed) => {
+    const rules = [
+      { rule_id: 'rule_alpha', source_ids: ['source_alpha'], scope: ' all ', authority: 'owner', status: 'effective' },
+      { rule_id: 'rule_beta', source_ids: ['source_beta'], scope: ' * ', authority: 'owner', status: 'effective' }
+    ];
+    return {
+      sources: [
+        { source_id: 'source_alpha', status: 'effective' },
+        { source_id: 'source_beta', status: 'effective' }
+      ],
+      locators: [{ locator_id: 'locator_decision', source_id: 'source_alpha', extraction_integrity: 'verified' }],
+      source_policy: { rules: reversed ? [...rules].reverse() : rules },
+      decision_records: []
+    };
+  };
+
+  const forwardPack = makePack(false);
+  const reversedPack = makePack(true);
+  const forward = resolveSourcePolicy(forwardPack);
+  const reversed = resolveSourcePolicy(reversedPack);
+
+  assert.equal(forward.conflicts[0].scope, '*');
+  assert.equal(forward.conflicts[0].root_issue_id, canonicalRoot);
+  assert.equal(forward.conflicts[0].conflict_id, reversed.conflicts[0].conflict_id);
+  assert.equal(forward.conflicts[0].root_issue_id, reversed.conflicts[0].root_issue_id);
+
+  for (const pack of [forwardPack, reversedPack]) {
+    pack.decision_records.push({
+      decision_id: 'decision_global', question_id: 'question_global', root_issue_ids: [canonicalRoot], affected_obligation_ids: [], clarification_event_seq: 1,
+      confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Which rule applies?', answer: 'Use alpha.', disposition: 'final',
+      authority_scope: ' all ', effective_scope: ' * ', evidence_ref: 'locator_decision', evidence_level: 'E3'
+    });
+    const resolved = resolveSourcePolicy(pack);
+    assert.deepEqual(resolved.conflicts, []);
+    assert.deepEqual(resolved.effectiveClaims, [{
+      claim_id: 'decision_global', claim_form: 'decision-record', source_ids: [], scope: '*', authority: '*'
+    }]);
+  }
 });

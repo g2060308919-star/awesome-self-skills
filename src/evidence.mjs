@@ -1,4 +1,4 @@
-import { scopeContains, validateDecisionRecords } from './decision-record.mjs';
+import { normalizeScope, scopeContains, validateDecisionRecords } from './decision-record.mjs';
 import { stableId } from './canonical.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
 
@@ -380,20 +380,8 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
   const locators = new Map(objectArray(pack.locators).flatMap((locator) => typeof locator.locator_id === 'string' ? [[locator.locator_id, locator]] : []));
   const decisionValidation = validateDecisionRecords(pack);
   const factLedger = objectArray(artifact.fact_ledger);
-  const factConflicts = factLedger.filter((entry) => entry.status === 'conflicted').flatMap((entry) => {
-    const sourceClaimIds = stringArray(entry.source_claim_ids).sort();
-    const scope = typeof entry.claim_id === 'string' ? rawClaims.get(entry.claim_id)?.scope : null;
-    if (typeof scope !== 'string') return [];
-    return [{
-      root_issue_id: stableId('root', {
-        missing_type: 'fact-conflict',
-        fact_id: typeof entry.fact_id === 'string' ? entry.fact_id : '',
-        source_claim_ids: sourceClaimIds,
-        scope
-      }),
-      scope
-    }];
-  });
+  /** @type {Array<{root_issue_id: string, scope: string}>} */
+  let factConflicts = [];
   const policy = resolveSourcePolicy(pack);
   const cyclicClaims = findE2Cycles(rawClaims);
   /** @type {Map<string, Record<string, unknown>>} */
@@ -501,7 +489,8 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
           diagnostics.push(diagnostic('reference', 'DECISION_EVIDENCE_MISMATCH', `/claims/${index}/source_locator_ids`, 'Decision Record evidence must be included in the claim locator references'));
           valid = false;
         }
-        if (claim.authority !== decision.authority_scope) {
+        if (typeof claim.authority !== 'string' || typeof decision.authority_scope !== 'string'
+          || normalizeScope(claim.authority) !== normalizeScope(decision.authority_scope)) {
           diagnostics.push(diagnostic('classification', 'DECISION_AUTHORITY_MISMATCH', `/claims/${index}/authority`, 'claim authority must match the Decision Record authority scope'));
           valid = false;
         }
@@ -614,6 +603,34 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
       }
     }
   }
+
+  // Higher evidence is closed first. Only accepted E3/E2 claims can establish a
+  // fact-conflict root against which a temporary E1 Decision is evaluated.
+  for (const [claimId, claim] of rawClaims) {
+    if (claim.level === 'E3' || claim.level === 'E2') validateIteratively(claimId);
+  }
+
+  factConflicts = factLedger.filter((entry) => entry.status === 'conflicted').flatMap((entry) => {
+    const primaryId = typeof entry.claim_id === 'string' ? entry.claim_id : '';
+    const primary = acceptedClaims.get(primaryId);
+    const sourceClaimIds = [...new Set(stringArray(entry.source_claim_ids))].sort();
+    const acceptedSources = sourceClaimIds.map((claimId) => acceptedClaims.get(claimId));
+    /** @param {Record<string, unknown> | undefined} claim */
+    const isHigher = (claim) => claim?.level === 'E3' || claim?.level === 'E2';
+    if (!isHigher(primary) || sourceClaimIds.length < 2
+      || acceptedSources.some((claim) => !isHigher(claim))) return [];
+    const scope = typeof primary?.scope === 'string' ? normalizeScope(primary.scope) : '';
+    if (scope.length === 0) return [];
+    return [{
+      root_issue_id: stableId('root', {
+        missing_type: 'fact-conflict',
+        fact_id: typeof entry.fact_id === 'string' ? entry.fact_id : '',
+        source_claim_ids: sourceClaimIds,
+        scope
+      }),
+      scope
+    }];
+  });
 
   for (const claimId of rawClaims.keys()) validateIteratively(claimId);
 

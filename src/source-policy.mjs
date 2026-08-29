@@ -1,5 +1,5 @@
 import { stableId } from './canonical.mjs';
-import { scopeContains, validateDecisionRecords } from './decision-record.mjs';
+import { normalizeScope, scopeContains, validateDecisionRecords } from './decision-record.mjs';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isObject(value) {
@@ -28,8 +28,10 @@ function compareStrings(left, right) {
 
 /** @param {string} left @param {string} right @returns {string | null} */
 function intersectScopes(left, right) {
-  if (scopeContains(left, right)) return right.trim();
-  if (scopeContains(right, left)) return left.trim();
+  const normalizedLeft = normalizeScope(left);
+  const normalizedRight = normalizeScope(right);
+  if (scopeContains(normalizedLeft, normalizedRight)) return normalizedRight;
+  if (scopeContains(normalizedRight, normalizedLeft)) return normalizedLeft;
   return null;
 }
 
@@ -196,17 +198,18 @@ function buildScopedReachability(graph, scopesById) {
     },
     /** @param {string} start @param {string} target @param {string} scope */
     reaches(start, target, scope) {
+      const normalizedScope = normalizeScope(scope);
       if (!graph.has(start) || !graph.has(target)
-        || !scopeContains(scopesById.get(start) ?? '', scope)
-        || !scopeContains(scopesById.get(target) ?? '', scope)) return false;
-      const dense = maybeBuildDense(scope);
+        || !scopeContains(scopesById.get(start) ?? '', normalizedScope)
+        || !scopeContains(scopesById.get(target) ?? '', normalizedScope)) return false;
+      const dense = maybeBuildDense(normalizedScope);
       if (dense) {
         const targetIndex = dense.indexById.get(target);
         const bits = dense.descendants.get(start);
         return targetIndex !== undefined && bits !== undefined
           && (bits[targetIndex >>> 5] & (1 << (targetIndex & 31))) !== 0;
       }
-      const cacheKey = `${scope}\0${start}\0${target}`;
+      const cacheKey = `${normalizedScope}\0${start}\0${target}`;
       const cached = sparseResults.get(cacheKey);
       if (cached !== undefined) return cached;
       const pending = [start];
@@ -217,7 +220,7 @@ function buildScopedReachability(graph, scopesById) {
         if (current === undefined || visited.has(current)) continue;
         visited.add(current);
         for (const neighbor of graph.get(current) ?? []) {
-          if (scopeContains(scopesById.get(neighbor) ?? '', scope) && !visited.has(neighbor)) pending.push(neighbor);
+          if (scopeContains(scopesById.get(neighbor) ?? '', normalizedScope) && !visited.has(neighbor)) pending.push(neighbor);
         }
       }
       return cacheSparseResult(cacheKey, false);
@@ -289,7 +292,7 @@ export function resolveSourcePolicy(sourcePack) {
   }));
   const scopesById = new Map(transitRules.map((rule) => [
     /** @type {string} */ (rule.rule_id),
-    /** @type {string} */ (rule.scope)
+    normalizeScope(/** @type {string} */ (rule.scope))
   ]));
   const reachability = buildScopedReachability(graph, scopesById);
   const activeRules = eligibleRules.filter((rule) => rule.status === 'effective');
@@ -372,13 +375,13 @@ export function resolveSourcePolicy(sourcePack) {
     const excludedScopes = [...new Set([
       ...(precedenceExclusions.get(ruleId) ?? []),
       ...(conflictExclusions.get(ruleId) ?? [])
-    ])].sort();
+    ].map(normalizeScope))].sort();
     if (excludedScopes.some((scope) => scopeContains(scope, /** @type {string} */ (rule.scope)))) return [];
     return [{
       claim_id: ruleId,
       claim_form: 'source-policy',
       source_ids: stringArray(rule.source_ids).sort(),
-      scope: /** @type {string} */ (rule.scope),
+      scope: normalizeScope(/** @type {string} */ (rule.scope)),
       authority: typeof rule.authority === 'string' ? rule.authority : '',
       excluded_scopes: excludedScopes
     }];
@@ -390,8 +393,8 @@ export function resolveSourcePolicy(sourcePack) {
       claim_id: decisionId,
       claim_form: 'decision-record',
       source_ids: [],
-      scope: decision.effective_scope,
-      authority: decision.authority_scope
+      scope: normalizeScope(decision.effective_scope),
+      authority: normalizeScope(decision.authority_scope)
     }];
   });
   const effectiveClaims = [...effectiveRules, ...effectiveDecisions]

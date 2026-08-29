@@ -13,12 +13,18 @@ function diagnostic(code, path, message) {
   return { category: 'reference', code, path, message };
 }
 
+/** @param {string} scope */
+export function normalizeScope(scope) {
+  const normalized = scope.trim();
+  return normalized === 'all' || normalized === '*' ? '*' : normalized;
+}
+
 /** @param {string} container @param {string} candidate */
 export function scopeContains(container, candidate) {
-  const left = container.trim();
-  const right = candidate.trim();
+  const left = normalizeScope(container);
+  const right = normalizeScope(candidate);
   if (left.length === 0 || right.length === 0) return false;
-  return left === '*' || left === 'all' || left === right
+  return left === '*' || left === right
     || right.startsWith(`${left}.`) || right.startsWith(`${left}/`);
 }
 
