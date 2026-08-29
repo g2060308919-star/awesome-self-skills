@@ -29,7 +29,6 @@ const NATIVE_ARRAY_SOME = Array.prototype.some;
 const NATIVE_ARRAY_PUSH = Array.prototype.push;
 const NATIVE_ARRAY_POP = Array.prototype.pop;
 const NATIVE_ARRAY_SLICE = Array.prototype.slice;
-const NATIVE_ARRAY_INCLUDES = Array.prototype.includes;
 
 /** @param {any[]} value @param {(...args:any[])=>any} callback */
 function arrayMap(value, callback) {
@@ -71,11 +70,6 @@ function arraySlice(value, start, end) {
   return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SLICE, value, end === undefined ? [start] : [start, end]);
 }
 
-/** @param {any[]} value @param {any} item */
-function arrayIncludes(value, item) {
-  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_INCLUDES, value, [item]);
-}
-
 /** @typedef {{category:string,code:string,path:string,message:string}} Diagnostic */
 
 /** @param {string} left @param {string} right */
@@ -99,22 +93,32 @@ function diagnostic(category, code, path, message) {
   return { category, code, path, message };
 }
 
+/** @param {Diagnostic} item */
+function diagnosticKey(item) {
+  return `${item.category}\0${item.code}\0${item.path}\0${item.message}`;
+}
+
+/** @param {Diagnostic} left @param {Diagnostic} right */
+function compareDiagnostics(left, right) {
+  return compareCodePoints(diagnosticKey(left), diagnosticKey(right));
+}
+
 /** @param {Diagnostic[]} diagnostics */
 function finalizeDiagnostics(diagnostics) {
   const unique = new Map();
-  for (const item of diagnostics) unique.set(
-    `${item.category}\0${item.code}\0${item.path}\0${item.message}`, item
-  );
-  if (unique.size > DIAGNOSTIC_LIMIT) {
-    const truncated = diagnostic(
-      'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
-    );
-    unique.set(`${truncated.category}\0${truncated.code}\0${truncated.path}\0${truncated.message}`, truncated);
+  let overflow = false;
+  for (const item of diagnostics) {
+    if (item.code === 'DIAGNOSTICS_TRUNCATED') overflow = true;
+    else unique.set(diagnosticKey(item), item);
   }
-  return arraySlice(arraySort([...unique.values()], (left, right) => compareCodePoints(
-    `${left.category}\0${left.code}\0${left.path}\0${left.message}`,
-    `${right.category}\0${right.code}\0${right.path}\0${right.message}`
-  )), 0, DIAGNOSTIC_LIMIT);
+  if (unique.size > DIAGNOSTIC_LIMIT) overflow = true;
+  const sorted = arraySort([...unique.values()], compareDiagnostics);
+  if (!overflow) return sorted;
+  const retained = arraySlice(sorted, 0, DIAGNOSTIC_LIMIT - 1);
+  arrayPush(retained, diagnostic(
+    'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
+  ));
+  return arraySort(retained, compareDiagnostics);
 }
 
 /**
@@ -608,6 +612,7 @@ function validatePriorState(prior, diagnostics) {
     const status = dispositionById.get(root.root_issue_id);
     const requiresBlockedTuple = root.current || isRetainedGateStatus(status);
     const expectedReasons = new Set();
+    const reasons = new Set(root.reasons);
     if (!dispositionById.has(root.root_issue_id)) arrayPush(diagnostics, diagnostic(
       'traceability', 'PRIOR_ROOT_DISPOSITION_MISSING', `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}`,
       'every retained root snapshot must retain one lifecycle disposition'
@@ -616,7 +621,7 @@ function validatePriorState(prior, diagnostics) {
       const point = priorPointById.get(obligationId);
       if (point?.classification === 'blocked' && point.blocked_reason) expectedReasons.add(point.blocked_reason);
       if (!point || (requiresBlockedTuple && (
-        point.classification !== 'blocked' || !arrayIncludes(root.reasons, point.blocked_reason)
+        point.classification !== 'blocked' || !reasons.has(point.blocked_reason)
       ))) arrayPush(diagnostics, diagnostic(
         'traceability', 'PRIOR_ROOT_ASSOCIATION_INVALID',
         `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}/affected_obligation_ids/${pointerPart(obligationId)}`,
@@ -803,7 +808,7 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
     ));
   }
   if (combined.length === 0) {
-    if (prior.semantic_snapshot !== null && sourceRevision !== prior.source_revision) arrayPush(diagnostics, diagnostic(
+    if (sourceRevision !== prior.source_revision) arrayPush(diagnostics, diagnostic(
       'classification', 'APPEND_REVISION_INVALID', '/source_revision',
       'an empty append batch must replay the exact prior immutable source revision'
     ));
@@ -1157,6 +1162,10 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     const currentRootIds = new Set(arrayMap(roots, (root) => root.root_issue_id));
     const currentRootById = new Map(arrayMap(roots, (root) => [root.root_issue_id, root]));
     const priorRootById = new Map(arrayMap(prior.root_snapshot_ledger, (root) => [root.root_issue_id, root]));
+    const priorAffectedByRootId = new Map(arrayMap(
+      prior.root_snapshot_ledger,
+      (root) => [root.root_issue_id, new Set(root.affected_obligation_ids)]
+    ));
     /** @type {Map<string, any[]>} */
     const currentRootsByObligation = new Map();
     for (const root of roots) for (const obligationId of root.affected_obligation_ids) {
@@ -1183,10 +1192,11 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
         const canProvideEvidence = decisionRecord.disposition === 'final' || decisionRecord.disposition === 'temporary';
         for (const rootId of decisionRecord.root_issue_ids) {
           const priorRoot = priorRootById.get(rootId);
+          const priorAffected = priorAffectedByRootId.get(rootId);
           let ownGain = false;
-          if (canProvideEvidence && priorRoot && !currentRootIds.has(rootId)) {
+          if (canProvideEvidence && priorRoot && priorAffected && !currentRootIds.has(rootId)) {
             for (const obligationId of decisionRecord.affected_obligation_ids) {
-              if (!arrayIncludes(priorRoot.affected_obligation_ids, obligationId)) continue;
+              if (!priorAffected.has(obligationId)) continue;
               const priorPoint = priorPoints.get(obligationId);
               const currentPoint = pointById.get(obligationId);
               const tupleChanged = priorPoint?.classification === 'blocked' && currentPoint

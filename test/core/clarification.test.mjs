@@ -778,6 +778,27 @@ test('clarification binds empty and nonempty append batches to exact revision tr
   ), true);
 });
 
+test('clarification binds the null-snapshot prior sentinel to the exact replay revision', () => {
+  const sameRevision = evaluateClarification(baseContext(), 'pause_for_clarification');
+  assert.deepEqual(sameRevision.diagnostics, []);
+  assert.equal(sameRevision.action, 'need_user_answers');
+
+  const forward = baseContext();
+  forward.source_revision = 5;
+  forward.blocked_obligations[0].semantic_refs = ['claim_refund_changed', 'view_refund#failure'];
+  const backward = baseContext();
+  backward.prior_state.source_revision = 5;
+  backward.blocked_obligations[0].risk = 'low';
+  for (const context of [forward, backward]) {
+    const result = evaluateClarification(context, 'pause_for_clarification');
+    assert.equal(result.action, 'need_revision');
+    assert.equal(result.state, null);
+    assert.equal(result.diagnostics.some(
+      (/** @type {any} */ item) => item.code === 'APPEND_REVISION_INVALID'
+    ), true);
+  }
+});
+
 test('clarification preserves a causally effective disposition while asking a genuinely new root', () => {
   const context = baseContext();
   context.source_revision = 1;
@@ -1192,6 +1213,59 @@ test('clarification diagnostics are canonical and reserve truncation only for re
   assert.deepEqual(unknownKeys, [...unknownKeys].sort());
 });
 
+test('clarification always reserves one canonical diagnostic slot for a real overflow marker', () => {
+  /** @param {number} count @param {boolean} [reverse] */
+  const withDuplicateDecisions = (count, reverse = false) => {
+    const pending = evaluateClarification(baseContext(), 'pause_for_clarification');
+    assert.deepEqual(pending.diagnostics, []);
+    const context = baseContext();
+    context.source_revision = 1;
+    context.prior_state = pending.state;
+    const indexes = Array.from({ length: count }, (_, index) => index);
+    if (reverse) indexes.reverse();
+    context.append_batch.decision_records = indexes.map((sourceIndex, position) => ({
+      decision_id: `decision_${String(sourceIndex).padStart(3, '0')}`,
+      question_id: questionId([ROOT_ORACLE]),
+      root_issue_ids: [ROOT_ORACLE],
+      affected_obligation_ids: [],
+      clarification_event_seq: position + 1,
+      confirmer: 'refund-owner',
+      confirmed_at: '2026-08-30',
+      question: 'What should happen?',
+      answer: 'I do not know.',
+      disposition: 'unknown',
+      authority_scope: 'refund',
+      effective_scope: 'refund',
+      evidence_ref: `locator_${String(sourceIndex).padStart(3, '0')}`,
+      evidence_level: 'E1'
+    }));
+    return evaluateClarification(context, 'pause_for_clarification');
+  };
+
+  const below = withDuplicateDecisions(256);
+  assert.equal(below.diagnostics.length, 255);
+  assert.equal(below.diagnostics.some(
+    (/** @type {any} */ item) => item.code === 'DIAGNOSTICS_TRUNCATED'
+  ), false);
+  const boundary = withDuplicateDecisions(257);
+  assert.equal(boundary.diagnostics.length, 256);
+  assert.equal(boundary.diagnostics.some(
+    (/** @type {any} */ item) => item.code === 'DIAGNOSTICS_TRUNCATED'
+  ), false);
+
+  const overflow = withDuplicateDecisions(300);
+  const reversed = withDuplicateDecisions(300, true);
+  assert.equal(overflow.diagnostics.length, 256);
+  assert.equal(overflow.diagnostics.filter(
+    (/** @type {any} */ item) => item.code === 'DIAGNOSTICS_TRUNCATED'
+  ).length, 1);
+  assert.deepEqual(reversed.diagnostics, overflow.diagnostics);
+  const keys = overflow.diagnostics.map(
+    (/** @type {any} */ item) => `${item.category}\0${item.code}\0${item.path}\0${item.message}`
+  );
+  assert.deepEqual(keys, [...keys].sort());
+});
+
 test('clarification snapshot traversal discloses overflow and never executes later accessors or iterators', () => {
   let accessorReads = 0;
   const context = baseContext();
@@ -1335,9 +1409,86 @@ console.log(JSON.stringify([1000, 2000, 4000].map(run)));
     for (const item of measurements) {
       assert.equal(item.action, 'deliver', `N=${item.size}`);
       assert.deepEqual(item.diagnostics, [], `N=${item.size}`);
-      assert.equal(item.includeCalls, item.size, `N=${item.size}, calls=${item.includeCalls}`);
+      assert.equal(item.includeCalls, 0, `N=${item.size}, calls=${item.includeCalls}`);
     }
-    assert.deepEqual(measurements.map((/** @type {any} */ item) => item.includeCalls), [1000, 2000, 4000]);
+    assert.deepEqual(measurements.map((/** @type {any} */ item) => item.includeCalls), [0, 0, 0]);
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('clarification uses constant-time membership for root reasons and Decision obligations', async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'task9-decision-membership-'));
+  const probePath = path.join(temporaryDirectory, 'probe.mjs');
+  const clarificationUrl = pathToFileURL(path.join(repositoryRoot, 'src/clarification.mjs')).href;
+  const canonicalUrl = pathToFileURL(path.join(repositoryRoot, 'src/canonical.mjs')).href;
+  await writeFile(probePath, `import { canonicalStringify, digest, stableId } from ${JSON.stringify(canonicalUrl)};
+const original = Array.prototype.includes;
+let comparisons = 0;
+Object.defineProperty(Array.prototype, 'includes', { configurable: true, writable: true, value(search, from = 0) {
+  const length = this.length >>> 0;
+  for (let index = Math.max(0, Number(from) || 0); index < length; index += 1) {
+    comparisons += 1;
+    const value = this[index];
+    if (value === search || (value !== value && search !== search)) return true;
+  }
+  return false;
+} });
+const { evaluateClarification } = await import(${JSON.stringify(clarificationUrl)});
+Object.defineProperty(Array.prototype, 'includes', { configurable: true, writable: true, value: original });
+function semantic(ids, classification) {
+  const points = ids.map((obligation_id) => ({
+    obligation_id, evidence_level: classification === 'blocked' ? 'E0' : 'E3', classification,
+    blocked_reason: classification === 'blocked' ? 'MISSING_ORACLE' : null
+  }));
+  return { formal_test_points: points, coverage_denominator: ids.length, delivery_sections: {
+    grounded: classification === 'grounded' ? [...ids] : [], conditional: [],
+    blocked: classification === 'blocked' ? [...ids] : [], exploratory: [],
+    coverage: { formal_denominator: ids.length },
+    quality: { delivery_status: classification === 'blocked' ? 'no_deterministic_cases' : 'executable_subset_ready' }
+  } };
+}
+function run(size) {
+  const ids = Array.from({ length: size }, (_, index) => \`obligation_\${String(index).padStart(5, '0')}\`);
+  const signature = { missing_type: 'oracle', semantic_refs: ['claim_shared'], scope: 'refund' };
+  const rootId = stableId('root', signature);
+  const priorSemantic = semantic(ids, 'blocked');
+  const currentSemantic = semantic(ids, 'grounded');
+  const root = {
+    root_issue_id: rootId, root_issue_key: canonicalStringify(signature), ...signature,
+    affected_obligation_ids: [...ids], risk_counts: { critical: 0, high: size, medium: 0, low: 0 },
+    question: 'What should happen?', answerable: true, reasons: ['MISSING_ORACLE'],
+    evidence_refs: ['claim_shared'], current: true
+  };
+  const context = { source_revision: 1, blocked_obligations: [], prior_state: {
+    source_revision: 0, clarification_event_seq: 0, asked_root_issue_ids: [rootId],
+    root_issue_dispositions: [{ root_issue_id: rootId, status: 'asked' }],
+    last_pending_root_issue_ids: [rootId], last_question_set_digest: digest([rootId]), clarification_stop: null,
+    semantic_snapshot: priorSemantic, root_snapshot_ledger: [root]
+  }, append_batch: { decision_records: [{
+    decision_id: 'decision_final', question_id: stableId('question', { root_issue_ids: [rootId] }),
+    root_issue_ids: [rootId], affected_obligation_ids: [...ids], clarification_event_seq: 1,
+    confirmer: 'owner', confirmed_at: '2026-08-30', question: 'What should happen?', answer: 'Apply the oracle.',
+    disposition: 'final', authority_scope: 'refund', effective_scope: 'refund',
+    evidence_ref: 'locator_decision', evidence_level: 'E3'
+  }], clarification_events: [] }, semantic_snapshot: currentSemantic };
+  comparisons = 0;
+  const result = evaluateClarification(context, 'pause_for_clarification');
+  return { size, comparisons, action: result.action, diagnostics: result.diagnostics };
+}
+console.log(JSON.stringify([500, 1000, 2000].map(run)));
+`, 'utf8');
+  try {
+    const output = (/** @type {any} */ (childProcess)).execFileSync(process.execPath, [probePath], {
+      encoding: 'utf8', maxBuffer: 10 * 1024 * 1024
+    });
+    const measurements = JSON.parse(output);
+    for (const item of measurements) {
+      assert.equal(item.action, 'deliver', `N=${item.size}`);
+      assert.deepEqual(item.diagnostics, [], `N=${item.size}`);
+      assert.equal(item.comparisons, 0, `N=${item.size}, comparisons=${item.comparisons}`);
+    }
+    assert.deepEqual(measurements.map((/** @type {any} */ item) => item.comparisons), [0, 0, 0]);
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
