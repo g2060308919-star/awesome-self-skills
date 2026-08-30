@@ -46,6 +46,7 @@ const NATIVE_GET_PROTOTYPE_OF = Object.getPrototypeOf;
 const NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
 const NATIVE_REFLECT_OWN_KEYS = Reflect.ownKeys;
 const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+const NATIVE_HAS_OWN = Object.hasOwn;
 
 export class BundleReconciliationError extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
@@ -168,7 +169,7 @@ function snapshotControlled(root) {
         if (key === 'length') continue;
         const numericKey = Number(key);
         const lengthDescriptor = descriptors.length;
-        const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
+        const length = lengthDescriptor && NATIVE_HAS_OWN(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
           ? Number(lengthDescriptor.value) : 0;
         if (!Number.isSafeInteger(numericKey) || numericKey < 0 || numericKey >= length || String(numericKey) !== key) {
           invalidOwnKeys = true;
@@ -181,11 +182,9 @@ function snapshotControlled(root) {
       }
       numeric.sort((left, right) => left - right);
       const lengthDescriptor = descriptors.length;
-      const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
+      const length = lengthDescriptor && NATIVE_HAS_OWN(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
         ? Number(lengthDescriptor.value) : 0;
-      /** @type {unknown[]} */
-      const target = new Array(length);
-      assign(target);
+      let structurallyInvalid = numeric.length !== length;
       let expected = 0;
       for (let position = 0; position < numeric.length; position += 1) {
         const numericKey = numeric[position];
@@ -201,17 +200,35 @@ function snapshotControlled(root) {
         expected += 1;
       }
       if (expected < length) overflow = true;
+      for (let position = 0; position < numeric.length; position += 1) {
+        const numericKey = numeric[position];
+        const descriptor = descriptors[String(numericKey)];
+        if (!descriptor || !NATIVE_HAS_OWN(descriptor, 'value')) {
+          structurallyInvalid = true;
+          addDiagnostic(diagnostic(
+            'schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${numericKey}`, 'controlled input must use own data properties'
+          ));
+        }
+      }
+      if (structurallyInvalid) {
+        assign(null);
+        continue;
+      }
+      /** @type {unknown[]} */
+      const target = new Array(length);
+      assign(target);
       /** @type {Array<{source:unknown,path:string,assign:(value:unknown)=>void}>} */
       const children = [];
       for (let position = 0; position < numeric.length; position += 1) {
         const numericKey = numeric[position];
         const descriptor = descriptors[String(numericKey)];
-        if (!descriptor || !Object.hasOwn(descriptor, 'value')) addDiagnostic(diagnostic(
-          'schema', 'ACCESSOR_NOT_ALLOWED', `${path}/${numericKey}`, 'controlled input must use own data properties'
-        ));
-        else children.push({
+        if (descriptor && NATIVE_HAS_OWN(descriptor, 'value')) children.push({
           source: descriptor.value, path: `${path}/${numericKey}`,
-          assign(value) { target[numericKey] = value; }
+          assign(value) {
+            NATIVE_DEFINE_PROPERTY(target, numericKey, {
+              value, enumerable: true, writable: true, configurable: true
+            });
+          }
         });
       }
       for (let position = children.length - 1; position >= 0; position -= 1) pending.push(children[position]);
@@ -238,7 +255,7 @@ function snapshotControlled(root) {
       }
       const descriptor = descriptors[key];
       const childPath = `${path}/${pointerPart(key)}`;
-      if (!descriptor || !Object.hasOwn(descriptor, 'value')) addDiagnostic(diagnostic(
+      if (!descriptor || !NATIVE_HAS_OWN(descriptor, 'value')) addDiagnostic(diagnostic(
         'schema', 'ACCESSOR_NOT_ALLOWED', childPath, 'controlled input must use own data properties'
       ));
       else children.push({
@@ -452,6 +469,25 @@ function buildEvidenceGraph(claimsById, diagnostics) {
   const exitByClaim = new Map();
   const topologicalIndexByClaim = new Map();
   for (let index = 0; index < cursor; index += 1) topologicalIndexByClaim.set(queue[index], index);
+  const MULTIPLE_DOWNGRADE_ROOTS = Symbol('multiple-downgrade-roots');
+  /** @type {Map<string, string|null|symbol>} */
+  const downgradeSummaryByClaim = new Map();
+  for (let index = 0; index < cursor; index += 1) {
+    const claimId = queue[index];
+    /** @type {string|null|symbol} */
+    let summary = claimsById.get(claimId)?.level === 'E1' ? claimId : null;
+    const parents = parentsByClaim.get(claimId) ?? [];
+    for (let parentIndex = 0; parentIndex < parents.length; parentIndex += 1) {
+      const parentSummary = downgradeSummaryByClaim.get(parents[parentIndex]) ?? null;
+      if (summary === MULTIPLE_DOWNGRADE_ROOTS || parentSummary === MULTIPLE_DOWNGRADE_ROOTS) {
+        summary = MULTIPLE_DOWNGRADE_ROOTS;
+      } else if (typeof parentSummary === 'string') {
+        if (typeof summary === 'string' && summary !== parentSummary) summary = MULTIPLE_DOWNGRADE_ROOTS;
+        else summary = parentSummary;
+      }
+    }
+    downgradeSummaryByClaim.set(claimId, summary);
+  }
   if (forest) {
     let time = 0;
     const roots = [...claimsById.keys()].filter((claimId) => (parentsByClaim.get(claimId)?.length ?? 0) === 0).sort(compareCodePoints);
@@ -474,7 +510,8 @@ function buildEvidenceGraph(claimsById, diagnostics) {
   }
   return {
     claimsById, parentsByClaim, childrenByClaim, componentByClaim,
-    entryByClaim, exitByClaim, topologicalIndexByClaim, forest
+    entryByClaim, exitByClaim, topologicalIndexByClaim, downgradeSummaryByClaim,
+    multipleDowngradeRoots: MULTIPLE_DOWNGRADE_ROOTS, forest
   };
 }
 
@@ -820,18 +857,13 @@ function validateCaseAssumption(caseDraft, lane, obligations, factsById, graph, 
     }
   }
   const supportingRoots = caseDirectEvidence(caseDraft, obligations, factsById, false);
-  const evidenceClosure = new Set();
-  const pending = [...supportingRoots].sort(compareCodePoints);
-  let cursor = 0;
-  while (cursor < pending.length) {
-    const claimId = pending[cursor];
-    cursor += 1;
-    if (evidenceClosure.has(claimId)) continue;
-    evidenceClosure.add(claimId);
-    for (const parentId of graph.parentsByClaim.get(claimId) ?? []) pending.push(parentId);
-  }
   const downgradeRoots = new Set(structuredRoots);
-  for (const claimId of evidenceClosure) if (graph.claimsById.get(claimId)?.level === 'E1') downgradeRoots.add(claimId);
+  let downgradeAmbiguous = false;
+  for (let index = 0; index < supportingRoots.length; index += 1) {
+    const summary = graph.downgradeSummaryByClaim.get(supportingRoots[index]);
+    if (summary === graph.multipleDowngradeRoots) downgradeAmbiguous = true;
+    else if (typeof summary === 'string') downgradeRoots.add(summary);
+  }
 
   const supportRecords = [];
   if (isRecord(caseDraft.role)) supportRecords.push(caseDraft.role);
@@ -847,7 +879,7 @@ function validateCaseAssumption(caseDraft, lane, obligations, factsById, graph, 
   ));
 
   if (lane === 'grounded') {
-    if (downgradeRoots.size > 0) diagnostics.push(diagnostic(
+    if (downgradeAmbiguous || downgradeRoots.size > 0) diagnostics.push(diagnostic(
       'classification', 'CASE_GROUNDED_DOWNGRADE_ROOT_INVALID', path,
       'Grounded Cases cannot depend on E1 or approved-assumption evidence'
     ));
@@ -856,20 +888,23 @@ function validateCaseAssumption(caseDraft, lane, obligations, factsById, graph, 
   if (lane !== 'conditional') return;
   const assumptionId = assumption && typeof assumption.claim_id === 'string' ? assumption.claim_id : '';
   const assumptionClaim = graph.claimsById.get(assumptionId);
+  const invalidationCondition = assumption && typeof assumption.invalidation_condition === 'string'
+    ? assumption.invalidation_condition : '';
   if (!assumption || assumptionId.length === 0 || !assumptionClaim
     || (assumptionClaim.level !== 'E1' && !structuredRoots.has(assumptionId))
     || typeof assumptionClaim.scope !== 'string' || typeof caseDraft.scope !== 'string'
-    || !scopeContains(assumptionClaim.scope, caseDraft.scope)) diagnostics.push(diagnostic(
+    || !scopeContains(assumptionClaim.scope, caseDraft.scope)
+    || invalidationCondition.trim().length === 0) diagnostics.push(diagnostic(
     'classification', 'CASE_TEMPORARY_ASSUMPTION_INVALID', `${path}/temporary_assumption`,
-    'Conditional temporary assumption must be accepted E1 or approved-assumption evidence covering the Case scope'
+    'Conditional temporary assumption must be accepted E1 or approved-assumption evidence covering the Case scope with a nonblank invalidation condition'
   ));
-  if (downgradeRoots.size === 0) diagnostics.push(diagnostic(
-    'classification', 'CASE_DOWNGRADE_ROOT_MISSING', path,
-    'Conditional Case requires exactly one independently derived downgrade root'
-  ));
-  else if (downgradeRoots.size > 1) diagnostics.push(diagnostic(
+  if (downgradeAmbiguous || downgradeRoots.size > 1) diagnostics.push(diagnostic(
     'classification', 'CASE_DOWNGRADE_ROOTS_AMBIGUOUS', path,
     'frozen Conditional Case schema cannot represent more than one downgrade root'
+  ));
+  else if (downgradeRoots.size === 0) diagnostics.push(diagnostic(
+    'classification', 'CASE_DOWNGRADE_ROOT_MISSING', path,
+    'Conditional Case requires exactly one independently derived downgrade root'
   ));
   else if (!downgradeRoots.has(assumptionId)) diagnostics.push(diagnostic(
     'traceability', 'CASE_TEMPORARY_ASSUMPTION_MISMATCH', `${path}/temporary_assumption/claim_id`,
@@ -1457,16 +1492,12 @@ function buildBundleTrusted(context) {
 
   const naInput = records(normalized.classification.not_applicable);
   const naById = new Map();
-  const naByExclusionId = new Map();
   for (const item of naInput) {
     const obligationId = String(item.obligation_id ?? '');
     requireClosed(item, ['obligation_id', 'status', 'exclusion_claim_id', 'scope', 'support_review'], `/classification/not_applicable/${pointerPart(obligationId)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
     const obligation = obligationsById.get(obligationId);
     const exclusionId = String(item.exclusion_claim_id ?? '');
     const exclusion = claimsById.get(exclusionId);
-    const sameExclusion = naByExclusionId.get(exclusionId) ?? [];
-    sameExclusion.push(item);
-    naByExclusionId.set(exclusionId, sameExclusion);
     if (naById.has(obligationId)) diagnostics.push(diagnostic('coverage', 'FORMAL_DISPOSITION_DUPLICATE', `/classification/not_applicable/${pointerPart(obligationId)}`, 'NotApplicable disposition must be unique'));
     else naById.set(obligationId, item);
     if (item.status !== 'not_applicable') diagnostics.push(diagnostic(
@@ -1522,27 +1553,6 @@ function buildBundleTrusted(context) {
     if (target && factRoots.some((ref) => isEvidenceRelated(targetId, ref, evidenceGraph))) diagnostics.push(diagnostic(
       'traceability', 'NOT_APPLICABLE_ROUTE_TARGET_RELATED', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
       'terminal NotApplicable exclusion must be independent of every routed fact evidence root'
-    ));
-    const matching = [];
-    for (const item of naByExclusionId.get(targetId) ?? []) {
-      if (item.exclusion_claim_id !== targetId || item.status !== 'not_applicable') continue;
-      const obligation = obligationsById.get(String(item.obligation_id ?? ''));
-      if (!obligation) continue;
-      const obligationRoots = [...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs)];
-      let related = false;
-      for (let factIndex = 0; factIndex < factRoots.length && !related; factIndex += 1) {
-        for (let rootIndex = 0; rootIndex < obligationRoots.length; rootIndex += 1) {
-          if (isEvidenceRelated(factRoots[factIndex], obligationRoots[rootIndex], evidenceGraph)) {
-            related = true;
-            break;
-          }
-        }
-      }
-      if (related) matching.push(item);
-    }
-    if (matching.length !== 1) diagnostics.push(diagnostic(
-      'traceability', 'NOT_APPLICABLE_ROUTE_DISPOSITION_MISMATCH', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
-      'terminal NotApplicable fact route must identify exactly one related verified disposition exclusion'
     ));
   }
   for (const point of points) {

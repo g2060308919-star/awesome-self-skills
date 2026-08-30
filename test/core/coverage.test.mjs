@@ -61,6 +61,77 @@ function conditionalContext() {
   return input;
 }
 
+/** @param {number} size */
+function sharedAssumptionClosureContext(size) {
+  const input = context();
+  /** @type {any[]} */
+  const chain = [{
+    claim_id: 'claim_shared_chain_0000', claim_form: 'direct', level: 'E3', kind: 'requirement',
+    scope: 'checkout', value: 'shared root', source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+  }];
+  for (let index = 1; index < size; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    const previous = String(index - 1).padStart(4, '0');
+    chain.push({
+      claim_id: `claim_shared_chain_${suffix}`, claim_form: 'derived', level: 'E2', kind: 'expected-value',
+      scope: 'checkout', value: `shared ${suffix}`, source_locator_ids: ['locator_checkout'],
+      derivation_kind: 'decision-table-instance', derivation_target: 'expected-value',
+      parent_claim_ids: [`claim_shared_chain_${previous}`], parameters: { table_id: `table_shared_${suffix}` },
+      rule_input: { conditions: [`shared ${suffix}`], outcome: `shared ${suffix}` }
+    });
+  }
+  const finalClaim = `claim_shared_chain_${String(size - 1).padStart(4, '0')}`;
+  const facts = [];
+  const obligations = [];
+  const routes = [];
+  const cases = [];
+  const points = [];
+  for (let index = 0; index < size; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    const factId = `fact_shared_${suffix}`;
+    const obligationId = `obligation_shared_${suffix}`;
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    obligations.push({
+      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#shared_${suffix}`],
+      required_oracle_refs: [finalClaim], required_capabilities: ['checkout-control']
+    });
+    routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
+    points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
+    const candidate = structuredClone(input.classification.grounded[0]);
+    candidate.case_id = `case_shared_${suffix}`;
+    candidate.fact_ids = [factId];
+    candidate.obligation_ids = [obligationId];
+    candidate.steps[0].expectations[0].expectation_id = `expectation_shared_${suffix}`;
+    candidate.steps[0].expectations[0].evidence_ref = finalClaim;
+    candidate.evidence_refs = [...new Set([...candidate.evidence_refs, finalClaim])].sort();
+    candidate.execution_signature.oracle_refs = [`expectation_shared_${suffix}`];
+    candidate.execution_signature.test_point_ids = [obligationId];
+    cases.push(candidate);
+  }
+  input.evidence_claims.claims.push(...chain);
+  input.evidence_claims.fact_ledger = facts;
+  input.obligations_artifact.obligations = obligations;
+  input.obligations_artifact.fact_routes = routes;
+  input.obligations_artifact.interaction_routes = [];
+  input.classification = { grounded: cases, conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: [] };
+  input.clarification.root_issues = [];
+  input.clarification.pending_root_issues = [];
+  input.clarification.state = {
+    source_revision: 4, clarification_event_seq: 0, asked_root_issue_ids: [], root_issue_dispositions: [],
+    last_pending_root_issue_ids: [], last_question_set_digest: '',
+    clarification_stop: { reason: 'converged', source_revision: 4 }, semantic_snapshot: null, root_snapshot_ledger: []
+  };
+  input.clarification.semantic_snapshot = {
+    formal_test_points: points, coverage_denominator: size,
+    delivery_sections: {
+      grounded: obligations.map((item) => item.obligation_id), conditional: [], blocked: [], exploratory: [],
+      coverage: { formal_denominator: size }, quality: { delivery_status: 'executable_subset_ready' }
+    }
+  };
+  return input;
+}
+
 test('coverage builds four independent ledgers with hand-counted denominators', () => {
   const bundle = buildBundle(context());
 
@@ -147,6 +218,16 @@ test('executable lanes revalidate the complete temporary-assumption downgrade cl
   const valid = conditionalContext();
   assert.equal(buildBundle(valid).conditional.length, 1);
 
+  for (const invalidationCondition of ['', '   ', '\n\t']) {
+    const invalidCondition = conditionalContext();
+    invalidCondition.classification.conditional[0].temporary_assumption.invalidation_condition = invalidationCondition;
+    assert.equal(
+      diagnosticCodes(() => buildBundle(invalidCondition)).includes('CASE_TEMPORARY_ASSUMPTION_INVALID'),
+      true,
+      JSON.stringify(invalidationCondition)
+    );
+  }
+
   const groundedStray = context();
   groundedStray.classification.grounded[0].temporary_assumption = {
     claim_id: 'claim_grounded', invalidation_condition: 'The accepted requirement changes.'
@@ -188,6 +269,25 @@ test('executable lanes revalidate the complete temporary-assumption downgrade cl
   candidate.testability_profile.observers[0].provenance_ref = 'claim_assumption_observer';
   candidate.evidence_refs = [...new Set([...candidate.evidence_refs, 'claim_assumption_observer'])].sort();
   assert.equal(diagnosticCodes(() => buildBundle(multiple)).includes('CASE_DOWNGRADE_ROOTS_AMBIGUOUS'), true);
+});
+
+test('temporary-assumption downgrade summaries are propagated once per evidence DAG', () => {
+  const nativeAdd = Set.prototype.add;
+  const measurements = [];
+  try {
+    for (const size of [40, 80, 160]) {
+      let chainAdds = 0;
+      Set.prototype.add = function (value) {
+        if (typeof value === 'string' && value.startsWith('claim_shared_chain_')) chainAdds += 1;
+        return Reflect.apply(nativeAdd, this, [value]);
+      };
+      assert.equal(buildBundle(sharedAssumptionClosureContext(size)).grounded.length, size);
+      measurements.push(chainAdds);
+    }
+  } finally {
+    Set.prototype.add = nativeAdd;
+  }
+  assert.equal(measurements.every((count, index) => count <= [40, 80, 160][index] * 25), true, measurements.join('/'));
 });
 
 test('evidence, classification, clarification, and obligation revisions identify one immutable source snapshot', () => {
@@ -436,35 +536,33 @@ test('NotApplicable accepts the real Task 8 shape where a normative fact routes 
   });
 });
 
-test('terminal NotApplicable fact routes bind exactly to a valid disposition and exclusion', () => {
+test('terminal NotApplicable fact routes form a requirement-only ledger independent of formal dispositions', () => {
   assert.equal(buildBundle(context()).coverage.requirements.entries.find(
     (/** @type {any} */ item) => item.fact_id === 'fact_na'
   ).status, 'not_applicable');
+
+  const terminalOnly = context();
+  terminalOnly.obligations_artifact.obligations = terminalOnly.obligations_artifact.obligations.filter(
+    (/** @type {any} */ obligation) => obligation.obligation_id !== 'obligation_na'
+  );
+  terminalOnly.classification.not_applicable = [];
+  terminalOnly.clarification.semantic_snapshot.formal_test_points = terminalOnly.clarification.semantic_snapshot.formal_test_points.filter(
+    (/** @type {any} */ point) => point.obligation_id !== 'obligation_na'
+  );
+  terminalOnly.clarification.semantic_snapshot.coverage_denominator = 2;
+  terminalOnly.clarification.semantic_snapshot.delivery_sections.coverage.formal_denominator = 2;
+  const terminalBundle = buildBundle(terminalOnly);
+  assert.equal(terminalBundle.coverage.formal.total, 2);
+  assert.deepEqual(terminalBundle.coverage.not_applicable, []);
+  assert.deepEqual(terminalBundle.coverage.requirements.entries.find(
+    (/** @type {any} */ item) => item.fact_id === 'fact_na'
+  ), { fact_id: 'fact_na', status: 'not_applicable' });
 
   const missing = context();
   missing.obligations_artifact.fact_routes.find(
     (/** @type {any} */ route) => route.fact_id === 'fact_na'
   ).not_applicable_claim_id = 'claim_missing';
   assert.equal(diagnosticCodes(() => buildBundle(missing)).includes('NOT_APPLICABLE_ROUTE_TARGET_INVALID'), true);
-
-  const wrongDisposition = context();
-  wrongDisposition.evidence_claims.claims.push({
-    claim_id: 'claim_exclusion_other', claim_form: 'direct', level: 'E3', kind: 'requirement',
-    scope: 'checkout/legacy', value: 'A different exclusion.',
-    source_locator_ids: ['locator_legacy_exclusion'], source_id: 'source_scope'
-  });
-  wrongDisposition.obligations_artifact.fact_routes.find(
-    (/** @type {any} */ route) => route.fact_id === 'fact_na'
-  ).not_applicable_claim_id = 'claim_exclusion_other';
-  assert.equal(diagnosticCodes(() => buildBundle(wrongDisposition)).includes('NOT_APPLICABLE_ROUTE_DISPOSITION_MISMATCH'), true);
-
-  const unrelatedFact = context();
-  const fact = unrelatedFact.evidence_claims.fact_ledger.find(
-    (/** @type {any} */ item) => item.fact_id === 'fact_na'
-  );
-  fact.claim_id = 'claim_grounded';
-  fact.source_claim_ids = ['claim_grounded'];
-  assert.equal(diagnosticCodes(() => buildBundle(unrelatedFact)).includes('NOT_APPLICABLE_ROUTE_DISPOSITION_MISMATCH'), true);
 
   const broadPrimaryFact = context();
   broadPrimaryFact.evidence_claims.claims.push({
@@ -833,6 +931,28 @@ test('entry snapshot rejects submitted array iteration hooks without calling the
   assert.equal(codes.includes('ARRAY_SYMBOL_PROPERTY_INVALID'), true, codes.join(','));
 });
 
+test('entry snapshot never invokes inherited numeric array setters while copying data', () => {
+  const input = context();
+  input.limits = Array.from({ length: 301 }, (_, index) => `limit-${index}`);
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, '300');
+  const nativeDefine = Object.defineProperty;
+  let setterCalls = 0;
+  try {
+    Object.defineProperty(Array.prototype, '300', {
+      configurable: true,
+      set(value) {
+        if (this.length === 301) setterCalls += 1;
+        nativeDefine(this, '300', { value, enumerable: true, writable: true, configurable: true });
+      }
+    });
+    assert.equal(buildBundle(input).quality.limits.length, 301);
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, '300', descriptor);
+    else delete Array.prototype[300];
+  }
+  assert.equal(setterCalls, 0);
+});
+
 test('entry snapshot rejects sparse, named, and custom-prototype controlled arrays', () => {
   /** @type {Array<{code:string,apply:(input:any)=>void}>} */
   const mutations = [
@@ -854,6 +974,31 @@ test('entry snapshot rejects sparse, named, and custom-prototype controlled arra
     mutation.apply(input);
     assert.equal(diagnosticCodes(() => buildBundle(input)).includes(mutation.code), true, mutation.code);
   }
+});
+
+test('entry snapshot rejects huge sparse arrays with descriptor-bounded work', () => {
+  const nativeHasOwn = Object.hasOwn;
+  const measurements = [];
+  try {
+    for (const length of [10_000, 80_000]) {
+      const input = context();
+      input.limits = new Array(length);
+      input.limits[length - 1] = 'retained';
+      let hasOwnCalls = 0;
+      Object.hasOwn = function (...args) {
+        hasOwnCalls += 1;
+        return Reflect.apply(nativeHasOwn, this, args);
+      };
+      const codes = diagnosticCodes(() => buildBundle(input));
+      assert.equal(codes.includes('ARRAY_HOLE'), true);
+      assert.equal(codes.includes('DIAGNOSTICS_TRUNCATED'), true);
+      measurements.push(hasOwnCalls);
+    }
+  } finally {
+    Object.hasOwn = nativeHasOwn;
+  }
+  assert.equal(measurements[0] < 5_000, true, measurements.join('/'));
+  assert.equal(measurements[1] <= measurements[0] + 100, true, measurements.join('/'));
 });
 
 test('descriptor capture failures return structured reconciliation diagnostics rather than raw errors', () => {
@@ -1138,6 +1283,37 @@ test('NotApplicable route reconciliation is indexed instead of rescanning every 
     measurements.push(routeVisits);
   }
   assert.equal(measurements.every((count, index) => count <= [100, 200, 400, 800][index] * 4), true, measurements.join('/'));
+});
+
+test('shared terminal exclusions do not scan the independent formal NotApplicable ledger', () => {
+  const nativeGet = Map.prototype.get;
+  const measurements = [];
+  try {
+    for (const size of [50, 100, 200]) {
+      const input = notApplicableScaleContext(size);
+      input.evidence_claims.claims.push({
+        claim_id: 'claim_na_exclusion_shared', claim_form: 'direct', level: 'E3', kind: 'requirement',
+        scope: 'checkout/legacy', value: 'All enumerated legacy paths are out of scope.',
+        source_locator_ids: ['locator_legacy_exclusion'], source_id: 'source_scope'
+      });
+      for (const route of input.obligations_artifact.fact_routes) {
+        route.not_applicable_claim_id = 'claim_na_exclusion_shared';
+      }
+      for (const disposition of input.classification.not_applicable) {
+        disposition.exclusion_claim_id = 'claim_na_exclusion_shared';
+      }
+      let factClaimGets = 0;
+      Map.prototype.get = function (key) {
+        if (typeof key === 'string' && key.startsWith('claim_na_fact_')) factClaimGets += 1;
+        return Reflect.apply(nativeGet, this, [key]);
+      };
+      assert.equal(buildBundle(input).coverage.requirements.total, size);
+      measurements.push(factClaimGets);
+    }
+  } finally {
+    Map.prototype.get = nativeGet;
+  }
+  assert.equal(measurements.every((count, index) => count <= [50, 100, 200][index] * 20), true, measurements.join('/'));
 });
 
 /** @param {number} size */

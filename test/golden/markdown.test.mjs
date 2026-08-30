@@ -5,7 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify } from '../../src/canonical.mjs';
 import { buildBundle } from '../../src/coverage.mjs';
-import { renderMarkdown } from '../../src/render-markdown.mjs';
+import { BundleRenderError, renderMarkdown } from '../../src/render-markdown.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 /** @param {string} relative */
@@ -33,4 +33,82 @@ test('renderer rejects bundle-external free text and never treats Markdown as ev
   });
   assert.equal(Reflect.apply(renderMarkdown, null, [bundle, 'UNTRUSTED FREE TEXT']).includes('UNTRUSTED FREE TEXT'), false);
   assert.equal(renderMarkdown(bundle).includes('Markdown evidence'), false);
+});
+
+test('renderer snapshots own data without executing submitted getters or iterators', async () => {
+  const getterBundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  let getterReads = 0;
+  Object.defineProperty(getterBundle, 'source_revision', {
+    enumerable: true,
+    get() { getterReads += 1; return 4; }
+  });
+  assert.throws(() => renderMarkdown(getterBundle), (/** @type {any} */ error) => {
+    assert.equal(error instanceof BundleRenderError, true);
+    assert.equal(error.status, 'need_revision');
+    assert.equal(error.stage, 'render_markdown');
+    assert.equal(error.diagnostics.some((/** @type {any} */ item) => item.code === 'ACCESSOR_NOT_ALLOWED'), true);
+    return true;
+  });
+  assert.equal(getterReads, 0);
+
+  const iteratorBundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  let iteratorCalls = 0;
+  Object.defineProperty(iteratorBundle.grounded, Symbol.iterator, {
+    value() { iteratorCalls += 1; return [][Symbol.iterator](); }
+  });
+  assert.throws(() => renderMarkdown(iteratorBundle), (/** @type {any} */ error) => {
+    assert.equal(error instanceof BundleRenderError, true);
+    assert.equal(error.status, 'need_revision');
+    assert.equal(error.stage, 'render_markdown');
+    return true;
+  });
+  assert.equal(iteratorCalls, 0);
+
+  const methodBundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  let methodCalls = 0;
+  Object.defineProperty(methodBundle.grounded, 'entries', {
+    value() { methodCalls += 1; return [][Symbol.iterator](); }
+  });
+  assert.throws(() => renderMarkdown(methodBundle), (/** @type {any} */ error) => {
+    assert.equal(error instanceof BundleRenderError, true);
+    assert.equal(error.diagnostics.some((/** @type {any} */ item) => item.code === 'ARRAY_NAMED_PROPERTY_INVALID'), true);
+    return true;
+  });
+  assert.equal(methodCalls, 0);
+
+  const revoked = Proxy.revocable(iteratorBundle, {});
+  revoked.revoke();
+  assert.throws(() => renderMarkdown(revoked.proxy), (/** @type {any} */ error) => {
+    assert.equal(error instanceof BundleRenderError, true);
+    assert.equal(error.stage, 'render_markdown');
+    return true;
+  });
+});
+
+test('renderer diagnostics reserve one canonical truncation marker on real overflow', async () => {
+  /** @param {boolean} reversed */
+  const diagnosticsFor = async (reversed) => {
+    const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+    const keys = Array.from({ length: 300 }, (_, index) => `accessor_${String(index).padStart(3, '0')}`);
+    if (reversed) keys.reverse();
+    let reads = 0;
+    for (const key of keys) Object.defineProperty(bundle, key, {
+      enumerable: true,
+      get() { reads += 1; return 'must not read'; }
+    });
+    try {
+      renderMarkdown(bundle);
+    } catch (error) {
+      assert.equal(error instanceof BundleRenderError, true);
+      assert.equal(reads, 0);
+      return /** @type {any} */ (error).diagnostics;
+    }
+    assert.fail('expected render revision');
+  };
+  const forward = await diagnosticsFor(false);
+  const reverse = await diagnosticsFor(true);
+  assert.equal(forward.length, 256);
+  assert.equal(forward.filter((/** @type {any} */ item) => item.code === 'DIAGNOSTICS_TRUNCATED').length, 1);
+  assert.equal(canonicalStringify(forward), canonicalStringify(reverse));
+  assert.deepEqual(forward, [...forward].sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right))));
 });
