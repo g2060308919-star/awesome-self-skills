@@ -603,6 +603,42 @@ test('residue cleanup rejects a replacement with copied process metadata', async
   }
 });
 
+test('residue cleanup restores its atomic claim if ownership changes after observation', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const displacedDirectory = path.join(runDirectory, '.cleanup-postclaim-holder');
+  const residue = path.join(runDirectory, '.compiler-advance.lock.release-999-78');
+  try {
+    await mkdir(path.join(residue, 'nested'), { recursive: true });
+    await writeFile(path.join(residue, 'nested/owner.json'), '{}\n', 'utf8');
+    await assert.rejects(acquireRunLock(runDirectory, {
+      afterResidueClaim: async () => {
+        const originalOwner = JSON.parse(await readFile(
+          path.join(lockDirectory, 'owner.json'), 'utf8'
+        ));
+        await rename(lockDirectory, displacedDirectory);
+        await mkdir(lockDirectory);
+        await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
+          ...originalOwner, token: 'postclaim-replacement'
+        })}\n`, 'utf8');
+      }
+    }), /exact acquired ownership/u);
+    await stat(residue);
+    assert.ok((await readdir(runDirectory)).every(
+      (/** @type {string} */ name) => !name.startsWith(
+        '.compiler-advance.lock.release-999-78.cleanup-'
+      )
+    ));
+    assert.equal(JSON.parse(await readFile(
+      path.join(lockDirectory, 'owner.json'), 'utf8'
+    )).token, 'postclaim-replacement');
+  } finally {
+    await rm(lockDirectory, { recursive: true, force: true });
+    await rm(displacedDirectory, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('a production lock holder renews its fenced lease while a contender waits', { timeout: 10_000 }, async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
@@ -763,6 +799,74 @@ test('release transaction restores its successor before a third contender can cl
   }
 });
 
+test('a live release transaction keeps its canonical gap fenced beyond one lease', {
+  timeout: 15_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const displacedDirectory = path.join(runDirectory, '.long-release-holder');
+  /** @type {Promise<()=>Promise<void>>|undefined} */
+  let contender;
+  let contenderState = 'not-started';
+  try {
+    const releaseHolder = await acquireRunLock(runDirectory, {
+      afterReleaseObservation: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2_750));
+        await rename(lockDirectory, displacedDirectory);
+        contender = acquireRunLock(runDirectory);
+        contenderState = await Promise.race([
+          contender.then(() => 'acquired'),
+          new Promise((resolve) => setTimeout(() => resolve('waiting'), 800))
+        ]);
+        await rename(displacedDirectory, lockDirectory);
+      }
+    });
+    await releaseHolder();
+    assert.equal(contenderState, 'waiting');
+    const pendingContender = contender;
+    if (!pendingContender) throw new Error('long-release contender was not started');
+    const releaseContender = await pendingContender;
+    await releaseContender();
+  } finally {
+    await rm(lockDirectory, { recursive: true, force: true });
+    await rm(displacedDirectory, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('a forged future transaction lease cannot block recovery behind a reused PID', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const transactionDirectory = path.join(runDirectory, '.compiler-advance.transaction');
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 7000)']);
+  try {
+    assert.ok(child.pid);
+    await mkdir(transactionDirectory);
+    await writeFile(path.join(transactionDirectory, 'owner.json'), `${JSON.stringify({
+      pid: child.pid, token: 'forged-future-transaction',
+      lease_expires_at_ms: Number.MAX_SAFE_INTEGER,
+      process_start_identity: `${child.pid}:${Date.now() - 60_000}`,
+      heartbeat_seq: 0, heartbeat_ready: true
+    })}\n`, 'utf8');
+    const contender = acquireRunLock(runDirectory);
+    const release = await Promise.race([
+      contender,
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 3_500))
+    ]);
+    if (release === 'waiting') {
+      await rm(transactionDirectory, { recursive: true, force: true });
+      const lateRelease = await contender;
+      await lateRelease();
+    }
+    assert.notEqual(release, 'waiting', 'a static future lease caused an unbounded wait');
+    if (release !== 'waiting') await (/** @type {()=>Promise<void>} */ (release))();
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('heartbeat worker stop failure closes the claim and removes only its lock', async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
@@ -789,6 +893,23 @@ test('heartbeat worker stop failure closes the claim and removes only its lock',
     await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
   } finally {
     Worker.prototype.postMessage = originalPostMessage;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('release failure before transaction acquisition stops every heartbeat helper', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const transactionPath = path.join(runDirectory, '.compiler-advance.transaction');
+  try {
+    const release = await acquireRunLock(runDirectory);
+    await writeFile(transactionPath, 'not a directory\n', 'utf8');
+    await assert.rejects(release, /claim is not a real directory|transaction is not a real directory/u);
+    await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
+    await rm(transactionPath);
+    const releaseRetry = await acquireRunLock(runDirectory);
+    await releaseRetry();
+  } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
@@ -953,6 +1074,35 @@ test('one stopped heartbeat worker leaves a second live proof for a synchronous 
       new Promise((resolve) => setTimeout(() => resolve('waiting'), 700))
     ]);
     assert.equal(state, 'waiting', 'one worker failure erased the live owner proof');
+    await releaseHolder();
+    const releaseContender = await contender;
+    await releaseContender();
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('two stopped heartbeat workers leave an independent guardian proof', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  try {
+    const releaseHolder = await acquireRunLock(runDirectory, {
+      afterHeartbeatWorkerReady: async (_stopOne, stopWorkers) => {
+        await stopWorkers();
+      }
+    });
+    const firstHeartbeat = (await stat(lockDirectory)).mtimeMs;
+    await new Promise((resolve) => setTimeout(resolve, 2_750));
+    const renewedHeartbeat = (await stat(lockDirectory)).mtimeMs;
+    assert.ok(renewedHeartbeat > firstHeartbeat);
+    const contender = acquireRunLock(runDirectory);
+    const state = await Promise.race([
+      contender.then(() => 'acquired'),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 700))
+    ]);
+    assert.equal(state, 'waiting', 'worker loss erased the guardian liveness proof');
     await releaseHolder();
     const releaseContender = await contender;
     await releaseContender();

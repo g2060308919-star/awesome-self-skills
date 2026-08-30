@@ -618,6 +618,14 @@ async function advanceStrictExclusive(runDirectory) {
     );
     runDirectory = await guardedAwait(prepareRunStore(runDirectory));
     const releaseRunLock = await acquireRunLock(runDirectory);
+    const baseGuardedAwait = guardedAwait;
+    {
+    /** @template T @param {Promise<T>} operation @returns {Promise<T>} */
+    const guardedAwait = async (operation) => {
+      const value = await baseGuardedAwait(operation);
+      releaseRunLock.assertHealthy();
+      return value;
+    };
     try {
       if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
       runDirectory = await guardedAwait(prepareRunStore(runDirectory));
@@ -943,6 +951,7 @@ async function advanceStrictExclusive(runDirectory) {
       return { status: 'finished', ...current };
     } finally {
       await guardedAwait(releaseRunLock());
+    }
     }
   } catch (error) {
     if (error instanceof CoreIntrinsicMutationError) return fatalReply(

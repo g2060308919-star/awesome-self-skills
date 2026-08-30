@@ -1,4 +1,5 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
+import { ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -100,7 +101,15 @@ const NATIVE_MATH_MIN = Math.min;
 const NATIVE_PROCESS = process;
 const NATIVE_PROCESS_KILL = process.kill;
 const NATIVE_PROCESS_PID = process.pid;
+const NATIVE_PROCESS_EXEC_PATH = process.execPath;
 const NATIVE_PROCESS_START_IDENTITY = `${process.pid}:${Date.now() - process.uptime() * 1_000}`;
+const NATIVE_CHILD_PROCESS_PROTOTYPE = ChildProcess.prototype;
+const NATIVE_CHILD_PROCESS_KILL = ChildProcess.prototype.kill;
+const NATIVE_SPAWN = spawn;
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_CHILD_PROCESS_INTRINSICS = Object.freeze([
+  ['kill', NATIVE_CHILD_PROCESS_KILL]
+]);
 const NATIVE_WORKER = Worker;
 const NATIVE_WORKER_PROTOTYPE = Worker.prototype;
 const NATIVE_WORKER_ON = EventEmitter.prototype.on;
@@ -132,7 +141,7 @@ const NATIVE_DATE_INTRINSICS = Object.freeze([['now', Date.now]]);
 const NATIVE_MATH_INTRINSICS = Object.freeze([['min', Math.min]]);
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_PROCESS_INTRINSICS = Object.freeze([
-  ['kill', process.kill], ['pid', process.pid]
+  ['execPath', process.execPath], ['kill', process.kill], ['pid', process.pid]
 ]);
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const fsConstants = fsPromises.constants;
@@ -447,6 +456,9 @@ export function runStoreIntrinsicsIntact() {
     && descriptorsMatch(NATIVE_DATE, NATIVE_DATE_INTRINSICS)
     && descriptorsMatch(NATIVE_MATH, NATIVE_MATH_INTRINSICS)
     && descriptorsMatch(NATIVE_PROCESS, NATIVE_PROCESS_INTRINSICS)
+    && resolvedDataMethodsMatch(
+      NATIVE_CHILD_PROCESS_PROTOTYPE, NATIVE_CHILD_PROCESS_INTRINSICS
+    )
     && resolvedDataMethodsMatch(NATIVE_WORKER_PROTOTYPE, NATIVE_WORKER_INTRINSICS)
     && resolvedDataMethodsMatch(NATIVE_STATS_PROTOTYPE, NATIVE_STATS_INTRINSICS)
     && descriptorsMatch(NATIVE_DIRENT_PROTOTYPE, NATIVE_DIRENT_INTRINSICS)
@@ -631,6 +643,14 @@ async function removeOwnedLockGeneration(runDirectory, lockDirectory, expectedSt
 async function waitForReleaseTransaction(runDirectory) {
   const transactionDirectory = pathJoin(runDirectory, RUN_LOCK_TRANSACTION_DIRECTORY);
   const ownerPath = pathJoin(transactionDirectory, RUN_LOCK_OWNER_FILE);
+  let observedToken = '';
+  let observedPid = -1;
+  let observedIdentity = '';
+  /** @type {any} */
+  let observedStatus = null;
+  let observedMtime = -1;
+  let firstObservedAt = 0;
+  let heartbeatAuthenticated = false;
   while (true) {
     let observed;
     try {
@@ -641,14 +661,54 @@ async function waitForReleaseTransaction(runDirectory) {
     }
     const now = currentTimeMilliseconds();
     const ownerPid = observed.record?.pid;
-    const ownerLease = observed.record?.lease_expires_at_ms;
+    const ownerToken = observed.record?.token;
+    const ownerIdentity = observed.record?.process_start_identity;
     const ownerValid = typeof observed.record?.token === 'string'
       && observed.record.token.length > 0
-      && typeof ownerLease === 'number'
-      && NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerLease]);
-    const incompleteIsYoung = !ownerValid
+      && typeof observed.record?.heartbeat_seq === 'number'
+      && NATIVE_REFLECT_APPLY(
+        NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [observed.record.heartbeat_seq]
+      )
+      && compilerProcessIdentityHasCanonicalShape(
+        ownerPid, ownerIdentity
+      );
+    const incompleteIsYoung = observed.record === null
       && now - observed.status.mtimeMs < RUN_LOCK_INCOMPLETE_GRACE_MS;
-    if (incompleteIsYoung || (ownerValid && ownerLease > now && processOwnerIsAlive(ownerPid))) {
+    if (ownerValid) {
+      const sameOwner = ownerToken === observedToken && ownerPid === observedPid
+        && ownerIdentity === observedIdentity
+        && sameFileGeneration(observed.status, observedStatus);
+      if (!sameOwner) {
+        observedToken = /** @type {string} */ (ownerToken);
+        observedPid = /** @type {number} */ (ownerPid);
+        observedIdentity = /** @type {string} */ (ownerIdentity);
+        observedStatus = observed.status;
+        observedMtime = observed.status.mtimeMs;
+        firstObservedAt = now;
+        heartbeatAuthenticated = false;
+      } else if (observed.status.mtimeMs > observedMtime) {
+        observedMtime = observed.status.mtimeMs;
+        heartbeatAuthenticated = true;
+      } else if (observed.status.mtimeMs < observedMtime) {
+        observedMtime = observed.status.mtimeMs;
+        firstObservedAt = now;
+        heartbeatAuthenticated = false;
+      }
+    } else {
+      observedToken = '';
+      observedPid = -1;
+      observedIdentity = '';
+      observedStatus = null;
+      observedMtime = -1;
+      firstObservedAt = 0;
+      heartbeatAuthenticated = false;
+    }
+    const heartbeatProofPending = ownerValid && !heartbeatAuthenticated
+      && now - firstObservedAt < RUN_LOCK_HEARTBEAT_PROOF_MS;
+    const movingOwnerIsFresh = ownerValid && heartbeatAuthenticated
+      && observed.status.mtimeMs + RUN_LOCK_LEASE_MS > now
+      && processOwnerIsAlive(ownerPid);
+    if (incompleteIsYoung || heartbeatProofPending || movingOwnerIsFresh) {
       await delay(RUN_LOCK_POLL_MS);
       continue;
     }
@@ -686,27 +746,40 @@ async function acquireReleaseTransaction(runDirectory, token) {
       throw error;
     }
     const acquiredStatus = await lstat(transactionDirectory);
+    /** @type {null|{stopAll:()=>Promise<void>,stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>}} */
+    let heartbeatWorkers = null;
     try {
       await syncDirectory(runDirectory);
-      await writeRunLockOwner(runDirectory, ownerPath, {
+      const owner = {
         pid: NATIVE_PROCESS_PID,
         token,
         lease_expires_at_ms: currentTimeMilliseconds() + RUN_LOCK_LEASE_MS,
-        process_start_identity: NATIVE_PROCESS_START_IDENTITY
-      });
+        process_start_identity: NATIVE_PROCESS_START_IDENTITY,
+        heartbeat_seq: 0,
+        heartbeat_ready: false
+      };
+      await writeRunLockOwner(runDirectory, ownerPath, owner);
+      await syncDirectory(runDirectory);
+      heartbeatWorkers = await startRunLockHeartbeat(transactionDirectory, acquiredStatus);
+      owner.heartbeat_ready = true;
+      await writeRunLockOwner(runDirectory, ownerPath, owner);
       await syncDirectory(runDirectory);
       const observed = await observeRunLock(runDirectory, transactionDirectory, ownerPath);
       if (!sameFileGeneration(acquiredStatus, observed.status)
-        || observed.record?.token !== token) throw new RunStoreIntegrityError(
+        || observed.record?.token !== token || observed.record?.heartbeat_ready !== true) {
+        throw new RunStoreIntegrityError(
         'Run coordination transaction changed during acquisition.'
-      );
+        );
+      }
     } catch (error) {
+      if (heartbeatWorkers) await heartbeatWorkers.stopAll().catch(() => {});
       await removeOwnedLockGeneration(
         runDirectory, transactionDirectory, acquiredStatus, 'stale'
       ).catch(() => {});
       throw error;
     }
     return async () => {
+      if (heartbeatWorkers) await heartbeatWorkers.stopAll();
       const observed = await observeRunLock(runDirectory, transactionDirectory, ownerPath);
       if (!sameFileGeneration(acquiredStatus, observed.status)
         || observed.record?.token !== token) throw new RunStoreIntegrityError(
@@ -761,8 +834,9 @@ async function restoreForeignLockGeneration(
  * itself and keeps that inode, so a renamed successor is never touched.
  * @param {string} lockDirectory
  * @param {any} expectedStatus
+ * @param {(error:unknown)=>void} [onFailure]
  */
-async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus) {
+async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
   const workerSource = `
     (async () => {
       const { parentPort, workerData } = await import('node:worker_threads');
@@ -830,6 +904,11 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus) {
   });
   /** @type {unknown} */
   let failure = null;
+  const reportFailure = (/** @type {unknown} */ error) => {
+    if (failure) return;
+    failure = error;
+    if (onFailure) onFailure(error);
+  };
   let stoppedAcknowledged = false;
   /** @type {null|((value?:unknown)=>void)} */
   let resolveStop = null;
@@ -849,21 +928,21 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus) {
       stoppedAcknowledged = true;
       if (resolveStop) resolveStop(undefined);
     } else if (message?.type === 'error') {
-      failure = new RunStoreIntegrityError(message.message);
+      reportFailure(new RunStoreIntegrityError(message.message));
       rejectReady(failure);
       if (rejectStop) rejectStop(failure);
     }
   }]);
   NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, worker, ['error', (/** @type {unknown} */ error) => {
-    failure = error;
+    reportFailure(error);
     rejectReady(error);
     if (rejectStop) rejectStop(error);
   }]);
   NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, worker, ['exit', (/** @type {number} */ code) => {
     if (stoppedAcknowledged) return;
-    failure = new RunStoreIntegrityError(
+    reportFailure(new RunStoreIntegrityError(
       `Run heartbeat worker exited unexpectedly with code ${nativeString(code)}.`
-    );
+    ));
     rejectReady(failure);
     if (rejectStop) rejectStop(failure);
   }]);
@@ -891,21 +970,180 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus) {
   };
 }
 
+/** Run a heartbeat in a separate process so worker-thread failures are not a single fault domain. */
+/** @param {string} lockDirectory @param {any} expectedStatus @param {(error:unknown)=>void} [onFailure] */
+async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, onFailure) {
+  const guardianSource = `
+    (async () => {
+      const fs = await import('node:fs/promises');
+      const { constants } = await import('node:fs');
+      const lockPath = process.argv[1];
+      const expectedDev = Number(process.argv[2]);
+      const expectedIno = Number(process.argv[3]);
+      const interval = Number(process.argv[4]);
+      let handle;
+      let stopped = false;
+      let failureSent = false;
+      let timer;
+      let pulse = Promise.resolve();
+      async function renew() {
+        const seconds = Date.now() / 1000;
+        await handle.utimes(seconds, seconds);
+        await handle.sync();
+      }
+      function schedule() {
+        if (stopped) return;
+        timer = setTimeout(() => {
+          pulse = pulse.then(renew);
+          pulse.then(schedule, fail);
+        }, interval);
+      }
+      async function finish() {
+        if (stopped) return;
+        stopped = true;
+        clearTimeout(timer);
+        await pulse;
+        if (handle) await handle.close();
+        if (process.connected) process.send({ type: 'stopped' });
+        if (process.connected) process.disconnect();
+      }
+      async function fail(error) {
+        if (failureSent) return;
+        failureSent = true;
+        stopped = true;
+        clearTimeout(timer);
+        try { if (handle) await handle.close(); } catch {}
+        if (process.connected) process.send({ type: 'error', message: String(error) });
+        if (process.connected) process.disconnect();
+      }
+      process.on('message', (message) => {
+        if (message && message.type === 'stop') finish().catch(fail);
+      });
+      process.on('disconnect', () => { finish().catch(() => {}); });
+      try {
+        handle = await fs.open(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const status = await handle.stat();
+        if (status.dev !== expectedDev || status.ino !== expectedIno) {
+          throw new Error('run lock generation changed before guardian start');
+        }
+        await renew();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await renew();
+        if (process.connected) process.send({ type: 'healthy' });
+        schedule();
+      } catch (error) { await fail(error); }
+    })();
+  `;
+  const child = NATIVE_REFLECT_APPLY(NATIVE_SPAWN, undefined, [
+    NATIVE_PROCESS_EXEC_PATH,
+    ['-e', guardianSource, lockDirectory, nativeString(expectedStatus.dev),
+      nativeString(expectedStatus.ino), nativeString(RUN_LOCK_HEARTBEAT_MS)],
+    { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
+  ]);
+  const childSend = NATIVE_REFLECT_APPLY(
+    NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR, NATIVE_OBJECT, [child, 'send']
+  )?.value;
+  if (typeof childSend !== 'function') {
+    NATIVE_REFLECT_APPLY(NATIVE_CHILD_PROCESS_KILL, child, []);
+    throw new RunStoreIntegrityError('Run heartbeat guardian has no trusted IPC send operation.');
+  }
+  /** @type {unknown} */
+  let failure = null;
+  const reportFailure = (/** @type {unknown} */ error) => {
+    if (failure) return;
+    failure = error;
+    if (onFailure) onFailure(error);
+  };
+  let stoppedAcknowledged = false;
+  /** @type {null|((value?:unknown)=>void)} */
+  let resolveStop = null;
+  /** @type {null|((error:unknown)=>void)} */
+  let rejectStop = null;
+  /** @type {(value?:unknown)=>void} */
+  let resolveReady = () => {};
+  /** @type {(error:unknown)=>void} */
+  let rejectReady = () => {};
+  const ready = new NATIVE_PROMISE((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, child, ['message', (/** @type {any} */ message) => {
+    if (message?.type === 'healthy') resolveReady(undefined);
+    else if (message?.type === 'stopped') {
+      stoppedAcknowledged = true;
+      if (resolveStop) resolveStop(undefined);
+    } else if (message?.type === 'error') {
+      reportFailure(new RunStoreIntegrityError(message.message));
+      rejectReady(failure);
+      if (rejectStop) rejectStop(failure);
+    }
+  }]);
+  NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, child, ['error', (/** @type {unknown} */ error) => {
+    reportFailure(error);
+    rejectReady(error);
+    if (rejectStop) rejectStop(error);
+  }]);
+  NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, child, ['exit', (/** @type {number} */ code) => {
+    if (stoppedAcknowledged) return;
+    reportFailure(new RunStoreIntegrityError(
+      `Run heartbeat guardian exited unexpectedly with code ${nativeString(code)}.`
+    ));
+    rejectReady(failure);
+    if (rejectStop) rejectStop(failure);
+  }]);
+  try { await ready; } catch (error) {
+    NATIVE_REFLECT_APPLY(NATIVE_CHILD_PROCESS_KILL, child, []);
+    throw error;
+  }
+  /** @type {Promise<void>|null} */
+  let stopOperation = null;
+  return () => {
+    if (stopOperation) return stopOperation;
+    stopOperation = (async () => {
+      try {
+        if (failure) throw failure;
+        await new NATIVE_PROMISE((resolve, reject) => {
+          resolveStop = resolve;
+          rejectStop = reject;
+          NATIVE_REFLECT_APPLY(childSend, child, [{ type: 'stop' }]);
+        });
+      } finally {
+        NATIVE_REFLECT_APPLY(NATIVE_CHILD_PROCESS_KILL, child, []);
+      }
+    })();
+    return stopOperation;
+  };
+}
+
 /**
- * Keep two independent lease workers. One worker may fail after readiness
- * without erasing the live owner's only externally observable liveness proof.
- * Static metadata never substitutes for a moving heartbeat.
+ * Keep two lease workers plus a separate-process guardian. Worker-thread
+ * failures cannot erase the live owner's only externally observable proof,
+ * and static metadata never substitutes for a moving heartbeat.
  * @param {string} lockDirectory
  * @param {any} expectedStatus
+ * @param {(error:unknown)=>void} [onFailure]
  */
-async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
-  const stopFirst = await startSingleRunLockHeartbeat(lockDirectory, expectedStatus);
+async function startRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
+  const stopFirst = await startSingleRunLockHeartbeat(
+    lockDirectory, expectedStatus, onFailure
+  );
   /** @type {()=>Promise<void>} */
   let stopSecond;
   try {
-    stopSecond = await startSingleRunLockHeartbeat(lockDirectory, expectedStatus);
+    stopSecond = await startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFailure);
   } catch (error) {
     await stopFirst().catch(() => {});
+    throw error;
+  }
+  /** @type {()=>Promise<void>} */
+  let stopGuardian;
+  try {
+    stopGuardian = await startRunLockHeartbeatGuardian(
+      lockDirectory, expectedStatus, onFailure
+    );
+  } catch (error) {
+    await stopFirst().catch(() => {});
+    await stopSecond().catch(() => {});
     throw error;
   }
   let firstStopped = false;
@@ -914,7 +1152,7 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
     firstStopped = true;
     await stopFirst();
   };
-  const stopAll = async () => {
+  const stopWorkers = async () => {
     /** @type {unknown} */
     let firstError = null;
     try { await stopOne(); } catch (error) { firstError = error; }
@@ -923,12 +1161,24 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
     }
     if (firstError) throw firstError;
   };
-  return { stopAll, stopOne };
+  const stopAll = async () => {
+    /** @type {unknown} */
+    let firstError = null;
+    let successfulStops = 0;
+    try { await stopOne(); successfulStops += 1; } catch (error) { firstError = error; }
+    try { await stopSecond(); successfulStops += 1; } catch (error) {
+      if (!firstError) firstError = error;
+    }
+    try { await stopGuardian(); successfulStops += 1; } catch (error) {
+      if (!firstError) firstError = error;
+    }
+    if (successfulStops === 0 && firstError) throw firstError;
+  };
+  return { stopAll, stopOne, stopWorkers };
 }
 
-/** Remove crash residues only under the exact acquired inode and owner token. */
 /** @param {string} runDirectory @param {any} expectedStatus @param {string} token */
-async function cleanupRunLockResidues(runDirectory, expectedStatus, token) {
+async function assertExactRunLockOwnership(runDirectory, expectedStatus, token) {
   const lockDirectory = pathJoin(runDirectory, RUN_LOCK_DIRECTORY);
   const ownerPath = pathJoin(lockDirectory, RUN_LOCK_OWNER_FILE);
   let observed;
@@ -947,6 +1197,34 @@ async function cleanupRunLockResidues(runDirectory, expectedStatus, token) {
       'Run coordination residue cleanup requires exact acquired ownership.'
     );
   }
+}
+
+/** @param {string} runDirectory @param {string} claimed @param {string} target */
+async function restoreResidueClaim(runDirectory, claimed, target) {
+  try {
+    await lstat(claimed);
+  } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  try {
+    await lstat(target);
+    throw new RunStoreIntegrityError(
+      'Run coordination residue claim could not be restored without replacement.'
+    );
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+  }
+  await rename(claimed, target);
+  await syncDirectory(runDirectory);
+}
+
+/** Remove crash residues only under the exact acquired inode and owner token. */
+/** @param {string} runDirectory @param {any} expectedStatus @param {string} token @param {()=>Promise<void>} [afterClaim] */
+async function cleanupRunLockResidues(
+  runDirectory, expectedStatus, token, afterClaim
+) {
+  await assertExactRunLockOwnership(runDirectory, expectedStatus, token);
   const entries = await readdir(runDirectory, { withFileTypes: true });
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
@@ -955,9 +1233,31 @@ async function cleanupRunLockResidues(runDirectory, expectedStatus, token) {
       'Run coordination crash residue is not a real directory.'
     );
     const target = pathJoin(runDirectory, entry.name);
+    const targetStatus = await lstat(target);
+    if (statsIsSymbolicLink(targetStatus) || !statsIsDirectory(targetStatus)) {
+      throw new RunStoreIntegrityError('Run coordination crash residue changed before cleanup.');
+    }
     await inspectTree(runDirectory, target);
-    await rm(target, { recursive: true, force: true });
+    await assertExactRunLockOwnership(runDirectory, expectedStatus, token);
+    const claimed = `${target}.cleanup-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
+    await rename(target, claimed);
     await syncDirectory(runDirectory);
+    try {
+      const claimedStatus = await lstat(claimed);
+      if (!sameFileGeneration(targetStatus, claimedStatus)) throw new RunStoreIntegrityError(
+        'Run coordination residue generation changed while it was claimed.'
+      );
+      if (afterClaim) await afterClaim();
+      await assertExactRunLockOwnership(runDirectory, expectedStatus, token);
+      await inspectTree(runDirectory, claimed);
+      await assertExactRunLockOwnership(runDirectory, expectedStatus, token);
+      await rm(claimed, { recursive: true, force: true });
+      await syncDirectory(runDirectory);
+      await assertExactRunLockOwnership(runDirectory, expectedStatus, token);
+    } catch (error) {
+      await restoreResidueClaim(runDirectory, claimed, target);
+      throw error;
+    }
   }
 }
 
@@ -966,8 +1266,8 @@ async function cleanupRunLockResidues(runDirectory, expectedStatus, token) {
  * The lock directory is the atomic claim; owner metadata distinguishes an
  * active process from a safely reclaimable abandoned claim.
  * @param {string} runDirectory
- * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterHeartbeatWorkerReady?:(stopOne:()=>Promise<void>)=>Promise<void>,beforeResidueCleanup?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
- * @returns {Promise<()=>Promise<void>>}
+ * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterHeartbeatWorkerReady?:(stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>)=>Promise<void>,beforeResidueCleanup?:()=>Promise<void>,afterResidueClaim?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
+ * @returns {Promise<(()=>Promise<void>) & {assertHealthy:()=>void}>}
  */
 export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
   requireRunStoreIntrinsics();
@@ -1051,7 +1351,7 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       let heartbeatPromise = null;
       /** @type {unknown} */
       let heartbeatError = null;
-      /** @type {null|{stopAll:()=>Promise<void>,stopOne:()=>Promise<void>}} */
+      /** @type {null|{stopAll:()=>Promise<void>,stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>}} */
       let heartbeatWorkers = null;
       const scheduleHeartbeat = () => {
         if (heartbeatStopped) return;
@@ -1087,9 +1387,13 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       try {
         if (coordinationHooks.afterHeartbeatObservation) scheduleHeartbeat();
         else {
-          heartbeatWorkers = await startRunLockHeartbeat(lockDirectory, acquiredStatus);
+          heartbeatWorkers = await startRunLockHeartbeat(
+            lockDirectory, acquiredStatus, (error) => { heartbeatError = error; }
+          );
           if (coordinationHooks.afterHeartbeatWorkerReady) {
-            await coordinationHooks.afterHeartbeatWorkerReady(heartbeatWorkers.stopOne);
+            await coordinationHooks.afterHeartbeatWorkerReady(
+              heartbeatWorkers.stopOne, heartbeatWorkers.stopWorkers
+            );
           }
         }
         owner.heartbeat_ready = true;
@@ -1105,7 +1409,9 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         if (coordinationHooks.beforeResidueCleanup) {
           await coordinationHooks.beforeResidueCleanup();
         }
-        await cleanupRunLockResidues(runDirectory, acquiredStatus, token);
+        await cleanupRunLockResidues(
+          runDirectory, acquiredStatus, token, coordinationHooks.afterResidueClaim
+        );
       } catch (error) {
         heartbeatStopped = true;
         if (heartbeatWorkers) await heartbeatWorkers.stopAll().catch(() => {});
@@ -1115,7 +1421,7 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         ).catch(() => {});
         throw error;
       }
-      return async () => {
+      const releaseOwnership = async () => {
         if (released) return;
         heartbeatStopped = true;
         if (heartbeatTimer !== undefined) NATIVE_CLEAR_TIMEOUT(heartbeatTimer);
@@ -1125,7 +1431,8 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
             if (heartbeatPromise) await heartbeatPromise;
             if (heartbeatWorkers) await heartbeatWorkers.stopAll();
             const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
-            if (heartbeatError || !sameFileGeneration(acquiredStatus, observed.status)
+            if (heartbeatError) throw heartbeatError;
+            if (!sameFileGeneration(acquiredStatus, observed.status)
               || observed.record?.token !== token || observed.record.pid !== NATIVE_PROCESS_PID
               || observed.record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
               throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
@@ -1160,6 +1467,14 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
             await releaseTransaction();
           }
         } catch (error) {
+          /** @type {unknown} */
+          let heartbeatCleanupError = null;
+          try {
+            if (heartbeatPromise) await heartbeatPromise;
+            if (heartbeatWorkers) await heartbeatWorkers.stopAll();
+          } catch (cleanupError) {
+            heartbeatCleanupError = cleanupError;
+          }
           try {
             await closeClaimHandle();
             await removeOwnedLockGeneration(
@@ -1170,9 +1485,20 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
               `Run coordination release failed (${nativeString(error)}) and cleanup failed (${nativeString(cleanupError)}).`
             );
           }
+          if (heartbeatCleanupError) throw new RunStoreIntegrityError(
+            `Run coordination release failed (${nativeString(error)}) and heartbeat cleanup failed (${nativeString(heartbeatCleanupError)}).`
+          );
           throw error;
         }
       };
+      NATIVE_REFLECT_APPLY(NATIVE_DEFINE_PROPERTY, NATIVE_OBJECT, [releaseOwnership, 'assertHealthy', {
+        value: () => {
+          if (heartbeatError) throw new RunStoreIntegrityError(
+            `Run coordination heartbeat failed: ${nativeString(heartbeatError)}`
+          );
+        }, enumerable: false, writable: false, configurable: false
+      }]);
+      return /** @type {(()=>Promise<void>) & {assertHealthy:()=>void}} */ (releaseOwnership);
     } catch (error) {
       if (!hasErrorCode(error, 'EEXIST')) throw error;
     }

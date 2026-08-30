@@ -10,6 +10,7 @@ declare module 'node:assert/strict' {
 }
 
 declare module 'node:child_process' {
+  export const ChildProcess: any;
   export const spawn: any;
 }
 
