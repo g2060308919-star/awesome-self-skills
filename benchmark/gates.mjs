@@ -48,6 +48,20 @@ export function evaluateReleaseGates(metrics) {
     };
   }
 
+  const domainReports = Object.entries(target.by_domain ?? {});
+  if (domainReports.length === 0 || domainReports.some(([, report]) => {
+    const metric = /** @type {any} */ (report).historical_defect_recall;
+    return !metric || metric.denominator === 0 || typeof metric.value !== 'number';
+  })) {
+    return {
+      status: 'insufficient_evidence',
+      failures: [failure(
+        'DOMAIN_METRICS_MISSING', `/systems/${TARGET_SYSTEM}/by_domain`,
+        'Every benchmark domain requires a non-zero historical-defect report.'
+      )]
+    };
+  }
+
   if (metrics.unsupported_critical_high_grounded_oracle_count !== 0) {
     failures.push(failure(
       'UNSUPPORTED_CRITICAL_HIGH_GROUNDED_ORACLE', '/unsupported_critical_high_grounded_oracle_count',
@@ -64,7 +78,7 @@ export function evaluateReleaseGates(metrics) {
     ));
   }
 
-  for (const [domain, report] of Object.entries(target.by_domain ?? {})) {
+  for (const [domain, report] of domainReports) {
     const value = /** @type {any} */ (report).historical_defect_recall?.value;
     if (typeof value !== 'number' || value < 0.80) failures.push(failure(
       'HISTORICAL_DEFECT_RECALL_BELOW_GATE', `/systems/${TARGET_SYSTEM}/by_domain/${domain}/historical_defect_recall`,

@@ -88,3 +88,11 @@ test('benchmark exact process failures are hard gates while mutation signal and 
   };
   assert.equal(evaluateReleaseGates(diagnosticOnly).status, 'pass');
 });
+
+test('benchmark gate treats a missing domain defect report as insufficient evidence', () => {
+  const report = passingReport();
+  report.systems['generate-test-cases'].by_domain = {};
+  const result = evaluateReleaseGates(report);
+  assert.equal(result.status, 'insufficient_evidence');
+  assert.equal(result.failures[0].code, 'DOMAIN_METRICS_MISSING');
+});

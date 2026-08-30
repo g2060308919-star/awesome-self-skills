@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +36,9 @@ function benchmarkCase(caseId, domain, stratum, obligations, assertions, accepte
   return {
     case_id: caseId, domain, stratum, risk: 'high', high_risk: true,
     assets: {
-      task: { case_id: caseId, scope: caseId, clarification_required: caseId === 'payment' },
+      task: { case_id: caseId, scope: caseId, source_paths: ['sources/prd.md'], clarification_required: caseId === 'payment' },
+      task_digest: `task-digest-${caseId}`,
+      sources: { files: ['sources/prd.md'], digest: `source-digest-${caseId}` },
       expert_obligations: labeledAsset(obligations),
       supported_assertions: labeledAsset(assertions),
       accepted_cases: labeledAsset(acceptedCases),
@@ -106,7 +109,8 @@ function captured(caseId, repeat, output) {
     provenance: {
       skill_version: 'test-skill', compiler_version: 'test-compiler', schema_version: '1.0.0',
       model_id: 'fixture-model', prompt_or_reference_id: 'fixture-prompt', baseline_version: 'fixture-baseline',
-      benchmark_version: 'v1-test', repeat
+      benchmark_version: 'v1-test', repeat,
+      source_digest: `source-digest-${caseId}`, task_digest: `task-digest-${caseId}`
     },
     review_time_minutes: 5,
     output: {
@@ -225,22 +229,29 @@ function completeContractCorpus() {
       const acceptedRows = [];
       for (const system of BENCHMARK_SYSTEMS) for (let repeat = 1; repeat <= 3; repeat += 1) {
         const captureId = `${caseId}-${system}-${repeat}`;
-        assertionRows.push(label(`${captureId}::assertion`, { supported: true, risk: 'critical', oracle: true, anchor_present: true }));
-        acceptedRows.push(label(`${captureId}::case`, { accepted_without_material_rewrite: true, risk: 'critical' }));
+        for (const risk of ['critical', 'high', 'medium', 'low']) {
+          assertionRows.push(label(`${captureId}::assertion-${risk}`, { supported: true, risk, oracle: true, anchor_present: true }));
+          acceptedRows.push(label(`${captureId}::case-${risk}`, { accepted_without_material_rewrite: true, risk }));
+        }
         runs.push({
           capture_id: captureId, case_id: caseId, system, repeat, capture_kind: 'external-captured',
           provenance: {
             skill_version: system === 'generate-test-cases' ? 'skill-v1' : 'not-applicable',
             compiler_version: system === 'generate-test-cases' ? 'compiler-v1' : 'not-applicable',
             schema_version: '1.0.0', model_id: `${system}-model`, prompt_or_reference_id: `${system}-reference`,
-            baseline_version: 'baseline-v1', benchmark_version: 'v1-complete-contract', repeat
+            baseline_version: 'baseline-v1', benchmark_version: 'v1-complete-contract', repeat,
+            source_digest: `source-digest-${caseId}`, task_digest: `task-digest-${caseId}`
           },
           review_time_minutes: 10,
           output: {
-            test_point_signatures: ['critical-point', 'blocked-point'],
-            grounded_test_point_signatures: ['critical-point'], grounded_coverage_signatures: ['critical-point'],
-            blocked_test_point_signatures: ['blocked-point'], grounded_assertions: ['assertion'], grounded_cases: ['case'],
-            detected_historical_defect_ids: [`defect-${caseId}`], killed_mutation_ids: [],
+            test_point_signatures: ['ground-critical', 'blocked-critical', 'ground-high', 'blocked-high', 'ground-medium', 'blocked-medium', 'ground-low', 'blocked-low'],
+            grounded_test_point_signatures: ['ground-critical', 'ground-high', 'ground-medium', 'ground-low'],
+            grounded_coverage_signatures: ['ground-critical', 'ground-high', 'ground-medium', 'ground-low'],
+            blocked_test_point_signatures: ['blocked-critical', 'blocked-high', 'blocked-medium', 'blocked-low'],
+            grounded_assertions: ['assertion-critical', 'assertion-high', 'assertion-medium', 'assertion-low'],
+            grounded_cases: ['case-critical', 'case-high', 'case-medium', 'case-low'],
+            detected_historical_defect_ids: ['critical', 'high', 'medium', 'low'].map((risk) => `defect-${risk}-${caseId}`),
+            killed_mutation_ids: [],
             process_failures: {
               silent_formal_test_point_loss: false, fixed_round_clarification_stop: false,
               auto_repeat_unknown_or_deferred: false, old_revision_recovery: false
@@ -251,11 +262,15 @@ function completeContractCorpus() {
       cases.push(benchmarkCase(
         caseId, `domain-${stratumIndex}`, stratum,
         [
-          label('critical-point', { expected: true, groundable: true, risk: 'critical' }),
-          label('blocked-point', { expected: true, groundable: false, risk: 'high' })
+          ...['critical', 'high', 'medium', 'low'].flatMap((risk) => [
+            label(`ground-${risk}`, { expected: true, groundable: true, risk }),
+            label(`blocked-${risk}`, { expected: true, groundable: false, risk })
+          ])
         ],
         assertionRows, acceptedRows,
-        [{ defect_id: `defect-${caseId}`, risk: 'high', source_ref: `external-history:${caseId}` }]
+        ['critical', 'high', 'medium', 'low'].map((risk) => ({
+          defect_id: `defect-${risk}-${caseId}`, risk, source_ref: `external-history:${caseId}:${risk}`
+        }))
       ));
       cases.at(-1).assets.task.clarification_required = caseIndex <= 2;
       cases.at(-1).assets.clarification_scenarios.scenarios = caseIndex <= 2 ? [{ scenario_id: `clarify-${caseId}`, required: true }] : [];
@@ -277,7 +292,99 @@ test('benchmark completeness accepts only the full 30-PRD six-stratum 360-captur
   const report = scoreBenchmark(manifest, runs);
   assert.deepEqual(report.completeness, { status: 'complete', issues: [] });
   assert.equal(report.systems['generate-test-cases'].overall.expert_critical_test_point_recall.value, 1);
-  assert.equal(report.systems['generate-test-cases'].overall.false_blocked_rate.denominator, 90);
+  assert.equal(report.systems['generate-test-cases'].overall.false_blocked_rate.denominator, 360);
+  assert.equal(Object.hasOwn(report.systems['generate-test-cases'], 'by_domain_and_risk'), true);
+  assert.ok(report.systems['generate-test-cases'].by_domain_and_risk['domain-0'].medium.false_blocked_rate.denominator > 0);
+});
+
+test('benchmark reviewer regressions fail closed instead of inflating or crashing completeness', () => {
+  const { manifest, runs } = completeContractCorpus();
+
+  const duplicate = structuredClone(manifest);
+  duplicate.cases[1].case_id = duplicate.cases[0].case_id;
+  assert.equal(scoreBenchmark(duplicate, runs).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'DUPLICATE_CASE_ID'
+  ), true);
+
+  const malformed = structuredClone(runs);
+  delete malformed[0].output.grounded_assertions;
+  const malformedReport = scoreBenchmark(manifest, malformed);
+  assert.equal(malformedReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_OUTPUT_INVALID'), true);
+
+  const processMissing = structuredClone(runs);
+  delete processMissing[0].output.process_failures.old_revision_recovery;
+  assert.equal(scoreBenchmark(manifest, processMissing).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'PROCESS_TELEMETRY_MISSING'
+  ), true);
+
+  const processExtra = structuredClone(runs);
+  processExtra[0].output.process_failures.invented_failure = false;
+  assert.equal(scoreBenchmark(manifest, processExtra).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'PROCESS_TELEMETRY_INVALID'
+  ), true);
+
+  const duplicateCapture = structuredClone(runs);
+  duplicateCapture[1].capture_id = duplicateCapture[0].capture_id;
+  assert.equal(scoreBenchmark(manifest, duplicateCapture).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'DUPLICATE_CAPTURE_ID'
+  ), true);
+
+  const labels = structuredClone(manifest);
+  delete labels.cases[0].assets.supported_assertions.label_version;
+  delete labels.cases[1].assets.supported_assertions.final_labels[0].value.anchor_present;
+  assert.equal(scoreBenchmark(labels, runs).completeness.issues.some((/** @type {any} */ issue) => issue.code === 'LABEL_VERSION_INVALID'), true);
+  assert.equal(scoreBenchmark(labels, runs).completeness.issues.some((/** @type {any} */ issue) => issue.code === 'ASSERTION_LABEL_INVALID'), true);
+
+  const mutations = structuredClone(manifest);
+  mutations.cases[0].assets.business_model_mutations.mutations = [];
+  assert.equal(scoreBenchmark(mutations, runs).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'HIGH_RISK_MUTATIONS_MISSING'
+  ), true);
+
+  const lineage = structuredClone(manifest);
+  lineage.cases[0].assets.supported_assertions.correction_of = '0.9.0';
+  lineage.cases[0].assets.supported_assertions.prior_versions = [];
+  assert.equal(scoreBenchmark(lineage, runs).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'LABEL_LINEAGE_MISSING'
+  ), true);
+
+  const invalidAdjudication = structuredClone(manifest);
+  const labelsAsset = invalidAdjudication.cases[0].assets.expert_obligations;
+  labelsAsset.expert_annotations[1].labels = structuredClone(labelsAsset.expert_annotations[1].labels);
+  labelsAsset.expert_annotations[1].labels[0] = label('ground-critical', { expected: true, groundable: false, risk: 'critical' });
+  labelsAsset.adjudications = [{ label_key: 'ground-critical', completed: true, resolved_value: labelsAsset.final_labels[0].value }];
+  assert.equal(scoreBenchmark(invalidAdjudication, runs).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'ADJUDICATION_INVALID'
+  ), true);
+
+  const provenance = structuredClone(runs);
+  provenance[0].provenance.source_digest = 'wrong-source';
+  assert.equal(scoreBenchmark(manifest, provenance).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'CAPTURE_SOURCE_TASK_MISMATCH'
+  ), true);
+
+  const zeroCohort = structuredClone(manifest);
+  for (const benchmarkCase of zeroCohort.cases.filter((/** @type {any} */ item) => item.domain === 'domain-0')) {
+    benchmarkCase.assets.supported_assertions.final_labels = benchmarkCase.assets.supported_assertions.final_labels.filter(
+      (/** @type {any} */ item) => item.value.risk !== 'medium'
+    );
+    benchmarkCase.assets.supported_assertions.expert_annotations.forEach((/** @type {any} */ annotation) => {
+      annotation.labels = annotation.labels.filter((/** @type {any} */ item) => item.value.risk !== 'medium');
+    });
+  }
+  assert.equal(scoreBenchmark(zeroCohort, runs).completeness.issues.some(
+    (/** @type {any} */ item) => item.code === 'MANDATORY_METRIC_ZERO_DENOMINATOR' && item.path.includes('/by_domain_and_risk/domain-0/medium/')
+  ), true);
+});
+
+test('benchmark loader validates the manifest schema and reports malformed inputs without throwing', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'benchmark-invalid-'));
+  const manifestPath = path.join(temporaryRoot, 'manifest.json');
+  await writeFile(manifestPath, JSON.stringify({ systems: ['invented-system'], cases: {} }));
+  const loaded = await loadBenchmarkInputs(manifestPath);
+  const report = scoreBenchmark(loaded.manifest, loaded.capturedRuns);
+  assert.equal(report.completeness.status, 'insufficient_evidence');
+  assert.equal(report.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'MANIFEST_SCHEMA_INVALID'), true);
 });
 
 test('benchmark V1 pilot has required hidden-label assets and only external capture paths', async () => {

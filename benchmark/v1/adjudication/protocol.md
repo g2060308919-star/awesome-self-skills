@@ -6,7 +6,7 @@ This protocol keeps generation inputs, captured outputs, and hidden labels in se
 
 For every PRD, run exactly `long-prompt`, `test-case-designer`, `technique-router`, and `generate-test-cases` three independent times against the same original `sources/` and `task.json`. Do not expose expert obligations, supported-assertion decisions, accepted-case decisions, historical-defect labels, prior outputs, or diagnostics to a generation session. Store raw outputs under the case's `captured/` directory, never below its label directory.
 
-Every capture records the Skill, compiler, Schema, model, prompt/reference, baseline, benchmark version, repeat number, capture kind, and review time. The scorer reads only captured artifacts and versioned local labels. It must not call a model, fetch a URL, or use the runtime compiler.
+Every capture records the Skill, compiler, Schema, model, prompt/reference, baseline, benchmark version, repeat number, source digest, task digest, capture kind, and review time. These digests bind every run to the exact original materials and task scope. The scorer reads only captured artifacts and versioned local labels. It must not call a model, fetch a URL, or use the runtime compiler.
 
 ## Independent labels and adjudication
 
@@ -16,7 +16,7 @@ Any disagreement requires a completed adjudication with the exact `label_key`, b
 
 ## Evaluation-only evidence
 
-Traceable historical defects may be searched and routed as risk evidence, but never override target requirements. Explicit high-risk cases may include offline business-model mutations. Mutation kills are reported as a separate enhancement signal and never act as an online truth or release gate.
+Traceable historical defects may be searched and routed as risk evidence, but never override target requirements. Every explicitly high-risk case includes offline business-model mutations. Mutation kills are reported as a separate enhancement signal and never act as an online truth or release gate.
 
 ## Completeness and release boundary
 

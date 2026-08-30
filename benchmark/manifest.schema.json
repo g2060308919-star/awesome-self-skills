@@ -11,7 +11,7 @@
     "systems": { "const": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"] },
     "repeats_per_system": { "const": 3 },
     "strata": {
-      "type": "array", "minItems": 6,
+      "type": "array", "minItems": 6, "uniqueItems": true,
       "items": {
         "type": "object",
         "required": ["stratum", "minimum_prds", "minimum_critical_obligations", "minimum_clarification_prds", "minimum_historical_defects"],
