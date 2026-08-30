@@ -270,6 +270,53 @@ test('promotion never deletes a staging file replaced after validation', async (
   }
 });
 
+test('parallel advances of one valid staging snapshot are serialized and idempotent', async () => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const runDirectory = await temporaryRun();
+    const revision = await revisionFixture();
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      const replies = /** @type {any[]} */ (await Promise.all([
+        advanceStrict(runDirectory), advanceStrict(runDirectory)
+      ]));
+      assert.deepEqual(
+        replies.map((reply) => `${reply.status}/${reply.stage}`),
+        ['need_artifact/evidence_claims', 'need_artifact/evidence_claims'],
+        `attempt ${attempt}: ${JSON.stringify(replies)}`
+      );
+      await stat(path.join(runDirectory, 'accepted/r000/source-pack.json'));
+      await assert.rejects(stat(path.join(runDirectory, 'staging/source-pack.json')));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('accepted artifact resolves its stale promotion claim before a newer canonical staging file', async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((/** @type {any} */ (await advanceStrict(runDirectory))).stage, 'evidence_claims');
+    const nextSource = revisionOneSource(revision);
+    await writeFile(
+      path.join(runDirectory, 'staging/.source-pack.json.claim-424242-1'),
+      `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+    );
+    await stage(runDirectory, 'source_pack', nextSource);
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.deepEqual(reply.scope, { source_revision: 1 });
+    await stat(path.join(runDirectory, 'accepted/r001/source-pack.json'));
+    await assert.rejects(stat(
+      path.join(runDirectory, 'staging/.source-pack.json.claim-424242-1')
+    ));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 for (const fixtureName of crashFixtureNames) {
   test(`recovery fixture ${fixtureName} selects accepted state deterministically`, async () => {
     const descriptor = await jsonFixture(fixtureName);

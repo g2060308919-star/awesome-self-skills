@@ -41,6 +41,53 @@ const STAGE_SCHEMA = Object.freeze({
   case_drafts: 'case-drafts.schema.json'
 });
 
+const NATIVE_MAP = Map;
+const NATIVE_MAP_GET = Map.prototype.get;
+const NATIVE_MAP_SET = Map.prototype.set;
+const NATIVE_MAP_DELETE = Map.prototype.delete;
+const NATIVE_PROMISE = Promise;
+const NATIVE_REFLECT_APPLY = Reflect.apply;
+/** @type {Map<string,Promise<void>>} */
+const ACTIVE_RUNS = new NATIVE_MAP();
+
+class CoreIntrinsicMutationError extends Error {}
+
+/** @template T @param {Promise<T>} promise @returns {Promise<T>} */
+async function guardedAwait(promise) {
+  try {
+    return await promise;
+  } finally {
+    if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
+  }
+}
+
+const loadedRegistry = await (async () => {
+  try {
+    const registry = await loadSchemaRegistry(
+      schemaDirectory, embeddedManifestDigest, embeddedCompilerVersion
+    );
+    return embeddedSchemaVersion && registry.schemaVersion !== embeddedSchemaVersion
+      ? null : registry;
+  } catch {
+    return null;
+  }
+})();
+
+/** @param {Map<any,any>} map @param {unknown} key */
+function mapGet(map, key) {
+  return NATIVE_REFLECT_APPLY(NATIVE_MAP_GET, map, [key]);
+}
+
+/** @param {Map<any,any>} map @param {unknown} key @param {unknown} value */
+function mapSet(map, key, value) {
+  NATIVE_REFLECT_APPLY(NATIVE_MAP_SET, map, [key, value]);
+}
+
+/** @param {Map<any,any>} map @param {unknown} key */
+function mapDelete(map, key) {
+  NATIVE_REFLECT_APPLY(NATIVE_MAP_DELETE, map, [key]);
+}
+
 /** @param {number} sourceRevision @param {keyof typeof STAGE_SCHEMA} stage */
 function artifactRequest(sourceRevision, stage) {
   return {
@@ -115,7 +162,7 @@ function artifactDiagnostics(artifact, schema) {
 /** @param {string} runDirectory @param {keyof typeof STAGE_SCHEMA} stage @param {number} sourceRevision */
 async function stagedArtifact(runDirectory, stage, sourceRevision) {
   const candidatePath = stagingPath(runDirectory, stage);
-  const text = await readTextIfPresent(runDirectory, candidatePath);
+  const text = await guardedAwait(readTextIfPresent(runDirectory, candidatePath));
   if (text === null) return null;
   try {
     const value = JSON.parse(text);
@@ -184,6 +231,17 @@ function historySequenceIntegrity(sourcePack) {
     );
   }
   return null;
+}
+
+/** @param {Record<string, unknown>} sourcePack */
+function initialClarificationControlDiagnostics(sourcePack) {
+  const events = Array.isArray(sourcePack.clarification_events)
+    ? sourcePack.clarification_events : [];
+  return events.length === 0 ? [] : [{
+    category: 'classification', code: 'INITIAL_CLARIFICATION_HISTORY_UNSUPPORTED',
+    path: '/clarification_events',
+    message: 'An initial run has no prior clarification lifecycle on which to apply control events.'
+  }];
 }
 
 /** @param {Record<string, unknown>} prior @param {Record<string, unknown>} next */
@@ -315,9 +373,9 @@ function appendBatch(previous, current) {
 
 /** @param {string} runDirectory @param {number} sourceRevision @param {Record<string, unknown>} sourcePack */
 async function clarificationInput(runDirectory, sourceRevision, sourcePack) {
-  const sameRevision = await readJsonIfPresent(
+  const sameRevision = await guardedAwait(readJsonIfPresent(
     runDirectory, clarificationStatePath(runDirectory, sourceRevision)
-  );
+  ));
   if (sameRevision) return {
     prior_state: sameRevision.value,
     append_batch: { decision_records: [], clarification_events: [] }
@@ -326,12 +384,12 @@ async function clarificationInput(runDirectory, sourceRevision, sourcePack) {
     prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
     append_batch: { decision_records: [], clarification_events: [] }
   };
-  const previousSource = await readJsonIfPresent(runDirectory, acceptedPath(
+  const previousSource = await guardedAwait(readJsonIfPresent(runDirectory, acceptedPath(
     runDirectory, sourceRevision - 1, 'source_pack'
-  ));
-  const previousState = await readJsonIfPresent(runDirectory, clarificationStatePath(
+  )));
+  const previousState = await guardedAwait(readJsonIfPresent(runDirectory, clarificationStatePath(
     runDirectory, sourceRevision - 1
-  ));
+  )));
   return {
     prior_state: previousState?.value
       ?? initialClarificationState(sourceRevision - 1, previousSource
@@ -370,14 +428,14 @@ async function acceptedDigests(runDirectory, sourceRevision) {
   /** @type {Record<string,string>} */
   const values = {};
   for (const stage of Object.keys(STAGE_FILES)) {
-    const accepted = await readJsonIfPresent(runDirectory, acceptedPath(
+    const accepted = await guardedAwait(readJsonIfPresent(runDirectory, acceptedPath(
       runDirectory, sourceRevision, /** @type {keyof typeof STAGE_FILES} */ (stage)
-    ));
+    )));
     if (accepted) values[stage] = accepted.digest;
   }
-  const obligations = await readJsonIfPresent(
+  const obligations = await guardedAwait(readJsonIfPresent(
     runDirectory, obligationsPath(runDirectory, sourceRevision)
-  );
+  ));
   if (obligations) values.test_obligations = obligations.digest;
   return values;
 }
@@ -408,9 +466,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
   let previousSource = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
     const sourceRevision = revisions[revisionIndex];
-    const sourceArtifact = await readJson(
+    const sourceArtifact = await guardedAwait(readJson(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
-    );
+    ));
     const sourcePack = /** @type {Record<string, unknown>} */ (sourceArtifact.value);
     if (sourcePack.source_revision !== sourceRevision) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack revision does not match its revision directory.'
@@ -425,6 +483,12 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     if (sourceDiagnostics.length > 0) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack failed deterministic schema validation.'
     );
+    if (sourceRevision === 0 && initialClarificationControlDiagnostics(sourcePack).length > 0) {
+      return fatalReply(
+        'RUN_INTEGRITY_ERROR',
+        'Accepted initial clarification controls have no prior lifecycle and cannot be replayed.'
+      );
+    }
     if (resolveSourcePolicy(sourcePack).diagnostics.length > 0) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack failed deterministic policy validation.'
     );
@@ -440,9 +504,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     let missingEarlierStage = false;
     for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) {
       const typedStage = /** @type {'evidence_claims'|'behavior_views'|'case_drafts'} */ (stage);
-      const artifact = await readJsonIfPresent(
+      const artifact = await guardedAwait(readJsonIfPresent(
         runDirectory, acceptedPath(runDirectory, sourceRevision, typedStage)
-      );
+      ));
       if (!artifact) { missingEarlierStage = true; continue; }
       if (missingEarlierStage) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Accepted artifacts must preserve the fixed stage prefix.'
@@ -474,7 +538,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       } else caseDrafts = record;
     }
     if (caseDrafts) {
-      const clarification = await clarificationInput(runDirectory, sourceRevision, sourcePack);
+      const clarification = await guardedAwait(
+        clarificationInput(runDirectory, sourceRevision, sourcePack)
+      );
       const replay = /** @type {any} */ (evaluateRevision({
         schema_version: '1.0.0', source_revision: sourceRevision,
         compiler_version: registry.compilerVersion,
@@ -503,20 +569,13 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
  * Advance one strict test-case-generation run.
  * @param {string} runDirectory
  */
-export async function advanceStrict(runDirectory) {
+async function advanceStrictExclusive(runDirectory) {
   if (!runStoreIntrinsicsIntact()) return fatalReply(
     'CORE_INTRINSIC_INVALID',
     'Run-store evaluation requires captured native collection traversal intrinsics.'
   );
-  let registry;
-  try {
-    registry = await loadSchemaRegistry(
-      schemaDirectory, embeddedManifestDigest, embeddedCompilerVersion
-    );
-    if (embeddedSchemaVersion && registry.schemaVersion !== embeddedSchemaVersion) {
-      return fatalReply('SCHEMA_INTEGRITY_MISMATCH', 'Bundled schema version does not match the compiler.');
-    }
-  } catch {
+  const registry = loadedRegistry;
+  if (!registry) {
     return fatalReply(
       'SCHEMA_INTEGRITY_MISMATCH',
       'Bundled schemas or schema manifest failed integrity verification.'
@@ -527,15 +586,17 @@ export async function advanceStrict(runDirectory) {
   );
 
   try {
-    runDirectory = await prepareRunStore(runDirectory);
-    await recoverStagingClaims(runDirectory);
-    await cleanupTemporaryFiles(runDirectory);
-    let revisions = await acceptedSourceRevisions(runDirectory);
-    const acceptedIntegrity = await acceptedRunIntegrity(runDirectory, revisions, registry);
-    if (acceptedIntegrity) return acceptedIntegrity;
-    let sourceCandidate = await stagedArtifact(
-      runDirectory, 'source_pack', revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1
+    runDirectory = await guardedAwait(prepareRunStore(runDirectory));
+    await guardedAwait(recoverStagingClaims(runDirectory));
+    await guardedAwait(cleanupTemporaryFiles(runDirectory));
+    let revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));
+    const acceptedIntegrity = await guardedAwait(
+      acceptedRunIntegrity(runDirectory, revisions, registry)
     );
+    if (acceptedIntegrity) return acceptedIntegrity;
+    let sourceCandidate = await guardedAwait(stagedArtifact(
+      runDirectory, 'source_pack', revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1
+    ));
     if (sourceCandidate) {
       const candidateRecord = sourceCandidate.value && typeof sourceCandidate.value === 'object'
         ? /** @type {Record<string, unknown>} */ (sourceCandidate.value) : null;
@@ -544,14 +605,16 @@ export async function advanceStrict(runDirectory) {
         : revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1;
       if (candidateRecord && revisions.length > 0
         && candidateRevision === revisions[revisions.length - 1]) {
-        const acceptedSource = await readJson(
+        const acceptedSource = await guardedAwait(readJson(
           runDirectory, acceptedPath(runDirectory, candidateRevision, 'source_pack')
-        );
+        ));
         if (acceptedSource.digest !== sourceCandidate.digest) return fatalReply(
           'RUN_INTEGRITY_ERROR',
           'Staging Source Pack conflicts with the immutable accepted revision.'
         );
-        await discardStagingSnapshot(runDirectory, 'source_pack', sourceCandidate);
+        await guardedAwait(discardStagingSnapshot(
+          runDirectory, 'source_pack', sourceCandidate
+        ));
         sourceCandidate = null;
       }
     }
@@ -565,24 +628,39 @@ export async function advanceStrict(runDirectory) {
       if (candidateRevision !== expectedRevision) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Source revisions must begin at r000 and advance by exactly one.'
       );
+      const diagnostics = sourceCandidate.parseDiagnostics.length > 0
+        ? sourceCandidate.parseDiagnostics
+        : stableDiagnostics(validateAgainstSchema(
+          sourceCandidate.value, registry.schemas.get(STAGE_SCHEMA.source_pack)
+        ));
+      if (diagnostics.length > 0) return revisionReply(
+        runDirectory, 'source_pack', candidateRevision, sourceCandidate.value, diagnostics
+      );
       if (candidateRecord) {
         const transition = revisions.length === 0
           ? historySequenceIntegrity(candidateRecord)
           : sourceRevisionIntegrity(
-            /** @type {Record<string, unknown>} */ ((await readJson(
+            /** @type {Record<string, unknown>} */ ((await guardedAwait(readJson(
               runDirectory, acceptedPath(
                 runDirectory, revisions[revisions.length - 1], 'source_pack'
               )
-            )).value),
+            ))).value),
             candidateRecord
-          );
+        );
         if (transition) return transition;
       }
-      const diagnostics = sourceCandidate.parseDiagnostics.length > 0
-        ? sourceCandidate.parseDiagnostics
-        : artifactDiagnostics(sourceCandidate.value, registry.schemas.get(STAGE_SCHEMA.source_pack));
-      if (diagnostics.length > 0) return revisionReply(
-        runDirectory, 'source_pack', candidateRevision, sourceCandidate.value, diagnostics
+      const identityDiagnostics = stableDiagnostics(
+        validateUniqueStableIds(sourceCandidate.value)
+      );
+      if (identityDiagnostics.length > 0) return revisionReply(
+        runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
+        identityDiagnostics
+      );
+      const initialControlDiagnostics = candidateRevision === 0 && candidateRecord
+        ? initialClarificationControlDiagnostics(candidateRecord) : [];
+      if (initialControlDiagnostics.length > 0) return revisionReply(
+        runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
+        initialControlDiagnostics
       );
       const sourcePolicy = resolveSourcePolicy(
         /** @type {Record<string, unknown>} */ (sourceCandidate.value)
@@ -591,21 +669,21 @@ export async function advanceStrict(runDirectory) {
         runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
         sourcePolicy.diagnostics
       );
-      await promoteArtifact(
+      await guardedAwait(promoteArtifact(
         runDirectory, candidateRevision, 'source_pack', sourceCandidate.value, sourceCandidate
-      );
-      const sourceDigests = await acceptedDigests(runDirectory, candidateRevision);
-      await writeCheckpoint(runDirectory, checkpoint(
+      ));
+      const sourceDigests = await guardedAwait(acceptedDigests(runDirectory, candidateRevision));
+      await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
         candidateRevision, 'source_pack',
         /** @type {Record<string, unknown>} */ (sourceCandidate.value), null, sourceDigests
-      ));
-      revisions = await acceptedSourceRevisions(runDirectory);
+      )));
+      revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));
     }
     if (revisions.length === 0) return artifactRequest(0, 'source_pack');
     const sourceRevision = revisions[revisions.length - 1];
-    const sourceAccepted = await readJson(
+    const sourceAccepted = await guardedAwait(readJson(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
-    );
+    ));
     const sourcePack = /** @type {Record<string, unknown>} */ (sourceAccepted.value);
     const acceptedSourceDiagnostics = artifactDiagnostics(
       sourcePack, registry.schemas.get(STAGE_SCHEMA.source_pack)
@@ -619,10 +697,12 @@ export async function advanceStrict(runDirectory) {
 
     for (const stage of ['evidence_claims', 'behavior_views']) {
       const typedStage = /** @type {'evidence_claims'|'behavior_views'} */ (stage);
-      let artifact = await readJsonIfPresent(
+      let artifact = await guardedAwait(readJsonIfPresent(
         runDirectory, acceptedPath(runDirectory, sourceRevision, typedStage)
-      );
-      let candidate = await stagedArtifact(runDirectory, typedStage, sourceRevision);
+      ));
+      let candidate = await guardedAwait(stagedArtifact(
+        runDirectory, typedStage, sourceRevision
+      ));
       if (artifact && candidate) {
         if (candidate.parseDiagnostics.length > 0 || artifact.digest !== candidate.digest) {
           return fatalReply(
@@ -630,7 +710,7 @@ export async function advanceStrict(runDirectory) {
             `Staging ${typedStage} conflicts with the immutable accepted artifact.`
           );
         }
-        await discardStagingSnapshot(runDirectory, typedStage, candidate);
+        await guardedAwait(discardStagingSnapshot(runDirectory, typedStage, candidate));
         candidate = null;
       }
       if (!artifact) {
@@ -668,19 +748,19 @@ export async function advanceStrict(runDirectory) {
           );
           candidateObligations = derivedCandidate.artifact;
         }
-        await promoteArtifact(
+        await guardedAwait(promoteArtifact(
           runDirectory, sourceRevision, typedStage, candidate.value, candidate
-        );
-        if (candidateObligations) await atomicWriteJson(
-          runDirectory, obligationsPath(runDirectory, sourceRevision), candidateObligations
-        );
-        artifact = await readJson(
-          runDirectory, acceptedPath(runDirectory, sourceRevision, typedStage)
-        );
-        const digests = await acceptedDigests(runDirectory, sourceRevision);
-        await writeCheckpoint(runDirectory, checkpoint(
-          sourceRevision, typedStage, sourcePack, null, digests
         ));
+        if (candidateObligations) await guardedAwait(atomicWriteJson(
+          runDirectory, obligationsPath(runDirectory, sourceRevision), candidateObligations
+        ));
+        artifact = await guardedAwait(readJson(
+          runDirectory, acceptedPath(runDirectory, sourceRevision, typedStage)
+        ));
+        const digests = await guardedAwait(acceptedDigests(runDirectory, sourceRevision));
+        await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
+          sourceRevision, typedStage, sourcePack, null, digests
+        )));
       }
       const diagnostics = artifactDiagnostics(
         artifact.value, registry.schemas.get(STAGE_SCHEMA[typedStage])
@@ -701,20 +781,24 @@ export async function advanceStrict(runDirectory) {
       'RUN_INTEGRITY_ERROR',
       'Accepted evidence or behavior artifacts failed deterministic obligation derivation.'
     );
-    await atomicWriteJson(
+    await guardedAwait(atomicWriteJson(
       runDirectory, obligationsPath(runDirectory, sourceRevision), derived.artifact
-    );
+    ));
 
-    let caseArtifact = await readJsonIfPresent(
+    let caseArtifact = await guardedAwait(readJsonIfPresent(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'case_drafts')
-    );
-    let caseCandidate = await stagedArtifact(runDirectory, 'case_drafts', sourceRevision);
+    ));
+    let caseCandidate = await guardedAwait(stagedArtifact(
+      runDirectory, 'case_drafts', sourceRevision
+    ));
     if (caseArtifact && caseCandidate) {
       if (caseCandidate.parseDiagnostics.length > 0
         || caseArtifact.digest !== caseCandidate.digest) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Staging case_drafts conflicts with the immutable accepted artifact.'
       );
-      await discardStagingSnapshot(runDirectory, 'case_drafts', caseCandidate);
+      await guardedAwait(discardStagingSnapshot(
+        runDirectory, 'case_drafts', caseCandidate
+      ));
       caseCandidate = null;
     }
     let caseFromStaging = false;
@@ -748,7 +832,9 @@ export async function advanceStrict(runDirectory) {
     const compilation = derived.compilation ?? inferredCompilation(
       /** @type {Record<string, unknown>} */ (accepted.behavior_views)
     );
-    const clarification = await clarificationInput(runDirectory, sourceRevision, sourcePack);
+    const clarification = await guardedAwait(
+      clarificationInput(runDirectory, sourceRevision, sourcePack)
+    );
     const result = /** @type {any} */ (evaluateRevision({
       schema_version: '1.0.0', source_revision: sourceRevision,
       compiler_version: registry.compilerVersion,
@@ -774,18 +860,18 @@ export async function advanceStrict(runDirectory) {
         runDirectory, stage, sourceRevision, caseArtifact.value, result.diagnostics
       );
     }
-    if (caseFromStaging) await promoteArtifact(
+    if (caseFromStaging) await guardedAwait(promoteArtifact(
       runDirectory, sourceRevision, 'case_drafts', caseArtifact.value, caseArtifact
-    );
+    ));
     const clarificationState = /** @type {Record<string, unknown>} */ (result.clarification_state);
-    await atomicWriteJson(
+    await guardedAwait(atomicWriteJson(
       runDirectory, clarificationStatePath(runDirectory, sourceRevision), clarificationState
-    );
-    const digests = await acceptedDigests(runDirectory, sourceRevision);
+    ));
+    const digests = await guardedAwait(acceptedDigests(runDirectory, sourceRevision));
     if (result.status === 'need_user_answers') {
-      await writeCheckpoint(runDirectory, checkpoint(
+      await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
         sourceRevision, 'verification', sourcePack, clarificationState, digests
-      ));
+      )));
       return {
         status: 'need_user_answers', source_revision: sourceRevision, stage: 'clarification',
         diagnostics: [], blockers: result.pending_root_issues.map((/** @type {any} */ item) => ({
@@ -804,24 +890,55 @@ export async function advanceStrict(runDirectory) {
     if (result.status !== 'finished') return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Pure revision evaluator returned an unsupported workflow result.'
     );
-    const paths = await writeFinalOutput(
+    const paths = await guardedAwait(writeFinalOutput(
       runDirectory, sourceRevision, result.bundle, result.markdown
-    );
-    digests.test_bundle = result.bundle_digest;
-    await writeCheckpoint(runDirectory, checkpoint(
-      sourceRevision, 'finished', sourcePack, clarificationState, digests
     ));
+    digests.test_bundle = result.bundle_digest;
+    await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
+      sourceRevision, 'finished', sourcePack, clarificationState, digests
+    )));
     const current = {
       source_revision: sourceRevision,
       bundle_path: paths.bundle,
       bundle_digest: result.bundle_digest,
       markdown_path: paths.markdown
     };
-    await atomicWriteJson(
+    await guardedAwait(atomicWriteJson(
       runDirectory, outputPaths(runDirectory, sourceRevision).current, current
-    );
+    ));
     return { status: 'finished', ...current };
   } catch (error) {
+    if (error instanceof CoreIntrinsicMutationError) return fatalReply(
+      'CORE_INTRINSIC_INVALID',
+      'Run-store evaluation requires captured native collection traversal intrinsics.'
+    );
     return fatalReply('RUN_INTEGRITY_ERROR', errorMessage(error));
   }
+}
+
+/**
+ * Serialize advances for one run. The mandatory first microtask boundary makes
+ * the intrinsic check in the exclusive evaluator observe mutations made while
+ * the caller holds the returned Promise, before any artifact can be accepted.
+ * @param {string} runDirectory
+ */
+export function advanceStrict(runDirectory) {
+  const key = typeof runDirectory === 'string' ? path.resolve(runDirectory) : '<invalid-run>';
+  const previous = mapGet(ACTIVE_RUNS, key);
+  /** @type {()=>void} */
+  let release = () => {};
+  const turn = new NATIVE_PROMISE((resolve) => {
+    release = () => { resolve(undefined); };
+  });
+  mapSet(ACTIVE_RUNS, key, turn);
+  return (async () => {
+    if (previous) await previous;
+    else await new NATIVE_PROMISE((resolve) => resolve(undefined));
+    try {
+      return await advanceStrictExclusive(runDirectory);
+    } finally {
+      release();
+      if (mapGet(ACTIVE_RUNS, key) === turn) mapDelete(ACTIVE_RUNS, key);
+    }
+  })();
 }

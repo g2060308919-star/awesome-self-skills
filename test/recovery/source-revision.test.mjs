@@ -187,6 +187,56 @@ test('immutable source replacement outranks policy diagnostics and is never prom
   }
 });
 
+test('malformed next source is a schema revision request before immutable comparison', async () => {
+  const runDirectory = await temporaryRun();
+  const fixture = await revisionFixture();
+  try {
+    await acceptInitialSource(runDirectory, fixture.source_pack);
+    await stageSource(runDirectory, {});
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'source_pack');
+    assert.ok(reply.diagnostics.length > 0);
+    assert.ok(reply.diagnostics.every((/** @type {any} */ item) => (
+      item.code !== 'NEW_RUN_REQUIRED'
+    )));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r001/source-pack.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('initial clarification control history is never silently treated as already applied', async () => {
+  const runDirectory = await temporaryRun();
+  const fixture = await revisionFixture();
+  fixture.source_pack.clarification_events.push({
+    event_id: 'event_initial', clarification_event_seq: 1, type: 'reopen_root_issues',
+    actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_never_existed']
+  });
+  try {
+    /** @type {any} */
+    let reply;
+    for (const stageName of ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']) {
+      const typedStage = /** @type {keyof typeof STAGE_FILES} */ (stageName);
+      await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
+      await writeFile(
+        path.join(runDirectory, 'staging', STAGE_FILES[typedStage]),
+        `${JSON.stringify(fixture[typedStage])}\n`, 'utf8'
+      );
+      reply = await advanceStrict(runDirectory);
+    }
+    assert.notEqual(reply.status, 'finished', JSON.stringify(reply));
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'source_pack');
+    assert.ok(reply.diagnostics.some((/** @type {any} */ item) => (
+      item.code === 'INITIAL_CLARIFICATION_HISTORY_UNSUPPORTED'
+    )), JSON.stringify(reply));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('initial Decision and control history must start at one and be globally contiguous', async () => {
   for (const mutate of [
     (/** @type {any} */ pack) => { pack.decision_records = [decision(2)]; },

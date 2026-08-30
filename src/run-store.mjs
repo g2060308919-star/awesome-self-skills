@@ -60,6 +60,7 @@ const NATIVE_REGEXP_INTRINSICS = Object.freeze([
   ['exec', RegExp.prototype.exec], ['test', RegExp.prototype.test]
 ]);
 const NATIVE_JSON = JSON;
+const NATIVE_JSON_PARSE = JSON.parse;
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_JSON_INTRINSICS = Object.freeze([
   ['parse', JSON.parse], ['stringify', JSON.stringify]
@@ -96,6 +97,7 @@ const NATIVE_MAP_SIZE_GET = NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
 const NATIVE_SET_SIZE_GET = NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
   NATIVE_SET_PROTOTYPE, 'size'
 )?.get;
+const NATIVE_NUMBER_IS_SAFE_INTEGER = Number.isSafeInteger;
 
 export class RunStoreIntegrityError extends Error {
   /** @param {string} message */
@@ -335,12 +337,36 @@ export async function recoverStagingClaims(runDirectory) {
       if (entry.isFile() && entry.name.startsWith(prefix)) append(claims, entry.name);
     }
     NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, claims, []);
-    if (claims.length === 0) continue;
+    /** @type {string[]} */
+    const unresolvedClaims = [];
+    for (let index = 0; index < claims.length; index += 1) {
+      const claimName = claims[index];
+      const claimPath = path.join(directory, claimName);
+      const claimText = await readText(runDirectory, claimPath);
+      let claimValue;
+      try {
+        claimValue = NATIVE_REFLECT_APPLY(NATIVE_JSON_PARSE, NATIVE_JSON, [claimText]);
+      } catch {
+        append(unresolvedClaims, claimName);
+        continue;
+      }
+      const claimRevision = claimValue && typeof claimValue === 'object'
+        ? claimValue.source_revision : undefined;
+      const accepted = NATIVE_REFLECT_APPLY(
+        NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [claimRevision]
+      ) ? await readJsonIfPresent(
+          runDirectory, acceptedPath(runDirectory, claimRevision, typedStage)
+        ) : null;
+      if (accepted && accepted.digest === digest(claimValue)) {
+        await removeFileDurably(runDirectory, claimPath);
+      } else append(unresolvedClaims, claimName);
+    }
+    if (unresolvedClaims.length === 0) continue;
     const canonical = stagingPath(runDirectory, typedStage);
-    const firstClaim = path.join(directory, claims[0]);
+    const firstClaim = path.join(directory, unresolvedClaims[0]);
     const firstText = await readText(runDirectory, firstClaim);
-    for (let index = 1; index < claims.length; index += 1) {
-      if (await readText(runDirectory, path.join(directory, claims[index])) !== firstText) {
+    for (let index = 1; index < unresolvedClaims.length; index += 1) {
+      if (await readText(runDirectory, path.join(directory, unresolvedClaims[index])) !== firstText) {
         throw new RunStoreIntegrityError('Conflicting staging promotion claims require manual revision.');
       }
     }
@@ -352,8 +378,8 @@ export async function recoverStagingClaims(runDirectory) {
       await rename(firstClaim, canonical);
       await syncDirectory(directory);
     } else await removeFileDurably(runDirectory, firstClaim);
-    for (let index = 1; index < claims.length; index += 1) {
-      await removeFileDurably(runDirectory, path.join(directory, claims[index]));
+    for (let index = 1; index < unresolvedClaims.length; index += 1) {
+      await removeFileDurably(runDirectory, path.join(directory, unresolvedClaims[index]));
     }
   }
 }

@@ -366,3 +366,26 @@ test('outer run boundary rejects mutable string and collection accessors before 
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
+
+test('intrinsic mutation during the first await cannot execute caller code or accept input', async () => {
+  const runDirectory = await temporaryRun('intrinsic toctou');
+  const revision = await fixture();
+  const originalSort = Array.prototype.sort;
+  let calls = 0;
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const pending = advanceStrict(runDirectory);
+    Array.prototype.sort = function (/** @type {any[]} */ ...args) {
+      calls += 1;
+      return Reflect.apply(originalSort, this, args);
+    };
+    const reply = /** @type {any} */ (await pending);
+    assert.equal(calls, 0, 'caller sort must not run after the initial async boundary');
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+  } finally {
+    Array.prototype.sort = originalSort;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
