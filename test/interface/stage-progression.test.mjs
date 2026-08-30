@@ -421,6 +421,60 @@ test('first-await mutation of static Array and path methods is contained before 
   }
 });
 
+test('first-await mutation of canonical and lock intrinsics never executes caller code', async () => {
+  const originalReflectApply = Reflect.apply;
+  /** @type {Array<[Record<string,any>,string]>} */
+  const cases = [
+    [/** @type {any} */ (Object), 'fromEntries'],
+    [/** @type {any} */ (Reflect), 'apply'],
+    [/** @type {any} */ (Math), 'min'],
+    [/** @type {any} */ (String.prototype), 'codePointAt'],
+    [/** @type {any} */ (Date), 'now']
+  ];
+  for (const [owner, method] of cases) {
+    const runDirectory = await temporaryRun(`intrinsic canonical ${method}`);
+    const revision = await fixture();
+    const original = owner[method];
+    let calls = 0;
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      const pending = advanceStrict(runDirectory);
+      owner[method] = function (/** @type {any[]} */ ...args) {
+        calls += 1;
+        return originalReflectApply(original, this, args);
+      };
+      const reply = /** @type {any} */ (await pending);
+      assert.equal(calls, 0, `${method} caller code executed`);
+      assert.equal(reply.status, 'fatal', `${method}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+      await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+    } finally {
+      owner[method] = original;
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+
+  const runDirectory = await temporaryRun('intrinsic fromEntries throwing');
+  const revision = await fixture();
+  const originalFromEntries = Object.fromEntries;
+  let calls = 0;
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const pending = advanceStrict(runDirectory);
+    Object.fromEntries = () => {
+      calls += 1;
+      throw new Error('caller Object.fromEntries must not execute');
+    };
+    const reply = /** @type {any} */ (await pending);
+    assert.equal(calls, 0);
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+  } finally {
+    Object.fromEntries = originalFromEntries;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('pre-call path replacement is contained by the outermost run boundary', async () => {
   const runDirectory = await temporaryRun('intrinsic pre-call path');
   const original = path.resolve;

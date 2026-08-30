@@ -12,6 +12,7 @@ import { STAGE_FILES } from '../../src/run-store.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+const rename = fsPromises.rename;
 const symlink = fsPromises.symlink;
 const recoveryRoot = path.join(repositoryRoot, 'test/fixtures/recovery');
 const crashFixtureNames = [
@@ -383,6 +384,167 @@ test('run coordination reclaims a dead owner but never deletes a live owner lock
     } finally {
       await rm(runDirectory, { recursive: true, force: true });
     }
+  }
+});
+
+test('post-acquire intrinsic failure releases ownership before returning', { timeout: 10_000 }, async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const originalSort = Array.prototype.sort;
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    await mkdir(lockDirectory);
+    await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
+      pid: process.pid, token: 'external-live-owner', lease_expires_at_ms: Date.now() + 60_000
+    })}\n`, 'utf8');
+    const pending = advanceStrict(runDirectory);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    Array.prototype.sort = function (/** @type {any[]} */ ...args) {
+      return Reflect.apply(originalSort, this, args);
+    };
+    await rm(lockDirectory, { recursive: true, force: true });
+    const reply = /** @type {any} */ (await pending);
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+    Array.prototype.sort = originalSort;
+    await assert.rejects(stat(lockDirectory), 'failed intrinsic check leaked run ownership');
+    const retry = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(retry.status, 'need_artifact', JSON.stringify(retry));
+    assert.equal(retry.stage, 'evidence_claims');
+  } finally {
+    Array.prototype.sort = originalSort;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('lock wait and release use captured Object Date and process intrinsics', { timeout: 10_000 }, async () => {
+  const originalReflectApply = Reflect.apply;
+  /** @type {Array<[Record<string,any>,string]>} */
+  const cases = [
+    [/** @type {any} */ (Object), 'fromEntries'],
+    [/** @type {any} */ (Date), 'now'],
+    [/** @type {any} */ (process), 'kill']
+  ];
+  for (const [owner, method] of cases) {
+    const runDirectory = await temporaryRun();
+    const revision = await revisionFixture();
+    const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+    const original = owner[method];
+    let calls = 0;
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      await mkdir(lockDirectory);
+      await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
+        pid: process.pid, token: `wait-${method}`, lease_expires_at_ms: Date.now() + 60_000
+      })}\n`, 'utf8');
+      const pending = advanceStrict(runDirectory);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      owner[method] = function (/** @type {any[]} */ ...args) {
+        calls += 1;
+        return originalReflectApply(original, this, args);
+      };
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      await rm(lockDirectory, { recursive: true, force: true });
+      const reply = /** @type {any} */ (await pending);
+      assert.equal(calls, 0, `${method} caller code executed while waiting or releasing`);
+      assert.equal(reply.status, 'fatal', `${method}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+      owner[method] = original;
+      await assert.rejects(stat(lockDirectory));
+    } finally {
+      owner[method] = original;
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('expired or reused PID owners recover while a renewed live lease remains held', { timeout: 10_000 }, async () => {
+  for (const owner of [
+    { pid: process.pid, token: 'expired-live-pid', lease_expires_at_ms: 0 },
+    {
+      pid: process.pid, token: 'reused-live-pid', lease_expires_at_ms: Date.now() + 60_000,
+      process_start_identity: 'different-process-start'
+    }
+  ]) {
+    const runDirectory = await temporaryRun();
+    const revision = await revisionFixture();
+    const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      await mkdir(lockDirectory);
+      await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify(owner)}\n`, 'utf8');
+      const pending = advanceStrict(runDirectory);
+      const state = await Promise.race([
+        pending, new Promise((resolve) => setTimeout(() => resolve('waiting'), 500))
+      ]);
+      if (state === 'waiting') {
+        await rm(lockDirectory, { recursive: true, force: true });
+        await pending;
+      }
+      assert.notEqual(state, 'waiting', `${owner.token} was mistaken for the active owner`);
+      assert.equal((/** @type {any} */ (state)).stage, 'evidence_claims');
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const ownerPath = path.join(lockDirectory, 'owner.json');
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    await mkdir(lockDirectory);
+    const owner = {
+      pid: process.pid, token: 'renewed-live-owner', lease_expires_at_ms: Date.now() + 150
+    };
+    await writeFile(ownerPath, `${JSON.stringify(owner)}\n`, 'utf8');
+    const pending = advanceStrict(runDirectory);
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    owner.lease_expires_at_ms = Date.now() + 1_000;
+    const replacement = `${ownerPath}.replacement`;
+    await writeFile(replacement, `${JSON.stringify(owner)}\n`, 'utf8');
+    await rename(replacement, ownerPath);
+    const state = await Promise.race([
+      pending.then(() => 'settled'),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 300))
+    ]);
+    assert.equal(state, 'waiting', 'a renewed live lease was reclaimed');
+    await rm(lockDirectory, { recursive: true, force: true });
+    assert.equal((/** @type {any} */ (await pending)).stage, 'evidence_claims');
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('lock rename crash residues are durably removed but matching symlinks fail closed', async () => {
+  const runDirectory = await temporaryRun();
+  const outside = await temporaryRun();
+  const revision = await revisionFixture();
+  const residues = [
+    path.join(runDirectory, '.compiler-advance.lock.release-999-1'),
+    path.join(runDirectory, '.compiler-advance.lock.stale-999-2')
+  ];
+  try {
+    for (const residue of residues) {
+      await mkdir(path.join(residue, 'nested'), { recursive: true });
+      await writeFile(path.join(residue, 'nested/owner.json'), '{}\n', 'utf8');
+    }
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.stage, 'evidence_claims', JSON.stringify(reply));
+    for (const residue of residues) await assert.rejects(stat(residue));
+
+    const symlinkResidue = path.join(runDirectory, '.compiler-advance.lock.release-999-3');
+    await symlink(outside, symlinkResidue);
+    const rejected = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(rejected.status, 'fatal', JSON.stringify(rejected));
+    assert.equal(rejected.diagnostics[0].code, 'RUN_INTEGRITY_ERROR');
+    await stat(symlinkResidue);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
 

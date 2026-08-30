@@ -13,6 +13,7 @@ const CONTROLLED_DIRECTORIES = Object.freeze(['accepted', 'staging', 'derived', 
 const CONTROLLED_FILES = Object.freeze(['checkpoint.json']);
 const REVISION_DIRECTORY = /^r([0-9]+)$/u;
 const TEMPORARY_FILE = /^\..+\.tmp-([0-9]+)-[0-9]+$/u;
+const RUN_LOCK_RESIDUE_DIRECTORY = /^\.compiler-advance\.lock\.(?:release|stale)-[0-9]+-[0-9]+$/u;
 let temporarySequence = 0;
 let lockSequence = 0;
 const RUN_LOCK_DIRECTORY = '.compiler-advance.lock';
@@ -39,6 +40,7 @@ const NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR = Object.getOwnPropertyDescripto
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_OBJECT_INTRINSICS = Object.freeze([
   ['defineProperty', Object.defineProperty],
+  ['fromEntries', Object.fromEntries],
   ['getOwnPropertyDescriptor', Object.getOwnPropertyDescriptor],
   ['getOwnPropertyDescriptors', Object.getOwnPropertyDescriptors],
   ['getPrototypeOf', Object.getPrototypeOf], ['hasOwn', Object.hasOwn],
@@ -59,6 +61,7 @@ const NATIVE_STRING = String;
 const NATIVE_STRING_PROTOTYPE = String.prototype;
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_STRING_INTRINSICS = Object.freeze([
+  ['codePointAt', String.prototype.codePointAt],
   ['split', String.prototype.split], ['includes', String.prototype.includes],
   ['startsWith', String.prototype.startsWith], ['padStart', String.prototype.padStart],
   ['trim', String.prototype.trim],
@@ -72,6 +75,7 @@ const NATIVE_REGEXP_INTRINSICS = Object.freeze([
 ]);
 const NATIVE_JSON = JSON;
 const NATIVE_JSON_PARSE = JSON.parse;
+const NATIVE_JSON_STRINGIFY = JSON.stringify;
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_JSON_INTRINSICS = Object.freeze([
   ['parse', JSON.parse], ['stringify', JSON.stringify]
@@ -79,6 +83,14 @@ const NATIVE_JSON_INTRINSICS = Object.freeze([
 const NATIVE_STRUCTURED_CLONE = structuredClone;
 const NATIVE_PROMISE = Promise;
 const NATIVE_SET_TIMEOUT = setTimeout;
+const NATIVE_DATE = Date;
+const NATIVE_DATE_NOW = Date.now;
+const NATIVE_MATH = Math;
+const NATIVE_MATH_MIN = Math.min;
+const NATIVE_PROCESS = process;
+const NATIVE_PROCESS_KILL = process.kill;
+const NATIVE_PROCESS_PID = process.pid;
+const NATIVE_PROCESS_START_IDENTITY = `${process.pid}:${Date.now() - process.uptime() * 1_000}`;
 const NATIVE_PATH = path;
 const NATIVE_PATH_BASENAME = path.basename;
 const NATIVE_PATH_DIRNAME = path.dirname;
@@ -91,6 +103,16 @@ const NATIVE_PATH_SEPARATOR = path.sep;
 const NATIVE_PATH_INTRINSICS = Object.freeze([
   ['basename', path.basename], ['dirname', path.dirname], ['isAbsolute', path.isAbsolute],
   ['join', path.join], ['relative', path.relative], ['resolve', path.resolve], ['sep', path.sep]
+]);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_REFLECT_INTRINSICS = Object.freeze([['apply', Reflect.apply]]);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_DATE_INTRINSICS = Object.freeze([['now', Date.now]]);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_MATH_INTRINSICS = Object.freeze([['min', Math.min]]);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_PROCESS_INTRINSICS = Object.freeze([
+  ['kill', process.kill], ['pid', process.pid]
 ]);
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const fsConstants = fsPromises.constants;
@@ -168,14 +190,28 @@ function pathResolve(value) {
   return NATIVE_REFLECT_APPLY(NATIVE_PATH_RESOLVE, NATIVE_PATH, [value]);
 }
 
+function currentTimeMilliseconds() {
+  return NATIVE_REFLECT_APPLY(NATIVE_DATE_NOW, NATIVE_DATE, []);
+}
+
+/** @param {unknown} value */
+function nativeString(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STRING, undefined, [value]);
+}
+
+/** @param {unknown} value */
+function nativeJsonStringify(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_JSON_STRINGIFY, NATIVE_JSON, [value]);
+}
+
 /** @param {string} fileName */
 function temporaryOwnerIsAlive(fileName) {
   const match = NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, TEMPORARY_FILE, [fileName]);
   if (!match) return false;
-  const ownerPid = Number(match[1]);
-  if (ownerPid === process.pid) return true;
+  const ownerPid = NATIVE_REFLECT_APPLY(NATIVE_NUMBER, undefined, [match[1]]);
+  if (ownerPid === NATIVE_PROCESS_PID) return true;
   try {
-    process.kill(ownerPid, 0);
+    NATIVE_REFLECT_APPLY(NATIVE_PROCESS_KILL, NATIVE_PROCESS, [ownerPid, 0]);
     return true;
   } catch (error) {
     return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'EPERM');
@@ -187,9 +223,9 @@ function processOwnerIsAlive(ownerPid) {
   if (typeof ownerPid !== 'number'
     || !NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerPid])
     || ownerPid <= 0) return false;
-  if (ownerPid === process.pid) return true;
+  if (ownerPid === NATIVE_PROCESS_PID) return true;
   try {
-    process.kill(ownerPid, 0);
+    NATIVE_REFLECT_APPLY(NATIVE_PROCESS_KILL, NATIVE_PROCESS, [ownerPid, 0]);
     return true;
   } catch (error) {
     return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'EPERM');
@@ -230,6 +266,7 @@ export function runStoreIntrinsicsIntact() {
     ['Array', NATIVE_ARRAY], ['Map', NATIVE_MAP], ['Set', NATIVE_SET],
     ['Object', NATIVE_OBJECT], ['Symbol', NATIVE_SYMBOL], ['Number', NATIVE_NUMBER],
     ['String', NATIVE_STRING], ['RegExp', NATIVE_REGEXP], ['Reflect', NATIVE_REFLECT],
+    ['Date', NATIVE_DATE], ['Math', NATIVE_MATH],
     ['JSON', NATIVE_JSON], ['structuredClone', NATIVE_STRUCTURED_CLONE]
   ];
   for (let index = 0; index < globals.length; index += 1) {
@@ -251,8 +288,18 @@ export function runStoreIntrinsicsIntact() {
     && descriptorsMatch(NATIVE_NUMBER, NATIVE_NUMBER_INTRINSICS)
     && descriptorsMatch(NATIVE_JSON, NATIVE_JSON_INTRINSICS)
     && descriptorsMatch(NATIVE_PATH, NATIVE_PATH_INTRINSICS)
+    && descriptorsMatch(NATIVE_REFLECT, NATIVE_REFLECT_INTRINSICS)
+    && descriptorsMatch(NATIVE_DATE, NATIVE_DATE_INTRINSICS)
+    && descriptorsMatch(NATIVE_MATH, NATIVE_MATH_INTRINSICS)
+    && descriptorsMatch(NATIVE_PROCESS, NATIVE_PROCESS_INTRINSICS)
     && getterMatches(NATIVE_MAP_PROTOTYPE, 'size', NATIVE_MAP_SIZE_GET)
     && getterMatches(NATIVE_SET_PROTOTYPE, 'size', NATIVE_SET_SIZE_GET);
+}
+
+function requireRunStoreIntrinsics() {
+  if (!runStoreIntrinsicsIntact()) throw new RunStoreIntegrityError(
+    'Run-store traversal intrinsics changed during an atomic operation.'
+  );
 }
 
 /** @param {number} sourceRevision */
@@ -348,6 +395,41 @@ function delay(milliseconds) {
   return new NATIVE_PROMISE((resolve) => { NATIVE_SET_TIMEOUT(resolve, milliseconds); });
 }
 
+/** @param {string} runDirectory @param {string} ownerPath */
+async function readRunLockOwner(runDirectory, ownerPath) {
+  const text = await readTextIfPresent(runDirectory, ownerPath);
+  if (text === null) return null;
+  try {
+    const value = NATIVE_REFLECT_APPLY(NATIVE_JSON_PARSE, NATIVE_JSON, [text]);
+    return value && typeof value === 'object'
+      ? /** @type {Record<string,unknown>} */ (value) : null;
+  } catch {
+    throw new RunStoreIntegrityError('Run coordination owner metadata is not valid JSON.');
+  }
+}
+
+/** @param {string} runDirectory @param {string} ownerPath @param {Record<string,unknown>} owner */
+async function writeRunLockOwner(runDirectory, ownerPath, owner) {
+  await atomicWriteText(runDirectory, ownerPath, `${nativeJsonStringify(owner)}\n`);
+}
+
+/** Remove crash residues only after proving their complete trees contain no symlink. */
+/** @param {string} runDirectory */
+export async function cleanupRunLockResidues(runDirectory) {
+  const entries = await readdir(runDirectory, { withFileTypes: true });
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!regexpTest(RUN_LOCK_RESIDUE_DIRECTORY, entry.name)) continue;
+    if (entry.isSymbolicLink() || !entry.isDirectory()) throw new RunStoreIntegrityError(
+      'Run coordination crash residue is not a real directory.'
+    );
+    const target = pathJoin(runDirectory, entry.name);
+    await inspectTree(runDirectory, target);
+    await rm(target, { recursive: true, force: true });
+    await syncDirectory(runDirectory);
+  }
+}
+
 /**
  * Acquire the crash-recoverable, process-wide coordination right for one run.
  * The lock directory is the atomic claim; owner metadata distinguishes an
@@ -358,20 +440,21 @@ function delay(milliseconds) {
 export async function acquireRunLock(runDirectory) {
   const lockDirectory = pathJoin(runDirectory, RUN_LOCK_DIRECTORY);
   const ownerPath = pathJoin(lockDirectory, RUN_LOCK_OWNER_FILE);
-  const startedAt = Date.now();
-  const token = `${String(process.pid)}-${String(startedAt)}-${String(++lockSequence)}`;
+  const startedAt = currentTimeMilliseconds();
+  const token = `${nativeString(NATIVE_PROCESS_PID)}-${nativeString(startedAt)}-${nativeString(++lockSequence)}`;
 
   while (true) {
     try {
       await mkdir(lockDirectory);
       await syncDirectory(runDirectory);
       const owner = {
-        pid: process.pid,
+        pid: NATIVE_PROCESS_PID,
         token,
-        lease_expires_at_ms: Date.now() + RUN_LOCK_LEASE_MS
+        lease_expires_at_ms: currentTimeMilliseconds() + RUN_LOCK_LEASE_MS,
+        process_start_identity: NATIVE_PROCESS_START_IDENTITY
       };
       try {
-        await atomicWriteJson(runDirectory, ownerPath, owner);
+        await writeRunLockOwner(runDirectory, ownerPath, owner);
         await syncDirectory(runDirectory);
       } catch (error) {
         await rm(lockDirectory, { recursive: true, force: true }).catch(() => {});
@@ -382,13 +465,12 @@ export async function acquireRunLock(runDirectory) {
       let released = false;
       return async () => {
         if (released) return;
-        const current = await readJsonIfPresent(runDirectory, ownerPath);
-        const record = current && current.value && typeof current.value === 'object'
-          ? /** @type {Record<string,unknown>} */ (current.value) : null;
-        if (!record || record.token !== token || record.pid !== process.pid) {
+        const record = await readRunLockOwner(runDirectory, ownerPath);
+        if (!record || record.token !== token || record.pid !== NATIVE_PROCESS_PID
+          || record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
           throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
         }
-        const releasedDirectory = `${lockDirectory}.release-${String(process.pid)}-${String(++lockSequence)}`;
+        const releasedDirectory = `${lockDirectory}.release-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
         await rename(lockDirectory, releasedDirectory);
         await syncDirectory(runDirectory);
         await rm(releasedDirectory, { recursive: true, force: true });
@@ -410,21 +492,27 @@ export async function acquireRunLock(runDirectory) {
       'Run coordination claim is not a real directory.'
     );
 
-    const owner = await readJsonIfPresent(runDirectory, ownerPath);
-    const record = owner && owner.value && typeof owner.value === 'object'
-      ? /** @type {Record<string,unknown>} */ (owner.value) : null;
+    const record = await readRunLockOwner(runDirectory, ownerPath);
     const ownerPid = record?.pid;
     const ownerToken = record?.token;
     const ownerLease = record?.lease_expires_at_ms;
+    const ownerProcessStart = record?.process_start_identity;
     const ownerShapeValid = typeof ownerToken === 'string' && ownerToken.length > 0
+      && typeof ownerPid === 'number' && typeof ownerLease === 'number'
       && NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerPid])
       && NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerLease]);
-    const ownerAlive = ownerShapeValid && processOwnerIsAlive(ownerPid);
+    const now = currentTimeMilliseconds();
+    const currentPidIdentityMatches = ownerPid !== NATIVE_PROCESS_PID
+      || ownerProcessStart === undefined
+      || ownerProcessStart === NATIVE_PROCESS_START_IDENTITY;
+    const ownerAlive = ownerShapeValid && typeof ownerLease === 'number' && ownerLease > now
+      && currentPidIdentityMatches
+      && processOwnerIsAlive(ownerPid);
     const incompleteIsYoung = !ownerShapeValid
-      && Date.now() - status.mtimeMs < RUN_LOCK_INCOMPLETE_GRACE_MS;
+      && now - status.mtimeMs < RUN_LOCK_INCOMPLETE_GRACE_MS;
 
     if (!ownerAlive && !incompleteIsYoung) {
-      const staleDirectory = `${lockDirectory}.stale-${String(process.pid)}-${String(++lockSequence)}`;
+      const staleDirectory = `${lockDirectory}.stale-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
       try {
         await rename(lockDirectory, staleDirectory);
         await syncDirectory(runDirectory);
@@ -437,7 +525,7 @@ export async function acquireRunLock(runDirectory) {
       }
     }
 
-    if (Date.now() - startedAt >= RUN_LOCK_WAIT_MS) throw new RunStoreIntegrityError(
+    if (currentTimeMilliseconds() - startedAt >= RUN_LOCK_WAIT_MS) throw new RunStoreIntegrityError(
       'Timed out waiting for the active run coordination owner.'
     );
     await delay(RUN_LOCK_POLL_MS);
@@ -607,7 +695,7 @@ export async function atomicWriteText(runDirectory, targetPath, content) {
   await assertNoSymlinkPath(runDirectory, targetPath);
   temporarySequence += 1;
   const temporaryPath = pathJoin(
-    directory, `.${pathBasename(targetPath)}.tmp-${process.pid}-${temporarySequence}`
+    directory, `.${pathBasename(targetPath)}.tmp-${NATIVE_PROCESS_PID}-${temporarySequence}`
   );
   let handle;
   try {
@@ -632,6 +720,7 @@ export async function atomicWriteText(runDirectory, targetPath, content) {
 
 /** @param {string} runDirectory @param {string} targetPath @param {unknown} value */
 export async function atomicWriteJson(runDirectory, targetPath, value) {
+  requireRunStoreIntrinsics();
   await atomicWriteText(runDirectory, targetPath, `${canonicalStringify(value)}\n`);
 }
 
@@ -659,7 +748,8 @@ export async function readTextIfPresent(runDirectory, filePath) {
 /** @param {string} runDirectory @param {string} filePath */
 export async function readJson(runDirectory, filePath) {
   const text = await readText(runDirectory, filePath);
-  const value = JSON.parse(text);
+  requireRunStoreIntrinsics();
+  const value = NATIVE_REFLECT_APPLY(NATIVE_JSON_PARSE, NATIVE_JSON, [text]);
   return { text, value, digest: digest(value) };
 }
 
@@ -747,7 +837,7 @@ export async function acceptedSourceRevisions(runDirectory) {
 export async function discardStagingSnapshot(runDirectory, stage, snapshot) {
   const source = stagingPath(runDirectory, stage);
   const directory = pathDirname(source);
-  const claim = pathJoin(directory, `.${pathBasename(source)}.claim-${process.pid}-${++temporarySequence}`);
+  const claim = pathJoin(directory, `.${pathBasename(source)}.claim-${NATIVE_PROCESS_PID}-${++temporarySequence}`);
   await rename(source, claim);
   await syncDirectory(directory);
   const claimedText = await readText(runDirectory, claim);
@@ -779,7 +869,7 @@ export async function promoteArtifact(runDirectory, sourceRevision, stage, value
   }
   const source = stagingPath(runDirectory, stage);
   const directory = pathDirname(source);
-  const claim = pathJoin(directory, `.${pathBasename(source)}.claim-${process.pid}-${++temporarySequence}`);
+  const claim = pathJoin(directory, `.${pathBasename(source)}.claim-${NATIVE_PROCESS_PID}-${++temporarySequence}`);
   await ensureDirectory(runDirectory, directory);
   await assertNoSymlinkPath(runDirectory, source);
   await rename(source, claim);
