@@ -9,6 +9,7 @@ const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
 const NATIVE_ARRAY_PUSH = Array.prototype.push;
 const NATIVE_ARRAY_POP = Array.prototype.pop;
 const NATIVE_ARRAY_SORT = Array.prototype.sort;
+const NATIVE_ARRAY_JOIN = Array.prototype.join;
 const NATIVE_GET_PROTOTYPE_OF = Object.getPrototypeOf;
 const NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
 const NATIVE_REFLECT_OWN_KEYS = Reflect.ownKeys;
@@ -22,8 +23,27 @@ export class BundleRenderError extends TypeError {
     this.name = 'BundleRenderError';
     this.status = 'need_revision';
     this.stage = 'render_markdown';
-    this.diagnostics = canonicalRenderDiagnostics(diagnostics).map((item) => ({ ...item }));
+    const canonical = canonicalRenderDiagnostics(diagnostics);
+    this.diagnostics = [];
+    for (let index = 0; index < canonical.length; index += 1) {
+      Reflect.apply(NATIVE_ARRAY_PUSH, this.diagnostics, [{ ...canonical[index] }]);
+    }
   }
+}
+
+/** @param {unknown[]} target @param {...unknown} values */
+function append(target, ...values) {
+  Reflect.apply(NATIVE_ARRAY_PUSH, target, values);
+}
+
+/** @param {unknown[]} target @param {unknown[]} source */
+function appendArray(target, source) {
+  for (let index = 0; index < source.length; index += 1) append(target, source[index]);
+}
+
+/** @param {unknown[]} values @param {string} separator */
+function joinArray(values, separator) {
+  return Reflect.apply(NATIVE_ARRAY_JOIN, values, [separator]);
 }
 
 /** @param {string} value */
@@ -260,7 +280,11 @@ function code(value) {
 
 /** @param {unknown[]} values */
 function codeList(values) {
-  return values.length === 0 ? '_None._' : values.map(code).join(', ');
+  if (values.length === 0) return '_None._';
+  /** @type {string[]} */
+  const encoded = [];
+  for (let index = 0; index < values.length; index += 1) append(encoded, code(values[index]));
+  return joinArray(encoded, ', ');
 }
 
 /** @param {any} oracle */
@@ -269,9 +293,9 @@ function oracleText(oracle) {
     value: 'expected_value', state: 'expected_state', event: 'expected_event', 'side-effect': 'expected_side_effect'
   }[String(oracle.type)] ?? '';
   const parts = [inline(oracle.type), inline(oracle.comparison), code(oracle[expectedField])];
-  if (Object.hasOwn(oracle, 'tolerance')) parts.push(`tolerance ${code(oracle.tolerance)}`);
-  if (Object.hasOwn(oracle, 'window')) parts.push(`window ${code(oracle.window)}`);
-  return parts.join(' ');
+  if (Object.hasOwn(oracle, 'tolerance')) append(parts, `tolerance ${code(oracle.tolerance)}`);
+  if (Object.hasOwn(oracle, 'window')) append(parts, `window ${code(oracle.window)}`);
+  return joinArray(parts, ' ');
 }
 
 /** @param {any} caseEntry @param {boolean} conditional */
@@ -286,33 +310,44 @@ function renderCase(caseEntry, conditional) {
     `- Formal Test Points: ${codeList(caseEntry.obligation_ids)}`,
     `- Evidence references: ${codeList(caseEntry.evidence_refs)}`
   ];
-  if (conditional) lines.push(
+  if (conditional) append(lines,
     `- Temporary assumption: ${code(caseEntry.temporary_assumption.claim_id)}; invalid when ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
   );
-  lines.push('', '#### Preconditions', '');
-  for (const [index, item] of caseEntry.preconditions.entries()) lines.push(
-    `${index + 1}. ${inline(item.condition)} (reachable from: ${inline(item.reachable_from)}; evidence: ${code(item.evidence_ref)})`
-  );
-  lines.push('', '#### Test Data', '');
-  for (const item of caseEntry.data) lines.push(
-    `- ${inline(item.name)} = ${code(item.value)} (${inline(item.provenance.type)}: ${code(item.provenance.ref)})`
-  );
-  lines.push('', '#### Steps and Oracles', '');
-  for (const [index, step] of caseEntry.steps.entries()) {
-    lines.push(`${index + 1}. ${code(step.step_id)} — ${inline(step.action)} (evidence: ${code(step.action_evidence_ref)})`);
-    for (const expectation of step.expectations) lines.push(
-      `   - ${code(expectation.expectation_id)}: ${inline(expectation.business_assertion)}`,
-      `     - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} → ${inline(expectation.observation_target)}`,
-      `     - Oracle: ${oracleText(expectation.oracle)}`,
-      `     - Evidence: ${code(expectation.evidence_ref)}`
-    );
+  append(lines, '', '#### Preconditions', '');
+  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
+    const item = caseEntry.preconditions[index];
+    append(lines, `${index + 1}. ${inline(item.condition)} (reachable from: ${inline(item.reachable_from)}; evidence: ${code(item.evidence_ref)})`);
   }
-  lines.push('', '#### Post-state and Cleanup', '');
-  lines.push(`- Post-state: ${inline(caseEntry.post_state.state)} (evidence: ${code(caseEntry.post_state.evidence_ref)})`);
-  if (caseEntry.cleanup.required) lines.push(
-    `- Cleanup: ${caseEntry.cleanup.steps.map(inline).join('; ')} (evidence: ${code(caseEntry.cleanup.evidence_ref)})`
-  );
-  else lines.push(
+  append(lines, '', '#### Test Data', '');
+  for (let dataIndex = 0; dataIndex < caseEntry.data.length; dataIndex += 1) {
+    const item = caseEntry.data[dataIndex];
+    append(lines, `- ${inline(item.name)} = ${code(item.value)} (${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
+  }
+  append(lines, '', '#### Steps and Oracles', '');
+  for (let index = 0; index < caseEntry.steps.length; index += 1) {
+    const step = caseEntry.steps[index];
+    append(lines, `${index + 1}. ${code(step.step_id)} — ${inline(step.action)} (evidence: ${code(step.action_evidence_ref)})`);
+    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
+      const expectation = step.expectations[expectationIndex];
+      append(
+        lines,
+        `   - ${code(expectation.expectation_id)}: ${inline(expectation.business_assertion)}`,
+        `     - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} → ${inline(expectation.observation_target)}`,
+        `     - Oracle: ${oracleText(expectation.oracle)}`,
+        `     - Evidence: ${code(expectation.evidence_ref)}`
+      );
+    }
+  }
+  append(lines, '', '#### Post-state and Cleanup', '');
+  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)} (evidence: ${code(caseEntry.post_state.evidence_ref)})`);
+  if (caseEntry.cleanup.required) {
+    /** @type {string[]} */
+    const cleanupSteps = [];
+    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) {
+      append(cleanupSteps, inline(caseEntry.cleanup.steps[index]));
+    }
+    append(lines, `- Cleanup: ${joinArray(cleanupSteps, '; ')} (evidence: ${code(caseEntry.cleanup.evidence_ref)})`);
+  } else append(lines,
     `- Cleanup: none — ${inline(caseEntry.cleanup.no_cleanup_reason)} (evidence: ${code(caseEntry.cleanup.no_cleanup_evidence_ref)})`
   );
   return lines;
@@ -321,21 +356,31 @@ function renderCase(caseEntry, conditional) {
 /** @param {string} title @param {any[]} cases @param {boolean} conditional */
 function renderCaseLane(title, cases, conditional) {
   const lines = [`## ${title}`, ''];
-  if (cases.length === 0) return [...lines, '_None._'];
-  for (const [index, item] of cases.entries()) {
-    if (index > 0) lines.push('');
-    lines.push(...renderCase(item, conditional));
+  if (cases.length === 0) {
+    append(lines, '_None._');
+    return lines;
+  }
+  for (let index = 0; index < cases.length; index += 1) {
+    const item = cases[index];
+    if (index > 0) append(lines, '');
+    appendArray(lines, renderCase(item, conditional));
   }
   return lines;
 }
 
 /** @param {string[]} headers @param {string[][]} rows */
 function table(headers, rows) {
-  return [
-    `| ${headers.join(' | ')} |`,
-    `| ${headers.map(() => '---').join(' | ')} |`,
-    ...rows.map((row) => `| ${row.join(' | ')} |`)
+  /** @type {string[]} */
+  const separators = [];
+  for (let index = 0; index < headers.length; index += 1) append(separators, '---');
+  const output = [
+    `| ${joinArray(headers, ' | ')} |`,
+    `| ${joinArray(separators, ' | ')} |`
   ];
+  for (let index = 0; index < rows.length; index += 1) {
+    append(output, `| ${joinArray(rows[index], ' | ')} |`);
+  }
+  return output;
 }
 
 /**
@@ -347,73 +392,103 @@ function renderMarkdownTrusted(bundle) {
   const captured = snapshotBundle(bundle);
   if (captured.diagnostics.length > 0) throw new BundleRenderError(captured.diagnostics);
   const snapshot = /** @type {any} */ (captured.snapshot);
-  const diagnostics = [
-    .../** @type {Diagnostic[]} */ (validateAgainstSchema(snapshot, testBundleSchema)),
-    .../** @type {Diagnostic[]} */ (validateUniqueStableIds(snapshot))
-  ];
+  /** @type {Diagnostic[]} */
+  const diagnostics = [];
+  appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateAgainstSchema(snapshot, testBundleSchema)));
+  appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateUniqueStableIds(snapshot)));
   if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
   const lines = [
     '# Test Case Bundle',
     '',
     `- Schema version: ${code(snapshot.schema_version)}`,
     `- Source revision: ${code(snapshot.source_revision)}`,
-    '',
-    ...renderCaseLane('Grounded Cases', snapshot.grounded, false),
-    '',
-    ...renderCaseLane('Conditional Cases', snapshot.conditional, true),
-    '',
-    '## Blocked Formal Test Points',
     ''
   ];
-  if (snapshot.blocked.length === 0) lines.push('_None._');
-  for (const item of snapshot.blocked) lines.push(
-    `### ${code(item.obligation_id)}`,
-    '',
-    `- Root issue: ${code(item.root_issue_id)}`,
-    `- Risk: ${code(item.risk)}`,
-    `- Reason: ${code(item.reason)}`,
-    `- Missing type: ${code(item.recovery.missing_type)}`,
-    `- Required material: ${inline(item.recovery.required_material)}`,
-    `- Recovery question: ${inline(item.recovery.question)}`,
-    ''
-  );
-  if (lines.at(-1) === '') lines.pop();
-  lines.push('', '## Exploratory Cases', '');
-  if (snapshot.exploratory.length === 0) lines.push('_None._');
-  for (const item of snapshot.exploratory) lines.push(
-    `### ${code(item.exploratory_id)} — ${inline(item.title)}`,
-    '',
-    `- Scope: ${code(item.scope)}`,
-    `- Risk: ${code(item.risk)}`,
-    `- Reason: ${inline(item.reason)}`,
-    ''
-  );
-  if (lines.at(-1) === '') lines.pop();
+  appendArray(lines, renderCaseLane('Grounded Cases', snapshot.grounded, false));
+  append(lines, '');
+  appendArray(lines, renderCaseLane('Conditional Cases', snapshot.conditional, true));
+  append(lines, '', '## Blocked Formal Test Points', '');
+  if (snapshot.blocked.length === 0) append(lines, '_None._');
+  for (let index = 0; index < snapshot.blocked.length; index += 1) {
+    const item = snapshot.blocked[index];
+    append(
+      lines,
+      `### ${code(item.obligation_id)}`,
+      '',
+      `- Root issue: ${code(item.root_issue_id)}`,
+      `- Risk: ${code(item.risk)}`,
+      `- Reason: ${code(item.reason)}`,
+      `- Missing type: ${code(item.recovery.missing_type)}`,
+      `- Required material: ${inline(item.recovery.required_material)}`,
+      `- Recovery question: ${inline(item.recovery.question)}`,
+      ''
+    );
+  }
+  if (lines[lines.length - 1] === '') Reflect.apply(NATIVE_ARRAY_POP, lines, []);
+  append(lines, '', '## Exploratory Cases', '');
+  if (snapshot.exploratory.length === 0) append(lines, '_None._');
+  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
+    const item = snapshot.exploratory[index];
+    append(
+      lines,
+      `### ${code(item.exploratory_id)} — ${inline(item.title)}`,
+      '',
+      `- Scope: ${code(item.scope)}`,
+      `- Risk: ${code(item.risk)}`,
+      `- Reason: ${inline(item.reason)}`,
+      ''
+    );
+  }
+  if (lines[lines.length - 1] === '') Reflect.apply(NATIVE_ARRAY_POP, lines, []);
   const coverage = snapshot.coverage;
-  lines.push(
+  /** @type {string[][]} */
+  const requirementRows = [];
+  for (let index = 0; index < coverage.requirements.entries.length; index += 1) {
+    const item = coverage.requirements.entries[index];
+    append(requirementRows, [code(item.fact_id), code(item.status)]);
+  }
+  /** @type {string[][]} */
+  const formalRows = [];
+  for (let index = 0; index < coverage.formal.entries.length; index += 1) {
+    const item = coverage.formal.entries[index];
+    append(formalRows, [code(item.obligation_id), code(item.status)]);
+  }
+  /** @type {string[][]} */
+  const executableRows = [];
+  for (let index = 0; index < coverage.executable.entries.length; index += 1) {
+    const item = coverage.executable.entries[index];
+    append(executableRows, [code(item.obligation_id), code(item.case_id)]);
+  }
+  append(
+    lines,
     '', '## Coverage', '',
     '### Requirement Fact Ledger', '',
-    `Accounted: ${coverage.requirements.accounted}/${coverage.requirements.total}`, '',
-    ...table(['Fact', 'Status'], coverage.requirements.entries.map((/** @type {any} */ item) => [code(item.fact_id), code(item.status)])),
-    '', '### Formal Test Point Ledger', '',
-    `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, '',
-    ...table(['Test Point', 'Disposition'], coverage.formal.entries.map((/** @type {any} */ item) => [code(item.obligation_id), code(item.status)])),
-    '', '### Grounded Executable Ledger', '',
-    `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, '',
-    ...table(['Test Point', 'Case'], coverage.executable.entries.map((/** @type {any} */ item) => [code(item.obligation_id), code(item.case_id)])),
-    '', '### Expert Recall Ledger', '',
-    `Status: ${code(coverage.expert_recall.status)}`
+    `Accounted: ${coverage.requirements.accounted}/${coverage.requirements.total}`, ''
   );
-  for (const limit of coverage.expert_recall.limits) lines.push(`- ${inline(limit)}`);
-  lines.push('', '### NotApplicable (excluded from the coverage numerator)', '');
-  if (coverage.not_applicable.length === 0) lines.push('_None._');
-  else lines.push(...table(
-    ['Test Point', 'Exclusion evidence', 'Scope', 'Review'],
-    coverage.not_applicable.map((/** @type {any} */ item) => [
-      code(item.obligation_id), code(item.exclusion_claim_id), code(item.scope), code(item.support_review)
-    ])
-  ));
-  lines.push(
+  appendArray(lines, table(['Fact', 'Status'], requirementRows));
+  append(lines, '', '### Formal Test Point Ledger', '', `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, '');
+  appendArray(lines, table(['Test Point', 'Disposition'], formalRows));
+  append(lines, '', '### Grounded Executable Ledger', '', `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, '');
+  appendArray(lines, table(['Test Point', 'Case'], executableRows));
+  append(lines, '', '### Expert Recall Ledger', '', `Status: ${code(coverage.expert_recall.status)}`);
+  for (let index = 0; index < coverage.expert_recall.limits.length; index += 1) {
+    append(lines, `- ${inline(coverage.expert_recall.limits[index])}`);
+  }
+  append(lines, '', '### NotApplicable (excluded from the coverage numerator)', '');
+  if (coverage.not_applicable.length === 0) append(lines, '_None._');
+  else {
+    /** @type {string[][]} */
+    const notApplicableRows = [];
+    for (let index = 0; index < coverage.not_applicable.length; index += 1) {
+      const item = coverage.not_applicable[index];
+      append(notApplicableRows, [
+        code(item.obligation_id), code(item.exclusion_claim_id), code(item.scope), code(item.support_review)
+      ]);
+    }
+    appendArray(lines, table(['Test Point', 'Exclusion evidence', 'Scope', 'Review'], notApplicableRows));
+  }
+  append(
+    lines,
     '', '## Quality', '',
     `- Delivery status: ${code(snapshot.quality.delivery_status)}`,
     `- Compiler version: ${code(snapshot.quality.compiler_version)}`,
@@ -422,8 +497,10 @@ function renderMarkdownTrusted(bundle) {
     `- Case-draft lineage digest: ${code(snapshot.quality.lineage.case_draft_digest)}`,
     '- Limits:'
   );
-  for (const limit of snapshot.quality.limits) lines.push(`  - ${inline(limit)}`);
-  return `${lines.join('\n')}\n`;
+  for (let index = 0; index < snapshot.quality.limits.length; index += 1) {
+    append(lines, `  - ${inline(snapshot.quality.limits[index])}`);
+  }
+  return `${joinArray(lines, '\n')}\n`;
 }
 
 /**

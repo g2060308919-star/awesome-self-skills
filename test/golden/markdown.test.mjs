@@ -85,6 +85,28 @@ test('renderer snapshots own data without executing submitted getters or iterato
   });
 });
 
+test('renderer uses captured array traversal intrinsics after snapshot validation', async () => {
+  const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'entries');
+  let reads = 0;
+  try {
+    Object.defineProperty(Array.prototype, 'entries', {
+      configurable: true,
+      get() { reads += 1; return descriptor?.value; }
+    });
+    assert.equal(renderMarkdown(bundle).startsWith('# Test Case Bundle\n'), true);
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, 'entries', descriptor);
+  }
+  assert.equal(reads, 0);
+});
+
+test('renderer projection has no direct mutable Array prototype or iterator traversal', async () => {
+  const source = await readFile(new URL('../../src/render-markdown.mjs', import.meta.url), 'utf8');
+  assert.equal(/\.(?:map|join|push|pop|at|entries)\(/u.test(source), false);
+  assert.equal(/for\s*\(const\s+[^)]*\s+of\s+/u.test(source), false);
+});
+
 test('renderer diagnostics reserve one canonical truncation marker on real overflow', async () => {
   /** @param {boolean} reversed */
   const diagnosticsFor = async (reversed) => {

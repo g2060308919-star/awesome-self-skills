@@ -271,6 +271,55 @@ test('executable lanes revalidate the complete temporary-assumption downgrade cl
   assert.equal(diagnosticCodes(() => buildBundle(multiple)).includes('CASE_DOWNGRADE_ROOTS_AMBIGUOUS'), true);
 });
 
+test('executable Case replay enforces containing actions and the complete Testability profile', () => {
+  /** @type {Array<[string,(input:any)=>void,boolean?]>} */
+  const mutations = [
+    ['CASE_EXPECTATION_ACTION_MISMATCH', (input) => {
+      input.classification.grounded[0].steps[0].expectations[0].preceding_action_id = 'step_missing';
+    }],
+    ['CASE_EXPECTATION_ACTION_MISMATCH', (input) => {
+      const candidate = input.classification.grounded[0];
+      const other = structuredClone(candidate.steps[0]);
+      other.step_id = 'step_other';
+      other.action = 'Review checkout';
+      other.expectations = [];
+      candidate.steps.push(other);
+      candidate.execution_signature.action_path.push('Review checkout');
+      candidate.steps[0].expectations[0].preceding_action_id = 'step_other';
+    }],
+    ['CASE_TESTABILITY_STATUS_INVALID', (input) => {
+      input.classification.grounded[0].testability_profile.observers[0].status = 'unknown';
+    }],
+    ['CASE_REQUIRED_CAPABILITY_MISSING', (input) => {
+      input.classification.grounded[0].testability_profile.capabilities[0].capability = 'renamed-control';
+    }],
+    ['CASE_TESTABILITY_STATUS_INVALID', (input) => {
+      input.classification.grounded[0].testability_profile.capabilities[0].status = 'approved-assumption';
+    }],
+    ['CASE_TESTABILITY_STATUS_INVALID', (input) => {
+      input.classification.conditional[0].testability_profile.capabilities[0].status = 'unavailable';
+    }, true],
+    ['CASE_EXPECTATION_OBSERVER_MISSING', (input) => {
+      input.classification.grounded[0].testability_profile.observers[0].observation_target = 'different target';
+    }],
+    ['CASE_TESTABILITY_PROFILE_INCOMPLETE', (input) => {
+      input.classification.grounded[0].testability_profile.controls = [];
+    }],
+    ['CASE_TESTABILITY_PROVENANCE_INVALID', (input) => {
+      const candidate = input.classification.grounded[0];
+      candidate.testability_profile.controls[0].provenance_ref = 'claim_missing';
+      candidate.evidence_refs = candidate.evidence_refs.filter((/** @type {string} */ ref) => ref !== 'claim_capability');
+      candidate.evidence_refs.push('claim_missing');
+      candidate.evidence_refs.sort();
+    }]
+  ];
+  for (const [code, mutate, conditional] of mutations) {
+    const input = conditional ? conditionalContext() : context();
+    mutate(input);
+    assert.equal(diagnosticCodes(() => buildBundle(input)).includes(code), true, code);
+  }
+});
+
 test('temporary-assumption downgrade summaries are propagated once per evidence DAG', () => {
   const nativeAdd = Set.prototype.add;
   const measurements = [];
@@ -449,6 +498,54 @@ test('the accepted fact ledger is the requirement denominator and every fact has
     const input = context();
     mutation.apply(input);
     assert.equal(diagnosticCodes(() => buildBundle(input)).includes(mutation.code), true, mutation.code);
+  }
+});
+
+test('duplicate accepted claim definitions fail before order-dependent semantic cascades', () => {
+  /** @param {boolean} duplicateFirst */
+  const diagnosticsFor = (duplicateFirst) => {
+    const input = context();
+    const index = input.evidence_claims.claims.findIndex(
+      (/** @type {any} */ claim) => claim.claim_id === 'claim_grounded'
+    );
+    const duplicate = {
+      ...structuredClone(input.evidence_claims.claims[index]),
+      kind: 'description', value: 'same ID with different semantics'
+    };
+    input.evidence_claims.claims.splice(duplicateFirst ? index : index + 1, 0, duplicate);
+    try { buildBundle(input); } catch (error) { return /** @type {any} */ (error).diagnostics; }
+    assert.fail('expected duplicate revision');
+  };
+  const forward = diagnosticsFor(false);
+  const reverse = diagnosticsFor(true);
+  assert.equal(canonicalStringify(forward), canonicalStringify(reverse));
+  assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), ['EVIDENCE_CLAIM_DUPLICATE']);
+});
+
+test('adjacent accepted fact and formal definitions also fail before order-dependent use', () => {
+  /** @param {'fact'|'obligation'} kind @param {boolean} duplicateFirst */
+  const diagnosticsFor = (kind, duplicateFirst) => {
+    const input = context();
+    const definitions = kind === 'fact'
+      ? input.evidence_claims.fact_ledger : input.obligations_artifact.obligations;
+    const idField = kind === 'fact' ? 'fact_id' : 'obligation_id';
+    const targetId = kind === 'fact' ? 'fact_grounded' : 'obligation_grounded';
+    const index = definitions.findIndex((/** @type {any} */ item) => item[idField] === targetId);
+    const duplicate = structuredClone(definitions[index]);
+    if (kind === 'fact') duplicate.claim_id = 'claim_action';
+    else duplicate.required_capabilities = ['different-capability'];
+    definitions.splice(duplicateFirst ? index : index + 1, 0, duplicate);
+    try { buildBundle(input); } catch (error) { return /** @type {any} */ (error).diagnostics; }
+    assert.fail('expected duplicate revision');
+  };
+  for (const [kind, code] of [
+    ['fact', 'REQUIREMENT_FACT_DUPLICATE'],
+    ['obligation', 'FORMAL_TEST_POINT_DUPLICATE']
+  ]) {
+    const forward = diagnosticsFor(/** @type {'fact'|'obligation'} */ (kind), false);
+    const reverse = diagnosticsFor(/** @type {'fact'|'obligation'} */ (kind), true);
+    assert.equal(canonicalStringify(forward), canonicalStringify(reverse), kind);
+    assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), [code]);
   }
 });
 
@@ -931,6 +1028,21 @@ test('entry snapshot rejects submitted array iteration hooks without calling the
   assert.equal(codes.includes('ARRAY_SYMBOL_PROPERTY_INVALID'), true, codes.join(','));
 });
 
+test('coverage worklists use captured array intrinsics instead of mutable prototype getters', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'pop');
+  let reads = 0;
+  try {
+    Object.defineProperty(Array.prototype, 'pop', {
+      configurable: true,
+      get() { reads += 1; return descriptor?.value; }
+    });
+    assert.equal(buildBundle(context()).grounded.length, 1);
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, 'pop', descriptor);
+  }
+  assert.equal(reads, 0);
+});
+
 test('entry snapshot never invokes inherited numeric array setters while copying data', () => {
   const input = context();
   input.limits = Array.from({ length: 301 }, (_, index) => `limit-${index}`);
@@ -1187,6 +1299,47 @@ test('one grouped current root may retain union evidence from only one affected 
   input.classification.blocked[1].evidence_refs = [];
 
   assert.equal(buildBundle(input).blocked.length, 2);
+});
+
+/** @param {number} size */
+function groupedBlockedScaleContext(size) {
+  const input = blockedScaleContext(size);
+  const refs = input.evidence_claims.claims.map((/** @type {any} */ claim) => claim.claim_id);
+  const obligationIds = input.obligations_artifact.obligations.map((/** @type {any} */ item) => item.obligation_id);
+  const identity = { missing_type: 'oracle', semantic_refs: [...refs], scope: 'scale' };
+  const rootId = stableId('root', identity);
+  const root = {
+    root_issue_id: rootId, root_issue_key: canonicalStringify(identity), ...identity,
+    affected_obligation_ids: obligationIds,
+    risk_counts: { critical: 0, high: 0, medium: size, low: 0 },
+    question: 'What proves every grouped result?', answerable: true,
+    reasons: ['MISSING_ORACLE'], evidence_refs: [...refs]
+  };
+  input.clarification.root_issues = [{ ...structuredClone(root), source_revision: 4, batch_id: null }];
+  input.clarification.state.root_snapshot_ledger = [{ ...structuredClone(root), current: true }];
+  input.clarification.state.root_issue_dispositions = [{ root_issue_id: rootId, status: 'suppressed_deferred' }];
+  input.clarification.state.asked_root_issue_ids = [rootId];
+  for (const blocker of input.classification.blocked) blocker.root_issue_id = rootId;
+  return input;
+}
+
+test('grouped root evidence relation is batched across all affected obligations', () => {
+  const nativeGet = Map.prototype.get;
+  const measurements = [];
+  try {
+    for (const size of [50, 100, 200]) {
+      let claimGets = 0;
+      Map.prototype.get = function (key) {
+        if (typeof key === 'string' && key.startsWith('claim_scale_')) claimGets += 1;
+        return Reflect.apply(nativeGet, this, [key]);
+      };
+      assert.equal(buildBundle(groupedBlockedScaleContext(size)).blocked.length, size);
+      measurements.push(claimGets);
+    }
+  } finally {
+    Map.prototype.get = nativeGet;
+  }
+  assert.equal(measurements.every((count, index) => count <= [50, 100, 200][index] * 50), true, measurements.join('/'));
 });
 
 test('a current Blocked owner cannot carry a resolved lifecycle disposition', () => {
@@ -1489,6 +1642,104 @@ test('prefix Oracle ancestry stays compressed without copying every required lab
     associationMeasurements.every((count, index) => count <= [20, 40, 80, 160][index] * 20),
     true, associationMeasurements.join('/')
   );
+});
+
+/** @param {number} size */
+function componentIsolatedForestContext(size) {
+  const input = context();
+  const candidate = structuredClone(input.classification.grounded[0]);
+  /** @type {any[]} */
+  const claims = [{
+    claim_id: 'claim_component_root', claim_form: 'direct', level: 'E3', kind: 'requirement',
+    scope: 'checkout', value: 'component root', source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+  }];
+  for (let index = 0; index < size; index += 1) claims.push({
+    claim_id: `claim_component_chain_${String(index).padStart(4, '0')}`,
+    claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'checkout', value: `chain ${index}`,
+    source_locator_ids: ['locator_checkout'], derivation_kind: 'decision-table-instance',
+    derivation_target: 'expected-value',
+    parent_claim_ids: [index === 0 ? 'claim_component_root' : `claim_component_chain_${String(index - 1).padStart(4, '0')}`],
+    parameters: { table_id: `component_chain_${index}` },
+    rule_input: { conditions: [`chain ${index}`], outcome: `chain ${index}` }
+  });
+  const last = `claim_component_chain_${String(size - 1).padStart(4, '0')}`;
+  const facts = [];
+  const obligations = [];
+  const routes = [];
+  const points = [];
+  const expectations = [];
+  const leaves = [];
+  for (let index = 0; index < size; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    const leaf = `claim_component_leaf_${suffix}`;
+    const obligationId = `obligation_component_${suffix}`;
+    const factId = `fact_component_${suffix}`;
+    leaves.push(leaf);
+    claims.push({
+      claim_id: leaf, claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'checkout',
+      value: `leaf ${index}`, source_locator_ids: ['locator_checkout'],
+      derivation_kind: 'decision-table-instance', derivation_target: 'expected-value',
+      parent_claim_ids: [last], parameters: { table_id: `component_leaf_${index}` },
+      rule_input: { conditions: [`leaf ${index}`], outcome: `leaf ${index}` }
+    });
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    obligations.push({
+      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#component_${suffix}`],
+      required_oracle_refs: ['claim_component_root'], required_capabilities: ['checkout-control']
+    });
+    routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
+    points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
+    expectations.push({
+      ...structuredClone(candidate.steps[0].expectations[0]),
+      expectation_id: `expectation_component_${suffix}`, evidence_ref: leaf
+    });
+  }
+  claims.push(
+    { claim_id: 'claim_unrelated_parent_a', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'unrelated', value: 'a', source_locator_ids: ['locator_checkout'], source_id: 'source_prd' },
+    { claim_id: 'claim_unrelated_parent_b', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'unrelated', value: 'b', source_locator_ids: ['locator_checkout'], source_id: 'source_prd' },
+    { claim_id: 'claim_unrelated_merge', claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'unrelated', value: 'merge', source_locator_ids: ['locator_checkout'], derivation_kind: 'decision-table-instance', derivation_target: 'expected-value', parent_claim_ids: ['claim_unrelated_parent_a', 'claim_unrelated_parent_b'], parameters: { table_id: 'unrelated' }, rule_input: { conditions: ['dummy'], outcome: 'merge' } }
+  );
+  candidate.case_id = 'case_component';
+  candidate.fact_ids = facts.map((item) => item.fact_id);
+  candidate.obligation_ids = obligations.map((item) => item.obligation_id);
+  candidate.steps[0].expectations = expectations;
+  candidate.evidence_refs = [...new Set([...candidate.evidence_refs, 'claim_component_root', ...leaves])].sort();
+  candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
+  candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
+  input.evidence_claims.claims.push(...claims);
+  input.evidence_claims.fact_ledger = facts;
+  input.obligations_artifact.obligations = obligations;
+  input.obligations_artifact.fact_routes = routes;
+  input.obligations_artifact.interaction_routes = [];
+  input.classification = { grounded: [candidate], conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: [] };
+  input.clarification.root_issues = [];
+  input.clarification.pending_root_issues = [];
+  input.clarification.state = { source_revision: 4, clarification_event_seq: 0, asked_root_issue_ids: [], root_issue_dispositions: [], last_pending_root_issue_ids: [], last_question_set_digest: '', clarification_stop: { reason: 'converged', source_revision: 4 }, semantic_snapshot: null, root_snapshot_ledger: [] };
+  input.clarification.semantic_snapshot = {
+    formal_test_points: points, coverage_denominator: size,
+    delivery_sections: { grounded: obligations.map((item) => item.obligation_id), conditional: [], blocked: [], exploratory: [], coverage: { formal_denominator: size }, quality: { delivery_status: 'executable_subset_ready' } }
+  };
+  return input;
+}
+
+test('an unrelated general-DAG component cannot disable forest matching for a Case component', () => {
+  const nativeAdd = Set.prototype.add;
+  const measurements = [];
+  try {
+    for (const size of [50, 100, 200]) {
+      let chainVisits = 0;
+      Set.prototype.add = function (value) {
+        if (typeof value === 'string' && value.startsWith('claim_component_chain_')) chainVisits += 1;
+        return Reflect.apply(nativeAdd, this, [value]);
+      };
+      assert.equal(buildBundle(componentIsolatedForestContext(size)).grounded.length, 1);
+      measurements.push(chainVisits);
+    }
+  } finally {
+    Set.prototype.add = nativeAdd;
+  }
+  assert.equal(measurements.every((count, index) => count <= [50, 100, 200][index] * 30), true, measurements.join('/'));
 });
 
 test('general Oracle reachability never retains an unbounded pairwise boolean matrix', async () => {
