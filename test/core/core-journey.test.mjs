@@ -402,12 +402,12 @@ function setSourceRevision(input, sourceRevision) {
   ]) artifact.source_revision = sourceRevision;
 }
 
-/** Load the private conflict gate without adding a production export. */
-async function loadConflictGate() {
+/** Load private orchestration helpers without adding production exports. */
+async function loadConflictGate(salt = '') {
   let source = await readFile(path.join(repositoryRoot, 'src/core.mjs'), 'utf8');
   source = source.replaceAll("from '../skill/", `from 'file://${repositoryRoot}/skill/`);
   source = source.replaceAll("from './", `from 'file://${repositoryRoot}/src/`);
-  source += '\nexport { applyLocalConflictBlocks };\n';
+  source += `\nexport { applyLocalConflictBlocks, externalizePendingRoots, prepareConflictRelations };\n// ${salt}\n`;
   return import(`data:text/javascript,${encodeURIComponent(source)}`);
 }
 
@@ -495,19 +495,40 @@ test('core journey diagnostics fail closed in canonical stable order at the owni
 });
 
 test('core journey preserves a surfaced source-conflict root through a legal final Decision revision', () => {
-  const firstInput = conflictRevision();
+  const broadPayment = rule('payment', {
+    level: 'E1', sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
+    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical'
+  });
+  const narrowPayment = { ...broadPayment, scope: 'checkout.payment.card' };
+  const firstInput = JSON.parse(JSON.stringify(conflictRevision())
+    .replaceAll('checkout.payment', 'checkout.payment.card')
+    .replaceAll(obligationId(broadPayment), obligationId(narrowPayment)));
+  for (const policyRule of firstInput.source_pack.source_policy.rules) {
+    if (policyRule.rule_id === 'policy_payment_old' || policyRule.rule_id === 'policy_payment_new') {
+      policyRule.scope = 'checkout.payment';
+    }
+  }
   const policy = resolveSourcePolicy(firstInput.source_pack);
   assert.equal(policy.conflicts.length, 1);
   const sourceConflictRootId = policy.conflicts[0].root_issue_id;
+  assert.equal(policy.conflicts[0].scope, 'checkout.payment');
   const first = runRevision(firstInput, 'pause_for_clarification');
 
-  assert.equal(first.status, 'need_user_answers');
+  assert.equal(first.status, 'need_user_answers', canonicalStringify(first));
   assert.equal(first.pending_root_issues.length, 1);
   assert.equal(first.pending_root_issues[0].root_issue_id, sourceConflictRootId);
+  assert.equal(first.pending_root_issues[0].scope, 'checkout.payment');
+  assert.equal(first.pending_root_issues[0].question, 'Clarification required for source-conflict in checkout.payment.');
+  assert.equal(first.pending_root_issues[0].root_issue_key, canonicalStringify({
+    missing_type: 'source-conflict',
+    rule_ids: policy.conflicts[0].rule_ids,
+    scope: 'checkout.payment',
+    source_ids: policy.conflicts[0].source_ids
+  }));
 
   const paymentObligationId = obligationId(rule('payment', {
     level: 'E1', sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
-    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical'
+    scope: 'checkout.payment.card', result: 'payment settles in two days', risk: 'critical'
   }));
   const finalDecision = {
     decision_id: 'decision_payment_conflict_final',
@@ -525,6 +546,7 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   const paymentClaim = secondInput.evidence_claims.claims.find((/** @type {any} */ item) => item.claim_id === 'claim_payment');
   paymentClaim.level = 'E3';
   paymentClaim.kind = 'requirement';
+  paymentClaim.authority = 'checkout.payment';
   paymentClaim.decision_id = finalDecision.decision_id;
   const paymentCase = secondInput.case_drafts.cases.find((/** @type {any} */ item) => item.case_id === 'case_payment');
   delete paymentCase.temporary_assumption;
@@ -532,18 +554,17 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   secondInput.clarification.append_batch.decision_records = [finalDecision];
 
   const invalidQuestionInput = structuredClone(secondInput);
-  invalidQuestionInput.source_pack.decision_records[0].question_id = 'question_forged';
   invalidQuestionInput.clarification.append_batch.decision_records[0].question_id = 'question_forged';
   const invalidQuestion = runRevision(invalidQuestionInput, 'pause_for_clarification');
   assert.equal(invalidQuestion.status, 'need_revision');
-  assert.equal(invalidQuestion.stage, 'clarification');
+  assert.equal(invalidQuestion.stage, 'clarification', canonicalStringify(invalidQuestion));
 
   const second = runRevision(secondInput, 'pause_for_clarification');
   assert.equal(second.status, 'finished', canonicalStringify(second));
   assert.equal(second.bundle.grounded.length, 2);
   assert.equal(second.bundle.blocked.length, 0);
   assert.deepEqual(second.bundle.grounded.map((/** @type {any} */ item) => item.scope).sort(), [
-    'checkout.payment', 'checkout.shipping'
+    'checkout.payment.card', 'checkout.shipping'
   ]);
 });
 
@@ -683,6 +704,187 @@ test('core boundary snapshots options once and contains revoked proxies and patc
   } finally {
     Object.defineProperty(Array.prototype, Symbol.iterator, iteratorDescriptor);
   }
+
+  const inheritedSetterInput = buildRevision('grounded');
+  let numericSetterCalls = 0;
+  let inheritedSetterResult;
+  try {
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set() { numericSetterCalls += 1; }
+    });
+    inheritedSetterResult = evaluateRevision(inheritedSetterInput, {
+      interactionPolicy: 'pause_for_clarification'
+    });
+  } finally {
+    delete Array.prototype[0];
+  }
+  assert.equal(inheritedSetterResult.status, 'need_revision');
+  assert.equal(numericSetterCalls, 0);
+});
+
+test('core boundary rejects replaced join and collection iterators without reading their getters', () => {
+  const patchedIntrinsics = /** @type {Array<[string, object, PropertyKey]>} */ ([
+    ['array-join', Array.prototype, 'join'],
+    ['set-iterator', Set.prototype, Symbol.iterator],
+    ['set-add', Set.prototype, 'add'],
+    ['set-has', Set.prototype, 'has'],
+    ['map-iterator', Map.prototype, Symbol.iterator],
+    ['map-get', Map.prototype, 'get'],
+    ['map-set', Map.prototype, 'set']
+  ]);
+  const observations = [];
+  for (const [name, prototype, key] of patchedIntrinsics) {
+    const descriptor = /** @type {PropertyDescriptor} */ (
+      Object.getOwnPropertyDescriptor(prototype, key)
+    );
+    const intrinsicInput = buildRevision('grounded');
+    let getterReads = 0;
+    let intrinsicResult;
+    try {
+      Object.defineProperty(prototype, key, {
+        configurable: true,
+        get() { getterReads += 1; return descriptor.value; }
+      });
+      intrinsicResult = evaluateRevision(intrinsicInput, {
+        interactionPolicy: 'pause_for_clarification'
+      });
+    } finally {
+      Object.defineProperty(prototype, key, descriptor);
+    }
+    observations.push({ name, getterReads, status: intrinsicResult.status });
+  }
+  assert.deepEqual(observations, [
+    { name: 'array-join', getterReads: 0, status: 'need_revision' },
+    { name: 'set-iterator', getterReads: 0, status: 'need_revision' },
+    { name: 'set-add', getterReads: 0, status: 'need_revision' },
+    { name: 'set-has', getterReads: 0, status: 'need_revision' },
+    { name: 'map-iterator', getterReads: 0, status: 'need_revision' },
+    { name: 'map-get', getterReads: 0, status: 'need_revision' },
+    { name: 'map-set', getterReads: 0, status: 'need_revision' }
+  ]);
+});
+
+test('core boundary never resolves replaced global collection constructors', () => {
+  const observations = [];
+  for (const name of ['Set', 'Map']) {
+    const descriptor = /** @type {PropertyDescriptor} */ (
+      Object.getOwnPropertyDescriptor(globalThis, name)
+    );
+    let constructorCalls = 0;
+    let result = null;
+    let raw = null;
+    try {
+      Object.defineProperty(globalThis, name, {
+        configurable: true, writable: true,
+        value: class ReplacedCollection {
+          constructor() { constructorCalls += 1; throw new Error('constructor executed'); }
+        }
+      });
+      try {
+        result = evaluateRevision({}, { interactionPolicy: 'pause_for_clarification' });
+      } catch (error) {
+        raw = String(error);
+      }
+    } finally {
+      Object.defineProperty(globalThis, name, descriptor);
+    }
+    observations.push({ name, constructorCalls, status: result?.status ?? null, raw });
+  }
+  assert.deepEqual(observations, [
+    { name: 'Set', constructorCalls: 0, status: 'need_revision', raw: null },
+    { name: 'Map', constructorCalls: 0, status: 'need_revision', raw: null }
+  ]);
+});
+
+test('core boundary never consults a replaced String iterator while sorting diagnostics', () => {
+  const descriptor = /** @type {PropertyDescriptor} */ (
+    Object.getOwnPropertyDescriptor(String.prototype, Symbol.iterator)
+  );
+  let getterReads = 0;
+  let result = null;
+  let raw = null;
+  try {
+    Object.defineProperty(String.prototype, Symbol.iterator, {
+      configurable: true,
+      get() { getterReads += 1; throw new Error('string iterator executed'); }
+    });
+    try {
+      result = evaluateRevision({}, { interactionPolicy: 'pause_for_clarification' });
+    } catch (error) {
+      raw = String(error);
+    }
+  } finally {
+    Object.defineProperty(String.prototype, Symbol.iterator, descriptor);
+  }
+  assert.deepEqual({ getterReads, status: result?.status ?? null, raw }, {
+    getterReads: 0, status: 'need_revision', raw: null
+  });
+});
+
+test('external pending roots retain Task 9 risk order while hashing a sorted batch set', async () => {
+  const { externalizePendingRoots } = await loadConflictGate();
+  const root = (/** @type {string} */ id, /** @type {any} */ riskCounts, affected = ['obligation']) => ({
+    root_issue_id: id, root_issue_key: id, missing_type: 'oracle', semantic_refs: [id],
+    scope: 'checkout', affected_obligation_ids: affected, risk_counts: riskCounts,
+    source_revision: 1, question: id, answerable: true, reasons: ['MISSING_ORACLE'],
+    evidence_refs: [], batch_id: null
+  });
+  const pending = [
+    root('root_a_low', { critical: 0, high: 0, medium: 0, low: 1 }),
+    root('root_b_high_one', { critical: 0, high: 1, medium: 0, low: 0 }),
+    root('root_c_critical', { critical: 1, high: 0, medium: 0, low: 0 }),
+    root('root_d_high_two', { critical: 0, high: 1, medium: 0, low: 0 }, ['a', 'b'])
+  ];
+  const output = externalizePendingRoots(pending, [], new Map());
+  assert.deepEqual(output.map((/** @type {any} */ item) => item.root_issue_id), [
+    'root_c_critical', 'root_d_high_two', 'root_b_high_one', 'root_a_low'
+  ]);
+  const expectedBatchId = stableId('batch', {
+    root_issue_ids: ['root_a_low', 'root_b_high_one', 'root_c_critical', 'root_d_high_two']
+  });
+  assert.deepEqual([...new Set(output.map((/** @type {any} */ item) => item.batch_id))], [expectedBatchId]);
+});
+
+test('source-conflict aliases come only from the compiler-owned structural bridge', async () => {
+  const { externalizePendingRoots } = await loadConflictGate();
+  const conflict = {
+    conflict_id: 'source_conflict_payment', root_issue_id: 'root_source_policy',
+    scope: 'checkout', rule_ids: ['new', 'old'], source_ids: ['source_new', 'source_old']
+  };
+  const internalSignature = {
+    missing_type: 'source-conflict',
+    semantic_refs: ['claim_payment', 'unresolved-source-policy'],
+    scope: 'checkout.payment'
+  };
+  const internalId = stableId('root', internalSignature);
+  const pendingRoot = (/** @type {any} */ overrides) => ({
+    root_issue_id: internalId, root_issue_key: canonicalStringify(internalSignature),
+    missing_type: 'source-conflict', semantic_refs: internalSignature.semantic_refs,
+    scope: internalSignature.scope,
+    affected_obligation_ids: ['obligation_payment'],
+    risk_counts: { critical: 1, high: 0, medium: 0, low: 0 }, source_revision: 1,
+    question: 'internal question', answerable: true, reasons: ['UNRESOLVED_CONFLICT'],
+    evidence_refs: ['claim_payment'], batch_id: null, ...overrides
+  });
+  const forged = pendingRoot({
+    root_issue_id: 'root_forged', root_issue_key: 'forged-key', missing_type: 'oracle',
+    semantic_refs: ['source-policy-root:root_source_policy'],
+    affected_obligation_ids: ['obligation_unrelated'], reasons: ['MISSING_ORACLE']
+  });
+  const bridge = new Map([[internalId, {
+    internal_root_issue_id: internalId, internal_scope: 'checkout.payment',
+    semantic_refs: ['claim_payment', 'unresolved-source-policy'],
+    affected_obligation_ids: ['obligation_payment'], conflict
+  }]]);
+  const output = externalizePendingRoots([forged, pendingRoot({})], [conflict], bridge);
+  assert.deepEqual(output.map((/** @type {any} */ item) => item.root_issue_id).sort(), [
+    'root_forged', 'root_source_policy'
+  ]);
+  const external = output.find((/** @type {any} */ item) => item.root_issue_id === 'root_source_policy');
+  assert.equal(external.scope, 'checkout');
+  assert.equal(external.question, 'Clarification required for source-conflict in checkout.');
+  assert.equal(output.find((/** @type {any} */ item) => item.root_issue_id === 'root_forged').missing_type, 'oracle');
 });
 
 test('local conflict candidate lookups scale with source associations rather than Cases times conflicts', async () => {
@@ -722,4 +924,222 @@ test('local conflict candidate lookups scale with source associations rather tha
     reads.push(scopeReads);
   }
   assert.deepEqual(reads, [100, 200, 400, 800]);
+});
+
+test('shared evidence ancestry is indexed once across many conflict-dependent Cases', async () => {
+  const { applyLocalConflictBlocks } = await loadConflictGate();
+  const reads = [];
+  for (const size of [100, 200, 400, 800]) {
+    let parentReads = 0;
+    const obligations = [];
+    const cases = [];
+    const claimsById = new Map();
+    for (let index = 0; index < size; index += 1) {
+      const suffix = String(index).padStart(4, '0');
+      const claim = {
+        claim_id: `claim_${suffix}`,
+        source_id: index === 0 ? 'source_conflict' : `source_${suffix}`,
+        source_locator_ids: []
+      };
+      Object.defineProperty(claim, 'parent_claim_ids', {
+        enumerable: true,
+        get() {
+          parentReads += 1;
+          return index === 0 ? [] : [`claim_${String(index - 1).padStart(4, '0')}`];
+        }
+      });
+      claimsById.set(claim.claim_id, claim);
+      obligations.push({ obligation_id: `obligation_${suffix}`, risk: 'high', scope: 'checkout' });
+      cases.push({
+        case_id: `case_${suffix}`, scope: 'checkout',
+        obligation_ids: [`obligation_${suffix}`], evidence_refs: [claim.claim_id]
+      });
+    }
+    const result = applyLocalConflictBlocks({
+      grounded: cases, conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
+    }, obligations, claimsById, { locators: [] }, [{
+      conflict_id: 'source_conflict', root_issue_id: 'root_conflict', scope: 'checkout',
+      source_ids: ['source_conflict'], rule_ids: ['new', 'old']
+    }]);
+    assert.equal(result.blocked.length, size);
+    reads.push(parentReads);
+  }
+  assert.deepEqual(reads, [100, 200, 400, 800]);
+});
+
+test('multiple canonical conflicts for one formal obligation fail closed instead of first-wins aliasing', async () => {
+  const { applyLocalConflictBlocks } = await loadConflictGate();
+  const conflicts = [
+    {
+      conflict_id: 'conflict_a', root_issue_id: 'root_a', scope: 'checkout',
+      source_ids: ['source_a'], rule_ids: ['rule_a1', 'rule_a2']
+    },
+    {
+      conflict_id: 'conflict_b', root_issue_id: 'root_b', scope: 'checkout',
+      source_ids: ['source_b'], rule_ids: ['rule_b1', 'rule_b2']
+    }
+  ];
+  const claimsById = new Map([
+    ['claim_a', { claim_id: 'claim_a', source_id: 'source_a', source_locator_ids: [], parent_claim_ids: [] }],
+    ['claim_b', { claim_id: 'claim_b', source_id: 'source_b', source_locator_ids: [], parent_claim_ids: [] }]
+  ]);
+  const obligations = [{ obligation_id: 'obligation_shared', risk: 'high', scope: 'checkout' }];
+  const classify = (/** @type {any[]} */ grounded) => applyLocalConflictBlocks({
+    grounded, conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
+  }, obligations, claimsById, { locators: [] }, conflicts);
+
+  const oneCase = classify([{
+    case_id: 'case_both', scope: 'checkout', obligation_ids: ['obligation_shared'],
+    evidence_refs: ['claim_a', 'claim_b']
+  }]);
+  const twoCases = classify([
+    {
+      case_id: 'case_a', scope: 'checkout', obligation_ids: ['obligation_shared'],
+      evidence_refs: ['claim_a']
+    },
+    {
+      case_id: 'case_b', scope: 'checkout', obligation_ids: ['obligation_shared'],
+      evidence_refs: ['claim_b']
+    }
+  ]);
+  for (const result of [oneCase, twoCases]) {
+    assert.deepEqual(result.diagnostics.map((/** @type {any} */ item) => item.code), [
+      'CORE_SOURCE_CONFLICT_AMBIGUOUS'
+    ]);
+    assert.equal(result.blocked.length, 0);
+  }
+});
+
+test('shared multi-parent conflict closures reuse labels instead of copying them across every edge', async () => {
+  const nativeForEach = Set.prototype.forEach;
+  let labelVisits = 0;
+  let privateCore;
+  try {
+    Object.defineProperty(Set.prototype, 'forEach', {
+      configurable: true, writable: true,
+      value(/** @type {Function} */ callback, /** @type {unknown} */ thisArg) {
+        return Reflect.apply(nativeForEach, this, [function visit(value, key, set) {
+          labelVisits += 1;
+          return Reflect.apply(callback, thisArg, [value, key, set]);
+        }]);
+      }
+    });
+    privateCore = await loadConflictGate('count-set-for-each');
+  } finally {
+    Object.defineProperty(Set.prototype, 'forEach', {
+      configurable: true, writable: true, value: nativeForEach
+    });
+  }
+
+  const visits = [];
+  for (const size of [20, 40, 80]) {
+    const locators = [];
+    const conflicts = [];
+    const claimsById = new Map();
+    for (let index = 0; index < size; index += 1) {
+      locators.push({ locator_id: `locator_${index}`, source_id: `source_${index}` });
+      conflicts.push({
+        conflict_id: `conflict_${index}`, root_issue_id: `root_${index}`, scope: 'checkout',
+        source_ids: [`source_${index}`], rule_ids: [`rule_${index}_a`, `rule_${index}_b`]
+      });
+    }
+    for (let index = 0; index < size; index += 1) {
+      claimsById.set(`claim_${index}`, {
+        claim_id: `claim_${index}`,
+        source_locator_ids: index === 0 ? locators.map((item) => item.locator_id) : [],
+        parent_claim_ids: index === 0
+          ? [] : Array.from({ length: index }, (_unused, parent) => `claim_${parent}`)
+      });
+    }
+    labelVisits = 0;
+    privateCore.prepareConflictRelations(claimsById, { locators }, conflicts);
+    visits.push(labelVisits);
+    assert.ok(labelVisits <= (size * size) + (8 * size), `${size}: ${labelVisits}`);
+  }
+  assert.deepEqual(visits, [289, 979, 3559]);
+
+  const nestedVisits = [];
+  for (const size of [20, 40, 80]) {
+    const locators = [];
+    const conflicts = [];
+    const claimsById = new Map();
+    for (let index = 0; index < size; index += 1) {
+      locators.push({ locator_id: `nested_locator_${index}`, source_id: `nested_source_${index}` });
+      conflicts.push({
+        conflict_id: `nested_conflict_${index}`, root_issue_id: `nested_root_${index}`,
+        scope: 'checkout', source_ids: [`nested_source_${index}`],
+        rule_ids: [`nested_rule_${index}_a`, `nested_rule_${index}_b`]
+      });
+      claimsById.set(`nested_claim_${index}`, {
+        claim_id: `nested_claim_${index}`,
+        source_locator_ids: [`nested_locator_${index}`],
+        parent_claim_ids: Array.from(
+          { length: index }, (_unused, parent) => `nested_claim_${parent}`
+        )
+      });
+    }
+    labelVisits = 0;
+    privateCore.prepareConflictRelations(claimsById, { locators }, conflicts);
+    nestedVisits.push(labelVisits);
+    assert.ok(labelVisits <= (3 * size * size) + (10 * size), `${size}: ${labelVisits}`);
+  }
+  assert.deepEqual(nestedVisits, [840, 3280, 12960]);
+});
+
+test('repeated children memoize unions of the same independent parent closures', async () => {
+  const nativeForEach = Set.prototype.forEach;
+  let labelVisits = 0;
+  let privateCore;
+  try {
+    Object.defineProperty(Set.prototype, 'forEach', {
+      configurable: true, writable: true,
+      value(/** @type {Function} */ callback, /** @type {unknown} */ thisArg) {
+        return Reflect.apply(nativeForEach, this, [function visit(value, key, set) {
+          labelVisits += 1;
+          return Reflect.apply(callback, thisArg, [value, key, set]);
+        }]);
+      }
+    });
+    privateCore = await loadConflictGate('count-repeated-parent-unions');
+  } finally {
+    Object.defineProperty(Set.prototype, 'forEach', {
+      configurable: true, writable: true, value: nativeForEach
+    });
+  }
+
+  const visits = [];
+  for (const size of [10, 20, 40]) {
+    const locators = [];
+    const conflicts = [];
+    const claimsById = new Map();
+    for (let index = 0; index < size; index += 1) {
+      locators.push({ locator_id: `repeated_locator_${index}`, source_id: `repeated_source_${index}` });
+      conflicts.push({
+        conflict_id: `repeated_conflict_${index}`, root_issue_id: `repeated_root_${index}`,
+        scope: 'checkout', source_ids: [`repeated_source_${index}`],
+        rule_ids: [`repeated_rule_${index}_a`, `repeated_rule_${index}_b`]
+      });
+      claimsById.set(`repeated_parent_${index}`, {
+        claim_id: `repeated_parent_${index}`,
+        source_locator_ids: Array.from(
+          { length: index + 1 }, (_unused, locator) => `repeated_locator_${locator}`
+        ),
+        parent_claim_ids: []
+      });
+    }
+    const parentClaimIds = Array.from(
+      { length: size }, (_unused, index) => `repeated_parent_${index}`
+    );
+    for (let index = 0; index < size; index += 1) {
+      claimsById.set(`repeated_child_${index}`, {
+        claim_id: `repeated_child_${index}`,
+        source_locator_ids: [],
+        parent_claim_ids: parentClaimIds
+      });
+    }
+    labelVisits = 0;
+    privateCore.prepareConflictRelations(claimsById, { locators }, conflicts);
+    visits.push(labelVisits);
+  }
+  assert.deepEqual(visits, [440, 1680, 6560]);
 });

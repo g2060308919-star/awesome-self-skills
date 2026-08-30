@@ -28,19 +28,15 @@ const COMPILATION_KEYS = Object.freeze([
   'contexts_by_view_id', 'custom_obligations', 'fact_routes', 'not_applicable_reviews'
 ]);
 const CLARIFICATION_KEYS = Object.freeze(['append_batch', 'prior_state']);
-const POLICIES = new Set(['pause_for_clarification', 'record_only']);
 const DIAGNOSTIC_LIMIT = 256;
-const SOURCE_POLICY_ROOT_REF_PREFIX = 'source-policy-root:';
 const NATIVE_ARRAY = Array;
 const NATIVE_ARRAY_PROTOTYPE = Array.prototype;
-const NATIVE_ARRAY_FROM = Array.from;
 const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
 const NATIVE_ARRAY_ITERATOR = Array.prototype[Symbol.iterator];
+const NATIVE_ARRAY_JOIN = Array.prototype.join;
 const NATIVE_ARRAY_FILTER = Array.prototype.filter;
 const NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
 const NATIVE_ARRAY_MAP = Array.prototype.map;
-const NATIVE_ARRAY_POP = Array.prototype.pop;
-const NATIVE_ARRAY_PUSH = Array.prototype.push;
 const NATIVE_ARRAY_SLICE = Array.prototype.slice;
 const NATIVE_ARRAY_SOME = Array.prototype.some;
 const NATIVE_ARRAY_SORT = Array.prototype.sort;
@@ -49,7 +45,27 @@ const NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
 const NATIVE_GET_OWN_PROPERTY_DESCRIPTOR = Object.getOwnPropertyDescriptor;
 const NATIVE_GET_PROTOTYPE_OF = Object.getPrototypeOf;
 const NATIVE_HAS_OWN = Object.hasOwn;
-const NATIVE_MAP_ENTRIES = Map.prototype.entries;
+const NATIVE_MAP = Map;
+const NATIVE_MAP_GET = Map.prototype.get;
+const NATIVE_MAP_SET = Map.prototype.set;
+const NATIVE_MAP_HAS = Map.prototype.has;
+const NATIVE_MAP_DELETE = Map.prototype.delete;
+const NATIVE_MAP_FOR_EACH = Map.prototype.forEach;
+const NATIVE_MAP_ITERATOR = Map.prototype[Symbol.iterator];
+const NATIVE_MAP_PROTOTYPE = Map.prototype;
+const NATIVE_SET = Set;
+const NATIVE_SET_ADD = Set.prototype.add;
+const NATIVE_SET_HAS = Set.prototype.has;
+const NATIVE_SET_DELETE = Set.prototype.delete;
+const NATIVE_SET_ITERATOR = Set.prototype[Symbol.iterator];
+const NATIVE_SET_FOR_EACH = Set.prototype.forEach;
+const NATIVE_SET_PROTOTYPE = Set.prototype;
+const NATIVE_STRING_CODE_POINT_AT = String.prototype.codePointAt;
+const NATIVE_STRING_ITERATOR = String.prototype[Symbol.iterator];
+const NATIVE_STRING_PROTOTYPE = String.prototype;
+const NATIVE_WEAK_MAP = WeakMap;
+const NATIVE_WEAK_MAP_GET = WeakMap.prototype.get;
+const NATIVE_WEAK_MAP_SET = WeakMap.prototype.set;
 const NATIVE_OBJECT_CREATE = Object.create;
 const NATIVE_OBJECT_ENTRIES = Object.entries;
 const NATIVE_OBJECT_KEYS = Object.keys;
@@ -74,7 +90,12 @@ function mapArray(values, project) {
 
 /** @template T @param {T[]} values @param {...T} items */
 function pushArray(values, ...items) {
-  return /** @type {number} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_PUSH, values, items));
+  for (let index = 0; index < items.length; index += 1) NATIVE_DEFINE_PROPERTY(
+    values, String(values.length), {
+      value: items[index], enumerable: true, writable: true, configurable: true
+    }
+  );
+  return values.length;
 }
 
 /** @template T @param {T[]} target @param {T[]} source */
@@ -94,27 +115,186 @@ function someArray(values, predicate) {
   return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SOME, values, [predicate]));
 }
 
+/** @param {unknown[]} values @param {string} separator */
+function joinArray(values, separator) {
+  return /** @type {string} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_JOIN, values, [separator]));
+}
+
 /** @template T @param {T[]} values @param {(left:T,right:T)=>number} comparator */
 function sortArray(values, comparator) {
   return /** @type {T[]} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, values, [comparator]));
 }
 
-function arrayIntrinsicIntegrityDiagnostic() {
+/** @template K,V @param {Map<K,V>} values @param {(value:V,key:K)=>void} visit */
+function forEachMap(values, visit) {
+  NATIVE_REFLECT_APPLY(NATIVE_MAP_FOR_EACH, values, [visit]);
+}
+
+/** @template T @param {Set<T>} values @param {(value:T)=>void} visit */
+function forEachSet(values, visit) {
+  NATIVE_REFLECT_APPLY(NATIVE_SET_FOR_EACH, values, [visit]);
+}
+
+/** @template K,V @param {Map<K,V>} values @param {K} key */
+function mapGet(values, key) {
+  return /** @type {V|undefined} */ (NATIVE_REFLECT_APPLY(NATIVE_MAP_GET, values, [key]));
+}
+
+/** @template K,V @param {Map<K,V>} values @param {K} key @param {V} value */
+function mapSet(values, key, value) {
+  NATIVE_REFLECT_APPLY(NATIVE_MAP_SET, values, [key, value]);
+}
+
+/** @template K,V @param {Map<K,V>} values @param {K} key */
+function mapHas(values, key) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(NATIVE_MAP_HAS, values, [key]));
+}
+
+/** @template K,V @param {Map<K,V>} values @param {K} key */
+function mapDelete(values, key) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(NATIVE_MAP_DELETE, values, [key]));
+}
+
+/** @template T @param {Set<T>} values @param {T} value */
+function setAdd(values, value) {
+  NATIVE_REFLECT_APPLY(NATIVE_SET_ADD, values, [value]);
+}
+
+/** @template T @param {Set<T>} values @param {T} value */
+function setHas(values, value) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(NATIVE_SET_HAS, values, [value]));
+}
+
+/** @template T @param {Set<T>} values @param {T} value */
+function setDelete(values, value) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(NATIVE_SET_DELETE, values, [value]));
+}
+
+/** @template K,V @param {WeakMap<object,V>} values @param {object} key */
+function weakMapGet(values, key) {
+  return /** @type {V|undefined} */ (NATIVE_REFLECT_APPLY(NATIVE_WEAK_MAP_GET, values, [key]));
+}
+
+/** @template K,V @param {WeakMap<object,V>} values @param {object} key @param {V} value */
+function weakMapSet(values, key, value) {
+  NATIVE_REFLECT_APPLY(NATIVE_WEAK_MAP_SET, values, [key, value]);
+}
+
+/** @template K,V @param {Array<[K,V]>} [entries] */
+function makeMap(entries = []) {
+  /** @type {Map<K,V>} */
+  const output = new NATIVE_MAP();
+  for (let index = 0; index < entries.length; index += 1) {
+    mapSet(output, entries[index][0], entries[index][1]);
+  }
+  return output;
+}
+
+/** @template T @param {T[]} [items] */
+function makeSet(items = []) {
+  /** @type {Set<T>} */
+  const output = new NATIVE_SET();
+  for (let index = 0; index < items.length; index += 1) setAdd(output, items[index]);
+  return output;
+}
+
+const POLICIES = makeSet(['pause_for_clarification', 'record_only']);
+
+/** @template K,V @param {Map<K,V>} values */
+function mapValuesArray(values) {
+  /** @type {V[]} */
+  const output = [];
+  forEachMap(values, (value) => pushArray(output, value));
+  return output;
+}
+
+/** @template K,V @param {Map<K,V>} values */
+function mapKeysArray(values) {
+  /** @type {K[]} */
+  const output = [];
+  forEachMap(values, (_value, key) => pushArray(output, key));
+  return output;
+}
+
+/** @template T @param {Set<T>} values */
+function setValuesArray(values) {
+  /** @type {T[]} */
+  const output = [];
+  forEachSet(values, (value) => pushArray(output, value));
+  return output;
+}
+
+/** @param {string[]} left @param {string[]} right */
+function unionSortedStrings(left, right) {
+  const unique = makeSet();
+  for (let index = 0; index < left.length; index += 1) setAdd(unique, left[index]);
+  for (let index = 0; index < right.length; index += 1) setAdd(unique, right[index]);
+  return sortArray(setValuesArray(unique), compareCodePoints);
+}
+
+function intrinsicIntegrityDiagnostic() {
   try {
     const iteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_ARRAY_PROTOTYPE, Symbol.iterator
     );
     const sortDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, 'sort');
+    const joinDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, 'join');
+    const zeroDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, '0');
+    const setIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_SET_PROTOTYPE, Symbol.iterator
+    );
+    const setAddDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'add');
+    const setHasDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'has');
+    const setDeleteDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'delete');
+    const setForEachDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'forEach');
+    const mapIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_MAP_PROTOTYPE, Symbol.iterator
+    );
+    const mapGetDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'get');
+    const mapSetDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'set');
+    const mapHasDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'has');
+    const mapDeleteDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'delete');
+    const mapForEachDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'forEach');
+    const stringIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_STRING_PROTOTYPE, Symbol.iterator
+    );
     if (iteratorDescriptor && NATIVE_HAS_OWN(iteratorDescriptor, 'value')
       && iteratorDescriptor.value === NATIVE_ARRAY_ITERATOR
       && sortDescriptor && NATIVE_HAS_OWN(sortDescriptor, 'value')
-      && sortDescriptor.value === NATIVE_ARRAY_SORT) return null;
+      && sortDescriptor.value === NATIVE_ARRAY_SORT
+      && joinDescriptor && NATIVE_HAS_OWN(joinDescriptor, 'value')
+      && joinDescriptor.value === NATIVE_ARRAY_JOIN
+      && zeroDescriptor === undefined
+      && setIteratorDescriptor && NATIVE_HAS_OWN(setIteratorDescriptor, 'value')
+      && setIteratorDescriptor.value === NATIVE_SET_ITERATOR
+      && setAddDescriptor && NATIVE_HAS_OWN(setAddDescriptor, 'value')
+      && setAddDescriptor.value === NATIVE_SET_ADD
+      && setHasDescriptor && NATIVE_HAS_OWN(setHasDescriptor, 'value')
+      && setHasDescriptor.value === NATIVE_SET_HAS
+      && setDeleteDescriptor && NATIVE_HAS_OWN(setDeleteDescriptor, 'value')
+      && setDeleteDescriptor.value === NATIVE_SET_DELETE
+      && setForEachDescriptor && NATIVE_HAS_OWN(setForEachDescriptor, 'value')
+      && setForEachDescriptor.value === NATIVE_SET_FOR_EACH
+      && mapIteratorDescriptor && NATIVE_HAS_OWN(mapIteratorDescriptor, 'value')
+      && mapIteratorDescriptor.value === NATIVE_MAP_ITERATOR
+      && mapGetDescriptor && NATIVE_HAS_OWN(mapGetDescriptor, 'value')
+      && mapGetDescriptor.value === NATIVE_MAP_GET
+      && mapSetDescriptor && NATIVE_HAS_OWN(mapSetDescriptor, 'value')
+      && mapSetDescriptor.value === NATIVE_MAP_SET
+      && mapHasDescriptor && NATIVE_HAS_OWN(mapHasDescriptor, 'value')
+      && mapHasDescriptor.value === NATIVE_MAP_HAS
+      && mapDeleteDescriptor && NATIVE_HAS_OWN(mapDeleteDescriptor, 'value')
+      && mapDeleteDescriptor.value === NATIVE_MAP_DELETE
+      && mapForEachDescriptor && NATIVE_HAS_OWN(mapForEachDescriptor, 'value')
+      && mapForEachDescriptor.value === NATIVE_MAP_FOR_EACH
+      && stringIteratorDescriptor && NATIVE_HAS_OWN(stringIteratorDescriptor, 'value')
+      && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR) return null;
   } catch {
     // Fall through to a stable fail-closed diagnostic.
   }
   return diagnostic(
-    'schema', 'CORE_INTRINSIC_INVALID', '/intrinsics/Array.prototype',
-    'pure-core evaluation requires the captured native Array traversal intrinsics'
+    'schema', 'CORE_INTRINSIC_INVALID', '/intrinsics',
+    'pure-core evaluation requires captured native collection and string traversal intrinsics'
   );
 }
 
@@ -127,13 +307,20 @@ function isRecord(value) {
 
 /** @param {string} left @param {string} right */
 function compareCodePoints(left, right) {
-  const leftPoints = NATIVE_ARRAY_FROM(left, (character) => character.codePointAt(0) ?? 0);
-  const rightPoints = NATIVE_ARRAY_FROM(right, (character) => character.codePointAt(0) ?? 0);
-  const length = Math.min(leftPoints.length, rightPoints.length);
-  for (let index = 0; index < length; index += 1) {
-    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
+  let leftIndex = 0;
+  let rightIndex = 0;
+  while (leftIndex < left.length && rightIndex < right.length) {
+    const leftPoint = Number(NATIVE_REFLECT_APPLY(
+      NATIVE_STRING_CODE_POINT_AT, left, [leftIndex]
+    ));
+    const rightPoint = Number(NATIVE_REFLECT_APPLY(
+      NATIVE_STRING_CODE_POINT_AT, right, [rightIndex]
+    ));
+    if (leftPoint !== rightPoint) return leftPoint - rightPoint;
+    leftIndex += leftPoint > 0xffff ? 2 : 1;
+    rightIndex += rightPoint > 0xffff ? 2 : 1;
   }
-  return leftPoints.length - rightPoints.length;
+  return leftIndex < left.length ? 1 : rightIndex < right.length ? -1 : 0;
 }
 
 /** @param {string} category @param {string} code @param {string} path @param {string} message */
@@ -155,15 +342,15 @@ function diagnosticArray(value) {
 
 /** @param {Diagnostic[]} diagnostics */
 function finalizeDiagnostics(diagnostics) {
-  const unique = new Map();
+  const unique = makeMap();
   let overflow = false;
   for (let index = 0; index < diagnostics.length; index += 1) {
     const item = diagnostics[index];
     if (item.code === 'DIAGNOSTICS_TRUNCATED') overflow = true;
-    else unique.set(canonicalStringify(item), item);
+    else mapSet(unique, canonicalStringify(item), item);
   }
   if (unique.size > DIAGNOSTIC_LIMIT) overflow = true;
-  const ordered = sortArray([...unique.values()], (left, right) =>
+  const ordered = sortArray(mapValuesArray(unique), (left, right) =>
     compareCodePoints(left.category, right.category)
     || compareCodePoints(left.code, right.code)
     || compareCodePoints(left.path, right.path)
@@ -193,12 +380,12 @@ function revisionRequired(stage, sourceRevision, diagnostics) {
 
 /** @param {Record<string, unknown>} value @param {readonly string[]} expected @param {string} path @param {Diagnostic[]} diagnostics */
 function requireClosed(value, expected, path, diagnostics) {
-  const allowed = new Set();
-  for (let index = 0; index < expected.length; index += 1) allowed.add(expected[index]);
+  const allowed = makeSet();
+  for (let index = 0; index < expected.length; index += 1) setAdd(allowed, expected[index]);
   const actualKeys = NATIVE_OBJECT_KEYS(value);
   for (let index = 0; index < actualKeys.length; index += 1) {
     const key = actualKeys[index];
-    if (!allowed.has(key)) pushArray(diagnostics, diagnostic(
+    if (!setHas(allowed, key)) pushArray(diagnostics, diagnostic(
       'schema', 'CORE_PROPERTY_UNKNOWN', `${path}/${key}`, 'pure-core input contains a property outside its closed revision contract'
     ));
   }
@@ -248,7 +435,7 @@ function snapshotOwnData(submitted, rootPath) {
     source: submitted, path: rootPath,
     assign(value) { NATIVE_DEFINE_PROPERTY(root, 'value', { value, enumerable: true }); }
   }];
-  const seen = new WeakMap();
+  const seen = new NATIVE_WEAK_MAP();
   let cursor = 0;
   while (cursor < pending.length) {
     const frame = pending[cursor++];
@@ -266,7 +453,7 @@ function snapshotOwnData(submitted, rootPath) {
       frame.assign(null);
       continue;
     }
-    const cached = seen.get(source);
+    const cached = weakMapGet(seen, source);
     if (cached !== undefined) {
       frame.assign(cached);
       continue;
@@ -348,7 +535,7 @@ function snapshotOwnData(submitted, rootPath) {
         continue;
       }
       const target = new NATIVE_ARRAY(declaredLength);
-      seen.set(source, target);
+      weakMapSet(seen, source, target);
       frame.assign(target);
       for (let index = 0; index < numericKeys.length; index += 1) {
         const key = numericKeys[index];
@@ -372,7 +559,7 @@ function snapshotOwnData(submitted, rootPath) {
       continue;
     }
     const target = NATIVE_OBJECT_CREATE(null);
-    seen.set(source, target);
+    weakMapSet(seen, source, target);
     frame.assign(target);
     for (let keyIndex = 0; keyIndex < stringKeys.length; keyIndex += 1) {
       const key = stringKeys[keyIndex];
@@ -448,23 +635,31 @@ function normalizeInput(submitted) {
 function validateArtifactSchemas(input) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
-  for (const [artifact, schema] of [
+  const artifactsAndSchemas = [
     [input.source_pack, sourcePackSchema],
     [input.evidence_claims, evidenceClaimsSchema],
     [input.behavior_views, behaviorViewsSchema],
     [input.case_drafts, caseDraftsSchema]
-  ]) {
+  ];
+  for (let index = 0; index < artifactsAndSchemas.length; index += 1) {
+    const artifact = artifactsAndSchemas[index][0];
+    const schema = artifactsAndSchemas[index][1];
     appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateAgainstSchema(artifact, schema)));
     appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateUniqueStableIds(artifact)));
   }
   const revision = Number(input.source_revision);
-  for (const [name, artifact] of [
+  const namedArtifacts = [
     ['source_pack', input.source_pack], ['evidence_claims', input.evidence_claims],
     ['behavior_views', input.behavior_views], ['case_drafts', input.case_drafts]
-  ]) if (!isRecord(artifact) || artifact.source_revision !== revision) pushArray(diagnostics, diagnostic(
-    'traceability', 'CORE_SOURCE_REVISION_MISMATCH', `/${name}/source_revision`,
-    'every submitted artifact must identify the complete revision being evaluated'
-  ));
+  ];
+  for (let index = 0; index < namedArtifacts.length; index += 1) {
+    const name = namedArtifacts[index][0];
+    const artifact = namedArtifacts[index][1];
+    if (!isRecord(artifact) || artifact.source_revision !== revision) pushArray(diagnostics, diagnostic(
+      'traceability', 'CORE_SOURCE_REVISION_MISMATCH', `/${name}/source_revision`,
+      'every submitted artifact must identify the complete revision being evaluated'
+    ));
+  }
   return finalizeDiagnostics(diagnostics);
 }
 
@@ -481,7 +676,7 @@ function evidenceContext(input, claimsById, conflicts) {
     runScope: String(sourcePack.run_scope),
     obligationCompilation: {
       sourceRevision: Number(input.source_revision),
-      contextsByViewId: new Map(NATIVE_OBJECT_ENTRIES(NATIVE_STRUCTURED_CLONE(contexts))),
+      contextsByViewId: makeMap(NATIVE_OBJECT_ENTRIES(NATIVE_STRUCTURED_CLONE(contexts))),
       factRoutes: NATIVE_STRUCTURED_CLONE(records(compilation.fact_routes)),
       notApplicableReviews: NATIVE_STRUCTURED_CLONE(records(compilation.not_applicable_reviews)),
       customObligations: NATIVE_STRUCTURED_CLONE(records(compilation.custom_obligations))
@@ -492,6 +687,229 @@ function evidenceContext(input, claimsById, conflicts) {
 /** @param {string} left @param {string} right */
 function scopesIntersect(left, right) {
   return scopeContains(left, right) || scopeContains(right, left);
+}
+
+/** @param {Record<string, unknown>} conflict */
+function conflictIdentity(conflict) {
+  return typeof conflict.conflict_id === 'string' ? conflict.conflict_id
+    : typeof conflict.root_issue_id === 'string' ? conflict.root_issue_id
+      : canonicalStringify(conflict);
+}
+
+/**
+ * Propagate only conflict identities through the accepted evidence DAG. Each
+ * parent edge is visited once; storage grows with actual claim/conflict
+ * associations instead of copying complete source ancestry per Case.
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ * @param {Record<string, unknown>} sourcePack
+ * @param {Record<string, unknown>[]} conflicts
+ */
+function prepareConflictRelations(claimsById, sourcePack, conflicts) {
+  const locatorSourceById = makeMap(mapArray(records(sourcePack.locators), (item) => [
+    String(item.locator_id), String(item.source_id)
+  ]));
+  /** @type {Map<string, Record<string, unknown>>} */
+  const conflictByIdentity = makeMap();
+  /** @type {Map<string, string[]>} */
+  const conflictIdsBySource = makeMap();
+  for (let index = 0; index < conflicts.length; index += 1) {
+    const conflict = conflicts[index];
+    const identity = conflictIdentity(conflict);
+    mapSet(conflictByIdentity, identity, conflict);
+    const sourceIds = makeSet(strings(conflict.source_ids));
+    forEachSet(sourceIds, (sourceId) => {
+      const bucket = mapGet(conflictIdsBySource, sourceId);
+      if (bucket) pushArray(bucket, identity);
+      else mapSet(conflictIdsBySource, sourceId, [identity]);
+    });
+  }
+  /** @type {Map<string, Set<string>>} */
+  const directCandidateIdsByClaim = makeMap();
+  /** @type {Map<string, Set<string>>} */
+  const candidateIdsByClaim = makeMap();
+  /** @type {Map<string, string[]>} */
+  const childrenByClaim = makeMap();
+  /** @type {Map<string, string[]>} */
+  const parentsByClaim = makeMap();
+  /** @type {Map<string, number>} */
+  const indegreeByClaim = makeMap();
+  const claimIds = sortArray(mapKeysArray(claimsById), compareCodePoints);
+  for (let index = 0; index < claimIds.length; index += 1) {
+    const claimId = claimIds[index];
+    const claim = mapGet(claimsById, claimId) ?? {};
+    const candidates = makeSet();
+    const directSourceIds = makeSet();
+    if (typeof claim.source_id === 'string') setAdd(directSourceIds, claim.source_id);
+    const locatorIds = strings(claim.source_locator_ids);
+    for (let locatorIndex = 0; locatorIndex < locatorIds.length; locatorIndex += 1) {
+      const sourceId = mapGet(locatorSourceById, locatorIds[locatorIndex]);
+      if (sourceId !== undefined) setAdd(directSourceIds, sourceId);
+    }
+    forEachSet(directSourceIds, (sourceId) => {
+      const identities = mapGet(conflictIdsBySource, sourceId) ?? [];
+      for (let identityIndex = 0; identityIndex < identities.length; identityIndex += 1) {
+        setAdd(candidates, identities[identityIndex]);
+      }
+    });
+    mapSet(directCandidateIdsByClaim, claimId, candidates);
+    const parents = makeSet(strings(claim.parent_claim_ids));
+    const parentIds = sortArray(setValuesArray(parents), compareCodePoints);
+    mapSet(parentsByClaim, claimId, parentIds);
+    let indegree = 0;
+    for (let parentIndex = 0; parentIndex < parentIds.length; parentIndex += 1) {
+      const parentId = parentIds[parentIndex];
+      if (!mapHas(claimsById, parentId)) continue;
+      indegree += 1;
+      const children = mapGet(childrenByClaim, parentId);
+      if (children) pushArray(children, claimId);
+      else mapSet(childrenByClaim, parentId, [claimId]);
+    }
+    mapSet(indegreeByClaim, claimId, indegree);
+  }
+  /** @type {string[]} */
+  const ready = [];
+  for (let index = 0; index < claimIds.length; index += 1) {
+    if (mapGet(indegreeByClaim, claimIds[index]) === 0) pushArray(ready, claimIds[index]);
+  }
+  /** @type {Map<string, Set<string>>} */
+  const internedCandidates = makeMap();
+  /** @type {WeakMap<object, number>} */
+  const candidateSetIdentity = new NATIVE_WEAK_MAP();
+  /** @type {Map<string, {candidates:Set<string>,count:number}>} */
+  const unionBySignature = makeMap();
+  /** @type {Map<string, number>} */
+  const candidateCountByClaim = makeMap();
+  let nextCandidateSetIdentity = 0;
+  let cursor = 0;
+  while (cursor < ready.length) {
+    const claimId = ready[cursor++];
+    const directCandidates = mapGet(directCandidateIdsByClaim, claimId) ?? makeSet();
+    const directItems = setValuesArray(directCandidates);
+    const parentIds = mapGet(parentsByClaim, claimId) ?? [];
+    /** @type {Set<Set<string>>} */
+    const uniqueParentCandidates = makeSet();
+    for (let parentIndex = 0; parentIndex < parentIds.length; parentIndex += 1) {
+      const parentCandidates = mapGet(candidateIdsByClaim, parentIds[parentIndex]);
+      if (parentCandidates) setAdd(uniqueParentCandidates, parentCandidates);
+    }
+    const uniqueParents = setValuesArray(uniqueParentCandidates);
+    let resolvedCandidates;
+    let resolvedCount;
+    if (directItems.length === 0 && uniqueParents.length === 1) {
+      resolvedCandidates = uniqueParents[0];
+      const firstParentId = parentIds[0];
+      resolvedCount = Number(mapGet(candidateCountByClaim, firstParentId) ?? 0);
+    } else {
+      const directSignature = sortArray(sliceArray(directItems, 0), compareCodePoints);
+      /** @type {number[]} */
+      const parentSetIdentities = [];
+      for (let parentIndex = 0; parentIndex < uniqueParents.length; parentIndex += 1) {
+        const parentCandidates = uniqueParents[parentIndex];
+        let identity = weakMapGet(candidateSetIdentity, parentCandidates);
+        if (identity === undefined) {
+          identity = nextCandidateSetIdentity;
+          nextCandidateSetIdentity += 1;
+          weakMapSet(candidateSetIdentity, parentCandidates, identity);
+        }
+        pushArray(parentSetIdentities, identity);
+      }
+      sortArray(parentSetIdentities, (left, right) => left - right);
+      const unionSignature = canonicalStringify([directSignature, parentSetIdentities]);
+      const cachedUnion = mapGet(unionBySignature, unionSignature);
+      if (cachedUnion) {
+        resolvedCandidates = cachedUnion.candidates;
+        resolvedCount = cachedUnion.count;
+      } else {
+        const merged = makeSet(directItems);
+        let baseParentId = null;
+        let baseCount = -1;
+        for (let parentIndex = 0; parentIndex < parentIds.length; parentIndex += 1) {
+          const parentId = parentIds[parentIndex];
+          const count = Number(mapGet(candidateCountByClaim, parentId) ?? 0);
+          if (count > baseCount || (count === baseCount && baseParentId !== null
+            && compareCodePoints(parentId, baseParentId) < 0)) {
+            baseParentId = parentId;
+            baseCount = count;
+          }
+        }
+        const baseCandidates = baseParentId === null
+          ? null : mapGet(candidateIdsByClaim, baseParentId) ?? null;
+        if (baseCandidates) forEachSet(baseCandidates, (identity) => setAdd(merged, identity));
+        const coveredByBase = makeSet(
+          baseParentId === null ? [] : mapGet(parentsByClaim, baseParentId) ?? []
+        );
+        const mergedParentSets = makeSet();
+        if (baseCandidates) setAdd(mergedParentSets, baseCandidates);
+        for (let parentIndex = 0; parentIndex < parentIds.length; parentIndex += 1) {
+          const parentId = parentIds[parentIndex];
+          if (parentId === baseParentId || setHas(coveredByBase, parentId)) continue;
+          const parentCandidates = mapGet(candidateIdsByClaim, parentId);
+          if (!parentCandidates || setHas(mergedParentSets, parentCandidates)) continue;
+          setAdd(mergedParentSets, parentCandidates);
+          forEachSet(parentCandidates, (identity) => setAdd(merged, identity));
+        }
+        const ordered = sortArray(setValuesArray(merged), compareCodePoints);
+        resolvedCount = ordered.length;
+        const key = canonicalStringify(ordered);
+        const interned = mapGet(internedCandidates, key);
+        if (interned) resolvedCandidates = interned;
+        else {
+          resolvedCandidates = merged;
+          mapSet(internedCandidates, key, merged);
+        }
+        mapSet(unionBySignature, unionSignature, {
+          candidates: resolvedCandidates, count: resolvedCount
+        });
+      }
+    }
+    mapSet(candidateIdsByClaim, claimId, resolvedCandidates);
+    mapSet(candidateCountByClaim, claimId, resolvedCount);
+    const children = mapGet(childrenByClaim, claimId) ?? [];
+    for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+      const childId = children[childIndex];
+      const nextIndegree = Number(mapGet(indegreeByClaim, childId)) - 1;
+      mapSet(indegreeByClaim, childId, nextIndegree);
+      if (nextIndegree === 0) pushArray(ready, childId);
+    }
+  }
+  return { candidateIdsByClaim, conflictByIdentity };
+}
+
+/**
+ * @param {Record<string, unknown>} caseDraft
+ * @param {ReturnType<typeof prepareConflictRelations>} relations
+ * @param {Set<string>} allowedConflictIds
+ */
+function conflictSelectionForCase(caseDraft, relations, allowedConflictIds) {
+  const candidateIds = makeSet();
+  const refs = strings(caseDraft.evidence_refs);
+  for (let index = 0; index < refs.length; index += 1) {
+    const related = mapGet(relations.candidateIdsByClaim, refs[index]);
+    if (related) forEachSet(related, (identity) => {
+      if (setHas(allowedConflictIds, identity)) setAdd(candidateIds, identity);
+    });
+  }
+  /** @type {string|null} */
+  let selectedIdentity = null;
+  let count = 0;
+  forEachSet(candidateIds, (identity) => {
+    const conflict = mapGet(relations.conflictByIdentity, identity);
+    if (!conflict) return;
+    const conflictScope = conflict.scope;
+    if (typeof conflictScope === 'string' && typeof caseDraft.scope === 'string'
+      && scopesIntersect(caseDraft.scope, conflictScope)) {
+      count += 1;
+      if (selectedIdentity === null || compareCodePoints(identity, selectedIdentity) < 0) {
+        selectedIdentity = identity;
+      }
+    }
+  });
+  return {
+    conflict: selectedIdentity === null ? null
+      : mapGet(relations.conflictByIdentity, selectedIdentity) ?? null,
+    identity: selectedIdentity,
+    count
+  };
 }
 
 /**
@@ -505,123 +923,111 @@ function scopesIntersect(left, right) {
  * @param {Map<string, Record<string, unknown>>} claimsById
  * @param {Record<string, unknown>} sourcePack
  * @param {Record<string, unknown>[]} conflicts
+ * @param {ReturnType<typeof prepareConflictRelations>} [preparedRelations]
  */
-function applyLocalConflictBlocks(classification, obligations, claimsById, sourcePack, conflicts) {
+function applyLocalConflictBlocks(
+  classification, obligations, claimsById, sourcePack, conflicts, preparedRelations
+) {
   if (conflicts.length === 0) return classification;
-  const locatorSourceById = new Map(mapArray(records(sourcePack.locators), (item) => [
-    String(item.locator_id), String(item.source_id)
-  ]));
-  /** @type {Map<string, Record<string, unknown>[]>} */
-  const conflictsBySourceId = new Map();
+  const relations = preparedRelations ?? prepareConflictRelations(claimsById, sourcePack, conflicts);
+  const allowedConflictIds = makeSet();
   for (let index = 0; index < conflicts.length; index += 1) {
-    const conflict = conflicts[index];
-    const uniqueSourceIds = new Set(strings(conflict.source_ids));
-    for (const sourceId of uniqueSourceIds) {
-      const bucket = conflictsBySourceId.get(sourceId);
-      if (bucket) pushArray(bucket, conflict);
-      else conflictsBySourceId.set(sourceId, [conflict]);
-    }
-  }
-  /** @type {Map<string, Set<string>>} */
-  const sourceIdsByClaim = new Map();
-  /** @param {string} root */
-  function sourceIdsFor(root) {
-    const cached = sourceIdsByClaim.get(root);
-    if (cached) return cached;
-    const result = new Set();
-    const pending = [root];
-    const seen = new Set();
-    while (pending.length > 0) {
-      const claimId = NATIVE_REFLECT_APPLY(NATIVE_ARRAY_POP, pending, []);
-      if (claimId === undefined || seen.has(claimId)) continue;
-      seen.add(claimId);
-      const claim = claimsById.get(claimId);
-      if (!claim) continue;
-      if (typeof claim.source_id === 'string') result.add(claim.source_id);
-      for (const locatorId of strings(claim.source_locator_ids)) {
-        const sourceId = locatorSourceById.get(locatorId);
-        if (sourceId !== undefined) result.add(sourceId);
-      }
-      for (const parentId of strings(claim.parent_claim_ids)) pushArray(pending, parentId);
-    }
-    sourceIdsByClaim.set(root, result);
-    return result;
+    setAdd(allowedConflictIds, conflictIdentity(conflicts[index]));
   }
 
-  const executable = [
-    ...mapArray(records(classification.grounded), (item) => ({ lane: 'grounded', item })),
-    ...mapArray(records(classification.conditional), (item) => ({ lane: 'conditional', item }))
-  ];
+  const executable = mapArray(
+    records(classification.grounded), (item) => ({ lane: 'grounded', item })
+  );
+  appendArray(executable, mapArray(
+    records(classification.conditional), (item) => ({ lane: 'conditional', item })
+  ));
   /** @type {Map<string, number[]>} */
-  const casesByObligation = new Map();
+  const casesByObligation = makeMap();
   for (let index = 0; index < executable.length; index += 1) {
-    for (const obligationId of strings(executable[index].item.obligation_ids)) {
-      const bucket = casesByObligation.get(obligationId);
+    const linkedIds = strings(executable[index].item.obligation_ids);
+    for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) {
+      const obligationId = linkedIds[obligationIndex];
+      const bucket = mapGet(casesByObligation, obligationId);
       if (bucket) pushArray(bucket, index);
-      else casesByObligation.set(obligationId, [index]);
+      else mapSet(casesByObligation, obligationId, [index]);
     }
   }
-  const obligationsById = new Map(mapArray(obligations, (item) => [String(item.obligation_id), item]));
-  const blockedByObligation = new Map(mapArray(records(classification.blocked), (item) => [
+  const obligationsById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
+  const blockedByObligation = makeMap(mapArray(records(classification.blocked), (item) => [
     String(item.obligation_id), NATIVE_STRUCTURED_CLONE(item)
   ]));
-  const blockedQueue = sortArray([...blockedByObligation.keys()], compareCodePoints);
-  const invalidCases = new Set();
+  const blockedQueue = sortArray(mapKeysArray(blockedByObligation), compareCodePoints);
+  const invalidCases = makeSet();
+  /** @type {Array<ReturnType<typeof conflictSelectionForCase>>} */
+  const selections = [];
+  /** @type {Map<string, Set<string>>} */
+  const conflictIdsByObligation = makeMap();
+  /** @type {Diagnostic[]} */
+  const ambiguityDiagnostics = [];
+
+  for (let index = 0; index < executable.length; index += 1) {
+    const caseDraft = executable[index].item;
+    const selection = conflictSelectionForCase(caseDraft, relations, allowedConflictIds);
+    pushArray(selections, selection);
+    if (selection.count > 1) pushArray(ambiguityDiagnostics, diagnostic(
+      'classification', 'CORE_SOURCE_CONFLICT_AMBIGUOUS',
+      `/cases/${pointerPart(String(caseDraft.case_id ?? 'unknown'))}/evidence_refs`,
+      'one executable Case cannot select more than one canonical source conflict'
+    ));
+    if (selection.identity === null) continue;
+    const linkedIds = strings(caseDraft.obligation_ids);
+    for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) {
+      const obligationId = linkedIds[obligationIndex];
+      const identities = mapGet(conflictIdsByObligation, obligationId) ?? makeSet();
+      setAdd(identities, selection.identity);
+      mapSet(conflictIdsByObligation, obligationId, identities);
+    }
+  }
+  forEachMap(conflictIdsByObligation, (identities, obligationId) => {
+    if (setValuesArray(identities).length <= 1) return;
+    pushArray(ambiguityDiagnostics, diagnostic(
+      'classification', 'CORE_SOURCE_CONFLICT_AMBIGUOUS',
+      `/obligations/${pointerPart(obligationId)}`,
+      'one formal obligation cannot select different canonical source conflicts'
+    ));
+  });
+  if (ambiguityDiagnostics.length > 0) {
+    const combinedDiagnostics = diagnosticArray(classification.diagnostics);
+    appendArray(combinedDiagnostics, ambiguityDiagnostics);
+    return { ...classification, diagnostics: finalizeDiagnostics(combinedDiagnostics) };
+  }
 
   /** @param {string} obligationId @param {string} reason @param {string[]} evidenceRefs @param {string|null} rootIssueId */
   function block(obligationId, reason, evidenceRefs, rootIssueId) {
-    const obligation = obligationsById.get(obligationId);
+    const obligation = mapGet(obligationsById, obligationId);
     if (!obligation) return;
-    const existing = blockedByObligation.get(obligationId);
-    const reasons = new Set([...(existing ? String(existing.reason).split(',') : []), reason]);
-    reasons.delete('');
-    const refs = new Set([...(existing ? strings(existing.evidence_refs) : []), ...evidenceRefs]);
-    blockedByObligation.set(obligationId, {
+    const existing = mapGet(blockedByObligation, obligationId);
+    const reasons = makeSet(existing ? String(existing.reason).split(',') : []);
+    setAdd(reasons, reason);
+    setDelete(reasons, '');
+    const refs = makeSet(existing ? strings(existing.evidence_refs) : []);
+    for (let index = 0; index < evidenceRefs.length; index += 1) setAdd(refs, evidenceRefs[index]);
+    const orderedReasons = sortArray(setValuesArray(reasons), compareCodePoints);
+    mapSet(blockedByObligation, obligationId, {
       obligation_id: obligationId,
       root_issue_id: rootIssueId ?? String(existing?.root_issue_id ?? stableId('root', {
         missing_type: 'case-classification', obligation_id: obligationId,
-        reason_codes: sortArray([...reasons], compareCodePoints), scope: obligation.scope
+        reason_codes: orderedReasons, scope: obligation.scope
       })),
-      reason: sortArray([...reasons], compareCodePoints).join(','),
-      risk: String(obligation.risk), evidence_refs: sortArray([...refs], compareCodePoints)
+      reason: joinArray(orderedReasons, ','),
+      risk: String(obligation.risk), evidence_refs: sortArray(setValuesArray(refs), compareCodePoints)
     });
     if (!existing) pushArray(blockedQueue, obligationId);
   }
 
   for (let index = 0; index < executable.length; index += 1) {
     const caseDraft = executable[index].item;
-    const caseSources = new Set();
-    for (const ref of strings(caseDraft.evidence_refs)) {
-      for (const sourceId of sourceIdsFor(ref)) caseSources.add(sourceId);
-    }
-    /** @type {Map<string, Record<string, unknown>>} */
-    const candidatesByIdentity = new Map();
-    for (const sourceId of caseSources) {
-      for (const candidate of conflictsBySourceId.get(sourceId) ?? []) {
-        const identity = typeof candidate.conflict_id === 'string' ? candidate.conflict_id
-          : typeof candidate.root_issue_id === 'string' ? candidate.root_issue_id
-            : canonicalStringify(candidate);
-        candidatesByIdentity.set(identity, candidate);
-      }
-    }
-    const candidates = sortArray(NATIVE_ARRAY_FROM(NATIVE_REFLECT_APPLY(
-      NATIVE_MAP_ENTRIES, candidatesByIdentity, []
-    )), (left, right) =>
-      compareCodePoints(left[0], right[0]));
-    let conflict;
-    for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
-      const candidate = candidates[candidateIndex][1];
-      const conflictScope = candidate.scope;
-      if (typeof conflictScope === 'string' && typeof caseDraft.scope === 'string'
-        && scopesIntersect(caseDraft.scope, conflictScope)) {
-        conflict = candidate;
-        break;
-      }
-    }
+    const conflict = selections[index].conflict;
     if (!conflict) continue;
-    invalidCases.add(index);
-    for (const obligationId of strings(caseDraft.obligation_ids)) block(
-      obligationId, 'UNRESOLVED_CONFLICT', strings(caseDraft.evidence_refs),
+    setAdd(invalidCases, index);
+    const linkedIds = strings(caseDraft.obligation_ids);
+    for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) block(
+      linkedIds[obligationIndex], 'UNRESOLVED_CONFLICT', strings(caseDraft.evidence_refs),
       typeof conflict.root_issue_id === 'string' ? conflict.root_issue_id : null
     );
   }
@@ -629,12 +1035,15 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
   let cursor = 0;
   while (cursor < blockedQueue.length) {
     const blockedId = blockedQueue[cursor++];
-    for (const caseIndex of casesByObligation.get(blockedId) ?? []) {
-      if (invalidCases.has(caseIndex)) continue;
-      invalidCases.add(caseIndex);
+    const linkedCaseIndexes = mapGet(casesByObligation, blockedId) ?? [];
+    for (let linkedIndex = 0; linkedIndex < linkedCaseIndexes.length; linkedIndex += 1) {
+      const caseIndex = linkedCaseIndexes[linkedIndex];
+      if (setHas(invalidCases, caseIndex)) continue;
+      setAdd(invalidCases, caseIndex);
       const caseDraft = executable[caseIndex].item;
-      for (const obligationId of strings(caseDraft.obligation_ids)) block(
-        obligationId, 'CASE_SHARES_BLOCKED_OBLIGATION', strings(caseDraft.evidence_refs), null
+      const linkedIds = strings(caseDraft.obligation_ids);
+      for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) block(
+        linkedIds[obligationIndex], 'CASE_SHARES_BLOCKED_OBLIGATION', strings(caseDraft.evidence_refs), null
       );
     }
   }
@@ -642,10 +1051,10 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
   return {
     ...classification,
     grounded: mapArray(filterArray(executable, (item, index) =>
-      item.lane === 'grounded' && !invalidCases.has(index)), (item) => item.item),
+      item.lane === 'grounded' && !setHas(invalidCases, index)), (item) => item.item),
     conditional: mapArray(filterArray(executable, (item, index) =>
-      item.lane === 'conditional' && !invalidCases.has(index)), (item) => item.item),
-    blocked: sortArray([...blockedByObligation.values()], (left, right) =>
+      item.lane === 'conditional' && !setHas(invalidCases, index)), (item) => item.item),
+    blocked: sortArray(mapValuesArray(blockedByObligation), (left, right) =>
       compareCodePoints(String(left.obligation_id), String(right.obligation_id)))
   };
 }
@@ -661,51 +1070,29 @@ function missingType(reason) {
 
 /** @param {Record<string, unknown>} obligation @param {string} reason */
 function semanticRefs(obligation, reason) {
-  const refs = new Set([
-    ...strings(obligation.source_claim_ids),
-    ...strings(obligation.required_oracle_refs),
-    ...strings(obligation.view_element_refs)
-  ]);
-  if (refs.size === 0) refs.add(String(obligation.obligation_id));
-  if (reason.includes('CONFLICT')) refs.add('unresolved-source-policy');
-  return sortArray([...refs], compareCodePoints);
-}
-
-/** @param {Record<string, unknown>[]} conflicts */
-function conflictsByRootId(conflicts) {
-  const output = new Map();
-  for (const conflict of conflicts) if (typeof conflict.root_issue_id === 'string') {
-    output.set(conflict.root_issue_id, conflict);
+  const refs = makeSet();
+  const groups = [
+    strings(obligation.source_claim_ids),
+    strings(obligation.required_oracle_refs),
+    strings(obligation.view_element_refs)
+  ];
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const values = groups[groupIndex];
+    for (let index = 0; index < values.length; index += 1) setAdd(refs, values[index]);
   }
-  return output;
+  if (setValuesArray(refs).length === 0) setAdd(refs, String(obligation.obligation_id));
+  if (reason.includes('CONFLICT')) setAdd(refs, 'unresolved-source-policy');
+  return sortArray(setValuesArray(refs), compareCodePoints);
 }
 
-/**
- * Task9 derives its private state identity from semantic refs. Preserve the
- * canonical source-policy root as a semantic marker so the adapter can expose
- * and consume that same identity without mutating the source-policy result.
- * @param {Record<string, unknown>} obligation
- * @param {Record<string, unknown>} blockedItem
- * @param {Map<string, Record<string, unknown>>} conflictByRoot
- */
-function blockedSemanticRefs(obligation, blockedItem, conflictByRoot) {
-  const reason = String(blockedItem.reason);
-  const rootIssueId = String(blockedItem.root_issue_id ?? '');
-  if (reason.includes('CONFLICT') && conflictByRoot.has(rootIssueId)) {
-    return [`${SOURCE_POLICY_ROOT_REF_PREFIX}${rootIssueId}`];
-  }
-  return semanticRefs(obligation, reason);
-}
-
-/** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>[]} conflicts */
-function bindBlockedRootIdentity(classification, obligations, conflicts) {
-  const obligationById = new Map(mapArray(obligations, (item) => [String(item.obligation_id), item]));
-  const conflictByRoot = conflictsByRootId(conflicts);
+/** @param {any} classification @param {Record<string, unknown>[]} obligations */
+function bindBlockedRootIdentity(classification, obligations) {
+  const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
   const blocked = mapArray(records(classification.blocked), (item) => {
-    const obligation = obligationById.get(String(item.obligation_id)) ?? {};
+    const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const signature = {
       missing_type: missingType(String(item.reason)),
-      semantic_refs: blockedSemanticRefs(obligation, item, conflictByRoot),
+      semantic_refs: semanticRefs(obligation, String(item.reason)),
       scope: String(obligation.scope ?? '')
     };
     return { ...item, root_issue_id: stableId('root', signature) };
@@ -713,12 +1100,11 @@ function bindBlockedRootIdentity(classification, obligations, conflicts) {
   return { ...classification, blocked };
 }
 
-/** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>[]} conflicts */
-function blockedDescriptors(classification, obligations, conflicts) {
-  const obligationById = new Map(mapArray(obligations, (item) => [String(item.obligation_id), item]));
-  const conflictByRoot = conflictsByRootId(conflicts);
+/** @param {any} classification @param {Record<string, unknown>[]} obligations */
+function blockedDescriptors(classification, obligations) {
+  const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
   return sortArray(mapArray(records(classification.blocked), (item) => {
-    const obligation = obligationById.get(String(item.obligation_id)) ?? {};
+    const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const reason = String(item.reason);
     const type = missingType(reason);
     const scope = String(obligation.scope ?? 'unknown');
@@ -727,7 +1113,7 @@ function blockedDescriptors(classification, obligations, conflicts) {
       || reason.includes('MISSING_CONTROL');
     return {
       obligation_id: String(item.obligation_id), missing_type: type,
-      semantic_refs: blockedSemanticRefs(obligation, item, conflictByRoot), scope,
+      semantic_refs: semanticRefs(obligation, reason), scope,
       risk: String(item.risk), reason, evidence_refs: sortArray(strings(item.evidence_refs), compareCodePoints),
       answerable: !technical,
       question: `Clarification required for ${type} in ${scope}.`
@@ -735,49 +1121,129 @@ function blockedDescriptors(classification, obligations, conflicts) {
   }), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
 }
 
-/** @param {unknown} value */
-function sourcePolicyRootRef(value) {
-  if (typeof value !== 'string' || !value.startsWith(SOURCE_POLICY_ROOT_REF_PREFIX)) return null;
-  const rootIssueId = value.slice(SOURCE_POLICY_ROOT_REF_PREFIX.length);
-  return rootIssueId.length > 0 ? rootIssueId : null;
+/**
+ * Build a compiler-owned bridge between Task9's obligation-scoped root and a
+ * canonical source-policy conflict. Submitted semantic refs never participate
+ * in alias discovery.
+ * @param {any} classification
+ * @param {Record<string, unknown>[]} obligations
+ * @param {ReturnType<typeof prepareConflictRelations>} relations
+ * @param {Record<string, unknown>[]} conflicts
+ */
+function buildSourceConflictBridge(classification, obligations, relations, conflicts) {
+  const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
+  const allowedConflictIds = makeSet();
+  for (let index = 0; index < conflicts.length; index += 1) {
+    setAdd(allowedConflictIds, conflictIdentity(conflicts[index]));
+  }
+  const executable = sliceArray(records(classification.grounded), 0);
+  appendArray(executable, records(classification.conditional));
+  /** @type {Map<string, any>} */
+  const bridge = makeMap();
+  const ambiguous = makeSet();
+  for (let caseIndex = 0; caseIndex < executable.length; caseIndex += 1) {
+    const caseDraft = executable[caseIndex];
+    const selection = conflictSelectionForCase(caseDraft, relations, allowedConflictIds);
+    if (selection.count !== 1 || !selection.conflict) continue;
+    const conflict = selection.conflict;
+    const linkedIds = strings(caseDraft.obligation_ids);
+    for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) {
+      const obligationId = linkedIds[obligationIndex];
+      const obligation = mapGet(obligationById, obligationId);
+      if (!obligation) continue;
+      const signature = {
+        missing_type: 'source-conflict',
+        semantic_refs: semanticRefs(obligation, 'UNRESOLVED_CONFLICT'),
+        scope: String(obligation.scope ?? '')
+      };
+      const internalId = stableId('root', signature);
+      const existing = mapGet(bridge, internalId);
+      if (existing && conflictIdentity(existing.conflict) !== conflictIdentity(conflict)) {
+        setAdd(ambiguous, internalId);
+        continue;
+      }
+      if (existing) setAdd(existing.affectedObligationIds, obligationId);
+      else mapSet(bridge, internalId, {
+        internal_root_issue_id: internalId,
+        internal_scope: signature.scope,
+        semantic_refs: signature.semantic_refs,
+        affectedObligationIds: makeSet([obligationId]),
+        conflict: NATIVE_STRUCTURED_CLONE(conflict)
+      });
+    }
+  }
+  forEachSet(ambiguous, (internalId) => mapDelete(bridge, internalId));
+  forEachMap(bridge, (entry) => {
+    entry.affected_obligation_ids = sortArray(
+      setValuesArray(entry.affectedObligationIds), compareCodePoints
+    );
+    delete entry.affectedObligationIds;
+  });
+  return bridge;
+}
+
+/** @param {Record<string, unknown>} root @param {any} bridgeEntry */
+function bridgeMatchesRoot(root, bridgeEntry) {
+  if (String(root.root_issue_id) !== bridgeEntry.internal_root_issue_id
+    || root.missing_type !== 'source-conflict'
+    || root.scope !== bridgeEntry.internal_scope) return false;
+  const signature = {
+    missing_type: 'source-conflict',
+    semantic_refs: bridgeEntry.semantic_refs,
+    scope: bridgeEntry.internal_scope
+  };
+  if (root.root_issue_key !== canonicalStringify(signature)
+    || canonicalStringify(strings(root.semantic_refs)) !== canonicalStringify(bridgeEntry.semantic_refs)
+    || canonicalStringify(sortArray(strings(root.affected_obligation_ids), compareCodePoints))
+      !== canonicalStringify(bridgeEntry.affected_obligation_ids)) return false;
+  const reasons = makeSet(strings(root.reasons));
+  return setHas(reasons, 'UNRESOLVED_CONFLICT');
 }
 
 /**
  * Translate user-visible source-policy root IDs back to Task9's private root
  * identities before validating a Decision/control append batch.
  * @param {Record<string, unknown>} clarificationInput
+ * @param {Map<string, any>} sourceConflictBridge
  */
-function translateClarificationAppend(clarificationInput) {
+function translateClarificationAppend(clarificationInput, sourceConflictBridge) {
   const output = NATIVE_STRUCTURED_CLONE(clarificationInput);
   if (!isRecord(output.prior_state) || !isRecord(output.append_batch)) return output;
+  const priorById = makeMap(mapArray(records(output.prior_state.root_snapshot_ledger), (item) => [
+    String(item.root_issue_id), item
+  ]));
   /** @type {Map<string, Set<string>>} */
-  const internalBySourceRoot = new Map();
-  for (const ledgerItem of records(output.prior_state.root_snapshot_ledger)) {
-    for (const ref of strings(ledgerItem.semantic_refs)) {
-      const sourceRootId = sourcePolicyRootRef(ref);
-      if (sourceRootId === null) continue;
-      const ids = internalBySourceRoot.get(sourceRootId) ?? new Set();
-      ids.add(String(ledgerItem.root_issue_id));
-      internalBySourceRoot.set(sourceRootId, ids);
-    }
-  }
+  const internalBySourceRoot = makeMap();
+  forEachMap(sourceConflictBridge, (entry, internalId) => {
+    const priorRoot = mapGet(priorById, internalId);
+    if (!priorRoot || !bridgeMatchesRoot(priorRoot, entry)) return;
+    const sourceRootId = String(entry.conflict.root_issue_id ?? '');
+    if (sourceRootId.length === 0) return;
+    const ids = mapGet(internalBySourceRoot, sourceRootId) ?? makeSet();
+    setAdd(ids, internalId);
+    mapSet(internalBySourceRoot, sourceRootId, ids);
+  });
   /** @param {unknown} rootIds */
   function translateRootIds(rootIds) {
-    const translated = new Set();
+    const translated = makeSet();
     let changed = false;
-    for (const rootId of strings(rootIds)) {
-      const internal = internalBySourceRoot.get(rootId);
+    const submittedRootIds = strings(rootIds);
+    for (let index = 0; index < submittedRootIds.length; index += 1) {
+      const rootId = submittedRootIds[index];
+      const internal = mapGet(internalBySourceRoot, rootId);
       if (internal) {
-        for (const internalId of internal) {
-          translated.add(internalId);
+        forEachSet(internal, (internalId) => {
+          setAdd(translated, internalId);
           if (internalId !== rootId) changed = true;
-        }
+        });
       }
-      else translated.add(rootId);
+      else setAdd(translated, rootId);
     }
-    return { ids: sortArray([...translated], compareCodePoints), changed };
+    return { ids: sortArray(setValuesArray(translated), compareCodePoints), changed };
   }
-  for (const decision of records(output.append_batch.decision_records)) {
+  const decisions = records(output.append_batch.decision_records);
+  for (let index = 0; index < decisions.length; index += 1) {
+    const decision = decisions[index];
     const externalRootIds = sortArray(strings(decision.root_issue_ids), compareCodePoints);
     const expectedExternalQuestionId = stableId('question', { root_issue_ids: externalRootIds });
     const submittedQuestionId = decision.question_id;
@@ -786,8 +1252,9 @@ function translateClarificationAppend(clarificationInput) {
     if (translated.changed) decision.question_id = submittedQuestionId === expectedExternalQuestionId
       ? stableId('question', { root_issue_ids: decision.root_issue_ids }) : '';
   }
-  for (const event of records(output.append_batch.clarification_events)) {
-    event.root_issue_ids = translateRootIds(event.root_issue_ids).ids;
+  const events = records(output.append_batch.clarification_events);
+  for (let index = 0; index < events.length; index += 1) {
+    events[index].root_issue_ids = translateRootIds(events[index].root_issue_ids).ids;
   }
   return output;
 }
@@ -798,20 +1265,22 @@ function translateClarificationAppend(clarificationInput) {
  * presentation so ordering is independent of Case/input order.
  * @param {unknown} pending
  * @param {Record<string, unknown>[]} conflicts
+ * @param {Map<string, any>} sourceConflictBridge
  */
-function externalizePendingRoots(pending, conflicts) {
-  const conflictByRoot = conflictsByRootId(conflicts);
+function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
+  void conflicts;
   /** @type {Map<string, any>} */
-  const grouped = new Map();
-  for (const submitted of records(pending)) {
+  const grouped = makeMap();
+  const pendingRoots = records(pending);
+  for (let pendingIndex = 0; pendingIndex < pendingRoots.length; pendingIndex += 1) {
+    const submitted = pendingRoots[pendingIndex];
     const item = NATIVE_STRUCTURED_CLONE(submitted);
-    let sourceRootId = null;
-    for (const ref of strings(item.semantic_refs)) {
-      sourceRootId = sourcePolicyRootRef(ref);
-      if (sourceRootId !== null) break;
-    }
-    const conflict = sourceRootId === null ? null : conflictByRoot.get(sourceRootId);
-    const externalId = conflict && sourceRootId ? sourceRootId : String(item.root_issue_id);
+    const bridgeEntry = mapGet(sourceConflictBridge, String(item.root_issue_id));
+    const conflict = bridgeEntry && bridgeMatchesRoot(item, bridgeEntry)
+      ? bridgeEntry.conflict : null;
+    const sourceRootId = conflict && typeof conflict.root_issue_id === 'string'
+      ? conflict.root_issue_id : null;
+    const externalId = sourceRootId ?? String(item.root_issue_id);
     if (conflict) {
       item.root_issue_id = externalId;
       item.root_issue_key = canonicalStringify({
@@ -820,30 +1289,45 @@ function externalizePendingRoots(pending, conflicts) {
         scope: String(conflict.scope),
         source_ids: sortArray(strings(conflict.source_ids), compareCodePoints)
       });
+      item.scope = String(conflict.scope);
+      item.question = `Clarification required for source-conflict in ${item.scope}.`;
     }
-    const existing = grouped.get(externalId);
-    if (!existing) grouped.set(externalId, item);
+    const existing = mapGet(grouped, externalId);
+    if (!existing) mapSet(grouped, externalId, item);
     else {
-      existing.affected_obligation_ids = sortArray([...new Set([
-        ...strings(existing.affected_obligation_ids), ...strings(item.affected_obligation_ids)
-      ])], compareCodePoints);
-      existing.reasons = sortArray([...new Set([
-        ...strings(existing.reasons), ...strings(item.reasons)
-      ])], compareCodePoints);
-      existing.evidence_refs = sortArray([...new Set([
-        ...strings(existing.evidence_refs), ...strings(item.evidence_refs)
-      ])], compareCodePoints);
+      existing.affected_obligation_ids = unionSortedStrings(
+        strings(existing.affected_obligation_ids), strings(item.affected_obligation_ids)
+      );
+      existing.reasons = unionSortedStrings(strings(existing.reasons), strings(item.reasons));
+      existing.evidence_refs = unionSortedStrings(
+        strings(existing.evidence_refs), strings(item.evidence_refs)
+      );
       const itemRiskCounts = isRecord(item.risk_counts) ? item.risk_counts : {};
-      for (const risk of ['critical', 'high', 'medium', 'low']) {
+      const risks = ['critical', 'high', 'medium', 'low'];
+      for (let riskIndex = 0; riskIndex < risks.length; riskIndex += 1) {
+        const risk = risks[riskIndex];
         existing.risk_counts[risk] = Number(existing.risk_counts[risk]) + Number(itemRiskCounts[risk]);
       }
     }
   }
-  const output = sortArray([...grouped.values()], (left, right) =>
-    compareCodePoints(String(left.root_issue_id), String(right.root_issue_id)));
-  const rootIssueIds = mapArray(output, (item) => String(item.root_issue_id));
+  const riskOrder = ['critical', 'high', 'medium', 'low'];
+  const output = sortArray(mapValuesArray(grouped), (left, right) => {
+    const leftRisk = isRecord(left.risk_counts) ? left.risk_counts : {};
+    const rightRisk = isRecord(right.risk_counts) ? right.risk_counts : {};
+    for (let index = 0; index < riskOrder.length; index += 1) {
+      const risk = riskOrder[index];
+      const difference = Number(rightRisk[risk] ?? 0) - Number(leftRisk[risk] ?? 0);
+      if (difference !== 0) return difference;
+    }
+    const countDifference = strings(right.affected_obligation_ids).length
+      - strings(left.affected_obligation_ids).length;
+    return countDifference || compareCodePoints(String(left.root_issue_id), String(right.root_issue_id));
+  });
+  const rootIssueIds = sortArray(
+    mapArray(output, (item) => String(item.root_issue_id)), compareCodePoints
+  );
   const batchId = stableId('batch', { root_issue_ids: rootIssueIds });
-  for (const item of output) item.batch_id = batchId;
+  for (let index = 0; index < output.length; index += 1) output[index].batch_id = batchId;
   return output;
 }
 
@@ -852,37 +1336,69 @@ function evidenceLevel(obligation, cases, claimsById, lane, notApplicable) {
   if (lane === 'blocked') return 'E0';
   if (lane === 'conditional') return 'E1';
   if (lane === 'not_applicable') {
-    const claim = claimsById.get(String(notApplicable?.exclusion_claim_id));
+    const claim = mapGet(claimsById, String(notApplicable?.exclusion_claim_id));
     return claim?.level === 'E2' ? 'E2' : 'E3';
   }
-  const refs = new Set([...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs)]);
-  for (const item of cases) for (const ref of strings(item.evidence_refs)) refs.add(ref);
-  for (const ref of refs) if (claimsById.get(ref)?.level === 'E2') return 'E2';
+  const refs = makeSet();
+  const initialRefs = [strings(obligation.source_claim_ids), strings(obligation.required_oracle_refs)];
+  for (let groupIndex = 0; groupIndex < initialRefs.length; groupIndex += 1) {
+    for (let index = 0; index < initialRefs[groupIndex].length; index += 1) {
+      setAdd(refs, initialRefs[groupIndex][index]);
+    }
+  }
+  for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) {
+    const evidenceRefs = strings(cases[caseIndex].evidence_refs);
+    for (let refIndex = 0; refIndex < evidenceRefs.length; refIndex += 1) {
+      setAdd(refs, evidenceRefs[refIndex]);
+    }
+  }
+  const orderedRefs = setValuesArray(refs);
+  for (let index = 0; index < orderedRefs.length; index += 1) {
+    if (mapGet(claimsById, orderedRefs[index])?.level === 'E2') return 'E2';
+  }
   return 'E3';
 }
 
 /** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Map<string, Record<string, unknown>>} claimsById */
 function semanticSnapshot(classification, obligations, claimsById) {
   /** @type {Map<string, {lane:string,reason:string|null,cases:Record<string, unknown>[],notApplicable?:Record<string, unknown>}>} */
-  const disposition = new Map();
-  for (const item of records(classification.grounded)) for (const id of strings(item.obligation_ids)) {
-    const existing = disposition.get(id) ?? { lane: 'grounded', reason: null, cases: [] };
-    pushArray(existing.cases, item);
-    disposition.set(id, existing);
+  const disposition = makeMap();
+  const groundedCases = records(classification.grounded);
+  for (let caseIndex = 0; caseIndex < groundedCases.length; caseIndex += 1) {
+    const item = groundedCases[caseIndex];
+    const ids = strings(item.obligation_ids);
+    for (let idIndex = 0; idIndex < ids.length; idIndex += 1) {
+      const id = ids[idIndex];
+      const existing = mapGet(disposition, id) ?? { lane: 'grounded', reason: null, cases: [] };
+      pushArray(existing.cases, item);
+      mapSet(disposition, id, existing);
+    }
   }
-  for (const item of records(classification.conditional)) for (const id of strings(item.obligation_ids)) {
-    const existing = disposition.get(id) ?? { lane: 'conditional', reason: null, cases: [] };
-    pushArray(existing.cases, item);
-    disposition.set(id, existing);
+  const conditionalCases = records(classification.conditional);
+  for (let caseIndex = 0; caseIndex < conditionalCases.length; caseIndex += 1) {
+    const item = conditionalCases[caseIndex];
+    const ids = strings(item.obligation_ids);
+    for (let idIndex = 0; idIndex < ids.length; idIndex += 1) {
+      const id = ids[idIndex];
+      const existing = mapGet(disposition, id) ?? { lane: 'conditional', reason: null, cases: [] };
+      pushArray(existing.cases, item);
+      mapSet(disposition, id, existing);
+    }
   }
-  for (const item of records(classification.blocked)) disposition.set(String(item.obligation_id), {
-    lane: 'blocked', reason: String(item.reason), cases: []
-  });
-  for (const item of records(classification.not_applicable)) disposition.set(String(item.obligation_id), {
-    lane: 'not_applicable', reason: null, cases: [], notApplicable: item
-  });
+  const blockedItems = records(classification.blocked);
+  for (let index = 0; index < blockedItems.length; index += 1) mapSet(disposition,
+    String(blockedItems[index].obligation_id), {
+      lane: 'blocked', reason: String(blockedItems[index].reason), cases: []
+    }
+  );
+  const notApplicableItems = records(classification.not_applicable);
+  for (let index = 0; index < notApplicableItems.length; index += 1) mapSet(disposition,
+    String(notApplicableItems[index].obligation_id), {
+      lane: 'not_applicable', reason: null, cases: [], notApplicable: notApplicableItems[index]
+    }
+  );
   const points = sortArray(mapArray(obligations, (obligation) => {
-    const state = disposition.get(String(obligation.obligation_id));
+    const state = mapGet(disposition, String(obligation.obligation_id));
     const lane = state?.lane ?? 'blocked';
     return {
       obligation_id: String(obligation.obligation_id),
@@ -900,9 +1416,9 @@ function semanticSnapshot(classification, obligations, claimsById) {
   const blocked = ids('blocked');
   const notApplicable = ids('not_applicable');
   const executableCount = grounded.length + conditional.length;
-  const riskById = new Map(mapArray(obligations, (item) => [String(item.obligation_id), String(item.risk)]));
+  const riskById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), String(item.risk)]));
   const hasHighBlocked = someArray(blocked, (id) =>
-    riskById.get(id) === 'critical' || riskById.get(id) === 'high');
+    mapGet(riskById, id) === 'critical' || mapGet(riskById, id) === 'high');
   const applicableCount = points.length - notApplicable.length;
   const deliveryStatus = applicableCount === 0 ? 'no_applicable_formal_test_points'
     : executableCount === 0 && blocked.length > 0 ? 'no_deterministic_cases'
@@ -929,8 +1445,8 @@ function semanticSnapshot(classification, obligations, claimsById) {
  * @param {unknown} submittedInput
  * @param {{interactionPolicy:'pause_for_clarification'|'record_only'}} options
  */
-export function evaluateRevision(submittedInput, options) {
-  const intrinsicDiagnostic = arrayIntrinsicIntegrityDiagnostic();
+function evaluateRevisionCaptured(submittedInput, options) {
+  const intrinsicDiagnostic = intrinsicIntegrityDiagnostic();
   if (intrinsicDiagnostic) return {
     status: 'need_revision', stage: 'schema', source_revision: 0,
     diagnostics: [intrinsicDiagnostic]
@@ -938,7 +1454,7 @@ export function evaluateRevision(submittedInput, options) {
   const normalized = normalizeInput(submittedInput);
   const capturedOptions = snapshotOwnData(options, '/options');
   appendArray(normalized.diagnostics, capturedOptions.diagnostics);
-  const postSnapshotIntrinsicDiagnostic = arrayIntrinsicIntegrityDiagnostic();
+  const postSnapshotIntrinsicDiagnostic = intrinsicIntegrityDiagnostic();
   if (postSnapshotIntrinsicDiagnostic) return {
     status: 'need_revision', stage: 'schema', source_revision: 0,
     diagnostics: [postSnapshotIntrinsicDiagnostic]
@@ -955,7 +1471,7 @@ export function evaluateRevision(submittedInput, options) {
     requireClosed(trustedOptions, ['interactionPolicy'], '/options', normalized.diagnostics);
     const submittedPolicy = trustedOptions.interactionPolicy;
     interactionPolicy = typeof submittedPolicy === 'string' ? submittedPolicy : '';
-    if (!POLICIES.has(interactionPolicy)) pushArray(normalized.diagnostics, diagnostic(
+    if (!setHas(POLICIES, interactionPolicy)) pushArray(normalized.diagnostics, diagnostic(
       'classification', 'INTERACTION_POLICY_INVALID', '/interaction_policy',
       'pure core accepts only the two frozen internal interaction policies'
     ));
@@ -980,9 +1496,8 @@ export function evaluateRevision(submittedInput, options) {
 
     const viewValidation = validateBehaviorViews(graph, input.behavior_views);
     const interactionAudit = auditInteractionMatrix(input.behavior_views);
-    const viewDiagnostics = [
-      ...diagnosticArray(viewValidation.diagnostics), ...diagnosticArray(interactionAudit.diagnostics)
-    ];
+    const viewDiagnostics = diagnosticArray(viewValidation.diagnostics);
+    appendArray(viewDiagnostics, diagnosticArray(interactionAudit.diagnostics));
     if (viewDiagnostics.length > 0) return revisionRequired('behavior_views', sourceRevision, viewDiagnostics);
 
     let obligations;
@@ -1008,20 +1523,36 @@ export function evaluateRevision(submittedInput, options) {
     if (classification.diagnostics.length > 0) return revisionRequired(
       'classification', sourceRevision, diagnosticArray(classification.diagnostics)
     );
+    const unresolvedSourcePack = /** @type {Record<string, unknown>} */ (
+      NATIVE_STRUCTURED_CLONE(input.source_pack)
+    );
+    unresolvedSourcePack.decision_records = [];
+    const unresolvedPolicy = resolveSourcePolicy(unresolvedSourcePack);
+    const potentialConflicts = records(unresolvedPolicy.conflicts);
+    const conflictRelations = prepareConflictRelations(
+      graph.claimsById, /** @type {Record<string, unknown>} */ (input.source_pack), potentialConflicts
+    );
+    const sourceConflictBridge = buildSourceConflictBridge(
+      classification, records(obligations.obligations), conflictRelations, potentialConflicts
+    );
     classification = applyLocalConflictBlocks(
       classification, records(obligations.obligations), graph.claimsById,
-      /** @type {Record<string, unknown>} */ (input.source_pack), graph.conflicts
+      /** @type {Record<string, unknown>} */ (input.source_pack), graph.conflicts,
+      conflictRelations
+    );
+    if (classification.diagnostics.length > 0) return revisionRequired(
+      'classification', sourceRevision, diagnosticArray(classification.diagnostics)
     );
     const semantics = semanticSnapshot(
       classification, records(obligations.obligations), graph.claimsById
     );
     const clarificationInput = /** @type {Record<string, unknown>} */ (input.clarification);
-    const translatedClarification = translateClarificationAppend(clarificationInput);
+    const translatedClarification = translateClarificationAppend(
+      clarificationInput, sourceConflictBridge
+    );
     const clarification = evaluateClarification({
       source_revision: sourceRevision,
-      blocked_obligations: blockedDescriptors(
-        classification, records(obligations.obligations), graph.conflicts
-      ),
+      blocked_obligations: blockedDescriptors(classification, records(obligations.obligations)),
       prior_state: translatedClarification.prior_state,
       append_batch: translatedClarification.append_batch,
       semantic_snapshot: semantics
@@ -1031,7 +1562,9 @@ export function evaluateRevision(submittedInput, options) {
     );
     if (clarification.action === 'need_user_answers') return {
       status: 'need_user_answers', source_revision: sourceRevision,
-      pending_root_issues: externalizePendingRoots(clarification.pending_root_issues, graph.conflicts),
+      pending_root_issues: externalizePendingRoots(
+        clarification.pending_root_issues, graph.conflicts, sourceConflictBridge
+      ),
       clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
       semantic_snapshot: NATIVE_STRUCTURED_CLONE(clarification.semantic_snapshot),
       diagnostics: []
@@ -1040,7 +1573,7 @@ export function evaluateRevision(submittedInput, options) {
     let bundle;
     try {
       const bundleClassification = bindBlockedRootIdentity(
-        classification, records(obligations.obligations), graph.conflicts
+        classification, records(obligations.obligations)
       );
       bundle = buildBundle({
         schema_version: '1.0.0', source_revision: sourceRevision,
@@ -1074,5 +1607,25 @@ export function evaluateRevision(submittedInput, options) {
       'classification', 'CORE_EVALUATION_FAILED', '/',
       'complete revision evaluation failed without exposing an internal exception'
     )]);
+  }
+}
+
+/**
+ * Contain every public-boundary failure, including mutable-global attacks that
+ * occur before the trusted snapshot can establish a source revision.
+ * @param {unknown} submittedInput
+ * @param {{interactionPolicy:'pause_for_clarification'|'record_only'}} options
+ */
+export function evaluateRevision(submittedInput, options) {
+  try {
+    return evaluateRevisionCaptured(submittedInput, options);
+  } catch {
+    return {
+      status: 'need_revision', stage: 'core', source_revision: 0,
+      diagnostics: [{
+        category: 'classification', code: 'CORE_EVALUATION_FAILED', path: '/',
+        message: 'complete revision evaluation failed without exposing an internal exception'
+      }]
+    };
   }
 }
