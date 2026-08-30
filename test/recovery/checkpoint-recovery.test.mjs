@@ -3,6 +3,7 @@ import {
   mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile
 } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { Worker } from 'node:worker_threads';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -582,37 +583,165 @@ test('a synchronous holder cannot starve the production heartbeat and lose its l
   const program = `
     import { acquireRunLock } from ${JSON.stringify(path.join(repositoryRoot, 'src/run-store.mjs'))};
     const release = await acquireRunLock(${JSON.stringify(runDirectory)});
-    process.stdout.write('READY\\n');
+    process.send('READY');
+    await new Promise((resolve) => process.once('message', resolve));
+    process.send('STARTED');
     const until = Date.now() + 3_000;
     while (Date.now() < until) {}
     await release();
-    process.stdout.write('RELEASED\\n');
+    process.send('RELEASED');
   `;
   const child = spawn(process.execPath, ['--input-type=module', '-e', program], {
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc']
   });
-  let stdout = '';
   let stderr = '';
-  child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (/** @type {string} */ chunk) => { stdout += chunk; });
   child.stderr.on('data', (/** @type {string} */ chunk) => { stderr += chunk; });
+  /** @type {Record<string,(value?:unknown)=>void>} */
+  const messageResolvers = {};
+  /** @param {string} name */
+  const message = (name) => new Promise((resolve) => { messageResolvers[name] = resolve; });
+  const ready = message('READY');
+  const startedSignal = message('STARTED');
+  const released = message('RELEASED');
+  child.on('message', (/** @type {unknown} */ value) => {
+    if (typeof value === 'string' && messageResolvers[value]) messageResolvers[value]();
+  });
   const closed = new Promise((resolve) => child.on(
     'close', (/** @type {number|null} */ code) => resolve(code)
   ));
   try {
-    while (!stdout.includes('READY')) {
-      if (child.exitCode !== null) assert.fail(`holder exited before ready: ${stderr}`);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    const started = Date.now();
+    await ready;
+    child.send('GO');
+    await startedSignal;
+    const startedAt = Date.now();
     const releaseContender = await acquireRunLock(runDirectory);
-    const waitedMs = Date.now() - started;
-    assert.ok(waitedMs >= 2_500, `contender reclaimed a live holder after only ${waitedMs}ms`);
-    assert.notEqual(child.exitCode, null, 'contender acquired before the holder released');
+    const waitedMs = Date.now() - startedAt;
+    assert.ok(waitedMs >= 2_800, `contender reclaimed a live holder after only ${waitedMs}ms`);
+    await released;
     await releaseContender();
     assert.equal(await closed, 0, stderr);
-    assert.match(stdout, /READY\nRELEASED\n/u);
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('release restores a successor substituted after ownership observation', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const displacedDirectory = path.join(runDirectory, '.original-holder');
+  const successor = {
+    pid: process.pid, token: 'release-race-successor',
+    lease_expires_at_ms: Date.now() + 60_000,
+    process_start_identity: `${process.pid}:successor`, heartbeat_seq: 0
+  };
+  try {
+    const release = await acquireRunLock(runDirectory, {
+      afterReleaseObservation: async () => {
+        await rename(lockDirectory, displacedDirectory);
+        await mkdir(lockDirectory);
+        await writeFile(
+          path.join(lockDirectory, 'owner.json'), `${JSON.stringify(successor)}\n`, 'utf8'
+        );
+      }
+    });
+    await assert.rejects(release, /release moved a different generation/u);
+    assert.deepEqual(
+      JSON.parse(await readFile(path.join(lockDirectory, 'owner.json'), 'utf8')), successor
+    );
+    assert.ok((await readdir(runDirectory)).every(
+      (/** @type {string} */ name) => !name.startsWith('.compiler-advance.lock.release-')
+    ));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('heartbeat worker stop failure closes the claim and removes only its lock', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const originalPostMessage = Worker.prototype.postMessage;
+  const originalTerminate = Worker.prototype.terminate;
+  Worker.prototype.postMessage = function (/** @type {any} */ message) {
+    if (message?.type === 'stop') {
+      Reflect.apply(originalTerminate, this, []);
+      return;
+    }
+    return Reflect.apply(originalPostMessage, this, [message]);
+  };
+  let faultingAcquire;
+  try {
+    const faultModuleUrl = new URL('../../src/run-store.mjs', import.meta.url);
+    faultModuleUrl.search = '?worker-stop-failure';
+    faultingAcquire = (await import(faultModuleUrl.href)).acquireRunLock;
+  } finally {
+    Worker.prototype.postMessage = originalPostMessage;
+  }
+  try {
+    const release = await faultingAcquire(runDirectory);
+    await assert.rejects(release, /heartbeat worker exited unexpectedly/u);
+    await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
+    const releaseRetry = await acquireRunLock(runDirectory);
+    await releaseRetry();
+    await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
+  } finally {
+    Worker.prototype.postMessage = originalPostMessage;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('acquisition refuses a heartbeat worker that exits during readiness', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const originalOn = Worker.prototype.on;
+  const originalTerminate = Worker.prototype.terminate;
+  Worker.prototype.on = function (/** @type {string} */ event, /** @type {Function} */ listener) {
+    if (event !== 'message') return Reflect.apply(originalOn, this, [event, listener]);
+    const worker = this;
+    return Reflect.apply(originalOn, this, [event, (/** @type {any} */ workerMessage) => {
+      if (workerMessage?.type === 'ready') Reflect.apply(originalTerminate, worker, []);
+      return listener(workerMessage);
+    }]);
+  };
+  let faultingAcquire;
+  try {
+    const faultModuleUrl = new URL('../../src/run-store.mjs', import.meta.url);
+    faultModuleUrl.search = '?worker-readiness-failure';
+    faultingAcquire = (await import(faultModuleUrl.href)).acquireRunLock;
+  } finally {
+    Worker.prototype.on = originalOn;
+  }
+  try {
+    await assert.rejects(
+      faultingAcquire(runDirectory), /heartbeat worker exited unexpectedly/u
+    );
+    await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
+  } finally {
+    Worker.prototype.on = originalOn;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('heartbeat worker boots when eval syntax detection is disabled', async () => {
+  const runDirectory = await temporaryRun();
+  const program = `
+    import { acquireRunLock } from ${JSON.stringify(path.join(repositoryRoot, 'src/run-store.mjs'))};
+    const release = await acquireRunLock(${JSON.stringify(runDirectory)});
+    await release();
+  `;
+  const child = spawn(process.execPath, [
+    '--no-experimental-detect-module', '--input-type=module', '-e', program
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (/** @type {string} */ chunk) => { stderr += chunk; });
+  try {
+    const code = await new Promise((resolve) => child.on(
+      'close', (/** @type {number|null} */ value) => resolve(value)
+    ));
+    assert.equal(code, 0, stderr);
+    await assert.rejects(stat(path.join(runDirectory, '.compiler-advance.lock')));
   } finally {
     if (child.exitCode === null) child.kill();
     await rm(runDirectory, { recursive: true, force: true });

@@ -100,9 +100,15 @@ const NATIVE_PROCESS_KILL = process.kill;
 const NATIVE_PROCESS_PID = process.pid;
 const NATIVE_PROCESS_START_IDENTITY = `${process.pid}:${Date.now() - process.uptime() * 1_000}`;
 const NATIVE_WORKER = Worker;
+const NATIVE_WORKER_PROTOTYPE = Worker.prototype;
 const NATIVE_WORKER_ON = Worker.prototype.on;
 const NATIVE_WORKER_POST_MESSAGE = Worker.prototype.postMessage;
 const NATIVE_WORKER_TERMINATE = Worker.prototype.terminate;
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_WORKER_INTRINSICS = Object.freeze([
+  ['on', NATIVE_WORKER_ON], ['postMessage', NATIVE_WORKER_POST_MESSAGE],
+  ['terminate', NATIVE_WORKER_TERMINATE]
+]);
 const NATIVE_PATH = path;
 const NATIVE_PATH_BASENAME = path.basename;
 const NATIVE_PATH_DIRNAME = path.dirname;
@@ -426,6 +432,7 @@ export function runStoreIntrinsicsIntact() {
     && descriptorsMatch(NATIVE_DATE, NATIVE_DATE_INTRINSICS)
     && descriptorsMatch(NATIVE_MATH, NATIVE_MATH_INTRINSICS)
     && descriptorsMatch(NATIVE_PROCESS, NATIVE_PROCESS_INTRINSICS)
+    && resolvedDataMethodsMatch(NATIVE_WORKER_PROTOTYPE, NATIVE_WORKER_INTRINSICS)
     && resolvedDataMethodsMatch(NATIVE_STATS_PROTOTYPE, NATIVE_STATS_INTRINSICS)
     && descriptorsMatch(NATIVE_DIRENT_PROTOTYPE, NATIVE_DIRENT_INTRINSICS)
     && descriptorsMatch(NATIVE_FILE_HANDLE_PROTOTYPE, NATIVE_FILE_HANDLE_INTRINSICS)
@@ -605,6 +612,56 @@ async function removeOwnedLockGeneration(runDirectory, lockDirectory, expectedSt
 }
 
 /**
+ * Put a foreign generation moved by a release ABA race back at the canonical
+ * path. A temporary mkdir reserves an empty canonical name so cooperative
+ * contenders cannot claim it between the absence check and restoration. If a
+ * newer canonical generation already exists, preserve the moved generation
+ * outside the cleanup-residue namespace instead of deleting either holder.
+ * @param {string} runDirectory
+ * @param {string} lockDirectory
+ * @param {string} movedDirectory
+ * @param {any} movedStatus
+ */
+async function restoreForeignLockGeneration(
+  runDirectory, lockDirectory, movedDirectory, movedStatus
+) {
+  const preservedDirectory = `${lockDirectory}.preserved-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
+  try {
+    await mkdir(lockDirectory);
+  } catch (error) {
+    if (!hasErrorCode(error, 'EEXIST')) throw error;
+    await rename(movedDirectory, preservedDirectory);
+    await syncDirectory(runDirectory);
+    return;
+  }
+  const reservationStatus = await lstat(lockDirectory);
+  await syncDirectory(runDirectory);
+  try {
+    await rename(movedDirectory, lockDirectory);
+    await syncDirectory(runDirectory);
+    const restoredStatus = await lstat(lockDirectory);
+    if (!sameFileGeneration(movedStatus, restoredStatus)) throw new RunStoreIntegrityError(
+      'Run coordination foreign generation could not be restored safely.'
+    );
+  } catch (error) {
+    let reservationStillPresent = false;
+    try {
+      reservationStillPresent = sameFileGeneration(reservationStatus, await lstat(lockDirectory));
+    } catch (statusError) {
+      if (!isMissing(statusError)) throw statusError;
+    }
+    if (reservationStillPresent) await rm(lockDirectory);
+    try {
+      await rename(movedDirectory, preservedDirectory);
+      await syncDirectory(runDirectory);
+    } catch (preserveError) {
+      if (!isMissing(preserveError)) throw preserveError;
+    }
+    throw error;
+  }
+}
+
+/**
  * Run lease pulses on a separate event loop so synchronous compilation cannot
  * make a live owner appear abandoned. The worker opens the claimed directory
  * itself and keeps that inode, so a renamed successor is never touched.
@@ -613,59 +670,65 @@ async function removeOwnedLockGeneration(runDirectory, lockDirectory, expectedSt
  */
 async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
   const workerSource = `
-    import { parentPort, workerData } from 'node:worker_threads';
-    import * as fs from 'node:fs/promises';
-    import { constants } from 'node:fs';
-    let handle;
-    let stopped = false;
-    let failureSent = false;
-    let timer;
-    let pulse = Promise.resolve();
-    async function renew() {
-      const seconds = Date.now() / 1000;
-      await handle.utimes(seconds, seconds);
-      await handle.sync();
-    }
-    function schedule() {
-      if (stopped) return;
-      timer = setTimeout(() => {
-        pulse = pulse.then(renew);
-        pulse.then(schedule, fail);
-      }, workerData.interval);
-    }
-    async function fail(error) {
-      if (failureSent) return;
-      failureSent = true;
-      stopped = true;
-      clearTimeout(timer);
-      try { if (handle) await handle.close(); } catch {}
-      parentPort.postMessage({ type: 'error', message: String(error) });
-      parentPort.close();
-    }
-    parentPort.on('message', async (message) => {
-      if (!message || message.type !== 'stop' || stopped) return;
-      stopped = true;
-      clearTimeout(timer);
-      try {
-        await pulse;
-        await handle.close();
-        parentPort.postMessage({ type: 'stopped' });
-        parentPort.close();
-      } catch (error) { await fail(error); }
-    });
     (async () => {
-      handle = await fs.open(workerData.path, constants.O_RDONLY | constants.O_NOFOLLOW);
-      const status = await handle.stat();
-      if (status.dev !== workerData.dev || status.ino !== workerData.ino) {
-        throw new Error('run lock generation changed before heartbeat start');
+      const { parentPort, workerData } = await import('node:worker_threads');
+      const fs = await import('node:fs/promises');
+      const { constants } = await import('node:fs');
+      let handle;
+      let stopped = false;
+      let failureSent = false;
+      let timer;
+      let pulse = Promise.resolve();
+      async function renew() {
+        const seconds = Date.now() / 1000;
+        await handle.utimes(seconds, seconds);
+        await handle.sync();
       }
-      await renew();
-      parentPort.postMessage({ type: 'ready' });
-      schedule();
-    })().catch(fail);
+      function schedule() {
+        if (stopped) return;
+        timer = setTimeout(() => {
+          pulse = pulse.then(renew);
+          pulse.then(schedule, fail);
+        }, workerData.interval);
+      }
+      async function fail(error) {
+        if (failureSent) return;
+        failureSent = true;
+        stopped = true;
+        clearTimeout(timer);
+        try { if (handle) await handle.close(); } catch {}
+        parentPort.postMessage({ type: 'error', message: String(error) });
+        parentPort.close();
+      }
+      parentPort.on('message', async (message) => {
+        if (!message || message.type !== 'stop' || stopped) return;
+        stopped = true;
+        clearTimeout(timer);
+        try {
+          await pulse;
+          await handle.close();
+          parentPort.postMessage({ type: 'stopped' });
+          parentPort.close();
+        } catch (error) { await fail(error); }
+      });
+      try {
+        handle = await fs.open(workerData.path, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const status = await handle.stat();
+        if (status.dev !== workerData.dev || status.ino !== workerData.ino) {
+          throw new Error('run lock generation changed before heartbeat start');
+        }
+        await renew();
+        parentPort.postMessage({ type: 'ready' });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (stopped) return;
+        await renew();
+        parentPort.postMessage({ type: 'healthy' });
+        schedule();
+      } catch (error) { await fail(error); }
+    })();
   `;
   const worker = new NATIVE_WORKER(workerSource, {
-    eval: true, type: 'module',
+    eval: true,
     workerData: {
       path: lockDirectory, dev: expectedStatus.dev, ino: expectedStatus.ino,
       interval: RUN_LOCK_HEARTBEAT_MS
@@ -687,7 +750,7 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
     rejectReady = reject;
   });
   NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, worker, ['message', (/** @type {any} */ message) => {
-    if (message?.type === 'ready') resolveReady(undefined);
+    if (message?.type === 'healthy') resolveReady(undefined);
     else if (message?.type === 'stopped') {
       stoppedAcknowledged = true;
       if (resolveStop) resolveStop(undefined);
@@ -750,7 +813,7 @@ export async function cleanupRunLockResidues(runDirectory) {
  * The lock directory is the atomic claim; owner metadata distinguishes an
  * active process from a safely reclaimable abandoned claim.
  * @param {string} runDirectory
- * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>}} [coordinationHooks]
+ * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
  * @returns {Promise<()=>Promise<void>>}
  */
 export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
@@ -874,18 +937,28 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         if (released) return;
         heartbeatStopped = true;
         if (heartbeatTimer !== undefined) NATIVE_CLEAR_TIMEOUT(heartbeatTimer);
-        if (heartbeatPromise) await heartbeatPromise;
-        if (stopHeartbeatWorker) await stopHeartbeatWorker();
         try {
+          if (heartbeatPromise) await heartbeatPromise;
+          if (stopHeartbeatWorker) await stopHeartbeatWorker();
           const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
           if (heartbeatError || !sameFileGeneration(acquiredStatus, observed.status)
             || observed.record?.token !== token || observed.record.pid !== NATIVE_PROCESS_PID
             || observed.record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
             throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
           }
+          if (coordinationHooks.afterReleaseObservation) {
+            await coordinationHooks.afterReleaseObservation();
+          }
           const releasedDirectory = `${lockDirectory}.release-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
           await rename(lockDirectory, releasedDirectory);
           await syncDirectory(runDirectory);
+          const movedStatus = await lstat(releasedDirectory);
+          if (!sameFileGeneration(acquiredStatus, movedStatus)) {
+            await restoreForeignLockGeneration(
+              runDirectory, lockDirectory, releasedDirectory, movedStatus
+            );
+            throw new RunStoreIntegrityError('Run coordination release moved a different generation.');
+          }
           const moved = await observeRunLock(
             runDirectory, releasedDirectory, pathJoin(releasedDirectory, RUN_LOCK_OWNER_FILE)
           );
@@ -897,7 +970,16 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
           await syncDirectory(runDirectory);
           released = true;
         } catch (error) {
-          await closeClaimHandle().catch(() => {});
+          try {
+            await closeClaimHandle();
+            await removeOwnedLockGeneration(
+              runDirectory, lockDirectory, acquiredStatus, 'stale'
+            );
+          } catch (cleanupError) {
+            throw new RunStoreIntegrityError(
+              `Run coordination release failed (${nativeString(error)}) and cleanup failed (${nativeString(cleanupError)}).`
+            );
+          }
           throw error;
         }
       };
