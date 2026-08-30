@@ -18,7 +18,9 @@ let temporarySequence = 0;
 let lockSequence = 0;
 const RUN_LOCK_DIRECTORY = '.compiler-advance.lock';
 const RUN_LOCK_OWNER_FILE = 'owner.json';
-const RUN_LOCK_LEASE_MS = 300_000;
+const RUN_LOCK_LEASE_MS = 2_000;
+const RUN_LOCK_HEARTBEAT_MS = 250;
+const RUN_LOCK_HEARTBEAT_PROOF_MS = RUN_LOCK_HEARTBEAT_MS * 2;
 const RUN_LOCK_INCOMPLETE_GRACE_MS = 2_000;
 const RUN_LOCK_POLL_MS = 25;
 const RUN_LOCK_WAIT_MS = 30_000;
@@ -37,6 +39,7 @@ const NATIVE_SET_PROTOTYPE = Set.prototype;
 const NATIVE_OBJECT = Object;
 const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
 const NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR = Object.getOwnPropertyDescriptor;
+const NATIVE_OBJECT_GET_PROTOTYPE_OF = Object.getPrototypeOf;
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_OBJECT_INTRINSICS = Object.freeze([
   ['defineProperty', Object.defineProperty],
@@ -59,6 +62,9 @@ const NATIVE_NUMBER_INTRINSICS = Object.freeze([
 ]);
 const NATIVE_STRING = String;
 const NATIVE_STRING_PROTOTYPE = String.prototype;
+const NATIVE_STRING_PAD_START = String.prototype.padStart;
+const NATIVE_STRING_SPLIT = String.prototype.split;
+const NATIVE_STRING_STARTS_WITH = String.prototype.startsWith;
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_STRING_INTRINSICS = Object.freeze([
   ['codePointAt', String.prototype.codePointAt],
@@ -83,6 +89,7 @@ const NATIVE_JSON_INTRINSICS = Object.freeze([
 const NATIVE_STRUCTURED_CLONE = structuredClone;
 const NATIVE_PROMISE = Promise;
 const NATIVE_SET_TIMEOUT = setTimeout;
+const NATIVE_CLEAR_TIMEOUT = clearTimeout;
 const NATIVE_DATE = Date;
 const NATIVE_DATE_NOW = Date.now;
 const NATIVE_MATH = Math;
@@ -120,6 +127,49 @@ const lstat = fsPromises.lstat;
 const open = fsPromises.open;
 const realpath = fsPromises.realpath;
 const rename = fsPromises.rename;
+const statsProbe = await lstat(new URL(import.meta.url));
+const NATIVE_STATS_PROTOTYPE = NATIVE_REFLECT_APPLY(
+  NATIVE_OBJECT_GET_PROTOTYPE_OF, NATIVE_OBJECT, [statsProbe]
+);
+const NATIVE_STATS_IS_DIRECTORY = NATIVE_STATS_PROTOTYPE.isDirectory;
+const NATIVE_STATS_IS_FILE = NATIVE_STATS_PROTOTYPE.isFile;
+const NATIVE_STATS_IS_SYMBOLIC_LINK = NATIVE_STATS_PROTOTYPE.isSymbolicLink;
+const direntProbe = (await readdir(new URL('.', import.meta.url), { withFileTypes: true }))[0];
+const NATIVE_DIRENT_PROTOTYPE = NATIVE_REFLECT_APPLY(
+  NATIVE_OBJECT_GET_PROTOTYPE_OF, NATIVE_OBJECT, [direntProbe]
+);
+const NATIVE_DIRENT_IS_DIRECTORY = NATIVE_DIRENT_PROTOTYPE.isDirectory;
+const NATIVE_DIRENT_IS_FILE = NATIVE_DIRENT_PROTOTYPE.isFile;
+const NATIVE_DIRENT_IS_SYMBOLIC_LINK = NATIVE_DIRENT_PROTOTYPE.isSymbolicLink;
+const fileHandleProbe = await open(new URL(import.meta.url));
+const NATIVE_FILE_HANDLE_PROTOTYPE = NATIVE_REFLECT_APPLY(
+  NATIVE_OBJECT_GET_PROTOTYPE_OF, NATIVE_OBJECT, [fileHandleProbe]
+);
+const NATIVE_FILE_HANDLE_READ_FILE = NATIVE_FILE_HANDLE_PROTOTYPE.readFile;
+const NATIVE_FILE_HANDLE_STAT = NATIVE_FILE_HANDLE_PROTOTYPE.stat;
+const NATIVE_FILE_HANDLE_SYNC = NATIVE_FILE_HANDLE_PROTOTYPE.sync;
+const NATIVE_FILE_HANDLE_UTIMES = NATIVE_FILE_HANDLE_PROTOTYPE.utimes;
+const NATIVE_FILE_HANDLE_WRITE_FILE = NATIVE_FILE_HANDLE_PROTOTYPE.writeFile;
+const fileHandleProbeClose = NATIVE_REFLECT_APPLY(
+  NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR, NATIVE_OBJECT, [fileHandleProbe, 'close']
+)?.value;
+await NATIVE_REFLECT_APPLY(fileHandleProbeClose, fileHandleProbe, []);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_STATS_INTRINSICS = Object.freeze([
+  ['isDirectory', NATIVE_STATS_IS_DIRECTORY], ['isFile', NATIVE_STATS_IS_FILE],
+  ['isSymbolicLink', NATIVE_STATS_IS_SYMBOLIC_LINK]
+]);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_DIRENT_INTRINSICS = Object.freeze([
+  ['isDirectory', NATIVE_DIRENT_IS_DIRECTORY], ['isFile', NATIVE_DIRENT_IS_FILE],
+  ['isSymbolicLink', NATIVE_DIRENT_IS_SYMBOLIC_LINK]
+]);
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_FILE_HANDLE_INTRINSICS = Object.freeze([
+  ['readFile', NATIVE_FILE_HANDLE_READ_FILE], ['stat', NATIVE_FILE_HANDLE_STAT],
+  ['sync', NATIVE_FILE_HANDLE_SYNC], ['utimes', NATIVE_FILE_HANDLE_UTIMES],
+  ['writeFile', NATIVE_FILE_HANDLE_WRITE_FILE]
+]);
 /** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
 const NATIVE_ARRAY_INTRINSICS = Object.freeze([
   ['sort', Array.prototype.sort], ['map', Array.prototype.map], ['some', Array.prototype.some],
@@ -204,6 +254,62 @@ function nativeJsonStringify(value) {
   return NATIVE_REFLECT_APPLY(NATIVE_JSON_STRINGIFY, NATIVE_JSON, [value]);
 }
 
+/** @param {string} value @param {number} length @param {string} fill */
+function stringPadStart(value, length, fill) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STRING_PAD_START, value, [length, fill]);
+}
+
+/** @param {string} value @param {string} separator */
+function stringSplit(value, separator) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STRING_SPLIT, value, [separator]);
+}
+
+/** @param {string} value @param {string} prefix */
+function stringStartsWith(value, prefix) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STRING_STARTS_WITH, value, [prefix]);
+}
+
+/** @param {any} status */
+function statsIsDirectory(status) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STATS_IS_DIRECTORY, status, []);
+}
+
+/** @param {any} status */
+function statsIsFile(status) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STATS_IS_FILE, status, []);
+}
+
+/** @param {any} status */
+function statsIsSymbolicLink(status) {
+  return NATIVE_REFLECT_APPLY(NATIVE_STATS_IS_SYMBOLIC_LINK, status, []);
+}
+
+/** @param {any} entry */
+function direntIsDirectory(entry) {
+  return NATIVE_REFLECT_APPLY(NATIVE_DIRENT_IS_DIRECTORY, entry, []);
+}
+
+/** @param {any} entry */
+function direntIsFile(entry) {
+  return NATIVE_REFLECT_APPLY(NATIVE_DIRENT_IS_FILE, entry, []);
+}
+
+/** @param {any} entry */
+function direntIsSymbolicLink(entry) {
+  return NATIVE_REFLECT_APPLY(NATIVE_DIRENT_IS_SYMBOLIC_LINK, entry, []);
+}
+
+/** @param {any} handle */
+async function closeFileHandle(handle) {
+  const closeMethod = NATIVE_REFLECT_APPLY(
+    NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR, NATIVE_OBJECT, [handle, 'close']
+  )?.value;
+  if (typeof closeMethod !== 'function') throw new RunStoreIntegrityError(
+    'Filesystem handle does not expose a trusted own close operation.'
+  );
+  await NATIVE_REFLECT_APPLY(closeMethod, handle, []);
+}
+
 /** @param {string} fileName */
 function temporaryOwnerIsAlive(fileName) {
   const match = NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, TEMPORARY_FILE, [fileName]);
@@ -252,6 +358,29 @@ function descriptorsMatch(owner, expected) {
   return true;
 }
 
+/** @param {object} owner @param {ReadonlyArray<readonly [string|symbol,unknown]>} expected */
+function resolvedDataMethodsMatch(owner, expected) {
+  for (let index = 0; index < expected.length; index += 1) {
+    let current = owner;
+    let matched = false;
+    while (current) {
+      const descriptor = NATIVE_REFLECT_APPLY(
+        NATIVE_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR, NATIVE_OBJECT,
+        [current, expected[index][0]]
+      );
+      if (descriptor) {
+        matched = !descriptor.get && !descriptor.set && descriptor.value === expected[index][1];
+        break;
+      }
+      current = NATIVE_REFLECT_APPLY(
+        NATIVE_OBJECT_GET_PROTOTYPE_OF, NATIVE_OBJECT, [current]
+      );
+    }
+    if (!matched) return false;
+  }
+  return true;
+}
+
 /** @param {object} owner @param {string|symbol} key @param {unknown} getter */
 function getterMatches(owner, key, getter) {
   const descriptor = NATIVE_REFLECT_APPLY(
@@ -292,6 +421,9 @@ export function runStoreIntrinsicsIntact() {
     && descriptorsMatch(NATIVE_DATE, NATIVE_DATE_INTRINSICS)
     && descriptorsMatch(NATIVE_MATH, NATIVE_MATH_INTRINSICS)
     && descriptorsMatch(NATIVE_PROCESS, NATIVE_PROCESS_INTRINSICS)
+    && resolvedDataMethodsMatch(NATIVE_STATS_PROTOTYPE, NATIVE_STATS_INTRINSICS)
+    && descriptorsMatch(NATIVE_DIRENT_PROTOTYPE, NATIVE_DIRENT_INTRINSICS)
+    && descriptorsMatch(NATIVE_FILE_HANDLE_PROTOTYPE, NATIVE_FILE_HANDLE_INTRINSICS)
     && getterMatches(NATIVE_MAP_PROTOTYPE, 'size', NATIVE_MAP_SIZE_GET)
     && getterMatches(NATIVE_SET_PROTOTYPE, 'size', NATIVE_SET_SIZE_GET);
 }
@@ -304,7 +436,7 @@ function requireRunStoreIntrinsics() {
 
 /** @param {number} sourceRevision */
 export function revisionName(sourceRevision) {
-  return `r${String(sourceRevision).padStart(3, '0')}`;
+  return `r${stringPadStart(nativeString(sourceRevision), 3, '0')}`;
 }
 
 /** @param {unknown} error */
@@ -316,7 +448,7 @@ export function isMissing(error) {
 /** @param {string} runDirectory @param {string} targetPath */
 function relativeControlledPath(runDirectory, targetPath) {
   const relative = pathRelative(runDirectory, targetPath);
-  if (relative === '' || relative === '..' || relative.startsWith(`..${NATIVE_PATH_SEPARATOR}`)
+  if (relative === '' || relative === '..' || stringStartsWith(relative, `..${NATIVE_PATH_SEPARATOR}`)
     || pathIsAbsolute(relative)) {
     throw new RunStoreIntegrityError('Controlled run path escaped the canonical run root.');
   }
@@ -326,7 +458,7 @@ function relativeControlledPath(runDirectory, targetPath) {
 /** @param {string} runDirectory @param {string} targetPath */
 async function assertNoSymlinkPath(runDirectory, targetPath) {
   const relative = relativeControlledPath(runDirectory, targetPath);
-  const parts = relative.split(NATIVE_PATH_SEPARATOR);
+  const parts = stringSplit(relative, NATIVE_PATH_SEPARATOR);
   let current = runDirectory;
   let lastExisting = runDirectory;
   for (let index = 0; index < parts.length; index += 1) {
@@ -336,10 +468,10 @@ async function assertNoSymlinkPath(runDirectory, targetPath) {
       if (isMissing(error)) break;
       throw error;
     }
-    if (status.isSymbolicLink()) throw new RunStoreIntegrityError(
+    if (statsIsSymbolicLink(status)) throw new RunStoreIntegrityError(
       `Controlled run path contains a symbolic link: ${relative}`
     );
-    if (index < parts.length - 1 && !status.isDirectory()) throw new RunStoreIntegrityError(
+    if (index < parts.length - 1 && !statsIsDirectory(status)) throw new RunStoreIntegrityError(
       `Controlled run path contains a non-directory ancestor: ${relative}`
     );
     lastExisting = current;
@@ -347,7 +479,7 @@ async function assertNoSymlinkPath(runDirectory, targetPath) {
   const realRoot = await realpath(runDirectory);
   const realExisting = await realpath(lastExisting);
   const realRelative = pathRelative(realRoot, realExisting);
-  if (realRelative === '..' || realRelative.startsWith(`..${NATIVE_PATH_SEPARATOR}`)
+  if (realRelative === '..' || stringStartsWith(realRelative, `..${NATIVE_PATH_SEPARATOR}`)
     || pathIsAbsolute(realRelative)) {
     throw new RunStoreIntegrityError('Controlled run path resolved outside the real run root.');
   }
@@ -357,13 +489,13 @@ async function assertNoSymlinkPath(runDirectory, targetPath) {
 async function ensureDirectory(runDirectory, directory) {
   if (pathResolve(directory) === pathResolve(runDirectory)) {
     const status = await lstat(runDirectory);
-    if (status.isSymbolicLink() || !status.isDirectory()) throw new RunStoreIntegrityError(
+    if (statsIsSymbolicLink(status) || !statsIsDirectory(status)) throw new RunStoreIntegrityError(
       'Run root is not a real directory.'
     );
     return;
   }
   const relative = relativeControlledPath(runDirectory, directory);
-  const parts = relative.split(NATIVE_PATH_SEPARATOR);
+  const parts = stringSplit(relative, NATIVE_PATH_SEPARATOR);
   let current = runDirectory;
   for (let index = 0; index < parts.length; index += 1) {
     current = pathJoin(current, parts[index]);
@@ -373,7 +505,7 @@ async function ensureDirectory(runDirectory, directory) {
       }
     }
     const status = await lstat(current);
-    if (status.isSymbolicLink() || !status.isDirectory()) throw new RunStoreIntegrityError(
+    if (statsIsSymbolicLink(status) || !statsIsDirectory(status)) throw new RunStoreIntegrityError(
       `Controlled directory is not a real directory: ${relative}`
     );
   }
@@ -382,7 +514,8 @@ async function ensureDirectory(runDirectory, directory) {
 /** @param {string} directory */
 async function syncDirectory(directory) {
   const handle = await open(directory, fsConstants.O_RDONLY);
-  try { await handle.sync(); } finally { await handle.close(); }
+  try { await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_SYNC, handle, []); }
+  finally { await closeFileHandle(handle); }
 }
 
 /** @param {unknown} error @param {string} code */
@@ -413,6 +546,20 @@ async function writeRunLockOwner(runDirectory, ownerPath, owner) {
   await atomicWriteText(runDirectory, ownerPath, `${nativeJsonStringify(owner)}\n`);
 }
 
+/** @param {any} left @param {any} right */
+function sameFileGeneration(left, right) {
+  return Boolean(left && right && left.dev === right.dev && left.ino === right.ino);
+}
+
+/** @param {string} runDirectory @param {string} directory @param {string} ownerPath */
+async function observeRunLock(runDirectory, directory, ownerPath) {
+  const status = await lstat(directory);
+  if (statsIsSymbolicLink(status) || !statsIsDirectory(status)) throw new RunStoreIntegrityError(
+    'Run coordination claim is not a real directory.'
+  );
+  return { status, record: await readRunLockOwner(runDirectory, ownerPath) };
+}
+
 /** Remove crash residues only after proving their complete trees contain no symlink. */
 /** @param {string} runDirectory */
 export async function cleanupRunLockResidues(runDirectory) {
@@ -420,7 +567,7 @@ export async function cleanupRunLockResidues(runDirectory) {
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
     if (!regexpTest(RUN_LOCK_RESIDUE_DIRECTORY, entry.name)) continue;
-    if (entry.isSymbolicLink() || !entry.isDirectory()) throw new RunStoreIntegrityError(
+    if (direntIsSymbolicLink(entry) || !direntIsDirectory(entry)) throw new RunStoreIntegrityError(
       'Run coordination crash residue is not a real directory.'
     );
     const target = pathJoin(runDirectory, entry.name);
@@ -435,64 +582,144 @@ export async function cleanupRunLockResidues(runDirectory) {
  * The lock directory is the atomic claim; owner metadata distinguishes an
  * active process from a safely reclaimable abandoned claim.
  * @param {string} runDirectory
+ * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>}} [coordinationHooks]
  * @returns {Promise<()=>Promise<void>>}
  */
-export async function acquireRunLock(runDirectory) {
+export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
   const lockDirectory = pathJoin(runDirectory, RUN_LOCK_DIRECTORY);
   const ownerPath = pathJoin(lockDirectory, RUN_LOCK_OWNER_FILE);
   const startedAt = currentTimeMilliseconds();
   const token = `${nativeString(NATIVE_PROCESS_PID)}-${nativeString(startedAt)}-${nativeString(++lockSequence)}`;
+  let foreignPid = -1;
+  let foreignToken = '';
+  let foreignProcessStart = '';
+  /** @type {any} */
+  let foreignStatus = null;
+  let foreignHeartbeatMtime = -1;
+  let foreignFirstObservedAt = 0;
+  let foreignHeartbeatAuthenticated = false;
 
   while (true) {
     try {
       await mkdir(lockDirectory);
-      await syncDirectory(runDirectory);
-      const owner = {
-        pid: NATIVE_PROCESS_PID,
-        token,
-        lease_expires_at_ms: currentTimeMilliseconds() + RUN_LOCK_LEASE_MS,
-        process_start_identity: NATIVE_PROCESS_START_IDENTITY
-      };
+      const acquiredStatus = await lstat(lockDirectory);
+      let claimHandle;
       try {
+        claimHandle = await open(
+          lockDirectory, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW
+        );
+        await syncDirectory(runDirectory);
+        const owner = {
+          pid: NATIVE_PROCESS_PID,
+          token,
+          lease_expires_at_ms: currentTimeMilliseconds() + RUN_LOCK_LEASE_MS,
+          process_start_identity: NATIVE_PROCESS_START_IDENTITY,
+          heartbeat_seq: 0
+        };
         await writeRunLockOwner(runDirectory, ownerPath, owner);
         await syncDirectory(runDirectory);
       } catch (error) {
+        if (claimHandle) await closeFileHandle(claimHandle).catch(() => {});
         await rm(lockDirectory, { recursive: true, force: true }).catch(() => {});
         await syncDirectory(runDirectory).catch(() => {});
         throw error;
       }
 
+      const claimed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+      if (!sameFileGeneration(acquiredStatus, claimed.status) || claimed.record?.token !== token) {
+        await closeFileHandle(claimHandle);
+        throw new RunStoreIntegrityError('Run coordination generation changed during acquisition.');
+      }
+
       let released = false;
+      let claimHandleClosed = false;
+      const closeClaimHandle = async () => {
+        if (claimHandleClosed) return;
+        claimHandleClosed = true;
+        await closeFileHandle(claimHandle);
+      };
+      let heartbeatStopped = false;
+      /** @type {ReturnType<typeof setTimeout>|undefined} */
+      let heartbeatTimer;
+      /** @type {Promise<void>|null} */
+      let heartbeatPromise = null;
+      /** @type {unknown} */
+      let heartbeatError = null;
+      const scheduleHeartbeat = () => {
+        if (heartbeatStopped) return;
+        heartbeatTimer = NATIVE_SET_TIMEOUT(() => {
+          heartbeatPromise = (async () => {
+            try {
+              const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+              if (!sameFileGeneration(acquiredStatus, observed.status)
+                || observed.record?.token !== token) throw new RunStoreIntegrityError(
+                  'Run coordination fencing changed before heartbeat renewal.'
+                );
+              if (coordinationHooks.afterHeartbeatObservation) {
+                await coordinationHooks.afterHeartbeatObservation();
+              }
+              const heartbeatSeconds = currentTimeMilliseconds() / 1_000;
+              await NATIVE_REFLECT_APPLY(
+                NATIVE_FILE_HANDLE_UTIMES, claimHandle, [heartbeatSeconds, heartbeatSeconds]
+              );
+              await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_SYNC, claimHandle, []);
+              const renewed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+              if (!sameFileGeneration(acquiredStatus, renewed.status)
+                || renewed.record?.token !== token) throw new RunStoreIntegrityError(
+                  'Run coordination fencing changed during heartbeat renewal.'
+                );
+            } catch (error) {
+              heartbeatError = error;
+              heartbeatStopped = true;
+            }
+            if (!heartbeatStopped) scheduleHeartbeat();
+          })();
+        }, RUN_LOCK_HEARTBEAT_MS);
+      };
+      scheduleHeartbeat();
       return async () => {
         if (released) return;
-        const record = await readRunLockOwner(runDirectory, ownerPath);
-        if (!record || record.token !== token || record.pid !== NATIVE_PROCESS_PID
-          || record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
-          throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
+        heartbeatStopped = true;
+        if (heartbeatTimer !== undefined) NATIVE_CLEAR_TIMEOUT(heartbeatTimer);
+        if (heartbeatPromise) await heartbeatPromise;
+        try {
+          const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+          if (heartbeatError || !sameFileGeneration(acquiredStatus, observed.status)
+            || observed.record?.token !== token || observed.record.pid !== NATIVE_PROCESS_PID
+            || observed.record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
+            throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
+          }
+          const releasedDirectory = `${lockDirectory}.release-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
+          await rename(lockDirectory, releasedDirectory);
+          await syncDirectory(runDirectory);
+          const moved = await observeRunLock(
+            runDirectory, releasedDirectory, pathJoin(releasedDirectory, RUN_LOCK_OWNER_FILE)
+          );
+          if (!sameFileGeneration(acquiredStatus, moved.status) || moved.record?.token !== token) {
+            throw new RunStoreIntegrityError('Run coordination release moved a different generation.');
+          }
+          await closeClaimHandle();
+          await rm(releasedDirectory, { recursive: true, force: true });
+          await syncDirectory(runDirectory);
+          released = true;
+        } catch (error) {
+          await closeClaimHandle().catch(() => {});
+          throw error;
         }
-        const releasedDirectory = `${lockDirectory}.release-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
-        await rename(lockDirectory, releasedDirectory);
-        await syncDirectory(runDirectory);
-        await rm(releasedDirectory, { recursive: true, force: true });
-        await syncDirectory(runDirectory);
-        released = true;
       };
     } catch (error) {
       if (!hasErrorCode(error, 'EEXIST')) throw error;
     }
 
-    let status;
+    let observed;
     try {
-      status = await lstat(lockDirectory);
+      observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
     } catch (error) {
       if (isMissing(error)) continue;
       throw error;
     }
-    if (status.isSymbolicLink() || !status.isDirectory()) throw new RunStoreIntegrityError(
-      'Run coordination claim is not a real directory.'
-    );
-
-    const record = await readRunLockOwner(runDirectory, ownerPath);
+    const status = observed.status;
+    const record = observed.record;
     const ownerPid = record?.pid;
     const ownerToken = record?.token;
     const ownerLease = record?.lease_expires_at_ms;
@@ -505,17 +732,81 @@ export async function acquireRunLock(runDirectory) {
     const currentPidIdentityMatches = ownerPid !== NATIVE_PROCESS_PID
       || ownerProcessStart === undefined
       || ownerProcessStart === NATIVE_PROCESS_START_IDENTITY;
-    const ownerAlive = ownerShapeValid && typeof ownerLease === 'number' && ownerLease > now
-      && currentPidIdentityMatches
+    const hasCompilerHeartbeat = typeof record?.heartbeat_seq === 'number'
+      && NATIVE_REFLECT_APPLY(
+        NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [record.heartbeat_seq]
+      );
+    const compilerIdentityValid = hasCompilerHeartbeat
+      && typeof ownerProcessStart === 'string'
+      && stringStartsWith(ownerProcessStart, `${nativeString(ownerPid)}:`);
+    const heartbeatLease = compilerIdentityValid
+      ? status.mtimeMs + RUN_LOCK_LEASE_MS : ownerLease;
+    let foreignHeartbeatPending = false;
+    if (ownerPid !== NATIVE_PROCESS_PID && ownerShapeValid && compilerIdentityValid) {
+      const sameForeignTuple = ownerPid === foreignPid && ownerToken === foreignToken
+        && ownerProcessStart === foreignProcessStart && sameFileGeneration(status, foreignStatus);
+      if (!sameForeignTuple) {
+        foreignPid = ownerPid;
+        foreignToken = ownerToken;
+        foreignProcessStart = ownerProcessStart;
+        foreignStatus = status;
+        foreignHeartbeatMtime = status.mtimeMs;
+        foreignFirstObservedAt = now;
+        foreignHeartbeatAuthenticated = false;
+      } else if (status.mtimeMs > foreignHeartbeatMtime) {
+        foreignHeartbeatMtime = status.mtimeMs;
+        foreignHeartbeatAuthenticated = true;
+      } else if (status.mtimeMs < foreignHeartbeatMtime) {
+        foreignHeartbeatMtime = status.mtimeMs;
+        foreignFirstObservedAt = now;
+        foreignHeartbeatAuthenticated = false;
+      }
+      foreignHeartbeatPending = !foreignHeartbeatAuthenticated
+        && now - foreignFirstObservedAt < RUN_LOCK_HEARTBEAT_PROOF_MS;
+    } else {
+      foreignPid = -1;
+      foreignToken = '';
+      foreignProcessStart = '';
+      foreignStatus = null;
+      foreignHeartbeatMtime = -1;
+      foreignFirstObservedAt = 0;
+      foreignHeartbeatAuthenticated = false;
+    }
+    const arbitraryPidIsAuthenticated = ownerPid === NATIVE_PROCESS_PID
+      || foreignHeartbeatAuthenticated;
+    const ownerAlive = ownerShapeValid && typeof heartbeatLease === 'number' && heartbeatLease > now
+      && currentPidIdentityMatches && arbitraryPidIsAuthenticated
       && processOwnerIsAlive(ownerPid);
     const incompleteIsYoung = !ownerShapeValid
       && now - status.mtimeMs < RUN_LOCK_INCOMPLETE_GRACE_MS;
+    const waitForForeignHeartbeatProof = foreignHeartbeatPending
+      && typeof heartbeatLease === 'number' && heartbeatLease > now && processOwnerIsAlive(ownerPid);
 
-    if (!ownerAlive && !incompleteIsYoung) {
+    if (!ownerAlive && !incompleteIsYoung && !waitForForeignHeartbeatProof) {
       const staleDirectory = `${lockDirectory}.stale-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
       try {
+        const confirmed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+        if (!sameFileGeneration(status, confirmed.status)
+          || confirmed.record?.token !== ownerToken) continue;
+        if (coordinationHooks.afterStaleObservation) {
+          await coordinationHooks.afterStaleObservation();
+        }
         await rename(lockDirectory, staleDirectory);
         await syncDirectory(runDirectory);
+        const moved = await observeRunLock(
+          runDirectory, staleDirectory, pathJoin(staleDirectory, RUN_LOCK_OWNER_FILE)
+        );
+        if (!sameFileGeneration(status, moved.status) || moved.record?.token !== ownerToken) {
+          try {
+            await rename(staleDirectory, lockDirectory);
+            await syncDirectory(runDirectory);
+          } catch (restoreError) {
+            throw new RunStoreIntegrityError(
+              `Run coordination ABA generation could not be restored: ${nativeString(restoreError)}`
+            );
+          }
+          continue;
+        }
         await rm(staleDirectory, { recursive: true, force: true });
         await syncDirectory(runDirectory);
         continue;
@@ -525,7 +816,8 @@ export async function acquireRunLock(runDirectory) {
       }
     }
 
-    if (currentTimeMilliseconds() - startedAt >= RUN_LOCK_WAIT_MS) throw new RunStoreIntegrityError(
+    if (!ownerAlive && !waitForForeignHeartbeatProof
+      && currentTimeMilliseconds() - startedAt >= RUN_LOCK_WAIT_MS) throw new RunStoreIntegrityError(
       'Timed out waiting for the active run coordination owner.'
     );
     await delay(RUN_LOCK_POLL_MS);
@@ -557,10 +849,10 @@ async function inspectTree(runDirectory, directory) {
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
       const target = pathJoin(current, entry.name);
-      if (entry.isSymbolicLink()) throw new RunStoreIntegrityError(
+      if (direntIsSymbolicLink(entry)) throw new RunStoreIntegrityError(
         `Controlled run tree contains a symbolic link: ${pathRelative(runDirectory, target)}`
       );
-      if (entry.isDirectory()) append(pending, target);
+      if (direntIsDirectory(entry)) append(pending, target);
     }
   }
 }
@@ -569,7 +861,7 @@ async function inspectTree(runDirectory, directory) {
 /** @param {string} runDirectory */
 export async function prepareRunStore(runDirectory) {
   const rootStatus = await lstat(runDirectory);
-  if (rootStatus.isSymbolicLink() || !rootStatus.isDirectory()) throw new RunStoreIntegrityError(
+  if (statsIsSymbolicLink(rootStatus) || !statsIsDirectory(rootStatus)) throw new RunStoreIntegrityError(
     'Run directory must be a real directory rather than a symbolic link.'
   );
   await realpath(runDirectory);
@@ -600,7 +892,7 @@ export async function recoverStagingClaims(runDirectory) {
     const claims = [];
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
-      if (entry.isFile() && entry.name.startsWith(prefix)) append(claims, entry.name);
+      if (direntIsFile(entry) && stringStartsWith(entry.name, prefix)) append(claims, entry.name);
     }
     NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, claims, []);
     /** @type {string[]} */
@@ -669,11 +961,11 @@ export async function cleanupTemporaryFiles(runDirectory) {
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index];
         const target = pathJoin(directory, entry.name);
-        if (entry.isSymbolicLink()) throw new RunStoreIntegrityError(
+        if (direntIsSymbolicLink(entry)) throw new RunStoreIntegrityError(
           `Controlled run tree contains a symbolic link: ${pathRelative(runDirectory, target)}`
         );
-        if (entry.isDirectory()) append(pending, target);
-        else if (entry.isFile() && regexpTest(TEMPORARY_FILE, entry.name)
+        if (direntIsDirectory(entry)) append(pending, target);
+        else if (direntIsFile(entry) && regexpTest(TEMPORARY_FILE, entry.name)
           && !temporaryOwnerIsAlive(entry.name)) {
           await removeFileDurably(runDirectory, target);
         }
@@ -704,15 +996,15 @@ export async function atomicWriteText(runDirectory, targetPath, content) {
       fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
       0o600
     );
-    await handle.writeFile(content, 'utf8');
-    await handle.sync();
-    await handle.close();
+    await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_WRITE_FILE, handle, [content, 'utf8']);
+    await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_SYNC, handle, []);
+    await closeFileHandle(handle);
     handle = undefined;
     await assertNoSymlinkPath(runDirectory, targetPath);
     await rename(temporaryPath, targetPath);
     await syncDirectory(directory);
   } catch (error) {
-    if (handle) await handle.close().catch(() => {});
+    if (handle) await closeFileHandle(handle).catch(() => {});
     await rm(temporaryPath, { force: true }).catch(() => {});
     throw error;
   }
@@ -729,12 +1021,12 @@ export async function readText(runDirectory, filePath) {
   await assertNoSymlinkPath(runDirectory, filePath);
   const handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
   try {
-    const status = await handle.stat();
-    if (!status.isFile()) throw new RunStoreIntegrityError(
+    const status = await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_STAT, handle, []);
+    if (!statsIsFile(status)) throw new RunStoreIntegrityError(
       `Controlled artifact is not a regular file: ${pathRelative(runDirectory, filePath)}`
     );
-    return await handle.readFile('utf8');
-  } finally { await handle.close(); }
+    return await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_READ_FILE, handle, ['utf8']);
+  } finally { await closeFileHandle(handle); }
 }
 
 /** @param {string} runDirectory @param {string} filePath */
@@ -804,8 +1096,8 @@ export async function acceptedSourceRevisions(runDirectory) {
   const revisions = [];
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
-    if (entry.isSymbolicLink()) throw new RunStoreIntegrityError('Accepted revision cannot be a symbolic link.');
-    if (!entry.isDirectory()) continue;
+    if (direntIsSymbolicLink(entry)) throw new RunStoreIntegrityError('Accepted revision cannot be a symbolic link.');
+    if (!direntIsDirectory(entry)) continue;
     const match = NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, REVISION_DIRECTORY, [entry.name]);
     if (!match) continue;
     const sourceRevision = Number(match[1]);

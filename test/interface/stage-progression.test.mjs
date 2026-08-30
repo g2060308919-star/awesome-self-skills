@@ -11,6 +11,7 @@ import { STAGE_FILES } from '../../src/run-store.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const fixturePath = path.join(repositoryRoot, 'test/fixtures/recovery/grounded-revision.json');
 const entryPath = path.join(repositoryRoot, 'src/entry.mjs');
 const stdoutFailurePreload = path.join(
@@ -401,6 +402,7 @@ test('first-await mutation of static Array and path methods is contained before 
     const runDirectory = await temporaryRun(`intrinsic static ${method}`);
     const revision = await fixture();
     const original = owner[method];
+    const originalDescriptor = Object.getOwnPropertyDescriptor(owner, method);
     let calls = 0;
     try {
       await stage(runDirectory, 'source_pack', revision.source_pack);
@@ -415,7 +417,8 @@ test('first-await mutation of static Array and path methods is contained before 
       assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
       await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
     } finally {
-      owner[method] = original;
+      if (originalDescriptor) Object.defineProperty(owner, method, originalDescriptor);
+      else delete owner[method];
       await rm(runDirectory, { recursive: true, force: true });
     }
   }
@@ -471,6 +474,79 @@ test('first-await mutation of canonical and lock intrinsics never executes calle
     assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
   } finally {
     Object.fromEntries = originalFromEntries;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('filesystem and String prototype methods are captured before any async run traversal', async () => {
+  const probeDirectory = await temporaryRun('prototype probes');
+  const probeFile = path.join(probeDirectory, 'probe.txt');
+  await writeFile(probeFile, 'probe', 'utf8');
+  const statsPrototype = Object.getPrototypeOf(await stat(probeFile));
+  const direntPrototype = Object.getPrototypeOf((await fsPromises.readdir(
+    probeDirectory, { withFileTypes: true }
+  ))[0]);
+  const probeHandle = await fsPromises.open(probeFile, 'r');
+  const fileHandlePrototype = Object.getPrototypeOf(probeHandle);
+  await probeHandle.close();
+  await rm(probeDirectory, { recursive: true, force: true });
+  const originalReflectApply = Reflect.apply;
+  /** @type {Array<[Record<string,any>,string]>} */
+  const cases = [
+    [statsPrototype, 'isDirectory'], [statsPrototype, 'isSymbolicLink'], [statsPrototype, 'isFile'],
+    [direntPrototype, 'isDirectory'], [direntPrototype, 'isSymbolicLink'], [direntPrototype, 'isFile'],
+    [fileHandlePrototype, 'writeFile'], [fileHandlePrototype, 'sync'],
+    [fileHandlePrototype, 'utimes'],
+    [fileHandlePrototype, 'stat'], [fileHandlePrototype, 'readFile'],
+    [/** @type {any} */ (String.prototype), 'split'],
+    [/** @type {any} */ (String.prototype), 'startsWith']
+  ];
+  for (const [owner, method] of cases) {
+    const runDirectory = await temporaryRun(`prototype ${method}`);
+    const revision = await fixture();
+    const original = owner[method];
+    let calls = 0;
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      const pending = advanceStrict(runDirectory);
+      owner[method] = function (/** @type {any[]} */ ...args) {
+        calls += 1;
+        return originalReflectApply(original, this, args);
+      };
+      const reply = /** @type {any} */ (await pending);
+      assert.equal(calls, 0, `${method} caller code executed`);
+      assert.equal(reply.status, 'fatal', `${method}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+      await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+    } finally {
+      owner[method] = original;
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+
+  const runDirectory = await temporaryRun('throwing stats method');
+  const revision = await fixture();
+  const originalIsDirectory = statsPrototype.isDirectory;
+  const originalIsDirectoryDescriptor = Object.getOwnPropertyDescriptor(
+    statsPrototype, 'isDirectory'
+  );
+  let calls = 0;
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const pending = advanceStrict(runDirectory);
+    statsPrototype.isDirectory = () => {
+      calls += 1;
+      throw new Error('caller Stats method must not execute');
+    };
+    const reply = /** @type {any} */ (await pending);
+    assert.equal(calls, 0);
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+  } finally {
+    if (originalIsDirectoryDescriptor) Object.defineProperty(
+      statsPrototype, 'isDirectory', originalIsDirectoryDescriptor
+    );
+    else delete statsPrototype.isDirectory;
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
