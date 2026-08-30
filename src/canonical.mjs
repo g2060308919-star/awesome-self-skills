@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto';
 
+const NATIVE_ARRAY_SORT = Array.prototype.sort;
+
+/** @template T @param {T[]} values @param {(left:T,right:T)=>number} compare */
+function sortArray(values, compare) {
+  return /** @type {T[]} */ (Reflect.apply(NATIVE_ARRAY_SORT, values, [compare]));
+}
+
 const VOLATILE_FIELDS = new Set(['source_revision', 'created_at', 'updated_at', 'confirmed_at', 'event_at', 'timestamp', 'position', 'index', 'array_index']);
 const ORDERED_ARRAY_PATHS = new Set([
   '/steps', '/action_path', '/flow', '/flow_sequence', '/sequence', '/transition_order', '/cleanup/steps',
@@ -70,13 +77,15 @@ function canonicalize(value, path = []) {
     const values = value.map((item) => canonicalize(item, path));
     const currentPath = pathKey(path);
     if (ORDERED_ARRAY_PATHS.has(currentPath)) return values;
-    if (SET_ARRAY_PATHS.has(currentPath)) return [...values].sort((left, right) => compareCodePoints(stableSemanticKey(path, left), stableSemanticKey(path, right)));
+    if (SET_ARRAY_PATHS.has(currentPath)) return sortArray(
+      [...values], (left, right) => compareCodePoints(stableSemanticKey(path, left), stableSemanticKey(path, right))
+    );
     return values;
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value)
-      .sort(([left], [right]) => compareCodePoints(left, right))
-      .map(([key, item]) => [key, canonicalize(item, [...path, key])]));
+    return Object.fromEntries(sortArray(
+      Object.entries(value), ([left], [right]) => compareCodePoints(left, right)
+    ).map(([key, item]) => [key, canonicalize(item, [...path, key])]));
   }
   return value;
 }

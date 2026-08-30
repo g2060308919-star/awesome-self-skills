@@ -37,6 +37,10 @@ const LEDGER_ROOT_KEYS = [
 ];
 const DISPOSITIONS = new Set(['grounded', 'conditional', 'blocked', 'not_applicable']);
 const RISKS = new Set(['critical', 'high', 'medium', 'low']);
+const COMPARISONS = new Set(['equals', 'contains', 'matches', 'within']);
+const ORACLE_FIELDS = Object.freeze({
+  value: 'expected_value', state: 'expected_state', event: 'expected_event', 'side-effect': 'expected_side_effect'
+});
 const ROOT_DISPOSITIONS = new Set([
   'open', 'asked', 'resolved_final', 'resolved_temporary', 'suppressed_unknown', 'suppressed_deferred'
 ]);
@@ -48,6 +52,12 @@ const NATIVE_REFLECT_OWN_KEYS = Reflect.ownKeys;
 const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
 const NATIVE_HAS_OWN = Object.hasOwn;
 const NATIVE_ARRAY_POP = Array.prototype.pop;
+const NATIVE_ARRAY_SORT = Array.prototype.sort;
+
+/** @template T @param {T[]} values @param {(left:T,right:T)=>number} compare */
+function sortArray(values, compare) {
+  return /** @type {T[]} */ (Reflect.apply(NATIVE_ARRAY_SORT, values, [compare]));
+}
 
 export class BundleReconciliationError extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
@@ -90,7 +100,7 @@ function finalizeDiagnostics(diagnostics) {
     else unique.set(canonicalStringify(item), item);
   }
   if (unique.size > DIAGNOSTIC_LIMIT) overflow = true;
-  const sorted = [...unique.values()].sort((left, right) =>
+  const sorted = sortArray([...unique.values()], (left, right) =>
     compareCodePoints(left.category, right.category)
     || compareCodePoints(left.code, right.code)
     || compareCodePoints(left.path, right.path)
@@ -100,7 +110,7 @@ function finalizeDiagnostics(diagnostics) {
   retained.push(diagnostic(
     'classification', 'DIAGNOSTICS_TRUNCATED', '/', `diagnostics are bounded at ${DIAGNOSTIC_LIMIT} entries`
   ));
-  return retained.sort((left, right) =>
+  return sortArray(retained, (left, right) =>
     compareCodePoints(left.category, right.category)
     || compareCodePoints(left.code, right.code)
     || compareCodePoints(left.path, right.path)
@@ -157,7 +167,7 @@ function snapshotControlled(root) {
         assign(null);
         continue;
       }
-      const keys = NATIVE_REFLECT_OWN_KEYS(descriptors).sort((left, right) =>
+      const keys = sortArray(NATIVE_REFLECT_OWN_KEYS(descriptors), (left, right) =>
         compareCodePoints(typeof left === 'symbol' ? String(left.description ?? '') : left,
           typeof right === 'symbol' ? String(right.description ?? '') : right));
       let invalidOwnKeys = false;
@@ -183,7 +193,7 @@ function snapshotControlled(root) {
         assign(null);
         continue;
       }
-      numeric.sort((left, right) => left - right);
+      sortArray(numeric, (left, right) => left - right);
       const lengthDescriptor = descriptors.length;
       const length = lengthDescriptor && NATIVE_HAS_OWN(lengthDescriptor, 'value') && Number.isSafeInteger(lengthDescriptor.value)
         ? Number(lengthDescriptor.value) : 0;
@@ -242,7 +252,7 @@ function snapshotControlled(root) {
       assign(null);
       continue;
     }
-    const keys = NATIVE_REFLECT_OWN_KEYS(descriptors).sort((left, right) =>
+    const keys = sortArray(NATIVE_REFLECT_OWN_KEYS(descriptors), (left, right) =>
       compareCodePoints(typeof left === 'symbol' ? String(left.description ?? '') : left,
         typeof right === 'symbol' ? String(right.description ?? '') : right));
     /** @type {Record<string, unknown>} */
@@ -294,7 +304,7 @@ function strings(value) {
 /** @param {Record<string, unknown>} value @param {string[]} allowed @param {string} path @param {Diagnostic[]} diagnostics @param {string} code */
 function requireClosed(value, allowed, path, diagnostics, code) {
   const allowedKeys = new Set(allowed);
-  for (const key of Object.keys(value).sort(compareCodePoints)) if (!allowedKeys.has(key)) diagnostics.push(diagnostic(
+  for (const key of sortArray(Object.keys(value), compareCodePoints)) if (!allowedKeys.has(key)) diagnostics.push(diagnostic(
     'schema', code, `${path}/${pointerPart(key)}`, 'property is outside the closed Task 10 contract'
   ));
   for (const key of allowed) if (!Object.hasOwn(value, key)) diagnostics.push(diagnostic(
@@ -319,7 +329,7 @@ function canonicalStrings(value, path, diagnostics, nonempty = false) {
     seen.add(value[index]);
     output.push(value[index]);
   }
-  return output.sort(compareCodePoints);
+  return sortArray(output, compareCodePoints);
 }
 
 /** @param {unknown} submittedContext */
@@ -392,7 +402,59 @@ function caseExpectations(caseDraft) {
 
 /** @param {string[]} left @param {string[]} right */
 function sameStrings(left, right) {
-  return canonicalStringify([...left].sort(compareCodePoints)) === canonicalStringify([...right].sort(compareCodePoints));
+  return canonicalStringify(sortArray([...left], compareCodePoints))
+    === canonicalStringify(sortArray([...right], compareCodePoints));
+}
+
+/** @param {unknown} value */
+function normalizeSemanticString(value) {
+  if (typeof value !== 'string') return '';
+  return value.normalize('NFC').trim().replace(/\s+/gu, ' ');
+}
+
+/** @param {Record<string, unknown>[]} entries */
+function canonicalSetProjection(entries) {
+  const byCanonicalValue = new Map();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    byCanonicalValue.set(canonicalStringify(entry), entry);
+  }
+  const ordered = sortArray([...byCanonicalValue], ([left], [right]) => compareCodePoints(left, right));
+  const projected = [];
+  for (let index = 0; index < ordered.length; index += 1) projected.push(ordered[index][1]);
+  return canonicalStringify(projected);
+}
+
+/** @param {Record<string, unknown>} caseDraft */
+function derivedExecutionSignature(caseDraft) {
+  const preconditions = records(caseDraft.preconditions);
+  const preconditionProjection = [];
+  for (let index = 0; index < preconditions.length; index += 1) preconditionProjection.push({
+    condition: normalizeSemanticString(preconditions[index].condition),
+    reachable_from: normalizeSemanticString(preconditions[index].reachable_from)
+  });
+  const data = records(caseDraft.data);
+  const dataProjection = [];
+  for (let index = 0; index < data.length; index += 1) dataProjection.push({
+    name: normalizeSemanticString(data[index].name), value: normalizeSemanticString(data[index].value)
+  });
+  const actionPath = [];
+  const oracleRefs = new Set();
+  const steps = records(caseDraft.steps);
+  for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
+    actionPath.push(normalizeSemanticString(steps[stepIndex].action));
+    const expectations = records(steps[stepIndex].expectations);
+    for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
+      oracleRefs.add(normalizeSemanticString(expectations[expectationIndex].expectation_id));
+    }
+  }
+  return {
+    role: isRecord(caseDraft.role) ? normalizeSemanticString(caseDraft.role.value) : '',
+    precondition_state: canonicalSetProjection(preconditionProjection),
+    data_partition: canonicalSetProjection(dataProjection),
+    action_path: actionPath,
+    oracle_refs: sortArray([...oracleRefs], compareCodePoints)
+  };
 }
 
 /**
@@ -430,13 +492,13 @@ function buildEvidenceGraph(claimsById, diagnostics) {
   /** @type {string[]} */
   const queue = [];
   for (const [claimId, degree] of indegree) if (degree === 0) queue.push(claimId);
-  queue.sort(compareCodePoints);
+  sortArray(queue, compareCodePoints);
   let cursor = 0;
   while (cursor < queue.length) {
     const claimId = /** @type {string} */ (queue[cursor]);
     cursor += 1;
     const children = /** @type {string[]} */ (childrenByClaim.get(claimId) ?? []);
-    children.sort(compareCodePoints);
+    sortArray(children, compareCodePoints);
     for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
       const childId = /** @type {string} */ (children[childIndex]);
       const remaining = (indegree.get(childId) ?? 0) - 1;
@@ -451,7 +513,7 @@ function buildEvidenceGraph(claimsById, diagnostics) {
 
   const componentByClaim = new Map();
   let component = 0;
-  for (const claimId of [...claimsById.keys()].sort(compareCodePoints)) {
+  for (const claimId of sortArray([...claimsById.keys()], compareCodePoints)) {
     if (componentByClaim.has(claimId)) continue;
     const pending = [claimId];
     componentByClaim.set(claimId, component);
@@ -459,7 +521,9 @@ function buildEvidenceGraph(claimsById, diagnostics) {
     while (position < pending.length) {
       const current = pending[position];
       position += 1;
-      const neighbors = [...(parentsByClaim.get(current) ?? []), ...(childrenByClaim.get(current) ?? [])].sort(compareCodePoints);
+      const neighbors = sortArray(
+        [...(parentsByClaim.get(current) ?? []), ...(childrenByClaim.get(current) ?? [])], compareCodePoints
+      );
       for (const neighbor of neighbors) if (!componentByClaim.has(neighbor)) {
         componentByClaim.set(neighbor, component);
         pending.push(neighbor);
@@ -500,10 +564,10 @@ function buildEvidenceGraph(claimsById, diagnostics) {
     downgradeSummaryByClaim.set(claimId, summary);
   }
   let time = 0;
-  const roots = [...claimsById.keys()].filter((claimId) =>
+  const roots = sortArray([...claimsById.keys()].filter((claimId) =>
     (parentsByClaim.get(claimId)?.length ?? 0) === 0
     && componentForestById.get(componentByClaim.get(claimId)) === true
-  ).sort(compareCodePoints);
+  ), compareCodePoints);
   for (const root of roots) {
     /** @type {Array<{claimId:string,exit:boolean}>} */
     const pending = [{ claimId: root, exit: false }];
@@ -568,44 +632,111 @@ function isEvidenceRelated(left, right, graph) {
   return isEvidenceAncestor(left, right, graph) || isEvidenceAncestor(right, left, graph);
 }
 
+/** @param {number[]} values @param {number} target */
+function lowerBound(values, target) {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (values[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
 /**
- * Build exactly the ancestor-or-descendant union for a root set. Traversing
- * upward and downward from the roots independently avoids admitting siblings
- * merely because they share an ancestor.
+ * Build an entry-local ancestor-or-descendant predicate. Forest components use
+ * preorder intervals and root positions, so many independent root-ledger
+ * entries never retain one transitive closure each. General components keep at
+ * most one traversal-local closure for the current ledger entry.
  * @param {Set<string>} roots
  * @param {ReturnType<typeof buildEvidenceGraph>} graph
- * @param {Map<string, Set<string>>} cache
  */
-function evidenceRelatedClosure(roots, graph, cache) {
-  const canonicalRoots = [...roots].sort(compareCodePoints);
-  const cacheKey = canonicalStringify(canonicalRoots);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-  const related = new Set();
-  const upward = [...canonicalRoots];
-  let cursor = 0;
-  while (cursor < upward.length) {
-    const claimId = upward[cursor];
-    cursor += 1;
-    if (!graph.claimsById.has(claimId) || related.has(claimId)) continue;
-    related.add(claimId);
-    const parents = graph.parentsByClaim.get(claimId) ?? [];
-    for (let index = 0; index < parents.length; index += 1) upward.push(parents[index]);
+function evidenceRelationIndex(roots, graph) {
+  /** @type {Map<number, {positions:number[], intervals:Array<{start:number,end:number}>}>} */
+  const forestByComponent = new Map();
+  /** @type {Map<number, string[]>} */
+  const generalRootsByComponent = new Map();
+  for (const root of roots) {
+    const componentId = graph.componentByClaim.get(root);
+    if (componentId === undefined) continue;
+    if (graph.componentForestById.get(componentId) === true) {
+      const start = graph.entryByClaim.get(root);
+      const end = graph.exitByClaim.get(root);
+      if (start === undefined || end === undefined) continue;
+      const component = forestByComponent.get(componentId) ?? { positions: [], intervals: [] };
+      component.positions.push(start);
+      component.intervals.push({ start, end });
+      forestByComponent.set(componentId, component);
+    } else {
+      const component = generalRootsByComponent.get(componentId) ?? [];
+      component.push(root);
+      generalRootsByComponent.set(componentId, component);
+    }
   }
-  const downwardVisited = new Set();
-  const downward = [...canonicalRoots];
-  cursor = 0;
-  while (cursor < downward.length) {
-    const claimId = downward[cursor];
-    cursor += 1;
-    if (!graph.claimsById.has(claimId) || downwardVisited.has(claimId)) continue;
-    downwardVisited.add(claimId);
-    related.add(claimId);
-    const children = graph.childrenByClaim.get(claimId) ?? [];
-    for (let index = 0; index < children.length; index += 1) downward.push(children[index]);
+  for (const component of forestByComponent.values()) {
+    sortArray(component.positions, (left, right) => left - right);
+    sortArray(component.intervals, (left, right) => left.start - right.start || right.end - left.end);
+    const merged = [];
+    for (let index = 0; index < component.intervals.length; index += 1) {
+      const interval = component.intervals[index];
+      const previous = merged[merged.length - 1];
+      if (previous && interval.start <= previous.end) previous.end = Math.max(previous.end, interval.end);
+      else merged.push({ ...interval });
+    }
+    component.intervals = merged;
   }
-  cache.set(cacheKey, related);
-  return related;
+  /** @type {Map<number, Set<string>>} */
+  const generalRelatedByComponent = new Map();
+  for (const [componentId, componentRoots] of generalRootsByComponent) {
+    const related = new Set();
+    const upward = [...componentRoots];
+    let cursor = 0;
+    while (cursor < upward.length) {
+      const claimId = upward[cursor];
+      cursor += 1;
+      if (related.has(claimId)) continue;
+      related.add(claimId);
+      const parents = graph.parentsByClaim.get(claimId) ?? [];
+      for (let index = 0; index < parents.length; index += 1) upward.push(parents[index]);
+    }
+    const downwardVisited = new Set();
+    const downward = [...componentRoots];
+    cursor = 0;
+    while (cursor < downward.length) {
+      const claimId = downward[cursor];
+      cursor += 1;
+      if (downwardVisited.has(claimId)) continue;
+      downwardVisited.add(claimId);
+      related.add(claimId);
+      const children = graph.childrenByClaim.get(claimId) ?? [];
+      for (let index = 0; index < children.length; index += 1) downward.push(children[index]);
+    }
+    generalRelatedByComponent.set(componentId, related);
+  }
+  return {
+    /** @param {string} claimId */
+    has(claimId) {
+      const componentId = graph.componentByClaim.get(claimId);
+      if (componentId === undefined) return false;
+      const general = generalRelatedByComponent.get(componentId);
+      if (general) return general.has(claimId);
+      const forest = forestByComponent.get(componentId);
+      const start = graph.entryByClaim.get(claimId);
+      const end = graph.exitByClaim.get(claimId);
+      if (!forest || start === undefined || end === undefined) return false;
+      const rootAtOrAfter = lowerBound(forest.positions, start);
+      if (rootAtOrAfter < forest.positions.length && forest.positions[rootAtOrAfter] <= end) return true;
+      let low = 0;
+      let high = forest.intervals.length;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (forest.intervals[middle].start <= start) low = middle + 1;
+        else high = middle;
+      }
+      return low > 0 && forest.intervals[low - 1].end >= start;
+    }
+  };
 }
 
 /** @param {number} size */
@@ -661,14 +792,14 @@ function matchForestOracleOwnership(requirements, expectations, graph) {
     if (start === undefined || end === undefined) return false;
     anchors.push({ start, end });
   }
-  anchors.sort((left, right) => right.start - left.start || left.end - right.end);
+  sortArray(anchors, (left, right) => right.start - left.start || left.end - right.end);
   /** @type {number[]} */
   const positions = [];
   for (const expectation of expectations) {
     const position = graph.entryByClaim.get(expectation.evidenceRef);
     if (position !== undefined) positions.push(position);
   }
-  positions.sort((left, right) => left - right);
+  sortArray(positions, (left, right) => left - right);
   const capacity = fenwick(positions.length);
   for (let index = 0; index < positions.length; index += 1) capacity.add(index, 1);
   /** @param {number} target @param {boolean} after */
@@ -731,9 +862,9 @@ function matchGeneralOracleOwnership(requirements, expectations, graph) {
     anchorByRequirement.push(anchor);
     const roots = new Set(requirement.required);
     requiredRootsByRequirement.push(roots);
-    requiredSignatureByRequirement.push(canonicalStringify([...roots].sort(compareCodePoints)));
+    requiredSignatureByRequirement.push(canonicalStringify(sortArray([...roots], compareCodePoints)));
   }
-  const requirementOrder = requirements.map((_, index) => index).sort((left, right) =>
+  const requirementOrder = sortArray(requirements.map((_, index) => index), (left, right) =>
     (graph.topologicalIndexByClaim.get(anchorByRequirement[right]) ?? -1)
       - (graph.topologicalIndexByClaim.get(anchorByRequirement[left]) ?? -1)
     || left - right);
@@ -828,30 +959,38 @@ function matchGeneralOracleOwnership(requirements, expectations, graph) {
 /** @param {Array<{required:string[]}>} requirements @param {Array<{evidenceRef:string}>} expectations @param {ReturnType<typeof buildEvidenceGraph>} graph */
 function hasCompleteOracleOwnership(requirements, expectations, graph) {
   if (requirements.length > expectations.length) return false;
-  let relevantComponentsAreForests = true;
+  /** @type {Map<number, {requirements:Array<{required:string[]}>, expectations:Array<{evidenceRef:string}>}>} */
+  const byComponent = new Map();
   for (let requirementIndex = 0; requirementIndex < requirements.length; requirementIndex += 1) {
     const roots = requirements[requirementIndex].required;
+    if (roots.length === 0) return false;
+    let requiredComponent;
     for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
       const componentId = graph.componentByClaim.get(roots[rootIndex]);
-      if (componentId === undefined || graph.componentForestById.get(componentId) !== true) {
-        relevantComponentsAreForests = false;
-        break;
-      }
+      if (componentId === undefined) return false;
+      if (requiredComponent === undefined) requiredComponent = componentId;
+      else if (requiredComponent !== componentId) return false;
     }
-    if (!relevantComponentsAreForests) break;
+    const component = byComponent.get(/** @type {number} */ (requiredComponent))
+      ?? { requirements: [], expectations: [] };
+    component.requirements.push(requirements[requirementIndex]);
+    byComponent.set(/** @type {number} */ (requiredComponent), component);
   }
-  if (relevantComponentsAreForests) for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
+  for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
     const componentId = graph.componentByClaim.get(expectations[expectationIndex].evidenceRef);
-    if (componentId === undefined || graph.componentForestById.get(componentId) !== true) {
-      relevantComponentsAreForests = false;
-      break;
-    }
+    if (componentId === undefined) continue;
+    const component = byComponent.get(componentId);
+    if (component) component.expectations.push(expectations[expectationIndex]);
   }
-  if (relevantComponentsAreForests) {
-    const forestResult = matchForestOracleOwnership(requirements, expectations, graph);
-    if (forestResult !== null) return forestResult;
+  for (const [componentId, component] of byComponent) {
+    if (component.requirements.length > component.expectations.length) return false;
+    if (graph.componentForestById.get(componentId) === true) {
+      const forestResult = matchForestOracleOwnership(component.requirements, component.expectations, graph);
+      if (forestResult === false) return false;
+      if (forestResult === null && !matchGeneralOracleOwnership(component.requirements, component.expectations, graph)) return false;
+    } else if (!matchGeneralOracleOwnership(component.requirements, component.expectations, graph)) return false;
   }
-  return matchGeneralOracleOwnership(requirements, expectations, graph);
+  return true;
 }
 
 /**
@@ -897,7 +1036,7 @@ function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption
     else if (caseDraft.cleanup.required === false) add(caseDraft.cleanup.no_cleanup_evidence_ref);
   }
   if (includeAssumption && isRecord(caseDraft.temporary_assumption)) add(caseDraft.temporary_assumption.claim_id);
-  return [...direct].sort(compareCodePoints);
+  return sortArray([...direct], compareCodePoints);
 }
 
 /**
@@ -1012,6 +1151,24 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, d
         `${path}/steps/${stepIndex}/expectations/${expectationIndex}/preceding_action_id`,
         'expectation preceding_action_id must equal the containing step_id'
       ));
+      const oracle = isRecord(expectation.oracle) ? expectation.oracle : null;
+      const expectedField = oracle ? ORACLE_FIELDS[/** @type {keyof typeof ORACLE_FIELDS} */ (oracle.type)] : null;
+      const comparisonValid = Boolean(oracle) && COMPARISONS.has(String(oracle?.comparison ?? ''));
+      const toleranceValid = !oracle || oracle.tolerance === undefined
+        || (typeof oracle.tolerance === 'number' && Number.isFinite(oracle.tolerance) && oracle.tolerance >= 0);
+      const windowValid = !oracle || oracle.window === undefined
+        || (typeof oracle.window === 'string' && oracle.window.trim().length > 0);
+      const expectedValid = Boolean(oracle && expectedField && typeof oracle[expectedField] === 'string'
+        && String(oracle[expectedField]).trim().length > 0);
+      const withinBounded = !oracle || oracle.comparison !== 'within'
+        || (oracle.tolerance !== undefined && toleranceValid) || (oracle.window !== undefined && windowValid);
+      if (!oracle || !expectedValid || !comparisonValid || !toleranceValid || !windowValid || !withinBounded) {
+        diagnostics.push(diagnostic(
+          'classification', 'CASE_ORACLE_INVALID',
+          `${path}/steps/${stepIndex}/expectations/${expectationIndex}/oracle`,
+          'executable Case Oracle must have one typed expected result, a valid comparison, and bounded within tolerance or window'
+        ));
+      }
     }
   }
 
@@ -1054,18 +1211,17 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, d
   }
 
   const capabilities = records(profile.capabilities);
+  const providedCapabilities = new Set();
+  for (let capabilityIndex = 0; capabilityIndex < capabilities.length; capabilityIndex += 1) {
+    const capability = capabilities[capabilityIndex];
+    if (typeof capability.capability === 'string' && allowedStatuses.has(String(capability.status ?? ''))) {
+      providedCapabilities.add(capability.capability);
+    }
+  }
   for (let obligationIndex = 0; obligationIndex < obligations.length; obligationIndex += 1) {
     const obligation = obligations[obligationIndex];
     for (const required of strings(obligation.required_capabilities)) {
-      let found = false;
-      for (let capabilityIndex = 0; capabilityIndex < capabilities.length; capabilityIndex += 1) {
-        const capability = capabilities[capabilityIndex];
-        if (capability.capability === required && allowedStatuses.has(String(capability.status ?? ''))) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) diagnostics.push(diagnostic(
+      if (!providedCapabilities.has(required)) diagnostics.push(diagnostic(
         'traceability', 'CASE_REQUIRED_CAPABILITY_MISSING', `${path}/obligation_ids/${pointerPart(String(obligation.obligation_id ?? ''))}`,
         `Case Testability profile must cover required capability ${required}`
       ));
@@ -1073,21 +1229,21 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, d
   }
 
   const observers = records(profile.observers);
+  const observationTargetsByObserver = new Map();
+  for (let observerIndex = 0; observerIndex < observers.length; observerIndex += 1) {
+    const observer = observers[observerIndex];
+    if (typeof observer.observer !== 'string' || typeof observer.observation_target !== 'string'
+      || !allowedStatuses.has(String(observer.status ?? ''))) continue;
+    const targets = observationTargetsByObserver.get(observer.observer) ?? new Set();
+    targets.add(observer.observation_target);
+    observationTargetsByObserver.set(observer.observer, targets);
+  }
   for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
     const expectations = records(steps[stepIndex].expectations);
     for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
       const expectation = expectations[expectationIndex];
-      let found = false;
-      for (let observerIndex = 0; observerIndex < observers.length; observerIndex += 1) {
-        const observer = observers[observerIndex];
-        if (observer.observer === expectation.observer
-          && observer.observation_target === expectation.observation_target
-          && allowedStatuses.has(String(observer.status ?? ''))) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) diagnostics.push(diagnostic(
+      if (!observationTargetsByObserver.get(String(expectation.observer ?? ''))
+        ?.has(String(expectation.observation_target ?? ''))) diagnostics.push(diagnostic(
         'traceability', 'CASE_EXPECTATION_OBSERVER_MISSING',
         `${path}/steps/${stepIndex}/expectations/${expectationIndex}`,
         'each expectation requires an executable observer with the same observer and observation_target'
@@ -1115,6 +1271,7 @@ function validateCaseTraceability(
   const path = `/${lane}/${pointerPart(caseId)}`;
   const factIds = strings(caseDraft.fact_ids);
   const obligationIds = strings(caseDraft.obligation_ids);
+  const obligationIdSet = new Set(obligationIds);
   const linkedObligations = [];
   for (const obligationId of obligationIds) {
     const obligation = obligationsById.get(obligationId);
@@ -1131,11 +1288,19 @@ function validateCaseTraceability(
   }
   for (const factId of factIds) {
     const route = routesByFact.get(factId);
+    let routesToCaseObligation = false;
+    const routeObligationIds = route?.route_type === 'obligations' ? strings(route.obligation_ids) : [];
+    for (let routeIndex = 0; routeIndex < routeObligationIds.length; routeIndex += 1) {
+      if (obligationIdSet.has(routeObligationIds[routeIndex])) {
+        routesToCaseObligation = true;
+        break;
+      }
+    }
     if (!factsById.has(factId)) diagnostics.push(diagnostic(
       'reference', 'CASE_FACT_UNKNOWN', `${path}/fact_ids/${pointerPart(factId)}`, 'Case references an unknown requirement fact'
     ));
     else if (!route || route.route_type !== 'obligations'
-      || !strings(route.obligation_ids).some((obligationId) => obligationIds.includes(obligationId))) diagnostics.push(diagnostic(
+      || !routesToCaseObligation) diagnostics.push(diagnostic(
       'traceability', 'CASE_FACT_TRACE_MISSING', `${path}/fact_ids/${pointerPart(factId)}`, 'Case fact must route to one of the Case formal Test Points'
     ));
   }
@@ -1151,7 +1316,7 @@ function validateCaseTraceability(
   validateCaseExecutionGates(caseDraft, lane, linkedObligations, evidenceGraph, path, diagnostics);
   validateCaseAssumption(caseDraft, lane, linkedObligations, factsById, evidenceGraph, path, diagnostics);
   const actualEvidence = caseDirectEvidence(caseDraft, linkedObligations, factsById);
-  const submittedEvidence = strings(caseDraft.evidence_refs).sort(compareCodePoints);
+  const submittedEvidence = sortArray(strings(caseDraft.evidence_refs), compareCodePoints);
   for (const ref of actualEvidence) {
     const claim = evidenceGraph.claimsById.get(ref);
     if (!claim) diagnostics.push(diagnostic(
@@ -1183,6 +1348,28 @@ function validateCaseTraceability(
   const expectations = caseExpectations(caseDraft);
   const expectationIds = strings(expectations.map((item) => item.expectation_id));
   const signature = isRecord(caseDraft.execution_signature) ? caseDraft.execution_signature : {};
+  const derivedSignature = derivedExecutionSignature(caseDraft);
+  const submittedActions = [];
+  const actionPath = strings(signature.action_path);
+  for (let index = 0; index < actionPath.length; index += 1) {
+    submittedActions.push(normalizeSemanticString(actionPath[index]));
+  }
+  const submittedOracleSet = new Set();
+  const signatureOracleRefs = strings(signature.oracle_refs);
+  for (let index = 0; index < signatureOracleRefs.length; index += 1) {
+    submittedOracleSet.add(normalizeSemanticString(signatureOracleRefs[index]));
+  }
+  const submittedSignature = {
+    role: normalizeSemanticString(signature.role),
+    precondition_state: signature.precondition_state,
+    data_partition: signature.data_partition,
+    action_path: submittedActions,
+    oracle_refs: sortArray([...submittedOracleSet], compareCodePoints)
+  };
+  if (canonicalStringify(submittedSignature) !== canonicalStringify(derivedSignature)) diagnostics.push(diagnostic(
+    'traceability', 'CASE_EXECUTION_SIGNATURE_MISMATCH', `${path}/execution_signature`,
+    'execution signature must be derived exactly from role, preconditions, data, ordered actions, and expectation identities'
+  ));
   const submittedOracleIds = strings(signature.oracle_refs);
   if (expectations.length < obligationIds.length || expectationIds.length !== expectations.length
     || new Set(expectationIds).size !== expectationIds.length || !sameStrings(expectationIds, submittedOracleIds)) diagnostics.push(diagnostic(
@@ -1192,7 +1379,7 @@ function validateCaseTraceability(
   /** @type {Array<{required:string[]}>} */
   const requirementList = [];
   for (const obligationId of obligationIds) {
-    const oracleRoots = strings(obligationsById.get(obligationId)?.required_oracle_refs).sort(compareCodePoints);
+    const oracleRoots = sortArray(strings(obligationsById.get(obligationId)?.required_oracle_refs), compareCodePoints);
     requirementList.push({ required: oracleRoots });
   }
   /** @type {Array<{evidenceRef:string}>} */
@@ -1217,17 +1404,17 @@ function canonicalRootProjection(root) {
     root_issue_id: String(root.root_issue_id ?? ''),
     root_issue_key: String(root.root_issue_key ?? ''),
     missing_type: String(root.missing_type ?? ''),
-    semantic_refs: strings(root.semantic_refs).sort(compareCodePoints),
+    semantic_refs: sortArray(strings(root.semantic_refs), compareCodePoints),
     scope: String(root.scope ?? ''),
-    affected_obligation_ids: strings(root.affected_obligation_ids).sort(compareCodePoints),
+    affected_obligation_ids: sortArray(strings(root.affected_obligation_ids), compareCodePoints),
     risk_counts: {
       critical: Number(riskCounts.critical), high: Number(riskCounts.high),
       medium: Number(riskCounts.medium), low: Number(riskCounts.low)
     },
     question: String(root.question ?? ''),
     answerable: root.answerable,
-    reasons: strings(root.reasons).sort(compareCodePoints),
-    evidence_refs: strings(root.evidence_refs).sort(compareCodePoints)
+    reasons: sortArray(strings(root.reasons), compareCodePoints),
+    evidence_refs: sortArray(strings(root.evidence_refs), compareCodePoints)
   };
 }
 
@@ -1274,7 +1461,7 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
     ));
     else ledgerById.set(rootId, entry);
     if (entry.current === true) currentLedgerIds.add(rootId);
-    const semanticRefs = strings(entry.semantic_refs).sort(compareCodePoints);
+    const semanticRefs = sortArray(strings(entry.semantic_refs), compareCodePoints);
     const expectedKey = canonicalStringify({
       missing_type: String(entry.missing_type ?? ''), scope: String(entry.scope ?? ''), semantic_refs: semanticRefs
     });
@@ -1401,7 +1588,7 @@ function buildBundleTrusted(context) {
     else claimsById.set(claimId, claim);
   }
   if (duplicateClaimIds.size > 0) {
-    for (const claimId of [...duplicateClaimIds].sort(compareCodePoints)) diagnostics.push(diagnostic(
+    for (const claimId of sortArray([...duplicateClaimIds], compareCodePoints)) diagnostics.push(diagnostic(
       'reference', 'EVIDENCE_CLAIM_DUPLICATE', `/evidence_claims/claims/${pointerPart(claimId)}`, 'accepted claim IDs must be unique'
     ));
     throw new BundleReconciliationError(diagnostics);
@@ -1420,12 +1607,22 @@ function buildBundleTrusted(context) {
     if (seenObligationIds.has(obligationId)) duplicateObligationIds.add(obligationId);
     else seenObligationIds.add(obligationId);
   }
-  if (duplicateFactIds.size > 0 || duplicateObligationIds.size > 0) {
-    for (const factId of [...duplicateFactIds].sort(compareCodePoints)) diagnostics.push(diagnostic(
+  const duplicateRouteFactIds = new Set();
+  const seenRouteFactIds = new Set();
+  for (const route of factRoutes) {
+    const factId = String(route.fact_id ?? '');
+    if (seenRouteFactIds.has(factId)) duplicateRouteFactIds.add(factId);
+    else seenRouteFactIds.add(factId);
+  }
+  if (duplicateFactIds.size > 0 || duplicateObligationIds.size > 0 || duplicateRouteFactIds.size > 0) {
+    for (const factId of sortArray([...duplicateFactIds], compareCodePoints)) diagnostics.push(diagnostic(
       'coverage', 'REQUIREMENT_FACT_DUPLICATE', `/evidence_claims/fact_ledger/${pointerPart(factId)}`, 'accepted requirement fact IDs must be unique'
     ));
-    for (const obligationId of [...duplicateObligationIds].sort(compareCodePoints)) diagnostics.push(diagnostic(
+    for (const obligationId of sortArray([...duplicateObligationIds], compareCodePoints)) diagnostics.push(diagnostic(
       'coverage', 'FORMAL_TEST_POINT_DUPLICATE', `/obligations/${pointerPart(obligationId)}`, 'formal Test Point IDs must be unique'
+    ));
+    for (const factId of sortArray([...duplicateRouteFactIds], compareCodePoints)) diagnostics.push(diagnostic(
+      'coverage', 'REQUIREMENT_FACT_ROUTE_DUPLICATE', `/fact_routes/${pointerPart(factId)}`, 'requirement facts must have exactly one canonical route'
     ));
     throw new BundleReconciliationError(diagnostics);
   }
@@ -1456,8 +1653,7 @@ function buildBundleTrusted(context) {
   const routesByFact = new Map();
   for (const route of factRoutes) {
     const factId = String(route.fact_id ?? '');
-    if (routesByFact.has(factId)) diagnostics.push(diagnostic('coverage', 'REQUIREMENT_FACT_ROUTE_DUPLICATE', `/fact_routes/${pointerPart(factId)}`, 'requirement facts must have exactly one canonical route'));
-    else routesByFact.set(factId, route);
+    routesByFact.set(factId, route);
     if (!allFactsById.has(factId)) diagnostics.push(diagnostic(
       'reference', 'FACT_ROUTE_FACT_UNKNOWN', `/fact_routes/${pointerPart(factId)}`, 'fact route references an unknown accepted requirement fact'
     ));
@@ -1616,7 +1812,6 @@ function buildBundleTrusted(context) {
   const rootLedger = validateRootLedger(
     roots, ledger, records(state.root_issue_dispositions), normalized.sourceRevision, diagnostics
   );
-  const evidenceRelatedClosureCache = new Map();
   for (const entry of ledger) {
     const rootId = String(entry.root_issue_id ?? '');
     const status = rootLedger.dispositionById.get(rootId);
@@ -1637,7 +1832,7 @@ function buildBundleTrusted(context) {
       }
       for (const formalRef of formalRoots) affectedRoots.add(formalRef);
     }
-    const relatedClaims = evidenceRelatedClosure(affectedRoots, evidenceGraph, evidenceRelatedClosureCache);
+    const relatedClaims = evidenceRelationIndex(affectedRoots, evidenceGraph);
     for (const ref of claimRefs) if (!claimsById.has(ref) || !relatedClaims.has(ref)) diagnostics.push(diagnostic(
       'traceability', 'BLOCKED_ROOT_EVIDENCE_INVALID', `/clarification/state/root_snapshot_ledger/${pointerPart(rootId)}/evidence_refs/${pointerPart(ref)}`,
       'Blocked root claim evidence must be accepted and related to one affected formal Test Point closure'
@@ -1698,7 +1893,7 @@ function buildBundleTrusted(context) {
       reason,
       recovery: {
         missing_type: missingType,
-        required_material: [...semanticRefs].sort(compareCodePoints).join(', '),
+        required_material: sortArray([...semanticRefs], compareCodePoints).join(', '),
         question
       },
       risk
@@ -1780,19 +1975,19 @@ function buildBundleTrusted(context) {
       'coverage', 'NOT_APPLICABLE_DISPOSITION_MISSING', `/formal/${pointerPart(id)}`, 'NotApplicable formal Test Point requires its verified exclusion record'
     ));
   }
-  const notApplicable = [...naById.values()].map((item) => ({
+  const notApplicable = sortArray([...naById.values()].map((item) => ({
     obligation_id: String(item.obligation_id),
     exclusion_claim_id: String(item.exclusion_claim_id),
     scope: String(item.scope),
     support_review: String(item.support_review)
-  })).sort((left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
+  })), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
 
   const exploratoryIds = strings(delivery.exploratory);
   const exploratoryInput = records(normalized.classification.exploratory);
   const allFormalRoots = new Set();
   for (const roots of formalRootsByObligation.values()) for (const ref of roots) allFormalRoots.add(ref);
   const formalEvidence = new Set();
-  const upward = [...allFormalRoots].sort(compareCodePoints);
+  const upward = sortArray([...allFormalRoots], compareCodePoints);
   let evidenceCursor = 0;
   while (evidenceCursor < upward.length) {
     const claimId = upward[evidenceCursor];
@@ -1802,7 +1997,7 @@ function buildBundleTrusted(context) {
     for (const parentId of evidenceGraph.parentsByClaim.get(claimId) ?? []) upward.push(parentId);
   }
   const formalDependence = new Set(formalEvidence);
-  const downward = [...formalEvidence].sort(compareCodePoints);
+  const downward = sortArray([...formalEvidence], compareCodePoints);
   evidenceCursor = 0;
   while (evidenceCursor < downward.length) {
     const claimId = downward[evidenceCursor];
@@ -1829,13 +2024,13 @@ function buildBundleTrusted(context) {
       'Exploratory source evidence must be accepted and independent of every formal Test Point closure'
     ));
   }
-  const exploratory = exploratoryInput.map((item) => ({
+  const exploratory = sortArray(exploratoryInput.map((item) => ({
     exploratory_id: String(item.exploratory_id ?? ''),
     title: String(item.title ?? ''),
     scope: String(item.scope ?? ''),
     risk: String(item.risk ?? ''),
-    reason: `Risk hypothesis outside formal Test Point coverage; evidence: ${strings(item.source_claim_ids).sort(compareCodePoints).join(', ')}`
-  })).sort((left, right) => compareCodePoints(left.exploratory_id, right.exploratory_id));
+    reason: `Risk hypothesis outside formal Test Point coverage; evidence: ${sortArray(strings(item.source_claim_ids), compareCodePoints).join(', ')}`
+  })), (left, right) => compareCodePoints(left.exploratory_id, right.exploratory_id));
   if (!sameStrings(exploratoryIds, exploratory.map((item) => item.exploratory_id))) diagnostics.push(diagnostic(
     'traceability', 'EXPLORATORY_LANE_MISMATCH', '/exploratory', 'Task 8 and Task 9 Exploratory identities must match exactly'
   ));
@@ -1886,16 +2081,16 @@ function buildBundleTrusted(context) {
     }
     requirementEntries.push({ fact_id: factId, status });
   }
-  requirementEntries.sort((left, right) => compareCodePoints(left.fact_id, right.fact_id));
+  sortArray(requirementEntries, (left, right) => compareCodePoints(left.fact_id, right.fact_id));
 
-  const formalEntries = points.map((point) => ({
+  const formalEntries = sortArray(points.map((point) => ({
     obligation_id: String(point.obligation_id), status: String(point.classification)
-  })).sort((left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
+  })), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
   const executableEntries = [];
   for (const caseDraft of grounded) for (const obligationId of strings(caseDraft.obligation_ids)) executableEntries.push({
     obligation_id: obligationId, case_id: String(caseDraft.case_id)
   });
-  executableEntries.sort((left, right) => compareCodePoints(left.obligation_id, right.obligation_id)
+  sortArray(executableEntries, (left, right) => compareCodePoints(left.obligation_id, right.obligation_id)
     || compareCodePoints(left.case_id, right.case_id));
   const applicable = formalEntries.filter((item) => item.status !== 'not_applicable');
   const covered = applicable.filter((item) => item.status === 'grounded' || item.status === 'conditional');
@@ -1918,9 +2113,9 @@ function buildBundleTrusted(context) {
   const bundle = {
     schema_version: '1.0.0',
     source_revision: normalized.sourceRevision,
-    grounded: grounded.sort((left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
-    conditional: conditional.sort((left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
-    blocked: blocked.sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id))),
+    grounded: sortArray(grounded, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
+    conditional: sortArray(conditional, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
+    blocked: sortArray(blocked, (left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id))),
     exploratory,
     coverage: {
       requirements: { total: requirementEntries.length, accounted: requirementEntries.length, entries: requirementEntries },

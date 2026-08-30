@@ -320,6 +320,26 @@ test('executable Case replay enforces containing actions and the complete Testab
   }
 });
 
+test('executable Case replay rejects unbounded Oracles and forged execution signatures', () => {
+  /** @type {Array<[string,(input:any)=>void]>} */
+  const mutations = [
+    ['CASE_ORACLE_INVALID', (/** @type {any} */ input) => {
+      input.classification.grounded[0].steps[0].expectations[0].oracle.comparison = 'within';
+    }],
+    ['CASE_EXECUTION_SIGNATURE_MISMATCH', (/** @type {any} */ input) => {
+      input.classification.grounded[0].execution_signature.role = 'administrator';
+    }],
+    ['CASE_EXECUTION_SIGNATURE_MISMATCH', (/** @type {any} */ input) => {
+      input.classification.grounded[0].execution_signature.action_path = ['Delete account'];
+    }]
+  ];
+  for (const [code, mutate] of mutations) {
+    const input = context();
+    mutate(input);
+    assert.equal(diagnosticCodes(() => buildBundle(input)).includes(code), true, code);
+  }
+});
+
 test('temporary-assumption downgrade summaries are propagated once per evidence DAG', () => {
   const nativeAdd = Set.prototype.add;
   const measurements = [];
@@ -547,6 +567,26 @@ test('adjacent accepted fact and formal definitions also fail before order-depen
     assert.equal(canonicalStringify(forward), canonicalStringify(reverse), kind);
     assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), [code]);
   }
+});
+
+test('duplicate fact routes fail before order-dependent semantic use', () => {
+  /** @param {boolean} duplicateFirst */
+  const diagnosticsFor = (duplicateFirst) => {
+    const input = context();
+    const routes = input.obligations_artifact.fact_routes;
+    const index = routes.findIndex((/** @type {any} */ route) => route.fact_id === 'fact_grounded');
+    const original = structuredClone(routes[index]);
+    const duplicate = {
+      fact_id: 'fact_grounded', route_type: 'blocked', blocker_root_issue_id: 'root_duplicate_probe'
+    };
+    routes.splice(index, 1, ...(duplicateFirst ? [duplicate, original] : [original, duplicate]));
+    try { buildBundle(input); } catch (error) { return /** @type {any} */ (error).diagnostics; }
+    assert.fail('expected duplicate route revision');
+  };
+  const forward = diagnosticsFor(false);
+  const reverse = diagnosticsFor(true);
+  assert.equal(canonicalStringify(forward), canonicalStringify(reverse));
+  assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), ['REQUIREMENT_FACT_ROUTE_DUPLICATE']);
 });
 
 test('NotApplicable revalidates accepted supported scoped independent exclusion evidence', () => {
@@ -1043,6 +1083,21 @@ test('coverage worklists use captured array intrinsics instead of mutable protot
   assert.equal(reads, 0);
 });
 
+test('coverage canonicalization uses a captured sort intrinsic', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'sort');
+  let reads = 0;
+  try {
+    Object.defineProperty(Array.prototype, 'sort', {
+      configurable: true,
+      get() { reads += 1; return descriptor?.value; }
+    });
+    assert.equal(buildBundle(context()).grounded.length, 1);
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, 'sort', descriptor);
+  }
+  assert.equal(reads, 0);
+});
+
 test('entry snapshot never invokes inherited numeric array setters while copying data', () => {
   const input = context();
   input.limits = Array.from({ length: 301 }, (_, index) => `limit-${index}`);
@@ -1340,6 +1395,50 @@ test('grouped root evidence relation is batched across all affected obligations'
     Map.prototype.get = nativeGet;
   }
   assert.equal(measurements.every((count, index) => count <= [50, 100, 200][index] * 50), true, measurements.join('/'));
+});
+
+/** @param {number} size */
+function chainedBlockedRootContext(size) {
+  const input = blockedScaleContext(size);
+  for (let index = 0; index < size; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    const claim = input.evidence_claims.claims[index];
+    claim.scope = 'scale';
+    if (index > 0) {
+      const previous = String(index - 1).padStart(4, '0');
+      delete claim.source_id;
+      claim.claim_form = 'derived';
+      claim.level = 'E2';
+      claim.kind = 'expected-value';
+      claim.parent_claim_ids = [`claim_scale_${previous}`];
+      claim.derivation_kind = 'decision-table-instance';
+      claim.derivation_target = 'expected-value';
+      claim.parameters = { table_id: `scale_${suffix}` };
+      claim.rule_input = { conditions: [`scale ${suffix}`], outcome: `Scale requirement ${suffix}` };
+    }
+    input.evidence_claims.fact_ledger[index].claim_id = 'claim_scale_0000';
+    input.evidence_claims.fact_ledger[index].source_claim_ids = ['claim_scale_0000'];
+  }
+  return input;
+}
+
+test('independent root-ledger entries do not retain one evidence closure per chain root', () => {
+  const nativeAdd = Set.prototype.add;
+  const measurements = [];
+  try {
+    for (const size of [40, 80, 160]) {
+      let chainAdds = 0;
+      Set.prototype.add = function (value) {
+        if (typeof value === 'string' && value.startsWith('claim_scale_')) chainAdds += 1;
+        return Reflect.apply(nativeAdd, this, [value]);
+      };
+      assert.equal(buildBundle(chainedBlockedRootContext(size)).blocked.length, size);
+      measurements.push(chainAdds);
+    }
+  } finally {
+    Set.prototype.add = nativeAdd;
+  }
+  assert.equal(measurements.every((count, index) => count <= [40, 80, 160][index] * 30), true, measurements.join('/'));
 });
 
 test('a current Blocked owner cannot carry a resolved lifecycle disposition', () => {
@@ -1700,11 +1799,17 @@ function componentIsolatedForestContext(size) {
     { claim_id: 'claim_unrelated_parent_b', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'unrelated', value: 'b', source_locator_ids: ['locator_checkout'], source_id: 'source_prd' },
     { claim_id: 'claim_unrelated_merge', claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'unrelated', value: 'merge', source_locator_ids: ['locator_checkout'], derivation_kind: 'decision-table-instance', derivation_target: 'expected-value', parent_claim_ids: ['claim_unrelated_parent_a', 'claim_unrelated_parent_b'], parameters: { table_id: 'unrelated' }, rule_input: { conditions: ['dummy'], outcome: 'merge' } }
   );
+  expectations.push({
+    ...structuredClone(candidate.steps[0].expectations[0]),
+    expectation_id: 'expectation_component_unowned', evidence_ref: 'claim_unrelated_merge'
+  });
   candidate.case_id = 'case_component';
   candidate.fact_ids = facts.map((item) => item.fact_id);
   candidate.obligation_ids = obligations.map((item) => item.obligation_id);
   candidate.steps[0].expectations = expectations;
-  candidate.evidence_refs = [...new Set([...candidate.evidence_refs, 'claim_component_root', ...leaves])].sort();
+  candidate.evidence_refs = [...new Set([
+    ...candidate.evidence_refs, 'claim_component_root', 'claim_unrelated_merge', ...leaves
+  ])].sort();
   candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
   candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
   input.evidence_claims.claims.push(...claims);
@@ -1740,6 +1845,27 @@ test('an unrelated general-DAG component cannot disable forest matching for a Ca
     Set.prototype.add = nativeAdd;
   }
   assert.equal(measurements.every((count, index) => count <= [50, 100, 200][index] * 30), true, measurements.join('/'));
+});
+
+test('Case fact-route membership uses indexed obligation associations', () => {
+  const nativeIncludes = Array.prototype.includes;
+  const measurements = [];
+  try {
+    for (const size of [100, 200, 400]) {
+      const input = componentIsolatedForestContext(size);
+      let comparisons = 0;
+      Array.prototype.includes = function (search, fromIndex) {
+        if (typeof search === 'string' && search.startsWith('obligation_component_')
+          && this.length === size && fromIndex === undefined) comparisons += this.length;
+        return Reflect.apply(nativeIncludes, this, [search, fromIndex]);
+      };
+      assert.equal(buildBundle(input).grounded.length, 1);
+      measurements.push(comparisons);
+    }
+  } finally {
+    Array.prototype.includes = nativeIncludes;
+  }
+  assert.deepEqual(measurements, [0, 0, 0]);
 });
 
 test('general Oracle reachability never retains an unbounded pairwise boolean matrix', async () => {

@@ -9,6 +9,13 @@ import path from "node:path";
 
 // src/canonical.mjs
 import { createHash } from "node:crypto";
+var NATIVE_ARRAY_SORT = Array.prototype.sort;
+function sortArray(values, compare) {
+  return (
+    /** @type {T[]} */
+    Reflect.apply(NATIVE_ARRAY_SORT, values, [compare])
+  );
+}
 var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/steps",
   "/action_path",
@@ -256,11 +263,17 @@ function canonicalize(value, path3 = []) {
     const values = value.map((item) => canonicalize(item, path3));
     const currentPath = pathKey(path3);
     if (ORDERED_ARRAY_PATHS.has(currentPath)) return values;
-    if (SET_ARRAY_PATHS.has(currentPath)) return [...values].sort((left, right) => compareCodePoints(stableSemanticKey(path3, left), stableSemanticKey(path3, right)));
+    if (SET_ARRAY_PATHS.has(currentPath)) return sortArray(
+      [...values],
+      (left, right) => compareCodePoints(stableSemanticKey(path3, left), stableSemanticKey(path3, right))
+    );
     return values;
   }
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => compareCodePoints(left, right)).map(([key, item]) => [key, canonicalize(item, [...path3, key])]));
+    return Object.fromEntries(sortArray(
+      Object.entries(value),
+      ([left], [right]) => compareCodePoints(left, right)
+    ).map(([key, item]) => [key, canonicalize(item, [...path3, key])]));
   }
   return value;
 }
