@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
+import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const dimensions = [
@@ -393,6 +394,23 @@ function conflictRevision() {
   return input;
 }
 
+/** @param {any} input @param {number} sourceRevision */
+function setSourceRevision(input, sourceRevision) {
+  input.source_revision = sourceRevision;
+  for (const artifact of [
+    input.source_pack, input.evidence_claims, input.behavior_views, input.case_drafts
+  ]) artifact.source_revision = sourceRevision;
+}
+
+/** Load the private conflict gate without adding a production export. */
+async function loadConflictGate() {
+  let source = await readFile(path.join(repositoryRoot, 'src/core.mjs'), 'utf8');
+  source = source.replaceAll("from '../skill/", `from 'file://${repositoryRoot}/skill/`);
+  source = source.replaceAll("from './", `from 'file://${repositoryRoot}/src/`);
+  source += '\nexport { applyLocalConflictBlocks };\n';
+  return import(`data:text/javascript,${encodeURIComponent(source)}`);
+}
+
 /** @param {any} result @param {any} expected */
 function assertFinished(result, expected) {
   assert.equal(result.status, expected.status, canonicalStringify(result));
@@ -474,4 +492,234 @@ test('core journey diagnostics fail closed in canonical stable order at the owni
     || compareCodePoints(left.path, right.path)
     || compareCodePoints(String(left.related_id ?? ''), String(right.related_id ?? ''))
   )));
+});
+
+test('core journey preserves a surfaced source-conflict root through a legal final Decision revision', () => {
+  const firstInput = conflictRevision();
+  const policy = resolveSourcePolicy(firstInput.source_pack);
+  assert.equal(policy.conflicts.length, 1);
+  const sourceConflictRootId = policy.conflicts[0].root_issue_id;
+  const first = runRevision(firstInput, 'pause_for_clarification');
+
+  assert.equal(first.status, 'need_user_answers');
+  assert.equal(first.pending_root_issues.length, 1);
+  assert.equal(first.pending_root_issues[0].root_issue_id, sourceConflictRootId);
+
+  const paymentObligationId = obligationId(rule('payment', {
+    level: 'E1', sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
+    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical'
+  }));
+  const finalDecision = {
+    decision_id: 'decision_payment_conflict_final',
+    question_id: stableId('question', { root_issue_ids: [sourceConflictRootId] }),
+    root_issue_ids: [sourceConflictRootId], affected_obligation_ids: [paymentObligationId],
+    clarification_event_seq: 2, confirmer: 'payments-owner', confirmed_at: '2026-08-30',
+    question: first.pending_root_issues[0].question,
+    answer: 'payment settles in two days', disposition: 'final',
+    authority_scope: 'checkout.payment', effective_scope: 'checkout.payment',
+    evidence_ref: 'locator_payment_new', evidence_level: 'E3'
+  };
+  const secondInput = structuredClone(firstInput);
+  setSourceRevision(secondInput, 2);
+  secondInput.source_pack.decision_records.push(finalDecision);
+  const paymentClaim = secondInput.evidence_claims.claims.find((/** @type {any} */ item) => item.claim_id === 'claim_payment');
+  paymentClaim.level = 'E3';
+  paymentClaim.kind = 'requirement';
+  paymentClaim.decision_id = finalDecision.decision_id;
+  const paymentCase = secondInput.case_drafts.cases.find((/** @type {any} */ item) => item.case_id === 'case_payment');
+  delete paymentCase.temporary_assumption;
+  secondInput.clarification.prior_state = first.clarification_state;
+  secondInput.clarification.append_batch.decision_records = [finalDecision];
+
+  const invalidQuestionInput = structuredClone(secondInput);
+  invalidQuestionInput.source_pack.decision_records[0].question_id = 'question_forged';
+  invalidQuestionInput.clarification.append_batch.decision_records[0].question_id = 'question_forged';
+  const invalidQuestion = runRevision(invalidQuestionInput, 'pause_for_clarification');
+  assert.equal(invalidQuestion.status, 'need_revision');
+  assert.equal(invalidQuestion.stage, 'clarification');
+
+  const second = runRevision(secondInput, 'pause_for_clarification');
+  assert.equal(second.status, 'finished', canonicalStringify(second));
+  assert.equal(second.bundle.grounded.length, 2);
+  assert.equal(second.bundle.blocked.length, 0);
+  assert.deepEqual(second.bundle.grounded.map((/** @type {any} */ item) => item.scope).sort(), [
+    'checkout.payment', 'checkout.shipping'
+  ]);
+});
+
+test('core boundary snapshots own data without executing submitted accessors or accepting hidden structure', () => {
+  const cases = [
+    {
+      name: 'own-symbol',
+      mutate(/** @type {any} */ input) { input[Symbol('extra')] = 'outside contract'; }
+    },
+    {
+      name: 'non-enumerable',
+      mutate(/** @type {any} */ input) { Object.defineProperty(input, 'hidden_extra', { value: true, enumerable: false }); }
+    },
+    {
+      name: 'custom-prototype',
+      mutate(/** @type {any} */ input) { Object.setPrototypeOf(input, { polluted: true }); }
+    }
+  ];
+  for (const item of cases) {
+    const input = buildRevision('grounded');
+    item.mutate(input);
+    const result = runRevision(input, 'pause_for_clarification');
+    assert.equal(result.status, 'need_revision', item.name);
+    assert.equal(result.stage, 'schema', item.name);
+  }
+
+  const accessorInput = buildRevision('grounded');
+  let accessorReads = 0;
+  Object.defineProperty(accessorInput, 'compiler_version', {
+    enumerable: true,
+    get() { accessorReads += 1; return '0.1.0'; }
+  });
+  const accessorResult = runRevision(accessorInput, 'pause_for_clarification');
+  assert.equal(accessorReads, 0);
+  assert.equal(accessorResult.status, 'need_revision');
+  assert.equal(/** @type {any} */ (accessorResult).stage, 'schema');
+
+  const controlledArrayInput = buildRevision('grounded');
+  let iteratorCalls = 0;
+  Object.defineProperty(controlledArrayInput.limits, Symbol.iterator, {
+    value() { iteratorCalls += 1; return [][Symbol.iterator](); }
+  });
+  const controlledArrayResult = runRevision(controlledArrayInput, 'pause_for_clarification');
+  assert.equal(iteratorCalls, 0);
+  assert.equal(controlledArrayResult.status, 'need_revision');
+  assert.equal(controlledArrayResult.stage, 'schema');
+
+  const sparseInput = buildRevision('grounded');
+  sparseInput.limits = new Array(2);
+  sparseInput.limits[1] = 'retained';
+  const sparseResult = runRevision(sparseInput, 'pause_for_clarification');
+  assert.equal(sparseResult.status, 'need_revision');
+  assert.equal(sparseResult.stage, 'schema');
+});
+
+test('core boundary snapshots options once and contains revoked proxies and patched Array methods', () => {
+  const input = buildRevision('partial-blocked');
+  let policyReads = 0;
+  const accessorOptions = {};
+  Object.defineProperty(accessorOptions, 'interactionPolicy', {
+    enumerable: true,
+    get() { policyReads += 1; return policyReads === 1 ? 'pause_for_clarification' : 'record_only'; }
+  });
+  const accessorResult = evaluateRevision(input, accessorOptions);
+  assert.equal(policyReads, 0);
+  assert.equal(accessorResult.status, 'need_revision');
+  assert.equal(/** @type {any} */ (accessorResult).stage, 'schema');
+
+  const revokedInput = Proxy.revocable({}, {});
+  revokedInput.revoke();
+  /** @type {any} */
+  let proxyResult = null;
+  assert.doesNotThrow(() => {
+    proxyResult = evaluateRevision(revokedInput.proxy, { interactionPolicy: 'pause_for_clarification' });
+  });
+  assert.equal(proxyResult.status, 'need_revision');
+
+  let revokeDuringSnapshot = () => {};
+  const selfRevokingInput = new Proxy({ only: true }, {
+    getOwnPropertyDescriptor(target, key) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+      revokeDuringSnapshot();
+      return descriptor;
+    }
+  });
+  const selfRevoking = Proxy.revocable(selfRevokingInput, {});
+  revokeDuringSnapshot = selfRevoking.revoke;
+  assert.doesNotThrow(() => {
+    proxyResult = evaluateRevision(selfRevoking.proxy, { interactionPolicy: 'pause_for_clarification' });
+  });
+  assert.equal(proxyResult.status, 'need_revision');
+
+  const revokedOptions = Proxy.revocable({ interactionPolicy: 'pause_for_clarification' }, {});
+  revokedOptions.revoke();
+  assert.doesNotThrow(() => {
+    proxyResult = evaluateRevision({}, /** @type {any} */ (revokedOptions.proxy));
+  });
+  assert.equal(proxyResult.status, 'need_revision');
+
+  const sortDescriptor = /** @type {PropertyDescriptor} */ (
+    Object.getOwnPropertyDescriptor(Array.prototype, 'sort')
+  );
+  const validSortInput = buildRevision('grounded');
+  let sortReads = 0;
+  try {
+    Object.defineProperty(Array.prototype, 'sort', {
+      configurable: true,
+      get() { sortReads += 1; return sortDescriptor.value; }
+    });
+    const result = evaluateRevision(validSortInput, { interactionPolicy: 'pause_for_clarification' });
+    assert.equal(result.status, 'need_revision');
+    assert.equal(sortReads, 0);
+  } finally {
+    Object.defineProperty(Array.prototype, 'sort', sortDescriptor);
+  }
+
+  const iteratorDescriptor = /** @type {PropertyDescriptor} */ (
+    Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator)
+  );
+  let iteratorReads = 0;
+  let iteratorInvocations = 0;
+  try {
+    Object.defineProperty(Array.prototype, Symbol.iterator, {
+      configurable: true,
+      get() {
+        iteratorReads += 1;
+        return /** @this {any} */ function submittedPrototypeIterator() {
+          iteratorInvocations += 1;
+          return Reflect.apply(iteratorDescriptor.value, this, []);
+        };
+      }
+    });
+    const result = evaluateRevision({}, { interactionPolicy: 'pause_for_clarification' });
+    assert.equal(result.status, 'need_revision');
+    assert.equal(iteratorReads, 0);
+    assert.equal(iteratorInvocations, 0);
+  } finally {
+    Object.defineProperty(Array.prototype, Symbol.iterator, iteratorDescriptor);
+  }
+});
+
+test('local conflict candidate lookups scale with source associations rather than Cases times conflicts', async () => {
+  const { applyLocalConflictBlocks } = await loadConflictGate();
+  const reads = [];
+  for (const size of [100, 200, 400, 800]) {
+    let scopeReads = 0;
+    const obligations = [];
+    const cases = [];
+    const conflicts = [];
+    const claimsById = new Map();
+    for (let index = 0; index < size; index += 1) {
+      const suffix = String(index).padStart(4, '0');
+      const obligationId = `obligation_${suffix}`;
+      const claimId = `claim_${suffix}`;
+      const sourceId = `source_${suffix}`;
+      const scope = `checkout.part-${suffix}`;
+      obligations.push({ obligation_id: obligationId, risk: 'high', scope });
+      cases.push({
+        case_id: `case_${suffix}`, scope, obligation_ids: [obligationId], evidence_refs: [claimId]
+      });
+      claimsById.set(claimId, { claim_id: claimId, source_id: sourceId, source_locator_ids: [] });
+      const conflict = {
+        conflict_id: `source_conflict_${suffix}`, root_issue_id: `root_${suffix}`,
+        source_ids: [sourceId], rule_ids: [`old_${suffix}`, `new_${suffix}`]
+      };
+      Object.defineProperty(conflict, 'scope', {
+        enumerable: true,
+        get() { scopeReads += 1; return scope; }
+      });
+      conflicts.push(conflict);
+    }
+    const result = applyLocalConflictBlocks({
+      grounded: cases, conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
+    }, obligations, claimsById, { locators: [] }, conflicts);
+    assert.equal(result.blocked.length, size);
+    reads.push(scopeReads);
+  }
+  assert.deepEqual(reads, [100, 200, 400, 800]);
 });
