@@ -1103,6 +1103,43 @@ test('heartbeat renewal remains bound to its acquired directory generation', { t
   }
 });
 
+test('production heartbeat helpers never write proof into a successor generation', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const displacedDirectory = path.join(runDirectory, '.production-heartbeat-original');
+  try {
+    const release = await acquireRunLock(runDirectory);
+    await rename(lockDirectory, displacedDirectory);
+    await mkdir(lockDirectory);
+    await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
+      pid: process.pid,
+      token: 'production-heartbeat-successor',
+      lease_expires_at_ms: Date.now() + 60_000,
+      process_start_identity: `${process.pid}:${Date.now() - process.uptime() * 1_000}`,
+      heartbeat_seq: 0,
+      heartbeat_ready: true
+    })}\n`, 'utf8');
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    assert.ok((await readdir(lockDirectory)).every(
+      (/** @type {string} */ name) => !name.startsWith('.heartbeat-')
+    ), 'an old heartbeat helper wrote proof into its successor generation');
+    assert.ok((await readdir(displacedDirectory)).some(
+      (/** @type {string} */ name) => name.startsWith('.heartbeat-')
+    ));
+    await assert.rejects(release, /ownership changed/u);
+    assert.equal(JSON.parse(await readFile(
+      path.join(lockDirectory, 'owner.json'), 'utf8'
+    )).token, 'production-heartbeat-successor');
+  } finally {
+    await rm(lockDirectory, { recursive: true, force: true });
+    await rm(displacedDirectory, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('stale reclaim restores a newer lock generation instead of deleting it', { timeout: 10_000 }, async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');

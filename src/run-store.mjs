@@ -873,15 +873,19 @@ async function restoreForeignLockGeneration(
  * @param {string} lockDirectory
  * @param {any} expectedStatus
  * @param {string} markerPath
+ * @param {any} expectedMarkerStatus
  * @param {(error:unknown)=>void} [onFailure]
  */
-async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, markerPath, onFailure) {
+async function startSingleRunLockHeartbeat(
+  lockDirectory, expectedStatus, markerPath, expectedMarkerStatus, onFailure
+) {
   const workerSource = `
     (async () => {
       const { parentPort, workerData } = await import('node:worker_threads');
       const fs = await import('node:fs/promises');
       const { constants } = await import('node:fs');
       let handle;
+      let markerHandle;
       let stopped = false;
       let failureSent = false;
       let timer;
@@ -891,7 +895,10 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, marker
         const seconds = Date.now() / 1000;
         await handle.utimes(seconds, seconds);
         sequence += 1;
-        await fs.writeFile(workerData.markerPath, String(sequence));
+        const proof = String(sequence);
+        await markerHandle.write(proof, 0, 'utf8');
+        await markerHandle.truncate(proof.length);
+        await markerHandle.sync();
         await handle.sync();
       }
       function schedule() {
@@ -906,6 +913,7 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, marker
         failureSent = true;
         stopped = true;
         clearTimeout(timer);
+        try { if (markerHandle) await markerHandle.close(); } catch {}
         try { if (handle) await handle.close(); } catch {}
         parentPort.postMessage({ type: 'error', message: String(error) });
         parentPort.close();
@@ -916,6 +924,7 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, marker
         clearTimeout(timer);
         try {
           await pulse;
+          await markerHandle.close();
           await handle.close();
           parentPort.postMessage({ type: 'stopped' });
           parentPort.close();
@@ -926,6 +935,14 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, marker
         const status = await handle.stat();
         if (status.dev !== workerData.dev || status.ino !== workerData.ino) {
           throw new Error('run lock generation changed before heartbeat start');
+        }
+        markerHandle = await fs.open(
+          workerData.markerPath, constants.O_RDWR | constants.O_NOFOLLOW
+        );
+        const markerStatus = await markerHandle.stat();
+        if (markerStatus.dev !== workerData.markerDev
+          || markerStatus.ino !== workerData.markerIno) {
+          throw new Error('run lock heartbeat marker changed before heartbeat start');
         }
         await renew();
         parentPort.postMessage({ type: 'ready' });
@@ -941,7 +958,8 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, marker
     eval: true,
     workerData: {
       path: lockDirectory, dev: expectedStatus.dev, ino: expectedStatus.ino,
-      interval: RUN_LOCK_HEARTBEAT_MS, markerPath
+      interval: RUN_LOCK_HEARTBEAT_MS, markerPath,
+      markerDev: expectedMarkerStatus.dev, markerIno: expectedMarkerStatus.ino
     }
   });
   /** @type {unknown} */
@@ -1013,8 +1031,10 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, marker
 }
 
 /** Run a heartbeat in a separate process so worker-thread failures are not a single fault domain. */
-/** @param {string} lockDirectory @param {any} expectedStatus @param {string} markerPath @param {(error:unknown)=>void} [onFailure] */
-async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, markerPath, onFailure) {
+/** @param {string} lockDirectory @param {any} expectedStatus @param {string} markerPath @param {any} expectedMarkerStatus @param {(error:unknown)=>void} [onFailure] */
+async function startRunLockHeartbeatGuardian(
+  lockDirectory, expectedStatus, markerPath, expectedMarkerStatus, onFailure
+) {
   const guardianSource = `
     (async () => {
       const fs = await import('node:fs/promises');
@@ -1024,7 +1044,10 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
       const expectedIno = Number(process.argv[3]);
       const interval = Number(process.argv[4]);
       const markerPath = process.argv[5];
+      const expectedMarkerDev = Number(process.argv[6]);
+      const expectedMarkerIno = Number(process.argv[7]);
       let handle;
+      let markerHandle;
       let stopped = false;
       let failureSent = false;
       let timer;
@@ -1034,7 +1057,10 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
         const seconds = Date.now() / 1000;
         await handle.utimes(seconds, seconds);
         sequence += 1;
-        await fs.writeFile(markerPath, String(sequence));
+        const proof = String(sequence);
+        await markerHandle.write(proof, 0, 'utf8');
+        await markerHandle.truncate(proof.length);
+        await markerHandle.sync();
         await handle.sync();
       }
       function schedule() {
@@ -1049,6 +1075,7 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
         stopped = true;
         clearTimeout(timer);
         await pulse;
+        if (markerHandle) await markerHandle.close();
         if (handle) await handle.close();
         if (process.connected) process.send({ type: 'stopped' });
         if (process.connected) process.disconnect();
@@ -1058,6 +1085,7 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
         failureSent = true;
         stopped = true;
         clearTimeout(timer);
+        try { if (markerHandle) await markerHandle.close(); } catch {}
         try { if (handle) await handle.close(); } catch {}
         if (process.connected) process.send({ type: 'error', message: String(error) });
         if (process.connected) process.disconnect();
@@ -1072,6 +1100,11 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
         if (status.dev !== expectedDev || status.ino !== expectedIno) {
           throw new Error('run lock generation changed before guardian start');
         }
+        markerHandle = await fs.open(markerPath, constants.O_RDWR | constants.O_NOFOLLOW);
+        const markerStatus = await markerHandle.stat();
+        if (markerStatus.dev !== expectedMarkerDev || markerStatus.ino !== expectedMarkerIno) {
+          throw new Error('run lock heartbeat marker changed before guardian start');
+        }
         await renew();
         await new Promise((resolve) => setTimeout(resolve, 0));
         await renew();
@@ -1083,7 +1116,8 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
   const child = NATIVE_REFLECT_APPLY(NATIVE_SPAWN, undefined, [
     NATIVE_PROCESS_EXEC_PATH,
     ['-e', guardianSource, lockDirectory, nativeString(expectedStatus.dev),
-      nativeString(expectedStatus.ino), nativeString(RUN_LOCK_HEARTBEAT_MS), markerPath],
+      nativeString(expectedStatus.ino), nativeString(RUN_LOCK_HEARTBEAT_MS), markerPath,
+      nativeString(expectedMarkerStatus.dev), nativeString(expectedMarkerStatus.ino)],
     { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
   ]);
   const childSend = NATIVE_REFLECT_APPLY(
@@ -1161,23 +1195,55 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, mark
   };
 }
 
+/** @param {string} lockDirectory @param {any} expectedStatus @param {string} name */
+async function createRunLockHeartbeatMarker(lockDirectory, expectedStatus, name) {
+  const markerPath = pathJoin(lockDirectory, name);
+  const markerHandle = await open(
+    markerPath,
+    fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_RDWR | fsConstants.O_NOFOLLOW,
+    0o600
+  );
+  try {
+    await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_WRITE_FILE, markerHandle, ['0']);
+    await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_SYNC, markerHandle, []);
+    const markerStatus = await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_STAT, markerHandle, []);
+    const currentDirectory = await lstat(lockDirectory);
+    if (!sameFileGeneration(expectedStatus, currentDirectory)) throw new RunStoreIntegrityError(
+      'Run coordination generation changed while heartbeat proof was initialized.'
+    );
+    return { markerPath, markerStatus };
+  } finally {
+    await closeFileHandle(markerHandle);
+  }
+}
+
 /**
  * Keep two lease workers plus a separate-process guardian. Worker-thread
- * failures cannot erase the live owner's only externally observable proof,
- * and static metadata never substitutes for a moving heartbeat.
+ * failures cannot erase the live owner's only externally observable proof.
+ * Every proof file is opened once and then updated only through that verified
+ * file descriptor, so a renamed successor generation is never touched.
  * @param {string} lockDirectory
  * @param {any} expectedStatus
  * @param {(error:unknown)=>void} [onFailure]
  */
 async function startRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
+  const firstMarker = await createRunLockHeartbeatMarker(
+    lockDirectory, expectedStatus, '.heartbeat-worker-1'
+  );
+  const secondMarker = await createRunLockHeartbeatMarker(
+    lockDirectory, expectedStatus, '.heartbeat-worker-2'
+  );
+  const guardianMarker = await createRunLockHeartbeatMarker(
+    lockDirectory, expectedStatus, '.heartbeat-guardian'
+  );
   const stopFirst = await startSingleRunLockHeartbeat(
-    lockDirectory, expectedStatus, pathJoin(lockDirectory, '.heartbeat-worker-1'), onFailure
+    lockDirectory, expectedStatus, firstMarker.markerPath, firstMarker.markerStatus, onFailure
   );
   /** @type {()=>Promise<void>} */
   let stopSecond;
   try {
     stopSecond = await startSingleRunLockHeartbeat(
-      lockDirectory, expectedStatus, pathJoin(lockDirectory, '.heartbeat-worker-2'), onFailure
+      lockDirectory, expectedStatus, secondMarker.markerPath, secondMarker.markerStatus, onFailure
     );
   } catch (error) {
     await stopFirst().catch(() => {});
@@ -1187,7 +1253,8 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
   let stopGuardian;
   try {
     stopGuardian = await startRunLockHeartbeatGuardian(
-      lockDirectory, expectedStatus, pathJoin(lockDirectory, '.heartbeat-guardian'), onFailure
+      lockDirectory, expectedStatus,
+      guardianMarker.markerPath, guardianMarker.markerStatus, onFailure
     );
   } catch (error) {
     await stopFirst().catch(() => {});
