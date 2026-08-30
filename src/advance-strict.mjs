@@ -7,7 +7,7 @@ import {
   compileObligations, ObligationCompilationError
 } from './obligations/compile-obligations.mjs';
 import {
-  acceptedPath, acceptedSourceRevisions, atomicWriteJson, clarificationStatePath,
+  acceptedPath, acceptedSourceRevisions, acquireRunLock, atomicWriteJson, clarificationStatePath,
   cleanupTemporaryFiles, discardStagingSnapshot, obligationsPath, outputPaths,
   prepareRunStore, promoteArtifact, readJson, readJsonIfPresent, readTextIfPresent,
   recoverStagingClaims,
@@ -41,12 +41,16 @@ const STAGE_SCHEMA = Object.freeze({
   case_drafts: 'case-drafts.schema.json'
 });
 
+const NATIVE_ARRAY = Array;
 const NATIVE_MAP = Map;
 const NATIVE_MAP_GET = Map.prototype.get;
 const NATIVE_MAP_SET = Map.prototype.set;
 const NATIVE_MAP_DELETE = Map.prototype.delete;
 const NATIVE_PROMISE = Promise;
 const NATIVE_REFLECT_APPLY = Reflect.apply;
+const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
+const NATIVE_PATH_IS_ABSOLUTE = path.isAbsolute;
+const NATIVE_PATH_RESOLVE = path.resolve;
 /** @type {Map<string,Promise<void>>} */
 const ACTIVE_RUNS = new NATIVE_MAP();
 
@@ -86,6 +90,21 @@ function mapSet(map, key, value) {
 /** @param {Map<any,any>} map @param {unknown} key */
 function mapDelete(map, key) {
   NATIVE_REFLECT_APPLY(NATIVE_MAP_DELETE, map, [key]);
+}
+
+/** @param {unknown} value @returns {value is any[]} */
+function arrayIsArray(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_IS_ARRAY, NATIVE_ARRAY, [value]);
+}
+
+/** @param {string} value */
+function pathIsAbsolute(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_IS_ABSOLUTE, path, [value]);
+}
+
+/** @param {string} value */
+function pathResolve(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_RESOLVE, path, [value]);
 }
 
 /** @param {number} sourceRevision @param {keyof typeof STAGE_SCHEMA} stage */
@@ -182,7 +201,7 @@ async function stagedArtifact(runDirectory, stage, sourceRevision) {
 function maximumEventSequence(sourcePack) {
   let maximum = 0;
   for (const field of ['decision_records', 'clarification_events']) {
-    const values = Array.isArray(sourcePack[field]) ? sourcePack[field] : [];
+    const values = arrayIsArray(sourcePack[field]) ? sourcePack[field] : [];
     for (let index = 0; index < values.length; index += 1) {
       const sequence = values[index]?.clarification_event_seq;
       if (Number.isSafeInteger(sequence) && sequence > maximum) maximum = sequence;
@@ -206,7 +225,7 @@ function historySequenceIntegrity(sourcePack) {
   for (const [field, identityField] of [
     ['decision_records', 'decision_id'], ['clarification_events', 'event_id']
   ]) {
-    const values = Array.isArray(sourcePack[field]) ? sourcePack[field] : [];
+    const values = arrayIsArray(sourcePack[field]) ? sourcePack[field] : [];
     const identities = new Set();
     let previous = 0;
     for (let index = 0; index < values.length; index += 1) {
@@ -234,14 +253,26 @@ function historySequenceIntegrity(sourcePack) {
 }
 
 /** @param {Record<string, unknown>} sourcePack */
-function initialClarificationControlDiagnostics(sourcePack) {
-  const events = Array.isArray(sourcePack.clarification_events)
+function initialClarificationHistoryDiagnostics(sourcePack) {
+  const diagnostics = [];
+  const events = arrayIsArray(sourcePack.clarification_events)
     ? sourcePack.clarification_events : [];
-  return events.length === 0 ? [] : [{
-    category: 'classification', code: 'INITIAL_CLARIFICATION_HISTORY_UNSUPPORTED',
-    path: '/clarification_events',
-    message: 'An initial run has no prior clarification lifecycle on which to apply control events.'
-  }];
+  if (events.length > 0) diagnostics.push({
+      category: 'classification', code: 'INITIAL_CLARIFICATION_HISTORY_UNSUPPORTED',
+      path: '/clarification_events',
+      message: 'An initial run has no prior clarification lifecycle on which to apply control events.'
+    });
+  const decisions = arrayIsArray(sourcePack.decision_records)
+    ? sourcePack.decision_records : [];
+  for (let index = 0; index < decisions.length; index += 1) {
+    if (decisions[index]?.disposition === 'unknown'
+      || decisions[index]?.disposition === 'deferred') diagnostics.push({
+        category: 'classification', code: 'INITIAL_DECISION_DISPOSITION_UNSUPPORTED',
+        path: `/decision_records/${index}/disposition`,
+        message: 'Initial unknown or deferred Decisions require a prior clarification lifecycle.'
+      });
+  }
+  return diagnostics;
 }
 
 /** @param {Record<string, unknown>} prior @param {Record<string, unknown>} next */
@@ -257,10 +288,10 @@ function sourceRevisionIntegrity(prior, next) {
   if (canonicalStringify(immutablePrior) !== canonicalStringify(immutableNext)) {
     return newRunRequired('RUN_INTEGRITY_ERROR: immutable original source set or run scope changed.');
   }
-  const priorDecisions = Array.isArray(prior.decision_records) ? prior.decision_records : [];
-  const nextDecisions = Array.isArray(next.decision_records) ? next.decision_records : [];
-  const priorEvents = Array.isArray(prior.clarification_events) ? prior.clarification_events : [];
-  const nextEvents = Array.isArray(next.clarification_events) ? next.clarification_events : [];
+  const priorDecisions = arrayIsArray(prior.decision_records) ? prior.decision_records : [];
+  const nextDecisions = arrayIsArray(next.decision_records) ? next.decision_records : [];
+  const priorEvents = arrayIsArray(prior.clarification_events) ? prior.clarification_events : [];
+  const nextEvents = arrayIsArray(next.clarification_events) ? next.clarification_events : [];
   if (!isExactPrefix(priorDecisions, nextDecisions) || !isExactPrefix(priorEvents, nextEvents)) {
     return fatalReply('RUN_INTEGRITY_ERROR', 'Decision and clarification histories are append-only and order-preserving.');
   }
@@ -293,7 +324,7 @@ function sourceRevisionIntegrity(prior, next) {
 function inferredCompilation(behaviorViews) {
   /** @type {Record<string, unknown>} */
   const contexts = {};
-  const views = Array.isArray(behaviorViews.views) ? behaviorViews.views : [];
+  const views = arrayIsArray(behaviorViews.views) ? behaviorViews.views : [];
   for (let viewIndex = 0; viewIndex < views.length; viewIndex += 1) {
     const view = views[viewIndex];
     if (!view || typeof view !== 'object' || typeof view.view_id !== 'string') continue;
@@ -303,12 +334,12 @@ function inferredCompilation(behaviorViews) {
     const requiredOracleRefsByElementId = {};
     /** @type {Record<string,string[]>} */
     const requiredCapabilitiesByElementId = {};
-    const elements = Array.isArray(view.elements) ? view.elements : [];
+    const elements = arrayIsArray(view.elements) ? view.elements : [];
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element || typeof element !== 'object' || typeof element.element_id !== 'string') continue;
       riskByElementId[element.element_id] = 'medium';
-      requiredOracleRefsByElementId[element.element_id] = Array.isArray(element.source_claim_ids)
+      requiredOracleRefsByElementId[element.element_id] = arrayIsArray(element.source_claim_ids)
         ? [...element.source_claim_ids] : [];
       requiredCapabilitiesByElementId[element.element_id] = [];
     }
@@ -331,8 +362,8 @@ function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevi
   const compilation = inferredCompilation(behaviorViews);
   const graph = {
     claimsById: evidence.claimsById,
-    factLedger: structuredClone(Array.isArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []),
-    conflicts: structuredClone(Array.isArray(policy.conflicts) ? policy.conflicts : []),
+    factLedger: structuredClone(arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []),
+    conflicts: structuredClone(arrayIsArray(policy.conflicts) ? policy.conflicts : []),
     runScope: String(sourcePack.run_scope),
     obligationCompilation: {
       sourceRevision,
@@ -361,10 +392,10 @@ function initialClarificationState(sourceRevision, eventSequence) {
 
 /** @param {Record<string, unknown>} previous @param {Record<string, unknown>} current */
 function appendBatch(previous, current) {
-  const previousDecisions = Array.isArray(previous.decision_records) ? previous.decision_records : [];
-  const previousEvents = Array.isArray(previous.clarification_events) ? previous.clarification_events : [];
-  const decisions = Array.isArray(current.decision_records) ? current.decision_records : [];
-  const events = Array.isArray(current.clarification_events) ? current.clarification_events : [];
+  const previousDecisions = arrayIsArray(previous.decision_records) ? previous.decision_records : [];
+  const previousEvents = arrayIsArray(previous.clarification_events) ? previous.clarification_events : [];
+  const decisions = arrayIsArray(current.decision_records) ? current.decision_records : [];
+  const events = arrayIsArray(current.clarification_events) ? current.clarification_events : [];
   return {
     decision_records: structuredClone(decisions.slice(previousDecisions.length)),
     clarification_events: structuredClone(events.slice(previousEvents.length))
@@ -411,9 +442,9 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests) {
     accepted_artifact_digests: acceptedDigests,
     clarification_event_seq: state && Number.isSafeInteger(state.clarification_event_seq)
       ? state.clarification_event_seq : maximumEventSequence(sourcePack),
-    asked_root_issue_ids: state && Array.isArray(state.asked_root_issue_ids)
+    asked_root_issue_ids: state && arrayIsArray(state.asked_root_issue_ids)
       ? state.asked_root_issue_ids : [],
-    root_issue_dispositions: state && Array.isArray(state.root_issue_dispositions)
+    root_issue_dispositions: state && arrayIsArray(state.root_issue_dispositions)
       ? state.root_issue_dispositions.map((item) => ({
         root_issue_id: item.root_issue_id, status: item.status
       })) : [],
@@ -483,7 +514,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     if (sourceDiagnostics.length > 0) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack failed deterministic schema validation.'
     );
-    if (sourceRevision === 0 && initialClarificationControlDiagnostics(sourcePack).length > 0) {
+    if (sourceRevision === 0 && initialClarificationHistoryDiagnostics(sourcePack).length > 0) {
       return fatalReply(
         'RUN_INTEGRITY_ERROR',
         'Accepted initial clarification controls have no prior lifecycle and cannot be replayed.'
@@ -581,15 +612,17 @@ async function advanceStrictExclusive(runDirectory) {
       'Bundled schemas or schema manifest failed integrity verification.'
     );
   }
-  if (!path.isAbsolute(runDirectory)) return fatalReply(
-    'run_directory_absolute', 'Run directory must be an absolute path.'
-  );
-
   try {
+    if (typeof runDirectory !== 'string' || !pathIsAbsolute(runDirectory)) return fatalReply(
+      'run_directory_absolute', 'Run directory must be an absolute path.'
+    );
     runDirectory = await guardedAwait(prepareRunStore(runDirectory));
-    await guardedAwait(recoverStagingClaims(runDirectory));
-    await guardedAwait(cleanupTemporaryFiles(runDirectory));
-    let revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));
+    const releaseRunLock = await guardedAwait(acquireRunLock(runDirectory));
+    try {
+      runDirectory = await guardedAwait(prepareRunStore(runDirectory));
+      await guardedAwait(recoverStagingClaims(runDirectory));
+      await guardedAwait(cleanupTemporaryFiles(runDirectory));
+      let revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));
     const acceptedIntegrity = await guardedAwait(
       acceptedRunIntegrity(runDirectory, revisions, registry)
     );
@@ -657,7 +690,7 @@ async function advanceStrictExclusive(runDirectory) {
         identityDiagnostics
       );
       const initialControlDiagnostics = candidateRevision === 0 && candidateRecord
-        ? initialClarificationControlDiagnostics(candidateRecord) : [];
+        ? initialClarificationHistoryDiagnostics(candidateRecord) : [];
       if (initialControlDiagnostics.length > 0) return revisionReply(
         runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
         initialControlDiagnostics
@@ -906,7 +939,10 @@ async function advanceStrictExclusive(runDirectory) {
     await guardedAwait(atomicWriteJson(
       runDirectory, outputPaths(runDirectory, sourceRevision).current, current
     ));
-    return { status: 'finished', ...current };
+      return { status: 'finished', ...current };
+    } finally {
+      await guardedAwait(releaseRunLock());
+    }
   } catch (error) {
     if (error instanceof CoreIntrinsicMutationError) return fatalReply(
       'CORE_INTRINSIC_INVALID',
@@ -923,7 +959,18 @@ async function advanceStrictExclusive(runDirectory) {
  * @param {string} runDirectory
  */
 export function advanceStrict(runDirectory) {
-  const key = typeof runDirectory === 'string' ? path.resolve(runDirectory) : '<invalid-run>';
+  if (!runStoreIntrinsicsIntact()) return new NATIVE_PROMISE((resolve) => resolve(fatalReply(
+    'CORE_INTRINSIC_INVALID',
+    'Run-store evaluation requires captured native collection traversal intrinsics.'
+  )));
+  let key;
+  try {
+    key = typeof runDirectory === 'string' ? pathResolve(runDirectory) : '<invalid-run>';
+  } catch {
+    return new NATIVE_PROMISE((resolve) => resolve(fatalReply(
+      'RUN_INTEGRITY_ERROR', 'Run directory could not be resolved at the outer run boundary.'
+    )));
+  }
   const previous = mapGet(ACTIVE_RUNS, key);
   /** @type {()=>void} */
   let release = () => {};

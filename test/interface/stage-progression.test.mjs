@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { advanceStrict } from '../../src/advance-strict.mjs';
 import { stableId } from '../../src/canonical.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
+import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixturePath = path.join(repositoryRoot, 'test/fixtures/recovery/grounded-revision.json');
@@ -387,5 +388,80 @@ test('intrinsic mutation during the first await cannot execute caller code or ac
   } finally {
     Array.prototype.sort = originalSort;
     await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('first-await mutation of static Array and path methods is contained before promotion', async () => {
+  /** @type {Array<[Record<string,any>,string]>} */
+  const cases = [
+    [/** @type {any} */ (Array), 'isArray'],
+    [/** @type {any} */ (path), 'isAbsolute']
+  ];
+  for (const [owner, method] of cases) {
+    const runDirectory = await temporaryRun(`intrinsic static ${method}`);
+    const revision = await fixture();
+    const original = owner[method];
+    let calls = 0;
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      const pending = advanceStrict(runDirectory);
+      owner[method] = function (/** @type {any[]} */ ...args) {
+        calls += 1;
+        return Reflect.apply(original, this, args);
+      };
+      const reply = /** @type {any} */ (await pending);
+      assert.equal(calls, 0, `${method} caller code executed`);
+      assert.equal(reply.status, 'fatal', `${method}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+      await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+    } finally {
+      owner[method] = original;
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('pre-call path replacement is contained by the outermost run boundary', async () => {
+  const runDirectory = await temporaryRun('intrinsic pre-call path');
+  const original = path.resolve;
+  let calls = 0;
+  try {
+    path.resolve = () => {
+      calls += 1;
+      throw new Error('caller path method must not execute');
+    };
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(calls, 0);
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+  } finally {
+    path.resolve = original;
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('initial unknown and deferred Decisions cannot be accepted then ignored', async () => {
+  for (const disposition of ['unknown', 'deferred']) {
+    const runDirectory = await temporaryRun(`initial ${disposition}`);
+    const revision = makeAnswerableConflict(await fixture());
+    const policy = resolveSourcePolicy(revision.source_pack);
+    assert.equal(policy.conflicts.length, 1);
+    const canonicalRootId = policy.conflicts[0].root_issue_id;
+    const decision = revision.source_pack.decision_records[0];
+    decision.root_issue_ids = [canonicalRootId];
+    decision.question_id = stableId('question', { root_issue_ids: [canonicalRootId] });
+    decision.disposition = disposition;
+    decision.answer = '';
+    try {
+      const reply = /** @type {any} */ (await submitCompleteRevision(runDirectory, revision));
+      assert.equal(reply.status, 'need_revision', `${disposition}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.stage, 'source_pack');
+      assert.ok(reply.diagnostics.some((/** @type {any} */ item) => (
+        item.code === 'INITIAL_DECISION_DISPOSITION_UNSUPPORTED'
+      )), JSON.stringify(reply));
+      await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
   }
 });

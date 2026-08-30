@@ -292,6 +292,100 @@ test('parallel advances of one valid staging snapshot are serialized and idempot
   }
 });
 
+test('separate processes coordinate one run and return the same idempotent result', { timeout: 20_000 }, async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  revision.source_pack.sources[0].content = 'x'.repeat(32 * 1024 * 1024);
+  const startPath = path.join(runDirectory, 'start');
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const program = `
+      import { stat } from 'node:fs/promises';
+      import { advanceStrict } from ${JSON.stringify(path.join(repositoryRoot, 'src/advance-strict.mjs'))};
+      process.stderr.write('READY\\n');
+      while (true) {
+        try { await stat(${JSON.stringify(startPath)}); break; }
+        catch { await new Promise((resolve) => setTimeout(resolve, 1)); }
+      }
+      process.stdout.write(JSON.stringify(await advanceStrict(${JSON.stringify(runDirectory)})));
+    `;
+    const children = [0, 1].map(() => spawn(
+      process.execPath, ['--input-type=module', '-e', program],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    ));
+    const outputs = children.map((child) => {
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', (/** @type {string} */ chunk) => { stdout += chunk; });
+      child.stderr.on('data', (/** @type {string} */ chunk) => { stderr += chunk; });
+      const ready = new Promise((resolve) => {
+        const check = () => { if (stderr.includes('READY')) resolve(undefined); };
+        child.stderr.on('data', check);
+        check();
+      });
+      const closed = new Promise((resolve) => child.on('close', (/** @type {number|null} */ code) => resolve({
+        code, stdout: () => stdout, stderr: () => stderr
+      })));
+      return { ready, closed };
+    });
+    await Promise.all(outputs.map((item) => item.ready));
+    await writeFile(startPath, 'go', 'utf8');
+    const completed = /** @type {any[]} */ (await Promise.all(
+      outputs.map((item) => item.closed)
+    ));
+    const replies = completed.map((item) => {
+      assert.equal(item.code, 0, item.stderr());
+      return JSON.parse(item.stdout());
+    });
+    assert.deepEqual(replies[0], replies[1]);
+    assert.equal(replies[0].status, 'need_artifact', JSON.stringify(replies));
+    assert.equal(replies[0].stage, 'evidence_claims');
+    assert.ok(replies.every((reply) => !reply.diagnostics?.some((/** @type {any} */ item) => (
+      /tmp-|claim-|ENOENT/u.test(item.message)
+    ))), JSON.stringify(replies));
+    await stat(path.join(runDirectory, 'accepted/r000/source-pack.json'));
+    await assert.rejects(stat(path.join(runDirectory, 'staging/source-pack.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('run coordination reclaims a dead owner but never deletes a live owner lock', { timeout: 10_000 }, async () => {
+  for (const owner of [
+    { pid: 999_999_999, token: 'dead-owner', lease_expires_at_ms: 0 },
+    { pid: process.pid, token: 'live-owner', lease_expires_at_ms: Date.now() + 60_000 }
+  ]) {
+    const runDirectory = await temporaryRun();
+    const revision = await revisionFixture();
+    const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      await mkdir(lockDirectory);
+      await writeFile(
+        path.join(lockDirectory, 'owner.json'), `${JSON.stringify(owner)}\n`, 'utf8'
+      );
+      const pending = advanceStrict(runDirectory);
+      if (owner.token === 'live-owner') {
+        const state = await Promise.race([
+          pending.then(() => 'settled'),
+          new Promise((resolve) => setTimeout(() => resolve('waiting'), 250))
+        ]);
+        assert.equal(state, 'waiting', 'an active owner lock must not be removed or bypassed');
+        await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+        await rm(lockDirectory, { recursive: true, force: true });
+      }
+      const reply = /** @type {any} */ (await pending);
+      assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+      assert.equal(reply.stage, 'evidence_claims');
+      await assert.rejects(stat(lockDirectory));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
 test('accepted artifact resolves its stale promotion claim before a newer canonical staging file', async () => {
   const runDirectory = await temporaryRun();
   const revision = await revisionFixture();

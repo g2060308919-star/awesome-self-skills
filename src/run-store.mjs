@@ -14,10 +14,21 @@ const CONTROLLED_FILES = Object.freeze(['checkpoint.json']);
 const REVISION_DIRECTORY = /^r([0-9]+)$/u;
 const TEMPORARY_FILE = /^\..+\.tmp-([0-9]+)-[0-9]+$/u;
 let temporarySequence = 0;
+let lockSequence = 0;
+const RUN_LOCK_DIRECTORY = '.compiler-advance.lock';
+const RUN_LOCK_OWNER_FILE = 'owner.json';
+const RUN_LOCK_LEASE_MS = 300_000;
+const RUN_LOCK_INCOMPLETE_GRACE_MS = 2_000;
+const RUN_LOCK_POLL_MS = 25;
+const RUN_LOCK_WAIT_MS = 30_000;
 
 const NATIVE_ARRAY = Array;
 const NATIVE_ARRAY_PROTOTYPE = Array.prototype;
 const NATIVE_ARRAY_SORT = Array.prototype.sort;
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_ARRAY_STATIC_INTRINSICS = Object.freeze([
+  ['isArray', Array.isArray], ['from', Array.from]
+]);
 const NATIVE_MAP = Map;
 const NATIVE_MAP_PROTOTYPE = Map.prototype;
 const NATIVE_SET = Set;
@@ -66,6 +77,21 @@ const NATIVE_JSON_INTRINSICS = Object.freeze([
   ['parse', JSON.parse], ['stringify', JSON.stringify]
 ]);
 const NATIVE_STRUCTURED_CLONE = structuredClone;
+const NATIVE_PROMISE = Promise;
+const NATIVE_SET_TIMEOUT = setTimeout;
+const NATIVE_PATH = path;
+const NATIVE_PATH_BASENAME = path.basename;
+const NATIVE_PATH_DIRNAME = path.dirname;
+const NATIVE_PATH_IS_ABSOLUTE = path.isAbsolute;
+const NATIVE_PATH_JOIN = path.join;
+const NATIVE_PATH_RELATIVE = path.relative;
+const NATIVE_PATH_RESOLVE = path.resolve;
+const NATIVE_PATH_SEPARATOR = path.sep;
+/** @type {ReadonlyArray<readonly [string|symbol,unknown]>} */
+const NATIVE_PATH_INTRINSICS = Object.freeze([
+  ['basename', path.basename], ['dirname', path.dirname], ['isAbsolute', path.isAbsolute],
+  ['join', path.join], ['relative', path.relative], ['resolve', path.resolve], ['sep', path.sep]
+]);
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const fsConstants = fsPromises.constants;
 const lstat = fsPromises.lstat;
@@ -112,11 +138,55 @@ function regexpTest(expression, value) {
   return NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, expression, [value]) !== null;
 }
 
+/** @param {string} value */
+function pathBasename(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_BASENAME, NATIVE_PATH, [value]);
+}
+
+/** @param {string} value */
+function pathDirname(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_DIRNAME, NATIVE_PATH, [value]);
+}
+
+/** @param {string} value */
+function pathIsAbsolute(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_IS_ABSOLUTE, NATIVE_PATH, [value]);
+}
+
+/** @param {...string} parts */
+function pathJoin(...parts) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_JOIN, NATIVE_PATH, parts);
+}
+
+/** @param {string} from @param {string} to */
+function pathRelative(from, to) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_RELATIVE, NATIVE_PATH, [from, to]);
+}
+
+/** @param {string} value */
+function pathResolve(value) {
+  return NATIVE_REFLECT_APPLY(NATIVE_PATH_RESOLVE, NATIVE_PATH, [value]);
+}
+
 /** @param {string} fileName */
 function temporaryOwnerIsAlive(fileName) {
   const match = NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, TEMPORARY_FILE, [fileName]);
   if (!match) return false;
   const ownerPid = Number(match[1]);
+  if (ownerPid === process.pid) return true;
+  try {
+    process.kill(ownerPid, 0);
+    return true;
+  } catch (error) {
+    return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'EPERM');
+  }
+}
+
+/** @param {unknown} ownerPid */
+function processOwnerIsAlive(ownerPid) {
+  if (typeof ownerPid !== 'number'
+    || !NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerPid])
+    || ownerPid <= 0) return false;
   if (ownerPid === process.pid) return true;
   try {
     process.kill(ownerPid, 0);
@@ -172,6 +242,7 @@ export function runStoreIntrinsicsIntact() {
     }
   }
   return descriptorsMatch(NATIVE_ARRAY_PROTOTYPE, NATIVE_ARRAY_INTRINSICS)
+    && descriptorsMatch(NATIVE_ARRAY, NATIVE_ARRAY_STATIC_INTRINSICS)
     && descriptorsMatch(NATIVE_MAP_PROTOTYPE, NATIVE_MAP_INTRINSICS)
     && descriptorsMatch(NATIVE_SET_PROTOTYPE, NATIVE_SET_INTRINSICS)
     && descriptorsMatch(NATIVE_STRING_PROTOTYPE, NATIVE_STRING_INTRINSICS)
@@ -179,6 +250,7 @@ export function runStoreIntrinsicsIntact() {
     && descriptorsMatch(NATIVE_OBJECT, NATIVE_OBJECT_INTRINSICS)
     && descriptorsMatch(NATIVE_NUMBER, NATIVE_NUMBER_INTRINSICS)
     && descriptorsMatch(NATIVE_JSON, NATIVE_JSON_INTRINSICS)
+    && descriptorsMatch(NATIVE_PATH, NATIVE_PATH_INTRINSICS)
     && getterMatches(NATIVE_MAP_PROTOTYPE, 'size', NATIVE_MAP_SIZE_GET)
     && getterMatches(NATIVE_SET_PROTOTYPE, 'size', NATIVE_SET_SIZE_GET);
 }
@@ -196,9 +268,9 @@ export function isMissing(error) {
 
 /** @param {string} runDirectory @param {string} targetPath */
 function relativeControlledPath(runDirectory, targetPath) {
-  const relative = path.relative(runDirectory, targetPath);
-  if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`)
-    || path.isAbsolute(relative)) {
+  const relative = pathRelative(runDirectory, targetPath);
+  if (relative === '' || relative === '..' || relative.startsWith(`..${NATIVE_PATH_SEPARATOR}`)
+    || pathIsAbsolute(relative)) {
     throw new RunStoreIntegrityError('Controlled run path escaped the canonical run root.');
   }
   return relative;
@@ -207,11 +279,11 @@ function relativeControlledPath(runDirectory, targetPath) {
 /** @param {string} runDirectory @param {string} targetPath */
 async function assertNoSymlinkPath(runDirectory, targetPath) {
   const relative = relativeControlledPath(runDirectory, targetPath);
-  const parts = relative.split(path.sep);
+  const parts = relative.split(NATIVE_PATH_SEPARATOR);
   let current = runDirectory;
   let lastExisting = runDirectory;
   for (let index = 0; index < parts.length; index += 1) {
-    current = path.join(current, parts[index]);
+    current = pathJoin(current, parts[index]);
     let status;
     try { status = await lstat(current); } catch (error) {
       if (isMissing(error)) break;
@@ -227,16 +299,16 @@ async function assertNoSymlinkPath(runDirectory, targetPath) {
   }
   const realRoot = await realpath(runDirectory);
   const realExisting = await realpath(lastExisting);
-  const realRelative = path.relative(realRoot, realExisting);
-  if (realRelative === '..' || realRelative.startsWith(`..${path.sep}`)
-    || path.isAbsolute(realRelative)) {
+  const realRelative = pathRelative(realRoot, realExisting);
+  if (realRelative === '..' || realRelative.startsWith(`..${NATIVE_PATH_SEPARATOR}`)
+    || pathIsAbsolute(realRelative)) {
     throw new RunStoreIntegrityError('Controlled run path resolved outside the real run root.');
   }
 }
 
 /** @param {string} runDirectory @param {string} directory */
 async function ensureDirectory(runDirectory, directory) {
-  if (path.resolve(directory) === path.resolve(runDirectory)) {
+  if (pathResolve(directory) === pathResolve(runDirectory)) {
     const status = await lstat(runDirectory);
     if (status.isSymbolicLink() || !status.isDirectory()) throw new RunStoreIntegrityError(
       'Run root is not a real directory.'
@@ -244,10 +316,10 @@ async function ensureDirectory(runDirectory, directory) {
     return;
   }
   const relative = relativeControlledPath(runDirectory, directory);
-  const parts = relative.split(path.sep);
+  const parts = relative.split(NATIVE_PATH_SEPARATOR);
   let current = runDirectory;
   for (let index = 0; index < parts.length; index += 1) {
-    current = path.join(current, parts[index]);
+    current = pathJoin(current, parts[index]);
     try { await mkdir(current); } catch (error) {
       if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) {
         throw error;
@@ -266,12 +338,118 @@ async function syncDirectory(directory) {
   try { await handle.sync(); } finally { await handle.close(); }
 }
 
+/** @param {unknown} error @param {string} code */
+function hasErrorCode(error, code) {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code);
+}
+
+/** @param {number} milliseconds */
+function delay(milliseconds) {
+  return new NATIVE_PROMISE((resolve) => { NATIVE_SET_TIMEOUT(resolve, milliseconds); });
+}
+
+/**
+ * Acquire the crash-recoverable, process-wide coordination right for one run.
+ * The lock directory is the atomic claim; owner metadata distinguishes an
+ * active process from a safely reclaimable abandoned claim.
+ * @param {string} runDirectory
+ * @returns {Promise<()=>Promise<void>>}
+ */
+export async function acquireRunLock(runDirectory) {
+  const lockDirectory = pathJoin(runDirectory, RUN_LOCK_DIRECTORY);
+  const ownerPath = pathJoin(lockDirectory, RUN_LOCK_OWNER_FILE);
+  const startedAt = Date.now();
+  const token = `${String(process.pid)}-${String(startedAt)}-${String(++lockSequence)}`;
+
+  while (true) {
+    try {
+      await mkdir(lockDirectory);
+      await syncDirectory(runDirectory);
+      const owner = {
+        pid: process.pid,
+        token,
+        lease_expires_at_ms: Date.now() + RUN_LOCK_LEASE_MS
+      };
+      try {
+        await atomicWriteJson(runDirectory, ownerPath, owner);
+        await syncDirectory(runDirectory);
+      } catch (error) {
+        await rm(lockDirectory, { recursive: true, force: true }).catch(() => {});
+        await syncDirectory(runDirectory).catch(() => {});
+        throw error;
+      }
+
+      let released = false;
+      return async () => {
+        if (released) return;
+        const current = await readJsonIfPresent(runDirectory, ownerPath);
+        const record = current && current.value && typeof current.value === 'object'
+          ? /** @type {Record<string,unknown>} */ (current.value) : null;
+        if (!record || record.token !== token || record.pid !== process.pid) {
+          throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
+        }
+        const releasedDirectory = `${lockDirectory}.release-${String(process.pid)}-${String(++lockSequence)}`;
+        await rename(lockDirectory, releasedDirectory);
+        await syncDirectory(runDirectory);
+        await rm(releasedDirectory, { recursive: true, force: true });
+        await syncDirectory(runDirectory);
+        released = true;
+      };
+    } catch (error) {
+      if (!hasErrorCode(error, 'EEXIST')) throw error;
+    }
+
+    let status;
+    try {
+      status = await lstat(lockDirectory);
+    } catch (error) {
+      if (isMissing(error)) continue;
+      throw error;
+    }
+    if (status.isSymbolicLink() || !status.isDirectory()) throw new RunStoreIntegrityError(
+      'Run coordination claim is not a real directory.'
+    );
+
+    const owner = await readJsonIfPresent(runDirectory, ownerPath);
+    const record = owner && owner.value && typeof owner.value === 'object'
+      ? /** @type {Record<string,unknown>} */ (owner.value) : null;
+    const ownerPid = record?.pid;
+    const ownerToken = record?.token;
+    const ownerLease = record?.lease_expires_at_ms;
+    const ownerShapeValid = typeof ownerToken === 'string' && ownerToken.length > 0
+      && NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerPid])
+      && NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerLease]);
+    const ownerAlive = ownerShapeValid && processOwnerIsAlive(ownerPid);
+    const incompleteIsYoung = !ownerShapeValid
+      && Date.now() - status.mtimeMs < RUN_LOCK_INCOMPLETE_GRACE_MS;
+
+    if (!ownerAlive && !incompleteIsYoung) {
+      const staleDirectory = `${lockDirectory}.stale-${String(process.pid)}-${String(++lockSequence)}`;
+      try {
+        await rename(lockDirectory, staleDirectory);
+        await syncDirectory(runDirectory);
+        await rm(staleDirectory, { recursive: true, force: true });
+        await syncDirectory(runDirectory);
+        continue;
+      } catch (error) {
+        if (isMissing(error)) continue;
+        throw error;
+      }
+    }
+
+    if (Date.now() - startedAt >= RUN_LOCK_WAIT_MS) throw new RunStoreIntegrityError(
+      'Timed out waiting for the active run coordination owner.'
+    );
+    await delay(RUN_LOCK_POLL_MS);
+  }
+}
+
 /** @param {string} runDirectory @param {string} targetPath */
 async function removeFileDurably(runDirectory, targetPath) {
   await assertNoSymlinkPath(runDirectory, targetPath);
   try {
     await rm(targetPath);
-    await syncDirectory(path.dirname(targetPath));
+    await syncDirectory(pathDirname(targetPath));
   } catch (error) {
     if (!isMissing(error)) throw error;
   }
@@ -290,9 +468,9 @@ async function inspectTree(runDirectory, directory) {
     }
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
-      const target = path.join(current, entry.name);
+      const target = pathJoin(current, entry.name);
       if (entry.isSymbolicLink()) throw new RunStoreIntegrityError(
-        `Controlled run tree contains a symbolic link: ${path.relative(runDirectory, target)}`
+        `Controlled run tree contains a symbolic link: ${pathRelative(runDirectory, target)}`
       );
       if (entry.isDirectory()) append(pending, target);
     }
@@ -307,12 +485,12 @@ export async function prepareRunStore(runDirectory) {
     'Run directory must be a real directory rather than a symbolic link.'
   );
   await realpath(runDirectory);
-  const canonicalRoot = path.resolve(runDirectory);
+  const canonicalRoot = pathResolve(runDirectory);
   for (let index = 0; index < CONTROLLED_DIRECTORIES.length; index += 1) {
-    await inspectTree(canonicalRoot, path.join(canonicalRoot, CONTROLLED_DIRECTORIES[index]));
+    await inspectTree(canonicalRoot, pathJoin(canonicalRoot, CONTROLLED_DIRECTORIES[index]));
   }
   for (let index = 0; index < CONTROLLED_FILES.length; index += 1) {
-    await assertNoSymlinkPath(canonicalRoot, path.join(canonicalRoot, CONTROLLED_FILES[index]));
+    await assertNoSymlinkPath(canonicalRoot, pathJoin(canonicalRoot, CONTROLLED_FILES[index]));
   }
   return canonicalRoot;
 }
@@ -320,7 +498,7 @@ export async function prepareRunStore(runDirectory) {
 /** Restore a staging file claimed immediately before a crashed promotion. */
 /** @param {string} runDirectory */
 export async function recoverStagingClaims(runDirectory) {
-  const directory = path.join(runDirectory, 'staging');
+  const directory = pathJoin(runDirectory, 'staging');
   let entries;
   try { entries = await readdir(directory, { withFileTypes: true }); } catch (error) {
     if (isMissing(error)) return;
@@ -341,7 +519,7 @@ export async function recoverStagingClaims(runDirectory) {
     const unresolvedClaims = [];
     for (let index = 0; index < claims.length; index += 1) {
       const claimName = claims[index];
-      const claimPath = path.join(directory, claimName);
+      const claimPath = pathJoin(directory, claimName);
       const claimText = await readText(runDirectory, claimPath);
       let claimValue;
       try {
@@ -363,10 +541,10 @@ export async function recoverStagingClaims(runDirectory) {
     }
     if (unresolvedClaims.length === 0) continue;
     const canonical = stagingPath(runDirectory, typedStage);
-    const firstClaim = path.join(directory, unresolvedClaims[0]);
+    const firstClaim = pathJoin(directory, unresolvedClaims[0]);
     const firstText = await readText(runDirectory, firstClaim);
     for (let index = 1; index < unresolvedClaims.length; index += 1) {
-      if (await readText(runDirectory, path.join(directory, unresolvedClaims[index])) !== firstText) {
+      if (await readText(runDirectory, pathJoin(directory, unresolvedClaims[index])) !== firstText) {
         throw new RunStoreIntegrityError('Conflicting staging promotion claims require manual revision.');
       }
     }
@@ -379,7 +557,7 @@ export async function recoverStagingClaims(runDirectory) {
       await syncDirectory(directory);
     } else await removeFileDurably(runDirectory, firstClaim);
     for (let index = 1; index < unresolvedClaims.length; index += 1) {
-      await removeFileDurably(runDirectory, path.join(directory, unresolvedClaims[index]));
+      await removeFileDurably(runDirectory, pathJoin(directory, unresolvedClaims[index]));
     }
   }
 }
@@ -389,7 +567,7 @@ export async function recoverStagingClaims(runDirectory) {
 export async function cleanupTemporaryFiles(runDirectory) {
   const roots = [runDirectory];
   for (let index = 0; index < CONTROLLED_DIRECTORIES.length; index += 1) {
-    append(roots, path.join(runDirectory, CONTROLLED_DIRECTORIES[index]));
+    append(roots, pathJoin(runDirectory, CONTROLLED_DIRECTORIES[index]));
   }
   for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
     const pending = [roots[rootIndex]];
@@ -402,9 +580,9 @@ export async function cleanupTemporaryFiles(runDirectory) {
       }
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index];
-        const target = path.join(directory, entry.name);
+        const target = pathJoin(directory, entry.name);
         if (entry.isSymbolicLink()) throw new RunStoreIntegrityError(
-          `Controlled run tree contains a symbolic link: ${path.relative(runDirectory, target)}`
+          `Controlled run tree contains a symbolic link: ${pathRelative(runDirectory, target)}`
         );
         if (entry.isDirectory()) append(pending, target);
         else if (entry.isFile() && regexpTest(TEMPORARY_FILE, entry.name)
@@ -424,12 +602,12 @@ export async function cleanupTemporaryFiles(runDirectory) {
  * @param {string} content
  */
 export async function atomicWriteText(runDirectory, targetPath, content) {
-  const directory = path.dirname(targetPath);
+  const directory = pathDirname(targetPath);
   await ensureDirectory(runDirectory, directory);
   await assertNoSymlinkPath(runDirectory, targetPath);
   temporarySequence += 1;
-  const temporaryPath = path.join(
-    directory, `.${path.basename(targetPath)}.tmp-${process.pid}-${temporarySequence}`
+  const temporaryPath = pathJoin(
+    directory, `.${pathBasename(targetPath)}.tmp-${process.pid}-${temporarySequence}`
   );
   let handle;
   try {
@@ -464,7 +642,7 @@ export async function readText(runDirectory, filePath) {
   try {
     const status = await handle.stat();
     if (!status.isFile()) throw new RunStoreIntegrityError(
-      `Controlled artifact is not a regular file: ${path.relative(runDirectory, filePath)}`
+      `Controlled artifact is not a regular file: ${pathRelative(runDirectory, filePath)}`
     );
     return await handle.readFile('utf8');
   } finally { await handle.close(); }
@@ -495,39 +673,39 @@ export async function readJsonIfPresent(runDirectory, filePath) {
 
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stage */
 export function stagingPath(runDirectory, stage) {
-  return path.join(runDirectory, 'staging', STAGE_FILES[stage]);
+  return pathJoin(runDirectory, 'staging', STAGE_FILES[stage]);
 }
 
 /** @param {string} runDirectory @param {number} sourceRevision @param {keyof typeof STAGE_FILES} stage */
 export function acceptedPath(runDirectory, sourceRevision, stage) {
-  return path.join(runDirectory, 'accepted', revisionName(sourceRevision), STAGE_FILES[stage]);
+  return pathJoin(runDirectory, 'accepted', revisionName(sourceRevision), STAGE_FILES[stage]);
 }
 
 /** @param {string} runDirectory @param {number} sourceRevision */
 export function obligationsPath(runDirectory, sourceRevision) {
-  return path.join(runDirectory, 'derived', revisionName(sourceRevision), 'test-obligations.json');
+  return pathJoin(runDirectory, 'derived', revisionName(sourceRevision), 'test-obligations.json');
 }
 
 /** @param {string} runDirectory @param {number} sourceRevision */
 export function clarificationStatePath(runDirectory, sourceRevision) {
-  return path.join(runDirectory, 'derived', revisionName(sourceRevision), 'clarification-state.json');
+  return pathJoin(runDirectory, 'derived', revisionName(sourceRevision), 'clarification-state.json');
 }
 
 /** @param {string} runDirectory @param {number} sourceRevision */
 export function outputPaths(runDirectory, sourceRevision) {
-  const directory = path.join(runDirectory, 'output', revisionName(sourceRevision));
+  const directory = pathJoin(runDirectory, 'output', revisionName(sourceRevision));
   return {
     directory,
-    bundle: path.join(directory, 'test-bundle.json'),
-    markdown: path.join(directory, 'test-cases.md'),
-    current: path.join(runDirectory, 'output', 'current.json')
+    bundle: pathJoin(directory, 'test-bundle.json'),
+    markdown: pathJoin(directory, 'test-cases.md'),
+    current: pathJoin(runDirectory, 'output', 'current.json')
   };
 }
 
 /** @param {string} runDirectory */
 export async function acceptedSourceRevisions(runDirectory) {
   let entries;
-  const acceptedDirectory = path.join(runDirectory, 'accepted');
+  const acceptedDirectory = pathJoin(runDirectory, 'accepted');
   try { entries = await readdir(acceptedDirectory, { withFileTypes: true }); } catch (error) {
     if (isMissing(error)) return [];
     throw error;
@@ -568,8 +746,8 @@ export async function acceptedSourceRevisions(runDirectory) {
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stage @param {{text:string}} snapshot */
 export async function discardStagingSnapshot(runDirectory, stage, snapshot) {
   const source = stagingPath(runDirectory, stage);
-  const directory = path.dirname(source);
-  const claim = path.join(directory, `.${path.basename(source)}.claim-${process.pid}-${++temporarySequence}`);
+  const directory = pathDirname(source);
+  const claim = pathJoin(directory, `.${pathBasename(source)}.claim-${process.pid}-${++temporarySequence}`);
   await rename(source, claim);
   await syncDirectory(directory);
   const claimedText = await readText(runDirectory, claim);
@@ -600,8 +778,8 @@ export async function promoteArtifact(runDirectory, sourceRevision, stage, value
     return;
   }
   const source = stagingPath(runDirectory, stage);
-  const directory = path.dirname(source);
-  const claim = path.join(directory, `.${path.basename(source)}.claim-${process.pid}-${++temporarySequence}`);
+  const directory = pathDirname(source);
+  const claim = pathJoin(directory, `.${pathBasename(source)}.claim-${process.pid}-${++temporarySequence}`);
   await ensureDirectory(runDirectory, directory);
   await assertNoSymlinkPath(runDirectory, source);
   await rename(source, claim);
@@ -620,7 +798,7 @@ export async function promoteArtifact(runDirectory, sourceRevision, stage, value
 
 /** @param {string} runDirectory @param {unknown} checkpoint */
 export async function writeCheckpoint(runDirectory, checkpoint) {
-  await atomicWriteJson(runDirectory, path.join(runDirectory, 'checkpoint.json'), checkpoint);
+  await atomicWriteJson(runDirectory, pathJoin(runDirectory, 'checkpoint.json'), checkpoint);
 }
 
 /** @param {string} runDirectory @param {number} sourceRevision @param {unknown} bundle @param {string} markdown */
