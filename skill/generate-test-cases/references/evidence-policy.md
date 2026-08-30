@@ -21,13 +21,13 @@ One lower fact lowers the whole Case. E1 never becomes Grounded. Unsupported or 
 
 ## Keep E2 mechanical and closed
 
-Allow only these derivations:
+Allow only this derivation-kind and target matrix:
 
-- formula with complete units, precision, and rounding → `expected-value`;
-- explicit decision-table instance with a sourced outcome → `expected-value`;
-- sourced finite-domain representative or inclusive boundary → `test-data`;
-- sourced exhaustive enumeration with `closed_world=true` → `test-data`;
-- graph reachability → `model-element` only.
+- `formula` → `test-data` or `expected-value`; require complete units, precision, and rounding;
+- `decision-table-instance` → `expected-value` or `model-element`; require explicit sourced conditions and outcome;
+- `boundary-representative` → `test-data`; require a sourced finite domain or inclusive boundary;
+- `enumeration-complement` → `test-data` or `model-element`; require a sourced exhaustive enumeration with `closed_world=true`;
+- `graph-reachability` → `model-element`; use it for structural reachability only.
 
 Match every derivation kind to its allowed target. Boundary analysis does not invent error text, persistence, events, or state changes. Graph reachability proves structure, not a business Oracle. Require an acyclic parent graph terminating in E3, with all inputs and parameters replayable.
 

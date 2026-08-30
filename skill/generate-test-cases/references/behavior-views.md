@@ -1,6 +1,6 @@
 # Behavior Views
 
-Build only views signaled by accepted facts, then run the fixed cross-module interaction audit. Every element, relation, condition, and result must trace to an accepted claim or an allowed E2 model element.
+Build only views signaled by accepted facts, then run the fixed interaction audit. Every element, relation, condition, and result must trace to an accepted claim or an allowed E2 model element.
 
 ## Select views from requirement signals
 
@@ -16,9 +16,9 @@ Build only views signaled by accepted facts, then run the fixed cross-module int
 
 Do not generate generic negative behavior merely because a technique suggests it. If a formal requirement exists but its result is missing, route it to Blocked. If only generic risk exists, keep it as independent Exploratory.
 
-## Audit cross-module interaction
+## Audit module interaction
 
-For every module pair, record each shared-entity, role, client, interface/event, time, concurrency, and side-effect cell as either `checked-no-signal` or `candidate`. Do not use an empty list as proof of checking.
+Use exactly these seven dimensions: `shared-entity`, `role`, `client`, `interface-event`, `time`, `concurrency`, and `side-effect`. For one declared module, record all seven `single-module` cells using that one module ID. For multiple declared modules, record all seven cells for every unordered module pair. Mark every cell as either `checked-no-signal` or `candidate`. Do not use an empty list as proof of checking.
 
 Route each candidate to exactly one destination:
 

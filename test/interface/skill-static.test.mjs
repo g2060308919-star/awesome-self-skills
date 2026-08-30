@@ -58,10 +58,24 @@ test('skill static contract keeps the adapter private concise and complete', asy
 });
 
 test('skill static policies freeze clarification and source-review boundaries', async () => {
+  const evidence = await text('references/evidence-policy.md');
+  for (const route of [
+    '`formula` → `test-data` or `expected-value`',
+    '`decision-table-instance` → `expected-value` or `model-element`',
+    '`boundary-representative` → `test-data`',
+    '`enumeration-complement` → `test-data` or `model-element`',
+    '`graph-reachability` → `model-element`'
+  ]) assert.match(evidence, new RegExp(route, 'u'));
+
   const behavior = await text('references/behavior-views.md');
   for (const viewType of [
     'flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration'
   ]) assert.match(behavior, new RegExp(`${String.fromCodePoint(96)}${viewType}${String.fromCodePoint(96)}`, 'u'));
+  assert.match(behavior, /For one declared module, record all seven `single-module` cells/u);
+  assert.match(
+    behavior,
+    /`shared-entity`, `role`, `client`, `interface-event`, `time`, `concurrency`, and `side-effect`/u
+  );
 
   const clarification = await text('references/clarification-policy.md');
   assert.match(clarification, /task-scoped E3/u);
