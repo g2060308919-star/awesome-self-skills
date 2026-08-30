@@ -8,7 +8,7 @@ import {
 } from './obligations/compile-obligations.mjs';
 import {
   acceptedPath, acceptedSourceRevisions, acquireRunLock, atomicWriteJson, clarificationStatePath,
-  cleanupRunLockResidues, cleanupTemporaryFiles, discardStagingSnapshot, obligationsPath, outputPaths,
+  cleanupTemporaryFiles, discardStagingSnapshot, obligationsPath, outputPaths,
   prepareRunStore, promoteArtifact, readJson, readJsonIfPresent, readTextIfPresent,
   recoverStagingClaims,
   runStoreIntrinsicsIntact, stagingPath, STAGE_FILES, writeCheckpoint, writeFinalOutput
@@ -621,7 +621,6 @@ async function advanceStrictExclusive(runDirectory) {
     try {
       if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
       runDirectory = await guardedAwait(prepareRunStore(runDirectory));
-      await guardedAwait(cleanupRunLockResidues(runDirectory));
       await guardedAwait(recoverStagingClaims(runDirectory));
       await guardedAwait(cleanupTemporaryFiles(runDirectory));
       let revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));

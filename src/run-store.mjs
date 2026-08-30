@@ -20,6 +20,7 @@ let temporarySequence = 0;
 let lockSequence = 0;
 const RUN_LOCK_DIRECTORY = '.compiler-advance.lock';
 const RUN_LOCK_OWNER_FILE = 'owner.json';
+const RUN_LOCK_TRANSACTION_DIRECTORY = '.compiler-advance.transaction';
 const RUN_LOCK_LEASE_MS = 2_000;
 const RUN_LOCK_HEARTBEAT_MS = 250;
 const RUN_LOCK_HEARTBEAT_PROOF_MS = RUN_LOCK_HEARTBEAT_MS * 2;
@@ -352,7 +353,7 @@ function processOwnerIsAlive(ownerPid) {
 }
 
 /** @param {unknown} ownerPid @param {unknown} identity */
-function compilerProcessIdentityIsCanonical(ownerPid, identity) {
+function compilerProcessIdentityHasCanonicalShape(ownerPid, identity) {
   if (typeof ownerPid !== 'number' || typeof identity !== 'string') return false;
   const parts = stringSplit(identity, ':');
   if (parts.length !== 2 || parts[0] !== nativeString(ownerPid) || parts[1].length === 0) {
@@ -625,11 +626,105 @@ async function removeOwnedLockGeneration(runDirectory, lockDirectory, expectedSt
   await syncDirectory(runDirectory);
 }
 
+/** Wait until no live release transaction fences canonical lock restoration. */
+/** @param {string} runDirectory */
+async function waitForReleaseTransaction(runDirectory) {
+  const transactionDirectory = pathJoin(runDirectory, RUN_LOCK_TRANSACTION_DIRECTORY);
+  const ownerPath = pathJoin(transactionDirectory, RUN_LOCK_OWNER_FILE);
+  while (true) {
+    let observed;
+    try {
+      observed = await observeRunLock(runDirectory, transactionDirectory, ownerPath);
+    } catch (error) {
+      if (isMissing(error)) return;
+      throw error;
+    }
+    const now = currentTimeMilliseconds();
+    const ownerPid = observed.record?.pid;
+    const ownerLease = observed.record?.lease_expires_at_ms;
+    const ownerValid = typeof observed.record?.token === 'string'
+      && observed.record.token.length > 0
+      && typeof ownerLease === 'number'
+      && NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [ownerLease]);
+    const incompleteIsYoung = !ownerValid
+      && now - observed.status.mtimeMs < RUN_LOCK_INCOMPLETE_GRACE_MS;
+    if (incompleteIsYoung || (ownerValid && ownerLease > now && processOwnerIsAlive(ownerPid))) {
+      await delay(RUN_LOCK_POLL_MS);
+      continue;
+    }
+    await removeOwnedLockGeneration(
+      runDirectory, transactionDirectory, observed.status, 'stale'
+    );
+  }
+}
+
+/** @param {string} runDirectory */
+async function releaseTransactionExists(runDirectory) {
+  try {
+    const status = await lstat(pathJoin(runDirectory, RUN_LOCK_TRANSACTION_DIRECTORY));
+    if (statsIsSymbolicLink(status) || !statsIsDirectory(status)) throw new RunStoreIntegrityError(
+      'Run coordination transaction is not a real directory.'
+    );
+    return true;
+  } catch (error) {
+    if (isMissing(error)) return false;
+    throw error;
+  }
+}
+
+/** Fence the brief canonical-name gap used by release and ABA restoration. */
+/** @param {string} runDirectory @param {string} token */
+async function acquireReleaseTransaction(runDirectory, token) {
+  const transactionDirectory = pathJoin(runDirectory, RUN_LOCK_TRANSACTION_DIRECTORY);
+  const ownerPath = pathJoin(transactionDirectory, RUN_LOCK_OWNER_FILE);
+  while (true) {
+    await waitForReleaseTransaction(runDirectory);
+    try {
+      await mkdir(transactionDirectory);
+    } catch (error) {
+      if (hasErrorCode(error, 'EEXIST')) continue;
+      throw error;
+    }
+    const acquiredStatus = await lstat(transactionDirectory);
+    try {
+      await syncDirectory(runDirectory);
+      await writeRunLockOwner(runDirectory, ownerPath, {
+        pid: NATIVE_PROCESS_PID,
+        token,
+        lease_expires_at_ms: currentTimeMilliseconds() + RUN_LOCK_LEASE_MS,
+        process_start_identity: NATIVE_PROCESS_START_IDENTITY
+      });
+      await syncDirectory(runDirectory);
+      const observed = await observeRunLock(runDirectory, transactionDirectory, ownerPath);
+      if (!sameFileGeneration(acquiredStatus, observed.status)
+        || observed.record?.token !== token) throw new RunStoreIntegrityError(
+        'Run coordination transaction changed during acquisition.'
+      );
+    } catch (error) {
+      await removeOwnedLockGeneration(
+        runDirectory, transactionDirectory, acquiredStatus, 'stale'
+      ).catch(() => {});
+      throw error;
+    }
+    return async () => {
+      const observed = await observeRunLock(runDirectory, transactionDirectory, ownerPath);
+      if (!sameFileGeneration(acquiredStatus, observed.status)
+        || observed.record?.token !== token) throw new RunStoreIntegrityError(
+        'Run coordination transaction changed before release.'
+      );
+      await removeOwnedLockGeneration(
+        runDirectory, transactionDirectory, acquiredStatus, 'release'
+      );
+    };
+  }
+}
+
 /**
  * Put a foreign generation moved by a release ABA race back at the canonical
- * path. If another generation already occupies that path, preserve it outside
- * the cleanup-residue namespace before restoring the earlier generation. Each
- * rename targets an absent path so the recovery remains portable to Windows.
+ * path. The release transaction makes every compliant contender withdraw a
+ * transient claim before this retries. Each rename targets an absent path so
+ * restoration remains portable to Windows. An out-of-protocol generation is
+ * never moved or deleted; the release residue remains recoverable evidence.
  * @param {string} runDirectory
  * @param {string} lockDirectory
  * @param {string} movedDirectory
@@ -638,55 +733,36 @@ async function removeOwnedLockGeneration(runDirectory, lockDirectory, expectedSt
 async function restoreForeignLockGeneration(
   runDirectory, lockDirectory, movedDirectory, movedStatus
 ) {
-  const preservedDirectory = `${lockDirectory}.preserved-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
-  try {
-    await lstat(lockDirectory);
-    await rename(lockDirectory, preservedDirectory);
-    await syncDirectory(runDirectory);
-  } catch (error) {
-    if (!isMissing(error)) throw error;
-  }
-  try {
+  const deadline = currentTimeMilliseconds() + RUN_LOCK_HEARTBEAT_PROOF_MS;
+  while (true) {
+    try {
+      await lstat(lockDirectory);
+      if (currentTimeMilliseconds() >= deadline) throw new RunStoreIntegrityError(
+        'Run coordination foreign generation restoration is blocked by another claim.'
+      );
+      await delay(RUN_LOCK_POLL_MS);
+      continue;
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+    }
     await rename(movedDirectory, lockDirectory);
     await syncDirectory(runDirectory);
     const restoredStatus = await lstat(lockDirectory);
     if (!sameFileGeneration(movedStatus, restoredStatus)) throw new RunStoreIntegrityError(
       'Run coordination foreign generation could not be restored safely.'
     );
-  } catch (error) {
-    try {
-      await lstat(lockDirectory);
-    } catch (statusError) {
-      if (isMissing(statusError)) {
-        try {
-          await rename(preservedDirectory, lockDirectory);
-          await syncDirectory(runDirectory);
-        } catch (restoreError) {
-          if (!isMissing(restoreError)) throw restoreError;
-        }
-      } else {
-        throw statusError;
-      }
-    }
-    try {
-      const movedPreserved = `${lockDirectory}.preserved-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
-      await rename(movedDirectory, movedPreserved);
-      await syncDirectory(runDirectory);
-    } catch (preserveError) {
-      if (!isMissing(preserveError)) throw preserveError;
-    }
-    throw error;
+    return;
   }
 }
 
 /**
  * Run lease pulses on a separate event loop so synchronous compilation cannot
- * make a live owner appear abandoned. The worker opens the claimed directory
+ * make a live owner appear abandoned. Each worker opens the claimed directory
  * itself and keeps that inode, so a renamed successor is never touched.
  * @param {string} lockDirectory
  * @param {any} expectedStatus
  */
-async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
+async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus) {
   const workerSource = `
     (async () => {
       const { parentPort, workerData } = await import('node:worker_threads');
@@ -795,38 +871,80 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
     await NATIVE_REFLECT_APPLY(NATIVE_WORKER_TERMINATE, worker, []).catch(() => {});
     throw error;
   }
-  return async () => {
-    try {
-      if (failure) throw failure;
-      await new NATIVE_PROMISE((resolve, reject) => {
-        resolveStop = resolve;
-        rejectStop = reject;
-        NATIVE_REFLECT_APPLY(NATIVE_WORKER_POST_MESSAGE, worker, [{ type: 'stop' }]);
-      });
-    } finally {
-      await NATIVE_REFLECT_APPLY(NATIVE_WORKER_TERMINATE, worker, []);
-    }
+  /** @type {Promise<void>|null} */
+  let stopOperation = null;
+  return () => {
+    if (stopOperation) return stopOperation;
+    stopOperation = (async () => {
+      try {
+        if (failure) throw failure;
+        await new NATIVE_PROMISE((resolve, reject) => {
+          resolveStop = resolve;
+          rejectStop = reject;
+          NATIVE_REFLECT_APPLY(NATIVE_WORKER_POST_MESSAGE, worker, [{ type: 'stop' }]);
+        });
+      } finally {
+        await NATIVE_REFLECT_APPLY(NATIVE_WORKER_TERMINATE, worker, []);
+      }
+    })();
+    return stopOperation;
   };
 }
 
-/** Remove crash residues only while this process owns the canonical run lock. */
-/** @param {string} runDirectory */
-export async function cleanupRunLockResidues(runDirectory) {
+/**
+ * Keep two independent lease workers. One worker may fail after readiness
+ * without erasing the live owner's only externally observable liveness proof.
+ * Static metadata never substitutes for a moving heartbeat.
+ * @param {string} lockDirectory
+ * @param {any} expectedStatus
+ */
+async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
+  const stopFirst = await startSingleRunLockHeartbeat(lockDirectory, expectedStatus);
+  /** @type {()=>Promise<void>} */
+  let stopSecond;
+  try {
+    stopSecond = await startSingleRunLockHeartbeat(lockDirectory, expectedStatus);
+  } catch (error) {
+    await stopFirst().catch(() => {});
+    throw error;
+  }
+  let firstStopped = false;
+  const stopOne = async () => {
+    if (firstStopped) return;
+    firstStopped = true;
+    await stopFirst();
+  };
+  const stopAll = async () => {
+    /** @type {unknown} */
+    let firstError = null;
+    try { await stopOne(); } catch (error) { firstError = error; }
+    try { await stopSecond(); } catch (error) {
+      if (!firstError) firstError = error;
+    }
+    if (firstError) throw firstError;
+  };
+  return { stopAll, stopOne };
+}
+
+/** Remove crash residues only under the exact acquired inode and owner token. */
+/** @param {string} runDirectory @param {any} expectedStatus @param {string} token */
+async function cleanupRunLockResidues(runDirectory, expectedStatus, token) {
   const lockDirectory = pathJoin(runDirectory, RUN_LOCK_DIRECTORY);
   const ownerPath = pathJoin(lockDirectory, RUN_LOCK_OWNER_FILE);
-  let owner;
+  let observed;
   try {
-    owner = (await observeRunLock(runDirectory, lockDirectory, ownerPath)).record;
+    observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
   } catch (error) {
     if (isMissing(error)) throw new RunStoreIntegrityError(
       'Run coordination residue cleanup requires active ownership.'
     );
     throw error;
   }
-  if (owner?.pid !== NATIVE_PROCESS_PID
-    || owner?.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
+  if (!sameFileGeneration(expectedStatus, observed.status)
+    || observed.record?.token !== token || observed.record?.pid !== NATIVE_PROCESS_PID
+    || observed.record?.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
     throw new RunStoreIntegrityError(
-      'Run coordination residue cleanup requires current-process ownership.'
+      'Run coordination residue cleanup requires exact acquired ownership.'
     );
   }
   const entries = await readdir(runDirectory, { withFileTypes: true });
@@ -848,7 +966,7 @@ export async function cleanupRunLockResidues(runDirectory) {
  * The lock directory is the atomic claim; owner metadata distinguishes an
  * active process from a safely reclaimable abandoned claim.
  * @param {string} runDirectory
- * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
+ * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterHeartbeatWorkerReady?:(stopOne:()=>Promise<void>)=>Promise<void>,beforeResidueCleanup?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
  * @returns {Promise<()=>Promise<void>>}
  */
 export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
@@ -867,9 +985,16 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
   let foreignHeartbeatAuthenticated = false;
 
   while (true) {
+    await waitForReleaseTransaction(runDirectory);
     try {
       await mkdir(lockDirectory);
       const acquiredStatus = await lstat(lockDirectory);
+      if (await releaseTransactionExists(runDirectory)) {
+        await removeOwnedLockGeneration(
+          runDirectory, lockDirectory, acquiredStatus, 'stale'
+        );
+        continue;
+      }
       let claimHandle;
       const owner = {
         pid: NATIVE_PROCESS_PID,
@@ -926,8 +1051,8 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       let heartbeatPromise = null;
       /** @type {unknown} */
       let heartbeatError = null;
-      /** @type {null|(()=>Promise<void>)} */
-      let stopHeartbeatWorker = null;
+      /** @type {null|{stopAll:()=>Promise<void>,stopOne:()=>Promise<void>}} */
+      let heartbeatWorkers = null;
       const scheduleHeartbeat = () => {
         if (heartbeatStopped) return;
         heartbeatTimer = NATIVE_SET_TIMEOUT(() => {
@@ -961,7 +1086,12 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       };
       try {
         if (coordinationHooks.afterHeartbeatObservation) scheduleHeartbeat();
-        else stopHeartbeatWorker = await startRunLockHeartbeat(lockDirectory, acquiredStatus);
+        else {
+          heartbeatWorkers = await startRunLockHeartbeat(lockDirectory, acquiredStatus);
+          if (coordinationHooks.afterHeartbeatWorkerReady) {
+            await coordinationHooks.afterHeartbeatWorkerReady(heartbeatWorkers.stopOne);
+          }
+        }
         owner.heartbeat_ready = true;
         await writeRunLockOwner(runDirectory, ownerPath, owner);
         await syncDirectory(runDirectory);
@@ -972,8 +1102,13 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
             'Run coordination generation changed during heartbeat readiness.'
           );
         }
+        if (coordinationHooks.beforeResidueCleanup) {
+          await coordinationHooks.beforeResidueCleanup();
+        }
+        await cleanupRunLockResidues(runDirectory, acquiredStatus, token);
       } catch (error) {
         heartbeatStopped = true;
+        if (heartbeatWorkers) await heartbeatWorkers.stopAll().catch(() => {});
         await closeClaimHandle().catch(() => {});
         await removeOwnedLockGeneration(
           runDirectory, lockDirectory, acquiredStatus, 'stale'
@@ -985,37 +1120,45 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         heartbeatStopped = true;
         if (heartbeatTimer !== undefined) NATIVE_CLEAR_TIMEOUT(heartbeatTimer);
         try {
-          if (heartbeatPromise) await heartbeatPromise;
-          if (stopHeartbeatWorker) await stopHeartbeatWorker();
-          const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
-          if (heartbeatError || !sameFileGeneration(acquiredStatus, observed.status)
-            || observed.record?.token !== token || observed.record.pid !== NATIVE_PROCESS_PID
-            || observed.record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
-            throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
-          }
-          if (coordinationHooks.afterReleaseObservation) {
-            await coordinationHooks.afterReleaseObservation();
-          }
-          const releasedDirectory = `${lockDirectory}.release-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
-          await rename(lockDirectory, releasedDirectory);
-          await syncDirectory(runDirectory);
-          const movedStatus = await lstat(releasedDirectory);
-          if (!sameFileGeneration(acquiredStatus, movedStatus)) {
-            await restoreForeignLockGeneration(
-              runDirectory, lockDirectory, releasedDirectory, movedStatus
+          const releaseTransaction = await acquireReleaseTransaction(runDirectory, token);
+          try {
+            if (heartbeatPromise) await heartbeatPromise;
+            if (heartbeatWorkers) await heartbeatWorkers.stopAll();
+            const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+            if (heartbeatError || !sameFileGeneration(acquiredStatus, observed.status)
+              || observed.record?.token !== token || observed.record.pid !== NATIVE_PROCESS_PID
+              || observed.record.process_start_identity !== NATIVE_PROCESS_START_IDENTITY) {
+              throw new RunStoreIntegrityError('Run coordination ownership changed before release.');
+            }
+            if (coordinationHooks.afterReleaseObservation) {
+              await coordinationHooks.afterReleaseObservation();
+            }
+            const releasedDirectory = `${lockDirectory}.release-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
+            await rename(lockDirectory, releasedDirectory);
+            await syncDirectory(runDirectory);
+            const movedStatus = await lstat(releasedDirectory);
+            if (!sameFileGeneration(acquiredStatus, movedStatus)) {
+              await restoreForeignLockGeneration(
+                runDirectory, lockDirectory, releasedDirectory, movedStatus
+              );
+              throw new RunStoreIntegrityError(
+                'Run coordination release moved a different generation.'
+              );
+            }
+            const moved = await observeRunLock(
+              runDirectory, releasedDirectory, pathJoin(releasedDirectory, RUN_LOCK_OWNER_FILE)
             );
-            throw new RunStoreIntegrityError('Run coordination release moved a different generation.');
+            if (!sameFileGeneration(acquiredStatus, moved.status)
+              || moved.record?.token !== token) throw new RunStoreIntegrityError(
+              'Run coordination release moved a different generation.'
+            );
+            await closeClaimHandle();
+            await rm(releasedDirectory, { recursive: true, force: true });
+            await syncDirectory(runDirectory);
+            released = true;
+          } finally {
+            await releaseTransaction();
           }
-          const moved = await observeRunLock(
-            runDirectory, releasedDirectory, pathJoin(releasedDirectory, RUN_LOCK_OWNER_FILE)
-          );
-          if (!sameFileGeneration(acquiredStatus, moved.status) || moved.record?.token !== token) {
-            throw new RunStoreIntegrityError('Run coordination release moved a different generation.');
-          }
-          await closeClaimHandle();
-          await rm(releasedDirectory, { recursive: true, force: true });
-          await syncDirectory(runDirectory);
-          released = true;
         } catch (error) {
           try {
             await closeClaimHandle();
@@ -1060,7 +1203,7 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [record.heartbeat_seq]
       );
     const compilerIdentityValid = hasCompilerHeartbeat
-      && compilerProcessIdentityIsCanonical(ownerPid, ownerProcessStart);
+      && compilerProcessIdentityHasCanonicalShape(ownerPid, ownerProcessStart);
     const heartbeatLease = compilerIdentityValid
       ? status.mtimeMs + RUN_LOCK_LEASE_MS : ownerLease;
     let foreignHeartbeatPending = false;
@@ -1094,12 +1237,10 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       foreignFirstObservedAt = 0;
       foreignHeartbeatAuthenticated = false;
     }
-    const durableCompilerOwner = compilerIdentityValid && record?.heartbeat_ready === true
-      && processOwnerIsAlive(ownerPid);
     const arbitraryPidIsAuthenticated = ownerPid === NATIVE_PROCESS_PID
-      || foreignHeartbeatAuthenticated || durableCompilerOwner;
+      || foreignHeartbeatAuthenticated;
     const ownerAlive = ownerShapeValid && typeof heartbeatLease === 'number'
-      && (heartbeatLease > now || durableCompilerOwner)
+      && heartbeatLease > now
       && currentPidIdentityMatches && arbitraryPidIsAuthenticated
       && processOwnerIsAlive(ownerPid);
     const incompleteIsYoung = !ownerShapeValid

@@ -572,6 +572,37 @@ test('advance cleans release residues only after it owns the run lock', async ()
   }
 });
 
+test('residue cleanup rejects a replacement with copied process metadata', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const displacedDirectory = path.join(runDirectory, '.cleanup-original-holder');
+  const residue = path.join(runDirectory, '.compiler-advance.lock.release-999-77');
+  try {
+    await mkdir(path.join(residue, 'nested'), { recursive: true });
+    await writeFile(path.join(residue, 'nested/owner.json'), '{}\n', 'utf8');
+    await assert.rejects(acquireRunLock(runDirectory, {
+      beforeResidueCleanup: async () => {
+        const originalOwner = JSON.parse(await readFile(
+          path.join(lockDirectory, 'owner.json'), 'utf8'
+        ));
+        await rename(lockDirectory, displacedDirectory);
+        await mkdir(lockDirectory);
+        await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
+          ...originalOwner, token: 'copied-metadata-replacement'
+        })}\n`, 'utf8');
+      }
+    }), /exact acquired ownership/u);
+    await stat(residue);
+    assert.equal(JSON.parse(await readFile(
+      path.join(lockDirectory, 'owner.json'), 'utf8'
+    )).token, 'copied-metadata-replacement');
+  } finally {
+    await rm(lockDirectory, { recursive: true, force: true });
+    await rm(displacedDirectory, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('a production lock holder renews its fenced lease while a contender waits', { timeout: 10_000 }, async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
@@ -689,55 +720,44 @@ test('release restores a successor substituted after ownership observation', asy
   }
 });
 
-test('release restores the earlier successor and preserves a third generation', async () => {
+test('release transaction restores its successor before a third contender can claim', async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
   const originalDirectory = path.join(runDirectory, '.original-holder');
-  const thirdOwner = {
-    pid: process.pid, token: 'third-generation', lease_expires_at_ms: Date.now() + 60_000
+  const secondOwner = {
+    pid: process.pid, token: 'second-generation', lease_expires_at_ms: Date.now() + 60_000
   };
-  /** @type {undefined|(()=>Promise<void>)} */
-  let releaseSecond;
-  /** @type {Promise<void>|undefined} */
-  let thirdClaim;
+  /** @type {Promise<()=>Promise<void>>|undefined} */
+  let thirdAcquire;
   try {
     const releaseFirst = await acquireRunLock(runDirectory, {
       afterReleaseObservation: async () => {
         await rename(lockDirectory, originalDirectory);
-        releaseSecond = await acquireRunLock(runDirectory);
-        thirdClaim = (async () => {
-          while (true) {
-            try {
-              await mkdir(lockDirectory);
-              await writeFile(
-                path.join(lockDirectory, 'owner.json'), `${JSON.stringify(thirdOwner)}\n`, 'utf8'
-              );
-              return;
-            } catch (error) {
-              if (!(error && typeof error === 'object' && 'code' in error
-                && error.code === 'EEXIST')) throw error;
-              await new Promise((resolve) => setTimeout(resolve, 0));
-            }
-          }
-        })();
+        await mkdir(lockDirectory);
+        await writeFile(
+          path.join(lockDirectory, 'owner.json'), `${JSON.stringify(secondOwner)}\n`, 'utf8'
+        );
+        thirdAcquire = acquireRunLock(runDirectory);
       }
     });
     await assert.rejects(releaseFirst, /release moved a different generation/u);
-    await thirdClaim;
-    const canonicalOwner = JSON.parse(await readFile(
+    assert.deepEqual(JSON.parse(await readFile(
       path.join(lockDirectory, 'owner.json'), 'utf8'
+    )), secondOwner);
+    assert.ok((await readdir(runDirectory)).every(
+      (/** @type {string} */ name) => !name.startsWith('.compiler-advance.lock.release-')
+        && !name.startsWith('.compiler-advance.lock.preserved-')
     ));
-    assert.notEqual(canonicalOwner.token, thirdOwner.token);
-    const preserved = (await readdir(runDirectory)).filter(
-      (/** @type {string} */ name) => name.startsWith('.compiler-advance.lock.preserved-')
-    );
-    assert.ok(preserved.length >= 1);
-    assert.ok((await Promise.all(preserved.map(async (/** @type {string} */ name) => JSON.parse(await readFile(
-      path.join(runDirectory, name, 'owner.json'), 'utf8'
-    ))))).some((owner) => owner.token === thirdOwner.token));
-    assert.ok(releaseSecond);
-    await (/** @type {()=>Promise<void>} */ (releaseSecond))();
-    await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
+    const pendingThird = thirdAcquire;
+    if (!pendingThird) throw new Error('third contender was not started');
+    const thirdState = await Promise.race([
+      pendingThird.then(() => 'acquired'),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 350))
+    ]);
+    assert.equal(thirdState, 'waiting');
+    await rm(lockDirectory, { recursive: true, force: true });
+    const releaseThird = await pendingThird;
+    await releaseThird();
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -909,7 +929,39 @@ test('stale reclaim restores a newer lock generation instead of deleting it', { 
   }
 });
 
-test('a ready compiler owner remains exclusive if its heartbeat worker stops', {
+test('one stopped heartbeat worker leaves a second live proof for a synchronous owner', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  try {
+    let stoppedOne = false;
+    const releaseHolder = await acquireRunLock(runDirectory, {
+      afterHeartbeatWorkerReady: async (stopOne) => {
+        await stopOne();
+        stoppedOne = true;
+      }
+    });
+    assert.equal(stoppedOne, true);
+    const firstHeartbeat = (await stat(lockDirectory)).mtimeMs;
+    await new Promise((resolve) => setTimeout(resolve, 2_750));
+    const renewedHeartbeat = (await stat(lockDirectory)).mtimeMs;
+    assert.ok(renewedHeartbeat > firstHeartbeat);
+    const contender = acquireRunLock(runDirectory);
+    const state = await Promise.race([
+      contender.then(() => 'acquired'),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 700))
+    ]);
+    assert.equal(state, 'waiting', 'one worker failure erased the live owner proof');
+    await releaseHolder();
+    const releaseContender = await contender;
+    await releaseContender();
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('a canonical ready record cannot turn an unrelated reused PID into a live owner', {
   timeout: 10_000
 }, async () => {
   const runDirectory = await temporaryRun();
@@ -919,48 +971,21 @@ test('a ready compiler owner remains exclusive if its heartbeat worker stops', {
     assert.ok(child.pid);
     await mkdir(lockDirectory);
     await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
-      pid: child.pid, token: 'ready-owner-without-pulses', lease_expires_at_ms: 0,
-      process_start_identity: `${child.pid}:${Date.now()}`, heartbeat_seq: 0,
+      pid: child.pid, token: 'reused-external-pid', lease_expires_at_ms: 0,
+      process_start_identity: `${child.pid}:${Date.now() - 60_000}`, heartbeat_seq: 7,
       heartbeat_ready: true
-    })}\n`, 'utf8');
-    const contender = acquireRunLock(runDirectory);
-    const state = await Promise.race([
-      contender.then(() => 'acquired'),
-      new Promise((resolve) => setTimeout(() => resolve('waiting'), 700))
-    ]);
-    assert.equal(state, 'waiting', 'a live ready compiler owner was reclaimed after pulse loss');
-    child.kill();
-    await new Promise((resolve) => child.on('close', resolve));
-    const release = await contender;
-    await release();
-  } finally {
-    if (child.exitCode === null) child.kill();
-    await rm(runDirectory, { recursive: true, force: true });
-  }
-});
-
-test('a different live PID with a static forged heartbeat cannot impersonate the owner', { timeout: 10_000 }, async () => {
-  const runDirectory = await temporaryRun();
-  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)']);
-  try {
-    assert.ok(child.pid);
-    await mkdir(lockDirectory);
-    await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
-      pid: child.pid, token: 'reused-external-pid', lease_expires_at_ms: Date.now() + 60_000,
-      process_start_identity: `${child.pid}:forged-start`, heartbeat_seq: 7
     })}\n`, 'utf8');
     const contender = acquireRunLock(runDirectory);
     const release = await Promise.race([
       contender,
-      new Promise((resolve) => setTimeout(() => resolve('waiting'), 600))
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 1_200))
     ]);
     if (release === 'waiting') {
       await rm(lockDirectory, { recursive: true, force: true });
       const lateRelease = await contender;
       await lateRelease();
     }
-    assert.notEqual(release, 'waiting', 'an unrelated live PID impersonated the compiler owner');
+    assert.notEqual(release, 'waiting', 'a static ready record authenticated an unrelated live PID');
     if (release !== 'waiting') await (/** @type {()=>Promise<void>} */ (release))();
   } finally {
     child.kill();
