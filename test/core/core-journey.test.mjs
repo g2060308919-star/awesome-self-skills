@@ -822,6 +822,77 @@ test('core boundary never consults a replaced String iterator while sorting diag
   });
 });
 
+test('core rejects polluted constructors and dynamic String methods before a valid revision executes them', async () => {
+  const fixture = await journeyFixture('grounded');
+  const input = buildRevision(fixture.scenario);
+  assert.equal(evaluateRevision(input, {
+    interactionPolicy: 'pause_for_clarification'
+  }).status, 'finished');
+
+  const constructorNames = ['Array', 'Set', 'Map', 'String'];
+  const stringMethodNames = ['trim', 'includes', 'split'];
+  const constructorDescriptors = constructorNames.map((name) => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
+    if (!descriptor) throw new Error(`missing global constructor ${name}`);
+    return descriptor;
+  });
+  const stringMethodDescriptors = stringMethodNames.map((name) => {
+    const descriptor = Object.getOwnPropertyDescriptor(String.prototype, name);
+    if (!descriptor) throw new Error(`missing String method ${name}`);
+    return descriptor;
+  });
+  let constructorCalls = 0;
+  let stringMethodCalls = 0;
+  /** @type {any} */
+  let result;
+  try {
+    for (let index = 0; index < constructorNames.length; index += 1) {
+      const descriptor = constructorDescriptors[index];
+      const original = descriptor.value;
+      Object.defineProperty(globalThis, constructorNames[index], {
+        ...descriptor,
+        value: new Proxy(original, {
+          apply(target, thisArg, args) {
+            constructorCalls += 1;
+            return Reflect.apply(target, thisArg, args);
+          },
+          construct(target, args, newTarget) {
+            constructorCalls += 1;
+            return Reflect.construct(target, args, newTarget);
+          }
+        })
+      });
+    }
+    for (let index = 0; index < stringMethodNames.length; index += 1) {
+      const descriptor = stringMethodDescriptors[index];
+      Object.defineProperty(String.prototype, stringMethodNames[index], {
+        ...descriptor,
+        value: new Proxy(descriptor.value, {
+          apply(target, thisArg, args) {
+            stringMethodCalls += 1;
+            return Reflect.apply(target, thisArg, args);
+          }
+        })
+      });
+    }
+    result = evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' });
+  } finally {
+    for (let index = stringMethodNames.length - 1; index >= 0; index -= 1) {
+      Object.defineProperty(String.prototype, stringMethodNames[index], stringMethodDescriptors[index]);
+    }
+    for (let index = constructorNames.length - 1; index >= 0; index -= 1) {
+      Object.defineProperty(globalThis, constructorNames[index], constructorDescriptors[index]);
+    }
+  }
+  assert.equal(constructorCalls, 0);
+  assert.equal(stringMethodCalls, 0);
+  assert.equal(result.status, 'need_revision');
+  assert.equal(result.stage, 'schema');
+  assert.deepEqual(result.diagnostics.map((/** @type {any} */ item) => item.code), [
+    'CORE_INTRINSIC_INVALID'
+  ]);
+});
+
 test('external pending roots retain Task 9 risk order while hashing a sorted batch set', async () => {
   const { externalizePendingRoots } = await loadConflictGate();
   const root = (/** @type {string} */ id, /** @type {any} */ riskCounts, affected = ['obligation']) => ({
@@ -924,6 +995,51 @@ test('local conflict candidate lookups scale with source associations rather tha
     reads.push(scopeReads);
   }
   assert.deepEqual(reads, [100, 200, 400, 800]);
+});
+
+test('dense shared conflict selections are cached by candidate union and Case scope', async () => {
+  const { applyLocalConflictBlocks } = await loadConflictGate();
+  const reads = [];
+  for (const size of [100, 200, 400, 800]) {
+    let scopeReads = 0;
+    const cases = [];
+    const obligations = [];
+    const conflicts = [];
+    for (let index = 0; index < size; index += 1) {
+      const suffix = String(index).padStart(4, '0');
+      cases.push({
+        case_id: `case_${suffix}`, scope: 'checkout',
+        obligation_ids: [`obligation_${suffix}`], evidence_refs: ['claim_shared']
+      });
+      obligations.push({
+        obligation_id: `obligation_${suffix}`, risk: 'high', scope: 'checkout'
+      });
+      const conflict = {
+        conflict_id: `conflict_${suffix}`, root_issue_id: `root_${suffix}`,
+        source_ids: ['source_shared'], rule_ids: [`old_${suffix}`, `new_${suffix}`]
+      };
+      Object.defineProperty(conflict, 'scope', {
+        enumerable: true,
+        get() {
+          scopeReads += 1;
+          return 'checkout';
+        }
+      });
+      conflicts.push(conflict);
+    }
+    const result = applyLocalConflictBlocks({
+      grounded: cases, conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
+    }, obligations, new Map([[
+      'claim_shared', {
+        claim_id: 'claim_shared', source_id: 'source_shared',
+        source_locator_ids: [], parent_claim_ids: []
+      }
+    ]]), { locators: [] }, conflicts);
+    assert.ok(result.diagnostics.some((/** @type {any} */ item) =>
+      item.code === 'CORE_SOURCE_CONFLICT_AMBIGUOUS'));
+    reads.push(scopeReads);
+  }
+  assert.deepEqual(reads, [2, 2, 2, 2]);
 });
 
 test('shared evidence ancestry is indexed once across many conflict-dependent Cases', async () => {

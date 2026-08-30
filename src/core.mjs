@@ -60,9 +60,14 @@ const NATIVE_SET_DELETE = Set.prototype.delete;
 const NATIVE_SET_ITERATOR = Set.prototype[Symbol.iterator];
 const NATIVE_SET_FOR_EACH = Set.prototype.forEach;
 const NATIVE_SET_PROTOTYPE = Set.prototype;
+const NATIVE_STRING = String;
 const NATIVE_STRING_CODE_POINT_AT = String.prototype.codePointAt;
+const NATIVE_STRING_TRIM = String.prototype.trim;
+const NATIVE_STRING_INCLUDES = String.prototype.includes;
+const NATIVE_STRING_SPLIT = String.prototype.split;
 const NATIVE_STRING_ITERATOR = String.prototype[Symbol.iterator];
 const NATIVE_STRING_PROTOTYPE = String.prototype;
+const NATIVE_GLOBAL_THIS = globalThis;
 const NATIVE_WEAK_MAP = WeakMap;
 const NATIVE_WEAK_MAP_GET = WeakMap.prototype.get;
 const NATIVE_WEAK_MAP_SET = WeakMap.prototype.set;
@@ -234,6 +239,10 @@ function unionSortedStrings(left, right) {
 
 function intrinsicIntegrityDiagnostic() {
   try {
+    const globalArrayDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Array');
+    const globalSetDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Set');
+    const globalMapDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Map');
+    const globalStringDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'String');
     const iteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_ARRAY_PROTOTYPE, Symbol.iterator
     );
@@ -258,7 +267,24 @@ function intrinsicIntegrityDiagnostic() {
     const stringIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_STRING_PROTOTYPE, Symbol.iterator
     );
-    if (iteratorDescriptor && NATIVE_HAS_OWN(iteratorDescriptor, 'value')
+    const stringTrimDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_STRING_PROTOTYPE, 'trim'
+    );
+    const stringIncludesDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_STRING_PROTOTYPE, 'includes'
+    );
+    const stringSplitDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_STRING_PROTOTYPE, 'split'
+    );
+    if (globalArrayDescriptor && NATIVE_HAS_OWN(globalArrayDescriptor, 'value')
+      && globalArrayDescriptor.value === NATIVE_ARRAY
+      && globalSetDescriptor && NATIVE_HAS_OWN(globalSetDescriptor, 'value')
+      && globalSetDescriptor.value === NATIVE_SET
+      && globalMapDescriptor && NATIVE_HAS_OWN(globalMapDescriptor, 'value')
+      && globalMapDescriptor.value === NATIVE_MAP
+      && globalStringDescriptor && NATIVE_HAS_OWN(globalStringDescriptor, 'value')
+      && globalStringDescriptor.value === NATIVE_STRING
+      && iteratorDescriptor && NATIVE_HAS_OWN(iteratorDescriptor, 'value')
       && iteratorDescriptor.value === NATIVE_ARRAY_ITERATOR
       && sortDescriptor && NATIVE_HAS_OWN(sortDescriptor, 'value')
       && sortDescriptor.value === NATIVE_ARRAY_SORT
@@ -288,7 +314,13 @@ function intrinsicIntegrityDiagnostic() {
       && mapForEachDescriptor && NATIVE_HAS_OWN(mapForEachDescriptor, 'value')
       && mapForEachDescriptor.value === NATIVE_MAP_FOR_EACH
       && stringIteratorDescriptor && NATIVE_HAS_OWN(stringIteratorDescriptor, 'value')
-      && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR) return null;
+      && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR
+      && stringTrimDescriptor && NATIVE_HAS_OWN(stringTrimDescriptor, 'value')
+      && stringTrimDescriptor.value === NATIVE_STRING_TRIM
+      && stringIncludesDescriptor && NATIVE_HAS_OWN(stringIncludesDescriptor, 'value')
+      && stringIncludesDescriptor.value === NATIVE_STRING_INCLUDES
+      && stringSplitDescriptor && NATIVE_HAS_OWN(stringSplitDescriptor, 'value')
+      && stringSplitDescriptor.value === NATIVE_STRING_SPLIT) return null;
   } catch {
     // Fall through to a stable fail-closed diagnostic.
   }
@@ -875,41 +907,100 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
   return { candidateIdsByClaim, conflictByIdentity };
 }
 
+function makeConflictSelectionCache() {
+  return {
+    /** @type {WeakMap<object,number>} */ relationIdentityBySet: new NATIVE_WEAK_MAP(),
+    nextRelationIdentity: 0,
+    /** @type {Map<string,Set<string>>} */ unionBySignature: makeMap(),
+    /** @type {Map<string,Set<string>>} */ internedUnions: makeMap(),
+    /** @type {WeakMap<object,string[]>} */ orderedIdsByUnion: new NATIVE_WEAK_MAP(),
+    /** @type {WeakMap<object,Map<string,any>>} */ selectionsByUnion: new NATIVE_WEAK_MAP()
+  };
+}
+
 /**
  * @param {Record<string, unknown>} caseDraft
  * @param {ReturnType<typeof prepareConflictRelations>} relations
  * @param {Set<string>} allowedConflictIds
+ * @param {{
+ *   relationIdentityBySet:WeakMap<object,number>,nextRelationIdentity:number,
+ *   unionBySignature:Map<string,Set<string>>,internedUnions:Map<string,Set<string>>,
+ *   orderedIdsByUnion:WeakMap<object,string[]>,selectionsByUnion:WeakMap<object,Map<string,any>>
+ * }} cache
  */
-function conflictSelectionForCase(caseDraft, relations, allowedConflictIds) {
-  const candidateIds = makeSet();
+function conflictSelectionForCase(caseDraft, relations, allowedConflictIds, cache) {
+  /** @type {Set<Set<string>>} */
+  const relatedSets = makeSet();
   const refs = strings(caseDraft.evidence_refs);
   for (let index = 0; index < refs.length; index += 1) {
     const related = mapGet(relations.candidateIdsByClaim, refs[index]);
-    if (related) forEachSet(related, (identity) => {
-      if (setHas(allowedConflictIds, identity)) setAdd(candidateIds, identity);
-    });
+    if (related) setAdd(relatedSets, related);
   }
+  const uniqueRelatedSets = setValuesArray(relatedSets);
+  /** @type {number[]} */
+  const relationIdentities = [];
+  for (let index = 0; index < uniqueRelatedSets.length; index += 1) {
+    const related = uniqueRelatedSets[index];
+    let identity = weakMapGet(cache.relationIdentityBySet, related);
+    if (identity === undefined) {
+      identity = cache.nextRelationIdentity;
+      cache.nextRelationIdentity += 1;
+      weakMapSet(cache.relationIdentityBySet, related, identity);
+    }
+    pushArray(relationIdentities, identity);
+  }
+  sortArray(relationIdentities, (left, right) => left - right);
+  const unionSignature = canonicalStringify(relationIdentities);
+  let candidateIds = mapGet(cache.unionBySignature, unionSignature);
+  if (!candidateIds) {
+    const merged = makeSet();
+    for (let index = 0; index < uniqueRelatedSets.length; index += 1) {
+      forEachSet(uniqueRelatedSets[index], (identity) => {
+        if (setHas(allowedConflictIds, identity)) setAdd(merged, identity);
+      });
+    }
+    const orderedIds = sortArray(setValuesArray(merged), compareCodePoints);
+    const candidateKey = canonicalStringify(orderedIds);
+    candidateIds = mapGet(cache.internedUnions, candidateKey);
+    if (!candidateIds) {
+      candidateIds = merged;
+      mapSet(cache.internedUnions, candidateKey, candidateIds);
+      weakMapSet(cache.orderedIdsByUnion, candidateIds, orderedIds);
+    }
+    mapSet(cache.unionBySignature, unionSignature, candidateIds);
+  }
+  let selectionsByScope = weakMapGet(cache.selectionsByUnion, candidateIds);
+  if (!selectionsByScope) {
+    selectionsByScope = makeMap();
+    weakMapSet(cache.selectionsByUnion, candidateIds, selectionsByScope);
+  }
+  const caseScope = typeof caseDraft.scope === 'string' ? caseDraft.scope : '';
+  const cachedSelection = mapGet(selectionsByScope, caseScope);
+  if (cachedSelection) return cachedSelection;
   /** @type {string|null} */
   let selectedIdentity = null;
   let count = 0;
-  forEachSet(candidateIds, (identity) => {
+  const orderedIds = weakMapGet(cache.orderedIdsByUnion, candidateIds)
+    ?? sortArray(setValuesArray(candidateIds), compareCodePoints);
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const identity = orderedIds[index];
     const conflict = mapGet(relations.conflictByIdentity, identity);
-    if (!conflict) return;
+    if (!conflict) continue;
     const conflictScope = conflict.scope;
-    if (typeof conflictScope === 'string' && typeof caseDraft.scope === 'string'
-      && scopesIntersect(caseDraft.scope, conflictScope)) {
+    if (typeof conflictScope === 'string' && scopesIntersect(caseScope, conflictScope)) {
       count += 1;
-      if (selectedIdentity === null || compareCodePoints(identity, selectedIdentity) < 0) {
-        selectedIdentity = identity;
-      }
+      if (selectedIdentity === null) selectedIdentity = identity;
+      if (count === 2) break;
     }
-  });
-  return {
+  }
+  const selection = {
     conflict: selectedIdentity === null ? null
       : mapGet(relations.conflictByIdentity, selectedIdentity) ?? null,
     identity: selectedIdentity,
     count
   };
+  mapSet(selectionsByScope, caseScope, selection);
+  return selection;
 }
 
 /**
@@ -964,10 +1055,13 @@ function applyLocalConflictBlocks(
   const conflictIdsByObligation = makeMap();
   /** @type {Diagnostic[]} */
   const ambiguityDiagnostics = [];
+  const selectionCache = makeConflictSelectionCache();
 
   for (let index = 0; index < executable.length; index += 1) {
     const caseDraft = executable[index].item;
-    const selection = conflictSelectionForCase(caseDraft, relations, allowedConflictIds);
+    const selection = conflictSelectionForCase(
+      caseDraft, relations, allowedConflictIds, selectionCache
+    );
     pushArray(selections, selection);
     if (selection.count > 1) pushArray(ambiguityDiagnostics, diagnostic(
       'classification', 'CORE_SOURCE_CONFLICT_AMBIGUOUS',
@@ -1141,9 +1235,12 @@ function buildSourceConflictBridge(classification, obligations, relations, confl
   /** @type {Map<string, any>} */
   const bridge = makeMap();
   const ambiguous = makeSet();
+  const selectionCache = makeConflictSelectionCache();
   for (let caseIndex = 0; caseIndex < executable.length; caseIndex += 1) {
     const caseDraft = executable[caseIndex];
-    const selection = conflictSelectionForCase(caseDraft, relations, allowedConflictIds);
+    const selection = conflictSelectionForCase(
+      caseDraft, relations, allowedConflictIds, selectionCache
+    );
     if (selection.count !== 1 || !selection.conflict) continue;
     const conflict = selection.conflict;
     const linkedIds = strings(caseDraft.obligation_ids);
