@@ -1,6 +1,6 @@
 # Case Writing Policy
 
-Draft Cases only after formal Test Points exist and clarification has converged or delivery was requested. Unresolved formal Test Points remain Blocked; never turn them into guessed Cases.
+Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls compiler finalization, not whether candidate drafts may be submitted.
 
 ## Build Oracle-gated Cases
 

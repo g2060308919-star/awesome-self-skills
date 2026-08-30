@@ -78,6 +78,11 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(cases, /read-only source rebuttal pass/u);
   assert.match(cases, /support_review = supported \| contradicted \| uncertain/u);
   assert.match(cases, /never introduce a new business fact/iu);
+  assert.match(
+    cases,
+    /Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply/u
+  );
+  assert.doesNotMatch(cases, /clarification has converged or delivery was requested/u);
 });
 
 test('skill static UI metadata remains the generated closed interface', async () => {
