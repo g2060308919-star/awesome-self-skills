@@ -25,16 +25,43 @@ function finished(input, policy = 'pause_for_clarification') {
 }
 
 test('metamorphic: artifact array reorder leaves the canonical bundle unchanged', () => {
-  const input = buildJourney('multi-module-interaction');
+  const input = revisionFromRules([
+    journeyRule('checkout'),
+    journeyRule('shipping', {
+      sourceId: 'source_shipping', scope: 'shipping',
+      digest: 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+    })
+  ], {
+    modules: ['checkout', 'shipping'],
+    extraSources: [{
+      source_id: 'source_shipping', kind: 'prd', version: '1', status: 'effective',
+      authority: 'shipping-owner', content: 'Frozen shipping requirements.',
+      content_digest: 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+      scope: 'shipping'
+    }],
+    extraPolicyRules: [{
+      rule_id: 'policy_shipping', source_ids: ['source_shipping'], scope: 'shipping',
+      authority: 'shipping-owner', status: 'effective'
+    }]
+  });
+  input.source_pack.source_policy.rules[0].scope = 'checkout';
+  const baseline = finished(input);
   const reordered = structuredClone(input);
-  for (const [record, fields] of [
-    [reordered.source_pack, ['sources', 'locators']],
-    [reordered.source_pack.source_policy, ['rules']],
-    [reordered.evidence_claims, ['claims', 'fact_ledger']],
-    [reordered.behavior_views, ['views', 'interaction_matrix', 'interaction_candidates']],
-    [reordered.case_drafts, ['cases', 'obligation_dispositions', 'exploratory_candidates']]
-  ]) for (const field of fields) record[field].reverse();
-  assert.equal(canonicalStringify(finished(reordered)), canonicalStringify(finished(input)));
+  for (const [label, collection] of [
+    ['sources', reordered.source_pack.sources],
+    ['locators', reordered.source_pack.locators],
+    ['source-policy rules', reordered.source_pack.source_policy.rules],
+    ['claims', reordered.evidence_claims.claims],
+    ['facts', reordered.evidence_claims.fact_ledger],
+    ['views', reordered.behavior_views.views],
+    ['interaction matrix cells', reordered.behavior_views.interaction_matrix],
+    ['Cases', reordered.case_drafts.cases],
+    ['dispositions', reordered.case_drafts.obligation_dispositions]
+  ]) {
+    assert.ok(collection.length >= 2, `${label} reorder precondition is non-vacuous`);
+    collection.reverse();
+  }
+  assert.equal(canonicalStringify(finished(reordered)), canonicalStringify(baseline));
 });
 
 test('metamorphic: adding an independent module preserves prior IDs and lanes', () => {
@@ -74,28 +101,54 @@ test('metamorphic hard gates: E3→E1 only moves Grounded to Conditional', () =>
 });
 
 test('metamorphic hard gates: E1→E0, unsupported review, and approved assumptions obey the lowest gate', () => {
-  const e1Context = classificationContext();
-  e1Context.evidence.claimsById.set('claim_role', acceptedClaim('claim_role', 'E1'));
-  e1Context.caseDrafts.cases[0].temporary_assumption = {
-    claim_id: 'claim_role', invalidation_condition: 'A final rule replaces it.'
-  };
-  const e1 = classifyCaseDrafts(e1Context);
-  assert.equal(e1.grounded.length, 0, 'reversal permits E1-as-Grounded');
-  assert.equal(e1.conditional.length, 1);
+  const e1Input = revisionFromRules([
+    journeyRule('checkout', { level: 'E1', decisionDisposition: 'temporary' }),
+    journeyRule('shipping', { scope: 'shipping' })
+  ], { modules: ['checkout', 'shipping'] });
+  assert.equal(e1Input.case_drafts.cases.length, 2, 'locality requires two independent Cases');
+  const e1 = finished(e1Input, 'record_only');
+  assert.equal(e1.conditional.length, 1, 'reversal permits E1-as-Grounded');
+  assert.equal(e1.grounded.length, 1);
+  assert.equal(e1.coverage.formal.entries.length, 2);
+  const affectedBaseline = e1.conditional.find(
+    (/** @type {any} */ item) => item.scope === 'checkout'
+  );
+  const unaffectedBaseline = e1.grounded.find(
+    (/** @type {any} */ item) => item.scope === 'shipping'
+  );
+  assert.ok(affectedBaseline && unaffectedBaseline, 'both locality lanes must exist');
+  assert.notEqual(affectedBaseline.case_id, unaffectedBaseline.case_id);
+  assert.notEqual(affectedBaseline.obligation_ids[0], unaffectedBaseline.obligation_ids[0]);
 
-  const e0Context = structuredClone(e1Context);
-  e0Context.caseDrafts.cases[0].role.evidence_ref = 'risk_e0';
-  e0Context.caseDrafts.cases[0].evidence_refs = e0Context.caseDrafts.cases[0].evidence_refs
-    .map((/** @type {string} */ ref) => ref === 'claim_role' ? 'risk_e0' : ref);
-  const e0 = classifyCaseDrafts(e0Context);
-  assert.equal(e0.grounded.length, 0);
-  assert.equal(e0.conditional.length, 0, 'reversal permits E0-as-Conditional');
+  const e0Input = structuredClone(e1Input);
+  const affectedDraft = e0Input.case_drafts.cases.find(
+    (/** @type {any} */ item) => item.scope === 'checkout'
+  );
+  assert.ok(affectedDraft, 'the affected E1 Case must exist before lowering support');
+  affectedDraft.steps[0].expectations[0].support_review = 'uncertain';
+  const e0 = finished(e0Input, 'record_only');
+  assert.equal(e0.grounded.length, 1);
+  assert.equal(e0.conditional.length, 0, 'reversal permits unsupported/E0-as-Conditional');
   assert.equal(e0.blocked.length, 1);
   assert.equal(e0.exploratory.length, 0);
-  assert.equal(
-    (/** @type {any} */ (e0.blocked[0])).obligation_id,
-    (/** @type {any} */ (e1.conditional[0])).obligation_ids[0]
+  assert.equal(e0.blocked[0].obligation_id, affectedBaseline.obligation_ids[0]);
+  assert.match(e0.blocked[0].reason, /SUPPORT_REVIEW_UNCERTAIN/u);
+  const unaffectedResult = e0.grounded.find(
+    (/** @type {any} */ item) => item.scope === 'shipping'
   );
+  assert.deepEqual(unaffectedResult, unaffectedBaseline, 'unrelated Grounded Case changed');
+  assert.equal(canonicalStringify(unaffectedResult), canonicalStringify(unaffectedBaseline));
+  assert.equal(unaffectedResult.case_id, unaffectedBaseline.case_id);
+  assert.deepEqual(unaffectedResult.obligation_ids, unaffectedBaseline.obligation_ids);
+  const unaffectedPointId = unaffectedBaseline.obligation_ids[0];
+  const unaffectedCoverageBefore = e1.coverage.formal.entries.find(
+    (/** @type {any} */ item) => item.obligation_id === unaffectedPointId
+  );
+  const unaffectedCoverageAfter = e0.coverage.formal.entries.find(
+    (/** @type {any} */ item) => item.obligation_id === unaffectedPointId
+  );
+  assert.deepEqual(unaffectedCoverageAfter, unaffectedCoverageBefore);
+  assert.equal(e0.coverage.formal.total, e1.coverage.formal.total);
 
   const unsupportedContext = classificationContext();
   unsupportedContext.caseDrafts.cases[0].steps[0].expectations[0].support_review = 'uncertain';

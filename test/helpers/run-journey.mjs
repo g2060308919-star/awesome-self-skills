@@ -680,11 +680,14 @@ export async function runInstalledAcceptedRepetitions(name, repetitions) {
   const runRoot = await mkdtemp(
     path.join(os.tmpdir(), 'generate-test-cases-repetition-root-')
   );
-  const revisionPath = path.join(runRoot, 'revision.json');
-  await writeFile(revisionPath, `${JSON.stringify(revision)}\n`, 'utf8');
+  const inputManifestPath = path.join(runRoot, 'input-manifest.json');
+  const stageInputs = Object.fromEntries(stages.map((stage) => [
+    stage, `${canonicalStringify(revision[stage])}\n`
+  ]));
+  await writeFile(inputManifestPath, `${JSON.stringify(stageInputs)}\n`, 'utf8');
   try {
     return await invokeNodeJson([
-      repetitionHarnessPath, runnerPath, revisionPath, String(repetitions), runRoot
+      repetitionHarnessPath, runnerPath, inputManifestPath, String(repetitions), runRoot
     ], 'repetition harness');
   } finally {
     await rm(runRoot, { recursive: true, force: true });
