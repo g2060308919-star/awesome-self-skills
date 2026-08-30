@@ -6,6 +6,8 @@ import { validateAgainstSchema } from '../src/schema-validator.mjs';
 import { evaluateReleaseGates } from './gates.mjs';
 
 const pathToFileURL = /** @type {any} */ (nodeUrl).pathToFileURL;
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+const realpath = fsPromises.realpath;
 
 export const BENCHMARK_SYSTEMS = Object.freeze([
   'long-prompt', 'test-case-designer', 'technique-router', 'generate-test-cases'
@@ -101,6 +103,22 @@ function issue(issues, code, pathValue, message) {
   issues.push({ code, path: pathValue, message });
 }
 
+/** @param {unknown} value @returns {value is Record<string, any>} */
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** @param {any} snapshot */
+function retainedLabelDigest(snapshot) {
+  const payload = {
+    label_version: snapshot.label_version,
+    final_labels: snapshot.final_labels,
+    expert_annotations: snapshot.expert_annotations,
+    adjudications: snapshot.adjudications
+  };
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
 /** @param {unknown} value */
 function isRisk(value) {
   return RISKS.includes(/** @type {string} */ (value));
@@ -120,12 +138,18 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
     issue(issues, 'EXPERT_LABELS_MISSING', pathValue, 'Final labels and two complete expert annotations are required.');
     return;
   }
-  if (typeof asset.label_version !== 'string' || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(asset.label_version) ||
-      !(asset.correction_of === null || (typeof asset.correction_of === 'string' && asset.correction_of.length > 0))) {
+  const semanticVersion = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+  if (typeof asset.label_version !== 'string' || !semanticVersion.test(asset.label_version) ||
+      !(asset.correction_of === null || (typeof asset.correction_of === 'string' && semanticVersion.test(asset.correction_of) && asset.correction_of !== asset.label_version))) {
     issue(issues, 'LABEL_VERSION_INVALID', `${pathValue}/label_version`, 'Every hidden-label asset requires an immutable semantic version and explicit correction lineage.');
   }
-  if (typeof asset.correction_of === 'string' && (!Array.isArray(asset.prior_versions) || !asset.prior_versions.includes(asset.correction_of))) {
-    issue(issues, 'LABEL_LINEAGE_MISSING', `${pathValue}/prior_versions`, 'A corrected label set must retain and identify the corrected prior version.');
+  if (typeof asset.correction_of === 'string') {
+    const snapshot = Array.isArray(asset.prior_versions) ? asset.prior_versions.find((/** @type {any} */ item) => item?.label_version === asset.correction_of) : null;
+    const retained = isRecord(snapshot) && Array.isArray(snapshot.final_labels) && Array.isArray(snapshot.expert_annotations) &&
+      snapshot.expert_annotations.length === 2 && snapshot.expert_annotations.every((/** @type {any} */ annotation) =>
+        isRecord(annotation) && annotation.complete === true && Array.isArray(annotation.labels)) &&
+      Array.isArray(snapshot.adjudications) && typeof snapshot.digest === 'string' && snapshot.digest === retainedLabelDigest(snapshot);
+    if (!retained) issue(issues, 'LABEL_LINEAGE_MISSING', `${pathValue}/prior_versions`, 'A correction must retain a digest-verified prior label snapshot.');
   }
   const invalidCode = kind === 'obligation' ? 'OBLIGATION_LABEL_INVALID' : kind === 'assertion' ? 'ASSERTION_LABEL_INVALID' : 'CASE_LABEL_INVALID';
   for (const [index, label] of asset.final_labels.entries()) {
@@ -134,7 +158,7 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
     }
   }
   const final = finalLabelMap(asset);
-  const annotations = asset.expert_annotations;
+  const annotations = asset.expert_annotations.filter(isRecord);
   const expertIds = new Set(annotations.map((/** @type {any} */ item) => item.expert_id));
   if (annotations.length !== 2 || expertIds.size !== 2 || annotations.some((/** @type {any} */ item) => item.complete !== true)) {
     issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', pathValue, 'Exactly two independent complete expert annotations are required.');
@@ -153,7 +177,7 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
     if (maps.some((/** @type {Map<string, any>} */ map) => !map.has(key))) issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', `${pathValue}/${key}`, 'Every expert must label every final item.');
     const serialized = maps.map((/** @type {Map<string, any>} */ map) => JSON.stringify(map.get(key)));
     if (new Set(serialized).size > 1) {
-      const adjudication = (asset.adjudications ?? []).find((/** @type {any} */ item) => item.label_key === key && item.completed === true);
+      const adjudication = (Array.isArray(asset.adjudications) ? asset.adjudications : []).find((/** @type {any} */ item) => item?.label_key === key && item.completed === true);
       if (!adjudication || JSON.stringify(adjudication.resolved_value) !== JSON.stringify(final.get(key))) {
         issue(issues, 'ADJUDICATION_MISSING', `${pathValue}/${key}`, 'Every expert disagreement requires a completed matching adjudication.');
       } else {
@@ -200,9 +224,9 @@ function scoreCohort(cases, runs, system, risk = null) {
   for (const benchmarkCase of cases) {
     const obligationLabels = obligationsFor(benchmarkCase, risk);
     const obligationMap = new Map(obligationLabels.map((item) => [item.signature, item]));
-    const assertionMap = finalLabelMap(benchmarkCase.assets.supported_assertions);
-    const caseMap = finalLabelMap(benchmarkCase.assets.accepted_cases);
-    const defects = (benchmarkCase.assets.historical_defects?.defects ?? []).filter(
+    const assertionMap = finalLabelMap(benchmarkCase.assets?.supported_assertions);
+    const caseMap = finalLabelMap(benchmarkCase.assets?.accepted_cases);
+    const defects = (benchmarkCase.assets?.historical_defects?.defects ?? []).filter(
       (/** @type {any} */ item) => risk === null || (item.risk ?? benchmarkCase.risk) === risk
     );
     const defectIds = new Set(defects.map((/** @type {any} */ item) => item.defect_id));
@@ -278,10 +302,19 @@ function scoreCohort(cases, runs, system, risk = null) {
 
 /** @param {any} manifest @param {any[]} capturedRuns */
 export function scoreBenchmark(manifest, capturedRuns) {
-  const cases = Array.isArray(manifest?.cases) ? manifest.cases : [];
-  const runs = Array.isArray(capturedRuns) ? capturedRuns : [];
+  const rawCases = Array.isArray(manifest?.cases) ? manifest.cases : [];
+  const rawRuns = Array.isArray(capturedRuns) ? capturedRuns : [];
   /** @type {any[]} */
   const issues = [];
+
+  for (const [caseIndex, benchmarkCase] of rawCases.entries()) {
+    if (!isRecord(benchmarkCase)) issue(issues, 'CASE_RECORD_INVALID', `/cases/${caseIndex}`, 'Every corpus entry must be a benchmark case object.');
+  }
+  for (const [runIndex, run] of rawRuns.entries()) {
+    if (!isRecord(run)) issue(issues, 'CAPTURE_RECORD_INVALID', `/captured_runs/${runIndex}`, 'Every captured run must be a capture object.');
+  }
+  const cases = rawCases.filter(isRecord);
+  const runs = rawRuns.filter(isRecord);
 
   for (const loadIssue of manifest?.load_issues ?? []) {
     issue(issues, loadIssue.code ?? 'BENCHMARK_ASSET_LOAD_FAILED', loadIssue.path ?? '/', loadIssue.message ?? 'A benchmark input could not be loaded.');
@@ -404,12 +437,14 @@ export function scoreBenchmark(manifest, capturedRuns) {
       if (metrics[name].denominator === 0) issue(issues, 'MANDATORY_METRIC_ZERO_DENOMINATOR', `${metricPath}/${name}`, 'Mandatory cohort metrics may not coerce a zero denominator.');
     }
   }
-  const target = systems['generate-test-cases'];
-  validateDenominators(target.overall, '/systems/generate-test-cases/overall', true);
-  for (const [domain, metrics] of Object.entries(target.by_domain)) validateDenominators(metrics, `/systems/generate-test-cases/by_domain/${domain}`, true);
-  for (const [risk, metrics] of Object.entries(target.by_risk)) validateDenominators(metrics, `/systems/generate-test-cases/by_risk/${risk}`, risk === 'critical');
-  for (const [domain, riskReports] of Object.entries(target.by_domain_and_risk)) for (const [risk, metrics] of Object.entries(/** @type {any} */ (riskReports))) {
-    validateDenominators(metrics, `/systems/generate-test-cases/by_domain_and_risk/${domain}/${risk}`, risk === 'critical');
+  for (const system of BENCHMARK_SYSTEMS) {
+    const report = systems[system];
+    validateDenominators(report.overall, `/systems/${system}/overall`, true);
+    for (const [domain, metrics] of Object.entries(report.by_domain)) validateDenominators(metrics, `/systems/${system}/by_domain/${domain}`, true);
+    for (const [risk, metrics] of Object.entries(report.by_risk)) validateDenominators(metrics, `/systems/${system}/by_risk/${risk}`, risk === 'critical');
+    for (const [domain, riskReports] of Object.entries(report.by_domain_and_risk)) for (const [risk, metrics] of Object.entries(/** @type {any} */ (riskReports))) {
+      validateDenominators(metrics, `/systems/${system}/by_domain_and_risk/${domain}/${risk}`, risk === 'critical');
+    }
   }
 
   let unsupportedOracleCount = 0;
@@ -420,13 +455,13 @@ export function scoreBenchmark(manifest, capturedRuns) {
   for (const run of scorableRuns.filter((/** @type {any} */ item) => item.system === 'generate-test-cases')) {
     const benchmarkCase = cases.find((/** @type {any} */ item) => item.case_id === run.case_id);
     if (!benchmarkCase) continue;
-    const assertions = finalLabelMap(benchmarkCase.assets.supported_assertions);
+    const assertions = finalLabelMap(benchmarkCase.assets?.supported_assertions);
     for (const assertionId of run.output.grounded_assertions) {
       const value = assertions.get(`${run.capture_id}::${assertionId}`);
       if (value?.oracle === true && value.supported !== true && ['critical', 'high'].includes(value.risk)) unsupportedOracleCount += 1;
     }
     for (const name of PROCESS_FAILURE_NAMES) if (run.output.process_failures?.[name] === true) processFailures[name] += 1;
-    const mutationIds = new Set(benchmarkCase.assets.business_model_mutations?.mutations?.map((/** @type {any} */ item) => item.mutation_id) ?? []);
+    const mutationIds = new Set(benchmarkCase.assets?.business_model_mutations?.mutations?.map((/** @type {any} */ item) => item.mutation_id) ?? []);
     mutationsObserved += mutationIds.size;
     mutationsKilled += [...new Set(run.output.killed_mutation_ids)].filter((id) => mutationIds.has(id)).length;
   }
@@ -456,6 +491,19 @@ async function listSourceFiles(directory, root = directory) {
     else if (entry.isFile()) files.push(path.relative(path.dirname(root), absolute).split(path.sep).join('/'));
   }
   return files.sort();
+}
+
+/** @param {string} directory */
+async function assertNoSymlinks(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) throw new Error(`Symlink is not allowed in benchmark evidence: ${path.join(directory, entry.name)}`);
+    if (entry.isDirectory()) await assertNoSymlinks(path.join(directory, entry.name));
+  }
+}
+
+/** @param {string} root @param {string} candidate */
+function isPathInside(root, candidate) {
+  return `${candidate}${path.sep}`.startsWith(`${root}${path.sep}`);
 }
 
 /** @param {string} caseRoot @param {string[]} files */
@@ -498,13 +546,33 @@ export async function loadBenchmarkInputs(manifestPath) {
       capturedRuns: deepFreeze(capturedRuns)
     };
   }
+  const expectedCaseRoot = path.resolve(benchmarkRoot, 'cases');
+  const expectedCaptureRoot = path.resolve(benchmarkRoot, 'captured');
+  let realCaseRoot;
+  let realCaptureRoot;
+  try {
+    realCaseRoot = await realpath(expectedCaseRoot);
+    realCaptureRoot = await realpath(expectedCaptureRoot);
+  } catch (error) {
+    loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: '/', message: error instanceof Error ? error.message : String(error) });
+    return { manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
+  }
   for (const [caseIndex, item] of (raw.cases ?? []).entries()) {
     const caseRoot = path.resolve(benchmarkRoot, item.case_directory);
     const captureRoot = path.resolve(benchmarkRoot, item.capture_directory);
-    const expectedCaseRoot = `${path.resolve(benchmarkRoot, 'cases')}${path.sep}`;
-    const expectedCaptureRoot = `${path.resolve(benchmarkRoot, 'captured')}${path.sep}`;
-    if (!`${caseRoot}${path.sep}`.startsWith(expectedCaseRoot) || !`${captureRoot}${path.sep}`.startsWith(expectedCaptureRoot)) {
-      throw new Error(`Benchmark case ${item.case_id} crosses the frozen hidden-label/capture boundary.`);
+    if (!isPathInside(expectedCaseRoot, caseRoot) || !isPathInside(expectedCaptureRoot, captureRoot)) {
+      loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: `/cases/${caseIndex}`, message: `Benchmark case ${item.case_id} crosses the frozen hidden-label/capture boundary.` });
+      continue;
+    }
+    try {
+      const realCase = await realpath(caseRoot);
+      const realCapture = await realpath(captureRoot);
+      if (!isPathInside(realCaseRoot, realCase) || !isPathInside(realCaptureRoot, realCapture)) throw new Error('Benchmark path resolves outside its frozen evidence root.');
+      await assertNoSymlinks(caseRoot);
+      await assertNoSymlinks(captureRoot);
+    } catch (error) {
+      loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: `/cases/${caseIndex}`, message: error instanceof Error ? error.message : String(error) });
+      continue;
     }
     /** @type {any} */
     const assets = {};

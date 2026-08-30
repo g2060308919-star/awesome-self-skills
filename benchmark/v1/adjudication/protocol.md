@@ -12,7 +12,7 @@ Every capture records the Skill, compiler, Schema, model, prompt/reference, base
 
 Two test experts independently and completely label every expert Test Point, generated factual claim, and generated Case. Anchor presence and semantic support are separate fields: a present source locator does not imply that the source supports the claim. Expert identities and complete label sets remain recorded beside the final labels.
 
-Any disagreement requires a completed adjudication with the exact `label_key`, both expert values, resolved value, adjudicator, completion time, and rationale. The final label must equal expert agreement or the completed resolution. Corrections create a new `label_version` with `correction_of`; prior labels are retained and never overwritten.
+Any disagreement requires a completed adjudication with the exact `label_key`, both expert values, resolved value, adjudicator, completion time, and rationale. The final label must equal expert agreement or the completed resolution. Corrections create a new `label_version` with `correction_of`; `prior_versions` retains the complete prior final labels, expert annotations, and adjudications behind a verified SHA-256 digest, so prior labels are never overwritten.
 
 ## Evaluation-only evidence
 

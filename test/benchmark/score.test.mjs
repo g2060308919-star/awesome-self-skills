@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -13,6 +14,8 @@ import {
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+const symlink = fsPromises.symlink;
 
 /** @param {string} key @param {unknown} value */
 function label(key, value) {
@@ -29,6 +32,17 @@ function labeledAsset(labels, second = labels, adjudications = []) {
     ],
     adjudications
   };
+}
+
+/** @param {any} asset @param {string} labelVersion */
+function retainedLabelSnapshot(asset, labelVersion) {
+  const payload = {
+    label_version: labelVersion,
+    final_labels: structuredClone(asset.final_labels),
+    expert_annotations: structuredClone(asset.expert_annotations),
+    adjudications: structuredClone(asset.adjudications)
+  };
+  return { ...payload, digest: createHash('sha256').update(JSON.stringify(payload)).digest('hex') };
 }
 
 /** @param {string} caseId @param {string} domain @param {string} stratum @param {any[]} obligations @param {any[]} assertions @param {any[]} acceptedCases @param {any[]} defects */
@@ -311,6 +325,16 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   const malformedReport = scoreBenchmark(manifest, malformed);
   assert.equal(malformedReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_OUTPUT_INVALID'), true);
 
+  const nullRun = structuredClone(runs);
+  nullRun[0] = null;
+  const nullRunReport = scoreBenchmark(manifest, nullRun);
+  assert.equal(nullRunReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_RECORD_INVALID'), true);
+
+  const nullExpert = structuredClone(manifest);
+  nullExpert.cases[0].assets.supported_assertions.expert_annotations[0] = null;
+  const nullExpertReport = scoreBenchmark(nullExpert, runs);
+  assert.equal(nullExpertReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'EXPERT_ANNOTATIONS_INCOMPLETE'), true);
+
   const processMissing = structuredClone(runs);
   delete processMissing[0].output.process_failures.old_revision_recovery;
   assert.equal(scoreBenchmark(manifest, processMissing).completeness.issues.some(
@@ -348,6 +372,14 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
     (/** @type {any} */ issue) => issue.code === 'LABEL_LINEAGE_MISSING'
   ), true);
 
+  const retainedLineage = structuredClone(manifest);
+  const correctedAsset = retainedLineage.cases[0].assets.supported_assertions;
+  correctedAsset.correction_of = '0.9.0';
+  correctedAsset.prior_versions = [retainedLabelSnapshot(correctedAsset, '0.9.0')];
+  assert.equal(scoreBenchmark(retainedLineage, runs).completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'LABEL_LINEAGE_MISSING'
+  ), false);
+
   const invalidAdjudication = structuredClone(manifest);
   const labelsAsset = invalidAdjudication.cases[0].assets.expert_obligations;
   labelsAsset.expert_annotations[1].labels = structuredClone(labelsAsset.expert_annotations[1].labels);
@@ -375,6 +407,13 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   assert.equal(scoreBenchmark(zeroCohort, runs).completeness.issues.some(
     (/** @type {any} */ item) => item.code === 'MANDATORY_METRIC_ZERO_DENOMINATOR' && item.path.includes('/by_domain_and_risk/domain-0/medium/')
   ), true);
+
+
+  const baselineZero = structuredClone(runs);
+  for (const run of baselineZero.filter((/** @type {any} */ item) => item.system === 'long-prompt')) run.output.grounded_assertions = [];
+  assert.equal(scoreBenchmark(manifest, baselineZero).completeness.issues.some(
+    (/** @type {any} */ item) => item.code === 'MANDATORY_METRIC_ZERO_DENOMINATOR' && item.path.includes('/systems/long-prompt/')
+  ), true);
 });
 
 test('benchmark loader validates the manifest schema and reports malformed inputs without throwing', async () => {
@@ -385,6 +424,26 @@ test('benchmark loader validates the manifest schema and reports malformed input
   const report = scoreBenchmark(loaded.manifest, loaded.capturedRuns);
   assert.equal(report.completeness.status, 'insufficient_evidence');
   assert.equal(report.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'MANIFEST_SCHEMA_INVALID'), true);
+});
+
+test('benchmark loader rejects a symlink that crosses the hidden-label directory boundary', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'benchmark-symlink-'));
+  await mkdir(path.join(temporaryRoot, 'cases'));
+  await mkdir(path.join(temporaryRoot, 'captured/escape'), { recursive: true });
+  await mkdir(path.join(temporaryRoot, 'outside-case'));
+  await symlink(path.join(temporaryRoot, 'outside-case'), path.join(temporaryRoot, 'cases/escape'), 'dir');
+  const manifestPath = path.join(temporaryRoot, 'manifest.json');
+  await writeFile(manifestPath, JSON.stringify({
+    schema_version: '1.0.0', benchmark_version: 'v1-symlink-test', manifest_id: 'symlink-test',
+    evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
+    cases: [{
+      case_id: 'escape', domain: 'security', stratum: BENCHMARK_STRATA[0], risk: 'low', high_risk: false,
+      case_directory: 'cases/escape', capture_directory: 'captured/escape'
+    }]
+  }));
+  const loaded = await loadBenchmarkInputs(manifestPath);
+  assert.equal(loaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
 });
 
 test('benchmark V1 pilot has required hidden-label assets and only external capture paths', async () => {
