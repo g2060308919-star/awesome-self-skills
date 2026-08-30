@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile
+} from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -8,6 +11,8 @@ import { advanceStrict } from '../../src/advance-strict.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+const symlink = fsPromises.symlink;
 const recoveryRoot = path.join(repositoryRoot, 'test/fixtures/recovery');
 const crashFixtureNames = [
   'staging-before-promotion', 'accepted-before-checkpoint', 'obligations-before-checkpoint',
@@ -96,6 +101,170 @@ test('an accepted artifact that no longer passes its deterministic gate is a run
     const reply = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.equal(reply.status, 'fatal');
     assert.equal(reply.diagnostics[0].code, 'RUN_INTEGRITY_ERROR');
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('controlled symlink descendants fail closed without escaping the real run root', async () => {
+  const revision = await revisionFixture();
+  for (const controlledName of ['accepted', 'staging', 'derived', 'output']) {
+    const runDirectory = await temporaryRun();
+    const outside = await temporaryRun();
+    try {
+      await symlink(outside, path.join(runDirectory, controlledName));
+      if (controlledName === 'staging') await writeFile(
+        path.join(outside, STAGE_FILES.source_pack), `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+      );
+      else await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
+      if (controlledName !== 'staging') await writeFile(
+        path.join(runDirectory, 'staging', STAGE_FILES.source_pack),
+        `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+      );
+      const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+      assert.equal(reply.status, 'fatal', `${controlledName}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.diagnostics[0].code, 'RUN_INTEGRITY_ERROR');
+      assert.deepEqual(await readdir(outside), controlledName === 'staging'
+        ? [STAGE_FILES.source_pack] : []);
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  }
+
+  const runDirectory = await temporaryRun();
+  const outside = await temporaryRun();
+  try {
+    await mkdir(path.join(runDirectory, 'accepted'), { recursive: true });
+    await symlink(outside, path.join(runDirectory, 'accepted/r000'));
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'RUN_INTEGRITY_ERROR');
+    assert.deepEqual(await readdir(outside), []);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test('recovery removes dead nested temp files and reconciles identical staging residue', async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  try {
+    for (const directory of ['accepted/r000', 'derived/r777', 'output/r777']) {
+      await mkdir(path.join(runDirectory, directory), { recursive: true });
+      await writeFile(path.join(runDirectory, directory, '.dead.json.tmp-424242-7'), '{"partial":');
+    }
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const first = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(first.stage, 'evidence_claims', JSON.stringify(first));
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const replay = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(replay.status, 'need_artifact', JSON.stringify(replay));
+    assert.equal(replay.stage, 'evidence_claims');
+    await assert.rejects(stat(path.join(runDirectory, 'staging/source-pack.json')));
+    for (const directory of ['accepted/r000', 'derived/r777', 'output/r777']) {
+      assert.ok((await readdir(path.join(runDirectory, directory))).every(
+        (/** @type {string} */ name) => !name.includes('.tmp-')
+      ));
+    }
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('recovery never removes an atomic temp owned by a live writer process', async () => {
+  const runDirectory = await temporaryRun();
+  const liveTemporary = path.join(
+    runDirectory, `accepted/r000/.source-pack.json.tmp-${process.pid}-999999`
+  );
+  try {
+    await mkdir(path.dirname(liveTemporary), { recursive: true });
+    await writeFile(liveTemporary, '{"still":"writing"}');
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.stage, 'source_pack');
+    assert.equal(await readFile(liveTemporary, 'utf8'), '{"still":"writing"}');
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('recovery restores an atomically claimed staging artifact after a promotion crash', async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    await fsPromises.rename(
+      path.join(runDirectory, 'staging/source-pack.json'),
+      path.join(runDirectory, 'staging/.source-pack.json.claim-424242-1')
+    );
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    await stat(path.join(runDirectory, 'accepted/r000/source-pack.json'));
+    assert.deepEqual(await readdir(path.join(runDirectory, 'staging')), []);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('a newer partial revision cannot hide invalid accepted semantics in an older revision', async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  try {
+    await finish(runDirectory, revision);
+    const invalidCase = structuredClone(revision.case_drafts);
+    invalidCase.cases[0].steps[0].expectations[0].evidence_ref = 'claim_missing';
+    await writeFile(
+      path.join(runDirectory, 'accepted/r000/case-drafts.json'),
+      `${JSON.stringify(invalidCase)}\n`, 'utf8'
+    );
+    const nextSource = revisionOneSource(revision);
+    await mkdir(path.join(runDirectory, 'accepted/r001'), { recursive: true });
+    await writeFile(
+      path.join(runDirectory, 'accepted/r001/source-pack.json'),
+      `${JSON.stringify(nextSource)}\n`, 'utf8'
+    );
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'RUN_INTEGRITY_ERROR');
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('promotion never deletes a staging file replaced after validation', async () => {
+  const runDirectory = await temporaryRun();
+  const revision = await revisionFixture();
+  revision.source_pack.sources[0].content = 'x'.repeat(32 * 1024 * 1024);
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const child = spawn(process.execPath, ['--input-type=module', '-e', `
+      import { advanceStrict } from ${JSON.stringify(path.join(repositoryRoot, 'src/advance-strict.mjs'))};
+      process.stdout.write(JSON.stringify(await advanceStrict(${JSON.stringify(runDirectory)})));
+    `], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (/** @type {string} */ chunk) => { output += chunk; });
+    let sawTemporary = false;
+    for (let attempt = 0; attempt < 30_000; attempt += 1) {
+      try {
+        const names = await readdir(path.join(runDirectory, 'accepted/r000'));
+        if (names.some((/** @type {string} */ name) => name.includes('.tmp-'))) {
+          sawTemporary = true;
+          break;
+        }
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    assert.equal(sawTemporary, true, 'fixture must overlap the accepted-file write');
+    await writeFile(path.join(runDirectory, 'staging/source-pack.json'), '{"replacement":true}\n');
+    const exitCode = await new Promise((resolve) => child.on('close', resolve));
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(output).stage, 'evidence_claims');
+    assert.equal(await readFile(path.join(runDirectory, 'staging/source-pack.json'), 'utf8'), '{"replacement":true}\n');
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }

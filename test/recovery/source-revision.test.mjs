@@ -139,6 +139,9 @@ test('source revision rejects history modification, deletion, reordering, and ev
     ['modified', (next) => { next.decision_records[0].answer = 'changed'; }],
     ['deleted', (next) => { next.decision_records.pop(); }],
     ['reordered', (next) => { next.decision_records.reverse(); }],
+    ['decision identity reuse', (next) => {
+      next.decision_records[next.decision_records.length - 1].decision_id = 'decision_1';
+    }],
     ['sequence reuse', (next) => { next.clarification_events.push({
       event_id: 'event_reopen', clarification_event_seq: 2, type: 'reopen_root_issues',
       actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_1']
@@ -162,5 +165,120 @@ test('source revision rejects history modification, deletion, reordering, and ev
     } finally {
       await rm(runDirectory, { recursive: true, force: true });
     }
+  }
+});
+
+test('immutable source replacement outranks policy diagnostics and is never promoted', async () => {
+  const runDirectory = await temporaryRun();
+  const fixture = await revisionFixture();
+  try {
+    await acceptInitialSource(runDirectory, fixture.source_pack);
+    const next = structuredClone(fixture.source_pack);
+    next.source_revision = 1;
+    next.sources[0].source_id = 'source_replaced';
+    next.decision_records.push(decision(1));
+    await stageSource(runDirectory, next);
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.deepEqual(integrityCodes(reply), ['RUN_INTEGRITY_ERROR', 'NEW_RUN_REQUIRED']);
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r001/source-pack.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('initial Decision and control history must start at one and be globally contiguous', async () => {
+  for (const mutate of [
+    (/** @type {any} */ pack) => { pack.decision_records = [decision(2)]; },
+    (/** @type {any} */ pack) => { pack.clarification_events = [{
+      event_id: 'event_gap', clarification_event_seq: 100, type: 'reopen_root_issues',
+      actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_never_existed']
+    }]; }
+  ]) {
+    const runDirectory = await temporaryRun();
+    const fixture = await revisionFixture();
+    try {
+      mutate(fixture.source_pack);
+      await stageSource(runDirectory, fixture.source_pack);
+      const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+      assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+      assert.equal(integrityCodes(reply)[0], 'RUN_INTEGRITY_ERROR');
+      await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('accepted recovery requires r000, consecutive directories, and matching artifact revisions', async () => {
+  const fixture = await revisionFixture();
+  const cases = [
+    {
+      name: 'orphan r999',
+      setup: async (/** @type {string} */ runDirectory) => {
+        const source = structuredClone(fixture.source_pack);
+        source.source_revision = 999;
+        await mkdir(path.join(runDirectory, 'accepted/r999'), { recursive: true });
+        await writeFile(path.join(runDirectory, 'accepted/r999/source-pack.json'), `${JSON.stringify(source)}\n`);
+      }
+    },
+    {
+      name: 'gap r000 to r002',
+      setup: async (/** @type {string} */ runDirectory) => {
+        await mkdir(path.join(runDirectory, 'accepted/r000'), { recursive: true });
+        await writeFile(path.join(runDirectory, 'accepted/r000/source-pack.json'), `${JSON.stringify(fixture.source_pack)}\n`);
+        const source = structuredClone(fixture.source_pack);
+        source.source_revision = 2;
+        source.decision_records.push(decision(1));
+        await mkdir(path.join(runDirectory, 'accepted/r002'), { recursive: true });
+        await writeFile(path.join(runDirectory, 'accepted/r002/source-pack.json'), `${JSON.stringify(source)}\n`);
+      }
+    },
+    {
+      name: 'accepted evidence revision mismatch',
+      setup: async (/** @type {string} */ runDirectory) => {
+        await mkdir(path.join(runDirectory, 'accepted/r000'), { recursive: true });
+        await writeFile(path.join(runDirectory, 'accepted/r000/source-pack.json'), `${JSON.stringify(fixture.source_pack)}\n`);
+        const evidence = structuredClone(fixture.evidence_claims);
+        evidence.source_revision = 999;
+        await writeFile(path.join(runDirectory, 'accepted/r000/evidence-claims.json'), `${JSON.stringify(evidence)}\n`);
+      }
+    }
+  ];
+  for (const item of cases) {
+    const runDirectory = await temporaryRun();
+    try {
+      await item.setup(runDirectory);
+      const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+      assert.equal(reply.status, 'fatal', `${item.name}: ${JSON.stringify(reply)}`);
+      assert.equal(integrityCodes(reply)[0], 'RUN_INTEGRITY_ERROR', item.name);
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('accepted recovery validates append-only integrity at every historical hop', async () => {
+  const runDirectory = await temporaryRun();
+  const fixture = await revisionFixture();
+  try {
+    await mkdir(path.join(runDirectory, 'accepted/r000'), { recursive: true });
+    await writeFile(path.join(runDirectory, 'accepted/r000/source-pack.json'), `${JSON.stringify(fixture.source_pack)}\n`);
+    const one = structuredClone(fixture.source_pack);
+    one.source_revision = 1;
+    one.decision_records.push(decision(1));
+    await mkdir(path.join(runDirectory, 'accepted/r001'), { recursive: true });
+    await writeFile(path.join(runDirectory, 'accepted/r001/source-pack.json'), `${JSON.stringify(one)}\n`);
+    const two = structuredClone(one);
+    two.source_revision = 2;
+    two.decision_records[0].answer = 'historically rewritten';
+    two.decision_records.push(decision(2));
+    await mkdir(path.join(runDirectory, 'accepted/r002'), { recursive: true });
+    await writeFile(path.join(runDirectory, 'accepted/r002/source-pack.json'), `${JSON.stringify(two)}\n`);
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(integrityCodes(reply)[0], 'RUN_INTEGRITY_ERROR');
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
   }
 });

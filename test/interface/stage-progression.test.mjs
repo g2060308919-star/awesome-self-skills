@@ -295,3 +295,74 @@ test('a higher resolved revision atomically replaces the current final output', 
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
+
+test('outer run boundary rejects mutable collection intrinsics without executing caller code', async () => {
+  const methods = ['sort', 'map', 'some', 'filter', 'slice', 'includes', 'reverse', 'push'];
+  for (const method of methods) {
+    const runDirectory = await temporaryRun(`intrinsic ${method}`);
+    const arrayPrototype = /** @type {any} */ (Array.prototype);
+    const original = arrayPrototype[method];
+    let calls = 0;
+    arrayPrototype[method] = function (/** @type {any[]} */ ...args) {
+      calls += 1;
+      return Reflect.apply(original, this, args);
+    };
+    try {
+      const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+      assert.equal(calls, 0, `${method} caller code executed`);
+      assert.equal(reply.status, 'fatal', `${method}: ${JSON.stringify(reply)}`);
+      assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+    } finally {
+      arrayPrototype[method] = original;
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('outer run boundary rejects mutable string and collection accessors before traversal', async () => {
+  /** @type {Array<[any,string]>} */
+  const methodCases = [
+    [String.prototype, 'split'], [String.prototype, 'includes'], [String.prototype, 'startsWith'],
+    [String.prototype, 'padStart']
+  ];
+  for (const [owner, method] of methodCases) {
+    const runDirectory = await temporaryRun(`intrinsic ${String(method)}`);
+    const record = /** @type {any} */ (owner);
+    const original = record[method];
+    let calls = 0;
+    record[method] = function (/** @type {any[]} */ ...args) {
+      calls += 1;
+      return Reflect.apply(original, this, args);
+    };
+    try {
+      const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+      assert.equal(calls, 0, `${String(method)} caller code executed`);
+      assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+      assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+    } finally {
+      record[method] = original;
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+
+  const runDirectory = await temporaryRun('intrinsic set size');
+  const originalSize = /** @type {PropertyDescriptor} */ (
+    Object.getOwnPropertyDescriptor(Set.prototype, 'size')
+  );
+  assert.ok(originalSize?.get);
+  const originalSizeGetter = /** @type {Function} */ (originalSize.get);
+  let getterCalls = 0;
+  try {
+    Object.defineProperty(Set.prototype, 'size', {
+      configurable: true,
+      get() { getterCalls += 1; return Reflect.apply(originalSizeGetter, this, []); }
+    });
+    const reply = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.equal(getterCalls, 0);
+    assert.equal(reply.status, 'fatal', JSON.stringify(reply));
+    assert.equal(reply.diagnostics[0].code, 'CORE_INTRINSIC_INVALID');
+  } finally {
+    Object.defineProperty(Set.prototype, 'size', originalSize);
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
