@@ -617,11 +617,11 @@ async function advanceStrictExclusive(runDirectory) {
       'run_directory_absolute', 'Run directory must be an absolute path.'
     );
     runDirectory = await guardedAwait(prepareRunStore(runDirectory));
-    await guardedAwait(cleanupRunLockResidues(runDirectory));
     const releaseRunLock = await acquireRunLock(runDirectory);
     try {
       if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
       runDirectory = await guardedAwait(prepareRunStore(runDirectory));
+      await guardedAwait(cleanupRunLockResidues(runDirectory));
       await guardedAwait(recoverStagingClaims(runDirectory));
       await guardedAwait(cleanupTemporaryFiles(runDirectory));
       let revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));

@@ -28,6 +28,10 @@ declare module 'node:crypto' {
   export const createHash: any;
 }
 
+declare module 'node:events' {
+  export const EventEmitter: any;
+}
+
 declare module 'node:os' {
   const os: any;
   export default os;

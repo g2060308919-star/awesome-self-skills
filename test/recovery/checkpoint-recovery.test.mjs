@@ -549,6 +549,29 @@ test('lock rename crash residues are durably removed but matching symlinks fail 
   }
 });
 
+test('advance cleans release residues only after it owns the run lock', async () => {
+  const runDirectory = await temporaryRun();
+  const residue = path.join(runDirectory, '.compiler-advance.lock.release-999-1');
+  try {
+    const releaseHolder = await acquireRunLock(runDirectory);
+    await mkdir(path.join(residue, 'nested'), { recursive: true });
+    await writeFile(path.join(residue, 'nested/owner.json'), '{}\n', 'utf8');
+    const pending = advanceStrict(runDirectory);
+    const state = await Promise.race([
+      pending.then(() => 'settled'),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 300))
+    ]);
+    assert.equal(state, 'waiting');
+    await stat(residue);
+    await releaseHolder();
+    const reply = /** @type {any} */ (await pending);
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    await assert.rejects(stat(residue), { code: 'ENOENT' });
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('a production lock holder renews its fenced lease while a contender waits', { timeout: 10_000 }, async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
@@ -604,21 +627,29 @@ test('a synchronous holder cannot starve the production heartbeat and lose its l
   const ready = message('READY');
   const startedSignal = message('STARTED');
   const released = message('RELEASED');
+  let releasedSeen = false;
   child.on('message', (/** @type {unknown} */ value) => {
+    if (value === 'RELEASED') releasedSeen = true;
     if (typeof value === 'string' && messageResolvers[value]) messageResolvers[value]();
+  });
+  const childFailure = new Promise((_, reject) => {
+    child.on('error', reject);
+    child.on('close', (/** @type {number|null} */ code) => {
+      if (!releasedSeen) reject(new Error(`holder exited before release (${code}): ${stderr}`));
+    });
   });
   const closed = new Promise((resolve) => child.on(
     'close', (/** @type {number|null} */ code) => resolve(code)
   ));
   try {
-    await ready;
+    await Promise.race([ready, childFailure]);
     child.send('GO');
-    await startedSignal;
+    await Promise.race([startedSignal, childFailure]);
     const startedAt = Date.now();
     const releaseContender = await acquireRunLock(runDirectory);
     const waitedMs = Date.now() - startedAt;
     assert.ok(waitedMs >= 2_800, `contender reclaimed a live holder after only ${waitedMs}ms`);
-    await released;
+    await Promise.race([released, childFailure]);
     await releaseContender();
     assert.equal(await closed, 0, stderr);
   } finally {
@@ -658,6 +689,60 @@ test('release restores a successor substituted after ownership observation', asy
   }
 });
 
+test('release restores the earlier successor and preserves a third generation', async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const originalDirectory = path.join(runDirectory, '.original-holder');
+  const thirdOwner = {
+    pid: process.pid, token: 'third-generation', lease_expires_at_ms: Date.now() + 60_000
+  };
+  /** @type {undefined|(()=>Promise<void>)} */
+  let releaseSecond;
+  /** @type {Promise<void>|undefined} */
+  let thirdClaim;
+  try {
+    const releaseFirst = await acquireRunLock(runDirectory, {
+      afterReleaseObservation: async () => {
+        await rename(lockDirectory, originalDirectory);
+        releaseSecond = await acquireRunLock(runDirectory);
+        thirdClaim = (async () => {
+          while (true) {
+            try {
+              await mkdir(lockDirectory);
+              await writeFile(
+                path.join(lockDirectory, 'owner.json'), `${JSON.stringify(thirdOwner)}\n`, 'utf8'
+              );
+              return;
+            } catch (error) {
+              if (!(error && typeof error === 'object' && 'code' in error
+                && error.code === 'EEXIST')) throw error;
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+          }
+        })();
+      }
+    });
+    await assert.rejects(releaseFirst, /release moved a different generation/u);
+    await thirdClaim;
+    const canonicalOwner = JSON.parse(await readFile(
+      path.join(lockDirectory, 'owner.json'), 'utf8'
+    ));
+    assert.notEqual(canonicalOwner.token, thirdOwner.token);
+    const preserved = (await readdir(runDirectory)).filter(
+      (/** @type {string} */ name) => name.startsWith('.compiler-advance.lock.preserved-')
+    );
+    assert.ok(preserved.length >= 1);
+    assert.ok((await Promise.all(preserved.map(async (/** @type {string} */ name) => JSON.parse(await readFile(
+      path.join(runDirectory, name, 'owner.json'), 'utf8'
+    ))))).some((owner) => owner.token === thirdOwner.token));
+    assert.ok(releaseSecond);
+    await (/** @type {()=>Promise<void>} */ (releaseSecond))();
+    await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('heartbeat worker stop failure closes the claim and removes only its lock', async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
@@ -675,11 +760,8 @@ test('heartbeat worker stop failure closes the claim and removes only its lock',
     const faultModuleUrl = new URL('../../src/run-store.mjs', import.meta.url);
     faultModuleUrl.search = '?worker-stop-failure';
     faultingAcquire = (await import(faultModuleUrl.href)).acquireRunLock;
-  } finally {
-    Worker.prototype.postMessage = originalPostMessage;
-  }
-  try {
     const release = await faultingAcquire(runDirectory);
+    Worker.prototype.postMessage = originalPostMessage;
     await assert.rejects(release, /heartbeat worker exited unexpectedly/u);
     await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
     const releaseRetry = await acquireRunLock(runDirectory);
@@ -691,7 +773,7 @@ test('heartbeat worker stop failure closes the claim and removes only its lock',
   }
 });
 
-test('acquisition refuses a heartbeat worker that exits during readiness', async () => {
+test('heartbeat readiness uses the captured native EventEmitter listener', async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
   const originalOn = Worker.prototype.on;
@@ -713,9 +795,8 @@ test('acquisition refuses a heartbeat worker that exits during readiness', async
     Worker.prototype.on = originalOn;
   }
   try {
-    await assert.rejects(
-      faultingAcquire(runDirectory), /heartbeat worker exited unexpectedly/u
-    );
+    const release = await faultingAcquire(runDirectory);
+    await release();
     await assert.rejects(stat(lockDirectory), { code: 'ENOENT' });
   } finally {
     Worker.prototype.on = originalOn;
@@ -723,15 +804,18 @@ test('acquisition refuses a heartbeat worker that exits during readiness', async
   }
 });
 
-test('heartbeat worker boots when eval syntax detection is disabled', async () => {
+test('heartbeat worker source runs when eval is forced to CommonJS', async () => {
   const runDirectory = await temporaryRun();
+  const moduleUrl = new URL('../../src/run-store.mjs', import.meta.url).href;
   const program = `
-    import { acquireRunLock } from ${JSON.stringify(path.join(repositoryRoot, 'src/run-store.mjs'))};
-    const release = await acquireRunLock(${JSON.stringify(runDirectory)});
-    await release();
+    (async () => {
+      const { acquireRunLock } = await import(${JSON.stringify(moduleUrl)});
+      const release = await acquireRunLock(${JSON.stringify(runDirectory)});
+      await release();
+    })().catch((error) => { console.error(error); process.exitCode = 1; });
   `;
   const child = spawn(process.execPath, [
-    '--no-experimental-detect-module', '--input-type=module', '-e', program
+    '--input-type=commonjs', '-e', program
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   let stderr = '';
   child.stderr.setEncoding('utf8');
@@ -821,6 +905,36 @@ test('stale reclaim restores a newer lock generation instead of deleting it', { 
     const release = await contender;
     await release();
   } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('a ready compiler owner remains exclusive if its heartbeat worker stops', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)']);
+  try {
+    assert.ok(child.pid);
+    await mkdir(lockDirectory);
+    await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify({
+      pid: child.pid, token: 'ready-owner-without-pulses', lease_expires_at_ms: 0,
+      process_start_identity: `${child.pid}:${Date.now()}`, heartbeat_seq: 0,
+      heartbeat_ready: true
+    })}\n`, 'utf8');
+    const contender = acquireRunLock(runDirectory);
+    const state = await Promise.race([
+      contender.then(() => 'acquired'),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 700))
+    ]);
+    assert.equal(state, 'waiting', 'a live ready compiler owner was reclaimed after pulse loss');
+    child.kill();
+    await new Promise((resolve) => child.on('close', resolve));
+    const release = await contender;
+    await release();
+  } finally {
+    if (child.exitCode === null) child.kill();
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
