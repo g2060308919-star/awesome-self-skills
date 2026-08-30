@@ -13,9 +13,9 @@ const NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
 const NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
 const NATIVE_ARRAY_JOIN = Array.prototype.join;
 const NATIVE_ARRAY_MAP = Array.prototype.map;
-const NATIVE_ARRAY_PUSH = Array.prototype.push;
 const NATIVE_ARRAY_SLICE = Array.prototype.slice;
 const NATIVE_ARRAY_SOME = Array.prototype.some;
+const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
 
 /** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
 function everyArray(values, predicate) {
@@ -49,7 +49,10 @@ function mapArray(values, project) {
 
 /** @template T @param {T[]} values @param {...T} items */
 function pushArray(values, ...items) {
-  return /** @type {number} */ (Reflect.apply(NATIVE_ARRAY_PUSH, values, items));
+  for (let index = 0; index < items.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY, Object, [
+    values, String(values.length), { value: items[index], writable: true, enumerable: true, configurable: true }
+  ]);
+  return values.length;
 }
 
 /** @template T @param {T[]} values @param {number} start @param {number} [end] */

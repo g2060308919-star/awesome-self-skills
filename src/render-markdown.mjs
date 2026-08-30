@@ -6,7 +6,6 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 
 const RENDER_DIAGNOSTIC_LIMIT = 256;
 const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
-const NATIVE_ARRAY_PUSH = Array.prototype.push;
 const NATIVE_ARRAY_POP = Array.prototype.pop;
 const NATIVE_ARRAY_SORT = Array.prototype.sort;
 const NATIVE_ARRAY_JOIN = Array.prototype.join;
@@ -26,14 +25,16 @@ export class BundleRenderError extends TypeError {
     const canonical = canonicalRenderDiagnostics(diagnostics);
     this.diagnostics = [];
     for (let index = 0; index < canonical.length; index += 1) {
-      Reflect.apply(NATIVE_ARRAY_PUSH, this.diagnostics, [{ ...canonical[index] }]);
+      append(this.diagnostics, { ...canonical[index] });
     }
   }
 }
 
 /** @param {unknown[]} target @param {...unknown} values */
 function append(target, ...values) {
-  Reflect.apply(NATIVE_ARRAY_PUSH, target, values);
+  for (let index = 0; index < values.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY, Object, [
+    target, String(target.length), { value: values[index], writable: true, enumerable: true, configurable: true }
+  ]);
 }
 
 /** @param {unknown[]} target @param {unknown[]} source */
@@ -81,12 +82,12 @@ function canonicalRenderDiagnostics(diagnostics) {
   /** @type {Diagnostic[]} */
   const retained = [];
   for (let index = 0; index < Math.min(sorted.length, RENDER_DIAGNOSTIC_LIMIT - 1); index += 1) {
-    Reflect.apply(NATIVE_ARRAY_PUSH, retained, [sorted[index]]);
+    append(retained, sorted[index]);
   }
-  Reflect.apply(NATIVE_ARRAY_PUSH, retained, [{
+  append(retained, {
     category: 'classification', code: 'DIAGNOSTICS_TRUNCATED', path: '/',
     message: `render diagnostics are bounded at ${RENDER_DIAGNOSTIC_LIMIT} entries`
-  }]);
+  });
   Reflect.apply(NATIVE_ARRAY_SORT, retained, [(left, right) =>
     compareCodePoints(left.category, right.category)
     || compareCodePoints(left.code, right.code)
@@ -117,10 +118,10 @@ function snapshotBundle(root) {
       continue;
     }
     if (seen.has(source)) {
-      Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+      append(diagnostics, {
         category: 'schema', code: 'CYCLIC_BUNDLE_INVALID', path: path || '/',
         message: 'render input must be an acyclic own-data bundle'
-      }]);
+      });
       assign(null);
       continue;
     }
@@ -131,19 +132,19 @@ function snapshotBundle(root) {
       prototype = NATIVE_GET_PROTOTYPE_OF(source);
       descriptors = NATIVE_GET_OWN_PROPERTY_DESCRIPTORS(source);
     } catch {
-      Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+      append(diagnostics, {
         category: 'schema', code: 'BUNDLE_DESCRIPTOR_UNREADABLE', path: path || '/',
         message: 'render input descriptors could not be captured'
-      }]);
+      });
       assign(null);
       continue;
     }
     if (NATIVE_ARRAY_IS_ARRAY(source)) {
       if (prototype !== Array.prototype) {
-        Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+        append(diagnostics, {
           category: 'schema', code: 'ARRAY_PROTOTYPE_INVALID', path: path || '/',
           message: 'render input arrays must use Array.prototype'
-        }]);
+        });
         assign(null);
         continue;
       }
@@ -162,21 +163,21 @@ function snapshotBundle(root) {
         const key = keys[index];
         if (typeof key === 'symbol') {
           invalid = true;
-          Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+          append(diagnostics, {
             category: 'schema', code: 'ARRAY_SYMBOL_PROPERTY_INVALID', path: path || '/',
             message: 'render input arrays cannot contain symbol properties'
-          }]);
+          });
           continue;
         }
         if (key === 'length') continue;
         const numericKey = Number(key);
         if (!Number.isSafeInteger(numericKey) || numericKey < 0 || numericKey >= length || String(numericKey) !== key) {
           invalid = true;
-          Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+          append(diagnostics, {
             category: 'schema', code: 'ARRAY_NAMED_PROPERTY_INVALID', path: `${path}/${pointerPart(key)}`,
             message: 'render input arrays cannot contain named properties'
-          }]);
-        } else Reflect.apply(NATIVE_ARRAY_PUSH, numeric, [numericKey]);
+          });
+        } else append(numeric, numericKey);
       }
       Reflect.apply(NATIVE_ARRAY_SORT, numeric, [(left, right) => left - right]);
       if (numeric.length !== length) {
@@ -186,19 +187,19 @@ function snapshotBundle(root) {
           if (numeric[index] !== expected) break;
           expected += 1;
         }
-        Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+        append(diagnostics, {
           category: 'schema', code: 'ARRAY_HOLE', path: `${path}/${expected}`,
           message: 'render input arrays must be dense'
-        }]);
+        });
       }
       for (let index = 0; index < numeric.length; index += 1) {
         const descriptor = descriptors[String(numeric[index])];
         if (!descriptor || !NATIVE_HAS_OWN(descriptor, 'value')) {
           invalid = true;
-          Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+          append(diagnostics, {
             category: 'schema', code: 'ACCESSOR_NOT_ALLOWED', path: `${path}/${numeric[index]}`,
             message: 'render input must use own data properties'
-          }]);
+          });
         }
       }
       if (invalid) {
@@ -210,18 +211,18 @@ function snapshotBundle(root) {
       for (let index = numeric.length - 1; index >= 0; index -= 1) {
         const numericKey = numeric[index];
         const descriptor = descriptors[String(numericKey)];
-        Reflect.apply(NATIVE_ARRAY_PUSH, pending, [{
+        append(pending, {
           source: descriptor.value, path: `${path}/${numericKey}`,
           assign(/** @type {unknown} */ value) { NATIVE_DEFINE_PROPERTY(target, numericKey, { value, enumerable: true, writable: true, configurable: true }); }
-        }]);
+        });
       }
       continue;
     }
     if (prototype !== Object.prototype && prototype !== null) {
-      Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+      append(diagnostics, {
         category: 'schema', code: 'RECORD_PROTOTYPE_INVALID', path: path || '/',
         message: 'render input records must use a plain or null prototype'
-      }]);
+      });
       assign(null);
       continue;
     }
@@ -235,22 +236,22 @@ function snapshotBundle(root) {
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
       if (typeof key === 'symbol') {
-        Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+        append(diagnostics, {
           category: 'schema', code: 'RECORD_SYMBOL_PROPERTY_INVALID', path: path || '/',
           message: 'render input records cannot contain symbol properties'
-        }]);
+        });
         continue;
       }
       const descriptor = descriptors[key];
       if (!descriptor || !NATIVE_HAS_OWN(descriptor, 'value')) {
-        Reflect.apply(NATIVE_ARRAY_PUSH, diagnostics, [{
+        append(diagnostics, {
           category: 'schema', code: 'ACCESSOR_NOT_ALLOWED', path: `${path}/${pointerPart(key)}`,
           message: 'render input must use own data properties'
-        }]);
-      } else Reflect.apply(NATIVE_ARRAY_PUSH, pending, [{
+        });
+      } else append(pending, {
         source: descriptor.value, path: `${path}/${pointerPart(key)}`,
         assign(/** @type {unknown} */ value) { NATIVE_DEFINE_PROPERTY(target, key, { value, enumerable: true, writable: true, configurable: true }); }
-      }]);
+      });
     }
   }
   return { snapshot, diagnostics: canonicalRenderDiagnostics(diagnostics) };

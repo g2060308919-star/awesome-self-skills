@@ -1186,6 +1186,31 @@ test('entry snapshot never invokes inherited numeric array setters while copying
   assert.equal(setterCalls, 0);
 });
 
+test('coverage and shared schema diagnostics never invoke inherited zero-index setters', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+  let setterCalls = 0;
+  let bundle;
+  let schemaDiagnostics;
+  try {
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set() { setterCalls += 1; }
+    });
+    bundle = buildBundle(context());
+    schemaDiagnostics = validateAgainstSchema({}, {
+      type: 'object', required: ['name'], properties: { name: { type: 'string' } }, additionalProperties: false
+    });
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, '0', descriptor);
+    else delete Array.prototype[0];
+  }
+  assert.equal(bundle?.grounded.length, 1);
+  assert.equal(setterCalls, 0);
+  assert.equal(schemaDiagnostics?.length, 1);
+  assert.equal(Object.hasOwn(schemaDiagnostics, 0), true);
+  assert.equal(schemaDiagnostics?.[0].code, 'REQUIRED_FIELD_MISSING');
+});
+
 test('entry snapshot rejects sparse, named, and custom-prototype controlled arrays', () => {
   /** @type {Array<{code:string,apply:(input:any)=>void}>} */
   const mutations = [

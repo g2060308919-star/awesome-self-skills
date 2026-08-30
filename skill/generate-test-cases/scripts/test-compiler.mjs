@@ -370,7 +370,6 @@ var NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
 var NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
 var NATIVE_ARRAY_JOIN2 = Array.prototype.join;
 var NATIVE_ARRAY_MAP2 = Array.prototype.map;
-var NATIVE_ARRAY_PUSH = Array.prototype.push;
 var NATIVE_ARRAY_SLICE = Array.prototype.slice;
 var NATIVE_ARRAY_SOME = Array.prototype.some;
 function mapArray2(values, project) {

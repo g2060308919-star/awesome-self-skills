@@ -22,6 +22,32 @@ test('markdown is a byte-stable mechanical projection of the hand-reviewed canon
   assert.equal(renderMarkdown(bundle), renderMarkdown(structuredClone(bundle)));
 });
 
+test('renderer internal arrays never invoke inherited zero-index setters', async () => {
+  const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const expectedMarkdown = renderMarkdown(bundle);
+  const invalid = structuredClone(bundle);
+  invalid.executive_summary = 'outside the closed bundle';
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+  let setterCalls = 0;
+  let actualMarkdown = '';
+  let renderError;
+  try {
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set() { setterCalls += 1; }
+    });
+    actualMarkdown = renderMarkdown(bundle);
+    try { renderMarkdown(invalid); } catch (error) { renderError = error; }
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, '0', descriptor);
+    else delete Array.prototype[0];
+  }
+  assert.equal(actualMarkdown, expectedMarkdown);
+  assert.equal(setterCalls, 0);
+  assert.equal(renderError instanceof BundleRenderError, true);
+  assert.equal(Object.hasOwn(/** @type {BundleRenderError} */ (renderError).diagnostics, 0), true);
+});
+
 test('renderer rejects bundle-external free text and never treats Markdown as evidence', async () => {
   const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
   const injected = structuredClone(bundle);
