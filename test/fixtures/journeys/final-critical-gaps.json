@@ -11,6 +11,126 @@
     "source_revision": 4,
     "claims": [
       {
+        "claim_id": "claim_action",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "The buyer submits checkout.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_blocked",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/refund",
+        "value": "Refund failure is a formal checkout responsibility.",
+        "source_locator_ids": [
+          "locator_refund"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_capability",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "Checkout control and order observation are available.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_cleanup",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "Isolated test orders may remain for audit.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_data",
+        "claim_form": "derived",
+        "level": "E2",
+        "kind": "test-data",
+        "scope": "checkout",
+        "value": "100.00",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "derivation_kind": "boundary-representative",
+        "derivation_target": "test-data",
+        "parent_claim_ids": [
+          "claim_grounded"
+        ],
+        "parameters": {
+          "domain_id": "cart-total"
+        },
+        "rule_input": {
+          "lower": 0,
+          "upper": 100,
+          "inclusive": true
+        }
+      },
+      {
+        "claim_id": "claim_exclusion",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/legacy",
+        "value": "Legacy checkout is excluded from this delivery scope.",
+        "source_locator_ids": [
+          "locator_legacy_exclusion"
+        ],
+        "source_id": "source_scope"
+      },
+      {
+        "claim_id": "claim_grounded",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout",
+        "value": "A ready cart can be submitted by a buyer.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_legacy",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/legacy",
+        "value": "Legacy checkout is represented in the formal model.",
+        "source_locator_ids": [
+          "locator_legacy"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_latency_risk",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout/network",
+        "value": "Degraded-network latency remains a risk hypothesis.",
+        "source_locator_ids": [
+          "locator_network"
+        ],
+        "source_id": "source_risk"
+      },
+      {
         "claim_id": "claim_oracle_blocked",
         "claim_form": "direct",
         "level": "E3",
@@ -39,9 +159,46 @@
         "value": "Legacy checkout has a defined terminal state.",
         "source_locator_ids": ["locator_legacy"],
         "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_role",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "The buyer performs checkout.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
       }
     ],
-    "fact_ledger": []
+    "fact_ledger": [
+      {
+        "fact_id": "fact_blocked",
+        "claim_id": "claim_blocked",
+        "status": "active",
+        "source_claim_ids": [
+          "claim_blocked"
+        ]
+      },
+      {
+        "fact_id": "fact_grounded",
+        "claim_id": "claim_grounded",
+        "status": "active",
+        "source_claim_ids": [
+          "claim_grounded"
+        ]
+      },
+      {
+        "fact_id": "fact_na",
+        "claim_id": "claim_legacy",
+        "status": "active",
+        "source_claim_ids": [
+          "claim_legacy"
+        ]
+      }
+    ]
   },
   "obligations_artifact": {
     "schema_version": "1.0.0",

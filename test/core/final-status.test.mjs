@@ -19,8 +19,15 @@ function retain(input, obligationIds) {
   const retained = new Set(obligationIds);
   input.obligations_artifact.obligations = input.obligations_artifact.obligations
     .filter((/** @type {any} */ item) => retained.has(item.obligation_id));
+  const retainedExclusions = new Set(input.classification.not_applicable
+    .filter((/** @type {any} */ item) => retained.has(item.obligation_id))
+    .map((/** @type {any} */ item) => item.exclusion_claim_id));
   input.obligations_artifact.fact_routes = input.obligations_artifact.fact_routes
-    .filter((/** @type {any} */ item) => item.obligation_ids?.some((/** @type {string} */ id) => retained.has(id)));
+    .filter((/** @type {any} */ item) => item.obligation_ids?.some((/** @type {string} */ id) => retained.has(id))
+      || retainedExclusions.has(item.not_applicable_claim_id));
+  const retainedFacts = new Set(input.obligations_artifact.fact_routes.map((/** @type {any} */ item) => item.fact_id));
+  input.evidence_claims.fact_ledger = input.evidence_claims.fact_ledger
+    .filter((/** @type {any} */ item) => retainedFacts.has(item.fact_id));
   for (const lane of ['grounded', 'conditional']) input.classification[lane] = input.classification[lane]
     .filter((/** @type {any} */ item) => item.obligation_ids.some((/** @type {string} */ id) => retained.has(id)));
   input.classification.blocked = input.classification.blocked
@@ -41,6 +48,10 @@ function retain(input, obligationIds) {
     ...root,
     affected_obligation_ids: root.affected_obligation_ids.filter((/** @type {string} */ id) => retained.has(id))
   })).filter((/** @type {any} */ root) => root.affected_obligation_ids.length > 0);
+  const retainedRoots = new Set(input.clarification.state.root_snapshot_ledger
+    .map((/** @type {any} */ root) => root.root_issue_id));
+  input.clarification.state.root_issue_dispositions = input.clarification.state.root_issue_dispositions
+    .filter((/** @type {any} */ disposition) => retainedRoots.has(disposition.root_issue_id));
   return input;
 }
 
