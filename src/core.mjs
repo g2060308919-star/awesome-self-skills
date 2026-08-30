@@ -39,13 +39,9 @@ const NATIVE_SYMBOL = Symbol;
 const NATIVE_SYMBOL_ITERATOR = Symbol.iterator;
 const NATIVE_ARRAY_PROTOTYPE = Array.prototype;
 const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
+const NATIVE_ARRAY_SPECIES_GET = Object.getOwnPropertyDescriptor(Array, Symbol.species)?.get;
 const NATIVE_ARRAY_ITERATOR = (/** @type {any} */ (Array.prototype))[NATIVE_SYMBOL_ITERATOR];
 const NATIVE_ARRAY_JOIN = Array.prototype.join;
-const NATIVE_ARRAY_FILTER = Array.prototype.filter;
-const NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
-const NATIVE_ARRAY_MAP = Array.prototype.map;
-const NATIVE_ARRAY_SLICE = Array.prototype.slice;
-const NATIVE_ARRAY_SOME = Array.prototype.some;
 const NATIVE_ARRAY_SORT = Array.prototype.sort;
 const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
 const NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
@@ -65,6 +61,7 @@ const NATIVE_MAP_SIZE_GET = /** @type {Function} */ (
 );
 const NATIVE_REGEXP_PROTOTYPE = RegExp.prototype;
 const NATIVE_REGEXP_TEST = RegExp.prototype.test;
+const NATIVE_REGEXP_EXEC = RegExp.prototype.exec;
 const NATIVE_ARRAY_INDEX_PATTERN = /^(0|[1-9][0-9]*)$/u;
 const NATIVE_SET = Set;
 const NATIVE_SET_ADD = Set.prototype.add;
@@ -93,17 +90,40 @@ const NATIVE_STRUCTURED_CLONE = structuredClone;
 
 /** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
 function filterArray(values, predicate) {
-  return /** @type {T[]} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_FILTER, values, [predicate]));
+  /** @type {T[]} */
+  const output = [];
+  for (let index = 0; index < values.length; index += 1) {
+    if (!NATIVE_HAS_OWN(values, String(index))) continue;
+    const value = values[index];
+    if (predicate(value, index, values)) pushArray(output, value);
+  }
+  return output;
 }
 
 /** @template T,U @param {T[]} values @param {(value:T,index:number,values:T[])=>U[]} project */
 function flatMapArray(values, project) {
-  return /** @type {U[]} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_FLAT_MAP, values, [project]));
+  /** @type {U[]} */
+  const output = [];
+  for (let index = 0; index < values.length; index += 1) {
+    if (!NATIVE_HAS_OWN(values, String(index))) continue;
+    appendArray(output, project(values[index], index, values));
+  }
+  return output;
 }
 
 /** @template T,U @param {T[]} values @param {(value:T,index:number,values:T[])=>U} project */
 function mapArray(values, project) {
-  return /** @type {U[]} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_MAP, values, [project]));
+  /** @type {U[]} */
+  const output = [];
+  NATIVE_DEFINE_PROPERTY(output, 'length', { value: values.length });
+  for (let index = 0; index < values.length; index += 1) {
+    if (!NATIVE_HAS_OWN(values, String(index))) continue;
+    NATIVE_DEFINE_PROPERTY(output, String(index), {
+      value: project(values[index], index, values),
+      enumerable: true, writable: true, configurable: true
+    });
+  }
+  return output;
 }
 
 /** @template T @param {T[]} values @param {...T} items */
@@ -123,14 +143,31 @@ function appendArray(target, source) {
 
 /** @template T @param {T[]} values @param {number} start @param {number} [end] */
 function sliceArray(values, start, end) {
-  return /** @type {T[]} */ (NATIVE_REFLECT_APPLY(
-    NATIVE_ARRAY_SLICE, values, end === undefined ? [start] : [start, end]
-  ));
+  const length = values.length;
+  const from = start < 0 ? (length + start < 0 ? 0 : length + start)
+    : start > length ? length : start;
+  const requestedEnd = end === undefined ? length : end;
+  const to = requestedEnd < 0 ? (length + requestedEnd < 0 ? 0 : length + requestedEnd)
+    : requestedEnd > length ? length : requestedEnd;
+  const outputLength = to > from ? to - from : 0;
+  /** @type {T[]} */
+  const output = [];
+  NATIVE_DEFINE_PROPERTY(output, 'length', { value: outputLength });
+  for (let index = from; index < to; index += 1) {
+    if (!NATIVE_HAS_OWN(values, String(index))) continue;
+    NATIVE_DEFINE_PROPERTY(output, String(index - from), {
+      value: values[index], enumerable: true, writable: true, configurable: true
+    });
+  }
+  return output;
 }
 
 /** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
 function someArray(values, predicate) {
-  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SOME, values, [predicate]));
+  for (let index = 0; index < values.length; index += 1) {
+    if (NATIVE_HAS_OWN(values, String(index)) && predicate(values[index], index, values)) return true;
+  }
+  return false;
 }
 
 /** @param {unknown[]} values @param {string} separator */
@@ -169,9 +206,22 @@ function mapSize(value) {
 
 /** @param {RegExp} expression @param {string} value */
 function regexpTest(expression, value) {
-  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(
-    NATIVE_REGEXP_TEST, expression, [value]
-  ));
+  return NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, expression, [value]) !== null;
+}
+
+/** @param {string} value */
+function splitCommas(value) {
+  /** @type {string[]} */
+  const output = [];
+  let current = '';
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === ',') {
+      pushArray(output, current);
+      current = '';
+    } else current += value[index];
+  }
+  pushArray(output, current);
+  return output;
 }
 
 /** @template K,V @param {Map<K,V>} values @param {(value:V,key:K)=>void} visit */
@@ -296,6 +346,12 @@ function intrinsicIntegrityDiagnostic() {
     const sortDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, 'sort');
     const joinDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, 'join');
     const zeroDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, '0');
+    const arrayConstructorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_ARRAY_PROTOTYPE, 'constructor'
+    );
+    const arraySpeciesDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_ARRAY, NATIVE_SYMBOL.species
+    );
     const setIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_SET_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
@@ -315,6 +371,9 @@ function intrinsicIntegrityDiagnostic() {
     const regexpTestDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_REGEXP_PROTOTYPE, 'test'
     );
+    const regexpExecDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_REGEXP_PROTOTYPE, 'exec'
+    );
     const stringIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_STRING_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
@@ -326,6 +385,9 @@ function intrinsicIntegrityDiagnostic() {
     );
     const stringSplitDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_STRING_PROTOTYPE, 'split'
+    );
+    const stringSymbolSplitDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_STRING_PROTOTYPE, NATIVE_SYMBOL.split
     );
     if (globalArrayDescriptor && NATIVE_HAS_OWN(globalArrayDescriptor, 'value')
       && globalArrayDescriptor.value === NATIVE_ARRAY
@@ -348,6 +410,10 @@ function intrinsicIntegrityDiagnostic() {
       && joinDescriptor && NATIVE_HAS_OWN(joinDescriptor, 'value')
       && joinDescriptor.value === NATIVE_ARRAY_JOIN
       && zeroDescriptor === undefined
+      && arrayConstructorDescriptor && NATIVE_HAS_OWN(arrayConstructorDescriptor, 'value')
+      && arrayConstructorDescriptor.value === NATIVE_ARRAY
+      && arraySpeciesDescriptor && NATIVE_HAS_OWN(arraySpeciesDescriptor, 'get')
+      && arraySpeciesDescriptor.get === NATIVE_ARRAY_SPECIES_GET
       && setIteratorDescriptor && NATIVE_HAS_OWN(setIteratorDescriptor, 'value')
       && setIteratorDescriptor.value === NATIVE_SET_ITERATOR
       && setAddDescriptor && NATIVE_HAS_OWN(setAddDescriptor, 'value')
@@ -374,6 +440,8 @@ function intrinsicIntegrityDiagnostic() {
       && mapSizeDescriptor.get === NATIVE_MAP_SIZE_GET
       && regexpTestDescriptor && NATIVE_HAS_OWN(regexpTestDescriptor, 'value')
       && regexpTestDescriptor.value === NATIVE_REGEXP_TEST
+      && regexpExecDescriptor && NATIVE_HAS_OWN(regexpExecDescriptor, 'value')
+      && regexpExecDescriptor.value === NATIVE_REGEXP_EXEC
       && stringIteratorDescriptor && NATIVE_HAS_OWN(stringIteratorDescriptor, 'value')
       && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR
       && stringTrimDescriptor && NATIVE_HAS_OWN(stringTrimDescriptor, 'value')
@@ -381,7 +449,8 @@ function intrinsicIntegrityDiagnostic() {
       && stringIncludesDescriptor && NATIVE_HAS_OWN(stringIncludesDescriptor, 'value')
       && stringIncludesDescriptor.value === NATIVE_STRING_INCLUDES
       && stringSplitDescriptor && NATIVE_HAS_OWN(stringSplitDescriptor, 'value')
-      && stringSplitDescriptor.value === NATIVE_STRING_SPLIT) return null;
+      && stringSplitDescriptor.value === NATIVE_STRING_SPLIT
+      && stringSymbolSplitDescriptor === undefined) return null;
   } catch {
     // Fall through to a stable fail-closed diagnostic.
   }
@@ -691,7 +760,8 @@ function normalizeInput(submitted) {
     'schema', 'CORE_INPUT_INVALID', '/', 'pure-core input must be a closed plain record'
   )] };
   requireClosed(input, INPUT_KEYS, '', diagnostics);
-  const sourceRevision = toNumber(input.source_revision);
+  const sourceRevision = typeof input.source_revision === 'number'
+    ? input.source_revision : 0 / 0;
   if (input.schema_version !== '1.0.0') pushArray(diagnostics, diagnostic(
     'schema', 'CORE_SCHEMA_VERSION_INVALID', '/schema_version', 'pure core requires schema version 1.0.0'
   ));
@@ -1160,7 +1230,7 @@ function applyLocalConflictBlocks(
     const obligation = mapGet(obligationsById, obligationId);
     if (!obligation) return;
     const existing = mapGet(blockedByObligation, obligationId);
-    const reasons = makeSet(existing ? String(existing.reason).split(',') : []);
+    const reasons = makeSet(existing ? splitCommas(String(existing.reason)) : []);
     setAdd(reasons, reason);
     setDelete(reasons, '');
     const refs = makeSet(existing ? strings(existing.evidence_refs) : []);
@@ -1643,7 +1713,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     'schema', initialRevision, normalized.diagnostics
   );
   const input = normalized.input;
-  const sourceRevision = toNumber(input.source_revision);
+  const sourceRevision = /** @type {number} */ (input.source_revision);
   try {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired('schema', sourceRevision, schemaDiagnostics);

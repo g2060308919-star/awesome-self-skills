@@ -1025,6 +1025,106 @@ test('core rejects Map size pollution before finalizing one closed input diagnos
   ]);
 });
 
+test('core rejects derived RegExp and Array species intrinsics before a valid revision executes them', async () => {
+  const fixture = await journeyFixture('grounded');
+  const input = buildRevision(fixture.scenario);
+  const cases = [
+    { owner: RegExp.prototype, key: 'exec', kind: 'method' },
+    { owner: Array.prototype, key: 'constructor', kind: 'getter' },
+    { owner: Array, key: Symbol.species, kind: 'getter' }
+  ];
+  const summaries = [];
+  for (const item of cases) {
+    const descriptor = Object.getOwnPropertyDescriptor(item.owner, item.key);
+    if (!descriptor) throw new Error(`missing derived intrinsic ${String(item.key)}`);
+    for (const mode of ['forward', 'throw']) {
+      let calls = 0;
+      /** @type {any} */
+      let result;
+      try {
+        if (item.kind === 'method') {
+          Object.defineProperty(item.owner, item.key, {
+            ...descriptor,
+            value: new Proxy(descriptor.value, {
+              apply(target, thisArg, args) {
+                calls += 1;
+                if (mode === 'throw') throw new Error('derived intrinsic method executed');
+                return Reflect.apply(target, thisArg, args);
+              }
+            })
+          });
+        } else {
+          Object.defineProperty(item.owner, item.key, {
+            configurable: true,
+            get() {
+              calls += 1;
+              if (mode === 'throw') throw new Error('derived intrinsic getter executed');
+              return item.owner === Array ? Array : Array;
+            }
+          });
+        }
+        result = evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' });
+      } finally {
+        Object.defineProperty(item.owner, item.key, descriptor);
+      }
+      summaries.push({
+        key: String(item.key), mode, calls, status: result.status, stage: result.stage,
+        codes: result.diagnostics.map((/** @type {any} */ entry) => entry.code)
+      });
+    }
+  }
+  assert.equal(summaries.length, 6);
+  for (const summary of summaries) assert.deepEqual(
+    { calls: summary.calls, status: summary.status, stage: summary.stage, codes: summary.codes },
+    { calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] }
+  );
+});
+
+test('core rejects String Symbol.split pollution without resolving its getter', () => {
+  const input = buildRevision('conflict');
+  const summaries = [];
+  for (const mode of ['forward', 'throw']) {
+    let reads = 0;
+    /** @type {any} */
+    let result;
+    try {
+      Object.defineProperty(String.prototype, Symbol.split, {
+        configurable: true,
+        get() {
+          reads += 1;
+          if (mode === 'throw') throw new Error('String Symbol.split getter executed');
+          return undefined;
+        }
+      });
+      result = evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' });
+    } finally {
+      Reflect.deleteProperty(String.prototype, Symbol.split);
+    }
+    summaries.push({
+      mode, reads, status: result.status, stage: result.stage,
+      codes: result.diagnostics.map((/** @type {any} */ item) => item.code)
+    });
+  }
+  assert.deepEqual(summaries, [
+    { mode: 'forward', reads: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { mode: 'throw', reads: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] }
+  ]);
+});
+
+test('core owns the schema diagnostic for a nonnumeric source revision', () => {
+  const input = buildRevision('grounded');
+  input.source_revision = {};
+  const result = /** @type {any} */ (
+    evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' })
+  );
+  assert.equal(result.status, 'need_revision');
+  assert.equal(result.stage, 'schema');
+  assert.ok(result.diagnostics.some((/** @type {any} */ item) =>
+    item.code === 'CORE_SOURCE_REVISION_INVALID' && item.path === '/source_revision'));
+  assert.ok(!result.diagnostics.some((/** @type {any} */ item) =>
+    item.code === 'CORE_EVALUATION_FAILED'));
+});
+
 test('external pending roots retain Task 9 risk order while hashing a sorted batch set', async () => {
   const { externalizePendingRoots } = await loadConflictGate();
   const root = (/** @type {string} */ id, /** @type {any} */ riskCounts, affected = ['obligation']) => ({
