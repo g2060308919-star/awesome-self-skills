@@ -950,6 +950,81 @@ test('core rejects Number Object and Symbol proxies before any forwarding or thr
   ]);
 });
 
+test('core rejects RegExp test pollution before snapshotting a complete valid revision', async () => {
+  const fixture = await journeyFixture('grounded');
+  const input = buildRevision(fixture.scenario);
+  const descriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, 'test');
+  if (!descriptor) throw new Error('missing RegExp.prototype.test');
+  const summaries = [];
+  for (const mode of ['forward', 'throw']) {
+    let calls = 0;
+    /** @type {any} */
+    let result;
+    try {
+      Object.defineProperty(RegExp.prototype, 'test', {
+        ...descriptor,
+        value: new Proxy(descriptor.value, {
+          apply(target, thisArg, args) {
+            calls += 1;
+            if (mode === 'throw') throw new Error('RegExp test trap executed');
+            return Reflect.apply(target, thisArg, args);
+          }
+        })
+      });
+      result = evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' });
+    } finally {
+      Object.defineProperty(RegExp.prototype, 'test', descriptor);
+    }
+    summaries.push({
+      mode, calls, status: result.status, stage: result.stage,
+      codes: result.diagnostics.map((/** @type {any} */ item) => item.code)
+    });
+  }
+  assert.deepEqual(summaries, [
+    { mode: 'forward', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { mode: 'throw', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] }
+  ]);
+});
+
+test('core rejects Map size pollution before finalizing one closed input diagnostic', async () => {
+  const fixture = await journeyFixture('grounded');
+  const input = buildRevision(fixture.scenario);
+  input.compiler_version = ' invalid ';
+  const descriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'size');
+  if (!descriptor || typeof descriptor.get !== 'function') {
+    throw new Error('missing Map.prototype.size getter');
+  }
+  const summaries = [];
+  for (const mode of ['forward', 'throw']) {
+    let reads = 0;
+    /** @type {any} */
+    let result;
+    try {
+      Object.defineProperty(Map.prototype, 'size', {
+        ...descriptor,
+        get: new Proxy(descriptor.get, {
+          apply(target, thisArg, args) {
+            reads += 1;
+            if (mode === 'throw') throw new Error('Map size getter executed');
+            return Reflect.apply(target, thisArg, args);
+          }
+        })
+      });
+      result = evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' });
+    } finally {
+      Object.defineProperty(Map.prototype, 'size', descriptor);
+    }
+    summaries.push({
+      mode, reads, status: result.status, stage: result.stage,
+      codes: result.diagnostics.map((/** @type {any} */ item) => item.code)
+    });
+  }
+  assert.deepEqual(summaries, [
+    { mode: 'forward', reads: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { mode: 'throw', reads: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] }
+  ]);
+});
+
 test('external pending roots retain Task 9 risk order while hashing a sorted batch set', async () => {
   const { externalizePendingRoots } = await loadConflictGate();
   const root = (/** @type {string} */ id, /** @type {any} */ riskCounts, affected = ['obligation']) => ({

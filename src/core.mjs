@@ -60,6 +60,12 @@ const NATIVE_MAP_DELETE = Map.prototype.delete;
 const NATIVE_MAP_FOR_EACH = Map.prototype.forEach;
 const NATIVE_MAP_ITERATOR = (/** @type {any} */ (Map.prototype))[NATIVE_SYMBOL_ITERATOR];
 const NATIVE_MAP_PROTOTYPE = Map.prototype;
+const NATIVE_MAP_SIZE_GET = /** @type {Function} */ (
+  NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'size')?.get
+);
+const NATIVE_REGEXP_PROTOTYPE = RegExp.prototype;
+const NATIVE_REGEXP_TEST = RegExp.prototype.test;
+const NATIVE_ARRAY_INDEX_PATTERN = /^(0|[1-9][0-9]*)$/u;
 const NATIVE_SET = Set;
 const NATIVE_SET_ADD = Set.prototype.add;
 const NATIVE_SET_HAS = Set.prototype.has;
@@ -153,6 +159,18 @@ function numberIsFinite(value) {
 function numberIsSafeInteger(value) {
   return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(
     NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [value]
+  ));
+}
+
+/** @param {Map<unknown,unknown>} value */
+function mapSize(value) {
+  return toNumber(NATIVE_REFLECT_APPLY(NATIVE_MAP_SIZE_GET, value, []));
+}
+
+/** @param {RegExp} expression @param {string} value */
+function regexpTest(expression, value) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(
+    NATIVE_REGEXP_TEST, expression, [value]
   ));
 }
 
@@ -293,6 +311,10 @@ function intrinsicIntegrityDiagnostic() {
     const mapHasDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'has');
     const mapDeleteDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'delete');
     const mapForEachDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'forEach');
+    const mapSizeDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'size');
+    const regexpTestDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
+      NATIVE_REGEXP_PROTOTYPE, 'test'
+    );
     const stringIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_STRING_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
@@ -348,6 +370,10 @@ function intrinsicIntegrityDiagnostic() {
       && mapDeleteDescriptor.value === NATIVE_MAP_DELETE
       && mapForEachDescriptor && NATIVE_HAS_OWN(mapForEachDescriptor, 'value')
       && mapForEachDescriptor.value === NATIVE_MAP_FOR_EACH
+      && mapSizeDescriptor && NATIVE_HAS_OWN(mapSizeDescriptor, 'get')
+      && mapSizeDescriptor.get === NATIVE_MAP_SIZE_GET
+      && regexpTestDescriptor && NATIVE_HAS_OWN(regexpTestDescriptor, 'value')
+      && regexpTestDescriptor.value === NATIVE_REGEXP_TEST
       && stringIteratorDescriptor && NATIVE_HAS_OWN(stringIteratorDescriptor, 'value')
       && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR
       && stringTrimDescriptor && NATIVE_HAS_OWN(stringTrimDescriptor, 'value')
@@ -416,7 +442,7 @@ function finalizeDiagnostics(diagnostics) {
     if (item.code === 'DIAGNOSTICS_TRUNCATED') overflow = true;
     else mapSet(unique, canonicalStringify(item), item);
   }
-  if (unique.size > DIAGNOSTIC_LIMIT) overflow = true;
+  if (mapSize(unique) > DIAGNOSTIC_LIMIT) overflow = true;
   const ordered = sortArray(mapValuesArray(unique), (left, right) =>
     compareCodePoints(left.category, right.category)
     || compareCodePoints(left.code, right.code)
@@ -571,7 +597,7 @@ function snapshotOwnData(submitted, rootPath) {
       for (let keyIndex = 0; keyIndex < stringKeys.length; keyIndex += 1) {
         const key = stringKeys[keyIndex];
         if (key === 'length') continue;
-        if (/^(0|[1-9][0-9]*)$/u.test(key) && toNumber(key) < 4294967295) {
+        if (regexpTest(NATIVE_ARRAY_INDEX_PATTERN, key) && toNumber(key) < 4294967295) {
           pushArray(numericKeys, key);
         }
         else {
