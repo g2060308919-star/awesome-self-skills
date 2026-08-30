@@ -335,6 +335,11 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   const nullExpertReport = scoreBenchmark(nullExpert, runs);
   assert.equal(nullExpertReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'EXPERT_ANNOTATIONS_INCOMPLETE'), true);
 
+  const nullLabel = structuredClone(manifest);
+  nullLabel.cases[0].assets.expert_obligations.final_labels[0] = null;
+  const nullLabelReport = scoreBenchmark(nullLabel, runs);
+  assert.equal(nullLabelReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'OBLIGATION_LABEL_INVALID'), true);
+
   const processMissing = structuredClone(runs);
   delete processMissing[0].output.process_failures.old_revision_recovery;
   assert.equal(scoreBenchmark(manifest, processMissing).completeness.issues.some(

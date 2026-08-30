@@ -95,7 +95,9 @@ function jaccard(left, right) {
 
 /** @param {any} asset */
 function finalLabelMap(asset) {
-  return new Map((asset?.final_labels ?? []).map((/** @type {any} */ item) => [item.label_key, item.value]));
+  const labels = Array.isArray(asset?.final_labels) ? asset.final_labels : [];
+  return new Map(labels.filter((/** @type {any} */ item) => isRecord(item) && typeof item.label_key === 'string')
+    .map((/** @type {any} */ item) => [item.label_key, item.value]));
 }
 
 /** @param {any[]} issues @param {string} code @param {string} pathValue @param {string} message */
