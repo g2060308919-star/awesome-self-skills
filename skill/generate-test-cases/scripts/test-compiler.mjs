@@ -10,10 +10,25 @@ import path from "node:path";
 // src/canonical.mjs
 import { createHash } from "node:crypto";
 var NATIVE_ARRAY_SORT = Array.prototype.sort;
+var NATIVE_ARRAY_FILTER = Array.prototype.filter;
+var NATIVE_ARRAY_JOIN = Array.prototype.join;
+var NATIVE_ARRAY_MAP = Array.prototype.map;
 function sortArray(values, compare) {
   return (
     /** @type {T[]} */
     Reflect.apply(NATIVE_ARRAY_SORT, values, [compare])
+  );
+}
+function joinArray(values, separator) {
+  return (
+    /** @type {string} */
+    Reflect.apply(NATIVE_ARRAY_JOIN, values, [separator])
+  );
+}
+function mapArray(values, project) {
+  return (
+    /** @type {U[]} */
+    Reflect.apply(NATIVE_ARRAY_MAP, values, [project])
   );
 }
 var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set([
@@ -239,7 +254,7 @@ function compareCodePoints(left, right) {
   return leftPoints.length - rightPoints.length;
 }
 function pathKey(path3) {
-  return `/${path3.join("/")}`;
+  return `/${joinArray(path3, "/")}`;
 }
 function stableSemanticKey(path3, value) {
   if (typeof value === "string") return `string:${value}`;
@@ -260,7 +275,7 @@ function stableSemanticKey(path3, value) {
 }
 function canonicalize(value, path3 = []) {
   if (Array.isArray(value)) {
-    const values = value.map((item) => canonicalize(item, path3));
+    const values = mapArray(value, (item) => canonicalize(item, path3));
     const currentPath = pathKey(path3);
     if (ORDERED_ARRAY_PATHS.has(currentPath)) return values;
     if (SET_ARRAY_PATHS.has(currentPath)) return sortArray(
@@ -270,10 +285,10 @@ function canonicalize(value, path3 = []) {
     return values;
   }
   if (value && typeof value === "object") {
-    return Object.fromEntries(sortArray(
-      Object.entries(value),
-      ([left], [right]) => compareCodePoints(left, right)
-    ).map(([key, item]) => [key, canonicalize(item, [...path3, key])]));
+    return Object.fromEntries(mapArray(
+      sortArray(Object.entries(value), ([left], [right]) => compareCodePoints(left, right)),
+      ([key, item]) => [key, canonicalize(item, [...path3, key])]
+    ));
   }
   return value;
 }
@@ -349,11 +364,31 @@ var supportedKeywords = /* @__PURE__ */ new Set([
   "additionalProperties"
 ]);
 var supportedTypes = /* @__PURE__ */ new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
+var NATIVE_ARRAY_EVERY = Array.prototype.every;
+var NATIVE_ARRAY_FILTER2 = Array.prototype.filter;
+var NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
+var NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
+var NATIVE_ARRAY_JOIN2 = Array.prototype.join;
+var NATIVE_ARRAY_MAP2 = Array.prototype.map;
+var NATIVE_ARRAY_SLICE = Array.prototype.slice;
+var NATIVE_ARRAY_SOME = Array.prototype.some;
+function mapArray2(values, project) {
+  return (
+    /** @type {U[]} */
+    Reflect.apply(NATIVE_ARRAY_MAP2, values, [project])
+  );
+}
+function someArray(values, predicate) {
+  return (
+    /** @type {boolean} */
+    Reflect.apply(NATIVE_ARRAY_SOME, values, [predicate])
+  );
+}
 function isSchemaObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function assertStringArray(value, keyword) {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string") || new Set(value).size !== value.length) {
+  if (!Array.isArray(value) || someArray(value, (item) => typeof item !== "string") || new Set(value).size !== value.length) {
     throw new Error(`Schema ${keyword} must be an array of unique strings.`);
   }
 }
@@ -374,7 +409,7 @@ function assertSupportedSchema(schema) {
       }
     } else if (key === "type") {
       const types = Array.isArray(value) ? value : [value];
-      if (!types.length || types.some((item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
+      if (!types.length || someArray(types, (item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
     } else if (key === "required") {
       assertStringArray(value, "required");
     } else if (key === "properties") {
@@ -386,7 +421,7 @@ function assertSupportedSchema(schema) {
       if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
       for (const child of value) assertSupportedSchema(child);
     } else if (key === "enum") {
-      if (!Array.isArray(value) || value.length === 0 || new Set(value.map((item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
+      if (!Array.isArray(value) || value.length === 0 || new Set(mapArray2(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
     } else if (key === "minItems" || key === "minLength") {
       if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
     } else if (key === "minimum" || key === "maximum") {

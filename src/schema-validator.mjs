@@ -7,6 +7,54 @@ const supportedKeywords = new Set([
   'uniqueItems', 'additionalProperties'
 ]);
 const supportedTypes = new Set(['array', 'boolean', 'integer', 'null', 'number', 'object', 'string']);
+const NATIVE_ARRAY_EVERY = Array.prototype.every;
+const NATIVE_ARRAY_FILTER = Array.prototype.filter;
+const NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
+const NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
+const NATIVE_ARRAY_JOIN = Array.prototype.join;
+const NATIVE_ARRAY_MAP = Array.prototype.map;
+const NATIVE_ARRAY_SLICE = Array.prototype.slice;
+const NATIVE_ARRAY_SOME = Array.prototype.some;
+
+/** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
+function everyArray(values, predicate) {
+  return /** @type {boolean} */ (Reflect.apply(NATIVE_ARRAY_EVERY, values, [predicate]));
+}
+
+/** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
+function filterArray(values, predicate) {
+  return /** @type {T[]} */ (Reflect.apply(NATIVE_ARRAY_FILTER, values, [predicate]));
+}
+
+/** @template T,U @param {T[]} values @param {(value:T,index:number,values:T[])=>U[]} project */
+function flatMapArray(values, project) {
+  return /** @type {U[]} */ (Reflect.apply(NATIVE_ARRAY_FLAT_MAP, values, [project]));
+}
+
+/** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>void} visit */
+function forEachArray(values, visit) {
+  Reflect.apply(NATIVE_ARRAY_FOR_EACH, values, [visit]);
+}
+
+/** @param {unknown[]} values @param {string} separator */
+function joinArray(values, separator) {
+  return /** @type {string} */ (Reflect.apply(NATIVE_ARRAY_JOIN, values, [separator]));
+}
+
+/** @template T,U @param {T[]} values @param {(value:T,index:number,values:T[])=>U} project */
+function mapArray(values, project) {
+  return /** @type {U[]} */ (Reflect.apply(NATIVE_ARRAY_MAP, values, [project]));
+}
+
+/** @template T @param {T[]} values @param {number} start @param {number} [end] */
+function sliceArray(values, start, end) {
+  return /** @type {T[]} */ (Reflect.apply(NATIVE_ARRAY_SLICE, values, end === undefined ? [start] : [start, end]));
+}
+
+/** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
+function someArray(values, predicate) {
+  return /** @type {boolean} */ (Reflect.apply(NATIVE_ARRAY_SOME, values, [predicate]));
+}
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isSchemaObject(value) {
@@ -15,7 +63,7 @@ function isSchemaObject(value) {
 
 /** @param {unknown} value @param {string} keyword */
 function assertStringArray(value, keyword) {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string') || new Set(value).size !== value.length) {
+  if (!Array.isArray(value) || someArray(value, (item) => typeof item !== 'string') || new Set(value).size !== value.length) {
     throw new Error(`Schema ${keyword} must be an array of unique strings.`);
   }
 }
@@ -47,7 +95,7 @@ export function assertSupportedSchema(schema) {
       if (key === 'pattern') { try { new RegExp(value); } catch { throw new Error('Schema pattern must be a valid regular expression.'); } }
     } else if (key === 'type') {
       const types = Array.isArray(value) ? value : [value];
-      if (!types.length || types.some((item) => typeof item !== 'string' || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error('Schema type must name supported unique types.');
+      if (!types.length || someArray(types, (item) => typeof item !== 'string' || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error('Schema type must name supported unique types.');
     } else if (key === 'required') {
       assertStringArray(value, 'required');
     } else if (key === 'properties') {
@@ -59,7 +107,7 @@ export function assertSupportedSchema(schema) {
       if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
       for (const child of value) assertSupportedSchema(child);
     } else if (key === 'enum') {
-      if (!Array.isArray(value) || value.length === 0 || new Set(value.map((item) => canonicalStringify(item))).size !== value.length) throw new Error('Schema enum must be a non-empty array of unique values.');
+      if (!Array.isArray(value) || value.length === 0 || new Set(mapArray(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error('Schema enum must be a non-empty array of unique values.');
     } else if (key === 'minItems' || key === 'minLength') {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
     } else if (key === 'minimum' || key === 'maximum') {
@@ -86,12 +134,12 @@ function validate(value, schema, path) {
   const diagnostics = [];
   const pointer = path || '/';
   if (schema.type && !matchesType(value, schema.type)) {
-    return [diagnostic('TYPE_MISMATCH', pointer, `must be ${Array.isArray(schema.type) ? schema.type.join(' or ') : schema.type}`)];
+    return [diagnostic('TYPE_MISMATCH', pointer, `must be ${Array.isArray(schema.type) ? joinArray(schema.type, ' or ') : schema.type}`)];
   }
   if (Object.hasOwn(schema, 'const') && canonicalStringify(value) !== canonicalStringify(schema.const)) {
     diagnostics.push(diagnostic('CONST_MISMATCH', pointer, 'must equal the schema constant'));
   }
-  if (Array.isArray(schema.enum) && !schema.enum.some((item) => canonicalStringify(item) === canonicalStringify(value))) {
+  if (Array.isArray(schema.enum) && !someArray(schema.enum, (item) => canonicalStringify(item) === canonicalStringify(value))) {
     diagnostics.push(diagnostic('ENUM_MISMATCH', pointer, 'must be one of the allowed values'));
   }
   if (typeof value === 'string') {
@@ -106,14 +154,14 @@ function validate(value, schema, path) {
     if (typeof schema.minItems === 'number' && value.length < schema.minItems) diagnostics.push(diagnostic('MIN_ITEMS', pointer, 'has too few items'));
     if (schema.uniqueItems === true) {
       const seen = new Set();
-      value.forEach((item, index) => {
+      forEachArray(value, (item, index) => {
         const key = canonicalStringify(item);
         if (seen.has(key)) diagnostics.push(diagnostic('UNIQUE_ITEMS', `${path}/${index}`, 'must not contain duplicate items'));
         seen.add(key);
       });
     }
     if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
-      value.forEach((item, index) => diagnostics.push(...validate(item, /** @type {Record<string, unknown>} */ (schema.items), `${path}/${index}`)));
+      forEachArray(value, (item, index) => diagnostics.push(...validate(item, /** @type {Record<string, unknown>} */ (schema.items), `${path}/${index}`)));
     }
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -140,10 +188,10 @@ function validate(value, schema, path) {
   }
   if (Array.isArray(schema.allOf)) for (const child of schema.allOf) diagnostics.push(...validate(value, /** @type {Record<string, unknown>} */ (child), path));
   if (Array.isArray(schema.oneOf)) {
-    const variants = schema.oneOf.map((child) => /** @type {Record<string, unknown>} */ (child));
-    const matching = variants.filter((child) => validate(value, child, path).length === 0);
+    const variants = mapArray(schema.oneOf, (child) => /** @type {Record<string, unknown>} */ (child));
+    const matching = filterArray(variants, (child) => validate(value, child, path).length === 0);
     if (matching.length !== 1) {
-      const discriminated = variants.filter((child) => matchesDiscriminator(value, child));
+      const discriminated = filterArray(variants, (child) => matchesDiscriminator(value, child));
       if (matching.length === 0 && discriminated.length === 1) diagnostics.push(...validate(value, discriminated[0], path));
       else diagnostics.push(diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
     }
@@ -157,13 +205,13 @@ function matchesDiscriminator(value, schema) {
   const properties = schema.properties;
   if (!isSchemaObject(properties)) return false;
   /** @type {Array<[string, Record<string, unknown>]>} */
-  const constants = Object.entries(properties).flatMap(([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, 'const') ? [[key, candidate]] : []);
-  return constants.length > 0 && constants.every(([key, candidate]) => canonicalStringify(/** @type {Record<string, unknown>} */ (value)[key]) === canonicalStringify(candidate.const));
+  const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, 'const') ? [[key, candidate]] : []);
+  return constants.length > 0 && everyArray(constants, ([key, candidate]) => canonicalStringify(/** @type {Record<string, unknown>} */ (value)[key]) === canonicalStringify(candidate.const));
 }
 
 /** @param {unknown} value @param {unknown} type @returns {boolean} */
 function matchesType(value, type) {
-  if (Array.isArray(type)) return type.some((candidate) => matchesType(value, candidate));
+  if (Array.isArray(type)) return someArray(type, (candidate) => matchesType(value, candidate));
   if (type === 'array') return Array.isArray(value);
   if (type === 'object') return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   if (type === 'integer') return typeof value === 'number' && Number.isInteger(value);
@@ -180,12 +228,12 @@ export function validateUniqueStableIds(artifact) {
   const seenByNamespace = new Map();
   for (const { path, id, namespace, scopeSegments } of /** @type {any[]} */ (STABLE_ID_COLLECTIONS)) {
     for (const { items, pointer } of findCollections(object, path)) {
-      const pointerSegments = pointer.split('/').filter(Boolean);
-      const scopedPointer = typeof scopeSegments === 'number' ? `/${pointerSegments.slice(0, -scopeSegments).join('/')}` : '';
-      const namespaceKey = `${namespace ?? path.join('/')}${scopedPointer}`;
+      const pointerSegments = filterArray(pointer.split('/'), Boolean);
+      const scopedPointer = typeof scopeSegments === 'number' ? `/${joinArray(sliceArray(pointerSegments, 0, -scopeSegments), '/')}` : '';
+      const namespaceKey = `${namespace ?? joinArray(path, '/')}${scopedPointer}`;
       const seen = seenByNamespace.get(namespaceKey) ?? new Set();
       seenByNamespace.set(namespaceKey, seen);
-      items.forEach((item, index) => {
+      forEachArray(items, (item, index) => {
         if (!item || typeof item !== 'object' || Array.isArray(item)) return;
         const value = /** @type {Record<string, unknown>} */ (item)[id];
         if (typeof value !== 'string') return;
@@ -203,7 +251,7 @@ function findCollections(value, segments, pointer = '') {
   const [segment, ...rest] = segments;
   if (segment === '*') {
     if (!Array.isArray(value)) return [];
-    return value.flatMap((item, index) => item && typeof item === 'object' && !Array.isArray(item)
+    return flatMapArray(value, (item, index) => item && typeof item === 'object' && !Array.isArray(item)
       ? findCollections(/** @type {Record<string, unknown>} */ (item), rest, `${pointer}/${index}`) : []);
   }
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, segment)) return [];

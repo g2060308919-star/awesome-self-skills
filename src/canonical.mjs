@@ -1,10 +1,28 @@
 import { createHash } from 'node:crypto';
 
 const NATIVE_ARRAY_SORT = Array.prototype.sort;
+const NATIVE_ARRAY_FILTER = Array.prototype.filter;
+const NATIVE_ARRAY_JOIN = Array.prototype.join;
+const NATIVE_ARRAY_MAP = Array.prototype.map;
 
 /** @template T @param {T[]} values @param {(left:T,right:T)=>number} compare */
 function sortArray(values, compare) {
   return /** @type {T[]} */ (Reflect.apply(NATIVE_ARRAY_SORT, values, [compare]));
+}
+
+/** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
+function filterArray(values, predicate) {
+  return /** @type {T[]} */ (Reflect.apply(NATIVE_ARRAY_FILTER, values, [predicate]));
+}
+
+/** @param {unknown[]} values @param {string} separator */
+function joinArray(values, separator) {
+  return /** @type {string} */ (Reflect.apply(NATIVE_ARRAY_JOIN, values, [separator]));
+}
+
+/** @template T,U @param {T[]} values @param {(value:T,index:number,values:T[])=>U} project */
+function mapArray(values, project) {
+  return /** @type {U[]} */ (Reflect.apply(NATIVE_ARRAY_MAP, values, [project]));
 }
 
 const VOLATILE_FIELDS = new Set(['source_revision', 'created_at', 'updated_at', 'confirmed_at', 'event_at', 'timestamp', 'position', 'index', 'array_index']);
@@ -52,7 +70,7 @@ function compareCodePoints(left, right) {
 
 /** @param {string[]} path */
 function pathKey(path) {
-  return `/${path.join('/')}`;
+  return `/${joinArray(path, '/')}`;
 }
 
 /** @param {string[]} path @param {unknown} value @returns {string} */
@@ -74,7 +92,7 @@ function stableSemanticKey(path, value) {
 /** @param {unknown} value @param {string[]} [path] @returns {unknown} */
 function canonicalize(value, path = []) {
   if (Array.isArray(value)) {
-    const values = value.map((item) => canonicalize(item, path));
+    const values = mapArray(value, (item) => canonicalize(item, path));
     const currentPath = pathKey(path);
     if (ORDERED_ARRAY_PATHS.has(currentPath)) return values;
     if (SET_ARRAY_PATHS.has(currentPath)) return sortArray(
@@ -83,9 +101,10 @@ function canonicalize(value, path = []) {
     return values;
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(sortArray(
-      Object.entries(value), ([left], [right]) => compareCodePoints(left, right)
-    ).map(([key, item]) => [key, canonicalize(item, [...path, key])]));
+    return Object.fromEntries(mapArray(
+      sortArray(Object.entries(value), ([left], [right]) => compareCodePoints(left, right)),
+      ([key, item]) => [key, canonicalize(item, [...path, key])]
+    ));
   }
   return value;
 }
@@ -102,16 +121,19 @@ export function digest(value) {
 
 /** @param {unknown} value @param {'root' | 'case' | 'execution' | 'other'} entity @param {string[]} [path] @returns {unknown} */
 function stripForEntity(value, entity, path = []) {
-  if (Array.isArray(value)) return value.map((item) => stripForEntity(item, entity, path));
+  if (Array.isArray(value)) return mapArray(value, (item) => stripForEntity(item, entity, path));
   if (!value || typeof value !== 'object') return value;
   const rootAssociations = entity === 'root' && path.length === 0;
   const directExecutionAssociations = entity === 'execution' && path.length === 0;
   const caseExecutionAssociations = entity === 'case' && path.length === 1 && path[0] === 'execution_signature';
-  return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !VOLATILE_FIELDS.has(key))
-    .filter(([key]) => !(rootAssociations && ROOT_ISSUE_ASSOCIATIONS.has(key)))
-    .filter(([key]) => !((directExecutionAssociations || caseExecutionAssociations) && EXECUTION_SIGNATURE_ASSOCIATIONS.has(key)))
-    .map(([key, item]) => [key, stripForEntity(item, entity, [...path, key])]));
+  const stableEntries = filterArray(Object.entries(value), ([key]) => !VOLATILE_FIELDS.has(key));
+  const rootEntries = filterArray(stableEntries, ([key]) => !(rootAssociations && ROOT_ISSUE_ASSOCIATIONS.has(key)));
+  const executionEntries = filterArray(rootEntries, ([key]) => !(
+    (directExecutionAssociations || caseExecutionAssociations) && EXECUTION_SIGNATURE_ASSOCIATIONS.has(key)
+  ));
+  return Object.fromEntries(mapArray(
+    executionEntries, ([key, item]) => [key, stripForEntity(item, entity, [...path, key])]
+  ));
 }
 
 /** @param {unknown} value @param {string} [entity] @returns {unknown} */

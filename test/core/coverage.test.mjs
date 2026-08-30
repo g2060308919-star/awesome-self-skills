@@ -340,6 +340,16 @@ test('executable Case replay rejects unbounded Oracles and forged execution sign
   }
 });
 
+test('executable Case replay rejects unresolved normative facts', () => {
+  for (const status of ['conflicted', 'ambiguous']) {
+    const input = context();
+    input.evidence_claims.fact_ledger.find(
+      (/** @type {any} */ fact) => fact.fact_id === 'fact_grounded'
+    ).status = status;
+    assert.equal(diagnosticCodes(() => buildBundle(input)).includes('CASE_FACT_UNRESOLVED'), true, status);
+  }
+});
+
 test('temporary-assumption downgrade summaries are propagated once per evidence DAG', () => {
   const nativeAdd = Set.prototype.add;
   const measurements = [];
@@ -458,6 +468,22 @@ test('a final Blocked Test Point cannot retain both a Task 8 blocker and a proje
   input.classification.grounded.push(projected);
 
   assert.equal(diagnosticCodes(() => buildBundle(input)).includes('FORMAL_DISPOSITION_DUPLICATE'), true);
+});
+
+test('duplicate Blocked dispositions fail before order-dependent semantic use', () => {
+  /** @param {boolean} duplicateFirst */
+  const diagnosticsFor = (duplicateFirst) => {
+    const input = context();
+    const valid = structuredClone(input.classification.blocked[0]);
+    const duplicate = { ...structuredClone(valid), reason: 'OTHER_REASON' };
+    input.classification.blocked = duplicateFirst ? [duplicate, valid] : [valid, duplicate];
+    try { buildBundle(input); } catch (error) { return /** @type {any} */ (error).diagnostics; }
+    assert.fail('expected duplicate Blocked disposition');
+  };
+  const forward = diagnosticsFor(false);
+  const reverse = diagnosticsFor(true);
+  assert.equal(canonicalStringify(forward), canonicalStringify(reverse));
+  assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), ['FORMAL_DISPOSITION_DUPLICATE']);
 });
 
 test('Oracle ownership accepts a concrete expectation derived from the required accepted Oracle', () => {
@@ -1098,6 +1124,23 @@ test('coverage canonicalization uses a captured sort intrinsic', () => {
   assert.equal(reads, 0);
 });
 
+test('coverage uses captured projection and predicate intrinsics', () => {
+  for (const method of ['map', 'filter', 'some', 'every', 'join']) {
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, method);
+    let reads = 0;
+    try {
+      Object.defineProperty(Array.prototype, method, {
+        configurable: true,
+        get() { reads += 1; return descriptor?.value; }
+      });
+      assert.equal(buildBundle(context()).grounded.length, 1, method);
+    } finally {
+      if (descriptor) Object.defineProperty(Array.prototype, method, descriptor);
+    }
+    assert.equal(reads, 0, method);
+  }
+});
+
 test('entry snapshot never invokes inherited numeric array setters while copying data', () => {
   const input = context();
   input.limits = Array.from({ length: 301 }, (_, index) => `limit-${index}`);
@@ -1422,6 +1465,20 @@ function chainedBlockedRootContext(size) {
   return input;
 }
 
+/** @param {number} size */
+function generalChainedBlockedRootContext(size) {
+  const input = chainedBlockedRootContext(size);
+  input.evidence_claims.claims.push({
+    claim_id: 'claim_scale_branch', claim_form: 'direct', level: 'E3', kind: 'requirement',
+    scope: 'scale', value: 'scale branch', source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+  });
+  const firstDerived = input.evidence_claims.claims.find(
+    (/** @type {any} */ claim) => claim.claim_id === 'claim_scale_0001'
+  );
+  firstDerived.parent_claim_ids.push('claim_scale_branch');
+  return input;
+}
+
 test('independent root-ledger entries do not retain one evidence closure per chain root', () => {
   const nativeAdd = Set.prototype.add;
   const measurements = [];
@@ -1439,6 +1496,25 @@ test('independent root-ledger entries do not retain one evidence closure per cha
     Set.prototype.add = nativeAdd;
   }
   assert.equal(measurements.every((count, index) => count <= [40, 80, 160][index] * 30), true, measurements.join('/'));
+});
+
+test('general-DAG root-ledger evidence equality does not rescan the shared component', () => {
+  const nativeAdd = Set.prototype.add;
+  const measurements = [];
+  try {
+    for (const size of [40, 80, 160]) {
+      let chainAdds = 0;
+      Set.prototype.add = function (value) {
+        if (typeof value === 'string' && value.startsWith('claim_scale_')) chainAdds += 1;
+        return Reflect.apply(nativeAdd, this, [value]);
+      };
+      assert.equal(buildBundle(generalChainedBlockedRootContext(size)).blocked.length, size);
+      measurements.push(chainAdds);
+    }
+  } finally {
+    Set.prototype.add = nativeAdd;
+  }
+  assert.equal(measurements.every((count, index) => count <= [40, 80, 160][index] * 35), true, measurements.join('/'));
 });
 
 test('a current Blocked owner cannot carry a resolved lifecycle disposition', () => {
