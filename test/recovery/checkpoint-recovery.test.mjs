@@ -15,6 +15,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const rename = fsPromises.rename;
 const symlink = fsPromises.symlink;
+const utimes = fsPromises.utimes;
 const recoveryRoot = path.join(repositoryRoot, 'test/fixtures/recovery');
 const crashFixtureNames = [
   'staging-before-promotion', 'accepted-before-checkpoint', 'obligations-before-checkpoint',
@@ -639,6 +640,43 @@ test('residue cleanup restores its atomic claim if ownership changes after obser
   }
 });
 
+test('a cleanup claim abandoned by process exit is recovered by the next owner', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const residue = path.join(runDirectory, '.compiler-advance.lock.release-999-79');
+  const moduleUrl = new URL('../../src/run-store.mjs', import.meta.url).href;
+  try {
+    await mkdir(path.join(residue, 'nested'), { recursive: true });
+    await writeFile(path.join(residue, 'nested/owner.json'), '{}\n', 'utf8');
+    const childSource = `
+      import { acquireRunLock } from ${JSON.stringify(moduleUrl)};
+      await acquireRunLock(process.argv[1], {
+        afterResidueClaim: async () => { process.exit(0); }
+      });
+    `;
+    const child = spawn(process.execPath, [
+      '--input-type=module', '-e', childSource, runDirectory
+    ], { stdio: 'ignore' });
+    const exitCode = await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('exit', resolve);
+    });
+    assert.equal(exitCode, 0);
+    assert.ok((await readdir(runDirectory)).some(
+      (/** @type {string} */ name) => name.startsWith(`${path.basename(residue)}.cleanup-`)
+    ));
+
+    const release = await acquireRunLock(runDirectory);
+    await release();
+    assert.ok((await readdir(runDirectory)).every(
+      (/** @type {string} */ name) => !name.startsWith(path.basename(residue))
+    ));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('a production lock holder renews its fenced lease while a contender waits', { timeout: 10_000 }, async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
@@ -830,6 +868,58 @@ test('a live release transaction keeps its canonical gap fenced beyond one lease
   } finally {
     await rm(lockDirectory, { recursive: true, force: true });
     await rm(displacedDirectory, { recursive: true, force: true });
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('changing heartbeat proof keeps a live transaction fenced with fixed directory mtime', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const transactionDirectory = path.join(runDirectory, '.compiler-advance.transaction');
+  const markerPath = path.join(transactionDirectory, '.heartbeat-worker-1');
+  /** @type {ReturnType<typeof setInterval>|undefined} */
+  let heartbeatTimer;
+  /** @type {(()=>Promise<void>)|undefined} */
+  let acquiredRelease;
+  try {
+    await mkdir(transactionDirectory);
+    await writeFile(path.join(transactionDirectory, 'owner.json'), `${JSON.stringify({
+      pid: process.pid,
+      token: 'coarse-timestamp-live-transaction',
+      lease_expires_at_ms: Date.now() + 60_000,
+      process_start_identity: `${process.pid}:${Date.now() - process.uptime() * 1_000}`,
+      heartbeat_seq: 0,
+      heartbeat_ready: true
+    })}\n`, 'utf8');
+    await writeFile(markerPath, '0\n', 'utf8');
+    const fixedSeconds = Math.floor(Date.now() / 10_000) * 10;
+    await utimes(transactionDirectory, fixedSeconds, fixedSeconds);
+    let sequence = 0;
+    heartbeatTimer = setInterval(() => {
+      sequence += 1;
+      void writeFile(markerPath, `${sequence}\n`, 'utf8');
+    }, 75);
+
+    const contender = acquireRunLock(runDirectory);
+    const state = await Promise.race([
+      contender.then((release) => {
+        acquiredRelease = release;
+        return 'acquired';
+      }),
+      new Promise((resolve) => setTimeout(() => resolve('waiting'), 900))
+    ]);
+    if (state === 'acquired' && acquiredRelease) await acquiredRelease();
+    assert.equal(state, 'waiting', 'dynamic proof was ignored when directory mtime stayed fixed');
+
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = undefined;
+    await rm(transactionDirectory, { recursive: true, force: true });
+    const release = await contender;
+    await release();
+  } finally {
+    if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
+    if (acquiredRelease) await acquiredRelease().catch(() => {});
     await rm(runDirectory, { recursive: true, force: true });
   }
 });
@@ -1106,6 +1196,34 @@ test('two stopped heartbeat workers leave an independent guardian proof', {
     await releaseHolder();
     const releaseContender = await contender;
     await releaseContender();
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('known loss of every heartbeat helper rejects the next operation before it starts', async () => {
+  const runDirectory = await temporaryRun();
+  /** @type {undefined|(()=>Promise<void>)} */
+  let failAll;
+  try {
+    const release = await acquireRunLock(runDirectory, {
+      afterHeartbeatWorkerReady: async (_stopOne, _stopWorkers, failEveryHelper) => {
+        failAll = failEveryHelper;
+      }
+    });
+    assert.equal(typeof failAll, 'function');
+    if (!failAll) throw new Error('all-helper failure control was not provided');
+    const failEveryHelper = failAll;
+    await failEveryHelper();
+    let operationStarted = false;
+    await assert.rejects(
+      release.guardedAwait(async () => {
+        operationStarted = true;
+      }),
+      /heartbeat failed/u
+    );
+    assert.equal(operationStarted, false);
+    await assert.rejects(release, /heartbeat/u);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }

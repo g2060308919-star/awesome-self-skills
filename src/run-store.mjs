@@ -16,7 +16,8 @@ const CONTROLLED_DIRECTORIES = Object.freeze(['accepted', 'staging', 'derived', 
 const CONTROLLED_FILES = Object.freeze(['checkpoint.json']);
 const REVISION_DIRECTORY = /^r([0-9]+)$/u;
 const TEMPORARY_FILE = /^\..+\.tmp-([0-9]+)-[0-9]+$/u;
-const RUN_LOCK_RESIDUE_DIRECTORY = /^\.compiler-advance\.lock\.(?:release|stale)-[0-9]+-[0-9]+$/u;
+const RUN_LOCK_RESIDUE_DIRECTORY = /^\.compiler-advance\.lock\.(?:release|stale)-[0-9]+-[0-9]+(?:\.cleanup-[0-9]+-[0-9]+)*$/u;
+const RUN_LOCK_HEARTBEAT_MARKER = /^\.heartbeat-(?:worker-1|worker-2|guardian)$/u;
 let temporarySequence = 0;
 let lockSequence = 0;
 const RUN_LOCK_DIRECTORY = '.compiler-advance.lock';
@@ -590,13 +591,39 @@ function sameFileGeneration(left, right) {
   return Boolean(left && right && left.dev === right.dev && left.ino === right.ino);
 }
 
+/** @param {string} runDirectory @param {string} directory */
+async function readRunLockHeartbeatProof(runDirectory, directory) {
+  let entries;
+  try { entries = await readdir(directory, { withFileTypes: true }); } catch (error) {
+    if (isMissing(error)) return '';
+    throw error;
+  }
+  /** @type {string[]} */
+  const proof = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!regexpTest(RUN_LOCK_HEARTBEAT_MARKER, entry.name)) continue;
+    if (direntIsSymbolicLink(entry) || !direntIsFile(entry)) throw new RunStoreIntegrityError(
+      'Run coordination heartbeat proof is not a real file.'
+    );
+    const text = await readTextIfPresent(runDirectory, pathJoin(directory, entry.name));
+    if (text !== null) append(proof, `${entry.name}:${text}`);
+  }
+  NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, proof, []);
+  return nativeJsonStringify(proof);
+}
+
 /** @param {string} runDirectory @param {string} directory @param {string} ownerPath */
 async function observeRunLock(runDirectory, directory, ownerPath) {
   const status = await lstat(directory);
   if (statsIsSymbolicLink(status) || !statsIsDirectory(status)) throw new RunStoreIntegrityError(
     'Run coordination claim is not a real directory.'
   );
-  return { status, record: await readRunLockOwner(runDirectory, ownerPath) };
+  return {
+    status,
+    record: await readRunLockOwner(runDirectory, ownerPath),
+    heartbeatProof: await readRunLockHeartbeatProof(runDirectory, directory)
+  };
 }
 
 /**
@@ -649,7 +676,9 @@ async function waitForReleaseTransaction(runDirectory) {
   /** @type {any} */
   let observedStatus = null;
   let observedMtime = -1;
+  let observedProof = '';
   let firstObservedAt = 0;
+  let heartbeatObservedAt = 0;
   let heartbeatAuthenticated = false;
   while (true) {
     let observed;
@@ -684,14 +713,21 @@ async function waitForReleaseTransaction(runDirectory) {
         observedIdentity = /** @type {string} */ (ownerIdentity);
         observedStatus = observed.status;
         observedMtime = observed.status.mtimeMs;
+        observedProof = observed.heartbeatProof;
         firstObservedAt = now;
+        heartbeatObservedAt = 0;
         heartbeatAuthenticated = false;
-      } else if (observed.status.mtimeMs > observedMtime) {
+      } else if (observed.status.mtimeMs > observedMtime
+        || (observed.heartbeatProof !== observedProof && observed.heartbeatProof.length > 0)) {
         observedMtime = observed.status.mtimeMs;
+        observedProof = observed.heartbeatProof;
+        heartbeatObservedAt = now;
         heartbeatAuthenticated = true;
       } else if (observed.status.mtimeMs < observedMtime) {
         observedMtime = observed.status.mtimeMs;
+        observedProof = observed.heartbeatProof;
         firstObservedAt = now;
+        heartbeatObservedAt = 0;
         heartbeatAuthenticated = false;
       }
     } else {
@@ -700,13 +736,15 @@ async function waitForReleaseTransaction(runDirectory) {
       observedIdentity = '';
       observedStatus = null;
       observedMtime = -1;
+      observedProof = '';
       firstObservedAt = 0;
+      heartbeatObservedAt = 0;
       heartbeatAuthenticated = false;
     }
     const heartbeatProofPending = ownerValid && !heartbeatAuthenticated
       && now - firstObservedAt < RUN_LOCK_HEARTBEAT_PROOF_MS;
     const movingOwnerIsFresh = ownerValid && heartbeatAuthenticated
-      && observed.status.mtimeMs + RUN_LOCK_LEASE_MS > now
+      && heartbeatObservedAt + RUN_LOCK_LEASE_MS > now
       && processOwnerIsAlive(ownerPid);
     if (incompleteIsYoung || heartbeatProofPending || movingOwnerIsFresh) {
       await delay(RUN_LOCK_POLL_MS);
@@ -746,7 +784,7 @@ async function acquireReleaseTransaction(runDirectory, token) {
       throw error;
     }
     const acquiredStatus = await lstat(transactionDirectory);
-    /** @type {null|{stopAll:()=>Promise<void>,stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>}} */
+    /** @type {null|{failAll:()=>Promise<void>,stopAll:()=>Promise<void>,stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>}} */
     let heartbeatWorkers = null;
     try {
       await syncDirectory(runDirectory);
@@ -834,9 +872,10 @@ async function restoreForeignLockGeneration(
  * itself and keeps that inode, so a renamed successor is never touched.
  * @param {string} lockDirectory
  * @param {any} expectedStatus
+ * @param {string} markerPath
  * @param {(error:unknown)=>void} [onFailure]
  */
-async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
+async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, markerPath, onFailure) {
   const workerSource = `
     (async () => {
       const { parentPort, workerData } = await import('node:worker_threads');
@@ -847,9 +886,12 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFail
       let failureSent = false;
       let timer;
       let pulse = Promise.resolve();
+      let sequence = 0;
       async function renew() {
         const seconds = Date.now() / 1000;
         await handle.utimes(seconds, seconds);
+        sequence += 1;
+        await fs.writeFile(workerData.markerPath, String(sequence));
         await handle.sync();
       }
       function schedule() {
@@ -899,7 +941,7 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFail
     eval: true,
     workerData: {
       path: lockDirectory, dev: expectedStatus.dev, ino: expectedStatus.ino,
-      interval: RUN_LOCK_HEARTBEAT_MS
+      interval: RUN_LOCK_HEARTBEAT_MS, markerPath
     }
   });
   /** @type {unknown} */
@@ -971,8 +1013,8 @@ async function startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFail
 }
 
 /** Run a heartbeat in a separate process so worker-thread failures are not a single fault domain. */
-/** @param {string} lockDirectory @param {any} expectedStatus @param {(error:unknown)=>void} [onFailure] */
-async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, onFailure) {
+/** @param {string} lockDirectory @param {any} expectedStatus @param {string} markerPath @param {(error:unknown)=>void} [onFailure] */
+async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, markerPath, onFailure) {
   const guardianSource = `
     (async () => {
       const fs = await import('node:fs/promises');
@@ -981,14 +1023,18 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, onFa
       const expectedDev = Number(process.argv[2]);
       const expectedIno = Number(process.argv[3]);
       const interval = Number(process.argv[4]);
+      const markerPath = process.argv[5];
       let handle;
       let stopped = false;
       let failureSent = false;
       let timer;
       let pulse = Promise.resolve();
+      let sequence = 0;
       async function renew() {
         const seconds = Date.now() / 1000;
         await handle.utimes(seconds, seconds);
+        sequence += 1;
+        await fs.writeFile(markerPath, String(sequence));
         await handle.sync();
       }
       function schedule() {
@@ -1037,7 +1083,7 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, onFa
   const child = NATIVE_REFLECT_APPLY(NATIVE_SPAWN, undefined, [
     NATIVE_PROCESS_EXEC_PATH,
     ['-e', guardianSource, lockDirectory, nativeString(expectedStatus.dev),
-      nativeString(expectedStatus.ino), nativeString(RUN_LOCK_HEARTBEAT_MS)],
+      nativeString(expectedStatus.ino), nativeString(RUN_LOCK_HEARTBEAT_MS), markerPath],
     { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
   ]);
   const childSend = NATIVE_REFLECT_APPLY(
@@ -1125,12 +1171,14 @@ async function startRunLockHeartbeatGuardian(lockDirectory, expectedStatus, onFa
  */
 async function startRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
   const stopFirst = await startSingleRunLockHeartbeat(
-    lockDirectory, expectedStatus, onFailure
+    lockDirectory, expectedStatus, pathJoin(lockDirectory, '.heartbeat-worker-1'), onFailure
   );
   /** @type {()=>Promise<void>} */
   let stopSecond;
   try {
-    stopSecond = await startSingleRunLockHeartbeat(lockDirectory, expectedStatus, onFailure);
+    stopSecond = await startSingleRunLockHeartbeat(
+      lockDirectory, expectedStatus, pathJoin(lockDirectory, '.heartbeat-worker-2'), onFailure
+    );
   } catch (error) {
     await stopFirst().catch(() => {});
     throw error;
@@ -1139,7 +1187,7 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
   let stopGuardian;
   try {
     stopGuardian = await startRunLockHeartbeatGuardian(
-      lockDirectory, expectedStatus, onFailure
+      lockDirectory, expectedStatus, pathJoin(lockDirectory, '.heartbeat-guardian'), onFailure
     );
   } catch (error) {
     await stopFirst().catch(() => {});
@@ -1174,7 +1222,13 @@ async function startRunLockHeartbeat(lockDirectory, expectedStatus, onFailure) {
     }
     if (successfulStops === 0 && firstError) throw firstError;
   };
-  return { stopAll, stopOne, stopWorkers };
+  const failAll = async () => {
+    await stopAll();
+    if (onFailure) onFailure(new RunStoreIntegrityError(
+      'Run coordination heartbeat failed because every helper stopped.'
+    ));
+  };
+  return { failAll, stopAll, stopOne, stopWorkers };
 }
 
 /** @param {string} runDirectory @param {any} expectedStatus @param {string} token */
@@ -1266,8 +1320,8 @@ async function cleanupRunLockResidues(
  * The lock directory is the atomic claim; owner metadata distinguishes an
  * active process from a safely reclaimable abandoned claim.
  * @param {string} runDirectory
- * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterHeartbeatWorkerReady?:(stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>)=>Promise<void>,beforeResidueCleanup?:()=>Promise<void>,afterResidueClaim?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
- * @returns {Promise<(()=>Promise<void>) & {assertHealthy:()=>void}>}
+ * @param {{afterStaleObservation?:()=>Promise<void>,afterHeartbeatObservation?:()=>Promise<void>,afterHeartbeatWorkerReady?:(stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>,failAll:()=>Promise<void>)=>Promise<void>,beforeResidueCleanup?:()=>Promise<void>,afterResidueClaim?:()=>Promise<void>,afterReleaseObservation?:()=>Promise<void>}} [coordinationHooks]
+ * @returns {Promise<(()=>Promise<void>) & {assertHealthy:()=>void,guardedAwait:<T>(operation:()=>Promise<T>)=>Promise<T>}>}
  */
 export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
   requireRunStoreIntrinsics();
@@ -1281,7 +1335,9 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
   /** @type {any} */
   let foreignStatus = null;
   let foreignHeartbeatMtime = -1;
+  let foreignHeartbeatProof = '';
   let foreignFirstObservedAt = 0;
+  let foreignHeartbeatObservedAt = 0;
   let foreignHeartbeatAuthenticated = false;
 
   while (true) {
@@ -1351,7 +1407,7 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       let heartbeatPromise = null;
       /** @type {unknown} */
       let heartbeatError = null;
-      /** @type {null|{stopAll:()=>Promise<void>,stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>}} */
+      /** @type {null|{failAll:()=>Promise<void>,stopAll:()=>Promise<void>,stopOne:()=>Promise<void>,stopWorkers:()=>Promise<void>}} */
       let heartbeatWorkers = null;
       const scheduleHeartbeat = () => {
         if (heartbeatStopped) return;
@@ -1392,7 +1448,7 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
           );
           if (coordinationHooks.afterHeartbeatWorkerReady) {
             await coordinationHooks.afterHeartbeatWorkerReady(
-              heartbeatWorkers.stopOne, heartbeatWorkers.stopWorkers
+              heartbeatWorkers.stopOne, heartbeatWorkers.stopWorkers, heartbeatWorkers.failAll
             );
           }
         }
@@ -1491,14 +1547,23 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
           throw error;
         }
       };
+      const assertHealthy = () => {
+        if (heartbeatError) throw new RunStoreIntegrityError(
+          `Run coordination heartbeat failed: ${nativeString(heartbeatError)}`
+        );
+      };
       NATIVE_REFLECT_APPLY(NATIVE_DEFINE_PROPERTY, NATIVE_OBJECT, [releaseOwnership, 'assertHealthy', {
-        value: () => {
-          if (heartbeatError) throw new RunStoreIntegrityError(
-            `Run coordination heartbeat failed: ${nativeString(heartbeatError)}`
-          );
+        value: assertHealthy, enumerable: false, writable: false, configurable: false
+      }]);
+      NATIVE_REFLECT_APPLY(NATIVE_DEFINE_PROPERTY, NATIVE_OBJECT, [releaseOwnership, 'guardedAwait', {
+        value: async (/** @type {()=>Promise<unknown>} */ operation) => {
+          assertHealthy();
+          const value = await operation();
+          assertHealthy();
+          return value;
         }, enumerable: false, writable: false, configurable: false
       }]);
-      return /** @type {(()=>Promise<void>) & {assertHealthy:()=>void}} */ (releaseOwnership);
+      return /** @type {(()=>Promise<void>) & {assertHealthy:()=>void,guardedAwait:<T>(operation:()=>Promise<T>)=>Promise<T>}} */ (releaseOwnership);
     } catch (error) {
       if (!hasErrorCode(error, 'EEXIST')) throw error;
     }
@@ -1542,14 +1607,22 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         foreignProcessStart = /** @type {string} */ (ownerProcessStart);
         foreignStatus = status;
         foreignHeartbeatMtime = status.mtimeMs;
+        foreignHeartbeatProof = observed.heartbeatProof;
         foreignFirstObservedAt = now;
+        foreignHeartbeatObservedAt = 0;
         foreignHeartbeatAuthenticated = false;
-      } else if (status.mtimeMs > foreignHeartbeatMtime) {
+      } else if (status.mtimeMs > foreignHeartbeatMtime
+        || (observed.heartbeatProof !== foreignHeartbeatProof
+          && observed.heartbeatProof.length > 0)) {
         foreignHeartbeatMtime = status.mtimeMs;
+        foreignHeartbeatProof = observed.heartbeatProof;
+        foreignHeartbeatObservedAt = now;
         foreignHeartbeatAuthenticated = true;
       } else if (status.mtimeMs < foreignHeartbeatMtime) {
         foreignHeartbeatMtime = status.mtimeMs;
+        foreignHeartbeatProof = observed.heartbeatProof;
         foreignFirstObservedAt = now;
+        foreignHeartbeatObservedAt = 0;
         foreignHeartbeatAuthenticated = false;
       }
       foreignHeartbeatPending = !foreignHeartbeatAuthenticated
@@ -1560,13 +1633,17 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       foreignProcessStart = '';
       foreignStatus = null;
       foreignHeartbeatMtime = -1;
+      foreignHeartbeatProof = '';
       foreignFirstObservedAt = 0;
+      foreignHeartbeatObservedAt = 0;
       foreignHeartbeatAuthenticated = false;
     }
     const arbitraryPidIsAuthenticated = ownerPid === NATIVE_PROCESS_PID
       || foreignHeartbeatAuthenticated;
-    const ownerAlive = ownerShapeValid && typeof heartbeatLease === 'number'
-      && heartbeatLease > now
+    const authenticatedLease = foreignHeartbeatAuthenticated
+      ? foreignHeartbeatObservedAt + RUN_LOCK_LEASE_MS : heartbeatLease;
+    const ownerAlive = ownerShapeValid && typeof authenticatedLease === 'number'
+      && authenticatedLease > now
       && currentPidIdentityMatches && arbitraryPidIsAuthenticated
       && processOwnerIsAlive(ownerPid);
     const incompleteIsYoung = !ownerShapeValid

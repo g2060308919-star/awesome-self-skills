@@ -620,23 +620,21 @@ async function advanceStrictExclusive(runDirectory) {
     const releaseRunLock = await acquireRunLock(runDirectory);
     const baseGuardedAwait = guardedAwait;
     {
-    /** @template T @param {Promise<T>} operation @returns {Promise<T>} */
+    /** @template T @param {()=>Promise<T>} operation @returns {Promise<T>} */
     const guardedAwait = async (operation) => {
-      const value = await baseGuardedAwait(operation);
-      releaseRunLock.assertHealthy();
-      return value;
+      return releaseRunLock.guardedAwait(() => baseGuardedAwait(operation()));
     };
     try {
       if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
-      runDirectory = await guardedAwait(prepareRunStore(runDirectory));
-      await guardedAwait(recoverStagingClaims(runDirectory));
-      await guardedAwait(cleanupTemporaryFiles(runDirectory));
-      let revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));
-    const acceptedIntegrity = await guardedAwait(
+      runDirectory = await guardedAwait(() => prepareRunStore(runDirectory));
+      await guardedAwait(() => recoverStagingClaims(runDirectory));
+      await guardedAwait(() => cleanupTemporaryFiles(runDirectory));
+      let revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
+    const acceptedIntegrity = await guardedAwait(() =>
       acceptedRunIntegrity(runDirectory, revisions, registry)
     );
     if (acceptedIntegrity) return acceptedIntegrity;
-    let sourceCandidate = await guardedAwait(stagedArtifact(
+    let sourceCandidate = await guardedAwait(() => stagedArtifact(
       runDirectory, 'source_pack', revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1
     ));
     if (sourceCandidate) {
@@ -647,15 +645,15 @@ async function advanceStrictExclusive(runDirectory) {
         : revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1;
       if (candidateRecord && revisions.length > 0
         && candidateRevision === revisions[revisions.length - 1]) {
-        const acceptedSource = await guardedAwait(readJson(
+        const acceptedSource = await guardedAwait(() => readJson(
           runDirectory, acceptedPath(runDirectory, candidateRevision, 'source_pack')
         ));
         if (acceptedSource.digest !== sourceCandidate.digest) return fatalReply(
           'RUN_INTEGRITY_ERROR',
           'Staging Source Pack conflicts with the immutable accepted revision.'
         );
-        await guardedAwait(discardStagingSnapshot(
-          runDirectory, 'source_pack', sourceCandidate
+        await guardedAwait(() => discardStagingSnapshot(
+          runDirectory, 'source_pack', /** @type {{text:string}} */ (sourceCandidate)
         ));
         sourceCandidate = null;
       }
@@ -682,7 +680,7 @@ async function advanceStrictExclusive(runDirectory) {
         const transition = revisions.length === 0
           ? historySequenceIntegrity(candidateRecord)
           : sourceRevisionIntegrity(
-            /** @type {Record<string, unknown>} */ ((await guardedAwait(readJson(
+            /** @type {Record<string, unknown>} */ ((await guardedAwait(() => readJson(
               runDirectory, acceptedPath(
                 runDirectory, revisions[revisions.length - 1], 'source_pack'
               )
@@ -711,19 +709,19 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
         sourcePolicy.diagnostics
       );
-      await guardedAwait(promoteArtifact(
+      await guardedAwait(() => promoteArtifact(
         runDirectory, candidateRevision, 'source_pack', sourceCandidate.value, sourceCandidate
       ));
-      const sourceDigests = await guardedAwait(acceptedDigests(runDirectory, candidateRevision));
-      await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
+      const sourceDigests = await guardedAwait(() => acceptedDigests(runDirectory, candidateRevision));
+      await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
         candidateRevision, 'source_pack',
         /** @type {Record<string, unknown>} */ (sourceCandidate.value), null, sourceDigests
       )));
-      revisions = await guardedAwait(acceptedSourceRevisions(runDirectory));
+      revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
     }
     if (revisions.length === 0) return artifactRequest(0, 'source_pack');
     const sourceRevision = revisions[revisions.length - 1];
-    const sourceAccepted = await guardedAwait(readJson(
+    const sourceAccepted = await guardedAwait(() => readJson(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
     ));
     const sourcePack = /** @type {Record<string, unknown>} */ (sourceAccepted.value);
@@ -739,10 +737,10 @@ async function advanceStrictExclusive(runDirectory) {
 
     for (const stage of ['evidence_claims', 'behavior_views']) {
       const typedStage = /** @type {'evidence_claims'|'behavior_views'} */ (stage);
-      let artifact = await guardedAwait(readJsonIfPresent(
+      let artifact = await guardedAwait(() => readJsonIfPresent(
         runDirectory, acceptedPath(runDirectory, sourceRevision, typedStage)
       ));
-      let candidate = await guardedAwait(stagedArtifact(
+      let candidate = await guardedAwait(() => stagedArtifact(
         runDirectory, typedStage, sourceRevision
       ));
       if (artifact && candidate) {
@@ -752,7 +750,9 @@ async function advanceStrictExclusive(runDirectory) {
             `Staging ${typedStage} conflicts with the immutable accepted artifact.`
           );
         }
-        await guardedAwait(discardStagingSnapshot(runDirectory, typedStage, candidate));
+        await guardedAwait(() => discardStagingSnapshot(
+          runDirectory, typedStage, /** @type {{text:string}} */ (candidate)
+        ));
         candidate = null;
       }
       if (!artifact) {
@@ -790,17 +790,17 @@ async function advanceStrictExclusive(runDirectory) {
           );
           candidateObligations = derivedCandidate.artifact;
         }
-        await guardedAwait(promoteArtifact(
+        await guardedAwait(() => promoteArtifact(
           runDirectory, sourceRevision, typedStage, candidate.value, candidate
         ));
-        if (candidateObligations) await guardedAwait(atomicWriteJson(
+        if (candidateObligations) await guardedAwait(() => atomicWriteJson(
           runDirectory, obligationsPath(runDirectory, sourceRevision), candidateObligations
         ));
-        artifact = await guardedAwait(readJson(
+        artifact = await guardedAwait(() => readJson(
           runDirectory, acceptedPath(runDirectory, sourceRevision, typedStage)
         ));
-        const digests = await guardedAwait(acceptedDigests(runDirectory, sourceRevision));
-        await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
+        const digests = await guardedAwait(() => acceptedDigests(runDirectory, sourceRevision));
+        await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
           sourceRevision, typedStage, sourcePack, null, digests
         )));
       }
@@ -823,14 +823,14 @@ async function advanceStrictExclusive(runDirectory) {
       'RUN_INTEGRITY_ERROR',
       'Accepted evidence or behavior artifacts failed deterministic obligation derivation.'
     );
-    await guardedAwait(atomicWriteJson(
+    await guardedAwait(() => atomicWriteJson(
       runDirectory, obligationsPath(runDirectory, sourceRevision), derived.artifact
     ));
 
-    let caseArtifact = await guardedAwait(readJsonIfPresent(
+    let caseArtifact = await guardedAwait(() => readJsonIfPresent(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'case_drafts')
     ));
-    let caseCandidate = await guardedAwait(stagedArtifact(
+    let caseCandidate = await guardedAwait(() => stagedArtifact(
       runDirectory, 'case_drafts', sourceRevision
     ));
     if (caseArtifact && caseCandidate) {
@@ -838,8 +838,8 @@ async function advanceStrictExclusive(runDirectory) {
         || caseArtifact.digest !== caseCandidate.digest) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Staging case_drafts conflicts with the immutable accepted artifact.'
       );
-      await guardedAwait(discardStagingSnapshot(
-        runDirectory, 'case_drafts', caseCandidate
+      await guardedAwait(() => discardStagingSnapshot(
+        runDirectory, 'case_drafts', /** @type {{text:string}} */ (caseCandidate)
       ));
       caseCandidate = null;
     }
@@ -874,7 +874,7 @@ async function advanceStrictExclusive(runDirectory) {
     const compilation = derived.compilation ?? inferredCompilation(
       /** @type {Record<string, unknown>} */ (accepted.behavior_views)
     );
-    const clarification = await guardedAwait(
+    const clarification = await guardedAwait(() =>
       clarificationInput(runDirectory, sourceRevision, sourcePack)
     );
     const result = /** @type {any} */ (evaluateRevision({
@@ -902,16 +902,16 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, stage, sourceRevision, caseArtifact.value, result.diagnostics
       );
     }
-    if (caseFromStaging) await guardedAwait(promoteArtifact(
+    if (caseFromStaging) await guardedAwait(() => promoteArtifact(
       runDirectory, sourceRevision, 'case_drafts', caseArtifact.value, caseArtifact
     ));
     const clarificationState = /** @type {Record<string, unknown>} */ (result.clarification_state);
-    await guardedAwait(atomicWriteJson(
+    await guardedAwait(() => atomicWriteJson(
       runDirectory, clarificationStatePath(runDirectory, sourceRevision), clarificationState
     ));
-    const digests = await guardedAwait(acceptedDigests(runDirectory, sourceRevision));
+    const digests = await guardedAwait(() => acceptedDigests(runDirectory, sourceRevision));
     if (result.status === 'need_user_answers') {
-      await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
+      await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
         sourceRevision, 'verification', sourcePack, clarificationState, digests
       )));
       return {
@@ -932,11 +932,11 @@ async function advanceStrictExclusive(runDirectory) {
     if (result.status !== 'finished') return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Pure revision evaluator returned an unsupported workflow result.'
     );
-    const paths = await guardedAwait(writeFinalOutput(
+    const paths = await guardedAwait(() => writeFinalOutput(
       runDirectory, sourceRevision, result.bundle, result.markdown
     ));
     digests.test_bundle = result.bundle_digest;
-    await guardedAwait(writeCheckpoint(runDirectory, checkpoint(
+    await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
       sourceRevision, 'finished', sourcePack, clarificationState, digests
     )));
     const current = {
@@ -945,12 +945,12 @@ async function advanceStrictExclusive(runDirectory) {
       bundle_digest: result.bundle_digest,
       markdown_path: paths.markdown
     };
-    await guardedAwait(atomicWriteJson(
+    await guardedAwait(() => atomicWriteJson(
       runDirectory, outputPaths(runDirectory, sourceRevision).current, current
     ));
       return { status: 'finished', ...current };
     } finally {
-      await guardedAwait(releaseRunLock());
+      await baseGuardedAwait(releaseRunLock());
     }
     }
   } catch (error) {
