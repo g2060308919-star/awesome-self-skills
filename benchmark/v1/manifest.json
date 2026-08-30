@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "benchmark_version": "v1.0.0-pilot.1",
+  "manifest_id": "generate-test-cases-v1-synthetic-pilot",
+  "evidence_class": "synthetic-pilot",
+  "systems": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"],
+  "repeats_per_system": 3,
+  "strata": [
+    {"stratum":"transaction/order/payment","minimum_prds":5,"minimum_critical_obligations":3,"minimum_clarification_prds":2,"minimum_historical_defects":5},
+    {"stratum":"identity/role/permission","minimum_prds":5,"minimum_critical_obligations":3,"minimum_clarification_prds":2,"minimum_historical_defects":5},
+    {"stratum":"workflow/approval/state","minimum_prds":5,"minimum_critical_obligations":3,"minimum_clarification_prds":2,"minimum_historical_defects":5},
+    {"stratum":"form/configuration/input validation","minimum_prds":5,"minimum_critical_obligations":3,"minimum_clarification_prds":2,"minimum_historical_defects":5},
+    {"stratum":"asynchronous integration/event","minimum_prds":5,"minimum_critical_obligations":3,"minimum_clarification_prds":2,"minimum_historical_defects":5},
+    {"stratum":"time-window/quota/entitlement","minimum_prds":5,"minimum_critical_obligations":3,"minimum_clarification_prds":2,"minimum_historical_defects":5}
+  ],
+  "cases": [
+    {
+      "case_id": "synthetic-checkout-001", "domain": "payments", "stratum": "transaction/order/payment",
+      "risk": "high", "high_risk": true,
+      "case_directory": "cases/synthetic-checkout-001", "capture_directory": "captured/synthetic-checkout-001"
+    }
+  ]
+}

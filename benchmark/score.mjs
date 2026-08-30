@@ -1,0 +1,387 @@
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
+import * as nodeUrl from 'node:url';
+import { evaluateReleaseGates } from './gates.mjs';
+
+const pathToFileURL = /** @type {any} */ (nodeUrl).pathToFileURL;
+
+export const BENCHMARK_SYSTEMS = Object.freeze([
+  'long-prompt', 'test-case-designer', 'technique-router', 'generate-test-cases'
+]);
+
+export const BENCHMARK_STRATA = Object.freeze([
+  'transaction/order/payment',
+  'identity/role/permission',
+  'workflow/approval/state',
+  'form/configuration/input validation',
+  'asynchronous integration/event',
+  'time-window/quota/entitlement'
+]);
+
+const RISKS = Object.freeze(['critical', 'high', 'medium', 'low']);
+const PROCESS_FAILURE_NAMES = Object.freeze([
+  'silent_formal_test_point_loss', 'fixed_round_clarification_stop',
+  'auto_repeat_unknown_or_deferred', 'old_revision_recovery'
+]);
+const PROVENANCE_FIELDS = Object.freeze([
+  'skill_version', 'compiler_version', 'schema_version', 'model_id',
+  'prompt_or_reference_id', 'baseline_version', 'benchmark_version'
+]);
+const REQUIRED_ASSETS = Object.freeze([
+  'task', 'expert_obligations', 'supported_assertions', 'accepted_cases',
+  'historical_defects', 'clarification_scenarios'
+]);
+
+/** @param {number} numerator @param {number} denominator */
+function ratioMetric(numerator, denominator) {
+  if (denominator === 0) return {
+    numerator, denominator, value: null,
+    confidence_interval: { method: 'unavailable-zero-denominator', lower: null, upper: null }
+  };
+  const value = numerator / denominator;
+  const z = 1.959963984540054;
+  const z2 = z * z;
+  const center = (value + z2 / (2 * denominator)) / (1 + z2 / denominator);
+  const margin = z * Math.sqrt((value * (1 - value) / denominator) + (z2 / (4 * denominator * denominator))) / (1 + z2 / denominator);
+  return {
+    numerator, denominator, value,
+    confidence_interval: { method: 'wilson-95', lower: Math.max(0, center - margin), upper: Math.min(1, center + margin) }
+  };
+}
+
+/** @param {number[]} samples */
+function meanMetric(samples) {
+  if (samples.length === 0) return {
+    numerator: 0, denominator: 0, value: null,
+    confidence_interval: { method: 'unavailable-zero-denominator', lower: null, upper: null }
+  };
+  const sum = samples.reduce((total, value) => total + value, 0);
+  const value = sum / samples.length;
+  if (samples.length === 1) return {
+    numerator: sum, denominator: 1, value,
+    confidence_interval: { method: 'unavailable-single-observation', lower: null, upper: null }
+  };
+  const variance = samples.reduce((total, sample) => total + ((sample - value) ** 2), 0) / (samples.length - 1);
+  const margin = 1.959963984540054 * Math.sqrt(variance / samples.length);
+  return {
+    numerator: sum, denominator: samples.length, value,
+    confidence_interval: { method: 'normal-approximation-95', lower: Math.max(0, value - margin), upper: Math.min(1, value + margin) }
+  };
+}
+
+/** @param {Set<string>} left @param {Set<string>} right */
+function jaccard(left, right) {
+  const union = new Set([...left, ...right]);
+  if (union.size === 0) return null;
+  let intersection = 0;
+  for (const value of left) if (right.has(value)) intersection += 1;
+  return intersection / union.size;
+}
+
+/** @param {any} asset */
+function finalLabelMap(asset) {
+  return new Map((asset?.final_labels ?? []).map((/** @type {any} */ item) => [item.label_key, item.value]));
+}
+
+/** @param {any[]} issues @param {string} code @param {string} pathValue @param {string} message */
+function issue(issues, code, pathValue, message) {
+  issues.push({ code, path: pathValue, message });
+}
+
+/** @param {any[]} issues @param {any} asset @param {string} pathValue */
+function validateLabeledAsset(issues, asset, pathValue) {
+  if (!asset || !Array.isArray(asset.final_labels) || !Array.isArray(asset.expert_annotations)) {
+    issue(issues, 'EXPERT_LABELS_MISSING', pathValue, 'Final labels and two complete expert annotations are required.');
+    return;
+  }
+  const final = finalLabelMap(asset);
+  const annotations = asset.expert_annotations;
+  const expertIds = new Set(annotations.map((/** @type {any} */ item) => item.expert_id));
+  if (annotations.length !== 2 || expertIds.size !== 2 || annotations.some((/** @type {any} */ item) => item.complete !== true)) {
+    issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', pathValue, 'Exactly two independent complete expert annotations are required.');
+  }
+  const maps = annotations.map((/** @type {any} */ annotation) => finalLabelMap({ final_labels: annotation.labels }));
+  for (const key of final.keys()) {
+    if (maps.some((/** @type {Map<string, any>} */ map) => !map.has(key))) issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', `${pathValue}/${key}`, 'Every expert must label every final item.');
+    const serialized = maps.map((/** @type {Map<string, any>} */ map) => JSON.stringify(map.get(key)));
+    if (new Set(serialized).size > 1) {
+      const adjudication = (asset.adjudications ?? []).find((/** @type {any} */ item) => item.label_key === key && item.completed === true);
+      if (!adjudication || JSON.stringify(adjudication.resolved_value) !== JSON.stringify(final.get(key))) {
+        issue(issues, 'ADJUDICATION_MISSING', `${pathValue}/${key}`, 'Every expert disagreement requires a completed matching adjudication.');
+      }
+    } else if (serialized[0] !== JSON.stringify(final.get(key))) {
+      issue(issues, 'FINAL_LABEL_UNSUPPORTED', `${pathValue}/${key}`, 'The final label must equal expert agreement or a completed adjudication.');
+    }
+  }
+}
+
+/** @param {any} benchmarkCase @param {string | null} risk */
+function obligationsFor(benchmarkCase, risk) {
+  return [...finalLabelMap(benchmarkCase?.assets?.expert_obligations)].map(([signature, value]) => ({ signature, ...value }))
+    .filter((item) => risk === null || item.risk === risk);
+}
+
+/** @param {any[]} cases @param {any[]} runs @param {string} system @param {string | null} risk */
+function scoreCohort(cases, runs, system, risk = null) {
+  let supported = 0;
+  let assertions = 0;
+  let criticalFound = 0;
+  let criticalExpected = 0;
+  let overallFound = 0;
+  let overallExpected = 0;
+  let accepted = 0;
+  let reviewedCases = 0;
+  let defectsFound = 0;
+  let defectsExpected = 0;
+  let falseGrounded = 0;
+  let groundedTotal = 0;
+  let falseBlocked = 0;
+  let blockedTotal = 0;
+  /** @type {Map<number, Set<string>>} */
+  const testPointsByRepeat = new Map();
+  /** @type {Map<number, Set<string>>} */
+  const groundedCoverageByRepeat = new Map();
+
+  for (const benchmarkCase of cases) {
+    const obligationLabels = obligationsFor(benchmarkCase, risk);
+    const obligationMap = new Map(obligationLabels.map((item) => [item.signature, item]));
+    const assertionMap = finalLabelMap(benchmarkCase.assets.supported_assertions);
+    const caseMap = finalLabelMap(benchmarkCase.assets.accepted_cases);
+    const defects = (benchmarkCase.assets.historical_defects?.defects ?? []).filter(
+      (/** @type {any} */ item) => risk === null || (item.risk ?? benchmarkCase.risk) === risk
+    );
+    const defectIds = new Set(defects.map((/** @type {any} */ item) => item.defect_id));
+    const caseRuns = runs.filter((run) => run.system === system && run.case_id === benchmarkCase.case_id);
+    for (const run of caseRuns) {
+      const generated = new Set(run.output.test_point_signatures.filter((/** @type {string} */ signature) => obligationMap.has(signature)));
+      const expected = obligationLabels.filter((item) => item.expected === true);
+      overallExpected += expected.length;
+      overallFound += expected.filter((item) => generated.has(item.signature)).length;
+      const critical = expected.filter((item) => item.risk === 'critical');
+      criticalExpected += critical.length;
+      criticalFound += critical.filter((item) => generated.has(item.signature)).length;
+
+      for (const assertionId of run.output.grounded_assertions) {
+        const value = assertionMap.get(`${run.capture_id}::${assertionId}`);
+        if (!value || (risk !== null && value.risk !== risk)) continue;
+        assertions += 1;
+        if (value.supported === true) supported += 1;
+      }
+      for (const caseId of run.output.grounded_cases) {
+        const value = caseMap.get(`${run.capture_id}::${caseId}`);
+        if (!value || (risk !== null && value.risk !== risk)) continue;
+        reviewedCases += 1;
+        if (value.accepted_without_material_rewrite === true) accepted += 1;
+      }
+      defectsExpected += defects.length;
+      defectsFound += [...new Set(run.output.detected_historical_defect_ids)].filter((id) => defectIds.has(id)).length;
+
+      for (const signature of run.output.grounded_test_point_signatures) {
+        const value = obligationMap.get(signature);
+        if (!value) continue;
+        groundedTotal += 1;
+        if (value.groundable !== true) falseGrounded += 1;
+      }
+      for (const signature of run.output.blocked_test_point_signatures) {
+        const value = obligationMap.get(signature);
+        if (!value) continue;
+        blockedTotal += 1;
+        if (value.groundable === true) falseBlocked += 1;
+      }
+
+      const testSet = testPointsByRepeat.get(run.repeat) ?? new Set();
+      for (const signature of run.output.test_point_signatures) if (obligationMap.has(signature)) testSet.add(`${benchmarkCase.case_id}::${signature}`);
+      testPointsByRepeat.set(run.repeat, testSet);
+      const coverageSet = groundedCoverageByRepeat.get(run.repeat) ?? new Set();
+      for (const signature of run.output.grounded_coverage_signatures) if (obligationMap.has(signature)) coverageSet.add(`${benchmarkCase.case_id}::${signature}`);
+      groundedCoverageByRepeat.set(run.repeat, coverageSet);
+    }
+  }
+
+  /** @param {Map<number, Set<string>>} sets */
+  function stability(sets) {
+    const samples = [];
+    for (const [left, right] of [[1, 2], [1, 3], [2, 3]]) {
+      const value = jaccard(sets.get(left) ?? new Set(), sets.get(right) ?? new Set());
+      if (value !== null) samples.push(value);
+    }
+    return meanMetric(samples);
+  }
+
+  return {
+    grounded_factual_support_precision: ratioMetric(supported, assertions),
+    expert_critical_test_point_recall: ratioMetric(criticalFound, criticalExpected),
+    expert_overall_test_point_recall: ratioMetric(overallFound, overallExpected),
+    grounded_no_material_rewrite_acceptance: ratioMetric(accepted, reviewedCases),
+    historical_defect_recall: ratioMetric(defectsFound, defectsExpected),
+    test_point_signature_jaccard: stability(testPointsByRepeat),
+    grounded_coverage_signature_jaccard: stability(groundedCoverageByRepeat),
+    false_grounded_rate: ratioMetric(falseGrounded, groundedTotal),
+    false_blocked_rate: ratioMetric(falseBlocked, blockedTotal)
+  };
+}
+
+/** @param {any} manifest @param {any[]} capturedRuns */
+export function scoreBenchmark(manifest, capturedRuns) {
+  const cases = Array.isArray(manifest?.cases) ? manifest.cases : [];
+  const runs = Array.isArray(capturedRuns) ? capturedRuns : [];
+  /** @type {any[]} */
+  const issues = [];
+
+  if (JSON.stringify(manifest?.systems) !== JSON.stringify(BENCHMARK_SYSTEMS)) issue(issues, 'SYSTEM_ENUM_INVALID', '/systems', 'Systems must be the exact frozen four-system enum.');
+  if (manifest?.repeats_per_system !== 3) issue(issues, 'REPEAT_COUNT_INVALID', '/repeats_per_system', 'Exactly three independent runs are required.');
+  if (manifest?.evidence_class !== 'external-expert-corpus') issue(issues, 'RELEASE_EVIDENCE_CLASS_INELIGIBLE', '/evidence_class', 'Synthetic pilot fixtures are never release evidence.');
+
+  for (const stratum of BENCHMARK_STRATA) {
+    const stratumCases = cases.filter((/** @type {any} */ item) => item.stratum === stratum);
+    if (stratumCases.length < 5) issue(issues, 'STRATUM_PRD_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires at least five PRDs.');
+    const critical = stratumCases.reduce((/** @type {number} */ total, /** @type {any} */ item) => total + obligationsFor(item, 'critical').filter((obligation) => obligation.expected === true).length, 0);
+    if (critical < 3) issue(issues, 'STRATUM_CRITICAL_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires at least three expert critical Test Points.');
+    const clarificationCount = stratumCases.filter((/** @type {any} */ item) => item.assets?.clarification_scenarios?.scenarios?.some((/** @type {any} */ scenario) => scenario.required === true)).length;
+    if (clarificationCount < 2) issue(issues, 'STRATUM_CLARIFICATION_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires two clarification-required PRDs.');
+    const defectCount = stratumCases.reduce((/** @type {number} */ total, /** @type {any} */ item) => total + (item.assets?.historical_defects?.defects?.filter((/** @type {any} */ defect) => typeof defect.source_ref === 'string' && defect.source_ref.length > 0).length ?? 0), 0);
+    if (defectCount < 5) issue(issues, 'STRATUM_DEFECT_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires five traceable historical defects.');
+  }
+  if (cases.length < 30) issue(issues, 'CORPUS_PRD_MINIMUM_NOT_MET', '/cases', 'V1 requires at least 30 PRDs.');
+
+  for (const [caseIndex, benchmarkCase] of cases.entries()) {
+    for (const asset of REQUIRED_ASSETS) if (!benchmarkCase.assets?.[asset]) issue(issues, 'CASE_ASSET_MISSING', `/cases/${caseIndex}/assets/${asset}`, 'Every case requires the complete frozen asset set.');
+    validateLabeledAsset(issues, benchmarkCase.assets?.expert_obligations, `/cases/${caseIndex}/expert-obligations`);
+    validateLabeledAsset(issues, benchmarkCase.assets?.supported_assertions, `/cases/${caseIndex}/supported-assertions`);
+    validateLabeledAsset(issues, benchmarkCase.assets?.accepted_cases, `/cases/${caseIndex}/accepted-cases`);
+    for (const system of BENCHMARK_SYSTEMS) for (let repeat = 1; repeat <= 3; repeat += 1) {
+      const matches = runs.filter((run) => run.case_id === benchmarkCase.case_id && run.system === system && run.repeat === repeat);
+      if (matches.length !== 1) issue(issues, 'CAPTURE_RUN_MISSING', `/cases/${caseIndex}/captures/${system}/${repeat}`, 'Every PRD requires one capture for every system and repeat.');
+    }
+  }
+
+  for (const [runIndex, run] of runs.entries()) {
+    if (!BENCHMARK_SYSTEMS.includes(run.system) || ![1, 2, 3].includes(run.repeat)) issue(issues, 'CAPTURE_IDENTITY_INVALID', `/captured_runs/${runIndex}`, 'Capture system and repeat must use the frozen contract.');
+    if (run.capture_kind !== 'external-captured') issue(issues, 'CAPTURE_EVIDENCE_INELIGIBLE', `/captured_runs/${runIndex}/capture_kind`, 'Synthetic outputs cannot satisfy release completeness.');
+    for (const field of PROVENANCE_FIELDS) if (typeof run.provenance?.[field] !== 'string' || run.provenance[field].length === 0) issue(issues, 'CAPTURE_PROVENANCE_MISSING', `/captured_runs/${runIndex}/provenance/${field}`, 'Complete capture provenance is required.');
+    if (typeof run.review_time_minutes !== 'number' || run.review_time_minutes < 0) issue(issues, 'CAPTURE_REVIEW_TIME_MISSING', `/captured_runs/${runIndex}/review_time_minutes`, 'Every captured output records review time.');
+    if (run.provenance?.repeat !== run.repeat || run.provenance?.benchmark_version !== manifest?.benchmark_version) issue(issues, 'CAPTURE_PROVENANCE_MISMATCH', `/captured_runs/${runIndex}/provenance`, 'Repeat and benchmark version must bind the capture to this manifest.');
+    const benchmarkCase = cases.find((/** @type {any} */ item) => item.case_id === run.case_id);
+    if (!benchmarkCase || !run.output) {
+      issue(issues, 'CAPTURE_OUTPUT_INVALID', `/captured_runs/${runIndex}/output`, 'Every capture must bind one manifest case and contain the complete offline output shape.');
+      continue;
+    }
+    const obligationLabels = finalLabelMap(benchmarkCase.assets?.expert_obligations);
+    for (const lane of ['test_point_signatures', 'grounded_test_point_signatures', 'blocked_test_point_signatures']) {
+      for (const signature of run.output[lane] ?? []) if (!obligationLabels.has(signature)) issue(issues, 'CAPTURE_TEST_POINT_LABEL_MISSING', `/captured_runs/${runIndex}/output/${lane}/${signature}`, 'Every generated Test Point must have two hidden expert labels.');
+    }
+    const assertionLabels = finalLabelMap(benchmarkCase.assets?.supported_assertions);
+    for (const assertionId of run.output.grounded_assertions ?? []) if (!assertionLabels.has(`${run.capture_id}::${assertionId}`)) issue(issues, 'CAPTURE_ASSERTION_LABEL_MISSING', `/captured_runs/${runIndex}/output/grounded_assertions/${assertionId}`, 'Every Grounded assertion requires two independent hidden support labels.');
+    const acceptedLabels = finalLabelMap(benchmarkCase.assets?.accepted_cases);
+    for (const caseId of run.output.grounded_cases ?? []) if (!acceptedLabels.has(`${run.capture_id}::${caseId}`)) issue(issues, 'CAPTURE_CASE_LABEL_MISSING', `/captured_runs/${runIndex}/output/grounded_cases/${caseId}`, 'Every Grounded Case requires two independent hidden acceptance labels.');
+  }
+
+  const domains = [...new Set(cases.map((/** @type {any} */ item) => item.domain))].sort();
+  /** @type {Record<string, any>} */
+  const systems = {};
+  for (const system of BENCHMARK_SYSTEMS) {
+    systems[system] = {
+      overall: scoreCohort(cases, runs, system),
+      by_domain: Object.fromEntries(domains.map((domain) => [domain, scoreCohort(cases.filter((/** @type {any} */ item) => item.domain === domain), runs, system)])),
+      by_risk: Object.fromEntries(RISKS.map((risk) => [risk, scoreCohort(cases, runs, system, risk)]))
+    };
+  }
+
+  const mandatory = systems['generate-test-cases'].overall;
+  for (const name of [
+    'grounded_factual_support_precision', 'expert_critical_test_point_recall', 'expert_overall_test_point_recall',
+    'grounded_no_material_rewrite_acceptance', 'historical_defect_recall', 'test_point_signature_jaccard',
+    'grounded_coverage_signature_jaccard', 'false_grounded_rate', 'false_blocked_rate'
+  ]) if (mandatory[name].denominator === 0) issue(issues, 'MANDATORY_METRIC_ZERO_DENOMINATOR', `/systems/generate-test-cases/overall/${name}`, 'Mandatory metrics may not coerce a zero denominator.');
+
+  let unsupportedOracleCount = 0;
+  /** @type {Record<string, number>} */
+  const processFailures = Object.fromEntries(PROCESS_FAILURE_NAMES.map((name) => [name, 0]));
+  let mutationsKilled = 0;
+  let mutationsObserved = 0;
+  for (const run of runs.filter((/** @type {any} */ item) => item.system === 'generate-test-cases')) {
+    const benchmarkCase = cases.find((/** @type {any} */ item) => item.case_id === run.case_id);
+    if (!benchmarkCase) continue;
+    const assertions = finalLabelMap(benchmarkCase.assets.supported_assertions);
+    for (const assertionId of run.output.grounded_assertions) {
+      const value = assertions.get(`${run.capture_id}::${assertionId}`);
+      if (value?.oracle === true && value.supported !== true && ['critical', 'high'].includes(value.risk)) unsupportedOracleCount += 1;
+    }
+    for (const name of PROCESS_FAILURE_NAMES) if (run.output.process_failures?.[name] === true) processFailures[name] += 1;
+    const mutationIds = new Set(benchmarkCase.assets.business_model_mutations?.mutations?.map((/** @type {any} */ item) => item.mutation_id) ?? []);
+    mutationsObserved += mutationIds.size;
+    mutationsKilled += [...new Set(run.output.killed_mutation_ids)].filter((id) => mutationIds.has(id)).length;
+  }
+
+  return {
+    benchmark_version: manifest?.benchmark_version ?? null,
+    completeness: { status: issues.length === 0 ? 'complete' : 'insufficient_evidence', issues },
+    systems,
+    unsupported_critical_high_grounded_oracle_count: unsupportedOracleCount,
+    process_failures: processFailures,
+    mutation_kill_signal: { release_gate: false, overall: ratioMetric(mutationsKilled, mutationsObserved) }
+  };
+}
+
+/** @param {string} filename */
+async function readJson(filename) {
+  return JSON.parse(await readFile(filename, 'utf8'));
+}
+
+/** @template T @param {T} value @param {WeakSet<object>} [seen] @returns {T} */
+function deepFreeze(value, seen = new WeakSet()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  for (const item of Object.values(value)) deepFreeze(item, seen);
+  return Object.freeze(value);
+}
+
+/** @param {string} manifestPath */
+export async function loadBenchmarkInputs(manifestPath) {
+  const absoluteManifest = path.resolve(manifestPath);
+  const benchmarkRoot = path.dirname(absoluteManifest);
+  const raw = await readJson(absoluteManifest);
+  const cases = [];
+  /** @type {any[]} */
+  const capturedRuns = [];
+  for (const item of raw.cases ?? []) {
+    const caseRoot = path.resolve(benchmarkRoot, item.case_directory);
+    const captureRoot = path.resolve(benchmarkRoot, item.capture_directory);
+    const expectedCaseRoot = `${path.resolve(benchmarkRoot, 'cases')}${path.sep}`;
+    const expectedCaptureRoot = `${path.resolve(benchmarkRoot, 'captured')}${path.sep}`;
+    if (!`${caseRoot}${path.sep}`.startsWith(expectedCaseRoot) || !`${captureRoot}${path.sep}`.startsWith(expectedCaptureRoot)) {
+      throw new Error(`Benchmark case ${item.case_id} crosses the frozen hidden-label/capture boundary.`);
+    }
+    /** @type {any} */
+    const assets = {
+      task: await readJson(path.join(caseRoot, 'task.json')),
+      expert_obligations: await readJson(path.join(caseRoot, 'expert-obligations.json')),
+      supported_assertions: await readJson(path.join(caseRoot, 'supported-assertions.json')),
+      accepted_cases: await readJson(path.join(caseRoot, 'accepted-cases.json')),
+      historical_defects: await readJson(path.join(caseRoot, 'historical-defects.json')),
+      clarification_scenarios: await readJson(path.join(caseRoot, 'clarification-scenarios.json'))
+    };
+    try { assets.business_model_mutations = await readJson(path.join(caseRoot, 'business-model-mutations.json')); } catch { assets.business_model_mutations = { mutations: [] }; }
+    cases.push({ ...item, assets });
+    let captureFiles = [];
+    try { captureFiles = (await readdir(captureRoot)).filter((/** @type {string} */ filename) => filename.endsWith('.json')).sort(); } catch {}
+    for (const filename of captureFiles) capturedRuns.push(await readJson(path.join(captureRoot, filename)));
+  }
+  return { manifest: deepFreeze({ ...raw, cases }), capturedRuns: deepFreeze(capturedRuns) };
+}
+
+async function main() {
+  const manifestPath = process.argv[2];
+  if (!manifestPath) throw new Error('Usage: node benchmark/score.mjs <manifest.json>');
+  const { manifest, capturedRuns } = await loadBenchmarkInputs(manifestPath);
+  const metrics = scoreBenchmark(manifest, capturedRuns);
+  const gate = evaluateReleaseGates(metrics);
+  process.stdout.write(`${JSON.stringify({ status: gate.status, failures: gate.failures, metrics })}\n`);
+}
+
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  main().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
