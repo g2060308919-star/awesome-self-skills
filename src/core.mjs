@@ -30,9 +30,16 @@ const COMPILATION_KEYS = Object.freeze([
 const CLARIFICATION_KEYS = Object.freeze(['append_batch', 'prior_state']);
 const DIAGNOSTIC_LIMIT = 256;
 const NATIVE_ARRAY = Array;
+const NATIVE_NUMBER = Number;
+const NATIVE_NUMBER_IS_FINITE = Number.isFinite;
+const NATIVE_NUMBER_IS_SAFE_INTEGER = Number.isSafeInteger;
+const NATIVE_OBJECT = Object;
+const NATIVE_OBJECT_PROTOTYPE = Object.prototype;
+const NATIVE_SYMBOL = Symbol;
+const NATIVE_SYMBOL_ITERATOR = Symbol.iterator;
 const NATIVE_ARRAY_PROTOTYPE = Array.prototype;
 const NATIVE_ARRAY_IS_ARRAY = Array.isArray;
-const NATIVE_ARRAY_ITERATOR = Array.prototype[Symbol.iterator];
+const NATIVE_ARRAY_ITERATOR = (/** @type {any} */ (Array.prototype))[NATIVE_SYMBOL_ITERATOR];
 const NATIVE_ARRAY_JOIN = Array.prototype.join;
 const NATIVE_ARRAY_FILTER = Array.prototype.filter;
 const NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
@@ -51,13 +58,13 @@ const NATIVE_MAP_SET = Map.prototype.set;
 const NATIVE_MAP_HAS = Map.prototype.has;
 const NATIVE_MAP_DELETE = Map.prototype.delete;
 const NATIVE_MAP_FOR_EACH = Map.prototype.forEach;
-const NATIVE_MAP_ITERATOR = Map.prototype[Symbol.iterator];
+const NATIVE_MAP_ITERATOR = (/** @type {any} */ (Map.prototype))[NATIVE_SYMBOL_ITERATOR];
 const NATIVE_MAP_PROTOTYPE = Map.prototype;
 const NATIVE_SET = Set;
 const NATIVE_SET_ADD = Set.prototype.add;
 const NATIVE_SET_HAS = Set.prototype.has;
 const NATIVE_SET_DELETE = Set.prototype.delete;
-const NATIVE_SET_ITERATOR = Set.prototype[Symbol.iterator];
+const NATIVE_SET_ITERATOR = (/** @type {any} */ (Set.prototype))[NATIVE_SYMBOL_ITERATOR];
 const NATIVE_SET_FOR_EACH = Set.prototype.forEach;
 const NATIVE_SET_PROTOTYPE = Set.prototype;
 const NATIVE_STRING = String;
@@ -65,7 +72,7 @@ const NATIVE_STRING_CODE_POINT_AT = String.prototype.codePointAt;
 const NATIVE_STRING_TRIM = String.prototype.trim;
 const NATIVE_STRING_INCLUDES = String.prototype.includes;
 const NATIVE_STRING_SPLIT = String.prototype.split;
-const NATIVE_STRING_ITERATOR = String.prototype[Symbol.iterator];
+const NATIVE_STRING_ITERATOR = (/** @type {any} */ (String.prototype))[NATIVE_SYMBOL_ITERATOR];
 const NATIVE_STRING_PROTOTYPE = String.prototype;
 const NATIVE_GLOBAL_THIS = globalThis;
 const NATIVE_WEAK_MAP = WeakMap;
@@ -128,6 +135,25 @@ function joinArray(values, separator) {
 /** @template T @param {T[]} values @param {(left:T,right:T)=>number} comparator */
 function sortArray(values, comparator) {
   return /** @type {T[]} */ (NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, values, [comparator]));
+}
+
+/** @param {unknown} value */
+function toNumber(value) {
+  return /** @type {number} */ (NATIVE_REFLECT_APPLY(NATIVE_NUMBER, undefined, [value]));
+}
+
+/** @param {unknown} value */
+function numberIsFinite(value) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(
+    NATIVE_NUMBER_IS_FINITE, NATIVE_NUMBER, [value]
+  ));
+}
+
+/** @param {unknown} value */
+function numberIsSafeInteger(value) {
+  return /** @type {boolean} */ (NATIVE_REFLECT_APPLY(
+    NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [value]
+  ));
 }
 
 /** @template K,V @param {Map<K,V>} values @param {(value:V,key:K)=>void} visit */
@@ -243,21 +269,24 @@ function intrinsicIntegrityDiagnostic() {
     const globalSetDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Set');
     const globalMapDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Map');
     const globalStringDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'String');
+    const globalNumberDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Number');
+    const globalObjectDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Object');
+    const globalSymbolDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_GLOBAL_THIS, 'Symbol');
     const iteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
-      NATIVE_ARRAY_PROTOTYPE, Symbol.iterator
+      NATIVE_ARRAY_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
     const sortDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, 'sort');
     const joinDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, 'join');
     const zeroDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_ARRAY_PROTOTYPE, '0');
     const setIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
-      NATIVE_SET_PROTOTYPE, Symbol.iterator
+      NATIVE_SET_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
     const setAddDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'add');
     const setHasDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'has');
     const setDeleteDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'delete');
     const setForEachDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_SET_PROTOTYPE, 'forEach');
     const mapIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
-      NATIVE_MAP_PROTOTYPE, Symbol.iterator
+      NATIVE_MAP_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
     const mapGetDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'get');
     const mapSetDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'set');
@@ -265,7 +294,7 @@ function intrinsicIntegrityDiagnostic() {
     const mapDeleteDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'delete');
     const mapForEachDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(NATIVE_MAP_PROTOTYPE, 'forEach');
     const stringIteratorDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
-      NATIVE_STRING_PROTOTYPE, Symbol.iterator
+      NATIVE_STRING_PROTOTYPE, NATIVE_SYMBOL_ITERATOR
     );
     const stringTrimDescriptor = NATIVE_GET_OWN_PROPERTY_DESCRIPTOR(
       NATIVE_STRING_PROTOTYPE, 'trim'
@@ -284,6 +313,12 @@ function intrinsicIntegrityDiagnostic() {
       && globalMapDescriptor.value === NATIVE_MAP
       && globalStringDescriptor && NATIVE_HAS_OWN(globalStringDescriptor, 'value')
       && globalStringDescriptor.value === NATIVE_STRING
+      && globalNumberDescriptor && NATIVE_HAS_OWN(globalNumberDescriptor, 'value')
+      && globalNumberDescriptor.value === NATIVE_NUMBER
+      && globalObjectDescriptor && NATIVE_HAS_OWN(globalObjectDescriptor, 'value')
+      && globalObjectDescriptor.value === NATIVE_OBJECT
+      && globalSymbolDescriptor && NATIVE_HAS_OWN(globalSymbolDescriptor, 'value')
+      && globalSymbolDescriptor.value === NATIVE_SYMBOL
       && iteratorDescriptor && NATIVE_HAS_OWN(iteratorDescriptor, 'value')
       && iteratorDescriptor.value === NATIVE_ARRAY_ITERATOR
       && sortDescriptor && NATIVE_HAS_OWN(sortDescriptor, 'value')
@@ -334,7 +369,7 @@ function intrinsicIntegrityDiagnostic() {
 function isRecord(value) {
   if (!value || typeof value !== 'object' || NATIVE_ARRAY_IS_ARRAY(value)) return false;
   const prototype = NATIVE_GET_PROTOTYPE_OF(value);
-  return prototype === Object.prototype || prototype === null;
+  return prototype === NATIVE_OBJECT_PROTOTYPE || prototype === null;
 }
 
 /** @param {string} left @param {string} right */
@@ -342,10 +377,10 @@ function compareCodePoints(left, right) {
   let leftIndex = 0;
   let rightIndex = 0;
   while (leftIndex < left.length && rightIndex < right.length) {
-    const leftPoint = Number(NATIVE_REFLECT_APPLY(
+    const leftPoint = toNumber(NATIVE_REFLECT_APPLY(
       NATIVE_STRING_CODE_POINT_AT, left, [leftIndex]
     ));
-    const rightPoint = Number(NATIVE_REFLECT_APPLY(
+    const rightPoint = toNumber(NATIVE_REFLECT_APPLY(
       NATIVE_STRING_CODE_POINT_AT, right, [rightIndex]
     ));
     if (leftPoint !== rightPoint) return leftPoint - rightPoint;
@@ -473,7 +508,7 @@ function snapshotOwnData(submitted, rootPath) {
     const frame = pending[cursor++];
     const source = frame.source;
     if (source === null || typeof source === 'string' || typeof source === 'boolean'
-      || (typeof source === 'number' && Number.isFinite(source))) {
+      || (typeof source === 'number' && numberIsFinite(source))) {
       frame.assign(source);
       continue;
     }
@@ -507,7 +542,8 @@ function snapshotOwnData(submitted, rootPath) {
       frame.assign(null);
       continue;
     }
-    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
+    if (array ? prototype !== NATIVE_ARRAY_PROTOTYPE
+      : prototype !== NATIVE_OBJECT_PROTOTYPE && prototype !== null) {
       pushArray(diagnostics, diagnostic(
         'schema', 'CORE_PROTOTYPE_INVALID', frame.path || '/',
         'pure-core input containers must use native JSON prototypes'
@@ -528,14 +564,16 @@ function snapshotOwnData(submitted, rootPath) {
     sortArray(stringKeys, compareCodePoints);
     if (array) {
       const lengthDescriptor = descriptors.length;
-      const declaredLength = Number(lengthDescriptor?.value);
+      const declaredLength = toNumber(lengthDescriptor?.value);
       /** @type {string[]} */
       const numericKeys = [];
-      let malformed = !Number.isSafeInteger(declaredLength) || declaredLength < 0;
+      let malformed = !numberIsSafeInteger(declaredLength) || declaredLength < 0;
       for (let keyIndex = 0; keyIndex < stringKeys.length; keyIndex += 1) {
         const key = stringKeys[keyIndex];
         if (key === 'length') continue;
-        if (/^(0|[1-9][0-9]*)$/u.test(key) && Number(key) < 4294967295) pushArray(numericKeys, key);
+        if (/^(0|[1-9][0-9]*)$/u.test(key) && toNumber(key) < 4294967295) {
+          pushArray(numericKeys, key);
+        }
         else {
           malformed = true;
           pushArray(diagnostics, diagnostic(
@@ -544,12 +582,12 @@ function snapshotOwnData(submitted, rootPath) {
           ));
         }
       }
-      sortArray(numericKeys, (left, right) => Number(left) - Number(right));
+      sortArray(numericKeys, (left, right) => toNumber(left) - toNumber(right));
       let firstHole = -1;
       if (!malformed && numericKeys.length !== declaredLength) {
         let expected = 0;
         for (let index = 0; index < numericKeys.length; index += 1) {
-          const actual = Number(numericKeys[index]);
+          const actual = toNumber(numericKeys[index]);
           if (actual !== expected) { firstHole = expected; break; }
           expected += 1;
         }
@@ -627,11 +665,11 @@ function normalizeInput(submitted) {
     'schema', 'CORE_INPUT_INVALID', '/', 'pure-core input must be a closed plain record'
   )] };
   requireClosed(input, INPUT_KEYS, '', diagnostics);
-  const sourceRevision = Number(input.source_revision);
+  const sourceRevision = toNumber(input.source_revision);
   if (input.schema_version !== '1.0.0') pushArray(diagnostics, diagnostic(
     'schema', 'CORE_SCHEMA_VERSION_INVALID', '/schema_version', 'pure core requires schema version 1.0.0'
   ));
-  if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0) pushArray(diagnostics, diagnostic(
+  if (!numberIsSafeInteger(sourceRevision) || sourceRevision < 0) pushArray(diagnostics, diagnostic(
     'schema', 'CORE_SOURCE_REVISION_INVALID', '/source_revision', 'source revision must be a nonnegative safe integer'
   ));
   if (typeof input.compiler_version !== 'string' || input.compiler_version.trim().length === 0
@@ -679,7 +717,7 @@ function validateArtifactSchemas(input) {
     appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateAgainstSchema(artifact, schema)));
     appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateUniqueStableIds(artifact)));
   }
-  const revision = Number(input.source_revision);
+  const revision = toNumber(input.source_revision);
   const namedArtifacts = [
     ['source_pack', input.source_pack], ['evidence_claims', input.evidence_claims],
     ['behavior_views', input.behavior_views], ['case_drafts', input.case_drafts]
@@ -707,7 +745,7 @@ function evidenceContext(input, claimsById, conflicts) {
     conflicts: NATIVE_STRUCTURED_CLONE(conflicts),
     runScope: String(sourcePack.run_scope),
     obligationCompilation: {
-      sourceRevision: Number(input.source_revision),
+      sourceRevision: toNumber(input.source_revision),
       contextsByViewId: makeMap(NATIVE_OBJECT_ENTRIES(NATIVE_STRUCTURED_CLONE(contexts))),
       factRoutes: NATIVE_STRUCTURED_CLONE(records(compilation.fact_routes)),
       notApplicableReviews: NATIVE_STRUCTURED_CLONE(records(compilation.not_applicable_reviews)),
@@ -830,7 +868,7 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
     if (directItems.length === 0 && uniqueParents.length === 1) {
       resolvedCandidates = uniqueParents[0];
       const firstParentId = parentIds[0];
-      resolvedCount = Number(mapGet(candidateCountByClaim, firstParentId) ?? 0);
+      resolvedCount = toNumber(mapGet(candidateCountByClaim, firstParentId) ?? 0);
     } else {
       const directSignature = sortArray(sliceArray(directItems, 0), compareCodePoints);
       /** @type {number[]} */
@@ -857,7 +895,7 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
         let baseCount = -1;
         for (let parentIndex = 0; parentIndex < parentIds.length; parentIndex += 1) {
           const parentId = parentIds[parentIndex];
-          const count = Number(mapGet(candidateCountByClaim, parentId) ?? 0);
+          const count = toNumber(mapGet(candidateCountByClaim, parentId) ?? 0);
           if (count > baseCount || (count === baseCount && baseParentId !== null
             && compareCodePoints(parentId, baseParentId) < 0)) {
             baseParentId = parentId;
@@ -899,7 +937,7 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
     const children = mapGet(childrenByClaim, claimId) ?? [];
     for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
       const childId = children[childIndex];
-      const nextIndegree = Number(mapGet(indegreeByClaim, childId)) - 1;
+      const nextIndegree = toNumber(mapGet(indegreeByClaim, childId)) - 1;
       mapSet(indegreeByClaim, childId, nextIndegree);
       if (nextIndegree === 0) pushArray(ready, childId);
     }
@@ -1403,7 +1441,8 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
       const risks = ['critical', 'high', 'medium', 'low'];
       for (let riskIndex = 0; riskIndex < risks.length; riskIndex += 1) {
         const risk = risks[riskIndex];
-        existing.risk_counts[risk] = Number(existing.risk_counts[risk]) + Number(itemRiskCounts[risk]);
+        existing.risk_counts[risk] = toNumber(existing.risk_counts[risk])
+          + toNumber(itemRiskCounts[risk]);
       }
     }
   }
@@ -1413,7 +1452,7 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
     const rightRisk = isRecord(right.risk_counts) ? right.risk_counts : {};
     for (let index = 0; index < riskOrder.length; index += 1) {
       const risk = riskOrder[index];
-      const difference = Number(rightRisk[risk] ?? 0) - Number(leftRisk[risk] ?? 0);
+      const difference = toNumber(rightRisk[risk] ?? 0) - toNumber(leftRisk[risk] ?? 0);
       if (difference !== 0) return difference;
     }
     const countDifference = strings(right.affected_obligation_ids).length
@@ -1557,8 +1596,9 @@ function evaluateRevisionCaptured(submittedInput, options) {
     diagnostics: [postSnapshotIntrinsicDiagnostic]
   };
   const trustedOptions = capturedOptions.snapshot;
-  const initialRevision = isRecord(normalized.input) && Number.isSafeInteger(normalized.input.source_revision)
-    ? Number(normalized.input.source_revision) : 0;
+  const initialRevision = isRecord(normalized.input)
+    && numberIsSafeInteger(normalized.input.source_revision)
+    ? toNumber(normalized.input.source_revision) : 0;
   let interactionPolicy = '';
   if (!isRecord(trustedOptions)) pushArray(normalized.diagnostics, diagnostic(
     'classification', 'INTERACTION_POLICY_INVALID', '/interaction_policy',
@@ -1577,7 +1617,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     'schema', initialRevision, normalized.diagnostics
   );
   const input = normalized.input;
-  const sourceRevision = Number(input.source_revision);
+  const sourceRevision = toNumber(input.source_revision);
   try {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired('schema', sourceRevision, schemaDiagnostics);

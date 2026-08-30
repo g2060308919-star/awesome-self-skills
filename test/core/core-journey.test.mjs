@@ -893,6 +893,63 @@ test('core rejects polluted constructors and dynamic String methods before a val
   ]);
 });
 
+test('core rejects Number Object and Symbol proxies before any forwarding or throwing trap runs', async () => {
+  const fixture = await journeyFixture('grounded');
+  const input = buildRevision(fixture.scenario);
+  assert.equal(runRevision(input, 'pause_for_clarification').status, 'finished');
+  const defineProperty = Object.defineProperty;
+  const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const globalNames = ['Number', 'Object', 'Symbol'];
+  const modes = ['forward', 'throw'];
+  const summaries = [];
+  for (let nameIndex = 0; nameIndex < globalNames.length; nameIndex += 1) {
+    const name = globalNames[nameIndex];
+    const descriptor = getOwnPropertyDescriptor(globalThis, name);
+    if (!descriptor) throw new Error(`missing global ${name}`);
+    for (let modeIndex = 0; modeIndex < modes.length; modeIndex += 1) {
+      const mode = modes[modeIndex];
+      let calls = 0;
+      const polluted = new Proxy(descriptor.value, {
+        apply(target, thisArg, args) {
+          calls += 1;
+          if (mode === 'throw') throw new Error(`${name} apply trap executed`);
+          return Reflect.apply(target, thisArg, args);
+        },
+        construct(target, args, newTarget) {
+          calls += 1;
+          if (mode === 'throw') throw new Error(`${name} construct trap executed`);
+          return Reflect.construct(target, args, newTarget);
+        },
+        get(target, key, receiver) {
+          calls += 1;
+          if (mode === 'throw') throw new Error(`${name} get trap executed`);
+          return Reflect.get(target, key, receiver);
+        }
+      });
+      /** @type {any} */
+      let result;
+      try {
+        Reflect.apply(defineProperty, Object, [globalThis, name, { ...descriptor, value: polluted }]);
+        result = evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' });
+      } finally {
+        Reflect.apply(defineProperty, Object, [globalThis, name, descriptor]);
+      }
+      summaries.push({
+        name, mode, calls, status: result.status, stage: result.stage,
+        codes: result.diagnostics.map((/** @type {any} */ item) => item.code)
+      });
+    }
+  }
+  assert.deepEqual(summaries, [
+    { name: 'Number', mode: 'forward', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { name: 'Number', mode: 'throw', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { name: 'Object', mode: 'forward', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { name: 'Object', mode: 'throw', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { name: 'Symbol', mode: 'forward', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] },
+    { name: 'Symbol', mode: 'throw', calls: 0, status: 'need_revision', stage: 'schema', codes: ['CORE_INTRINSIC_INVALID'] }
+  ]);
+});
+
 test('external pending roots retain Task 9 risk order while hashing a sorted batch set', async () => {
   const { externalizePendingRoots } = await loadConflictGate();
   const root = (/** @type {string} */ id, /** @type {any} */ riskCounts, affected = ['obligation']) => ({
