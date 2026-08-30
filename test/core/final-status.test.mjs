@@ -75,10 +75,18 @@ test('final status priority is mutually exclusive and frozen', () => {
 
 test('Conditional Case counts as executable but never as Grounded executable coverage', () => {
   const input = retain(base(), ['obligation_grounded']);
+  input.evidence_claims.claims.push({
+    claim_id: 'claim_assumption', claim_form: 'decision-record', level: 'E1', kind: 'assumption',
+    scope: 'checkout', value: 'Treat checkout control as temporarily available.',
+    source_locator_ids: ['locator_checkout'], decision_id: 'decision_assumption', authority: 'product-owner'
+  });
   const candidate = input.classification.grounded.pop();
+  candidate.testability_profile.capabilities[0].status = 'approved-assumption';
+  candidate.testability_profile.capabilities[0].provenance_ref = 'claim_assumption';
   candidate.temporary_assumption = {
     claim_id: 'claim_assumption', invalidation_condition: 'The owner rejects the temporary rule.'
   };
+  candidate.evidence_refs = [...new Set([...candidate.evidence_refs, 'claim_assumption'])].sort();
   input.classification.conditional.push(candidate);
   const point = input.clarification.semantic_snapshot.formal_test_points[0];
   point.classification = 'conditional';

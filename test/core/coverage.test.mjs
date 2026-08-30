@@ -35,6 +35,32 @@ function diagnosticCodes(callback) {
   return lastDiagnosticCodes;
 }
 
+/** @returns {any} */
+function conditionalContext() {
+  const input = context();
+  input.evidence_claims.claims.push({
+    claim_id: 'claim_assumption', claim_form: 'decision-record', level: 'E1', kind: 'assumption',
+    scope: 'checkout', value: 'Treat checkout control as temporarily available.',
+    source_locator_ids: ['locator_checkout'], decision_id: 'decision_assumption', authority: 'product-owner'
+  });
+  const candidate = input.classification.grounded.pop();
+  candidate.testability_profile.capabilities[0].status = 'approved-assumption';
+  candidate.testability_profile.capabilities[0].provenance_ref = 'claim_assumption';
+  candidate.temporary_assumption = {
+    claim_id: 'claim_assumption', invalidation_condition: 'The owner rejects the temporary rule.'
+  };
+  candidate.evidence_refs = [...new Set([...candidate.evidence_refs, 'claim_assumption'])].sort();
+  input.classification.conditional.push(candidate);
+  const point = input.clarification.semantic_snapshot.formal_test_points.find(
+    (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
+  );
+  point.classification = 'conditional';
+  point.evidence_level = 'E1';
+  input.clarification.semantic_snapshot.delivery_sections.grounded = [];
+  input.clarification.semantic_snapshot.delivery_sections.conditional = ['obligation_grounded'];
+  return input;
+}
+
 test('coverage builds four independent ledgers with hand-counted denominators', () => {
   const bundle = buildBundle(context());
 
@@ -115,6 +141,53 @@ test('Case associations are bidirectional across facts, Test Points, and indepen
     const codes = diagnosticCodes(() => buildBundle(input));
     assert.equal(codes.some((code) => code.includes('TRACE') || code.includes('UNKNOWN') || code.includes('ORACLE')), true, codes.join(','));
   }
+});
+
+test('executable lanes revalidate the complete temporary-assumption downgrade closure', () => {
+  const valid = conditionalContext();
+  assert.equal(buildBundle(valid).conditional.length, 1);
+
+  const groundedStray = context();
+  groundedStray.classification.grounded[0].temporary_assumption = {
+    claim_id: 'claim_grounded', invalidation_condition: 'The accepted requirement changes.'
+  };
+  assert.equal(diagnosticCodes(() => buildBundle(groundedStray)).includes('CASE_TEMPORARY_ASSUMPTION_UNEXPECTED'), true);
+
+  const dangling = conditionalContext();
+  dangling.classification.conditional[0].temporary_assumption.claim_id = 'claim_missing';
+  assert.equal(diagnosticCodes(() => buildBundle(dangling)).includes('CASE_TEMPORARY_ASSUMPTION_INVALID'), true);
+
+  const mismatch = conditionalContext();
+  mismatch.classification.conditional[0].temporary_assumption.claim_id = 'claim_capability';
+  assert.equal(diagnosticCodes(() => buildBundle(mismatch)).includes('CASE_TEMPORARY_ASSUMPTION_MISMATCH'), true);
+
+  const unconsumed = conditionalContext();
+  unconsumed.classification.conditional[0].testability_profile.capabilities[0] = {
+    capability: 'checkout-control', status: 'provided', provenance_ref: 'claim_capability'
+  };
+  assert.equal(diagnosticCodes(() => buildBundle(unconsumed)).includes('CASE_DOWNGRADE_ROOT_MISSING'), true);
+
+  const outsideScope = conditionalContext();
+  outsideScope.evidence_claims.claims.find(
+    (/** @type {any} */ claim) => claim.claim_id === 'claim_assumption'
+  ).scope = 'checkout/other';
+  assert.equal(diagnosticCodes(() => buildBundle(outsideScope)).includes('CASE_TEMPORARY_ASSUMPTION_INVALID'), true);
+
+  const unsupported = conditionalContext();
+  unsupported.classification.conditional[0].role.support_review = 'uncertain';
+  assert.equal(diagnosticCodes(() => buildBundle(unsupported)).includes('CASE_SUPPORT_REVIEW_INVALID'), true);
+
+  const multiple = conditionalContext();
+  multiple.evidence_claims.claims.push({
+    claim_id: 'claim_assumption_observer', claim_form: 'decision-record', level: 'E1', kind: 'assumption',
+    scope: 'checkout', value: 'Treat order observation as temporarily available.',
+    source_locator_ids: ['locator_checkout'], decision_id: 'decision_assumption_observer', authority: 'product-owner'
+  });
+  const candidate = multiple.classification.conditional[0];
+  candidate.testability_profile.observers[0].status = 'approved-assumption';
+  candidate.testability_profile.observers[0].provenance_ref = 'claim_assumption_observer';
+  candidate.evidence_refs = [...new Set([...candidate.evidence_refs, 'claim_assumption_observer'])].sort();
+  assert.equal(diagnosticCodes(() => buildBundle(multiple)).includes('CASE_DOWNGRADE_ROOTS_AMBIGUOUS'), true);
 });
 
 test('evidence, classification, clarification, and obligation revisions identify one immutable source snapshot', () => {
@@ -361,6 +434,83 @@ test('NotApplicable accepts the real Task 8 shape where a normative fact routes 
   assert.deepEqual(bundle.coverage.requirements.entries.find((/** @type {any} */ item) => item.fact_id === 'fact_na'), {
     fact_id: 'fact_na', status: 'not_applicable'
   });
+});
+
+test('terminal NotApplicable fact routes bind exactly to a valid disposition and exclusion', () => {
+  assert.equal(buildBundle(context()).coverage.requirements.entries.find(
+    (/** @type {any} */ item) => item.fact_id === 'fact_na'
+  ).status, 'not_applicable');
+
+  const missing = context();
+  missing.obligations_artifact.fact_routes.find(
+    (/** @type {any} */ route) => route.fact_id === 'fact_na'
+  ).not_applicable_claim_id = 'claim_missing';
+  assert.equal(diagnosticCodes(() => buildBundle(missing)).includes('NOT_APPLICABLE_ROUTE_TARGET_INVALID'), true);
+
+  const wrongDisposition = context();
+  wrongDisposition.evidence_claims.claims.push({
+    claim_id: 'claim_exclusion_other', claim_form: 'direct', level: 'E3', kind: 'requirement',
+    scope: 'checkout/legacy', value: 'A different exclusion.',
+    source_locator_ids: ['locator_legacy_exclusion'], source_id: 'source_scope'
+  });
+  wrongDisposition.obligations_artifact.fact_routes.find(
+    (/** @type {any} */ route) => route.fact_id === 'fact_na'
+  ).not_applicable_claim_id = 'claim_exclusion_other';
+  assert.equal(diagnosticCodes(() => buildBundle(wrongDisposition)).includes('NOT_APPLICABLE_ROUTE_DISPOSITION_MISMATCH'), true);
+
+  const unrelatedFact = context();
+  const fact = unrelatedFact.evidence_claims.fact_ledger.find(
+    (/** @type {any} */ item) => item.fact_id === 'fact_na'
+  );
+  fact.claim_id = 'claim_grounded';
+  fact.source_claim_ids = ['claim_grounded'];
+  assert.equal(diagnosticCodes(() => buildBundle(unrelatedFact)).includes('NOT_APPLICABLE_ROUTE_DISPOSITION_MISMATCH'), true);
+
+  const broadPrimaryFact = context();
+  broadPrimaryFact.evidence_claims.claims.push({
+    claim_id: 'claim_na_broad', claim_form: 'direct', level: 'E3', kind: 'requirement',
+    scope: 'checkout', value: 'A broad fact cannot use a narrow exclusion.',
+    source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+  });
+  const broadFact = broadPrimaryFact.evidence_claims.fact_ledger.find(
+    (/** @type {any} */ item) => item.fact_id === 'fact_na'
+  );
+  broadFact.claim_id = 'claim_na_broad';
+  broadFact.source_claim_ids = ['claim_legacy'];
+  assert.equal(diagnosticCodes(() => buildBundle(broadPrimaryFact)).includes('NOT_APPLICABLE_ROUTE_SCOPE_INVALID'), true);
+
+  const dependentTarget = context();
+  dependentTarget.evidence_claims.claims.push({
+    claim_id: 'claim_na_primary', claim_form: 'direct', level: 'E3', kind: 'requirement',
+    scope: 'checkout/legacy', value: 'A separate terminal fact.',
+    source_locator_ids: ['locator_legacy'], source_id: 'source_prd'
+  });
+  const dependentFact = dependentTarget.evidence_claims.fact_ledger.find(
+    (/** @type {any} */ item) => item.fact_id === 'fact_na'
+  );
+  dependentFact.claim_id = 'claim_na_primary';
+  dependentFact.source_claim_ids = ['claim_legacy'];
+  const exclusion = dependentTarget.evidence_claims.claims.find(
+    (/** @type {any} */ item) => item.claim_id === 'claim_exclusion'
+  );
+  Object.assign(exclusion, {
+    claim_form: 'derived', level: 'E2', kind: 'model-element',
+    derivation_kind: 'graph-reachability', derivation_target: 'model-element',
+    parent_claim_ids: ['claim_na_primary'], parameters: { graph_id: 'terminal_scope' },
+    rule_input: { from: 'terminal', to: 'excluded' }
+  });
+  delete exclusion.source_id;
+  assert.equal(diagnosticCodes(() => buildBundle(dependentTarget)).includes('NOT_APPLICABLE_ROUTE_TARGET_RELATED'), true);
+
+  const directTargetFact = context();
+  directTargetFact.evidence_claims.fact_ledger.find(
+    (/** @type {any} */ item) => item.fact_id === 'fact_na'
+  ).source_claim_ids.push('claim_exclusion');
+  assert.equal(diagnosticCodes(() => buildBundle(directTargetFact)).includes('NOT_APPLICABLE_ROUTE_TARGET_RELATED'), true);
+
+  const wrongStatus = context();
+  wrongStatus.classification.not_applicable[0].status = 'grounded';
+  assert.equal(diagnosticCodes(() => buildBundle(wrongStatus)).includes('NOT_APPLICABLE_STATUS_INVALID'), true);
 });
 
 /** @param {any} input @param {string} status */
@@ -1187,4 +1337,264 @@ test('dense accepted Oracle ownership compresses equivalent relations and never 
     measurements.push(operations);
   }
   assert.equal(measurements[3] <= measurements[2] * 2.8, true, measurements.join('/'));
+});
+
+/** @param {number} size */
+function multiRootOracleContext(size) {
+  const input = context();
+  const candidate = structuredClone(input.classification.grounded[0]);
+  const roots = [];
+  const merges = [];
+  for (let index = 0; index < size; index += 1) roots.push({
+    claim_id: `claim_multi_root_${String(index).padStart(4, '0')}`,
+    claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'accepted',
+    source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+  });
+  for (let index = 1; index < size; index += 1) merges.push({
+    claim_id: `claim_multi_merge_${String(index).padStart(4, '0')}`,
+    claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'checkout', value: 'accepted',
+    source_locator_ids: ['locator_checkout'], derivation_kind: 'decision-table-instance',
+    derivation_target: 'expected-value', parent_claim_ids: [
+      index === 1 ? 'claim_multi_root_0000' : `claim_multi_merge_${String(index - 1).padStart(4, '0')}`,
+      `claim_multi_root_${String(index).padStart(4, '0')}`
+    ],
+    parameters: { table_id: `table_multi_${index}` },
+    rule_input: { conditions: [`merge ${index}`], outcome: 'accepted' }
+  });
+  const finalEvidence = `claim_multi_merge_${String(size - 1).padStart(4, '0')}`;
+  input.evidence_claims.claims.push(...roots, ...merges);
+  input.evidence_claims.fact_ledger = [{
+    fact_id: 'fact_multi', claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded']
+  }];
+  input.obligations_artifact.obligations = [{
+    obligation_id: 'obligation_multi', kind: 'flow', risk: 'high', scope: 'checkout',
+    source_claim_ids: ['claim_grounded'], view_element_refs: ['view_checkout#multi'],
+    required_oracle_refs: roots.map((item) => item.claim_id), required_capabilities: ['checkout-control']
+  }];
+  input.obligations_artifact.fact_routes = [{
+    fact_id: 'fact_multi', route_type: 'obligations', obligation_ids: ['obligation_multi']
+  }];
+  input.obligations_artifact.interaction_routes = [];
+  candidate.case_id = 'case_multi';
+  candidate.fact_ids = ['fact_multi'];
+  candidate.obligation_ids = ['obligation_multi'];
+  candidate.steps[0].expectations = [{
+    ...candidate.steps[0].expectations[0], expectation_id: 'expectation_multi', evidence_ref: finalEvidence
+  }];
+  candidate.evidence_refs = [...new Set([
+    ...candidate.evidence_refs, ...roots.map((item) => item.claim_id), finalEvidence
+  ])].sort();
+  candidate.execution_signature.oracle_refs = ['expectation_multi'];
+  candidate.execution_signature.test_point_ids = ['obligation_multi'];
+  input.classification = {
+    grounded: [candidate], conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
+  };
+  input.clarification.root_issues = [];
+  input.clarification.pending_root_issues = [];
+  input.clarification.state = {
+    source_revision: 4, clarification_event_seq: 0, asked_root_issue_ids: [], root_issue_dispositions: [],
+    last_pending_root_issue_ids: [], last_question_set_digest: '',
+    clarification_stop: { reason: 'converged', source_revision: 4 }, semantic_snapshot: null, root_snapshot_ledger: []
+  };
+  input.clarification.semantic_snapshot = {
+    formal_test_points: [{
+      obligation_id: 'obligation_multi', evidence_level: 'E2', classification: 'grounded', blocked_reason: null
+    }],
+    coverage_denominator: 1,
+    delivery_sections: {
+      grounded: ['obligation_multi'], conditional: [], blocked: [], exploratory: [],
+      coverage: { formal_denominator: 1 }, quality: { delivery_status: 'executable_subset_ready' }
+    }
+  };
+  return input;
+}
+
+test('multi-root DAG Oracle compatibility visits each merge ancestry once per concrete expectation', () => {
+  const nativeAdd = Set.prototype.add;
+  const measurements = [];
+  for (const size of [20, 40, 80, 160]) {
+    let mergeVisits = 0;
+    try {
+      Set.prototype.add = function (value) {
+        if (typeof value === 'string' && value.startsWith('claim_multi_merge_')) mergeVisits += 1;
+        return Reflect.apply(nativeAdd, this, [value]);
+      };
+      assert.equal(buildBundle(multiRootOracleContext(size)).grounded.length, 1);
+    } finally {
+      Set.prototype.add = nativeAdd;
+    }
+    measurements.push(mergeVisits);
+  }
+  assert.equal(measurements.every((count, index) => count <= [20, 40, 80, 160][index] * 16), true, measurements.join('/'));
+});
+
+/** @param {number} size */
+function sharedMultiRootExpectationsContext(size) {
+  const input = multiRootOracleContext(size);
+  const candidate = input.classification.grounded[0];
+  const roots = input.obligations_artifact.obligations[0].required_oracle_refs;
+  const finalMerge = `claim_multi_merge_${String(size - 1).padStart(4, '0')}`;
+  const claims = [];
+  const facts = [];
+  const routes = [];
+  const obligations = [];
+  const points = [];
+  const expectations = [];
+  for (let index = 0; index < size; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    const expectationRef = `claim_multi_leaf_${suffix}`;
+    const obligationId = `obligation_multi_${suffix}`;
+    const factId = `fact_multi_${suffix}`;
+    claims.push({
+      claim_id: expectationRef, claim_form: 'derived', level: 'E2', kind: 'expected-value',
+      scope: 'checkout', value: `accepted ${suffix}`, source_locator_ids: ['locator_checkout'],
+      derivation_kind: 'decision-table-instance', derivation_target: 'expected-value',
+      parent_claim_ids: [finalMerge], parameters: { table_id: `table_multi_leaf_${suffix}` },
+      rule_input: { conditions: [`leaf ${suffix}`], outcome: `accepted ${suffix}` }
+    });
+    facts.push({
+      fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded']
+    });
+    routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
+    obligations.push({
+      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#multi_${suffix}`],
+      required_oracle_refs: [...roots], required_capabilities: ['checkout-control']
+    });
+    points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
+    expectations.push({
+      ...structuredClone(candidate.steps[0].expectations[0]),
+      expectation_id: `expectation_multi_${suffix}`, evidence_ref: expectationRef
+    });
+  }
+  input.evidence_claims.claims.push(...claims);
+  input.evidence_claims.fact_ledger = facts;
+  input.obligations_artifact.obligations = obligations;
+  input.obligations_artifact.fact_routes = routes;
+  candidate.fact_ids = facts.map((item) => item.fact_id);
+  candidate.obligation_ids = obligations.map((item) => item.obligation_id);
+  candidate.steps[0].expectations = expectations;
+  candidate.evidence_refs = [...new Set([
+    ...candidate.evidence_refs.filter((/** @type {string} */ ref) => ref !== finalMerge),
+    ...claims.map((claim) => claim.claim_id)
+  ])].sort();
+  candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
+  candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
+  input.clarification.semantic_snapshot.formal_test_points = points;
+  input.clarification.semantic_snapshot.coverage_denominator = size;
+  input.clarification.semantic_snapshot.delivery_sections.grounded = obligations.map((item) => item.obligation_id);
+  input.clarification.semantic_snapshot.delivery_sections.coverage.formal_denominator = size;
+  return input;
+}
+
+test('multi-root ownership reuses shared expectation ancestry without retaining an expectation by root matrix', async () => {
+  const nativeAdd = Set.prototype.add;
+  const measurements = [];
+  for (const size of [20, 40, 80]) {
+    let mergeVisits = 0;
+    try {
+      Set.prototype.add = function (value) {
+        if (typeof value === 'string' && value.startsWith('claim_multi_merge_')) mergeVisits += 1;
+        return Reflect.apply(nativeAdd, this, [value]);
+      };
+      assert.equal(buildBundle(sharedMultiRootExpectationsContext(size)).grounded.length, 1);
+    } finally {
+      Set.prototype.add = nativeAdd;
+    }
+    measurements.push(mergeVisits);
+  }
+  assert.equal(measurements.every((count, index) => count <= [20, 40, 80][index] * 24), true, measurements.join('/'));
+  const source = await readFile(new URL('../../src/coverage.mjs', import.meta.url), 'utf8');
+  assert.equal(source.includes('coverageByExpectation'), false);
+});
+
+/** @param {number} size */
+function manyCaseForestContext(size) {
+  const input = context();
+  const claims = [];
+  const facts = [];
+  const obligations = [];
+  const routes = [];
+  const cases = [];
+  const points = [];
+  for (let index = 0; index < size; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    const oracleId = `claim_case_oracle_${suffix}`;
+    const evidenceRef = `claim_case_expectation_${suffix}`;
+    const obligationId = `obligation_case_${suffix}`;
+    const factId = `fact_case_${suffix}`;
+    claims.push(
+      {
+        claim_id: oracleId, claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout',
+        value: 'accepted', source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+      },
+      {
+        claim_id: evidenceRef, claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'checkout',
+        value: 'accepted', source_locator_ids: ['locator_checkout'],
+        derivation_kind: 'decision-table-instance', derivation_target: 'expected-value',
+        parent_claim_ids: [oracleId], parameters: { table_id: `table_case_${suffix}` },
+        rule_input: { conditions: [`case ${suffix}`], outcome: 'accepted' }
+      }
+    );
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    obligations.push({
+      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#case_${suffix}`],
+      required_oracle_refs: [oracleId], required_capabilities: ['checkout-control']
+    });
+    routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
+    points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
+    const candidate = structuredClone(input.classification.grounded[0]);
+    candidate.case_id = `case_independent_${suffix}`;
+    candidate.fact_ids = [factId];
+    candidate.obligation_ids = [obligationId];
+    candidate.steps[0].expectations[0].expectation_id = `expectation_case_${suffix}`;
+    candidate.steps[0].expectations[0].evidence_ref = evidenceRef;
+    candidate.evidence_refs = [...new Set([...candidate.evidence_refs, oracleId, evidenceRef])].sort();
+    candidate.execution_signature.oracle_refs = [`expectation_case_${suffix}`];
+    candidate.execution_signature.test_point_ids = [obligationId];
+    cases.push(candidate);
+  }
+  input.evidence_claims.claims.push(...claims);
+  input.evidence_claims.fact_ledger = facts;
+  input.obligations_artifact.obligations = obligations;
+  input.obligations_artifact.fact_routes = routes;
+  input.obligations_artifact.interaction_routes = [];
+  input.classification = {
+    grounded: cases, conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
+  };
+  input.clarification.root_issues = [];
+  input.clarification.pending_root_issues = [];
+  input.clarification.state = {
+    source_revision: 4, clarification_event_seq: 0, asked_root_issue_ids: [], root_issue_dispositions: [],
+    last_pending_root_issue_ids: [], last_question_set_digest: '',
+    clarification_stop: { reason: 'converged', source_revision: 4 }, semantic_snapshot: null, root_snapshot_ledger: []
+  };
+  input.clarification.semantic_snapshot = {
+    formal_test_points: points, coverage_denominator: size,
+    delivery_sections: {
+      grounded: obligations.map((item) => item.obligation_id), conditional: [], blocked: [], exploratory: [],
+      coverage: { formal_denominator: size }, quality: { delivery_status: 'executable_subset_ready' }
+    }
+  };
+  return input;
+}
+
+test('forest Oracle matching initializes Fenwick capacity from each Case local expectations only', () => {
+  const nativeFill = Array.prototype.fill;
+  const measurements = [];
+  for (const size of [50, 100, 200]) {
+    let localCells = 0;
+    try {
+      Array.prototype.fill = function (...args) {
+        if (this.length === 2 && args[0] === 0) localCells += this.length;
+        return Reflect.apply(nativeFill, this, args);
+      };
+      assert.equal(buildBundle(manyCaseForestContext(size)).grounded.length, size);
+    } finally {
+      Array.prototype.fill = nativeFill;
+    }
+    measurements.push(localCells);
+  }
+  assert.deepEqual(measurements, [100, 200, 400]);
 });

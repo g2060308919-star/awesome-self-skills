@@ -571,14 +571,31 @@ function matchForestOracleOwnership(requirements, expectations, graph) {
     anchors.push({ start, end });
   }
   anchors.sort((left, right) => right.start - left.start || left.end - right.end);
-  const capacity = fenwick(graph.claimsById.size);
+  /** @type {number[]} */
+  const positions = [];
   for (const expectation of expectations) {
     const position = graph.entryByClaim.get(expectation.evidenceRef);
-    if (position !== undefined) capacity.add(position, 1);
+    if (position !== undefined) positions.push(position);
   }
+  positions.sort((left, right) => left - right);
+  const capacity = fenwick(positions.length);
+  for (let index = 0; index < positions.length; index += 1) capacity.add(index, 1);
+  /** @param {number} target @param {boolean} after */
+  const localBoundary = (target, after) => {
+    let low = 0;
+    let high = positions.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (positions[middle] < target || (after && positions[middle] === target)) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
   for (const anchor of anchors) {
-    const before = capacity.sum(anchor.start);
-    if (capacity.sum(anchor.end + 1) === before) return false;
+    const start = localBoundary(anchor.start, false);
+    const end = localBoundary(anchor.end, true);
+    const before = capacity.sum(start);
+    if (capacity.sum(end) === before) return false;
     const position = capacity.lowerBound(before + 1);
     capacity.add(position, -1);
   }
@@ -607,6 +624,10 @@ function matchGeneralOracleOwnership(requirements, expectations, graph) {
   }
   /** @type {string[]} */
   const anchorByRequirement = [];
+  /** @type {Set<string>[]} */
+  const requiredRootsByRequirement = [];
+  /** @type {string[]} */
+  const requiredSignatureByRequirement = [];
   for (const requirement of requirements) {
     if (requirement.required.length === 0
       || requirement.required.some((root) => !graph.claimsById.has(root))) return false;
@@ -617,15 +638,49 @@ function matchGeneralOracleOwnership(requirements, expectations, graph) {
         > (graph.topologicalIndexByClaim.get(anchor) ?? -1)) anchor = candidate;
     }
     anchorByRequirement.push(anchor);
+    const roots = new Set(requirement.required);
+    requiredRootsByRequirement.push(roots);
+    requiredSignatureByRequirement.push(canonicalStringify([...roots].sort(compareCodePoints)));
   }
   const requirementOrder = requirements.map((_, index) => index).sort((left, right) =>
     (graph.topologicalIndexByClaim.get(anchorByRequirement[right]) ?? -1)
       - (graph.topologicalIndexByClaim.get(anchorByRequirement[left]) ?? -1)
     || left - right);
+  let lastCompatibilitySignature = '';
+  let lastCompatibilityRepresentative = '';
+  let lastCompatibilityResult = false;
   /** @param {number} requirementIndex @param {string} claimId */
-  const compatible = (requirementIndex, claimId) => requirements[requirementIndex].required.every(
-    (root) => root === anchorByRequirement[requirementIndex] || isEvidenceAncestor(root, claimId, graph)
-  );
+  const compatible = (requirementIndex, claimId) => {
+    const requiredRoots = requiredRootsByRequirement[requirementIndex];
+    if (requiredRoots.size === 1) return true;
+    let representative = claimId;
+    let climbBudget = graph.claimsById.size;
+    while (!requiredRoots.has(representative) && climbBudget > 0) {
+      climbBudget -= 1;
+      const parents = graph.parentsByClaim.get(representative) ?? [];
+      if (parents.length !== 1) break;
+      representative = parents[0];
+    }
+    const signature = requiredSignatureByRequirement[requirementIndex];
+    if (signature === lastCompatibilitySignature && representative === lastCompatibilityRepresentative) {
+      return lastCompatibilityResult;
+    }
+    const pending = [representative];
+    const visited = new Set();
+    let found = 0;
+    while (pending.length > 0 && found < requiredRoots.size) {
+      const current = /** @type {string} */ (pending.pop());
+      if (visited.has(current)) continue;
+      visited.add(current);
+      if (requiredRoots.has(current)) found += 1;
+      const parents = graph.parentsByClaim.get(current) ?? [];
+      for (let index = parents.length - 1; index >= 0; index -= 1) pending.push(parents[index]);
+    }
+    lastCompatibilitySignature = signature;
+    lastCompatibilityRepresentative = representative;
+    lastCompatibilityResult = found === requiredRoots.size;
+    return lastCompatibilityResult;
+  };
   for (const start of requirementOrder) {
     const seenRequirements = new Set([start]);
     const seenExpectations = new Set();
@@ -644,8 +699,8 @@ function matchGeneralOracleOwnership(requirements, expectations, graph) {
         claimCursor += 1;
         if (seenClaims.has(claimId)) continue;
         seenClaims.add(claimId);
-        if (compatible(requirementIndex, claimId)) {
-          const atClaim = expectationsByClaim.get(claimId) ?? [];
+        const atClaim = expectationsByClaim.get(claimId) ?? [];
+        if (atClaim.length > 0 && compatible(requirementIndex, claimId)) {
           for (let offset = 0; offset < atClaim.length; offset += 1) {
             const expectationIndex = atClaim[offset];
             if (seenExpectations.has(expectationIndex)) continue;
@@ -694,8 +749,9 @@ function hasCompleteOracleOwnership(requirements, expectations, graph) {
  * @param {Record<string, unknown>} caseDraft
  * @param {Record<string, unknown>[]} obligations
  * @param {Map<string, Record<string, unknown>>} factsById
+ * @param {boolean} [includeAssumption]
  */
-function caseDirectEvidence(caseDraft, obligations, factsById) {
+function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption = true) {
   const direct = new Set();
   /** @param {unknown} value */
   const add = (value) => { if (typeof value === 'string' && value.length > 0) direct.add(value); };
@@ -730,7 +786,95 @@ function caseDirectEvidence(caseDraft, obligations, factsById) {
     if (caseDraft.cleanup.required === true) add(caseDraft.cleanup.evidence_ref);
     else if (caseDraft.cleanup.required === false) add(caseDraft.cleanup.no_cleanup_evidence_ref);
   }
+  if (includeAssumption && isRecord(caseDraft.temporary_assumption)) add(caseDraft.temporary_assumption.claim_id);
   return [...direct].sort(compareCodePoints);
+}
+
+/**
+ * Revalidate the frozen Task 8 lane gate from actual Case evidence and
+ * structured approved-assumption provenance, excluding the assumption
+ * declaration itself so it cannot authorize its own use.
+ * @param {Record<string, unknown>} caseDraft
+ * @param {string} lane
+ * @param {Record<string, unknown>[]} obligations
+ * @param {Map<string, Record<string, unknown>>} factsById
+ * @param {ReturnType<typeof buildEvidenceGraph>} graph
+ * @param {string} path
+ * @param {Diagnostic[]} diagnostics
+ */
+function validateCaseAssumption(caseDraft, lane, obligations, factsById, graph, path, diagnostics) {
+  const assumption = isRecord(caseDraft.temporary_assumption) ? caseDraft.temporary_assumption : null;
+  if (lane === 'grounded' && assumption) diagnostics.push(diagnostic(
+    'classification', 'CASE_TEMPORARY_ASSUMPTION_UNEXPECTED', `${path}/temporary_assumption`,
+    'Grounded Cases cannot carry a temporary assumption'
+  ));
+
+  const structuredRoots = new Set();
+  if (isRecord(caseDraft.testability_profile)) {
+    for (const field of ['capabilities', 'observers', 'controls']) {
+      for (const item of records(caseDraft.testability_profile[field])) {
+        if (item.status === 'approved-assumption' && typeof item.provenance_ref === 'string') {
+          structuredRoots.add(item.provenance_ref);
+        }
+      }
+    }
+  }
+  const supportingRoots = caseDirectEvidence(caseDraft, obligations, factsById, false);
+  const evidenceClosure = new Set();
+  const pending = [...supportingRoots].sort(compareCodePoints);
+  let cursor = 0;
+  while (cursor < pending.length) {
+    const claimId = pending[cursor];
+    cursor += 1;
+    if (evidenceClosure.has(claimId)) continue;
+    evidenceClosure.add(claimId);
+    for (const parentId of graph.parentsByClaim.get(claimId) ?? []) pending.push(parentId);
+  }
+  const downgradeRoots = new Set(structuredRoots);
+  for (const claimId of evidenceClosure) if (graph.claimsById.get(claimId)?.level === 'E1') downgradeRoots.add(claimId);
+
+  const supportRecords = [];
+  if (isRecord(caseDraft.role)) supportRecords.push(caseDraft.role);
+  supportRecords.push(...records(caseDraft.preconditions), ...records(caseDraft.data));
+  for (const step of records(caseDraft.steps)) {
+    supportRecords.push(step, ...records(step.expectations));
+  }
+  if (isRecord(caseDraft.post_state)) supportRecords.push(caseDraft.post_state);
+  if (isRecord(caseDraft.cleanup)) supportRecords.push(caseDraft.cleanup);
+  for (const item of supportRecords) if (item.support_review !== 'supported') diagnostics.push(diagnostic(
+    'classification', 'CASE_SUPPORT_REVIEW_INVALID', path,
+    'executable Case evidence must have supported support reviews'
+  ));
+
+  if (lane === 'grounded') {
+    if (downgradeRoots.size > 0) diagnostics.push(diagnostic(
+      'classification', 'CASE_GROUNDED_DOWNGRADE_ROOT_INVALID', path,
+      'Grounded Cases cannot depend on E1 or approved-assumption evidence'
+    ));
+    return;
+  }
+  if (lane !== 'conditional') return;
+  const assumptionId = assumption && typeof assumption.claim_id === 'string' ? assumption.claim_id : '';
+  const assumptionClaim = graph.claimsById.get(assumptionId);
+  if (!assumption || assumptionId.length === 0 || !assumptionClaim
+    || (assumptionClaim.level !== 'E1' && !structuredRoots.has(assumptionId))
+    || typeof assumptionClaim.scope !== 'string' || typeof caseDraft.scope !== 'string'
+    || !scopeContains(assumptionClaim.scope, caseDraft.scope)) diagnostics.push(diagnostic(
+    'classification', 'CASE_TEMPORARY_ASSUMPTION_INVALID', `${path}/temporary_assumption`,
+    'Conditional temporary assumption must be accepted E1 or approved-assumption evidence covering the Case scope'
+  ));
+  if (downgradeRoots.size === 0) diagnostics.push(diagnostic(
+    'classification', 'CASE_DOWNGRADE_ROOT_MISSING', path,
+    'Conditional Case requires exactly one independently derived downgrade root'
+  ));
+  else if (downgradeRoots.size > 1) diagnostics.push(diagnostic(
+    'classification', 'CASE_DOWNGRADE_ROOTS_AMBIGUOUS', path,
+    'frozen Conditional Case schema cannot represent more than one downgrade root'
+  ));
+  else if (!downgradeRoots.has(assumptionId)) diagnostics.push(diagnostic(
+    'traceability', 'CASE_TEMPORARY_ASSUMPTION_MISMATCH', `${path}/temporary_assumption/claim_id`,
+    'temporary assumption must identify the sole downgrade root derived from actual Case support'
+  ));
 }
 
 /**
@@ -785,6 +929,7 @@ function validateCaseTraceability(
     'traceability', 'CASE_FACT_ROUTE_LINK_MISSING', `${path}/fact_ids/${pointerPart(factId)}`,
     'every Case must include every normative fact routed to one of its linked formal Test Points'
   ));
+  validateCaseAssumption(caseDraft, lane, linkedObligations, factsById, evidenceGraph, path, diagnostics);
   const actualEvidence = caseDirectEvidence(caseDraft, linkedObligations, factsById);
   const submittedEvidence = strings(caseDraft.evidence_refs).sort(compareCodePoints);
   for (const ref of actualEvidence) {
@@ -1312,14 +1457,22 @@ function buildBundleTrusted(context) {
 
   const naInput = records(normalized.classification.not_applicable);
   const naById = new Map();
+  const naByExclusionId = new Map();
   for (const item of naInput) {
     const obligationId = String(item.obligation_id ?? '');
     requireClosed(item, ['obligation_id', 'status', 'exclusion_claim_id', 'scope', 'support_review'], `/classification/not_applicable/${pointerPart(obligationId)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
     const obligation = obligationsById.get(obligationId);
     const exclusionId = String(item.exclusion_claim_id ?? '');
     const exclusion = claimsById.get(exclusionId);
+    const sameExclusion = naByExclusionId.get(exclusionId) ?? [];
+    sameExclusion.push(item);
+    naByExclusionId.set(exclusionId, sameExclusion);
     if (naById.has(obligationId)) diagnostics.push(diagnostic('coverage', 'FORMAL_DISPOSITION_DUPLICATE', `/classification/not_applicable/${pointerPart(obligationId)}`, 'NotApplicable disposition must be unique'));
     else naById.set(obligationId, item);
+    if (item.status !== 'not_applicable') diagnostics.push(diagnostic(
+      'classification', 'NOT_APPLICABLE_STATUS_INVALID', `/classification/not_applicable/${pointerPart(obligationId)}/status`,
+      'NotApplicable disposition status must be not_applicable'
+    ));
     if (pointsById.get(obligationId)?.classification !== 'not_applicable') diagnostics.push(diagnostic(
       'traceability', 'NOT_APPLICABLE_DISPOSITION_MISMATCH', `/classification/not_applicable/${pointerPart(obligationId)}`, 'NotApplicable disposition must match final formal semantics'
     ));
@@ -1347,6 +1500,50 @@ function buildBundleTrusted(context) {
         'NotApplicable exclusion must be independent of the formal Test Point evidence closure'
       ));
     }
+  }
+  for (const route of factRoutes) if (route.route_type === 'not_applicable') {
+    const factId = String(route.fact_id ?? '');
+    const targetId = String(route.not_applicable_claim_id ?? '');
+    const target = claimsById.get(targetId);
+    if (!target || (target.level !== 'E3' && target.level !== 'E2')) diagnostics.push(diagnostic(
+      'reference', 'NOT_APPLICABLE_ROUTE_TARGET_INVALID', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
+      'terminal NotApplicable route target must be accepted E3 or E2 exclusion evidence'
+    ));
+    const fact = factsById.get(factId);
+    const factRoots = fact ? [String(fact.claim_id ?? ''), ...strings(fact.source_claim_ids)] : [];
+    const primaryFactClaim = fact ? claimsById.get(String(fact.claim_id ?? '')) : undefined;
+    if (target && (!primaryFactClaim || typeof target.scope !== 'string'
+      || typeof primaryFactClaim.scope !== 'string' || !scopeContains(target.scope, primaryFactClaim.scope))) {
+      diagnostics.push(diagnostic(
+        'traceability', 'NOT_APPLICABLE_ROUTE_SCOPE_INVALID', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
+        'terminal NotApplicable exclusion scope must cover the routed normative fact scope'
+      ));
+    }
+    if (target && factRoots.some((ref) => isEvidenceRelated(targetId, ref, evidenceGraph))) diagnostics.push(diagnostic(
+      'traceability', 'NOT_APPLICABLE_ROUTE_TARGET_RELATED', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
+      'terminal NotApplicable exclusion must be independent of every routed fact evidence root'
+    ));
+    const matching = [];
+    for (const item of naByExclusionId.get(targetId) ?? []) {
+      if (item.exclusion_claim_id !== targetId || item.status !== 'not_applicable') continue;
+      const obligation = obligationsById.get(String(item.obligation_id ?? ''));
+      if (!obligation) continue;
+      const obligationRoots = [...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs)];
+      let related = false;
+      for (let factIndex = 0; factIndex < factRoots.length && !related; factIndex += 1) {
+        for (let rootIndex = 0; rootIndex < obligationRoots.length; rootIndex += 1) {
+          if (isEvidenceRelated(factRoots[factIndex], obligationRoots[rootIndex], evidenceGraph)) {
+            related = true;
+            break;
+          }
+        }
+      }
+      if (related) matching.push(item);
+    }
+    if (matching.length !== 1) diagnostics.push(diagnostic(
+      'traceability', 'NOT_APPLICABLE_ROUTE_DISPOSITION_MISMATCH', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
+      'terminal NotApplicable fact route must identify exactly one related verified disposition exclusion'
+    ));
   }
   for (const point of points) {
     const id = String(point.obligation_id);
