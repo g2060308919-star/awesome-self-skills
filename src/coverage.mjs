@@ -2,7 +2,7 @@ import evidenceClaimsSchema from '../skill/generate-test-cases/scripts/schemas/e
 import caseDraftsSchema from '../skill/generate-test-cases/scripts/schemas/case-drafts.schema.json' with { type: 'json' };
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import testObligationsSchema from '../skill/generate-test-cases/scripts/schemas/test-obligations.schema.json' with { type: 'json' };
-import { canonicalStringify } from './canonical.mjs';
+import { canonicalStringify, stableId } from './canonical.mjs';
 import { scopeContains } from './decision-record.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 
@@ -375,40 +375,24 @@ function sameStrings(left, right) {
   return canonicalStringify([...left].sort(compareCodePoints)) === canonicalStringify([...right].sort(compareCodePoints));
 }
 
-/** @param {string} start @param {string} target @param {Map<string, Record<string, unknown>>} claimsById */
-function evidenceReaches(start, target, claimsById) {
-  const pending = [start];
-  const seen = new Set();
-  while (pending.length > 0) {
-    const claimId = /** @type {string} */ (pending.pop());
-    if (seen.has(claimId)) continue;
-    seen.add(claimId);
-    if (claimId === target) return true;
-    const claim = claimsById.get(claimId);
-    for (const parentId of strings(claim?.parent_claim_ids)) pending.push(parentId);
-  }
-  return false;
-}
-
 /**
- * Propagate only required-Oracle labels from accepted parents to descendants.
- * This is built once per invocation and shared by every Case.
+ * Build one sparse accepted-evidence DAG index. Forest ancestry uses DFS
+ * intervals; general DAG queries keep only traversal-local state and never
+ * copy every required Oracle label through the graph.
  * @param {Map<string, Record<string, unknown>>} claimsById
- * @param {Record<string, unknown>[]} obligations
  * @param {Diagnostic[]} diagnostics
  */
-function buildOracleReachability(claimsById, obligations, diagnostics) {
-  const required = new Set();
-  for (const obligation of obligations) for (const ref of strings(obligation.required_oracle_refs)) required.add(ref);
-  /** @type {Map<string, Set<string>>} */
-  const labelsByClaim = new Map();
+function buildEvidenceGraph(claimsById, diagnostics) {
+  /** @type {Map<string, string[]>} */
+  const parentsByClaim = new Map();
   /** @type {Map<string, string[]>} */
   const childrenByClaim = new Map();
   const indegree = new Map();
+  let forest = true;
   for (const claimId of claimsById.keys()) {
+    parentsByClaim.set(claimId, []);
     childrenByClaim.set(claimId, []);
     indegree.set(claimId, 0);
-    if (required.has(claimId)) labelsByClaim.set(claimId, new Set([claimId]));
   }
   for (const [claimId, claim] of claimsById) for (const parentId of strings(claim.parent_claim_ids)) {
     if (!claimsById.has(parentId)) {
@@ -418,8 +402,10 @@ function buildOracleReachability(claimsById, obligations, diagnostics) {
       ));
       continue;
     }
+    parentsByClaim.get(claimId)?.push(parentId);
     childrenByClaim.get(parentId)?.push(claimId);
     indegree.set(claimId, (indegree.get(claimId) ?? 0) + 1);
+    if ((indegree.get(claimId) ?? 0) > 1) forest = false;
   }
   /** @type {string[]} */
   const queue = [];
@@ -429,16 +415,10 @@ function buildOracleReachability(claimsById, obligations, diagnostics) {
   while (cursor < queue.length) {
     const claimId = /** @type {string} */ (queue[cursor]);
     cursor += 1;
-    const labels = labelsByClaim.get(claimId);
     const children = /** @type {string[]} */ (childrenByClaim.get(claimId) ?? []);
     children.sort(compareCodePoints);
     for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
       const childId = /** @type {string} */ (children[childIndex]);
-      if (labels && labels.size > 0) {
-        const childLabels = labelsByClaim.get(childId) ?? new Set();
-        for (const label of labels) childLabels.add(label);
-        labelsByClaim.set(childId, childLabels);
-      }
       const remaining = (indegree.get(childId) ?? 0) - 1;
       indegree.set(childId, remaining);
       if (remaining === 0) queue.push(childId);
@@ -447,76 +427,310 @@ function buildOracleReachability(claimsById, obligations, diagnostics) {
   if (cursor !== claimsById.size) diagnostics.push(diagnostic(
     'traceability', 'EVIDENCE_ANCESTRY_INVALID', '/evidence_claims/claims', 'accepted evidence ancestry must be an acyclic closed graph'
   ));
-  return labelsByClaim;
+  if (cursor !== claimsById.size) forest = false;
+
+  const componentByClaim = new Map();
+  let component = 0;
+  for (const claimId of [...claimsById.keys()].sort(compareCodePoints)) {
+    if (componentByClaim.has(claimId)) continue;
+    const pending = [claimId];
+    componentByClaim.set(claimId, component);
+    let position = 0;
+    while (position < pending.length) {
+      const current = pending[position];
+      position += 1;
+      const neighbors = [...(parentsByClaim.get(current) ?? []), ...(childrenByClaim.get(current) ?? [])].sort(compareCodePoints);
+      for (const neighbor of neighbors) if (!componentByClaim.has(neighbor)) {
+        componentByClaim.set(neighbor, component);
+        pending.push(neighbor);
+      }
+    }
+    component += 1;
+  }
+
+  const entryByClaim = new Map();
+  const exitByClaim = new Map();
+  const topologicalIndexByClaim = new Map();
+  for (let index = 0; index < cursor; index += 1) topologicalIndexByClaim.set(queue[index], index);
+  if (forest) {
+    let time = 0;
+    const roots = [...claimsById.keys()].filter((claimId) => (parentsByClaim.get(claimId)?.length ?? 0) === 0).sort(compareCodePoints);
+    for (const root of roots) {
+      /** @type {Array<{claimId:string,exit:boolean}>} */
+      const pending = [{ claimId: root, exit: false }];
+      while (pending.length > 0) {
+        const item = /** @type {{claimId:string,exit:boolean}} */ (pending.pop());
+        if (item.exit) {
+          exitByClaim.set(item.claimId, time - 1);
+          continue;
+        }
+        entryByClaim.set(item.claimId, time);
+        time += 1;
+        pending.push({ claimId: item.claimId, exit: true });
+        const children = childrenByClaim.get(item.claimId) ?? [];
+        for (let index = children.length - 1; index >= 0; index -= 1) pending.push({ claimId: children[index], exit: false });
+      }
+    }
+  }
+  return {
+    claimsById, parentsByClaim, childrenByClaim, componentByClaim,
+    entryByClaim, exitByClaim, topologicalIndexByClaim, forest
+  };
 }
 
 /**
- * Exact iterative capacitated matching over compressed relation groups.
- * @param {Array<{count:number,required:Set<string>}>} requirements
- * @param {Array<{count:number,available:Set<string>}>} expectations
+ * @param {string} ancestor
+ * @param {string} descendant
+ * @param {ReturnType<typeof buildEvidenceGraph>} graph
  */
-function hasCompleteOracleOwnership(requirements, expectations) {
-  const source = 0;
-  const requirementOffset = 1;
-  const expectationOffset = requirementOffset + requirements.length;
-  const sink = expectationOffset + expectations.length;
-  /** @type {Array<Array<{to:number,capacity:number,reverse:number}>>} */
-  const graph = Array.from({ length: sink + 1 }, () => []);
-  /** @param {number} from @param {number} to @param {number} capacity */
-  const addEdge = (from, to, capacity) => {
-    const forward = { to, capacity, reverse: graph[to].length };
-    const reverse = { to: from, capacity: 0, reverse: graph[from].length };
-    graph[from].push(forward);
-    graph[to].push(reverse);
+function isEvidenceAncestor(ancestor, descendant, graph) {
+  if (ancestor === descendant) return graph.claimsById.has(ancestor);
+  if (!graph.claimsById.has(ancestor) || !graph.claimsById.has(descendant)
+    || graph.componentByClaim.get(ancestor) !== graph.componentByClaim.get(descendant)) return false;
+  if (graph.forest) {
+    const ancestorEntry = graph.entryByClaim.get(ancestor);
+    const descendantEntry = graph.entryByClaim.get(descendant);
+    return ancestorEntry !== undefined && descendantEntry !== undefined
+      && ancestorEntry <= descendantEntry && descendantEntry <= (graph.exitByClaim.get(ancestor) ?? -1);
+  }
+  if ((graph.topologicalIndexByClaim.get(ancestor) ?? Number.MAX_SAFE_INTEGER)
+    >= (graph.topologicalIndexByClaim.get(descendant) ?? -1)) return false;
+  const pending = [descendant];
+  const visited = new Set();
+  let found = false;
+  while (pending.length > 0 && !found) {
+    const claimId = /** @type {string} */ (pending.pop());
+    if (claimId === ancestor) {
+      found = true;
+      break;
+    }
+    if (visited.has(claimId)) continue;
+    visited.add(claimId);
+    const parents = graph.parentsByClaim.get(claimId) ?? [];
+    for (let index = parents.length - 1; index >= 0; index -= 1) pending.push(parents[index]);
+  }
+  return found;
+}
+
+/** @param {string} left @param {string} right @param {ReturnType<typeof buildEvidenceGraph>} graph */
+function isEvidenceRelated(left, right, graph) {
+  return isEvidenceAncestor(left, right, graph) || isEvidenceAncestor(right, left, graph);
+}
+
+/** @param {number} size */
+function fenwick(size) {
+  const tree = new Array(size + 1).fill(0);
+  return {
+    /** @param {number} index @param {number} delta */
+    add(index, delta) {
+      for (let cursor = index + 1; cursor < tree.length; cursor += cursor & -cursor) tree[cursor] += delta;
+    },
+    /** @param {number} end */
+    sum(end) {
+      let total = 0;
+      for (let cursor = end; cursor > 0; cursor -= cursor & -cursor) total += tree[cursor];
+      return total;
+    },
+    /** @param {number} target */
+    lowerBound(target) {
+      let index = 0;
+      let step = 1;
+      while (step * 2 < tree.length) step *= 2;
+      for (; step > 0; step = Math.floor(step / 2)) {
+        const next = index + step;
+        if (next < tree.length && tree[next] < target) {
+          index = next;
+          target -= tree[next];
+        }
+      }
+      return index;
+    }
   };
-  let demand = 0;
-  for (let index = 0; index < requirements.length; index += 1) {
-    demand += requirements[index].count;
-    addEdge(source, requirementOffset + index, requirements[index].count);
-    for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
-      let covered = requirements[index].required.size > 0;
-      for (const oracleRef of requirements[index].required) if (!expectations[expectationIndex].available.has(oracleRef)) {
-        covered = false;
-        break;
-      }
-      if (covered) addEdge(requirementOffset + index, expectationOffset + expectationIndex, requirements[index].count);
+}
+
+/**
+ * Exact matching for forest ancestry: qualifying expectation sets are nested
+ * or disjoint subtrees, so deepest-first interval allocation is sufficient.
+ * @param {Array<{required:string[]}>} requirements
+ * @param {Array<{evidenceRef:string}>} expectations
+ * @param {ReturnType<typeof buildEvidenceGraph>} graph
+ */
+function matchForestOracleOwnership(requirements, expectations, graph) {
+  const anchors = [];
+  for (const requirement of requirements) {
+    if (requirement.required.length === 0) return false;
+    let anchor = requirement.required[0];
+    for (let index = 1; index < requirement.required.length; index += 1) {
+      const candidate = requirement.required[index];
+      if (isEvidenceAncestor(anchor, candidate, graph)) anchor = candidate;
+      else if (!isEvidenceAncestor(candidate, anchor, graph)) return null;
     }
+    const start = graph.entryByClaim.get(anchor);
+    const end = graph.exitByClaim.get(anchor);
+    if (start === undefined || end === undefined) return false;
+    anchors.push({ start, end });
   }
-  for (let index = 0; index < expectations.length; index += 1) {
-    addEdge(expectationOffset + index, sink, expectations[index].count);
+  anchors.sort((left, right) => right.start - left.start || left.end - right.end);
+  const capacity = fenwick(graph.claimsById.size);
+  for (const expectation of expectations) {
+    const position = graph.entryByClaim.get(expectation.evidenceRef);
+    if (position !== undefined) capacity.add(position, 1);
   }
-  let flow = 0;
-  while (flow < demand) {
-    const parentNode = new Array(graph.length).fill(-1);
-    const parentEdge = new Array(graph.length).fill(-1);
-    const queue = [source];
-    parentNode[source] = source;
-    let cursor = 0;
-    while (cursor < queue.length && parentNode[sink] < 0) {
-      const node = queue[cursor];
-      cursor += 1;
-      for (let edgeIndex = 0; edgeIndex < graph[node].length; edgeIndex += 1) {
-        const edge = graph[node][edgeIndex];
-        if (edge.capacity <= 0 || parentNode[edge.to] >= 0) continue;
-        parentNode[edge.to] = node;
-        parentEdge[edge.to] = edgeIndex;
-        queue.push(edge.to);
-        if (edge.to === sink) break;
-      }
-    }
-    if (parentNode[sink] < 0) return false;
-    let amount = demand - flow;
-    for (let node = sink; node !== source; node = parentNode[node]) {
-      amount = Math.min(amount, graph[parentNode[node]][parentEdge[node]].capacity);
-    }
-    for (let node = sink; node !== source; node = parentNode[node]) {
-      const edge = graph[parentNode[node]][parentEdge[node]];
-      edge.capacity -= amount;
-      graph[node][edge.reverse].capacity += amount;
-    }
-    flow += amount;
+  for (const anchor of anchors) {
+    const before = capacity.sum(anchor.start);
+    if (capacity.sum(anchor.end + 1) === before) return false;
+    const position = capacity.lowerBound(before + 1);
+    capacity.add(position, -1);
   }
   return true;
+}
+
+/**
+ * General-DAG fallback searches accepted evidence descendants while building
+ * an augmenting path. It stores O(graph + requirements + expectations) state,
+ * stops as soon as a free concrete expectation is found, and never materializes
+ * the potentially dense transitive obligation/expectation relation.
+ * @param {Array<{required:string[]}>} requirements
+ * @param {Array<{evidenceRef:string}>} expectations
+ * @param {ReturnType<typeof buildEvidenceGraph>} graph
+ */
+function matchGeneralOracleOwnership(requirements, expectations, graph) {
+  const matchedRequirementByExpectation = new Array(expectations.length).fill(-1);
+  const matchedExpectationByRequirement = new Array(requirements.length).fill(-1);
+  /** @type {Map<string, number[]>} */
+  const expectationsByClaim = new Map();
+  for (let index = 0; index < expectations.length; index += 1) {
+    const claimId = expectations[index].evidenceRef;
+    const atClaim = expectationsByClaim.get(claimId) ?? [];
+    atClaim.push(index);
+    expectationsByClaim.set(claimId, atClaim);
+  }
+  /** @type {string[]} */
+  const anchorByRequirement = [];
+  for (const requirement of requirements) {
+    if (requirement.required.length === 0
+      || requirement.required.some((root) => !graph.claimsById.has(root))) return false;
+    let anchor = requirement.required[0];
+    for (let index = 1; index < requirement.required.length; index += 1) {
+      const candidate = requirement.required[index];
+      if ((graph.topologicalIndexByClaim.get(candidate) ?? -1)
+        > (graph.topologicalIndexByClaim.get(anchor) ?? -1)) anchor = candidate;
+    }
+    anchorByRequirement.push(anchor);
+  }
+  const requirementOrder = requirements.map((_, index) => index).sort((left, right) =>
+    (graph.topologicalIndexByClaim.get(anchorByRequirement[right]) ?? -1)
+      - (graph.topologicalIndexByClaim.get(anchorByRequirement[left]) ?? -1)
+    || left - right);
+  /** @param {number} requirementIndex @param {string} claimId */
+  const compatible = (requirementIndex, claimId) => requirements[requirementIndex].required.every(
+    (root) => root === anchorByRequirement[requirementIndex] || isEvidenceAncestor(root, claimId, graph)
+  );
+  for (const start of requirementOrder) {
+    const seenRequirements = new Set([start]);
+    const seenExpectations = new Set();
+    const parentRequirementByExpectation = new Array(expectations.length).fill(-1);
+    const queue = [start];
+    let cursor = 0;
+    let freeExpectation = -1;
+    while (cursor < queue.length && freeExpectation < 0) {
+      const requirementIndex = queue[cursor];
+      cursor += 1;
+      const pendingClaims = [anchorByRequirement[requirementIndex]];
+      const seenClaims = new Set();
+      let claimCursor = 0;
+      while (claimCursor < pendingClaims.length && freeExpectation < 0) {
+        const claimId = pendingClaims[claimCursor];
+        claimCursor += 1;
+        if (seenClaims.has(claimId)) continue;
+        seenClaims.add(claimId);
+        if (compatible(requirementIndex, claimId)) {
+          const atClaim = expectationsByClaim.get(claimId) ?? [];
+          for (let offset = 0; offset < atClaim.length; offset += 1) {
+            const expectationIndex = atClaim[offset];
+            if (seenExpectations.has(expectationIndex)) continue;
+            seenExpectations.add(expectationIndex);
+            parentRequirementByExpectation[expectationIndex] = requirementIndex;
+            const matched = matchedRequirementByExpectation[expectationIndex];
+            if (matched < 0) {
+              freeExpectation = expectationIndex;
+              break;
+            }
+            if (!seenRequirements.has(matched)) {
+              seenRequirements.add(matched);
+              queue.push(matched);
+            }
+          }
+        }
+        const children = graph.childrenByClaim.get(claimId) ?? [];
+        for (let childIndex = 0; childIndex < children.length; childIndex += 1) pendingClaims.push(children[childIndex]);
+      }
+    }
+    if (freeExpectation < 0) return false;
+    let expectationIndex = freeExpectation;
+    while (expectationIndex >= 0) {
+      const requirementIndex = parentRequirementByExpectation[expectationIndex];
+      const previousExpectation = matchedExpectationByRequirement[requirementIndex];
+      matchedExpectationByRequirement[requirementIndex] = expectationIndex;
+      matchedRequirementByExpectation[expectationIndex] = requirementIndex;
+      expectationIndex = previousExpectation;
+    }
+  }
+  return true;
+}
+
+/** @param {Array<{required:string[]}>} requirements @param {Array<{evidenceRef:string}>} expectations @param {ReturnType<typeof buildEvidenceGraph>} graph */
+function hasCompleteOracleOwnership(requirements, expectations, graph) {
+  if (requirements.length > expectations.length) return false;
+  if (graph.forest) {
+    const forestResult = matchForestOracleOwnership(requirements, expectations, graph);
+    if (forestResult !== null) return forestResult;
+  }
+  return matchGeneralOracleOwnership(requirements, expectations, graph);
+}
+
+/**
+ * Rebuild the exact Task 8 direct-root summary from frozen Case fields.
+ * @param {Record<string, unknown>} caseDraft
+ * @param {Record<string, unknown>[]} obligations
+ * @param {Map<string, Record<string, unknown>>} factsById
+ */
+function caseDirectEvidence(caseDraft, obligations, factsById) {
+  const direct = new Set();
+  /** @param {unknown} value */
+  const add = (value) => { if (typeof value === 'string' && value.length > 0) direct.add(value); };
+  if (isRecord(caseDraft.role)) add(caseDraft.role.evidence_ref);
+  for (const ref of strings(caseDraft.source_claim_ids)) add(ref);
+  for (const factId of strings(caseDraft.fact_ids)) {
+    const fact = factsById.get(factId);
+    if (!fact) continue;
+    add(fact.claim_id);
+    for (const ref of strings(fact.source_claim_ids)) add(ref);
+  }
+  for (const obligation of obligations) {
+    for (const ref of strings(obligation.source_claim_ids)) add(ref);
+    for (const ref of strings(obligation.required_oracle_refs)) add(ref);
+  }
+  for (const precondition of records(caseDraft.preconditions)) {
+    add(precondition.evidence_ref);
+    for (const ref of strings(precondition.source_claim_ids)) add(ref);
+  }
+  for (const datum of records(caseDraft.data)) if (isRecord(datum.provenance)) add(datum.provenance.ref);
+  for (const step of records(caseDraft.steps)) {
+    add(step.action_evidence_ref);
+    for (const expectation of records(step.expectations)) add(expectation.evidence_ref);
+  }
+  if (isRecord(caseDraft.testability_profile)) {
+    for (const capability of records(caseDraft.testability_profile.capabilities)) add(capability.provenance_ref);
+    for (const observer of records(caseDraft.testability_profile.observers)) add(observer.provenance_ref);
+    for (const control of records(caseDraft.testability_profile.controls)) add(control.provenance_ref);
+  }
+  if (isRecord(caseDraft.post_state)) add(caseDraft.post_state.evidence_ref);
+  if (isRecord(caseDraft.cleanup)) {
+    if (caseDraft.cleanup.required === true) add(caseDraft.cleanup.evidence_ref);
+    else if (caseDraft.cleanup.required === false) add(caseDraft.cleanup.no_cleanup_evidence_ref);
+  }
+  return [...direct].sort(compareCodePoints);
 }
 
 /**
@@ -525,28 +739,30 @@ function hasCompleteOracleOwnership(requirements, expectations) {
  * @param {Map<string, Record<string, unknown>>} obligationsById
  * @param {Map<string, Record<string, unknown>>} routesByFact
  * @param {Map<string, Record<string, unknown>>} factsById
+ * @param {Map<string, Set<string>>} factIdsByObligation
  * @param {Map<string, Record<string, unknown>>} pointsById
- * @param {Map<string, Set<string>>} oracleLabelsByClaim
+ * @param {ReturnType<typeof buildEvidenceGraph>} evidenceGraph
  * @param {Diagnostic[]} diagnostics
  */
-function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact, factsById, pointsById, oracleLabelsByClaim, diagnostics) {
+function validateCaseTraceability(
+  caseDraft, lane, obligationsById, routesByFact, factsById,
+  factIdsByObligation, pointsById, evidenceGraph, diagnostics
+) {
   const caseId = typeof caseDraft.case_id === 'string' ? caseDraft.case_id : 'invalid';
   const path = `/${lane}/${pointerPart(caseId)}`;
   const factIds = strings(caseDraft.fact_ids);
   const obligationIds = strings(caseDraft.obligation_ids);
-  const evidenceRefs = new Set(strings(caseDraft.evidence_refs));
+  const linkedObligations = [];
   for (const obligationId of obligationIds) {
     const obligation = obligationsById.get(obligationId);
     if (!obligation) diagnostics.push(diagnostic(
       'reference', 'CASE_OBLIGATION_UNKNOWN', `${path}/obligation_ids/${pointerPart(obligationId)}`, 'Case references an unknown formal Test Point'
     ));
     else {
+      linkedObligations.push(obligation);
       const point = pointsById.get(obligationId);
       if (point?.classification !== lane) diagnostics.push(diagnostic(
         'traceability', 'CASE_DISPOSITION_MISMATCH', `${path}/obligation_ids/${pointerPart(obligationId)}`, 'Case lane and final formal disposition must match'
-      ));
-      for (const ref of [...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs)]) if (!evidenceRefs.has(ref)) diagnostics.push(diagnostic(
-        'traceability', 'CASE_ORACLE_TRACE_MISSING', `${path}/evidence_refs/${pointerPart(ref)}`, 'Case must retain each linked Test Point source and Oracle reference'
       ));
     }
   }
@@ -560,6 +776,45 @@ function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact
       'traceability', 'CASE_FACT_TRACE_MISSING', `${path}/fact_ids/${pointerPart(factId)}`, 'Case fact must route to one of the Case formal Test Points'
     ));
   }
+  const requiredFactIds = new Set();
+  for (const obligationId of obligationIds) {
+    for (const factId of factIdsByObligation.get(obligationId) ?? []) requiredFactIds.add(factId);
+  }
+  const submittedFactIds = new Set(factIds);
+  for (const factId of requiredFactIds) if (!submittedFactIds.has(factId)) diagnostics.push(diagnostic(
+    'traceability', 'CASE_FACT_ROUTE_LINK_MISSING', `${path}/fact_ids/${pointerPart(factId)}`,
+    'every Case must include every normative fact routed to one of its linked formal Test Points'
+  ));
+  const actualEvidence = caseDirectEvidence(caseDraft, linkedObligations, factsById);
+  const submittedEvidence = strings(caseDraft.evidence_refs).sort(compareCodePoints);
+  for (const ref of actualEvidence) {
+    const claim = evidenceGraph.claimsById.get(ref);
+    if (!claim) diagnostics.push(diagnostic(
+      'reference', 'CASE_EVIDENCE_REFERENCE_UNKNOWN', `${path}/evidence_refs/${pointerPart(ref)}`,
+      'every direct Case evidence reference must exist in accepted evidence'
+    ));
+  }
+  if (canonicalStringify(actualEvidence) !== canonicalStringify(submittedEvidence)) diagnostics.push(diagnostic(
+    'traceability', 'CASE_EVIDENCE_SUMMARY_MISMATCH', `${path}/evidence_refs`,
+    'Case evidence_refs must exactly summarize all direct evidence roots used by frozen Case fields'
+  ));
+  const formalRoots = new Set();
+  for (const obligation of linkedObligations) {
+    for (const ref of strings(obligation.source_claim_ids)) formalRoots.add(ref);
+    for (const ref of strings(obligation.required_oracle_refs)) formalRoots.add(ref);
+  }
+  for (const factId of factIds) {
+    const fact = factsById.get(factId);
+    if (!fact) continue;
+    formalRoots.add(String(fact.claim_id ?? ''));
+    for (const ref of strings(fact.source_claim_ids)) formalRoots.add(ref);
+  }
+  for (const ref of strings(caseDraft.source_claim_ids)) if (![...formalRoots].some(
+    (root) => isEvidenceAncestor(ref, root, evidenceGraph)
+  )) diagnostics.push(diagnostic(
+    'traceability', 'CASE_SOURCE_CLAIM_OUTSIDE_CLOSURE', `${path}/source_claim_ids/${pointerPart(ref)}`,
+    'Case source_claim_ids must stay inside the linked formal evidence ancestry'
+  ));
   const expectations = caseExpectations(caseDraft);
   const expectationIds = strings(expectations.map((item) => item.expectation_id));
   const signature = isRecord(caseDraft.execution_signature) ? caseDraft.execution_signature : {};
@@ -569,29 +824,19 @@ function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact
     'traceability', 'CASE_ORACLE_TRACE_MISSING', `${path}/execution_signature/oracle_refs`,
     'every covered Test Point requires a distinct independently locatable expectation Oracle'
   ));
-  /** @type {Map<string, {count:number,required:Set<string>}>} */
-  const requirementGroups = new Map();
+  /** @type {Array<{required:string[]}>} */
+  const requirementList = [];
   for (const obligationId of obligationIds) {
     const oracleRoots = strings(obligationsById.get(obligationId)?.required_oracle_refs).sort(compareCodePoints);
-    const key = canonicalStringify(oracleRoots);
-    const group = requirementGroups.get(key);
-    if (group) group.count += 1;
-    else requirementGroups.set(key, { count: 1, required: new Set(oracleRoots) });
+    requirementList.push({ required: oracleRoots });
   }
-  /** @type {Map<string, {count:number,available:Set<string>}>} */
-  const expectationGroups = new Map();
+  /** @type {Array<{evidenceRef:string}>} */
+  const expectationList = [];
   for (const expectation of expectations) {
     const evidenceRef = String(expectation.evidence_ref ?? '');
-    const labels = oracleLabelsByClaim.get(evidenceRef) ?? new Set();
-    const orderedLabels = [...labels].sort(compareCodePoints);
-    const key = canonicalStringify(orderedLabels);
-    const group = expectationGroups.get(key);
-    if (group) group.count += 1;
-    else expectationGroups.set(key, { count: 1, available: new Set(orderedLabels) });
+    expectationList.push({ evidenceRef });
   }
-  const requirementList = [...requirementGroups.entries()].sort((left, right) => compareCodePoints(left[0], right[0])).map(([, group]) => group);
-  const expectationList = [...expectationGroups.entries()].sort((left, right) => compareCodePoints(left[0], right[0])).map(([, group]) => group);
-  if (!hasCompleteOracleOwnership(requirementList, expectationList)) diagnostics.push(diagnostic(
+  if (!hasCompleteOracleOwnership(requirementList, expectationList, evidenceGraph)) diagnostics.push(diagnostic(
     'traceability', 'CASE_ORACLE_OWNERSHIP_INCOMPLETE', `${path}/steps`,
     'every linked Test Point must own one distinct concrete expectation covering all required Oracles through accepted ancestry'
   ));
@@ -632,7 +877,7 @@ function validateRootShape(root, path, current, diagnostics) {
   canonicalStrings(root.semantic_refs, `${path}/semantic_refs`, diagnostics, true);
   canonicalStrings(root.affected_obligation_ids, `${path}/affected_obligation_ids`, diagnostics, true);
   canonicalStrings(root.reasons, `${path}/reasons`, diagnostics, true);
-  canonicalStrings(root.evidence_refs, `${path}/evidence_refs`, diagnostics, true);
+  canonicalStrings(root.evidence_refs, `${path}/evidence_refs`, diagnostics);
   if (typeof root.answerable !== 'boolean' || (!current && typeof root.current !== 'boolean')) diagnostics.push(diagnostic(
     'schema', 'ROOT_LEDGER_FIELD_INVALID', path, 'root answerability and ledger currency must be booleans'
   ));
@@ -672,6 +917,13 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
       'traceability', 'ROOT_LEDGER_KEY_MISMATCH', `/clarification/state/root_snapshot_ledger/${pointerPart(rootId)}/root_issue_key`,
       'root ledger key must be the canonical semantic identity projection'
     ));
+    const expectedId = stableId('root', {
+      missing_type: String(entry.missing_type ?? ''), semantic_refs: semanticRefs, scope: String(entry.scope ?? '')
+    });
+    if (rootId !== expectedId) diagnostics.push(diagnostic(
+      'traceability', 'ROOT_LEDGER_ID_MISMATCH', `/clarification/state/root_snapshot_ledger/${pointerPart(rootId)}/root_issue_id`,
+      'root ledger identity must derive from its canonical semantic key'
+    ));
   }
   const rootsById = new Map();
   for (const root of roots) {
@@ -700,6 +952,7 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
     'current root issues must exactly equal ledger entries marked current'
   ));
   const dispositionIds = new Set();
+  const dispositionById = new Map();
   for (const disposition of dispositions) {
     const rootId = String(disposition.root_issue_id ?? '');
     requireClosed(disposition, ['root_issue_id', 'status'], `/clarification/state/root_issue_dispositions/${pointerPart(rootId)}`, diagnostics, 'ROOT_LEDGER_PROPERTY_UNKNOWN');
@@ -708,6 +961,7 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
       'each ledger root requires exactly one lifecycle disposition'
     ));
     dispositionIds.add(rootId);
+    dispositionById.set(rootId, String(disposition.status ?? ''));
     if (!ROOT_DISPOSITIONS.has(String(disposition.status ?? ''))) diagnostics.push(diagnostic(
       'classification', 'ROOT_LEDGER_DISPOSITION_INVALID', `/clarification/state/root_issue_dispositions/${pointerPart(rootId)}/status`,
       'root lifecycle disposition is outside the frozen Task 9 enumeration'
@@ -721,24 +975,43 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
     'traceability', 'ROOT_LEDGER_DISPOSITION_MISSING', `/clarification/state/root_snapshot_ledger/${pointerPart(rootId)}`,
     'every authoritative root ledger entry requires one lifecycle disposition'
   ));
-  /** @type {Map<string, Map<string, Record<string, unknown>[]>>} */
-  const rootsByObligationReason = new Map();
   for (const entry of ledger) {
+    const rootId = String(entry.root_issue_id ?? '');
+    const status = dispositionById.get(rootId);
+    if (entry.current === true && (status === 'resolved_final' || status === 'resolved_temporary')) diagnostics.push(diagnostic(
+      'classification', 'ROOT_LEDGER_DISPOSITION_CURRENT_INVALID', `/clarification/state/root_issue_dispositions/${pointerPart(rootId)}`,
+      'a current Blocked root cannot simultaneously be resolved'
+    ));
+    if (entry.current !== true && status === 'asked') diagnostics.push(diagnostic(
+      'classification', 'ROOT_LEDGER_DISPOSITION_CURRENT_INVALID', `/clarification/state/root_issue_dispositions/${pointerPart(rootId)}`,
+      'an asked Blocked root must remain current'
+    ));
+  }
+  /** @type {Map<string, Map<string, Record<string, unknown>[]>>} */
+  const currentByObligationReason = new Map();
+  /** @type {Map<string, Map<string, Record<string, unknown>[]>>} */
+  const retainedByObligationReason = new Map();
+  for (const entry of ledger) {
+    const status = dispositionById.get(String(entry.root_issue_id ?? ''));
+    const target = entry.current === true ? currentByObligationReason
+      : (status === 'suppressed_unknown' || status === 'suppressed_deferred' || status === 'open')
+        ? retainedByObligationReason : null;
+    if (!target) continue;
     const reasons = strings(entry.reasons);
     const obligationIds = strings(entry.affected_obligation_ids);
     for (let obligationIndex = 0; obligationIndex < obligationIds.length; obligationIndex += 1) {
       for (let reasonIndex = 0; reasonIndex < reasons.length; reasonIndex += 1) {
         const obligationId = obligationIds[obligationIndex];
         const reason = reasons[reasonIndex];
-        const byReason = rootsByObligationReason.get(obligationId) ?? new Map();
+        const byReason = target.get(obligationId) ?? new Map();
         const matches = byReason.get(reason) ?? [];
         matches.push(entry);
         byReason.set(reason, matches);
-        rootsByObligationReason.set(obligationId, byReason);
+        target.set(obligationId, byReason);
       }
     }
   }
-  return rootsByObligationReason;
+  return { ledgerById, dispositionById, currentByObligationReason, retainedByObligationReason };
 }
 
 /**
@@ -753,7 +1026,7 @@ function buildBundleTrusted(context) {
   const diagnostics = [];
   const obligations = records(normalized.obligations.obligations);
   const factRoutes = records(normalized.obligations.fact_routes);
-  const facts = records(normalized.evidenceClaims.fact_ledger);
+  const allFacts = records(normalized.evidenceClaims.fact_ledger);
   const obligationsById = new Map();
   const claimsById = new Map();
   for (const claim of records(normalized.evidenceClaims.claims)) {
@@ -763,17 +1036,24 @@ function buildBundleTrusted(context) {
     ));
     else claimsById.set(claimId, claim);
   }
+  const allFactsById = new Map();
   const factsById = new Map();
-  for (const fact of facts) {
+  const facts = [];
+  for (const fact of allFacts) {
     const factId = String(fact.fact_id ?? '');
-    if (factsById.has(factId)) diagnostics.push(diagnostic(
+    if (allFactsById.has(factId)) diagnostics.push(diagnostic(
       'coverage', 'REQUIREMENT_FACT_DUPLICATE', `/evidence_claims/fact_ledger/${pointerPart(factId)}`, 'accepted requirement fact IDs must be unique'
     ));
-    else factsById.set(factId, fact);
+    else allFactsById.set(factId, fact);
     const claimRefs = [String(fact.claim_id ?? ''), ...strings(fact.source_claim_ids)];
     for (let index = 0; index < claimRefs.length; index += 1) if (!claimsById.has(claimRefs[index])) diagnostics.push(diagnostic(
       'reference', 'REQUIREMENT_FACT_CLAIM_UNKNOWN', `/evidence_claims/fact_ledger/${pointerPart(factId)}`, 'fact ledger references must exist in accepted evidence'
     ));
+    const owningClaim = claimsById.get(String(fact.claim_id ?? ''));
+    if (fact.status !== 'diagnostic' && (owningClaim?.kind === 'requirement' || owningClaim?.kind === 'assumption')) {
+      facts.push(fact);
+      factsById.set(factId, fact);
+    }
   }
   for (const obligation of obligations) {
     const id = String(obligation.obligation_id ?? '');
@@ -785,8 +1065,12 @@ function buildBundleTrusted(context) {
     const factId = String(route.fact_id ?? '');
     if (routesByFact.has(factId)) diagnostics.push(diagnostic('coverage', 'REQUIREMENT_FACT_ROUTE_DUPLICATE', `/fact_routes/${pointerPart(factId)}`, 'requirement facts must have exactly one canonical route'));
     else routesByFact.set(factId, route);
-    if (!factsById.has(factId)) diagnostics.push(diagnostic(
+    if (!allFactsById.has(factId)) diagnostics.push(diagnostic(
       'reference', 'FACT_ROUTE_FACT_UNKNOWN', `/fact_routes/${pointerPart(factId)}`, 'fact route references an unknown accepted requirement fact'
+    ));
+    else if (!factsById.has(factId)) diagnostics.push(diagnostic(
+      'classification', 'FACT_ROUTE_NON_NORMATIVE', `/fact_routes/${pointerPart(factId)}`,
+      'Task 7 formal routes may contain only normative requirement or assumption facts'
     ));
     if (route.route_type === 'obligations') for (const obligationId of strings(route.obligation_ids)) {
       if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic(
@@ -798,7 +1082,41 @@ function buildBundleTrusted(context) {
   for (const factId of factsById.keys()) if (!routesByFact.has(factId)) diagnostics.push(diagnostic(
     'coverage', 'REQUIREMENT_FACT_ROUTE_MISSING', `/evidence_claims/fact_ledger/${pointerPart(factId)}`, 'every accepted requirement fact requires exactly one canonical route'
   ));
-  const oracleLabelsByClaim = buildOracleReachability(claimsById, obligations, diagnostics);
+  const evidenceGraph = buildEvidenceGraph(claimsById, diagnostics);
+  /** @type {Map<string, Set<string>>} */
+  const factRootsByObligation = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const factIdsByObligation = new Map();
+  for (const route of factRoutes) if (route.route_type === 'obligations') {
+    const fact = factsById.get(String(route.fact_id ?? ''));
+    if (!fact) continue;
+    const roots = [String(fact.claim_id ?? ''), ...strings(fact.source_claim_ids)];
+    for (const obligationId of strings(route.obligation_ids)) {
+      const target = factRootsByObligation.get(obligationId) ?? new Set();
+      for (const ref of roots) target.add(ref);
+      factRootsByObligation.set(obligationId, target);
+      const factIds = factIdsByObligation.get(obligationId) ?? new Set();
+      factIds.add(String(route.fact_id ?? ''));
+      factIdsByObligation.set(obligationId, factIds);
+    }
+  }
+  /** @type {Map<string, Set<string>>} */
+  const formalRootsByObligation = new Map();
+  for (const obligation of obligations) {
+    const obligationId = String(obligation.obligation_id ?? '');
+    for (const field of ['source_claim_ids', 'required_oracle_refs']) {
+      for (const ref of strings(obligation[field])) if (!claimsById.has(ref)) diagnostics.push(diagnostic(
+        'reference', 'FORMAL_EVIDENCE_REFERENCE_UNKNOWN',
+        `/obligations/${pointerPart(obligationId)}/${field}/${pointerPart(ref)}`,
+        'formal Test Point evidence roots must exist in accepted evidence before reconciliation'
+      ));
+    }
+    const roots = new Set([
+      ...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs),
+      ...(factRootsByObligation.get(obligationId) ?? [])
+    ]);
+    formalRootsByObligation.set(obligationId, roots);
+  }
 
   const semantics = isRecord(normalized.clarification.semantic_snapshot)
     ? normalized.clarification.semantic_snapshot : {};
@@ -872,7 +1190,10 @@ function buildBundleTrusted(context) {
     }
     const finalLanes = new Set(obligationIds.map((id) => String(pointsById.get(id)?.classification ?? 'unknown')));
     if (finalLanes.size === 1 && finalLanes.has(lane)) {
-      validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact, factsById, pointsById, oracleLabelsByClaim, diagnostics);
+      validateCaseTraceability(
+        caseDraft, lane, obligationsById, routesByFact, factsById,
+        factIdsByObligation, pointsById, evidenceGraph, diagnostics
+      );
       (lane === 'grounded' ? grounded : conditional).push(structuredClone(caseDraft));
     } else if (!(finalLanes.size === 1 && finalLanes.has('blocked'))) diagnostics.push(diagnostic(
       'traceability', 'CASE_DISPOSITION_MISMATCH', `/classification/${lane}/${pointerPart(caseId)}`, 'one Case cannot cross final executable and blocked dispositions'
@@ -887,6 +1208,7 @@ function buildBundleTrusted(context) {
   for (const item of blockedInput) {
     const id = String(item.obligation_id ?? '');
     requireClosed(item, ['obligation_id', 'root_issue_id', 'reason', 'risk', 'evidence_refs'], `/classification/blocked/${pointerPart(id)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
+    canonicalStrings(item.evidence_refs, `/classification/blocked/${pointerPart(id)}/evidence_refs`, diagnostics);
     if (blockedInputById.has(id)) diagnostics.push(diagnostic('coverage', 'FORMAL_DISPOSITION_DUPLICATE', `/classification/blocked/${pointerPart(id)}`, 'Blocked disposition must be unique'));
     else blockedInputById.set(id, item);
     if (pointsById.get(id)?.classification !== 'blocked') diagnostics.push(diagnostic(
@@ -897,9 +1219,35 @@ function buildBundleTrusted(context) {
   const state = isRecord(normalized.clarification.state) ? normalized.clarification.state : {};
   requireClosed(state, CLARIFICATION_STATE_KEYS, '/clarification/state', diagnostics, 'ROOT_LEDGER_PROPERTY_UNKNOWN');
   const ledger = records(state.root_snapshot_ledger);
-  const rootsByObligationReason = validateRootLedger(
+  const rootLedger = validateRootLedger(
     roots, ledger, records(state.root_issue_dispositions), normalized.sourceRevision, diagnostics
   );
+  for (const entry of ledger) {
+    const rootId = String(entry.root_issue_id ?? '');
+    const status = rootLedger.dispositionById.get(rootId);
+    if (entry.current !== true && status !== 'suppressed_unknown'
+      && status !== 'suppressed_deferred' && status !== 'open') continue;
+    const evidenceRefs = strings(entry.evidence_refs);
+    const semanticClaimRefs = strings(entry.semantic_refs).filter((ref) => claimsById.has(ref));
+    const claimRefs = [...evidenceRefs, ...semanticClaimRefs];
+    const affectedRoots = new Set();
+    for (const obligationId of strings(entry.affected_obligation_ids)) {
+      const formalRoots = formalRootsByObligation.get(obligationId);
+      if (!formalRoots) {
+        diagnostics.push(diagnostic(
+          'reference', 'BLOCKED_ROOT_OBLIGATION_UNKNOWN', `/clarification/state/root_snapshot_ledger/${pointerPart(rootId)}/affected_obligation_ids/${pointerPart(obligationId)}`,
+          'root ledger associations must reference a formal Test Point'
+        ));
+        continue;
+      }
+      for (const formalRef of formalRoots) affectedRoots.add(formalRef);
+    }
+    for (const ref of claimRefs) if (!claimsById.has(ref)
+      || ![...affectedRoots].some((formalRef) => isEvidenceRelated(ref, formalRef, evidenceGraph))) diagnostics.push(diagnostic(
+      'traceability', 'BLOCKED_ROOT_EVIDENCE_INVALID', `/clarification/state/root_snapshot_ledger/${pointerPart(rootId)}/evidence_refs/${pointerPart(ref)}`,
+      'Blocked root claim evidence must be accepted and related to one affected formal Test Point closure'
+    ));
+  }
   /** @type {Record<string, unknown>[]} */
   const blocked = [];
   for (const point of points.filter((item) => item.classification === 'blocked')) {
@@ -920,7 +1268,16 @@ function buildBundleTrusted(context) {
       'traceability', 'BLOCKED_DISPOSITION_MISMATCH', `/classification/blocked/${pointerPart(obligationId)}`,
       'Task 8 and final Blocked reason and risk must agree'
     ));
-    const candidates = rootsByObligationReason.get(obligationId)?.get(reason) ?? [];
+    if (task8Blocker) for (const ref of strings(task8Blocker.evidence_refs)) {
+      const formalRoots = formalRootsByObligation.get(obligationId) ?? new Set();
+      if (!claimsById.has(ref) || ![...formalRoots].some((formalRef) => isEvidenceRelated(ref, formalRef, evidenceGraph))) diagnostics.push(diagnostic(
+        'traceability', 'BLOCKED_ROOT_EVIDENCE_INVALID', `/classification/blocked/${pointerPart(obligationId)}/evidence_refs/${pointerPart(ref)}`,
+        'Task 8 Blocked evidence must be accepted and related to the formal Test Point closure'
+      ));
+    }
+    const currentCandidates = rootLedger.currentByObligationReason.get(obligationId)?.get(reason) ?? [];
+    const retainedCandidates = rootLedger.retainedByObligationReason.get(obligationId)?.get(reason) ?? [];
+    const candidates = currentCandidates.length > 0 ? currentCandidates : retainedCandidates;
     if (candidates.length !== 1) {
       diagnostics.push(diagnostic(
         'traceability', 'BLOCKED_ROOT_TRACE_INVALID', `/blocked/${pointerPart(obligationId)}`,
@@ -929,6 +1286,10 @@ function buildBundleTrusted(context) {
       continue;
     }
     const root = candidates[0];
+    if (task8Blocker && task8Blocker.root_issue_id !== root.root_issue_id) diagnostics.push(diagnostic(
+      'traceability', 'BLOCKED_ROOT_ID_MISMATCH', `/classification/blocked/${pointerPart(obligationId)}/root_issue_id`,
+      'Task 8 Blocked root identity must equal the selected authoritative Task 9 owner'
+    ));
     const semanticRefs = strings(root.semantic_refs);
     const missingType = typeof root.missing_type === 'string' ? root.missing_type : '';
     const question = typeof root.question === 'string' ? root.question : '';
@@ -980,23 +1341,10 @@ function buildBundleTrusted(context) {
         'traceability', 'NOT_APPLICABLE_EXCLUSION_SCOPE_INVALID', `/classification/not_applicable/${pointerPart(obligationId)}/scope`,
         'NotApplicable exclusion and submitted scope must cover the formal Test Point scope'
       ));
-      const obligationRoots = obligation
-        ? [...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs)] : [];
-      for (const route of factRoutes) if (route.route_type === 'obligations'
-        && strings(route.obligation_ids).includes(obligationId)) {
-        const fact = factsById.get(String(route.fact_id ?? ''));
-        if (fact) obligationRoots.push(String(fact.claim_id ?? ''), ...strings(fact.source_claim_ids));
-      }
-      if (obligationRoots.some((root) => evidenceReaches(exclusionId, root, claimsById)
-        || evidenceReaches(root, exclusionId, claimsById))) diagnostics.push(diagnostic(
+      const obligationRoots = formalRootsByObligation.get(obligationId) ?? new Set();
+      if ([...obligationRoots].some((root) => isEvidenceRelated(exclusionId, root, evidenceGraph))) diagnostics.push(diagnostic(
         'traceability', 'NOT_APPLICABLE_EXCLUSION_RELATED', `/classification/not_applicable/${pointerPart(obligationId)}/exclusion_claim_id`,
         'NotApplicable exclusion must be independent of the formal Test Point evidence closure'
-      ));
-      const exclusionRoutes = factRoutes.filter((route) => route.route_type === 'not_applicable'
-        && route.not_applicable_claim_id === exclusionId);
-      if (exclusionRoutes.length === 0) diagnostics.push(diagnostic(
-        'traceability', 'NOT_APPLICABLE_EXCLUSION_ROUTE_MISSING', `/classification/not_applicable/${pointerPart(obligationId)}/exclusion_claim_id`,
-        'NotApplicable exclusion must be retained by a verified Task 7 fact route'
       ));
     }
   }
@@ -1019,10 +1367,46 @@ function buildBundleTrusted(context) {
 
   const exploratoryIds = strings(delivery.exploratory);
   const exploratoryInput = records(normalized.classification.exploratory);
-  for (const item of exploratoryInput) requireClosed(
-    item, ['exploratory_id', 'title', 'scope', 'risk', 'source_claim_ids'],
-    `/classification/exploratory/${pointerPart(String(item.exploratory_id ?? ''))}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN'
-  );
+  const allFormalRoots = new Set();
+  for (const roots of formalRootsByObligation.values()) for (const ref of roots) allFormalRoots.add(ref);
+  const formalEvidence = new Set();
+  const upward = [...allFormalRoots].sort(compareCodePoints);
+  let evidenceCursor = 0;
+  while (evidenceCursor < upward.length) {
+    const claimId = upward[evidenceCursor];
+    evidenceCursor += 1;
+    if (!claimsById.has(claimId) || formalEvidence.has(claimId)) continue;
+    formalEvidence.add(claimId);
+    for (const parentId of evidenceGraph.parentsByClaim.get(claimId) ?? []) upward.push(parentId);
+  }
+  const formalDependence = new Set(formalEvidence);
+  const downward = [...formalEvidence].sort(compareCodePoints);
+  evidenceCursor = 0;
+  while (evidenceCursor < downward.length) {
+    const claimId = downward[evidenceCursor];
+    evidenceCursor += 1;
+    for (const childId of evidenceGraph.childrenByClaim.get(claimId) ?? []) {
+      if (formalDependence.has(childId)) continue;
+      formalDependence.add(childId);
+      downward.push(childId);
+    }
+  }
+  for (const item of exploratoryInput) {
+    const exploratoryId = String(item.exploratory_id ?? '');
+    requireClosed(
+      item, ['exploratory_id', 'title', 'scope', 'risk', 'source_claim_ids'],
+      `/classification/exploratory/${pointerPart(exploratoryId)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN'
+    );
+    canonicalStrings(
+      item.source_claim_ids,
+      `/classification/exploratory/${pointerPart(exploratoryId)}/source_claim_ids`, diagnostics, true
+    );
+    for (const ref of strings(item.source_claim_ids)) if (!claimsById.has(ref)
+      || formalDependence.has(ref)) diagnostics.push(diagnostic(
+      'traceability', 'EXPLORATORY_EVIDENCE_INVALID', `/classification/exploratory/${pointerPart(exploratoryId)}/source_claim_ids/${pointerPart(ref)}`,
+      'Exploratory source evidence must be accepted and independent of every formal Test Point closure'
+    ));
+  }
   const exploratory = exploratoryInput.map((item) => ({
     exploratory_id: String(item.exploratory_id ?? ''),
     title: String(item.title ?? ''),
@@ -1035,12 +1419,33 @@ function buildBundleTrusted(context) {
   ));
 
   const executableCases = [...grounded, ...conditional];
-  const traceByFact = new Map();
-  for (const caseDraft of executableCases) for (const factId of strings(caseDraft.fact_ids)) {
-    const linked = traceByFact.get(factId) ?? new Set();
-    for (const obligationId of strings(caseDraft.obligation_ids)) linked.add(obligationId);
-    traceByFact.set(factId, linked);
+  /** @type {Map<string, Set<number>>} */
+  const caseIndexesByFact = new Map();
+  /** @type {Map<string, Set<number>>} */
+  const caseIndexesByObligation = new Map();
+  for (let caseIndex = 0; caseIndex < executableCases.length; caseIndex += 1) {
+    const caseDraft = executableCases[caseIndex];
+    for (const factId of strings(caseDraft.fact_ids)) {
+      const indexes = caseIndexesByFact.get(factId) ?? new Set();
+      indexes.add(caseIndex);
+      caseIndexesByFact.set(factId, indexes);
+    }
+    for (const obligationId of strings(caseDraft.obligation_ids)) {
+      const indexes = caseIndexesByObligation.get(obligationId) ?? new Set();
+      indexes.add(caseIndex);
+      caseIndexesByObligation.set(obligationId, indexes);
+    }
   }
+  /** @param {string} factId @param {string} obligationId */
+  const sharesCase = (factId, obligationId) => {
+    const factCases = caseIndexesByFact.get(factId);
+    const obligationCases = caseIndexesByObligation.get(obligationId);
+    if (!factCases || !obligationCases) return false;
+    const smaller = factCases.size <= obligationCases.size ? factCases : obligationCases;
+    const larger = smaller === factCases ? obligationCases : factCases;
+    for (const caseIndex of smaller) if (larger.has(caseIndex)) return true;
+    return false;
+  };
   const requirementEntries = [];
   for (const fact of facts) {
     const factId = String(fact.fact_id);
@@ -1050,9 +1455,8 @@ function buildBundleTrusted(context) {
     else if (route?.route_type === 'obligations') {
       const obligationIds = strings(route.obligation_ids);
       const dispositions = obligationIds.map((id) => String(pointsById.get(id)?.classification ?? 'unknown'));
-      const linked = traceByFact.get(factId) ?? new Set();
       const executableRouteIds = obligationIds.filter((id, index) => dispositions[index] === 'grounded' || dispositions[index] === 'conditional');
-      if (executableRouteIds.length > 0 && executableRouteIds.every((id) => linked.has(id))) status = 'covered';
+      if (executableRouteIds.length > 0 && executableRouteIds.every((id) => sharesCase(factId, id))) status = 'covered';
       else if (dispositions.every((item) => item === 'not_applicable')) status = 'not_applicable';
       else if (executableRouteIds.length > 0) diagnostics.push(diagnostic(
         'traceability', 'REQUIREMENT_CASE_TRACE_MISSING', `/coverage/requirements/${pointerPart(factId)}`, 'an executable fact route requires a reverse Case association'
