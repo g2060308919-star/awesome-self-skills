@@ -100,12 +100,23 @@ test('metamorphic hard gates: E3→E1 only moves Grounded to Conditional', () =>
   assert.deepEqual(conditional.conditional[0].obligation_ids, originalCheckout.obligation_ids);
 });
 
-test('metamorphic hard gates: E1→E0, unsupported review, and approved assumptions obey the lowest gate', () => {
+test('metamorphic hard gate: E1→E0 from a missing formal Oracle changes only the affected Case', () => {
   const e1Input = revisionFromRules([
     journeyRule('checkout', { level: 'E1', decisionDisposition: 'temporary' }),
     journeyRule('shipping', { scope: 'shipping' })
   ], { modules: ['checkout', 'shipping'] });
   assert.equal(e1Input.case_drafts.cases.length, 2, 'locality requires two independent Cases');
+  assert.deepEqual(
+    e1Input.obligation_compilation.contexts_by_view_id.view_checkout
+      .requiredOracleRefsByElementId.rule_checkout,
+    ['claim_checkout'],
+    'the E1 baseline must require its accepted E1 Oracle'
+  );
+  const baselineCheckoutClaim = e1Input.evidence_claims.claims.find(
+    (/** @type {any} */ item) => item.claim_id === 'claim_checkout'
+  );
+  assert.equal(baselineCheckoutClaim.level, 'E1');
+  assert.equal(baselineCheckoutClaim.claim_form, 'decision-record');
   const e1 = finished(e1Input, 'record_only');
   assert.equal(e1.conditional.length, 1, 'reversal permits E1-as-Grounded');
   assert.equal(e1.grounded.length, 1);
@@ -120,19 +131,43 @@ test('metamorphic hard gates: E1→E0, unsupported review, and approved assumpti
   assert.notEqual(affectedBaseline.case_id, unaffectedBaseline.case_id);
   assert.notEqual(affectedBaseline.obligation_ids[0], unaffectedBaseline.obligation_ids[0]);
 
-  const e0Input = structuredClone(e1Input);
+  const e0Input = revisionFromRules([
+    journeyRule('checkout', {
+      level: 'E1', decisionDisposition: 'temporary', hasOracle: false
+    }),
+    journeyRule('shipping', { scope: 'shipping' })
+  ], { modules: ['checkout', 'shipping'] });
   const affectedDraft = e0Input.case_drafts.cases.find(
     (/** @type {any} */ item) => item.scope === 'checkout'
   );
-  assert.ok(affectedDraft, 'the affected E1 Case must exist before lowering support');
-  affectedDraft.steps[0].expectations[0].support_review = 'uncertain';
+  assert.ok(affectedDraft, 'the affected E1 Case must exist before removing its Oracle');
+  assert.deepEqual(
+    e0Input.obligation_compilation.contexts_by_view_id.view_checkout
+      .requiredOracleRefsByElementId.rule_checkout,
+    [],
+    'the E0-like result must come from no accepted formal Oracle dependency'
+  );
+  assert.equal(e0Input.evidence_claims.claims.some(
+    (/** @type {any} */ item) => item.level === 'E0'
+  ), false, 'E0/unknown must stay outside accepted evidence');
+  const checkoutClaimWithoutOracleRole = e0Input.evidence_claims.claims.find(
+    (/** @type {any} */ item) => item.claim_id === 'claim_checkout'
+  );
+  assert.deepEqual(
+    checkoutClaimWithoutOracleRole, baselineCheckoutClaim,
+    'the temporary E1 requirement remains accepted but is no longer a formal Oracle'
+  );
+  assert.deepEqual(
+    e0Input.case_drafts.cases, e1Input.case_drafts.cases,
+    'the E1→E0 mutation must not change support_review or any submitted Case content'
+  );
   const e0 = finished(e0Input, 'record_only');
   assert.equal(e0.grounded.length, 1);
-  assert.equal(e0.conditional.length, 0, 'reversal permits unsupported/E0-as-Conditional');
+  assert.equal(e0.conditional.length, 0, 'reversal permits missing-Oracle/E0-as-Conditional');
   assert.equal(e0.blocked.length, 1);
   assert.equal(e0.exploratory.length, 0);
   assert.equal(e0.blocked[0].obligation_id, affectedBaseline.obligation_ids[0]);
-  assert.match(e0.blocked[0].reason, /SUPPORT_REVIEW_UNCERTAIN/u);
+  assert.equal(e0.blocked[0].reason, 'FORMAL_ORACLE_MISSING');
   const unaffectedResult = e0.grounded.find(
     (/** @type {any} */ item) => item.scope === 'shipping'
   );
@@ -149,7 +184,9 @@ test('metamorphic hard gates: E1→E0, unsupported review, and approved assumpti
   );
   assert.deepEqual(unaffectedCoverageAfter, unaffectedCoverageBefore);
   assert.equal(e0.coverage.formal.total, e1.coverage.formal.total);
+});
 
+test('metamorphic hard gates: unsupported review and approved assumptions obey the lowest gate', () => {
   const unsupportedContext = classificationContext();
   unsupportedContext.caseDrafts.cases[0].steps[0].expectations[0].support_review = 'uncertain';
   const unsupported = classifyCaseDrafts(unsupportedContext);
