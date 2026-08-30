@@ -392,11 +392,13 @@ test('intrinsic mutation during the first await cannot execute caller code or ac
   }
 });
 
-test('first-await mutation of static Array and path methods is contained before promotion', async () => {
+test('first-await mutation of static Array, path, and global conversion methods is contained', async () => {
   /** @type {Array<[Record<string,any>,string]>} */
   const cases = [
     [/** @type {any} */ (Array), 'isArray'],
-    [/** @type {any} */ (path), 'isAbsolute']
+    [/** @type {any} */ (path), 'isAbsolute'],
+    [/** @type {any} */ (globalThis), 'String'],
+    [/** @type {any} */ (globalThis), 'Number']
   ];
   for (const [owner, method] of cases) {
     const runDirectory = await temporaryRun(`intrinsic static ${method}`);

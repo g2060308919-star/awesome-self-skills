@@ -1,5 +1,6 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { canonicalStringify, digest } from './canonical.mjs';
 
 export const STAGE_FILES = Object.freeze({
@@ -98,6 +99,10 @@ const NATIVE_PROCESS = process;
 const NATIVE_PROCESS_KILL = process.kill;
 const NATIVE_PROCESS_PID = process.pid;
 const NATIVE_PROCESS_START_IDENTITY = `${process.pid}:${Date.now() - process.uptime() * 1_000}`;
+const NATIVE_WORKER = Worker;
+const NATIVE_WORKER_ON = Worker.prototype.on;
+const NATIVE_WORKER_POST_MESSAGE = Worker.prototype.postMessage;
+const NATIVE_WORKER_TERMINATE = Worker.prototype.terminate;
 const NATIVE_PATH = path;
 const NATIVE_PATH_BASENAME = path.basename;
 const NATIVE_PATH_DIRNAME = path.dirname;
@@ -340,7 +345,7 @@ function processOwnerIsAlive(ownerPid) {
 
 /** @param {any[]} values @param {unknown} value */
 function append(values, value) {
-  NATIVE_REFLECT_APPLY(NATIVE_DEFINE_PROPERTY, NATIVE_OBJECT, [values, String(values.length), {
+  NATIVE_REFLECT_APPLY(NATIVE_DEFINE_PROPERTY, NATIVE_OBJECT, [values, nativeString(values.length), {
     value, enumerable: true, writable: true, configurable: true
   }]);
 }
@@ -560,6 +565,169 @@ async function observeRunLock(runDirectory, directory, ownerPath) {
   return { status, record: await readRunLockOwner(runDirectory, ownerPath) };
 }
 
+/**
+ * Remove only the exact lock-directory generation created by this caller.
+ * If the canonical name now refers to a successor, leave it untouched.
+ * @param {string} runDirectory
+ * @param {string} lockDirectory
+ * @param {any} expectedStatus
+ * @param {string} label
+ */
+async function removeOwnedLockGeneration(runDirectory, lockDirectory, expectedStatus, label) {
+  let current;
+  try { current = await lstat(lockDirectory); } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  if (!sameFileGeneration(expectedStatus, current)) return;
+  const residue = `${lockDirectory}.${label}-${nativeString(NATIVE_PROCESS_PID)}-${nativeString(++lockSequence)}`;
+  try { await rename(lockDirectory, residue); } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  await syncDirectory(runDirectory);
+  const moved = await lstat(residue);
+  if (!sameFileGeneration(expectedStatus, moved)) {
+    try {
+      await lstat(lockDirectory);
+    } catch (error) {
+      if (isMissing(error)) {
+        await rename(residue, lockDirectory);
+        await syncDirectory(runDirectory);
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+  await rm(residue, { recursive: true, force: true });
+  await syncDirectory(runDirectory);
+}
+
+/**
+ * Run lease pulses on a separate event loop so synchronous compilation cannot
+ * make a live owner appear abandoned. The worker opens the claimed directory
+ * itself and keeps that inode, so a renamed successor is never touched.
+ * @param {string} lockDirectory
+ * @param {any} expectedStatus
+ */
+async function startRunLockHeartbeat(lockDirectory, expectedStatus) {
+  const workerSource = `
+    import { parentPort, workerData } from 'node:worker_threads';
+    import * as fs from 'node:fs/promises';
+    import { constants } from 'node:fs';
+    let handle;
+    let stopped = false;
+    let failureSent = false;
+    let timer;
+    let pulse = Promise.resolve();
+    async function renew() {
+      const seconds = Date.now() / 1000;
+      await handle.utimes(seconds, seconds);
+      await handle.sync();
+    }
+    function schedule() {
+      if (stopped) return;
+      timer = setTimeout(() => {
+        pulse = pulse.then(renew);
+        pulse.then(schedule, fail);
+      }, workerData.interval);
+    }
+    async function fail(error) {
+      if (failureSent) return;
+      failureSent = true;
+      stopped = true;
+      clearTimeout(timer);
+      try { if (handle) await handle.close(); } catch {}
+      parentPort.postMessage({ type: 'error', message: String(error) });
+      parentPort.close();
+    }
+    parentPort.on('message', async (message) => {
+      if (!message || message.type !== 'stop' || stopped) return;
+      stopped = true;
+      clearTimeout(timer);
+      try {
+        await pulse;
+        await handle.close();
+        parentPort.postMessage({ type: 'stopped' });
+        parentPort.close();
+      } catch (error) { await fail(error); }
+    });
+    (async () => {
+      handle = await fs.open(workerData.path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const status = await handle.stat();
+      if (status.dev !== workerData.dev || status.ino !== workerData.ino) {
+        throw new Error('run lock generation changed before heartbeat start');
+      }
+      await renew();
+      parentPort.postMessage({ type: 'ready' });
+      schedule();
+    })().catch(fail);
+  `;
+  const worker = new NATIVE_WORKER(workerSource, {
+    eval: true, type: 'module',
+    workerData: {
+      path: lockDirectory, dev: expectedStatus.dev, ino: expectedStatus.ino,
+      interval: RUN_LOCK_HEARTBEAT_MS
+    }
+  });
+  /** @type {unknown} */
+  let failure = null;
+  let stoppedAcknowledged = false;
+  /** @type {null|((value?:unknown)=>void)} */
+  let resolveStop = null;
+  /** @type {null|((error:unknown)=>void)} */
+  let rejectStop = null;
+  /** @type {(value?:unknown)=>void} */
+  let resolveReady = () => {};
+  /** @type {(error:unknown)=>void} */
+  let rejectReady = () => {};
+  const ready = new NATIVE_PROMISE((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, worker, ['message', (/** @type {any} */ message) => {
+    if (message?.type === 'ready') resolveReady(undefined);
+    else if (message?.type === 'stopped') {
+      stoppedAcknowledged = true;
+      if (resolveStop) resolveStop(undefined);
+    } else if (message?.type === 'error') {
+      failure = new RunStoreIntegrityError(message.message);
+      rejectReady(failure);
+      if (rejectStop) rejectStop(failure);
+    }
+  }]);
+  NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, worker, ['error', (/** @type {unknown} */ error) => {
+    failure = error;
+    rejectReady(error);
+    if (rejectStop) rejectStop(error);
+  }]);
+  NATIVE_REFLECT_APPLY(NATIVE_WORKER_ON, worker, ['exit', (/** @type {number} */ code) => {
+    if (stoppedAcknowledged) return;
+    failure = new RunStoreIntegrityError(
+      `Run heartbeat worker exited unexpectedly with code ${nativeString(code)}.`
+    );
+    rejectReady(failure);
+    if (rejectStop) rejectStop(failure);
+  }]);
+  try { await ready; } catch (error) {
+    await NATIVE_REFLECT_APPLY(NATIVE_WORKER_TERMINATE, worker, []).catch(() => {});
+    throw error;
+  }
+  return async () => {
+    try {
+      if (failure) throw failure;
+      await new NATIVE_PROMISE((resolve, reject) => {
+        resolveStop = resolve;
+        rejectStop = reject;
+        NATIVE_REFLECT_APPLY(NATIVE_WORKER_POST_MESSAGE, worker, [{ type: 'stop' }]);
+      });
+    } finally {
+      await NATIVE_REFLECT_APPLY(NATIVE_WORKER_TERMINATE, worker, []);
+    }
+  };
+}
+
 /** Remove crash residues only after proving their complete trees contain no symlink. */
 /** @param {string} runDirectory */
 export async function cleanupRunLockResidues(runDirectory) {
@@ -620,14 +788,27 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
         await syncDirectory(runDirectory);
       } catch (error) {
         if (claimHandle) await closeFileHandle(claimHandle).catch(() => {});
-        await rm(lockDirectory, { recursive: true, force: true }).catch(() => {});
-        await syncDirectory(runDirectory).catch(() => {});
+        await removeOwnedLockGeneration(
+          runDirectory, lockDirectory, acquiredStatus, 'stale'
+        ).catch(() => {});
         throw error;
       }
 
-      const claimed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+      let claimed;
+      try {
+        claimed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
+      } catch (error) {
+        await closeFileHandle(claimHandle).catch(() => {});
+        await removeOwnedLockGeneration(
+          runDirectory, lockDirectory, acquiredStatus, 'stale'
+        ).catch(() => {});
+        throw error;
+      }
       if (!sameFileGeneration(acquiredStatus, claimed.status) || claimed.record?.token !== token) {
-        await closeFileHandle(claimHandle);
+        await closeFileHandle(claimHandle).catch(() => {});
+        await removeOwnedLockGeneration(
+          runDirectory, lockDirectory, acquiredStatus, 'stale'
+        ).catch(() => {});
         throw new RunStoreIntegrityError('Run coordination generation changed during acquisition.');
       }
 
@@ -645,6 +826,8 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       let heartbeatPromise = null;
       /** @type {unknown} */
       let heartbeatError = null;
+      /** @type {null|(()=>Promise<void>)} */
+      let stopHeartbeatWorker = null;
       const scheduleHeartbeat = () => {
         if (heartbeatStopped) return;
         heartbeatTimer = NATIVE_SET_TIMEOUT(() => {
@@ -676,12 +859,23 @@ export async function acquireRunLock(runDirectory, coordinationHooks = {}) {
           })();
         }, RUN_LOCK_HEARTBEAT_MS);
       };
-      scheduleHeartbeat();
+      try {
+        if (coordinationHooks.afterHeartbeatObservation) scheduleHeartbeat();
+        else stopHeartbeatWorker = await startRunLockHeartbeat(lockDirectory, acquiredStatus);
+      } catch (error) {
+        heartbeatStopped = true;
+        await closeClaimHandle().catch(() => {});
+        await removeOwnedLockGeneration(
+          runDirectory, lockDirectory, acquiredStatus, 'stale'
+        ).catch(() => {});
+        throw error;
+      }
       return async () => {
         if (released) return;
         heartbeatStopped = true;
         if (heartbeatTimer !== undefined) NATIVE_CLEAR_TIMEOUT(heartbeatTimer);
         if (heartbeatPromise) await heartbeatPromise;
+        if (stopHeartbeatWorker) await stopHeartbeatWorker();
         try {
           const observed = await observeRunLock(runDirectory, lockDirectory, ownerPath);
           if (heartbeatError || !sameFileGeneration(acquiredStatus, observed.status)
@@ -1100,8 +1294,9 @@ export async function acceptedSourceRevisions(runDirectory) {
     if (!direntIsDirectory(entry)) continue;
     const match = NATIVE_REFLECT_APPLY(NATIVE_REGEXP_EXEC, REVISION_DIRECTORY, [entry.name]);
     if (!match) continue;
-    const sourceRevision = Number(match[1]);
-    if (!Number.isSafeInteger(sourceRevision) || entry.name !== revisionName(sourceRevision)) {
+    const sourceRevision = NATIVE_REFLECT_APPLY(NATIVE_NUMBER, undefined, [match[1]]);
+    if (!NATIVE_REFLECT_APPLY(NATIVE_NUMBER_IS_SAFE_INTEGER, NATIVE_NUMBER, [sourceRevision])
+      || entry.name !== revisionName(sourceRevision)) {
       throw new RunStoreIntegrityError(`Accepted revision directory is not canonical: ${entry.name}`);
     }
     const source = await readJsonIfPresent(

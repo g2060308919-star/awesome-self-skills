@@ -43,6 +43,10 @@ declare module 'node:test' {
   export default test;
 }
 
+declare module 'node:worker_threads' {
+  export const Worker: any;
+}
+
 declare module 'node:url' {
   export const fileURLToPath: any;
 }

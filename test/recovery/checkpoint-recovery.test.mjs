@@ -575,6 +575,50 @@ test('a production lock holder renews its fenced lease while a contender waits',
   }
 });
 
+test('a synchronous holder cannot starve the production heartbeat and lose its lock', {
+  timeout: 10_000
+}, async () => {
+  const runDirectory = await temporaryRun();
+  const program = `
+    import { acquireRunLock } from ${JSON.stringify(path.join(repositoryRoot, 'src/run-store.mjs'))};
+    const release = await acquireRunLock(${JSON.stringify(runDirectory)});
+    process.stdout.write('READY\\n');
+    const until = Date.now() + 3_000;
+    while (Date.now() < until) {}
+    await release();
+    process.stdout.write('RELEASED\\n');
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', program], {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (/** @type {string} */ chunk) => { stdout += chunk; });
+  child.stderr.on('data', (/** @type {string} */ chunk) => { stderr += chunk; });
+  const closed = new Promise((resolve) => child.on(
+    'close', (/** @type {number|null} */ code) => resolve(code)
+  ));
+  try {
+    while (!stdout.includes('READY')) {
+      if (child.exitCode !== null) assert.fail(`holder exited before ready: ${stderr}`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const started = Date.now();
+    const releaseContender = await acquireRunLock(runDirectory);
+    const waitedMs = Date.now() - started;
+    assert.ok(waitedMs >= 2_500, `contender reclaimed a live holder after only ${waitedMs}ms`);
+    assert.notEqual(child.exitCode, null, 'contender acquired before the holder released');
+    await releaseContender();
+    assert.equal(await closed, 0, stderr);
+    assert.match(stdout, /READY\nRELEASED\n/u);
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('heartbeat renewal remains bound to its acquired directory generation', { timeout: 10_000 }, async () => {
   const runDirectory = await temporaryRun();
   const lockDirectory = path.join(runDirectory, '.compiler-advance.lock');
