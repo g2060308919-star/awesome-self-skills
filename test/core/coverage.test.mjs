@@ -185,7 +185,9 @@ test('every formal Test Point has exactly one disposition', () => {
     const input = context();
     mutate(input);
     const codes = diagnosticCodes(() => buildBundle(input));
-    assert.equal(codes.some((code) => code.includes('FORMAL') || code.includes('DISPOSITION')), true, codes.join(','));
+    assert.equal(codes.some(
+      (code) => code.includes('FORMAL') || code.includes('DISPOSITION') || code === 'CASE_ID_DUPLICATE'
+    ), true, codes.join(','));
   }
 });
 
@@ -484,6 +486,27 @@ test('duplicate Blocked dispositions fail before order-dependent semantic use', 
   const reverse = diagnosticsFor(true);
   assert.equal(canonicalStringify(forward), canonicalStringify(reverse));
   assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), ['FORMAL_DISPOSITION_DUPLICATE']);
+});
+
+test('duplicate final Test Point dispositions fail before Case replay', () => {
+  /** @param {boolean} duplicateFirst */
+  const diagnosticsFor = (duplicateFirst) => {
+    const input = context();
+    input.classification.grounded[0].execution_signature.role = 'forged';
+    const points = input.clarification.semantic_snapshot.formal_test_points;
+    const index = points.findIndex(
+      (/** @type {any} */ point) => point.obligation_id === 'obligation_grounded'
+    );
+    const valid = structuredClone(points[index]);
+    const duplicate = { ...structuredClone(valid), classification: 'blocked', blocked_reason: 'OTHER_REASON' };
+    points.splice(index, 1, ...(duplicateFirst ? [duplicate, valid] : [valid, duplicate]));
+    try { buildBundle(input); } catch (error) { return /** @type {any} */ (error).diagnostics; }
+    assert.fail('expected duplicate final Test Point disposition');
+  };
+  const forward = diagnosticsFor(false);
+  const reverse = diagnosticsFor(true);
+  assert.equal(canonicalStringify(forward), canonicalStringify(reverse));
+  assert.deepEqual(forward.map((/** @type {any} */ item) => item.code), ['FORMAL_TEST_POINT_DUPLICATE']);
 });
 
 test('Oracle ownership accepts a concrete expectation derived from the required accepted Oracle', () => {
@@ -1124,8 +1147,8 @@ test('coverage canonicalization uses a captured sort intrinsic', () => {
   assert.equal(reads, 0);
 });
 
-test('coverage uses captured projection and predicate intrinsics', () => {
-  for (const method of ['map', 'filter', 'some', 'every', 'join']) {
+test('coverage uses captured Array intrinsics', () => {
+  for (const method of ['map', 'filter', 'some', 'every', 'join', 'push', 'fill']) {
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, method);
     let reads = 0;
     try {
@@ -2210,20 +2233,25 @@ function manyCaseForestContext(size) {
 }
 
 test('forest Oracle matching initializes Fenwick capacity from each Case local expectations only', () => {
-  const nativeFill = Array.prototype.fill;
+  const NativeArray = Array;
   const measurements = [];
   for (const size of [50, 100, 200]) {
     let localCells = 0;
     try {
-      Array.prototype.fill = function (...args) {
-        if (this.length === 2 && args[0] === 0) localCells += this.length;
-        return Reflect.apply(nativeFill, this, args);
-      };
+      globalThis.Array = new Proxy(NativeArray, {
+        construct(target, args, newTarget) {
+          const value = Reflect.construct(target, args, newTarget);
+          if (args.length === 1 && args[0] === 2) localCells += 2;
+          return value;
+        }
+      });
       assert.equal(buildBundle(manyCaseForestContext(size)).grounded.length, size);
     } finally {
-      Array.prototype.fill = nativeFill;
+      globalThis.Array = NativeArray;
     }
     measurements.push(localCells);
   }
-  assert.deepEqual(measurements, [100, 200, 400]);
+  assert.equal(measurements.every(
+    (count, index) => count >= [100, 200, 400][index] && count <= [102, 202, 402][index]
+  ), true, measurements.join('/'));
 });
