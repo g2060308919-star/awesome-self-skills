@@ -1,0 +1,7 @@
+Evidence ID: EV-CAP-001
+Case: CAP-001
+Step: CAP-001-S1
+Assertion: CAP-001-A1
+Observation: The active Codex tool inventory contained no Chrome DevTools MCP capability.
+Action: The run stopped before launching or operating a browser. No fallback adapter was used.
+Sensitive data: None collected.

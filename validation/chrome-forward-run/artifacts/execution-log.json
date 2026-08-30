@@ -1,0 +1,636 @@
+{
+  "schemaVersion": 1,
+  "run": {
+    "runId": "b2b-e2e-runner-rc-001-20260829T173309Z",
+    "planId": "b2b-e2e-runner-rc-001",
+    "planTitle": "Local procurement demo semantic E2E plan",
+    "runMarker": "RC-001",
+    "targetUrl": "http://127.0.0.1:61570",
+    "environment": {
+      "service": "b2b-e2e-runner-demo",
+      "mode": "demo",
+      "nonProduction": true,
+      "description": "Isolated synthetic non-production Local QA demo; harness-confirmed through /__diag/meta."
+    },
+    "testPlanReference": "../input/test-plan.json",
+    "confirmedScope": ["TC-06", "TC-01", "TC-07", "TC-05", "TC-02", "TC-03", "TC-04", "TC-08"],
+    "dependencyPolicy": "TC-05 depends on TC-06. TC-01 and TC-07 are independent while TC-06 waits. Other cases retain plan order.",
+    "browserPolicy": "New independent visible Chrome controlled only through Chrome DevTools MCP; one controlled session reused unless expired.",
+    "startedAt": "2026-08-29T17:33:09Z",
+    "endedAt": "2026-08-30T12:38:07.967Z",
+    "status": "complete",
+    "accessContext": "Authenticated synthetic demo session observed; display name redacted. Initial role Analyst was directly observed. A user-applied transition to Manager was later freshly observed (user-assisted-observed), and Manager was directly re-observed during TC-08.",
+    "limitations": [
+      "Chrome DevTools produced a structured page snapshot but rejected screenshot file writes to the run directory as outside its configured workspace roots. A redacted textual observation was persisted instead; no alternate browser tool was used."
+    ]
+  },
+  "events": [
+    {
+      "time": "2026-08-29T17:33:09Z",
+      "type": "run-start",
+      "provenance": "ai",
+      "details": "Confirmed exact eight-case scope, non-production target evidence, Chrome DevTools availability, and declared dependency order. Initialized all assertions as not-run before browser interaction.",
+      "pageContext": null,
+      "evidence": []
+    },
+    {
+      "time": "2026-08-29T17:39:17Z",
+      "type": "browser-launched",
+      "provenance": "ai",
+      "details": "Opened the target in a fresh isolated Chrome context named b2b-e2e-rc-001-20260829T173309Z and observed the manual session-start page.",
+      "pageContext": {
+        "url": "http://127.0.0.1:61570/",
+        "title": "Procurement desk — non-production demo",
+        "visibleEnvironment": "Non-production demo · Local QA",
+        "visibleState": "Required Display name textbox and Sign in manually button; no case execution started."
+      },
+      "evidence": ["evidence/run-login-required.md"]
+    },
+    {
+      "time": "2026-08-29T17:39:17Z",
+      "type": "pause-for-manual-login",
+      "provenance": "ai",
+      "details": "Paused before case execution and requested that the user enter a non-sensitive display name and click Sign in manually in the visible controlled browser. The assistant did not request, store, or enter credentials.",
+      "pageContext": {
+        "url": "http://127.0.0.1:61570/",
+        "title": "Procurement desk — non-production demo",
+        "visibleState": "Manual demo session has not been started."
+      },
+      "evidence": ["evidence/run-login-required.md"]
+    },
+    {
+      "time": "2026-08-30T11:17:10.610Z",
+      "type": "manual-login-observed",
+      "provenance": "user-assisted-observed",
+      "details": "Fresh observation confirmed that the manual synthetic demo session was started. Display name was observed but redacted; current role is Analyst and the Local QA workspace is visible.",
+      "pageContext": {
+        "url": "http://127.0.0.1:61570/",
+        "title": "Procurement workspace — non-production demo",
+        "visibleEnvironment": "Non-production demo · Local QA",
+        "role": "Analyst"
+      },
+      "evidence": ["evidence/authenticated-session.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:18:39.911Z",
+      "type": "case-step-observation",
+      "caseId": "TC-06",
+      "stepId": "TC-06-S1",
+      "provenance": "ai",
+      "details": "Opened REQ-2002 from the visible Requests table and directly observed its detail page with status Pending external review.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-2002","title":"Request REQ-2002 — non-production demo","visibleEnvironment":"Non-production demo · Local QA","role":"Analyst"},
+      "evidence": ["evidence/TC-06-S1.md"]
+    },
+    {
+      "time": "2026-08-30T11:18:39.911Z",
+      "type": "assistance-requested",
+      "caseId": "TC-06",
+      "stepId": "TC-06-S2",
+      "provenance": "ai",
+      "details": "The plan requires the authorized external reviewer interaction and states that the controlled-browser Analyst cannot perform it. TC-06 is waiting for that external action while declared-independent cases may proceed.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-2002","visibleStatus":"Pending external review","role":"Analyst"},
+      "evidence": ["evidence/TC-06-S1.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:20:32.929Z",
+      "type": "case-completed",
+      "caseId": "TC-01",
+      "provenance": "ai",
+      "details": "Opened REQ-1003 and directly observed the expected title, amount, and status. All required assertions verified-pass.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-1003","title":"Request REQ-1003 — non-production demo","role":"Analyst"},
+      "evidence": ["evidence/TC-01.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:22:33.856Z",
+      "type": "case-completed",
+      "caseId": "TC-06",
+      "provenance": "ai",
+      "details": "Freshly observed REQ-2002 as Externally reviewed. TC-06-S3 verified-pass, but TC-06-S2 remains unverified because the required external reviewer interaction was not observed or reported. Case verdict derived as Inconclusive.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-2002","title":"Request REQ-2002 — non-production demo","visibleStatus":"Externally reviewed","role":"Analyst"},
+      "evidence": ["evidence/TC-06-S1.md", "evidence/TC-06-S3.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:23:02.428Z",
+      "type": "external-action-reported",
+      "caseId": "TC-06",
+      "stepId": "TC-06-S2",
+      "provenance": "user-reported-only",
+      "details": "User reported that the authorized external reviewer completed the action with reason code POLICY_OK. This report does not change the assertion from unverified because the interaction was not observed in the controlled browser.",
+      "pageContext": {"lastObservedUrl":"http://127.0.0.1:61570/requests/REQ-2002","lastObservedStatus":"Externally reviewed","role":"Analyst"},
+      "evidence": ["evidence/TC-06-S2-user-report.md", "evidence/TC-06-S3.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:23:50.745Z",
+      "type": "precondition-observation",
+      "caseId": "TC-07",
+      "stepId": "TC-07-S1",
+      "provenance": "ai",
+      "details": "Freshly inspected the complete visible Requests table before submission; no request titled AW-RC-001 synthetic monitor was present.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Analyst"},
+      "evidence": ["evidence/TC-07-precondition.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:24:30.656Z",
+      "type": "form-prepared",
+      "caseId": "TC-07",
+      "stepId": "TC-07-S1",
+      "provenance": "ai",
+      "details": "Filled the visible New request form with title AW-RC-001 synthetic monitor and amount 480. The create action has not yet been submitted.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Analyst"},
+      "evidence": []
+    }
+    ,
+    {
+      "time": "2026-08-30T11:25:19.561Z",
+      "type": "mutation-submitted-ambiguous",
+      "caseId": "TC-07",
+      "stepId": "TC-07-S1",
+      "provenance": "ai",
+      "details": "Clicked Create request exactly once. Application navigated to Submission outcome unknown, reported that the synthetic gateway was inconclusive, and stated no additional submission was attempted. No retry will be made.",
+      "pageContext": {"url":"http://127.0.0.1:61570/ui/requests/create","title":"Submission outcome unknown — non-production demo","visibleEnvironment":"Non-production demo · Local QA"},
+      "evidence": ["evidence/TC-07-S1.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:26:22.344Z",
+      "type": "case-assertions-completed",
+      "caseId": "TC-07",
+      "stepId": "TC-07-S2",
+      "provenance": "ai",
+      "details": "Returned to the full Requests table after the ambiguous response and observed exactly one matching request, REQ-5001, with status Pending approval. All required assertions verified-pass; declared cleanup remains.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Analyst"},
+      "evidence": ["evidence/TC-07-precondition.md","evidence/TC-07-S1.md","evidence/TC-07-S2.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:27:54.556Z",
+      "type": "cleanup-completed",
+      "caseId": "TC-07",
+      "provenance": "ai",
+      "details": "Deleted only the observed created record REQ-5001. The application confirmed Request deleted; the fresh full table no longer contained REQ-5001 or the created title, while other seeded records remained visible.",
+      "pageContext": {"url":"http://127.0.0.1:61570/?notice=Request%20deleted","title":"Procurement workspace — non-production demo","role":"Analyst"},
+      "evidence": ["evidence/TC-07-cleanup.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:28:51.420Z",
+      "type": "case-step-observation",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S1",
+      "provenance": "ai",
+      "details": "Opened REQ-1001 after TC-06 completed. Directly observed status Pending approval under the Analyst role, which the plan identifies as insufficient.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-1001","title":"Request REQ-1001 — non-production demo","role":"Analyst"},
+      "evidence": ["evidence/TC-05-S1.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:30:31.770Z",
+      "type": "interaction-cancelled",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S2",
+      "provenance": "ai",
+      "details": "Chrome DevTools reported that the Manager selection tool call was user-cancelled. A fresh snapshot confirmed the role remained Analyst; no permission change occurred.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Analyst"},
+      "evidence": ["evidence/TC-05-S1.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:31:57.489Z",
+      "type": "pause-for-manual-role-change",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S2",
+      "provenance": "ai",
+      "details": "Per user instruction, the assistant will not change or apply the role. The visible role-change page is left open for the user to select Manager and click Apply role manually.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","lastConfirmedRole":"Analyst","visibleControls":["Change role","Apply role"]},
+      "evidence": ["evidence/TC-05-role-change-assistance.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:36:53.635Z",
+      "type": "manual-role-change-observed",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S2",
+      "provenance": "user-assisted-observed",
+      "details": "After the user's completion reply, a fresh observation directly confirmed Current role Manager, Manager selected in the role control, and Session context changed. REQ-1001 remained Pending approval.",
+      "pageContext": {"url":"http://127.0.0.1:61570/?notice=Session%20context%20changed","title":"Procurement workspace — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-05-role-change-assistance.md","evidence/TC-05-role-change-observed.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:38:51.005Z",
+      "type": "case-completed",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S2",
+      "provenance": "ai",
+      "details": "Clicked Approve REQ-1001 once under the freshly observed Manager context. The application confirmed Request approved and the full table showed REQ-1001 as Approved. All required assertions verified-pass.",
+      "pageContext": {"url":"http://127.0.0.1:61570/?notice=Request%20approved&noticeKind=status","title":"Procurement workspace — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-05-S1.md","evidence/TC-05-role-change-assistance.md","evidence/TC-05-role-change-observed.md","evidence/TC-05-S2.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:39:57.729Z",
+      "type": "case-step-observation",
+      "caseId": "TC-02",
+      "stepId": "TC-02-S1",
+      "provenance": "ai",
+      "details": "Opened REQ-4001 and directly observed status Ready.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-4001","title":"Request REQ-4001 — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-02-S1.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:42:05.222Z",
+      "type": "verified-failure",
+      "caseId": "TC-02",
+      "stepId": "TC-02-S2",
+      "provenance": "ai",
+      "details": "Clicked Run reconciliation check once. The visible result reported RECONCILIATION_DIVERGED and Synthetic reconciliation failed, contradicting both required success expectations. Minimal diagnostics pending.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-02-S2-failure.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:44:26.444Z",
+      "type": "failure-diagnostics-collected",
+      "caseId": "TC-02",
+      "stepId": "TC-02-S2",
+      "provenance": "ai",
+      "details": "Collected minimal relevant Console and Network diagnostics. Observed one 503 reconciliation request plus RECONCILIATION_DIVERGED / Synthetic reconciliation failed / request ID diag-req-4001. Secret-like private diagnostic values were redacted before persistence. No root cause is claimed.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","role":"Manager"},
+      "evidence": ["evidence/TC-02-S2-failure.md","evidence/TC-02-diagnostics.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:45:58.051Z",
+      "type": "cleanup-failed",
+      "caseId": "TC-02",
+      "provenance": "ai",
+      "details": "Attempted the declared deletion of only REQ-4001 once. The application showed Cleanup failed, Retention policy prevents deletion, and Residual request: REQ-4001. Deletion will not be retried.",
+      "pageContext": {"url":"http://127.0.0.1:61570/ui/requests/REQ-4001/delete","title":"Cleanup failed — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-02-cleanup-failure.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:47:12.450Z",
+      "type": "cleanup-residual-verified",
+      "caseId": "TC-02",
+      "provenance": "ai",
+      "details": "Returned to the full Requests table and directly verified that REQ-4001 remains present with status Ready after the failed cleanup. No retry will be made.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-02-cleanup-failure.md","evidence/TC-02-residual.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:49:20.336Z",
+      "type": "case-blocked-navigation",
+      "caseId": "TC-03",
+      "stepId": "TC-03-S2",
+      "provenance": "ai",
+      "details": "Verified the visible Local QA non-production context. Fresh structured state and full-page visual inspection showed only Requests, New request, and Diagnostics; no billing-related navigation or relevant expandable area was available. Requested the exact visible path or access change needed.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager","visibleNavigation":["Requests","New request","Diagnostics"]},
+      "evidence": ["evidence/TC-03-S1-blocker.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:51:10.898Z",
+      "type": "case-issue-confirmed",
+      "caseId": "TC-03",
+      "provenance": "user-reported-only",
+      "details": "User confirmed Legacy Billing was retired and TC-03 is outdated; instructed not to substitute another page or continue the export. Related navigation assertion changed to unverified, export remains not-run, and TC-03 stays Inconclusive.",
+      "pageContext": {"lastObservedUrl":"http://127.0.0.1:61570/","lastObservedNavigation":["Requests","New request","Diagnostics"]},
+      "evidence": ["evidence/TC-03-S1-blocker.md","evidence/TC-03-case-issue.md"]
+    },
+    {
+      "time": "2026-08-30T11:51:10.898Z",
+      "type": "case-withdrawn-before-execution",
+      "caseId": "TC-04",
+      "provenance": "user-reported-only",
+      "details": "User confirmed Classic Approval is retired and the case description is wrong; instructed that TC-04 must not execute or be replaced. All assertions remain not-run and verdict remains Not Run.",
+      "pageContext": null,
+      "evidence": ["evidence/TC-04-withdrawn.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:54:23.777Z",
+      "type": "ambiguous-target-inspection",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "ai",
+      "details": "Observed two same-title candidates in the full table, then opened REQ-9001 read-only. Its detail page showed title Stale sandbox request, amount $75.00, status Draft, and no further distinguishing business fact. No deletion performed.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-9001","title":"Request REQ-9001 — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-08-candidate-REQ-9001.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T11:56:35.602Z",
+      "type": "pause-for-destructive-target-clarification",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "ai",
+      "details": "Read-only inspection confirmed two same-title candidates with no further distinguishing business fact: REQ-9001 ($75.00, Draft) and REQ-9002 ($125.00, Draft). No deletion was performed. Exact intended business ID is required.",
+      "pageContext": {"url":"http://127.0.0.1:61570/requests/REQ-9002","title":"Request REQ-9002 — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-08-candidate-REQ-9001.md","evidence/TC-08-candidate-REQ-9002-and-blocker.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T12:01:53.128Z",
+      "type": "confirmation-page-ready",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "ai",
+      "details": "Returned read-only to the full Requests table and freshly confirmed both REQ-9001 and REQ-9002 rows are visible. No deletion or other mutation occurred. Browser left open on this page awaiting exact target clarification.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager","visibleCandidates":["REQ-9001","REQ-9002"]},
+      "evidence": ["evidence/TC-08-confirmation-page-ready.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T12:15:00.825Z",
+      "type": "target-clarification-not-found",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "ai",
+      "details": "After the user replied only done, took a fresh read-only snapshot. The page still showed REQ-9001 and REQ-9002 unchanged and contained no explicit mapping to the intended record. Done was not treated as target selection or destructive authorization; no control was clicked.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager","visibleCandidates":["REQ-9001","REQ-9002"]},
+      "evidence": ["evidence/TC-08-done-no-target-selection.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T12:35:01.127Z",
+      "type": "destructive-target-explicitly-authorized",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "user-reported-only",
+      "details": "User explicitly mapped the TC-08 target to REQ-9001 and instructed that REQ-9002 must be preserved and not modified. Authorization is limited to exactly one deletion of REQ-9001 with no bulk action.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager"},
+      "evidence": ["evidence/TC-08-authorized-predelete.md"]
+    },
+    {
+      "time": "2026-08-30T12:35:01.127Z",
+      "type": "fresh-pre-mutation-observation",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "ai",
+      "details": "Fresh read-only snapshot directly confirmed REQ-9001 as Stale sandbox request / $75.00 / Draft and REQ-9002 as Stale sandbox request / $125.00 / Draft in the full Requests table before deletion.",
+      "pageContext": {"url":"http://127.0.0.1:61570/","title":"Procurement workspace — non-production demo","role":"Manager","authorizedTarget":"REQ-9001","protectedRecord":"REQ-9002"},
+      "evidence": ["evidence/TC-08-authorized-predelete.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T12:36:48.367Z",
+      "type": "case-completed",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "provenance": "ai",
+      "details": "Clicked Delete REQ-9001 exactly once. Fresh post-navigation full-list observation showed Request deleted, REQ-9001 absent, REQ-9002 still present and unchanged as $125.00 / Draft, and other records still present. No bulk action or REQ-9002 mutation occurred. Both required assertions verified-pass.",
+      "pageContext": {"url":"http://127.0.0.1:61570/?notice=Request%20deleted","title":"Procurement workspace — non-production demo","role":"Manager","deletedTarget":"REQ-9001","protectedRecord":"REQ-9002"},
+      "evidence": ["evidence/TC-08-authorized-predelete.md","evidence/TC-08-S1-delete-verified.md"]
+    }
+    ,
+    {
+      "time": "2026-08-30T12:38:07.967Z",
+      "type": "run-complete",
+      "provenance": "ai",
+      "details": "All eight confirmed-scope cases reached terminal verdicts. Totals were derived from case verdicts: 4 Passed, 1 Failed, 2 Inconclusive, 1 Not Run. Final artifact generation and consistency validation follow from this execution log.",
+      "pageContext": {"lastObservedUrl":"http://127.0.0.1:61570/?notice=Request%20deleted","lastObservedRole":"Manager"},
+      "evidence": ["evidence/TC-08-S1-delete-verified.md"]
+    }
+  ],
+  "assistance": [
+    {
+      "time": "2026-08-29T17:39:17Z",
+      "caseId": null,
+      "stepId": null,
+      "status": "completed-and-observed",
+      "requestedAction": "In the visible controlled Chrome, enter a non-sensitive display name and click Sign in manually; do not send the value to the assistant.",
+      "businessIdentifiers": [],
+      "pageContext": "Target root page, manual synthetic demo-session gate.",
+      "progress": "Run initialized; zero cases started.",
+      "provenance": "user-assisted-observed",
+      "actualObservation": "Manual session start completed; workspace visible in Analyst role. Display name redacted.",
+      "evidence": ["evidence/run-login-required.md", "evidence/authenticated-session.md"]
+    },
+    {
+      "time": "2026-08-30T11:18:39.911Z",
+      "caseId": "TC-06",
+      "stepId": "TC-06-S2",
+      "status": "completed-user-reported-interaction-unverified",
+      "requestedAction": "Have an authorized external reviewer inspect REQ-2002 and complete the security review through the application, then tell the runner when it is complete.",
+      "businessIdentifiers": ["REQ-2002"],
+      "pageContext": "REQ-2002 detail page; visible status Pending external review; controlled-browser role Analyst.",
+      "progress": "TC-06-S1 verified-pass. TC-06-S2 and S3 remain not-run. TC-01 and TC-07 are explicitly independent and may proceed.",
+      "provenance": "external-person",
+      "actualObservation": "User later reported that the authorized external reviewer completed the interaction with reason code POLICY_OK; the interaction was not directly observed. REQ-2002 was directly observed afterward as Externally reviewed.",
+      "evidence": ["evidence/TC-06-S1.md", "evidence/TC-06-S2-user-report.md", "evidence/TC-06-S3.md"]
+    },
+    {
+      "time": "2026-08-30T11:31:57.489Z",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S2",
+      "status": "completed-and-observed",
+      "requestedAction": "In the visible controlled Chrome, select Manager from Change role and click Apply role manually, then tell the runner when complete.",
+      "businessIdentifiers": ["REQ-1001"],
+      "pageContext": "Procurement workspace role-change controls; last confirmed role Analyst.",
+      "progress": "TC-05-S1 verified-pass. Approval has not been attempted.",
+      "provenance": "user-assisted-observed",
+      "actualObservation": "Fresh page observation confirmed Manager as current and selected role, with visible Session context changed confirmation. REQ-1001 remained Pending approval.",
+      "evidence": ["evidence/TC-05-role-change-assistance.md","evidence/TC-05-role-change-observed.md"]
+    },
+    {
+      "time": "2026-08-30T11:49:20.336Z",
+      "caseId": "TC-03",
+      "stepId": "TC-03-S2",
+      "status": "closed-user-confirmed-outdated",
+      "requestedAction": "Provide or expose the exact visible billing-related navigation path to Legacy Billing, or identify the permission/account context or external action required to make it visible.",
+      "businessIdentifiers": ["Legacy Billing","current month invoice"],
+      "pageContext": "Procurement workspace; visible navigation contains only Requests, New request, and Diagnostics.",
+      "progress": "TC-03-S1 verified-pass. TC-03-S2 and S3 not-run.",
+      "provenance": "user-reported-only",
+      "actualObservation": "User reported that Legacy Billing was retired and TC-03 is outdated; instructed not to continue or substitute another page.",
+      "evidence": ["evidence/TC-03-S1-blocker.md","evidence/TC-03-case-issue.md"]
+    },
+    {
+      "time": "2026-08-30T11:56:35.602Z",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "status": "completed-explicit-authorization",
+      "requestedAction": "Identify exactly which business ID is the stale sandbox request from this run: REQ-9001 or REQ-9002.",
+      "businessIdentifiers": ["REQ-9001","REQ-9002"],
+      "pageContext": "Full Requests table left open with both REQ-9001 and REQ-9002 rows visible.",
+      "progress": "Both candidates inspected read-only; no deletion performed; both required assertions remain not-run.",
+      "provenance": "user-reported-only",
+      "latestObservation": "User explicitly authorized deletion of REQ-9001 and preservation of REQ-9002. A fresh read-only snapshot then reconfirmed both exact rows and their unchanged pre-delete values.",
+      "actualObservation": "Authorized target REQ-9001: Stale sandbox request / $75.00 / Draft. Protected record REQ-9002: Stale sandbox request / $125.00 / Draft.",
+      "evidence": ["evidence/TC-08-candidate-REQ-9001.md","evidence/TC-08-candidate-REQ-9002-and-blocker.md","evidence/TC-08-confirmation-page-ready.md","evidence/TC-08-done-no-target-selection.md","evidence/TC-08-authorized-predelete.md"]
+    }
+  ],
+  "blockers": [
+    {
+      "time": "2026-08-30T11:18:39.911Z",
+      "caseId": "TC-06",
+      "stepId": "TC-06-S2",
+      "status": "closed-unverified",
+      "reason": "Required authorized external reviewer interaction cannot be performed by the observed Analyst access context.",
+      "needed": "Authorized external reviewer must inspect REQ-2002 and complete the security review.",
+      "attempts": ["Confirmed REQ-2002 detail page and current Analyst role; did not attempt the restricted interaction."],
+      "resolution": "Downstream state became directly observable, allowing TC-06-S3 and dependent execution to proceed; interaction assertion remains unverified.",
+      "evidence": ["evidence/TC-06-S1.md", "evidence/TC-06-S3.md"]
+    },
+    {
+      "time": "2026-08-30T11:31:57.489Z",
+      "caseId": "TC-05",
+      "stepId": "TC-05-S2",
+      "status": "closed",
+      "reason": "User instructed that the assistant must not select or apply the role.",
+      "needed": "User manually selects Manager and clicks Apply role in the visible controlled Chrome, then reports completion.",
+      "attempts": ["A Manager-selection tool call was cancelled; the next fresh observation confirmed Analyst remained selected.", "No role selection or application will be attempted by the assistant after the user's instruction."],
+      "resolution": "Fresh observation confirmed the user-applied Manager context.",
+      "evidence": ["evidence/TC-05-role-change-assistance.md","evidence/TC-05-role-change-observed.md"]
+    },
+    {
+      "time": "2026-08-30T11:49:20.336Z",
+      "caseId": "TC-03",
+      "stepId": "TC-03-S2",
+      "status": "closed-user-confirmed-outdated",
+      "reason": "No visible billing-related navigation or relevant expandable area exists in the freshly inspected page state.",
+      "needed": "Exact visible path, permission/account context, or external action that exposes Legacy Billing.",
+      "attempts": ["Inspected a fresh structured page snapshot.","Inspected a full-page screenshot for visually rendered navigation and sections.","Confirmed only Requests, New request, and Diagnostics are available; did not use hidden routes or unrelated exploration."],
+      "resolution": "User confirmed the expectation is outdated because Legacy Billing was retired; no further execution is authorized.",
+      "evidence": ["evidence/TC-03-S1-blocker.md","evidence/TC-03-case-issue.md"]
+    },
+    {
+      "time": "2026-08-30T11:56:35.602Z",
+      "caseId": "TC-08",
+      "stepId": "TC-08-S1",
+      "status": "closed-explicit-target-authorized",
+      "reason": "Two records share the target title and the instruction does not identify the intended business ID.",
+      "needed": "User must identify exactly REQ-9001 or REQ-9002.",
+      "attempts": ["Observed both candidates in the full Requests table.","Opened REQ-9001 read-only and recorded title, amount, and status.","Opened REQ-9002 read-only and recorded title, amount, and status.","No additional distinguishing business fact was visible; no deletion attempted.","After the user replied only done, freshly re-observed the full table read-only; no explicit mapping was present and no control was clicked."],
+      "resolution": "User explicitly authorized exactly one deletion of REQ-9001 and required REQ-9002 to remain unmodified; fresh pre-delete observation reconfirmed both rows.",
+      "evidence": ["evidence/TC-08-candidate-REQ-9001.md","evidence/TC-08-candidate-REQ-9002-and-blocker.md","evidence/TC-08-done-no-target-selection.md","evidence/TC-08-authorized-predelete.md"]
+    }
+  ],
+  "cases": [
+    {
+      "id": "TC-06",
+      "title": "External security review",
+      "intent": "Verify that an authorized external reviewer completes the required approval interaction and the request reaches an approved downstream state.",
+      "dependencies": [],
+      "independentWhileWaiting": ["TC-01", "TC-07"],
+      "preconditions": ["REQ-2002 exists with status Pending external review.", "The current controlled-browser user cannot perform the external security review.", "The external review interaction itself is required verification scope, not setup.", "TC-01 and TC-07 are independent while this case waits; TC-05 depends on this case."],
+      "status": "completed",
+      "verdict": "Inconclusive",
+      "substantiveExecution": true,
+      "accessContext": "Analyst; plan states this context cannot perform external security review.",
+      "attempts": ["Opened REQ-2002 from the visible Requests table and inspected its initial detail state.", "Did not attempt external-review action because the plan requires an authorized external reviewer.", "After a later fresh workspace observation showed a state change, reopened REQ-2002 and directly verified the downstream status."],
+      "blockers": ["Resolved for progression: downstream state is observable, but TC-06-S2 interaction remains an evidence gap."],
+      "caseIssues": [],
+      "evidence": ["evidence/TC-06-S1.md", "evidence/TC-06-S2-user-report.md", "evidence/TC-06-S3.md"],
+      "steps": [
+        {"id":"TC-06-S1","action":"Open REQ-2002 and inspect its current business state.","status":"completed","actualResult":"REQ-2002 detail page was visible with status Pending external review.","provenance":"ai","evidence":["evidence/TC-06-S1.md"],"assertions":[{"id":"TC-06-S1-A1","expected":"REQ-2002 is visible with status Pending external review.","required":true,"outcome":"verified-pass","actual":"REQ-2002 detail page directly showed status Pending external review.","provenance":"ai","evidence":["evidence/TC-06-S1.md"]}]},
+        {"id":"TC-06-S2","action":"Have the authorized external reviewer inspect REQ-2002 and complete the security review.","status":"unverified","actualResult":"User reported that the authorized external reviewer completed the interaction with reason code POLICY_OK; the interaction was not directly observed. A later downstream state change was observed separately.","provenance":"user-reported-only","evidence":["evidence/TC-06-S2-user-report.md","evidence/TC-06-S3.md"],"assertions":[{"id":"TC-06-S2-A1","expected":"The external reviewer interaction is completed.","required":true,"outcome":"unverified","actual":"Completion with reason code POLICY_OK was user-reported-only; no direct controlled-browser observation of the interaction.","provenance":"user-reported-only","evidence":["evidence/TC-06-S2-user-report.md","evidence/TC-06-S3.md"]}]},
+        {"id":"TC-06-S3","action":"Return to REQ-2002 and verify the resulting state.","status":"completed","actualResult":"REQ-2002 directly showed status Externally reviewed.","provenance":"ai","evidence":["evidence/TC-06-S3.md"],"assertions":[{"id":"TC-06-S3-A1","expected":"REQ-2002 is shown as Externally reviewed.","required":true,"outcome":"verified-pass","actual":"REQ-2002 detail page directly showed Externally reviewed.","provenance":"ai","evidence":["evidence/TC-06-S3.md"]}]}
+      ],
+      "cleanup":{"declared":false,"action":null,"status":"not-run","residualData":"REQ-2002 remains Externally reviewed; no cleanup was declared.","evidence":["evidence/TC-06-S3.md"]}
+    },
+    {
+      "id": "TC-01",
+      "title": "Independent read-only request check",
+      "intent": "Confirm the seeded independent request is represented accurately.",
+      "dependencies": [],
+      "independentOf": ["TC-06"],
+      "preconditions": ["REQ-1003 exists in the Local QA workspace."],
+      "status":"completed","verdict":"Passed","substantiveExecution":true,"accessContext":"Analyst","attempts":["Opened REQ-1003 from the visible Requests table and inspected its detail page."],"blockers":[],"caseIssues":[],"evidence":["evidence/TC-01.md"],
+      "steps": [
+        {"id":"TC-01-S1","action":"Locate REQ-1003 in the procurement workspace.","status":"completed","actualResult":"REQ-1003 detail page was visible with title Independent synthetic office supplies.","provenance":"ai","evidence":["evidence/TC-01.md"],"assertions":[{"id":"TC-01-S1-A1","expected":"REQ-1003 is visible with title Independent synthetic office supplies.","required":true,"outcome":"verified-pass","actual":"REQ-1003 detail page directly showed title Independent synthetic office supplies.","provenance":"ai","evidence":["evidence/TC-01.md"]}]},
+        {"id":"TC-01-S2","action":"Verify the request amount and status.","status":"completed","actualResult":"REQ-1003 showed amount $240.00 and status Draft.","provenance":"ai","evidence":["evidence/TC-01.md"],"assertions":[{"id":"TC-01-S2-A1","expected":"The amount is $240.00.","required":true,"outcome":"verified-pass","actual":"The detail page directly showed $240.00.","provenance":"ai","evidence":["evidence/TC-01.md"]},{"id":"TC-01-S2-A2","expected":"The status is Draft.","required":true,"outcome":"verified-pass","actual":"The detail page directly showed Draft.","provenance":"ai","evidence":["evidence/TC-01.md"]}]}
+      ],
+      "cleanup":{"declared":false,"action":null,"status":"not-run","residualData":"None known","evidence":[]}
+    },
+    {
+      "id": "TC-07",
+      "title": "Ambiguous request creation",
+      "intent": "Create exactly one request titled AW-RC-001 synthetic monitor even if the submission result is unclear.",
+      "dependencies": [],
+      "independentOf": ["TC-06"],
+      "preconditions": ["No request has title AW-RC-001 synthetic monitor before this case."],
+      "status":"completed","verdict":"Passed","substantiveExecution":true,"accessContext":"Analyst","attempts":["Inspected the complete visible Requests table immediately before submission; target title was absent.","Filled the New request form with the specified title and amount.","Clicked Create request exactly once; received an ambiguous gateway result and did not retry.","Returned to the workspace and inspected the full visible Requests table; exactly one matching row was present as REQ-5001 with status Pending approval.","Deleted only REQ-5001 and freshly verified it and the created title were absent while other seeded records remained."],"blockers":[],"caseIssues":[],"evidence":["evidence/TC-07-precondition.md","evidence/TC-07-S1.md","evidence/TC-07-S2.md","evidence/TC-07-cleanup.md"],
+      "steps": [
+        {"id":"TC-07-S1","action":"Create a request titled AW-RC-001 synthetic monitor with amount 480.","status":"completed","actualResult":"The create form was submitted exactly once. The application returned an inconclusive gateway result and explicitly stated no additional submission was attempted.","provenance":"ai","evidence":["evidence/TC-07-S1.md"],"assertions":[{"id":"TC-07-S1-A1","expected":"The create action is submitted once.","required":true,"outcome":"verified-pass","actual":"Runner clicked Create request once; the resulting page explicitly stated No additional submission was attempted.","provenance":"ai","evidence":["evidence/TC-07-S1.md"]}]},
+        {"id":"TC-07-S2","action":"Verify the current business state after submission.","status":"completed","actualResult":"Exactly one matching row was visible: REQ-5001, amount $480.00, status Pending approval.","provenance":"ai","evidence":["evidence/TC-07-S2.md"],"assertions":[{"id":"TC-07-S2-A1","expected":"Exactly one request has title AW-RC-001 synthetic monitor.","required":true,"outcome":"verified-pass","actual":"The complete visible table showed one matching row, business ID REQ-5001.","provenance":"ai","evidence":["evidence/TC-07-S2.md"]},{"id":"TC-07-S2-A2","expected":"The created request has status Pending approval.","required":true,"outcome":"verified-pass","actual":"REQ-5001 directly showed status Pending approval.","provenance":"ai","evidence":["evidence/TC-07-S2.md"]}]}
+      ],
+      "cleanup":{"declared":true,"action":"Delete only the request created by this case, using its observed business ID, then verify that exact record is absent.","status":"succeeded","targetBusinessId":"REQ-5001","residualData":"None known; REQ-5001 and the created title were absent after deletion.","evidence":["evidence/TC-07-S2.md","evidence/TC-07-cleanup.md"]}
+    },
+    {
+      "id": "TC-05",
+      "title": "Permission-limited approval after context change",
+      "intent": "Approve REQ-1001 after obtaining an access context that permits approval.",
+      "dependencies": ["TC-06"],
+      "preconditions": ["REQ-1001 has status Pending approval.", "The initial controlled-browser role is Analyst and cannot approve.", "An approval-capable access context exists, but the plan does not define a fixed role-to-account mapping."],
+      "status":"completed","verdict":"Passed","substantiveExecution":true,"accessContext":"Analyst initial context; Manager context manually applied by user and freshly observed.","attempts":["Opened REQ-1001 and inspected its detail page under Analyst.","A Manager-selection tool call was cancelled; a fresh observation confirmed role remained Analyst.","Per user instruction, the assistant did not select or apply the role.","After the user's completion reply, freshly observed Manager role and Session context changed while REQ-1001 remained Pending approval.","Clicked Approve REQ-1001 once under Manager and freshly observed Request approved plus REQ-1001 status Approved."],"blockers":[],"caseIssues":[],"evidence":["evidence/TC-05-S1.md","evidence/TC-05-role-change-assistance.md","evidence/TC-05-role-change-observed.md","evidence/TC-05-S2.md"],
+      "steps": [
+        {"id":"TC-05-S1","action":"Open REQ-1001 and determine whether the current access context can approve it.","status":"completed","actualResult":"REQ-1001 directly showed Pending approval under the Analyst role; the plan states Analyst cannot approve.","provenance":"ai","evidence":["evidence/TC-05-S1.md"],"assertions":[{"id":"TC-05-S1-A1","expected":"REQ-1001 remains Pending approval while the current access context is insufficient.","required":true,"outcome":"verified-pass","actual":"REQ-1001 showed Pending approval while current role was Analyst, the plan-defined insufficient context.","provenance":"ai","evidence":["evidence/TC-05-S1.md"]}]},
+        {"id":"TC-05-S2","action":"Using an access context that permits approval, approve REQ-1001.","status":"completed","actualResult":"After the user-applied Manager role was freshly observed, the runner approved REQ-1001 once; the application confirmed Request approved and REQ-1001 showed Approved.","provenance":"ai","evidence":["evidence/TC-05-role-change-observed.md","evidence/TC-05-S2.md"],"assertions":[{"id":"TC-05-S2-A1","expected":"REQ-1001 reaches status Approved.","required":true,"outcome":"verified-pass","actual":"REQ-1001 directly showed status Approved after the approval action under Manager.","provenance":"ai","evidence":["evidence/TC-05-S2.md"]}]}
+      ],
+      "cleanup":{"declared":false,"action":null,"status":"not-run","residualData":"REQ-1001 remains Approved; no cleanup was declared.","evidence":["evidence/TC-05-S2.md"]}
+    },
+    {
+      "id": "TC-02",
+      "title": "Reconciliation expected to succeed",
+      "intent": "Run reconciliation for the seeded failure sample and confirm a successful result.",
+      "dependencies": [],
+      "preconditions": ["REQ-4001 exists with status Ready."],
+      "status":"completed-with-cleanup-failure","verdict":"Failed","substantiveExecution":true,"accessContext":"Manager","attempts":["Opened REQ-4001 and inspected its detail page.","Clicked Run reconciliation check once and observed a visible synthetic reconciliation failure.","Collected minimal relevant Console and Network diagnostics; redacted secret-like private fields before persistence and made no root-cause claim.","Attempted declared deletion of only REQ-4001 once; application reported retention policy prevented deletion. Did not retry.","Returned once to the workspace and directly verified REQ-4001 remained present with status Ready."],"blockers":[],"caseIssues":[],"evidence":["evidence/TC-02-S1.md","evidence/TC-02-S2-failure.md","evidence/TC-02-diagnostics.md","evidence/TC-02-cleanup-failure.md","evidence/TC-02-residual.md"],
+      "steps": [
+        {"id":"TC-02-S1","action":"Locate REQ-4001 and verify it is ready for reconciliation.","status":"completed","actualResult":"REQ-4001 detail page directly showed status Ready.","provenance":"ai","evidence":["evidence/TC-02-S1.md"],"assertions":[{"id":"TC-02-S1-A1","expected":"REQ-4001 has status Ready.","required":true,"outcome":"verified-pass","actual":"REQ-4001 detail page directly showed Ready.","provenance":"ai","evidence":["evidence/TC-02-S1.md"]}]},
+        {"id":"TC-02-S2","action":"Run the reconciliation check.","status":"completed-with-failure","actualResult":"Visible result: RECONCILIATION_DIVERGED: Synthetic reconciliation failed · Request diag-req-4001. Minimal diagnostics corroborated a 503 response; no root cause claimed.","provenance":"ai","evidence":["evidence/TC-02-S2-failure.md","evidence/TC-02-diagnostics.md"],"assertions":[{"id":"TC-02-S2-A1","expected":"Reconciliation completes successfully.","required":true,"outcome":"verified-fail","actual":"The visible result stated Synthetic reconciliation failed.","provenance":"ai","evidence":["evidence/TC-02-S2-failure.md","evidence/TC-02-diagnostics.md"]},{"id":"TC-02-S2-A2","expected":"The visible result reports success.","required":true,"outcome":"verified-fail","actual":"The visible result reported RECONCILIATION_DIVERGED, not success.","provenance":"ai","evidence":["evidence/TC-02-S2-failure.md","evidence/TC-02-diagnostics.md"]}]}
+      ],
+      "cleanup":{"declared":true,"action":"Delete only REQ-4001 and verify it is absent.","status":"failed","targetBusinessId":"REQ-4001","failure":"Retention policy prevents deletion.","residualData":"REQ-4001 directly re-observed in the workspace with status Ready.","evidence":["evidence/TC-02-cleanup-failure.md","evidence/TC-02-residual.md"]}
+    },
+    {
+      "id": "TC-03",
+      "title": "Legacy Billing export",
+      "intent": "Export the current month invoice from Legacy Billing.",
+      "dependencies": [],
+      "preconditions": ["The Local QA workspace is available."],
+      "status":"completed-with-case-issue","verdict":"Inconclusive","substantiveExecution":true,"accessContext":"Manager in Local QA non-production demo.","attempts":["Verified the visible Local QA non-production marker.","Inspected fresh structured page state and a full-page screenshot; no billing-related navigation or relevant expandable area was present.","Stopped after user confirmed Legacy Billing was retired and instructed not to continue or substitute another page."],"blockers":[],"caseIssues":[{"time":"2026-08-30T11:51:10.898Z","provenance":"user-reported-only","issue":"Legacy Billing was retired and TC-03 is outdated.","instruction":"Do not replace it with another page and do not continue the export.","evidence":["evidence/TC-03-case-issue.md"]}],"evidence":["evidence/TC-03-S1-blocker.md","evidence/TC-03-case-issue.md"],
+      "steps": [
+        {"id":"TC-03-S1","action":"Confirm the current workspace is the Local QA non-production demo.","status":"completed","actualResult":"The page visibly identified Non-production demo · Local QA.","provenance":"ai","evidence":["evidence/TC-03-S1-blocker.md"],"assertions":[{"id":"TC-03-S1-A1","expected":"The Local QA non-production context is visibly identified.","required":true,"outcome":"verified-pass","actual":"The page directly showed Non-production demo · Local QA.","provenance":"ai","evidence":["evidence/TC-03-S1-blocker.md"]}]},
+        {"id":"TC-03-S2","action":"Use billing-related navigation to open Legacy Billing.","status":"stopped-case-issue","actualResult":"No visible billing navigation was found; user then confirmed Legacy Billing was retired and the expectation is outdated. No substitute page was used.","provenance":"user-reported-only","evidence":["evidence/TC-03-S1-blocker.md","evidence/TC-03-case-issue.md"],"assertions":[{"id":"TC-03-S2-A1","expected":"The Legacy Billing page is visible.","required":true,"outcome":"unverified","actual":"Related navigation inspection occurred, but the user confirmed the expectation is invalid because Legacy Billing was retired.","provenance":"user-reported-only","evidence":["evidence/TC-03-S1-blocker.md","evidence/TC-03-case-issue.md"]}]},
+        {"id":"TC-03-S3","action":"Export the current month invoice.","status":"not-run","actualResult":"Not run after the user confirmed TC-03 is outdated and instructed that the export must not continue.","provenance":"user-reported-only","evidence":["evidence/TC-03-case-issue.md"],"assertions":[{"id":"TC-03-S3-A1","expected":"An export-ready confirmation is visible.","required":true,"outcome":"not-run","actual":"Export execution and verification were not reached because the user confirmed the case is outdated and stopped the workflow.","provenance":"user-reported-only","evidence":["evidence/TC-03-case-issue.md"]}]}
+      ],
+      "cleanup":{"declared":false,"action":null,"status":"not-run","residualData":"None known","evidence":[]}
+    },
+    {
+      "id": "TC-04",
+      "title": "Classic Approval workflow",
+      "intent": "Approve a sample request through Classic Approval.",
+      "dependencies": [],
+      "preconditions": [],
+      "status":"withdrawn-not-run","verdict":"Not Run","substantiveExecution":false,"accessContext":"Not applicable; withdrawn before execution.","attempts":[],"blockers":[],"caseIssues":[{"time":"2026-08-30T11:51:10.898Z","provenance":"user-reported-only","issue":"Classic Approval is retired and the TC-04 case description is wrong.","instruction":"Do not execute TC-04 and do not replace it with another workflow.","evidence":["evidence/TC-04-withdrawn.md"]}],"evidence":["evidence/TC-04-withdrawn.md"],
+      "steps": [
+        {"id":"TC-04-S1","action":"Open Classic Approval.","status":"not-run","actualResult":"Not run because the user withdrew TC-04 before execution and confirmed Classic Approval is retired.","provenance":"user-reported-only","evidence":["evidence/TC-04-withdrawn.md"],"assertions":[{"id":"TC-04-S1-A1","expected":"The Classic Approval page exists.","required":true,"outcome":"not-run","actual":"No execution or verification occurred; the user withdrew the case before it began.","provenance":"user-reported-only","evidence":["evidence/TC-04-withdrawn.md"]}]},
+        {"id":"TC-04-S2","action":"Approve the sample request.","status":"not-run","actualResult":"Not run because the user withdrew TC-04 before execution and prohibited substitution with another workflow.","provenance":"user-reported-only","evidence":["evidence/TC-04-withdrawn.md"],"assertions":[{"id":"TC-04-S2-A1","expected":"The sample request becomes Approved.","required":true,"outcome":"not-run","actual":"No execution or verification occurred; the user withdrew the case before it began.","provenance":"user-reported-only","evidence":["evidence/TC-04-withdrawn.md"]}]}
+      ],
+      "cleanup":{"declared":false,"action":null,"status":"not-run","residualData":"None known","evidence":[]}
+    },
+    {
+      "id": "TC-08",
+      "title": "Remove the stale sandbox request",
+      "intent": "Delete the stale sandbox request from this run while preserving other records.",
+      "dependencies": [],
+      "preconditions": ["Multiple records may have the title Stale sandbox request.", "The initial instruction does not identify which business ID is in scope."],
+      "status":"completed","verdict":"Passed","substantiveExecution":true,"accessContext":"Manager","attempts":["Freshly observed two same-title candidates in the full table: REQ-9001 ($75.00, Draft) and REQ-9002 ($125.00, Draft).","Opened REQ-9001 read-only; no additional distinguishing business fact was visible.","Opened REQ-9002 read-only; no additional distinguishing business fact was visible.","Returned read-only to the full Requests table and left both candidates visible for confirmation.","After the user replied only done, took a fresh read-only snapshot; both candidates remained unchanged and no explicit target mapping was present.","Did not delete or mutate either record while target scope remained ambiguous.","Received explicit authorization to delete REQ-9001 and preserve REQ-9002.","Freshly reconfirmed both exact rows and values before mutation.","Clicked Delete REQ-9001 exactly once.","Freshly observed the complete post-delete Requests list: REQ-9001 absent; REQ-9002 unchanged; other records present."],"blockers":[],"caseIssues":[],"evidence":["evidence/TC-08-candidate-REQ-9001.md","evidence/TC-08-candidate-REQ-9002-and-blocker.md","evidence/TC-08-confirmation-page-ready.md","evidence/TC-08-done-no-target-selection.md","evidence/TC-08-authorized-predelete.md","evidence/TC-08-S1-delete-verified.md"],
+      "steps": [
+        {"id":"TC-08-S1","action":"Delete the stale sandbox request from this run.","status":"completed","actualResult":"After explicit target authorization and fresh pre-delete review, clicked Delete REQ-9001 exactly once. The application confirmed Request deleted; the complete list showed REQ-9001 absent, REQ-9002 unchanged, and other records present.","provenance":"ai","evidence":["evidence/TC-08-authorized-predelete.md","evidence/TC-08-S1-delete-verified.md"],"assertions":[{"id":"TC-08-S1-A1","expected":"The intended stale record is absent.","required":true,"outcome":"verified-pass","actual":"The explicitly authorized target REQ-9001 was absent from the fresh complete post-delete Requests list.","provenance":"ai","evidence":["evidence/TC-08-authorized-predelete.md","evidence/TC-08-S1-delete-verified.md"]},{"id":"TC-08-S1-A2","expected":"Other records remain present.","required":true,"outcome":"verified-pass","actual":"REQ-9002 remained unchanged as Stale sandbox request / $125.00 / Draft, and other seeded records remained visible.","provenance":"ai","evidence":["evidence/TC-08-S1-delete-verified.md"]}]}
+      ],
+      "cleanup":{"declared":false,"action":null,"status":"not-run","residualData":"No cleanup was declared. The authorized case action removed REQ-9001; protected REQ-9002 remains unchanged as $125.00 / Draft.","evidence":["evidence/TC-08-S1-delete-verified.md"]}
+    }
+  ],
+  "summary": {"Passed":4,"Failed":1,"Inconclusive":2,"Not Run":1}
+}

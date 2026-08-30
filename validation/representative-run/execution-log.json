@@ -1,0 +1,59 @@
+{
+  "runId": "representative-mcp-gate-001",
+  "target": "https://demo.invalid",
+  "environment": "confirmed non-production synthetic demo",
+  "scopeConfirmed": true,
+  "startedAt": "2026-08-29T00:00:00+08:00",
+  "endedAt": "2026-08-29T00:00:01+08:00",
+  "status": "completed-with-blocker",
+  "limitations": [
+    "Chrome DevTools MCP was unavailable, so no browser behavior was executed."
+  ],
+  "cases": [
+    {
+      "id": "CAP-001",
+      "title": "Reject execution when Chrome DevTools MCP is unavailable",
+      "substantiveExecution": false,
+      "verdict": "Not Run",
+      "reason": "The required sole browser adapter was unavailable before browser launch.",
+      "evidence": ["evidence/capability-check.txt"],
+      "steps": [
+        {
+          "id": "CAP-001-S1",
+          "action": "Check for Chrome DevTools MCP before browser launch",
+          "expected": "Stop clearly and use no fallback when the capability is absent",
+          "actual": "Stopped before browser launch and reported the missing capability",
+          "provenance": "ai",
+          "evidence": ["evidence/capability-check.txt"],
+          "assertions": [
+            {
+              "id": "CAP-001-A1",
+              "required": true,
+              "expected": "A browser-backed E2E assertion is executed only through Chrome DevTools MCP",
+              "actual": "No browser-backed E2E assertion was attempted because Chrome DevTools MCP was unavailable",
+              "outcome": "not-run",
+              "reason": "The required browser capability was unavailable; no verification attempt occurred.",
+              "evidence": ["evidence/capability-check.txt"]
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "declared": false,
+        "authorized": false,
+        "result": "not-run",
+        "residualData": "None; no browser or business mutation occurred."
+      }
+    }
+  ],
+  "summary": {
+    "Passed": 0,
+    "Failed": 0,
+    "Inconclusive": 0,
+    "Not Run": 1
+  },
+  "assistance": [],
+  "blockers": ["Chrome DevTools MCP unavailable"],
+  "caseIssues": [],
+  "dataHandling": "No credentials, secrets, console data, network data, screenshots, or sensitive business data were collected."
+}

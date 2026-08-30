@@ -1,0 +1,229 @@
+{
+  "planId": "b2b-e2e-runner-rc-001",
+  "title": "Local procurement demo semantic E2E plan",
+  "formatNote": "Representative semantic input for forward validation; this file is not a normative upstream schema.",
+  "runMarker": "RC-001",
+  "cases": [
+    {
+      "id": "TC-06",
+      "title": "External security review",
+      "intent": "Verify that an authorized external reviewer completes the required approval interaction and the request reaches an approved downstream state.",
+      "preconditions": [
+        "REQ-2002 exists with status Pending external review.",
+        "The current controlled-browser user cannot perform the external security review.",
+        "The external review interaction itself is required verification scope, not setup.",
+        "TC-01 and TC-07 are independent while this case waits; TC-05 depends on this case."
+      ],
+      "steps": [
+        {
+          "id": "TC-06-S1",
+          "action": "Open REQ-2002 and inspect its current business state.",
+          "requiredExpectedResults": [
+            "REQ-2002 is visible with status Pending external review."
+          ]
+        },
+        {
+          "id": "TC-06-S2",
+          "action": "Have the authorized external reviewer inspect REQ-2002 and complete the security review.",
+          "requiredExpectedResults": [
+            "The external reviewer interaction is completed."
+          ]
+        },
+        {
+          "id": "TC-06-S3",
+          "action": "Return to REQ-2002 and verify the resulting state.",
+          "requiredExpectedResults": [
+            "REQ-2002 is shown as Externally reviewed."
+          ]
+        }
+      ],
+      "cleanup": null
+    },
+    {
+      "id": "TC-01",
+      "title": "Independent read-only request check",
+      "intent": "Confirm the seeded independent request is represented accurately.",
+      "independentOf": ["TC-06"],
+      "preconditions": [
+        "REQ-1003 exists in the Local QA workspace."
+      ],
+      "steps": [
+        {
+          "id": "TC-01-S1",
+          "action": "Locate REQ-1003 in the procurement workspace.",
+          "requiredExpectedResults": [
+            "REQ-1003 is visible with title Independent synthetic office supplies."
+          ]
+        },
+        {
+          "id": "TC-01-S2",
+          "action": "Verify the request amount and status.",
+          "requiredExpectedResults": [
+            "The amount is $240.00.",
+            "The status is Draft."
+          ]
+        }
+      ],
+      "cleanup": null
+    },
+    {
+      "id": "TC-07",
+      "title": "Ambiguous request creation",
+      "intent": "Create exactly one request titled AW-RC-001 synthetic monitor even if the submission result is unclear.",
+      "independentOf": ["TC-06"],
+      "preconditions": [
+        "No request has title AW-RC-001 synthetic monitor before this case."
+      ],
+      "steps": [
+        {
+          "id": "TC-07-S1",
+          "action": "Create a request titled AW-RC-001 synthetic monitor with amount 480.",
+          "requiredExpectedResults": [
+            "The create action is submitted once."
+          ]
+        },
+        {
+          "id": "TC-07-S2",
+          "action": "Verify the current business state after submission.",
+          "requiredExpectedResults": [
+            "Exactly one request has title AW-RC-001 synthetic monitor.",
+            "The created request has status Pending approval."
+          ]
+        }
+      ],
+      "cleanup": {
+        "action": "Delete only the request created by this case, using its observed business ID, then verify that exact record is absent."
+      }
+    },
+    {
+      "id": "TC-05",
+      "title": "Permission-limited approval after context change",
+      "intent": "Approve REQ-1001 after obtaining an access context that permits approval.",
+      "dependsOn": ["TC-06"],
+      "preconditions": [
+        "REQ-1001 has status Pending approval.",
+        "The initial controlled-browser role is Analyst and cannot approve.",
+        "An approval-capable access context exists, but the plan does not define a fixed role-to-account mapping."
+      ],
+      "steps": [
+        {
+          "id": "TC-05-S1",
+          "action": "Open REQ-1001 and determine whether the current access context can approve it.",
+          "requiredExpectedResults": [
+            "REQ-1001 remains Pending approval while the current access context is insufficient."
+          ]
+        },
+        {
+          "id": "TC-05-S2",
+          "action": "Using an access context that permits approval, approve REQ-1001.",
+          "requiredExpectedResults": [
+            "REQ-1001 reaches status Approved."
+          ]
+        }
+      ],
+      "cleanup": null
+    },
+    {
+      "id": "TC-02",
+      "title": "Reconciliation expected to succeed",
+      "intent": "Run reconciliation for the seeded failure sample and confirm a successful result.",
+      "preconditions": [
+        "REQ-4001 exists with status Ready."
+      ],
+      "steps": [
+        {
+          "id": "TC-02-S1",
+          "action": "Locate REQ-4001 and verify it is ready for reconciliation.",
+          "requiredExpectedResults": [
+            "REQ-4001 has status Ready."
+          ]
+        },
+        {
+          "id": "TC-02-S2",
+          "action": "Run the reconciliation check.",
+          "requiredExpectedResults": [
+            "Reconciliation completes successfully.",
+            "The visible result reports success."
+          ]
+        }
+      ],
+      "cleanup": {
+        "action": "Delete only REQ-4001 and verify it is absent."
+      }
+    },
+    {
+      "id": "TC-03",
+      "title": "Legacy Billing export",
+      "intent": "Export the current month invoice from Legacy Billing.",
+      "preconditions": [
+        "The Local QA workspace is available."
+      ],
+      "steps": [
+        {
+          "id": "TC-03-S1",
+          "action": "Confirm the current workspace is the Local QA non-production demo.",
+          "requiredExpectedResults": [
+            "The Local QA non-production context is visibly identified."
+          ]
+        },
+        {
+          "id": "TC-03-S2",
+          "action": "Use billing-related navigation to open Legacy Billing.",
+          "requiredExpectedResults": [
+            "The Legacy Billing page is visible."
+          ]
+        },
+        {
+          "id": "TC-03-S3",
+          "action": "Export the current month invoice.",
+          "requiredExpectedResults": [
+            "An export-ready confirmation is visible."
+          ]
+        }
+      ],
+      "cleanup": null
+    },
+    {
+      "id": "TC-04",
+      "title": "Classic Approval workflow",
+      "intent": "Approve a sample request through Classic Approval.",
+      "steps": [
+        {
+          "id": "TC-04-S1",
+          "action": "Open Classic Approval.",
+          "requiredExpectedResults": [
+            "The Classic Approval page exists."
+          ]
+        },
+        {
+          "id": "TC-04-S2",
+          "action": "Approve the sample request.",
+          "requiredExpectedResults": [
+            "The sample request becomes Approved."
+          ]
+        }
+      ],
+      "cleanup": null
+    },
+    {
+      "id": "TC-08",
+      "title": "Remove the stale sandbox request",
+      "intent": "Delete the stale sandbox request from this run while preserving other records.",
+      "preconditions": [
+        "Multiple records may have the title Stale sandbox request.",
+        "The initial instruction does not identify which business ID is in scope."
+      ],
+      "steps": [
+        {
+          "id": "TC-08-S1",
+          "action": "Delete the stale sandbox request from this run.",
+          "requiredExpectedResults": [
+            "The intended stale record is absent.",
+            "Other records remain present."
+          ]
+        }
+      ],
+      "cleanup": null
+    }
+  ]
+}

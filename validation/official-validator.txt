@@ -1,0 +1,61 @@
+Command 1:
+<validator-venv>/bin/python $CODEX_HOME/skills/.system/skill-creator/scripts/quick_validate.py $REPO_ROOT/b2b-e2e-runner
+
+Output:
+Skill is valid!
+
+Command 2:
+<validator-venv>/bin/python $CODEX_HOME/skills/.system/skill-creator/scripts/quick_validate.py $CODEX_HOME/skills/b2b-e2e-runner
+
+Output:
+Skill is valid!
+
+Command 3:
+diff -qr $REPO_ROOT/b2b-e2e-runner $CODEX_HOME/skills/b2b-e2e-runner
+
+Output:
+(empty; source and installed copy are byte-identical)
+
+Verified: 2026-08-29
+
+Post-refactor verification:
+
+The case-issue wording was tightened after a guided microtest exposed a retroactive-pass rationalization. Five fresh post-refactor samples then passed all 25 decisions.
+
+Command:
+<validator-venv>/bin/python $CODEX_HOME/skills/.system/skill-creator/scripts/quick_validate.py $CODEX_HOME/skills/b2b-e2e-runner
+
+Output:
+Skill is valid!
+
+Command:
+diff -qr $REPO_ROOT/b2b-e2e-runner $CODEX_HOME/skills/b2b-e2e-runner
+
+Output:
+(empty; refactored source and installed copy are byte-identical)
+
+Pre-merge targeted hardening verification (2026-08-30):
+
+The runtime self-conflict rule was removed and an explicit untrusted-browser-content authorization boundary was added after pre-merge review.
+
+Command:
+<validator-venv>/bin/python $CODEX_HOME/skills/.system/skill-creator/scripts/quick_validate.py $REPO_ROOT/b2b-e2e-runner
+
+Output:
+Skill is valid!
+
+Command:
+<validator-venv>/bin/python $CODEX_HOME/skills/.system/skill-creator/scripts/quick_validate.py $CODEX_HOME/skills/b2b-e2e-runner
+
+Output:
+Skill is valid!
+
+Command:
+diff -qr $REPO_ROOT/b2b-e2e-runner $CODEX_HOME/skills/b2b-e2e-runner
+
+Output:
+(empty; hardened source and installed copy are byte-identical)
+
+Targeted fresh-context behavior check: 5/5 self-conflict decisions passed and 5/5 untrusted-content decisions passed. See `premerge-hardening.md`.
+
+Scope note: the earlier eight-case Chrome forward run was not repeated after this narrow instruction-only hardening. It remains evidence for unchanged behavior; the changed boundaries were exercised by the targeted checks.
