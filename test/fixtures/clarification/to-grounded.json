@@ -1,0 +1,4 @@
+{
+  "scenario": "clarification-grounded",
+  "decision": { "disposition": "final", "evidence_level": "E3", "expected_lane": "grounded" }
+}

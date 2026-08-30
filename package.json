@@ -6,7 +6,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "build": "node build/build.mjs",
-    "test": "node --test test/**/*.test.mjs",
+    "test": "node --test test/**/*.test.mjs && node --test test/repeatability/*.repeat.mjs",
     "check": "tsc --noEmit -p jsconfig.json && npm run build && npm test",
     "benchmark": "node benchmark/score.mjs benchmark/v1/manifest.json"
   },
