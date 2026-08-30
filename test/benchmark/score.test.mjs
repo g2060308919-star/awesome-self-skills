@@ -340,6 +340,13 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   const nullLabelReport = scoreBenchmark(nullLabel, runs);
   assert.equal(nullLabelReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'OBLIGATION_LABEL_INVALID'), true);
 
+  const malformedExpertLabels = structuredClone(manifest);
+  malformedExpertLabels.cases[0].assets.supported_assertions.expert_annotations[0].labels = {};
+  const malformedExpertReport = scoreBenchmark(malformedExpertLabels, runs);
+  assert.equal(malformedExpertReport.completeness.issues.some(
+    (/** @type {any} */ issue) => issue.code === 'EXPERT_ANNOTATIONS_INCOMPLETE'
+  ), true);
+
   const processMissing = structuredClone(runs);
   delete processMissing[0].output.process_failures.old_revision_recovery;
   assert.equal(scoreBenchmark(manifest, processMissing).completeness.issues.some(

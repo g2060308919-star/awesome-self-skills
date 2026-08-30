@@ -170,7 +170,7 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
     map.size !== (annotations[index].labels?.length ?? -1) || map.size !== final.size || [...final.keys()].some((key) => !map.has(key)))) {
     issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', pathValue, 'Final and expert label sets must contain the same unique label keys.');
   }
-  for (const [annotationIndex, annotation] of annotations.entries()) for (const [labelIndex, label] of (annotation.labels ?? []).entries()) {
+  for (const [annotationIndex, annotation] of annotations.entries()) for (const [labelIndex, label] of (Array.isArray(annotation.labels) ? annotation.labels : []).entries()) {
     if (typeof label?.label_key !== 'string' || !validLabelValue(label?.value, kind)) {
       issue(issues, invalidCode, `${pathValue}/expert_annotations/${annotationIndex}/labels/${labelIndex}`, 'Every expert label must satisfy its typed hidden-label contract.');
     }
@@ -183,7 +183,8 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
       if (!adjudication || JSON.stringify(adjudication.resolved_value) !== JSON.stringify(final.get(key))) {
         issue(issues, 'ADJUDICATION_MISSING', `${pathValue}/${key}`, 'Every expert disagreement requires a completed matching adjudication.');
       } else {
-        const recordedValues = (adjudication.expert_values ?? []).map((/** @type {any} */ value) => JSON.stringify(value)).sort();
+        const recordedValues = (Array.isArray(adjudication.expert_values) ? adjudication.expert_values : [])
+          .map((/** @type {any} */ value) => JSON.stringify(value)).sort();
         const validRecord = recordedValues.length === 2 && JSON.stringify(recordedValues) === JSON.stringify([...serialized].sort()) &&
           typeof adjudication.adjudicator === 'string' && adjudication.adjudicator.length > 0 &&
           typeof adjudication.completed_at === 'string' && adjudication.completed_at.length > 0 &&
@@ -228,7 +229,8 @@ function scoreCohort(cases, runs, system, risk = null) {
     const obligationMap = new Map(obligationLabels.map((item) => [item.signature, item]));
     const assertionMap = finalLabelMap(benchmarkCase.assets?.supported_assertions);
     const caseMap = finalLabelMap(benchmarkCase.assets?.accepted_cases);
-    const defects = (benchmarkCase.assets?.historical_defects?.defects ?? []).filter(
+    const defectRows = benchmarkCase.assets?.historical_defects?.defects;
+    const defects = (Array.isArray(defectRows) ? defectRows : []).filter(
       (/** @type {any} */ item) => risk === null || (item.risk ?? benchmarkCase.risk) === risk
     );
     const defectIds = new Set(defects.map((/** @type {any} */ item) => item.defect_id));
@@ -318,7 +320,7 @@ export function scoreBenchmark(manifest, capturedRuns) {
   const cases = rawCases.filter(isRecord);
   const runs = rawRuns.filter(isRecord);
 
-  for (const loadIssue of manifest?.load_issues ?? []) {
+  for (const loadIssue of Array.isArray(manifest?.load_issues) ? manifest.load_issues : []) {
     issue(issues, loadIssue.code ?? 'BENCHMARK_ASSET_LOAD_FAILED', loadIssue.path ?? '/', loadIssue.message ?? 'A benchmark input could not be loaded.');
   }
 
@@ -327,7 +329,7 @@ export function scoreBenchmark(manifest, capturedRuns) {
   if (manifest?.evidence_class !== 'external-expert-corpus') issue(issues, 'RELEASE_EVIDENCE_CLASS_INELIGIBLE', '/evidence_class', 'Synthetic pilot fixtures are never release evidence.');
   const strata = Array.isArray(manifest?.strata) ? manifest.strata : [];
   if (strata.length !== BENCHMARK_STRATA.length || BENCHMARK_STRATA.some((stratum) => {
-    const matches = strata.filter((/** @type {any} */ item) => item.stratum === stratum);
+    const matches = strata.filter((/** @type {any} */ item) => item?.stratum === stratum);
     return matches.length !== 1 || matches[0].minimum_prds !== 5 || matches[0].minimum_critical_obligations !== 3 ||
       matches[0].minimum_clarification_prds !== 2 || matches[0].minimum_historical_defects !== 5;
   })) issue(issues, 'STRATA_CONTRACT_INVALID', '/strata', 'The manifest must contain the exact frozen six-stratum V1 contract.');
@@ -337,9 +339,15 @@ export function scoreBenchmark(manifest, capturedRuns) {
     if (stratumCases.length < 5) issue(issues, 'STRATUM_PRD_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires at least five PRDs.');
     const critical = stratumCases.reduce((/** @type {number} */ total, /** @type {any} */ item) => total + obligationsFor(item, 'critical').filter((obligation) => obligation.expected === true).length, 0);
     if (critical < 3) issue(issues, 'STRATUM_CRITICAL_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires at least three expert critical Test Points.');
-    const clarificationCount = stratumCases.filter((/** @type {any} */ item) => item.assets?.clarification_scenarios?.scenarios?.some((/** @type {any} */ scenario) => scenario.required === true)).length;
+    const clarificationCount = stratumCases.filter((/** @type {any} */ item) => {
+      const scenarios = item.assets?.clarification_scenarios?.scenarios;
+      return Array.isArray(scenarios) && scenarios.some((/** @type {any} */ scenario) => scenario?.required === true);
+    }).length;
     if (clarificationCount < 2) issue(issues, 'STRATUM_CLARIFICATION_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires two clarification-required PRDs.');
-    const defectCount = stratumCases.reduce((/** @type {number} */ total, /** @type {any} */ item) => total + (item.assets?.historical_defects?.defects?.filter((/** @type {any} */ defect) => typeof defect.source_ref === 'string' && defect.source_ref.length > 0).length ?? 0), 0);
+    const defectCount = stratumCases.reduce((/** @type {number} */ total, /** @type {any} */ item) => {
+      const defects = item.assets?.historical_defects?.defects;
+      return total + (Array.isArray(defects) ? defects.filter((/** @type {any} */ defect) => typeof defect?.source_ref === 'string' && defect.source_ref.length > 0).length : 0);
+    }, 0);
     if (defectCount < 5) issue(issues, 'STRATUM_DEFECT_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires five traceable historical defects.');
   }
   if (cases.length < 30) issue(issues, 'CORPUS_PRD_MINIMUM_NOT_MET', '/cases', 'V1 requires at least 30 PRDs.');
@@ -463,7 +471,8 @@ export function scoreBenchmark(manifest, capturedRuns) {
       if (value?.oracle === true && value.supported !== true && ['critical', 'high'].includes(value.risk)) unsupportedOracleCount += 1;
     }
     for (const name of PROCESS_FAILURE_NAMES) if (run.output.process_failures?.[name] === true) processFailures[name] += 1;
-    const mutationIds = new Set(benchmarkCase.assets?.business_model_mutations?.mutations?.map((/** @type {any} */ item) => item.mutation_id) ?? []);
+    const mutations = benchmarkCase.assets?.business_model_mutations?.mutations;
+    const mutationIds = new Set((Array.isArray(mutations) ? mutations : []).map((/** @type {any} */ item) => item?.mutation_id));
     mutationsObserved += mutationIds.size;
     mutationsKilled += [...new Set(run.output.killed_mutation_ids)].filter((id) => mutationIds.has(id)).length;
   }
