@@ -3,6 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSchemaRegistry } from './schema-registry.mjs';
 
+// Task 11 keeps revision evaluation in src/core.mjs as a pure internal seam.
+// Task 12 will make this filesystem shell load a complete revision and invoke
+// it with the fixed pause_for_clarification policy; no policy selector is added
+// to this sole external interface.
+
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const schemaDirectory = path.resolve(
   moduleDirectory,
