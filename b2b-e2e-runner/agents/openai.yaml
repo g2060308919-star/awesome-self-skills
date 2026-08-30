@@ -1,0 +1,4 @@
+interface:
+  display_name: "B2B E2E Runner"
+  short_description: "Run adaptive E2E tests on non-production B2B systems"
+  default_prompt: "Use $b2b-e2e-runner to execute my confirmed semantic test plan against this non-production B2B system."
