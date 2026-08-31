@@ -280,6 +280,24 @@ export function createBusinessOperations(options) {
     );
   }
 
+  async function getCustomer(context, customerId) {
+    return withActor(
+      context,
+      {
+        logicalOperation: "customer.detail",
+        permission: "customer.read",
+        entity: "customer",
+        targetId: customerId
+      },
+      ({ draft }) => {
+        const customer = draft.customers.find(({ id }) => id === customerId);
+        return customer
+          ? { ok: true, status: 200, customer: structuredClone(customer) }
+          : publicFailure("CUSTOMER_NOT_FOUND", "Customer was not found", 404);
+      }
+    );
+  }
+
   async function createCustomer(context, input) {
     return withActor(
       context,
@@ -404,6 +422,24 @@ export function createBusinessOperations(options) {
         source: query.source
       },
       ({ draft }) => ({ ok: true, status: 200, projects: structuredClone(draft.projects) })
+    );
+  }
+
+  async function getProject(context, projectId) {
+    return withActor(
+      context,
+      {
+        logicalOperation: "project.detail",
+        permission: "project.read",
+        entity: "project",
+        targetId: projectId
+      },
+      ({ draft }) => {
+        const project = draft.projects.find(({ id }) => id === projectId);
+        return project
+          ? { ok: true, status: 200, project: structuredClone(project) }
+          : publicFailure("PROJECT_NOT_FOUND", "Project was not found", 404);
+      }
     );
   }
 
@@ -573,6 +609,40 @@ export function createBusinessOperations(options) {
     );
   }
 
+  async function listApprovals(context) {
+    return withActor(
+      context,
+      { logicalOperation: "approval.list", permission: "approval.read", entity: "approval" },
+      ({ draft }) => ({
+        ok: true,
+        status: 200,
+        approvals: structuredClone(draft.approvals)
+      })
+    );
+  }
+
+  async function getSessionContext(context) {
+    return coordinator.transact({ logicalOperation: "session.current" }, (draft, tools) => {
+      const resolved = resolveSession(draft, context?.sessionId);
+      if (!resolved.session || !resolved.account) {
+        return publicFailure("MANUAL_LOGIN_REQUIRED", "Manual login is required", 401);
+      }
+      emitEvent(draft, tools, {
+        type: "operation_attempt",
+        actorId: resolved.account.id,
+        sessionId: resolved.session.id,
+        logicalOperation: "session.current",
+        outcome: "observed"
+      });
+      return {
+        ok: true,
+        status: 200,
+        session: structuredClone(resolved.session),
+        account: structuredClone(resolved.account)
+      };
+    });
+  }
+
   async function changeAccountRole(accountId, role, actor = "evaluator") {
     return coordinator.transact({ logicalOperation: "session.role.change" }, (draft, tools) => {
       const account = draft.accounts.find(({ id }) => id === accountId);
@@ -695,14 +765,18 @@ export function createBusinessOperations(options) {
     login,
     logout,
     switchAccount,
+    getSessionContext,
     listCustomers,
+    getCustomer,
     createCustomer,
     updateCustomer,
     deleteCustomer,
     listProjects,
+    getProject,
     changeProjectStatus,
     submitApproval,
     decideApproval,
+    listApprovals,
     readBusinessAudit,
     changeAccountRole,
     expireSession,
