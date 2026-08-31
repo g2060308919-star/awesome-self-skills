@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node bin/sandbox.mjs",
-    "test": "node --test",
+    "test": "node --test test/*.test.mjs",
     "self-test": "node bin/self-test.mjs",
     "bundle:digests": "node bin/bundle-digests.mjs --write",
     "bundle:verify": "node bin/bundle-digests.mjs --verify"

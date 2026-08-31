@@ -298,19 +298,19 @@ const fixture = {
     { id: "acct-admin", displayName: "Ada Administrator", role: "Administrator" }
   ],
   customers: [
-    { id: "CUS-1001", name: "Beacon Synthetic", status: "Active", owner: "Morgan Lee", plan: "Core", email: "beacon@example.test", timezone: "UTC", tags: ["north"] },
-    { id: "CUS-1002", name: "Cedar Synthetic", status: "Active", owner: "Morgan Lee", plan: "Core", email: "cedar@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1003", name: "Delta Synthetic", status: "Active", owner: "Taylor Quinn", plan: "Scale", email: "delta@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1004", name: "Elm Synthetic", status: "Suspended", owner: "Taylor Quinn", plan: "Core", email: "elm@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1005", name: "Fjord Synthetic", status: "Active", owner: "Avery Stone", plan: "Core", email: "fjord@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1006", name: "Grove Synthetic", status: "Active", owner: "Avery Stone", plan: "Scale", email: "grove@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1007", name: "Helix Synthetic", status: "Active", owner: "Morgan Lee", plan: "Core", email: "helix@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1008", name: "Indigo Synthetic", status: "Suspended", owner: "Morgan Lee", plan: "Scale", email: "indigo@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1009", name: "Juniper Synthetic", status: "Active", owner: "Taylor Quinn", plan: "Core", email: "juniper@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1010", name: "Keystone Synthetic", status: "Active", owner: "Taylor Quinn", plan: "Scale", email: "keystone@example.test", timezone: "UTC", tags: [] },
-    { id: "CUS-1011", name: "Acme Harbor", status: "Suspended", owner: "Avery Stone", plan: "Core", email: "harbor@example.test", timezone: "UTC", tags: ["review"] },
-    { id: "CUS-1012", name: "Acme Alpine", status: "Active", owner: "Avery Stone", plan: "Scale", email: "alpine@example.test", timezone: "America/New_York", tags: ["gold"] },
-    { id: "CUS-RUN-SCOPED", name: "Bench-{{runId}}", status: "Active", owner: "Owen Operator", plan: "Core", email: "bench@example.test", timezone: "UTC", tags: [] }
+    { id: "CUS-1001", name: "Beacon Synthetic", status: "Active", owner: "Morgan Lee", plan: "Core", email: "beacon@example.invalid", timezone: "UTC", tags: ["north"] },
+    { id: "CUS-1002", name: "Cedar Synthetic", status: "Active", owner: "Morgan Lee", plan: "Core", email: "cedar@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1003", name: "Delta Synthetic", status: "Active", owner: "Taylor Quinn", plan: "Scale", email: "delta@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1004", name: "Elm Synthetic", status: "Suspended", owner: "Taylor Quinn", plan: "Core", email: "elm@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1005", name: "Fjord Synthetic", status: "Active", owner: "Avery Stone", plan: "Core", email: "fjord@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1006", name: "Grove Synthetic", status: "Active", owner: "Avery Stone", plan: "Scale", email: "grove@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1007", name: "Helix Synthetic", status: "Active", owner: "Morgan Lee", plan: "Core", email: "helix@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1008", name: "Indigo Synthetic", status: "Suspended", owner: "Morgan Lee", plan: "Scale", email: "indigo@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1009", name: "Juniper Synthetic", status: "Active", owner: "Taylor Quinn", plan: "Core", email: "juniper@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1010", name: "Keystone Synthetic", status: "Active", owner: "Taylor Quinn", plan: "Scale", email: "keystone@example.invalid", timezone: "UTC", tags: [] },
+    { id: "CUS-1011", name: "Acme Harbor", status: "Suspended", owner: "Avery Stone", plan: "Core", email: "harbor@example.invalid", timezone: "UTC", tags: ["review"] },
+    { id: "CUS-1012", name: "Acme Alpine", status: "Active", owner: "Avery Stone", plan: "Scale", email: "alpine@example.invalid", timezone: "America/New_York", tags: ["gold"] },
+    { id: "CUS-RUN-SCOPED", name: "Bench-{{runId}}", status: "Active", owner: "Owen Operator", plan: "Core", email: "bench@example.invalid", timezone: "UTC", tags: [] }
   ],
   projects: [
     { id: "PRJ-1001", businessId: "AR-4102", name: "Atlas Renewal", status: "Inactive", description: "Annual synthetic renewal" },

@@ -33,7 +33,7 @@
       "status": "Active",
       "owner": "Morgan Lee",
       "plan": "Core",
-      "email": "beacon@example.test",
+      "email": "beacon@example.invalid",
       "timezone": "UTC",
       "tags": [
         "north"
@@ -45,7 +45,7 @@
       "status": "Active",
       "owner": "Morgan Lee",
       "plan": "Core",
-      "email": "cedar@example.test",
+      "email": "cedar@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -55,7 +55,7 @@
       "status": "Active",
       "owner": "Taylor Quinn",
       "plan": "Scale",
-      "email": "delta@example.test",
+      "email": "delta@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -65,7 +65,7 @@
       "status": "Suspended",
       "owner": "Taylor Quinn",
       "plan": "Core",
-      "email": "elm@example.test",
+      "email": "elm@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -75,7 +75,7 @@
       "status": "Active",
       "owner": "Avery Stone",
       "plan": "Core",
-      "email": "fjord@example.test",
+      "email": "fjord@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -85,7 +85,7 @@
       "status": "Active",
       "owner": "Avery Stone",
       "plan": "Scale",
-      "email": "grove@example.test",
+      "email": "grove@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -95,7 +95,7 @@
       "status": "Active",
       "owner": "Morgan Lee",
       "plan": "Core",
-      "email": "helix@example.test",
+      "email": "helix@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -105,7 +105,7 @@
       "status": "Suspended",
       "owner": "Morgan Lee",
       "plan": "Scale",
-      "email": "indigo@example.test",
+      "email": "indigo@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -115,7 +115,7 @@
       "status": "Active",
       "owner": "Taylor Quinn",
       "plan": "Core",
-      "email": "juniper@example.test",
+      "email": "juniper@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -125,7 +125,7 @@
       "status": "Active",
       "owner": "Taylor Quinn",
       "plan": "Scale",
-      "email": "keystone@example.test",
+      "email": "keystone@example.invalid",
       "timezone": "UTC",
       "tags": []
     },
@@ -135,7 +135,7 @@
       "status": "Suspended",
       "owner": "Avery Stone",
       "plan": "Core",
-      "email": "harbor@example.test",
+      "email": "harbor@example.invalid",
       "timezone": "UTC",
       "tags": [
         "review"
@@ -147,7 +147,7 @@
       "status": "Active",
       "owner": "Avery Stone",
       "plan": "Scale",
-      "email": "alpine@example.test",
+      "email": "alpine@example.invalid",
       "timezone": "America/New_York",
       "tags": [
         "gold"
@@ -159,7 +159,7 @@
       "status": "Active",
       "owner": "Owen Operator",
       "plan": "Core",
-      "email": "bench@example.test",
+      "email": "bench@example.invalid",
       "timezone": "UTC",
       "tags": []
     }

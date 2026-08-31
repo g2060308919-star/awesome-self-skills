@@ -12,7 +12,7 @@
   "faults/session-expiry.json": "a2c3aa09449b2433fdc160a29b665f69891dad903fee532897d07fdfe5baacdc",
   "faults/success-without-persistence.json": "3f8f16c8a82ed2abdcb656e0a3f7e750af5b67aed2c2b109d9f26dff39575473",
   "faults/transient-read-once.json": "aea6a3aa7ed65728eaa88ec2e932e39a5705a9968fc0d2b2ab4cb3b803cdee75",
-  "fixtures/core-v1.json": "68bdc1e75a0279154a9e6cfda1fecb702c3b96ac25e2169237bbfe3c6b898351",
+  "fixtures/core-v1.json": "ce814f25c7091994c327cf2487c12ec8817571c73d923b3583b88e2fd8976be6",
   "host-trace-classifier.json": "586355852b6394ba877ba85ca70705f2629c017a5139eaff758cac01fcc072e1",
   "oracles/index.json": "a629d7ee14f7c53415fe83482253d2fd9b34acb65564b5db845afa687362c2b9",
   "profiles/B01.json": "4cccc76c9a6e3d87859ec3651c8a645a44f9190738b78624f417703051a1c4b6",

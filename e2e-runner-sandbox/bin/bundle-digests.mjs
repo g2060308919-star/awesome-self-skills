@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { lstat, opendir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { sha256File } from "../src/bundle/digests.mjs";
 import { SandboxError } from "../src/shared/errors.mjs";
@@ -49,14 +49,16 @@ export async function verifyBundleDigests() {
   return actual;
 }
 
-const mode = process.argv[2];
-if (mode === "--write") {
-  const digests = await writeBundleDigests();
-  process.stdout.write(`${JSON.stringify({ ok: true, mode: "write", files: Object.keys(digests).length })}\n`);
-} else if (mode === "--verify") {
-  const digests = await verifyBundleDigests();
-  process.stdout.write(`${JSON.stringify({ ok: true, mode: "verify", files: Object.keys(digests).length })}\n`);
-} else {
-  process.stderr.write("Usage: bundle-digests.mjs --write|--verify\n");
-  process.exitCode = 2;
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const mode = process.argv[2];
+  if (mode === "--write") {
+    const digests = await writeBundleDigests();
+    process.stdout.write(`${JSON.stringify({ ok: true, mode: "write", files: Object.keys(digests).length })}\n`);
+  } else if (mode === "--verify") {
+    const digests = await verifyBundleDigests();
+    process.stdout.write(`${JSON.stringify({ ok: true, mode: "verify", files: Object.keys(digests).length })}\n`);
+  } else {
+    process.stderr.write("Usage: bundle-digests.mjs --write|--verify\n");
+    process.exitCode = 2;
+  }
 }

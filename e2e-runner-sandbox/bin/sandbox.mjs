@@ -9,6 +9,7 @@ import { createRuntimeFiles } from "../src/control/runtime-files.mjs";
 import { createBusinessOperations } from "../src/domain/operations.mjs";
 import { createRunCoordinator } from "../src/domain/run-coordinator.mjs";
 import { SandboxError } from "../src/shared/errors.mjs";
+import { installOutboundGuard } from "../src/security/outbound-guard.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const bundlePromise = loadBundle(join(packageRoot, "benchmark"), "v1");
@@ -27,6 +28,10 @@ const operations = createBusinessOperations({ coordinator });
 const business = createBusinessServer({ coordinator, operations });
 const address = await business.listen();
 const runtime = await createRuntimeFiles({ businessUrl: address.origin });
+const outboundGuard = installOutboundGuard({
+  allowedHosts: ["127.0.0.1", "::1"],
+  allowedSocketPaths: [runtime.socketPath]
+});
 let stopping = false;
 
 async function shutdown() {
@@ -34,6 +39,7 @@ async function shutdown() {
   stopping = true;
   await control.close();
   await business.close();
+  outboundGuard.restore();
 }
 
 const control = createControlServer({
