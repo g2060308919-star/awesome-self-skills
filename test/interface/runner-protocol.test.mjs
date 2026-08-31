@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -17,6 +17,10 @@ const runnerPath = path.join(
 const unsupportedRuntimePreloadPath = path.join(
   repositoryRoot,
   'test/fixtures/unsupported-node-runtime.cjs'
+);
+const groundedRevisionPath = path.join(
+  repositoryRoot,
+  'test/fixtures/recovery/grounded-revision.json'
 );
 
 /**
@@ -64,6 +68,32 @@ test('empty run returns the source-pack artifact request', async () => {
 
     assert.equal(result.code, 0, result.stderr);
     assert.deepEqual(parseSingleJsonValue(result.stdout), emptyRunReply);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('installed runner accepts the requested source pack after an initial empty invocation', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
+  try {
+    const initial = await runCompiler(runDirectory);
+    assert.deepEqual(parseSingleJsonValue(initial.stdout), emptyRunReply);
+
+    const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+    await mkdir(path.join(runDirectory, 'staging'));
+    await writeFile(
+      path.join(runDirectory, 'staging/source-pack.json'),
+      `${JSON.stringify(revision.source_pack)}\n`,
+      'utf8'
+    );
+    const advanced = await runCompiler(runDirectory);
+
+    assert.equal(advanced.code, 0, advanced.stderr);
+    assert.deepEqual(parseSingleJsonValue(advanced.stdout), {
+      status: 'need_artifact', stage: 'evidence_claims',
+      schema_ref: 'evidence-claims.schema.json',
+      scope: { source_revision: 0 }, diagnostics: []
+    });
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
