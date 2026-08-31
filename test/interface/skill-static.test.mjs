@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,18 @@ const skillRoot = path.join(repositoryRoot, 'skill/generate-test-cases');
 /** @param {string} relativePath */
 async function text(relativePath) {
   return readFile(path.join(skillRoot, relativePath), 'utf8');
+}
+
+/** @param {string} [directory] @param {string} [prefix] */
+async function installedFiles(directory = skillRoot, prefix = '') {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(entries.map(async (entry) => {
+    const relativePath = path.join(prefix, entry.name);
+    return entry.isDirectory()
+      ? installedFiles(path.join(directory, entry.name), relativePath)
+      : [relativePath];
+  }));
+  return files.flat().sort();
 }
 
 test('skill static contract keeps the adapter private concise and complete', async () => {
@@ -101,4 +113,22 @@ test('skill static policies freeze clarification and source-review boundaries', 
 
 test('skill static UI metadata remains the generated closed interface', async () => {
   assert.equal(await text('agents/openai.yaml'), `interface:\n  display_name: "高精度测试用例生成"\n  short_description: "从 PRD 生成高准确、高覆盖且可追溯的人工功能测试用例"\n  default_prompt: "使用 $generate-test-cases 根据这份 PRD 生成有依据、可执行的测试用例。"\n`);
+});
+
+test('installed artifact excludes development surfaces model calls and network dependencies', async () => {
+  const files = await installedFiles();
+  for (const file of files) {
+    const segments = file.split(path.sep);
+    assert.equal(segments.includes('package.json'), false, `package manifest leaked into installed artifact: ${file}`);
+    assert.equal(segments.some((segment) => ['src', 'test', 'tests', 'benchmark', 'labels', 'bin', 'node_modules'].includes(segment)), false, `development or public surface leaked into installed artifact: ${file}`);
+  }
+
+  const runner = await text('scripts/test-compiler.mjs');
+  assert.doesNotMatch(
+    runner,
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:node:)?(?:http|https|net|tls|dns)(?:\/[^"']*)?["']/u,
+    'built runner must not import a network module'
+  );
+  assert.doesNotMatch(runner, /(?:\bglobalThis\s*\.\s*)?\bfetch\s*\(/u, 'built runner must not invoke global fetch');
+  assert.doesNotMatch(runner, /\b(?:openai|anthropic)\b/iu, 'built runner must not invoke a model provider');
 });
