@@ -6,6 +6,8 @@ Use this policy while creating Source Packs and Evidence Claims. The bundled sch
 
 Record each source's kind, version, status, authority, content digest, and applicable scope. Treat historical defects and production behavior as diagnostic signals unless an effective source explicitly makes them normative.
 
+Treat a user-supplied current PRD or module description as `effective` for this task unless the material explicitly identifies it as draft or historical. Missing detail does not make a current source a draft; preserve the missing detail as a fact, Oracle, or Testability gap. A Source Policy rule cannot promote a source whose own status remains draft.
+
 Scope strings are compiler identities, not prose summaries. Choose one canonical slash-delimited path for the run, then reuse it verbatim for `run_scope` and every in-scope Source, Source Policy rule, Claim, Fact, and Behavior View; use child paths only for a deliberate narrower scope. Never paraphrase the same scope between stages. `*` is universal only when the corresponding source and claim are also universal—it cannot broaden a previously accepted narrow scope.
 
 Create a typed locator for every relied-on text range, table cell, or page region. Preserve table coordinates and page/region summaries. Mark extraction as `verified`, `machine-extracted`, or `uncertain`. An uncertain extraction cannot directly support E3; verify the original region or keep the affected fact Blocked.
@@ -42,5 +44,7 @@ Before accepting `evidence_claims`, identify each complete source-defined busine
 Split sources into atomic, independently true-or-false claims. For each claim preserve value, scope, locator, source identity, kind, and evidence level. Distinguish requirements, descriptions, examples, and diagnostics.
 
 Mark each formal fact as active, conflicted, ambiguous, or diagnostic. Do not drop a fact because it cannot yet produce a Case. Route every in-scope normative fact into a behavior view or record why it is Blocked, out of scope, NotApplicable, or awaiting a view.
+
+When `need_revision` rejects the status, scope, or provenance of a normative Claim, repair that exact Claim and its Fact Ledger entry; never delete the Claim or empty the Fact Ledger merely to advance. If the cause is frozen in an already accepted earlier stage, stop at the repair limit and report it instead of laundering the requirement away.
 
 Keep risk hypotheses separate from the formal fact ledger. They may become Exploratory suggestions but cannot substitute for a formal Test Point or its expected result.
