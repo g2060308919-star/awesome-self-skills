@@ -1,0 +1,16 @@
+{
+  "name": "e2e-runner-evaluation-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node bin/sandbox.mjs",
+    "test": "node --test",
+    "self-test": "node bin/self-test.mjs",
+    "bundle:digests": "node bin/bundle-digests.mjs --write",
+    "bundle:verify": "node bin/bundle-digests.mjs --verify"
+  }
+}
