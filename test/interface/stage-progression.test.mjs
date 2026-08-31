@@ -228,16 +228,79 @@ test('real runner rejects a normative claim disguised as a diagnostic Fact', asy
   }
 });
 
-test('real runner accepts one conflicted Fact that owns both accepted normative alternatives', async () => {
-  const runDirectory = await temporaryRun('conflicted fact ownership');
+test('real runner accepts one grouped Fact that owns both accepted normative alternatives', async () => {
+  for (const status of ['conflicted', 'ambiguous']) {
+    const runDirectory = await temporaryRun(`${status} fact ownership`);
+    const revision = await fixture();
+    revision.evidence_claims.claims.push({
+      ...structuredClone(revision.evidence_claims.claims[0]),
+      claim_id: 'claim_checkout_rejected', value: 'checkout rejected'
+    });
+    Object.assign(revision.evidence_claims.fact_ledger[0], {
+      status,
+      source_claim_ids: ['claim_checkout', 'claim_checkout_rejected']
+    });
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+      await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+      const reply = await advance(runDirectory);
+      assert.equal(reply.status, 'need_artifact', JSON.stringify({ status, reply }));
+      assert.equal(reply.stage, 'behavior_views');
+      await stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json'));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('real runner accepts one ambiguous Fact as its normative primary owner', async () => {
+  const runDirectory = await temporaryRun('ambiguous primary fact ownership');
   const revision = await fixture();
+  revision.evidence_claims.fact_ledger[0].status = 'ambiguous';
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    const reply = await advance(runDirectory);
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.stage, 'behavior_views');
+    await stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json'));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('real runner rejects a single-source conflicted Fact owner', async () => {
+  const runDirectory = await temporaryRun('single source conflict ownership');
+  const revision = await fixture();
+  revision.evidence_claims.fact_ledger[0].status = 'conflicted';
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    const reply = await advance(runDirectory);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+      diagnostic.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true, JSON.stringify(reply));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('real runner accepts conflicted normative alternatives across nested scopes', async () => {
+  const runDirectory = await temporaryRun('nested scope conflict ownership');
+  const revision = await fixture();
+  revision.evidence_claims.claims[0].scope = 'checkout/child';
   revision.evidence_claims.claims.push({
     ...structuredClone(revision.evidence_claims.claims[0]),
-    claim_id: 'claim_checkout_rejected', value: 'checkout rejected'
+    claim_id: 'claim_checkout_parent', scope: 'checkout', value: 'checkout rejected'
   });
   Object.assign(revision.evidence_claims.fact_ledger[0], {
     status: 'conflicted',
-    source_claim_ids: ['claim_checkout', 'claim_checkout_rejected']
+    source_claim_ids: ['claim_checkout', 'claim_checkout_parent']
   });
   try {
     await stage(runDirectory, 'source_pack', revision.source_pack);

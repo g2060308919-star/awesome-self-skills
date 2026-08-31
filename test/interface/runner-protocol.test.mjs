@@ -193,6 +193,82 @@ test('installed runner rejects a normative claim disguised as a diagnostic Fact'
   }
 });
 
+test('installed runner preserves valid ambiguous and nested-scope conflicted Fact ownership', async () => {
+  for (const scenario of ['ambiguous-primary', 'ambiguous-group', 'nested-scope-conflict']) {
+    const runDirectory = await mkdtemp(path.join(os.tmpdir(), `test-compiler-${scenario}-`));
+    const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+    if (scenario === 'ambiguous-primary') revision.evidence_claims.fact_ledger[0].status = 'ambiguous';
+    else if (scenario === 'ambiguous-group') {
+      revision.evidence_claims.claims.push({
+        ...structuredClone(revision.evidence_claims.claims[0]),
+        claim_id: 'claim_checkout_rejected', value: 'checkout rejected'
+      });
+      Object.assign(revision.evidence_claims.fact_ledger[0], {
+        status: 'ambiguous',
+        source_claim_ids: ['claim_checkout', 'claim_checkout_rejected']
+      });
+    } else {
+      revision.evidence_claims.claims[0].scope = 'checkout/child';
+      revision.evidence_claims.claims.push({
+        ...structuredClone(revision.evidence_claims.claims[0]),
+        claim_id: 'claim_checkout_parent', scope: 'checkout', value: 'checkout rejected'
+      });
+      Object.assign(revision.evidence_claims.fact_ledger[0], {
+        status: 'conflicted',
+        source_claim_ids: ['claim_checkout', 'claim_checkout_parent']
+      });
+    }
+    try {
+      await mkdir(path.join(runDirectory, 'staging'));
+      await writeFile(
+        path.join(runDirectory, 'staging/source-pack.json'),
+        `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+      );
+      assert.equal((await runCompiler(runDirectory)).code, 0);
+      await writeFile(
+        path.join(runDirectory, 'staging/evidence-claims.json'),
+        `${JSON.stringify(revision.evidence_claims)}\n`, 'utf8'
+      );
+      const result = await runCompiler(runDirectory);
+      const reply = parseSingleJsonValue(result.stdout);
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(reply.status, 'need_artifact', JSON.stringify({ scenario, reply }));
+      assert.equal(reply.stage, 'behavior_views');
+      await readFile(path.join(runDirectory, 'accepted/r000/evidence-claims.json'));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('installed runner rejects a single-source conflicted Fact owner', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-single-conflict-'));
+  const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+  revision.evidence_claims.fact_ledger[0].status = 'conflicted';
+  try {
+    await mkdir(path.join(runDirectory, 'staging'));
+    await writeFile(
+      path.join(runDirectory, 'staging/source-pack.json'),
+      `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+    );
+    assert.equal((await runCompiler(runDirectory)).code, 0);
+    await writeFile(
+      path.join(runDirectory, 'staging/evidence-claims.json'),
+      `${JSON.stringify(revision.evidence_claims)}\n`, 'utf8'
+    );
+    const result = await runCompiler(runDirectory);
+    const reply = parseSingleJsonValue(result.stdout);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ item) =>
+      item.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true, JSON.stringify(reply));
+    await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('installed runner rejects normative ownership laundered through a non-normative Fact', async () => {
   for (const primaryKind of ['description', 'diagnostic']) {
     for (const status of ['ambiguous', 'conflicted']) {
