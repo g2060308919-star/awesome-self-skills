@@ -364,18 +364,40 @@ function inferredCompilation(behaviorViews) {
 
 /** @param {Record<string, unknown>} evidenceClaims @param {Map<string,Record<string,unknown>>} claimsById */
 function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
-  const ledgeredClaimIds = new Set((arrayIsArray(evidenceClaims.fact_ledger)
-    ? evidenceClaims.fact_ledger : []).flatMap((entry) => entry && typeof entry === 'object'
-    && typeof entry.claim_id === 'string' ? [entry.claim_id] : []));
+  /** @type {Map<string,Record<string,unknown>[]>} */
+  const entriesByClaimId = new Map();
+  for (const value of arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []) {
+    if (!value || typeof value !== 'object') continue;
+    const entry = /** @type {Record<string,unknown>} */ (value);
+    if (typeof entry.claim_id !== 'string') continue;
+    const entries = entriesByClaimId.get(entry.claim_id) ?? [];
+    entries.push(entry);
+    entriesByClaimId.set(entry.claim_id, entries);
+  }
   return [...claimsById.entries()]
     .filter(([, claim]) => (claim.kind === 'requirement' || claim.kind === 'assumption'))
-    .filter(([claimId]) => !ledgeredClaimIds.has(claimId))
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .map(([claimId]) => ({
-      category: 'traceability', code: 'NORMATIVE_CLAIM_UNLEDGERED',
-      path: `/claims/${encodeURIComponent(claimId)}`,
-      message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
-    }));
+    .flatMap(([claimId]) => {
+      const entries = entriesByClaimId.get(claimId) ?? [];
+      if (entries.length === 0) return [{
+        category: 'traceability', code: 'NORMATIVE_CLAIM_UNLEDGERED',
+        path: `/claims/${encodeURIComponent(claimId)}`,
+        message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
+      }];
+      const entry = entries[0];
+      const sourceClaimIds = arrayIsArray(entry.source_claim_ids) ? entry.source_claim_ids : [];
+      let ownsClaim = false;
+      for (let index = 0; index < sourceClaimIds.length; index += 1) {
+        if (sourceClaimIds[index] === claimId) ownsClaim = true;
+      }
+      if (entries.length !== 1 || entry.status === 'diagnostic'
+        || !ownsClaim) return [{
+        category: 'traceability', code: 'NORMATIVE_CLAIM_LEDGER_INVALID',
+        path: `/claims/${encodeURIComponent(claimId)}`,
+        message: `accepted normative claim "${claimId}" requires exactly one non-diagnostic Fact Ledger entry that owns the claim`
+      }];
+      return [];
+    });
 }
 
 /** @param {Record<string, unknown>} behaviorViews */

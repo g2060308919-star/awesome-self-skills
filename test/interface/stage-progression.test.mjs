@@ -209,6 +209,25 @@ test('real runner rejects accepted normative claims omitted from the Fact Ledger
   }
 });
 
+test('real runner rejects a normative claim disguised as a diagnostic Fact', async () => {
+  const runDirectory = await temporaryRun('diagnostic normative claim');
+  const revision = await fixture();
+  revision.evidence_claims.fact_ledger[0].status = 'diagnostic';
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    const reply = await advance(runDirectory);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+      diagnostic.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true, JSON.stringify(reply));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('invalid staging is deterministic and cannot move accepted state or checkpoint', async () => {
   const runDirectory = await temporaryRun('invalid staging');
   const revision = await fixture();

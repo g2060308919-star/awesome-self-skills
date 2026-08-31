@@ -165,6 +165,34 @@ test('installed runner rejects an empty responsibility view without accepting or
   }
 });
 
+test('installed runner rejects a normative claim disguised as a diagnostic Fact', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-diagnostic-fact-'));
+  const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+  revision.evidence_claims.fact_ledger[0].status = 'diagnostic';
+  try {
+    await mkdir(path.join(runDirectory, 'staging'));
+    await writeFile(
+      path.join(runDirectory, 'staging/source-pack.json'),
+      `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+    );
+    assert.equal((await runCompiler(runDirectory)).code, 0);
+    await writeFile(
+      path.join(runDirectory, 'staging/evidence-claims.json'),
+      `${JSON.stringify(revision.evidence_claims)}\n`, 'utf8'
+    );
+    const result = await runCompiler(runDirectory);
+    const reply = parseSingleJsonValue(result.stdout);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ item) =>
+      item.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true, JSON.stringify(reply));
+    await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('absolute run directory is required and a relative path does not write files', async () => {
   const relativeRunDirectory = 'relative-test-compiler-run';
   const result = await runCompiler(relativeRunDirectory);
