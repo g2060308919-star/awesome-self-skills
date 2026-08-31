@@ -15471,111 +15471,14 @@ function sourceRevisionIntegrity(prior, next) {
   }
   return null;
 }
-function inferredElementRefs(value) {
-  if (!value || typeof value !== "object") return [];
-  const element = (
-    /** @type {Record<string, unknown>} */
-    value
-  );
-  return [...new Set([
-    ...arrayIsArray(element.source_claim_ids) ? element.source_claim_ids : [],
-    ...arrayIsArray(element.model_refs) ? element.model_refs : []
-  ].filter((ref) => typeof ref === "string"))].sort();
-}
-function inferredResponsibilityEvidence(claim) {
-  const record2 = claim && typeof claim === "object" ? (
-    /** @type {Record<string, unknown>} */
-    claim
-  ) : null;
-  return Boolean(record2) && (record2?.level === "E3" && record2.kind === "requirement" || record2?.level === "E1" && record2.kind === "assumption" || record2?.level === "E2" && record2.kind === "model-element" && record2.derivation_target === "model-element");
-}
-function inferredOracleEvidence(claim) {
-  const record2 = claim && typeof claim === "object" ? (
-    /** @type {Record<string, unknown>} */
-    claim
-  ) : null;
-  return Boolean(record2) && (record2?.level === "E3" && record2.kind === "requirement" || record2?.level === "E1" && record2.kind === "assumption" || record2?.level === "E2" && record2.kind === "expected-value" && record2.derivation_target === "expected-value" && (record2.derivation_kind === "formula" || record2.derivation_kind === "decision-table-instance"));
-}
-function inferredResponsibilityDescriptors(view) {
-  const descriptors = [];
-  const elements = arrayIsArray(view.elements) ? view.elements : [];
-  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
-    const element = elements[elementIndex];
-    if (!element || typeof element !== "object" || typeof element.element_id !== "string") continue;
-    const elementId = element.element_id;
-    if (view.type === "input-domain" && element.kind === "input-domain") {
-      const classes = arrayIsArray(element.classes) ? element.classes : [];
-      for (let classIndex = 0; classIndex < classes.length; classIndex += 1) {
-        const equivalenceClass = classes[classIndex];
-        if (equivalenceClass && typeof equivalenceClass === "object" && typeof equivalenceClass.class_id === "string") {
-          descriptors.push({ element, key: responsibilityKey("input-domain", elementId, {
-            responsibility: "equivalence-class",
-            class_id: equivalenceClass.class_id
-          }) });
-        }
-      }
-      if (element.bounds && typeof element.bounds === "object") for (const boundary of ["lower", "upper"]) {
-        descriptors.push({ element, key: responsibilityKey("input-domain", elementId, {
-          responsibility: "boundary",
-          boundary
-        }) });
-      }
-    } else if (view.type === "role" && element.kind === "role-permission") {
-      const permissions = arrayIsArray(element.permissions) ? element.permissions : [];
-      for (let permissionIndex = 0; permissionIndex < permissions.length; permissionIndex += 1) {
-        if (typeof permissions[permissionIndex] === "string") descriptors.push({
-          element,
-          key: responsibilityKey("role", elementId, {
-            responsibility: "permission",
-            permission: permissions[permissionIndex]
-          })
-        });
-      }
-    } else if (view.type === "timing" && element.kind === "timing-rule") {
-      for (const thresholdRelation of ["before", "equal", "after"]) descriptors.push({
-        element,
-        key: responsibilityKey("timing", elementId, {
-          responsibility: "threshold",
-          threshold_relation: thresholdRelation
-        })
-      });
-    } else if (view.type === "integration" && element.kind === "integration-contract") {
-      for (const surface of ["request", "response", "persistence", "event", "callback", "compensation"]) {
-        descriptors.push({ element, key: responsibilityKey("integration", elementId, {
-          responsibility: "surface",
-          surface
-        }) });
-      }
-      const sideEffects = arrayIsArray(element.side_effects) ? element.side_effects : [];
-      for (let sideEffectIndex = 0; sideEffectIndex < sideEffects.length; sideEffectIndex += 1) {
-        descriptors.push({ element, key: responsibilityKey("integration", elementId, {
-          responsibility: "side-effect",
-          side_effect: sideEffects[sideEffectIndex]
-        }) });
-      }
-    }
-  }
-  return descriptors.sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0);
-}
-function inferredCompilation(behaviorViews, claimsById) {
+function inferredCompilation(behaviorViews) {
   const contexts = {};
   const views = arrayIsArray(behaviorViews.views) ? behaviorViews.views : [];
   for (let viewIndex = 0; viewIndex < views.length; viewIndex += 1) {
     const view = views[viewIndex];
     if (!view || typeof view !== "object" || typeof view.view_id !== "string") continue;
     if (["input-domain", "role", "timing", "integration"].includes(String(view.type))) {
-      contexts[view.view_id] = {
-        responsibilityBindings: inferredResponsibilityDescriptors(view).map(({ element, key }) => {
-          const elementRefs = inferredElementRefs(element);
-          return {
-            responsibility_key: key,
-            risk: "medium",
-            source_claim_ids: elementRefs.filter((claimId) => inferredResponsibilityEvidence(claimsById.get(claimId))),
-            required_oracle_refs: elementRefs.filter((claimId) => inferredOracleEvidence(claimsById.get(claimId))),
-            required_capabilities: []
-          };
-        })
-      };
+      contexts[view.view_id] = { responsibilityBindings: [] };
       continue;
     }
     const riskByElementId = {};
@@ -15607,7 +15510,7 @@ function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevi
   if (policy.diagnostics.length > 0) return { diagnostics: policy.diagnostics, artifact: null };
   const evidence = validateEvidenceGraph(sourcePack, evidenceClaims);
   if (evidence.diagnostics.length > 0) return { diagnostics: evidence.diagnostics, artifact: null };
-  const compilation = inferredCompilation(behaviorViews, evidence.claimsById);
+  const compilation = inferredCompilation(behaviorViews);
   const graph = {
     claimsById: evidence.claimsById,
     factLedger: structuredClone(arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []),
@@ -16239,12 +16142,7 @@ async function advanceStrictExclusive(runDirectory) {
         }
         const compilation = derived.compilation ?? inferredCompilation(
           /** @type {Record<string, unknown>} */
-          accepted.behavior_views,
-          validateEvidenceGraph(
-            sourcePack,
-            /** @type {Record<string, unknown>} */
-            accepted.evidence_claims
-          ).claimsById
+          accepted.behavior_views
         );
         const clarification = await guardedAwait2(
           () => clarificationInput(runDirectory, sourceRevision, sourcePack)

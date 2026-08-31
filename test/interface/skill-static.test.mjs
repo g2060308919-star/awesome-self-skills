@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const skillRoot = path.join(repositoryRoot, 'skill/generate-test-cases');
@@ -17,11 +18,37 @@ async function installedFiles(directory = skillRoot, prefix = '') {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = await Promise.all(entries.map(async (/** @type {any} */ entry) => {
     const relativePath = path.join(prefix, entry.name);
+    assert.equal(entry.isSymbolicLink(), false, `installed artifact must not contain symlinks: ${relativePath}`);
     return entry.isDirectory()
       ? installedFiles(path.join(directory, entry.name), relativePath)
       : [relativePath];
   }));
   return files.flat().sort();
+}
+
+/** @param {string} source */
+async function prohibitedRunnerUses(source) {
+  /** @type {string[]} */
+  const violations = [];
+  const networkModules = new Set(['http', 'https', 'net', 'tls', 'dns']);
+  const providerModules = new Set(['openai', 'anthropic', '@anthropic-ai/sdk']);
+  const parsed = await build({
+    stdin: { contents: source, resolveDir: repositoryRoot, sourcefile: 'test-compiler.mjs' },
+    bundle: true, write: false, metafile: true, platform: 'node', format: 'esm',
+    external: ['*'], logLevel: 'silent'
+  });
+  const imports = Object.values(parsed.metafile.outputs).flatMap((output) => output.imports);
+  for (const item of imports) {
+    const specifier = item.path;
+    const normalized = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
+    const root = normalized.split('/')[0];
+    if (networkModules.has(root)) violations.push(`network-module:${specifier}`);
+    if (providerModules.has(normalized)) violations.push(`model-provider:${specifier}`);
+  }
+  const normalizedOutput = parsed.outputFiles.map((file) => file.text).join('\n');
+  if (/(?:\bfetch|\bglobalThis\s*(?:\.\s*fetch|\[\s*["']fetch["']\s*\]))\s*\(/u
+    .test(normalizedOutput)) violations.push('global-fetch');
+  return [...new Set(violations)].sort();
 }
 
 test('skill static contract keeps the adapter private concise and complete', async () => {
@@ -132,11 +159,8 @@ test('installed artifact excludes development surfaces model calls and network d
   }
 
   const runner = await text('scripts/test-compiler.mjs');
-  assert.doesNotMatch(
-    runner,
-    /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:node:)?(?:http|https|net|tls|dns)(?:\/[^"']*)?["']/u,
-    'built runner must not import a network module'
-  );
-  assert.doesNotMatch(runner, /(?:\bglobalThis\s*\.\s*)?\bfetch\s*\(/u, 'built runner must not invoke global fetch');
-  assert.doesNotMatch(runner, /\b(?:openai|anthropic)\b/iu, 'built runner must not invoke a model provider');
+  assert.deepEqual(await prohibitedRunnerUses(runner), []);
+  assert.deepEqual(await prohibitedRunnerUses('import "node:http";'), ['network-module:node:http']);
+  assert.deepEqual(await prohibitedRunnerUses('globalThis["fetch"]("https://example.test");'), ['global-fetch']);
+  assert.deepEqual(await prohibitedRunnerUses('// OpenAI is mentioned only in documentation.\nconst local = 1;'), []);
 });

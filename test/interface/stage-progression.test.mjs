@@ -134,7 +134,7 @@ test('real advanceStrict progresses every fixed artifact stage and atomically pu
   }
 });
 
-test('real runner derives the closed responsibility context for an integration view', async () => {
+test('real runner fails closed when an integration view omits responsibility-specific context', async () => {
   const runDirectory = await temporaryRun('integration context');
   const behaviorViews = JSON.parse(await readFile(integrationFixturePath, 'utf8'));
   behaviorViews.source_revision = 0;
@@ -176,13 +176,13 @@ test('real runner derives the closed responsibility context for an integration v
     await stage(runDirectory, 'behavior_views', behaviorViews);
     const reply = await advance(runDirectory);
 
-    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
-    assert.equal(reply.stage, 'case_drafts');
-    const obligations = JSON.parse(await readFile(
-      path.join(runDirectory, 'derived/r000/test-obligations.json'), 'utf8'
-    ));
-    assert.ok(obligations.obligations.length > 0);
-    assert.equal(obligations.obligations.every((/** @type {any} */ obligation) => obligation.kind === 'integration'), true);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'behavior_views');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+      diagnostic.code === 'OBLIGATION_STRATEGY_REJECTED'
+      && diagnostic.message.includes('missing responsibility binding')), true, JSON.stringify(reply));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/behavior-views.json')));
+    await assert.rejects(stat(path.join(runDirectory, 'derived/r000/test-obligations.json')));
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
