@@ -45,6 +45,33 @@ function retainedLabelSnapshot(asset, labelVersion) {
   return { ...payload, digest: createHash('sha256').update(JSON.stringify(payload)).digest('hex') };
 }
 
+/** @param {any} output */
+function outputDigest(output) {
+  return createHash('sha256').update(JSON.stringify(output)).digest('hex');
+}
+
+/** @param {any} run */
+function rebindOutput(run) {
+  run.raw_output_digest = outputDigest(run.output);
+  run._raw_output_digest = run.raw_output_digest;
+  run._raw_output = structuredClone(run.output);
+}
+
+/** @param {any} report @param {string} code */
+function hasIssue(report, code) {
+  return report.completeness.issues.some((/** @type {any} */ item) => item.code === code);
+}
+
+/** @param {string} benchmarkVersion */
+function expectedProvenance(benchmarkVersion) {
+  return Object.fromEntries(BENCHMARK_SYSTEMS.map((system) => [system, {
+    skill_version: system === 'generate-test-cases' ? 'skill-v1' : 'not-applicable',
+    compiler_version: system === 'generate-test-cases' ? 'compiler-v1' : 'not-applicable',
+    schema_version: '1.0.0', model_id: `${system}-model`, prompt_or_reference_id: `${system}-reference`,
+    baseline_version: 'baseline-v1', benchmark_version: benchmarkVersion
+  }]));
+}
+
 /** @param {string} caseId @param {string} domain @param {string} stratum @param {any[]} obligations @param {any[]} assertions @param {any[]} acceptedCases @param {any[]} defects */
 function benchmarkCase(caseId, domain, stratum, obligations, assertions, acceptedCases, defects) {
   return {
@@ -100,23 +127,40 @@ const identityAssertionLabels = [1, 2, 3].flatMap((repeat) => assertionLabels(
 const identityCaseLabels = [1, 2, 3].flatMap((repeat) => caseLabels(
   `identity-generate-test-cases-${repeat}`, [['c1', true, 'critical']]
 ));
+const metricExpectedProvenance = expectedProvenance('v1-test');
+metricExpectedProvenance['generate-test-cases'] = {
+  skill_version: 'test-skill', compiler_version: 'test-compiler', schema_version: '1.0.0',
+  model_id: 'fixture-model', prompt_or_reference_id: 'fixture-prompt', baseline_version: 'fixture-baseline',
+  benchmark_version: 'v1-test'
+};
 
 const metricManifest = {
   schema_version: '1.0.0', benchmark_version: 'v1-test', manifest_id: 'hand-calculated-corpus',
   evidence_class: 'synthetic-test-fixture', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+  expected_provenance: metricExpectedProvenance,
   strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
   cases: [
     benchmarkCase('payment', 'payments', BENCHMARK_STRATA[0], paymentObligations, paymentAssertionLabels, paymentCaseLabels, [
-      { defect_id: 'd1', source_ref: 'history:1' }, { defect_id: 'd2', source_ref: 'history:2' }
+      { defect_id: 'd1', risk: 'high', source_ref: 'history:1' }, { defect_id: 'd2', risk: 'low', source_ref: 'history:2' }
     ]),
     benchmarkCase('identity', 'identity', BENCHMARK_STRATA[1], identityObligations, identityAssertionLabels, identityCaseLabels, [
-      { defect_id: 'i-defect', source_ref: 'history:i' }
+      { defect_id: 'i-defect', risk: 'critical', source_ref: 'history:i' }
     ])
   ]
 };
 
 /** @param {string} caseId @param {number} repeat @param {any} output */
 function captured(caseId, repeat, output) {
+  const completeOutput = {
+    test_point_signatures: [], grounded_test_point_signatures: [], grounded_coverage_signatures: [],
+    blocked_test_point_signatures: [], grounded_assertions: [], grounded_cases: [],
+    detected_historical_defect_ids: [], killed_mutation_ids: [],
+    process_failures: {
+      silent_formal_test_point_loss: false, fixed_round_clarification_stop: false,
+      auto_repeat_unknown_or_deferred: false, old_revision_recovery: false
+    },
+    ...output
+  };
   return {
     capture_id: `${caseId}-generate-test-cases-${repeat}`,
     case_id: caseId, system: 'generate-test-cases', repeat, capture_kind: 'synthetic-test-fixture',
@@ -127,16 +171,11 @@ function captured(caseId, repeat, output) {
       source_digest: `source-digest-${caseId}`, task_digest: `task-digest-${caseId}`
     },
     review_time_minutes: 5,
-    output: {
-      test_point_signatures: [], grounded_test_point_signatures: [], grounded_coverage_signatures: [],
-      blocked_test_point_signatures: [], grounded_assertions: [], grounded_cases: [],
-      detected_historical_defect_ids: [], killed_mutation_ids: [],
-      process_failures: {
-        silent_formal_test_point_loss: false, fixed_round_clarification_stop: false,
-        auto_repeat_unknown_or_deferred: false, old_revision_recovery: false
-      },
-      ...output
-    }
+    raw_output_path: `raw/${caseId}-generate-test-cases-${repeat}.json`,
+    raw_output_digest: outputDigest(completeOutput),
+    _raw_output_digest: outputDigest(completeOutput),
+    _raw_output: structuredClone(completeOutput),
+    output: completeOutput
   };
 }
 
@@ -247,6 +286,20 @@ function completeContractCorpus() {
           assertionRows.push(label(`${captureId}::assertion-${risk}`, { supported: true, risk, oracle: true, anchor_present: true }));
           acceptedRows.push(label(`${captureId}::case-${risk}`, { accepted_without_material_rewrite: true, risk }));
         }
+        const output = {
+          test_point_signatures: ['ground-critical', 'blocked-critical', 'ground-high', 'blocked-high', 'ground-medium', 'blocked-medium', 'ground-low', 'blocked-low'],
+          grounded_test_point_signatures: ['ground-critical', 'ground-high', 'ground-medium', 'ground-low'],
+          grounded_coverage_signatures: ['ground-critical', 'ground-high', 'ground-medium', 'ground-low'],
+          blocked_test_point_signatures: ['blocked-critical', 'blocked-high', 'blocked-medium', 'blocked-low'],
+          grounded_assertions: ['assertion-critical', 'assertion-high', 'assertion-medium', 'assertion-low'],
+          grounded_cases: ['case-critical', 'case-high', 'case-medium', 'case-low'],
+          detected_historical_defect_ids: ['critical', 'high', 'medium', 'low'].map((risk) => `defect-${risk}-${caseId}`),
+          killed_mutation_ids: [],
+          process_failures: {
+            silent_formal_test_point_loss: false, fixed_round_clarification_stop: false,
+            auto_repeat_unknown_or_deferred: false, old_revision_recovery: false
+          }
+        };
         runs.push({
           capture_id: captureId, case_id: caseId, system, repeat, capture_kind: 'external-captured',
           provenance: {
@@ -257,20 +310,8 @@ function completeContractCorpus() {
             source_digest: `source-digest-${caseId}`, task_digest: `task-digest-${caseId}`
           },
           review_time_minutes: 10,
-          output: {
-            test_point_signatures: ['ground-critical', 'blocked-critical', 'ground-high', 'blocked-high', 'ground-medium', 'blocked-medium', 'ground-low', 'blocked-low'],
-            grounded_test_point_signatures: ['ground-critical', 'ground-high', 'ground-medium', 'ground-low'],
-            grounded_coverage_signatures: ['ground-critical', 'ground-high', 'ground-medium', 'ground-low'],
-            blocked_test_point_signatures: ['blocked-critical', 'blocked-high', 'blocked-medium', 'blocked-low'],
-            grounded_assertions: ['assertion-critical', 'assertion-high', 'assertion-medium', 'assertion-low'],
-            grounded_cases: ['case-critical', 'case-high', 'case-medium', 'case-low'],
-            detected_historical_defect_ids: ['critical', 'high', 'medium', 'low'].map((risk) => `defect-${risk}-${caseId}`),
-            killed_mutation_ids: [],
-            process_failures: {
-              silent_formal_test_point_loss: false, fixed_round_clarification_stop: false,
-              auto_repeat_unknown_or_deferred: false, old_revision_recovery: false
-            }
-          }
+          raw_output_path: `raw/${captureId}.json`, raw_output_digest: outputDigest(output),
+          _raw_output_digest: outputDigest(output), _raw_output: structuredClone(output), output
         });
       }
       cases.push(benchmarkCase(
@@ -294,6 +335,7 @@ function completeContractCorpus() {
     manifest: {
       schema_version: '1.0.0', benchmark_version: 'v1-complete-contract', manifest_id: 'complete-contract',
       evidence_class: 'external-expert-corpus', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+      expected_provenance: expectedProvenance('v1-complete-contract'),
       strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
       cases
     },
@@ -309,6 +351,84 @@ test('benchmark completeness accepts only the full 30-PRD six-stratum 360-captur
   assert.equal(report.systems['generate-test-cases'].overall.false_blocked_rate.denominator, 360);
   assert.equal(Object.hasOwn(report.systems['generate-test-cases'], 'by_domain_and_risk'), true);
   assert.ok(report.systems['generate-test-cases'].by_domain_and_risk['domain-0'].medium.false_blocked_rate.denominator > 0);
+});
+
+test('benchmark closes metric inflation, provenance impersonation, and cloned-corpus bypasses', () => {
+  const coverageRuns = structuredClone(metricRuns);
+  coverageRuns[0].output.grounded_coverage_signatures.push('unlabeled-coverage');
+  rebindOutput(coverageRuns[0]);
+  const coverageReport = scoreBenchmark(metricManifest, coverageRuns);
+  assert.equal(hasIssue(coverageReport, 'CAPTURE_TEST_POINT_LABEL_MISSING'), true);
+  assert.ok(Math.abs(coverageReport.systems['generate-test-cases'].overall.grounded_coverage_signature_jaccard.value - (47 / 90)) < 1e-12);
+
+  const { manifest, runs } = completeContractCorpus();
+  const closureManifest = structuredClone(manifest);
+  const closureRuns = structuredClone(runs);
+  const closureRun = closureRuns.find((/** @type {any} */ run) => run.case_id === closureManifest.cases[0].case_id && run.system === 'generate-test-cases' && run.repeat === 1);
+  const assertionKey = `${closureRun.capture_id}::assertion-critical`;
+  const acceptedKey = `${closureRun.capture_id}::case-critical`;
+  for (const row of closureManifest.cases[0].assets.supported_assertions.final_labels) {
+    if (row.label_key === assertionKey) row.value.supported = false;
+  }
+  for (const annotation of closureManifest.cases[0].assets.supported_assertions.expert_annotations) {
+    for (const row of annotation.labels) if (row.label_key === assertionKey) row.value.supported = false;
+  }
+  for (const row of closureManifest.cases[0].assets.accepted_cases.final_labels) {
+    if (row.label_key === acceptedKey) row.value.accepted_without_material_rewrite = false;
+  }
+  for (const annotation of closureManifest.cases[0].assets.accepted_cases.expert_annotations) {
+    for (const row of annotation.labels) if (row.label_key === acceptedKey) row.value.accepted_without_material_rewrite = false;
+  }
+  closureRun.output.grounded_assertions = ['assertion-high', 'assertion-high', 'assertion-medium', 'assertion-low'];
+  closureRun.output.grounded_cases = ['case-high', 'case-high', 'case-medium', 'case-low'];
+  rebindOutput(closureRun);
+  const closureReport = scoreBenchmark(closureManifest, closureRuns);
+  assert.equal(hasIssue(closureReport, 'CAPTURE_OUTPUT_DUPLICATE_ID'), true);
+  assert.equal(hasIssue(closureReport, 'CAPTURE_ASSERTION_LABEL_CLOSURE_INVALID'), true);
+  assert.equal(hasIssue(closureReport, 'CAPTURE_CASE_LABEL_CLOSURE_INVALID'), true);
+  assert.equal(closureReport.unsupported_critical_high_grounded_oracle_count, 1, 'capture omission cannot hide an expert-labeled unsupported Oracle');
+  assert.equal(closureReport.systems['generate-test-cases'].overall.grounded_factual_support_precision.value, 359 / 360);
+  assert.equal(closureReport.systems['generate-test-cases'].overall.grounded_no_material_rewrite_acceptance.value, 359 / 360);
+
+  const defectManifest = structuredClone(manifest);
+  const defects = defectManifest.cases[0].assets.historical_defects.defects;
+  defects[0] = null;
+  defects[1].defect_id = defects[2].defect_id;
+  delete defects[3].defect_id;
+  const defectReport = scoreBenchmark(defectManifest, runs);
+  assert.equal(hasIssue(defectReport, 'HISTORICAL_DEFECT_INVALID'), true);
+  assert.equal(hasIssue(defectReport, 'DUPLICATE_HISTORICAL_DEFECT_ID'), true);
+
+  const expertManifest = structuredClone(manifest);
+  expertManifest.cases[0].assets.expert_obligations.expert_annotations[0].expert_id = 1;
+  expertManifest.cases[0].assets.expert_obligations.expert_annotations[1].expert_id = 2;
+  assert.equal(hasIssue(scoreBenchmark(expertManifest, runs), 'EXPERT_ANNOTATIONS_INCOMPLETE'), true);
+
+  const provenanceRuns = structuredClone(runs);
+  provenanceRuns[0].provenance.model_id = 'impersonated-model';
+  assert.equal(hasIssue(scoreBenchmark(manifest, provenanceRuns), 'CAPTURE_PROVENANCE_MISMATCH'), true);
+
+  const leakedRuns = structuredClone(runs);
+  leakedRuns[0].expert_labels = ['forbidden-leak'];
+  leakedRuns[0].prior_diagnostics = ['forbidden-leak'];
+  assert.equal(hasIssue(scoreBenchmark(manifest, leakedRuns), 'CAPTURE_SCHEMA_INVALID'), true);
+  const unboundRuns = structuredClone(runs);
+  unboundRuns[0].raw_output_digest = '0'.repeat(64);
+  unboundRuns[1].raw_output_path = '../labels.json';
+  unboundRuns[2]._raw_output = undefined;
+  const unboundReport = scoreBenchmark(manifest, unboundRuns);
+  assert.equal(hasIssue(unboundReport, 'CAPTURE_RAW_OUTPUT_INVALID'), true);
+  const sharedRawRuns = structuredClone(runs);
+  for (const run of sharedRawRuns) run.raw_output_path = 'raw/one-output-for-all-captures.json';
+  assert.equal(hasIssue(scoreBenchmark(manifest, sharedRawRuns), 'CAPTURE_RAW_OUTPUT_INVALID'), true);
+
+  const clonedManifest = structuredClone(manifest);
+  const clonedCase = clonedManifest.cases[1];
+  clonedCase.assets.sources.digest = clonedManifest.cases[0].assets.sources.digest;
+  for (const run of runs.filter((/** @type {any} */ item) => item.case_id === clonedCase.case_id)) {
+    run.provenance.source_digest = clonedCase.assets.sources.digest;
+  }
+  assert.equal(hasIssue(scoreBenchmark(clonedManifest, runs), 'DUPLICATE_SOURCE_IDENTITY'), true);
 });
 
 test('benchmark reviewer regressions fail closed instead of inflating or crashing completeness', () => {
@@ -334,6 +454,13 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   nullExpert.cases[0].assets.supported_assertions.expert_annotations[0] = null;
   const nullExpertReport = scoreBenchmark(nullExpert, runs);
   assert.equal(nullExpertReport.completeness.issues.some((/** @type {any} */ issue) => issue.code === 'EXPERT_ANNOTATIONS_INCOMPLETE'), true);
+
+  const extraNullExpert = structuredClone(manifest);
+  extraNullExpert.cases[0].assets.supported_assertions.expert_annotations.push(null);
+  assert.equal(hasIssue(scoreBenchmark(extraNullExpert, runs), 'EXPERT_ANNOTATIONS_INCOMPLETE'), true);
+  const sparseExpert = structuredClone(manifest);
+  sparseExpert.cases[0].assets.supported_assertions.expert_annotations.length = 3;
+  assert.equal(hasIssue(scoreBenchmark(sparseExpert, runs), 'EXPERT_ANNOTATIONS_INCOMPLETE'), true);
 
   const nullLabel = structuredClone(manifest);
   nullLabel.cases[0].assets.expert_obligations.final_labels[0] = null;
@@ -392,6 +519,19 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
     (/** @type {any} */ issue) => issue.code === 'LABEL_LINEAGE_MISSING'
   ), false);
 
+  const invalidRetainedExperts = structuredClone(manifest);
+  const invalidRetainedAsset = invalidRetainedExperts.cases[0].assets.supported_assertions;
+  invalidRetainedAsset.correction_of = '0.9.0';
+  const invalidSnapshot = retainedLabelSnapshot(invalidRetainedAsset, '0.9.0');
+  invalidSnapshot.expert_annotations[1].expert_id = invalidSnapshot.expert_annotations[0].expert_id;
+  const invalidPayload = {
+    label_version: invalidSnapshot.label_version, final_labels: invalidSnapshot.final_labels,
+    expert_annotations: invalidSnapshot.expert_annotations, adjudications: invalidSnapshot.adjudications
+  };
+  invalidSnapshot.digest = createHash('sha256').update(JSON.stringify(invalidPayload)).digest('hex');
+  invalidRetainedAsset.prior_versions = [invalidSnapshot];
+  assert.equal(hasIssue(scoreBenchmark(invalidRetainedExperts, runs), 'LABEL_LINEAGE_MISSING'), true);
+
   const invalidAdjudication = structuredClone(manifest);
   const labelsAsset = invalidAdjudication.cases[0].assets.expert_obligations;
   labelsAsset.expert_annotations[1].labels = structuredClone(labelsAsset.expert_annotations[1].labels);
@@ -448,6 +588,7 @@ test('benchmark loader rejects a symlink that crosses the hidden-label directory
   await writeFile(manifestPath, JSON.stringify({
     schema_version: '1.0.0', benchmark_version: 'v1-symlink-test', manifest_id: 'symlink-test',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    expected_provenance: expectedProvenance('v1-symlink-test'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: [{
       case_id: 'escape', domain: 'security', stratum: BENCHMARK_STRATA[0], risk: 'low', high_risk: false,
@@ -456,6 +597,58 @@ test('benchmark loader rejects a symlink that crosses the hidden-label directory
   }));
   const loaded = await loadBenchmarkInputs(manifestPath);
   assert.equal(loaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+
+  await mkdir(path.join(temporaryRoot, 'cases/real'));
+  await mkdir(path.join(temporaryRoot, 'captured/real'));
+  await symlink(path.join(temporaryRoot, 'cases/real'), path.join(temporaryRoot, 'cases/alias'), 'dir');
+  await symlink(path.join(temporaryRoot, 'captured/real'), path.join(temporaryRoot, 'captured/alias'), 'dir');
+  const aliasManifestPath = path.join(temporaryRoot, 'inside-alias-manifest.json');
+  await writeFile(aliasManifestPath, JSON.stringify({
+    schema_version: '1.0.0', benchmark_version: 'v1-symlink-test', manifest_id: 'inside-alias-test',
+    evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    expected_provenance: expectedProvenance('v1-symlink-test'),
+    strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
+    cases: [{
+      case_id: 'alias', domain: 'security', stratum: BENCHMARK_STRATA[0], risk: 'low', high_risk: false,
+      case_directory: 'cases/alias', capture_directory: 'captured/alias'
+    }]
+  }));
+  const aliasLoaded = await loadBenchmarkInputs(aliasManifestPath);
+  assert.equal(aliasLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+
+});
+
+test('benchmark loader rejects symlinked or overlapping top-level evidence roots', async () => {
+  const temporaryParent = await mkdtemp(path.join(os.tmpdir(), 'benchmark-root-boundary-'));
+  const benchmarkRoot = path.join(temporaryParent, 'benchmark');
+  await mkdir(benchmarkRoot);
+  await mkdir(path.join(temporaryParent, 'outside-cases'));
+  await mkdir(path.join(benchmarkRoot, 'captured'));
+  await symlink(path.join(temporaryParent, 'outside-cases'), path.join(benchmarkRoot, 'cases'), 'dir');
+  const manifestPath = path.join(benchmarkRoot, 'manifest.json');
+  await writeFile(manifestPath, JSON.stringify({
+    schema_version: '1.0.0', benchmark_version: 'v1-root-test', manifest_id: 'root-test',
+    evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    expected_provenance: expectedProvenance('v1-root-test'),
+    strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
+    cases: []
+  }));
+  const loaded = await loadBenchmarkInputs(manifestPath);
+  assert.equal(loaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+
+  const overlapRoot = path.join(temporaryParent, 'overlap-benchmark');
+  await mkdir(path.join(overlapRoot, 'cases'), { recursive: true });
+  await symlink(path.join(overlapRoot, 'cases'), path.join(overlapRoot, 'captured'), 'dir');
+  const overlapManifestPath = path.join(overlapRoot, 'manifest.json');
+  await writeFile(overlapManifestPath, JSON.stringify({
+    schema_version: '1.0.0', benchmark_version: 'v1-root-test', manifest_id: 'overlap-root-test',
+    evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    expected_provenance: expectedProvenance('v1-root-test'),
+    strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
+    cases: []
+  }));
+  const overlapLoaded = await loadBenchmarkInputs(overlapManifestPath);
+  assert.equal(overlapLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
 });
 
 test('benchmark V1 pilot has required hidden-label assets and only external capture paths', async () => {
@@ -478,6 +671,7 @@ test('benchmark V1 pilot has required hidden-label assets and only external capt
   assert.equal(Object.isFrozen(manifest), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => run.capture_kind === 'synthetic-pilot'), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => !Object.hasOwn(run, 'expert_labels')), true);
+  assert.equal(capturedRuns.every((/** @type {any} */ run) => typeof run.raw_output_path === 'string' && /^[a-f0-9]{64}$/.test(run.raw_output_digest)), true);
   assert.equal(scoreBenchmark(manifest, capturedRuns).completeness.status, 'insufficient_evidence');
 });
 

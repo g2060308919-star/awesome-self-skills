@@ -32,11 +32,20 @@ const PROVENANCE_FIELDS = Object.freeze([
   'prompt_or_reference_id', 'baseline_version', 'benchmark_version',
   'source_digest', 'task_digest'
 ]);
+const SYSTEM_PROVENANCE_FIELDS = Object.freeze([
+  'skill_version', 'compiler_version', 'schema_version', 'model_id',
+  'prompt_or_reference_id', 'baseline_version', 'benchmark_version'
+]);
 const OUTPUT_ARRAY_FIELDS = Object.freeze([
   'test_point_signatures', 'grounded_test_point_signatures', 'grounded_coverage_signatures',
   'blocked_test_point_signatures', 'grounded_assertions', 'grounded_cases',
   'detected_historical_defect_ids', 'killed_mutation_ids'
 ]);
+const CAPTURE_EXTERNAL_FIELDS = Object.freeze([
+  'capture_id', 'case_id', 'system', 'repeat', 'capture_kind', 'provenance',
+  'review_time_minutes', 'raw_output_path', 'raw_output_digest', 'output'
+]);
+const CAPTURE_INTERNAL_FIELDS = Object.freeze(['_raw_output', '_raw_output_digest']);
 const METRIC_NAMES = Object.freeze([
   'grounded_factual_support_precision', 'expert_critical_test_point_recall', 'expert_overall_test_point_recall',
   'grounded_no_material_rewrite_acceptance', 'historical_defect_recall', 'test_point_signature_jaccard',
@@ -110,6 +119,68 @@ function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** @param {unknown} value @param {readonly string[]} expected */
+function hasExactKeys(value, expected) {
+  return isRecord(value) && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...expected].sort());
+}
+
+/** @param {unknown} value */
+function semanticDigest(value) {
+  const serialized = semanticJson(value);
+  return serialized === null ? null : createHash('sha256').update(serialized).digest('hex');
+}
+
+/** @param {unknown} value */
+function semanticJson(value) {
+  try {
+    const serialized = JSON.stringify(value);
+    return typeof serialized === 'string' ? serialized : null;
+  } catch {
+    return null;
+  }
+}
+
+/** @param {unknown} value @returns {value is string} */
+function isNonblankString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/** @param {unknown} value */
+function isSafeRelativePath(value) {
+  if (!isNonblankString(value) || path.isAbsolute(value)) return false;
+  const segments = value.split(/[\\/]+/u);
+  return segments.every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+}
+
+/** @param {any[]} cases @param {any[]} issues */
+function collectHistoricalDefects(cases, issues) {
+  const byCase = new Map();
+  const corpusIds = new Set();
+  for (const [caseIndex, benchmarkCase] of cases.entries()) {
+    const rows = benchmarkCase.assets?.historical_defects?.defects;
+    if (!Array.isArray(rows)) {
+      issue(issues, 'HISTORICAL_DEFECT_INVALID', `/cases/${caseIndex}/historical-defects`, 'Historical defects must be a dense array of traceable records.');
+      byCase.set(benchmarkCase, []);
+      continue;
+    }
+    const valid = [];
+    for (const [defectIndex, row] of rows.entries()) {
+      if (!isRecord(row) || !isNonblankString(row.defect_id) || !isRisk(row.risk) || !isNonblankString(row.source_ref)) {
+        issue(issues, 'HISTORICAL_DEFECT_INVALID', `/cases/${caseIndex}/historical-defects/${defectIndex}`, 'Each historical defect requires a unique ID, valid risk, and traceable source.');
+        continue;
+      }
+      if (corpusIds.has(row.defect_id)) {
+        issue(issues, 'DUPLICATE_HISTORICAL_DEFECT_ID', `/cases/${caseIndex}/historical-defects/${defectIndex}/defect_id`, 'Historical defect IDs must be unique across the corpus.');
+        continue;
+      }
+      corpusIds.add(row.defect_id);
+      valid.push(row);
+    }
+    byCase.set(benchmarkCase, valid);
+  }
+  return byCase;
+}
+
 /** @param {any} snapshot */
 function retainedLabelDigest(snapshot) {
   const payload = {
@@ -124,6 +195,11 @@ function retainedLabelDigest(snapshot) {
 /** @param {unknown} value */
 function isRisk(value) {
   return RISKS.includes(/** @type {string} */ (value));
+}
+
+/** @param {Set<string>} left @param {Set<string>} right */
+function setsEqual(left, right) {
+  return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
 /** @param {any} value @param {'obligation'|'assertion'|'case'} kind */
@@ -147,9 +223,12 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
   }
   if (typeof asset.correction_of === 'string') {
     const snapshot = Array.isArray(asset.prior_versions) ? asset.prior_versions.find((/** @type {any} */ item) => item?.label_version === asset.correction_of) : null;
-    const retained = isRecord(snapshot) && Array.isArray(snapshot.final_labels) && Array.isArray(snapshot.expert_annotations) &&
-      snapshot.expert_annotations.length === 2 && snapshot.expert_annotations.every((/** @type {any} */ annotation) =>
-        isRecord(annotation) && annotation.complete === true && Array.isArray(annotation.labels)) &&
+    const retainedAnnotations = Array.isArray(snapshot?.expert_annotations) ? snapshot.expert_annotations : [];
+    const retainedExperts = retainedAnnotations.filter(isRecord);
+    const retainedExpertIds = new Set(retainedExperts.map((/** @type {any} */ annotation) => annotation.expert_id));
+    const retained = isRecord(snapshot) && Array.isArray(snapshot.final_labels) && retainedAnnotations.length === 2 && retainedExperts.length === 2 &&
+      retainedExpertIds.size === 2 && retainedExperts.every((/** @type {any} */ annotation) =>
+        isNonblankString(annotation.expert_id) && annotation.complete === true && Array.isArray(annotation.labels)) &&
       Array.isArray(snapshot.adjudications) && typeof snapshot.digest === 'string' && snapshot.digest === retainedLabelDigest(snapshot);
     if (!retained) issue(issues, 'LABEL_LINEAGE_MISSING', `${pathValue}/prior_versions`, 'A correction must retain a digest-verified prior label snapshot.');
   }
@@ -162,7 +241,8 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
   const final = finalLabelMap(asset);
   const annotations = asset.expert_annotations.filter(isRecord);
   const expertIds = new Set(annotations.map((/** @type {any} */ item) => item.expert_id));
-  if (annotations.length !== 2 || expertIds.size !== 2 || annotations.some((/** @type {any} */ item) => item.complete !== true)) {
+  if (asset.expert_annotations.length !== 2 || annotations.length !== 2 || expertIds.size !== 2 || annotations.some((/** @type {any} */ item) =>
+    !isNonblankString(item.expert_id) || item.complete !== true || !Array.isArray(item.labels))) {
     issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', pathValue, 'Exactly two independent complete expert annotations are required.');
   }
   const maps = annotations.map((/** @type {any} */ annotation) => finalLabelMap({ final_labels: annotation.labels }));
@@ -203,8 +283,8 @@ function obligationsFor(benchmarkCase, risk) {
     .filter((item) => risk === null || item.risk === risk);
 }
 
-/** @param {any[]} cases @param {any[]} runs @param {string} system @param {string | null} risk */
-function scoreCohort(cases, runs, system, risk = null) {
+/** @param {any[]} cases @param {any[]} runs @param {Map<any, any[]>} historicalByCase @param {string} system @param {string | null} risk */
+function scoreCohort(cases, runs, historicalByCase, system, risk = null) {
   let supported = 0;
   let assertions = 0;
   let criticalFound = 0;
@@ -227,11 +307,11 @@ function scoreCohort(cases, runs, system, risk = null) {
   for (const benchmarkCase of cases) {
     const obligationLabels = obligationsFor(benchmarkCase, risk);
     const obligationMap = new Map(obligationLabels.map((item) => [item.signature, item]));
+    const allObligationMap = new Map(obligationsFor(benchmarkCase, null).map((item) => [item.signature, item]));
     const assertionMap = finalLabelMap(benchmarkCase.assets?.supported_assertions);
     const caseMap = finalLabelMap(benchmarkCase.assets?.accepted_cases);
-    const defectRows = benchmarkCase.assets?.historical_defects?.defects;
-    const defects = (Array.isArray(defectRows) ? defectRows : []).filter(
-      (/** @type {any} */ item) => risk === null || (item.risk ?? benchmarkCase.risk) === risk
+    const defects = (historicalByCase.get(benchmarkCase) ?? []).filter(
+      (/** @type {any} */ item) => risk === null || item.risk === risk
     );
     const defectIds = new Set(defects.map((/** @type {any} */ item) => item.defect_id));
     const caseRuns = runs.filter((run) => run.system === system && run.case_id === benchmarkCase.case_id);
@@ -244,15 +324,13 @@ function scoreCohort(cases, runs, system, risk = null) {
       criticalExpected += critical.length;
       criticalFound += critical.filter((item) => generated.has(item.signature)).length;
 
-      for (const assertionId of run.output.grounded_assertions) {
-        const value = assertionMap.get(`${run.capture_id}::${assertionId}`);
-        if (!value || (risk !== null && value.risk !== risk)) continue;
+      for (const [labelKey, value] of assertionMap) {
+        if (!labelKey.startsWith(`${run.capture_id}::`) || (risk !== null && value.risk !== risk)) continue;
         assertions += 1;
         if (value.supported === true) supported += 1;
       }
-      for (const caseId of run.output.grounded_cases) {
-        const value = caseMap.get(`${run.capture_id}::${caseId}`);
-        if (!value || (risk !== null && value.risk !== risk)) continue;
+      for (const [labelKey, value] of caseMap) {
+        if (!labelKey.startsWith(`${run.capture_id}::`) || (risk !== null && value.risk !== risk)) continue;
         reviewedCases += 1;
         if (value.accepted_without_material_rewrite === true) accepted += 1;
       }
@@ -273,10 +351,16 @@ function scoreCohort(cases, runs, system, risk = null) {
       }
 
       const testSet = testPointsByRepeat.get(run.repeat) ?? new Set();
-      for (const signature of run.output.test_point_signatures) if (obligationMap.has(signature)) testSet.add(`${benchmarkCase.case_id}::${signature}`);
+      for (const signature of run.output.test_point_signatures) {
+        const label = allObligationMap.get(signature);
+        if (risk === null || !label || label.risk === risk) testSet.add(`${benchmarkCase.case_id}::${signature}`);
+      }
       testPointsByRepeat.set(run.repeat, testSet);
       const coverageSet = groundedCoverageByRepeat.get(run.repeat) ?? new Set();
-      for (const signature of run.output.grounded_coverage_signatures) if (obligationMap.has(signature)) coverageSet.add(`${benchmarkCase.case_id}::${signature}`);
+      for (const signature of run.output.grounded_coverage_signatures) {
+        const label = allObligationMap.get(signature);
+        if (risk === null || !label || label.risk === risk) coverageSet.add(`${benchmarkCase.case_id}::${signature}`);
+      }
       groundedCoverageByRepeat.set(run.repeat, coverageSet);
     }
   }
@@ -327,12 +411,20 @@ export function scoreBenchmark(manifest, capturedRuns) {
   if (JSON.stringify(manifest?.systems) !== JSON.stringify(BENCHMARK_SYSTEMS)) issue(issues, 'SYSTEM_ENUM_INVALID', '/systems', 'Systems must be the exact frozen four-system enum.');
   if (manifest?.repeats_per_system !== 3) issue(issues, 'REPEAT_COUNT_INVALID', '/repeats_per_system', 'Exactly three independent runs are required.');
   if (manifest?.evidence_class !== 'external-expert-corpus') issue(issues, 'RELEASE_EVIDENCE_CLASS_INELIGIBLE', '/evidence_class', 'Synthetic pilot fixtures are never release evidence.');
+  const expectedProvenance = manifest?.expected_provenance;
+  if (!hasExactKeys(expectedProvenance, BENCHMARK_SYSTEMS) || BENCHMARK_SYSTEMS.some((system) => {
+    const expected = expectedProvenance?.[system];
+    return !hasExactKeys(expected, SYSTEM_PROVENANCE_FIELDS) || SYSTEM_PROVENANCE_FIELDS.some((field) =>
+      !isNonblankString(expected[field]) || (field === 'benchmark_version' && expected[field] !== manifest?.benchmark_version));
+  })) issue(issues, 'EXPECTED_PROVENANCE_INVALID', '/expected_provenance', 'The manifest must freeze one exact provenance identity for every system.');
   const strata = Array.isArray(manifest?.strata) ? manifest.strata : [];
   if (strata.length !== BENCHMARK_STRATA.length || BENCHMARK_STRATA.some((stratum) => {
     const matches = strata.filter((/** @type {any} */ item) => item?.stratum === stratum);
     return matches.length !== 1 || matches[0].minimum_prds !== 5 || matches[0].minimum_critical_obligations !== 3 ||
       matches[0].minimum_clarification_prds !== 2 || matches[0].minimum_historical_defects !== 5;
   })) issue(issues, 'STRATA_CONTRACT_INVALID', '/strata', 'The manifest must contain the exact frozen six-stratum V1 contract.');
+
+  const historicalByCase = collectHistoricalDefects(cases, issues);
 
   for (const stratum of BENCHMARK_STRATA) {
     const stratumCases = cases.filter((/** @type {any} */ item) => item.stratum === stratum);
@@ -345,17 +437,22 @@ export function scoreBenchmark(manifest, capturedRuns) {
     }).length;
     if (clarificationCount < 2) issue(issues, 'STRATUM_CLARIFICATION_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires two clarification-required PRDs.');
     const defectCount = stratumCases.reduce((/** @type {number} */ total, /** @type {any} */ item) => {
-      const defects = item.assets?.historical_defects?.defects;
-      return total + (Array.isArray(defects) ? defects.filter((/** @type {any} */ defect) => typeof defect?.source_ref === 'string' && defect.source_ref.length > 0).length : 0);
+      return total + (historicalByCase.get(item)?.length ?? 0);
     }, 0);
     if (defectCount < 5) issue(issues, 'STRATUM_DEFECT_MINIMUM_NOT_MET', `/strata/${stratum}`, 'Each stratum requires five traceable historical defects.');
   }
   if (cases.length < 30) issue(issues, 'CORPUS_PRD_MINIMUM_NOT_MET', '/cases', 'V1 requires at least 30 PRDs.');
 
   const seenCaseIds = new Set();
+  const seenSourceDigests = new Set();
   for (const [caseIndex, benchmarkCase] of cases.entries()) {
     if (seenCaseIds.has(benchmarkCase.case_id)) issue(issues, 'DUPLICATE_CASE_ID', `/cases/${caseIndex}/case_id`, 'Every PRD must have a unique case ID.');
     seenCaseIds.add(benchmarkCase.case_id);
+    const sourceDigest = benchmarkCase.assets?.sources?.digest;
+    if (isNonblankString(sourceDigest)) {
+      if (seenSourceDigests.has(sourceDigest)) issue(issues, 'DUPLICATE_SOURCE_IDENTITY', `/cases/${caseIndex}/sources/digest`, 'Each PRD must have a unique immutable source identity.');
+      seenSourceDigests.add(sourceDigest);
+    }
   }
 
   for (const [caseIndex, benchmarkCase] of cases.entries()) {
@@ -387,43 +484,89 @@ export function scoreBenchmark(manifest, capturedRuns) {
   /** @type {any[]} */
   const scorableRuns = [];
   const seenCaptureIds = new Set();
+  const seenRawOutputPaths = new Set();
   for (const [runIndex, run] of runs.entries()) {
+    const capturePath = `/captured_runs/${runIndex}`;
+    if (!hasExactKeys(run, [...CAPTURE_EXTERNAL_FIELDS, ...CAPTURE_INTERNAL_FIELDS]) ||
+        !hasExactKeys(run.provenance, [...PROVENANCE_FIELDS, 'repeat'])) {
+      issue(issues, 'CAPTURE_SCHEMA_INVALID', capturePath, 'Captured artifacts use a closed schema and may not contain hidden labels, prior diagnostics, or unknown fields.');
+      continue;
+    }
     if (typeof run.capture_id !== 'string' || run.capture_id.length === 0 || seenCaptureIds.has(run.capture_id)) {
-      issue(issues, 'DUPLICATE_CAPTURE_ID', `/captured_runs/${runIndex}/capture_id`, 'Every capture must have one unique non-empty identity.');
+      issue(issues, 'DUPLICATE_CAPTURE_ID', `${capturePath}/capture_id`, 'Every capture must have one unique non-empty identity.');
     }
     seenCaptureIds.add(run.capture_id);
-    if (!BENCHMARK_SYSTEMS.includes(run.system) || ![1, 2, 3].includes(run.repeat)) issue(issues, 'CAPTURE_IDENTITY_INVALID', `/captured_runs/${runIndex}`, 'Capture system and repeat must use the frozen contract.');
-    if (run.capture_kind !== 'external-captured') issue(issues, 'CAPTURE_EVIDENCE_INELIGIBLE', `/captured_runs/${runIndex}/capture_kind`, 'Synthetic outputs cannot satisfy release completeness.');
-    for (const field of PROVENANCE_FIELDS) if (typeof run.provenance?.[field] !== 'string' || run.provenance[field].length === 0) issue(issues, 'CAPTURE_PROVENANCE_MISSING', `/captured_runs/${runIndex}/provenance/${field}`, 'Complete capture provenance is required.');
-    if (typeof run.review_time_minutes !== 'number' || run.review_time_minutes < 0) issue(issues, 'CAPTURE_REVIEW_TIME_MISSING', `/captured_runs/${runIndex}/review_time_minutes`, 'Every captured output records review time.');
-    if (run.provenance?.repeat !== run.repeat || run.provenance?.benchmark_version !== manifest?.benchmark_version) issue(issues, 'CAPTURE_PROVENANCE_MISMATCH', `/captured_runs/${runIndex}/provenance`, 'Repeat and benchmark version must bind the capture to this manifest.');
+    if (!BENCHMARK_SYSTEMS.includes(run.system) || ![1, 2, 3].includes(run.repeat)) issue(issues, 'CAPTURE_IDENTITY_INVALID', capturePath, 'Capture system and repeat must use the frozen contract.');
+    if (run.capture_kind !== 'external-captured') issue(issues, 'CAPTURE_EVIDENCE_INELIGIBLE', `${capturePath}/capture_kind`, 'Synthetic outputs cannot satisfy release completeness.');
+    for (const field of PROVENANCE_FIELDS) if (!isNonblankString(run.provenance[field])) issue(issues, 'CAPTURE_PROVENANCE_MISSING', `${capturePath}/provenance/${field}`, 'Complete capture provenance is required.');
+    if (typeof run.review_time_minutes !== 'number' || !Number.isFinite(run.review_time_minutes) || run.review_time_minutes < 0) issue(issues, 'CAPTURE_REVIEW_TIME_MISSING', `${capturePath}/review_time_minutes`, 'Every captured output records review time.');
+    const expected = expectedProvenance?.[run.system];
+    const systemProvenanceMatches = hasExactKeys(expected, SYSTEM_PROVENANCE_FIELDS) && SYSTEM_PROVENANCE_FIELDS.every((field) => run.provenance[field] === expected[field]);
+    if (run.provenance.repeat !== run.repeat || !systemProvenanceMatches) {
+      issue(issues, 'CAPTURE_PROVENANCE_MISMATCH', `${capturePath}/provenance`, 'Every capture must match the manifest-frozen identity for its system and repeat.');
+      continue;
+    }
     const benchmarkCase = cases.find((/** @type {any} */ item) => item.case_id === run.case_id);
     const arraysValid = OUTPUT_ARRAY_FIELDS.every((field) => Array.isArray(run.output?.[field]) && run.output[field].every((/** @type {any} */ value) => typeof value === 'string'));
     if (!benchmarkCase || !run.output || !arraysValid) {
-      issue(issues, 'CAPTURE_OUTPUT_INVALID', `/captured_runs/${runIndex}/output`, 'Every capture must bind one manifest case and contain the complete offline output shape.');
+      issue(issues, 'CAPTURE_OUTPUT_INVALID', `${capturePath}/output`, 'Every capture must bind one manifest case and contain the complete offline output shape.');
       continue;
+    }
+    if (Object.keys(run.output).some((field) => ![...OUTPUT_ARRAY_FIELDS, 'process_failures'].includes(field))) {
+      issue(issues, 'CAPTURE_SCHEMA_INVALID', `${capturePath}/output`, 'Captured output summaries may contain only the frozen metric and process fields.');
+      continue;
+    }
+    const duplicateOutputField = OUTPUT_ARRAY_FIELDS.find((field) => new Set(run.output[field]).size !== run.output[field].length);
+    if (duplicateOutputField) {
+      issue(issues, 'CAPTURE_OUTPUT_DUPLICATE_ID', `${capturePath}/output/${duplicateOutputField}`, 'Every captured output ID/signature array must contain unique values.');
     }
     const processValid = run.output.process_failures && PROCESS_FAILURE_NAMES.every((name) => typeof run.output.process_failures[name] === 'boolean');
     if (!processValid) {
-      issue(issues, 'PROCESS_TELEMETRY_MISSING', `/captured_runs/${runIndex}/output/process_failures`, 'All four exact process-failure observations are mandatory booleans.');
+      issue(issues, 'PROCESS_TELEMETRY_MISSING', `${capturePath}/output/process_failures`, 'All four exact process-failure observations are mandatory booleans.');
       continue;
     }
     if (JSON.stringify(Object.keys(run.output.process_failures).sort()) !== JSON.stringify([...PROCESS_FAILURE_NAMES].sort())) {
-      issue(issues, 'PROCESS_TELEMETRY_INVALID', `/captured_runs/${runIndex}/output/process_failures`, 'Process telemetry may contain only the four frozen failure observations.');
+      issue(issues, 'PROCESS_TELEMETRY_INVALID', `${capturePath}/output/process_failures`, 'Process telemetry may contain only the four frozen failure observations.');
+      continue;
+    }
+    const rawOutputJson = semanticJson(run._raw_output);
+    const scoredOutputJson = semanticJson(run.output);
+    const rawOutputIdentity = `${run.case_id}::${run.raw_output_path}`;
+    const rawBindingValid = rawOutputJson !== null && scoredOutputJson !== null && isSafeRelativePath(run.raw_output_path) && /^[a-f0-9]{64}$/u.test(run.raw_output_digest) &&
+      run._raw_output_digest === run.raw_output_digest && semanticDigest(run._raw_output) === run.raw_output_digest &&
+      rawOutputJson === scoredOutputJson && !seenRawOutputPaths.has(rawOutputIdentity);
+    if (!rawBindingValid) {
+      issue(issues, 'CAPTURE_RAW_OUTPUT_INVALID', `${capturePath}/raw_output_path`, 'A local raw-output path and verified digest must bind the exact scored summary.');
+      continue;
+    }
+    seenRawOutputPaths.add(rawOutputIdentity);
+    if (run.provenance?.source_digest !== benchmarkCase.assets?.sources?.digest || run.provenance?.task_digest !== benchmarkCase.assets?.task_digest) {
+      issue(issues, 'CAPTURE_SOURCE_TASK_MISMATCH', `${capturePath}/provenance`, 'Capture provenance must bind the immutable source and task digests.');
       continue;
     }
     scorableRuns.push(run);
-    if (run.provenance?.source_digest !== benchmarkCase.assets?.sources?.digest || run.provenance?.task_digest !== benchmarkCase.assets?.task_digest) {
-      issue(issues, 'CAPTURE_SOURCE_TASK_MISMATCH', `/captured_runs/${runIndex}/provenance`, 'Capture provenance must bind the immutable source and task digests.');
-    }
     const obligationLabels = finalLabelMap(benchmarkCase.assets?.expert_obligations);
-    for (const lane of ['test_point_signatures', 'grounded_test_point_signatures', 'blocked_test_point_signatures']) {
-      for (const signature of run.output[lane] ?? []) if (!obligationLabels.has(signature)) issue(issues, 'CAPTURE_TEST_POINT_LABEL_MISSING', `/captured_runs/${runIndex}/output/${lane}/${signature}`, 'Every generated Test Point must have two hidden expert labels.');
+    for (const lane of ['test_point_signatures', 'grounded_test_point_signatures', 'grounded_coverage_signatures', 'blocked_test_point_signatures']) {
+      for (const signature of run.output[lane]) if (!obligationLabels.has(signature)) issue(issues, 'CAPTURE_TEST_POINT_LABEL_MISSING', `${capturePath}/output/${lane}/${signature}`, 'Every generated or coverage Test Point must have two hidden expert labels.');
     }
     const assertionLabels = finalLabelMap(benchmarkCase.assets?.supported_assertions);
-    for (const assertionId of run.output.grounded_assertions ?? []) if (!assertionLabels.has(`${run.capture_id}::${assertionId}`)) issue(issues, 'CAPTURE_ASSERTION_LABEL_MISSING', `/captured_runs/${runIndex}/output/grounded_assertions/${assertionId}`, 'Every Grounded assertion requires two independent hidden support labels.');
+    for (const assertionId of run.output.grounded_assertions) if (!assertionLabels.has(`${run.capture_id}::${assertionId}`)) issue(issues, 'CAPTURE_ASSERTION_LABEL_MISSING', `${capturePath}/output/grounded_assertions/${assertionId}`, 'Every Grounded assertion requires two independent hidden support labels.');
     const acceptedLabels = finalLabelMap(benchmarkCase.assets?.accepted_cases);
-    for (const caseId of run.output.grounded_cases ?? []) if (!acceptedLabels.has(`${run.capture_id}::${caseId}`)) issue(issues, 'CAPTURE_CASE_LABEL_MISSING', `/captured_runs/${runIndex}/output/grounded_cases/${caseId}`, 'Every Grounded Case requires two independent hidden acceptance labels.');
+    for (const caseId of run.output.grounded_cases) if (!acceptedLabels.has(`${run.capture_id}::${caseId}`)) issue(issues, 'CAPTURE_CASE_LABEL_MISSING', `${capturePath}/output/grounded_cases/${caseId}`, 'Every Grounded Case requires two independent hidden acceptance labels.');
+  }
+
+  for (const [caseIndex, benchmarkCase] of cases.entries()) {
+    const caseRuns = scorableRuns.filter((run) => run.case_id === benchmarkCase.case_id);
+    const assertionOutputs = new Set(caseRuns.flatMap((run) => run.output.grounded_assertions.map((/** @type {string} */ id) => `${run.capture_id}::${id}`)));
+    const assertionLabels = new Set(finalLabelMap(benchmarkCase.assets?.supported_assertions).keys());
+    if (!setsEqual(assertionOutputs, assertionLabels)) {
+      issue(issues, 'CAPTURE_ASSERTION_LABEL_CLOSURE_INVALID', `/cases/${caseIndex}/supported-assertions`, 'Grounded assertion outputs and capture-scoped hidden labels must form one exact bidirectional set.');
+    }
+    const caseOutputs = new Set(caseRuns.flatMap((run) => run.output.grounded_cases.map((/** @type {string} */ id) => `${run.capture_id}::${id}`)));
+    const caseLabels = new Set(finalLabelMap(benchmarkCase.assets?.accepted_cases).keys());
+    if (!setsEqual(caseOutputs, caseLabels)) {
+      issue(issues, 'CAPTURE_CASE_LABEL_CLOSURE_INVALID', `/cases/${caseIndex}/accepted-cases`, 'Grounded Case outputs and capture-scoped hidden labels must form one exact bidirectional set.');
+    }
   }
 
   const domains = [...new Set(cases.map((/** @type {any} */ item) => item.domain))].sort();
@@ -431,11 +574,11 @@ export function scoreBenchmark(manifest, capturedRuns) {
   const systems = {};
   for (const system of BENCHMARK_SYSTEMS) {
     systems[system] = {
-      overall: scoreCohort(cases, scorableRuns, system),
-      by_domain: Object.fromEntries(domains.map((domain) => [domain, scoreCohort(cases.filter((/** @type {any} */ item) => item.domain === domain), scorableRuns, system)])),
-      by_risk: Object.fromEntries(RISKS.map((risk) => [risk, scoreCohort(cases, scorableRuns, system, risk)])),
+      overall: scoreCohort(cases, scorableRuns, historicalByCase, system),
+      by_domain: Object.fromEntries(domains.map((domain) => [domain, scoreCohort(cases.filter((/** @type {any} */ item) => item.domain === domain), scorableRuns, historicalByCase, system)])),
+      by_risk: Object.fromEntries(RISKS.map((risk) => [risk, scoreCohort(cases, scorableRuns, historicalByCase, system, risk)])),
       by_domain_and_risk: Object.fromEntries(domains.map((domain) => [domain, Object.fromEntries(RISKS.map((risk) => [
-        risk, scoreCohort(cases.filter((/** @type {any} */ item) => item.domain === domain), scorableRuns, system, risk)
+        risk, scoreCohort(cases.filter((/** @type {any} */ item) => item.domain === domain), scorableRuns, historicalByCase, system, risk)
       ]))]))
     };
   }
@@ -466,8 +609,8 @@ export function scoreBenchmark(manifest, capturedRuns) {
     const benchmarkCase = cases.find((/** @type {any} */ item) => item.case_id === run.case_id);
     if (!benchmarkCase) continue;
     const assertions = finalLabelMap(benchmarkCase.assets?.supported_assertions);
-    for (const assertionId of run.output.grounded_assertions) {
-      const value = assertions.get(`${run.capture_id}::${assertionId}`);
+    for (const [labelKey, value] of assertions) {
+      if (!labelKey.startsWith(`${run.capture_id}::`)) continue;
       if (value?.oracle === true && value.supported !== true && ['critical', 'high'].includes(value.risk)) unsupportedOracleCount += 1;
     }
     for (const name of PROCESS_FAILURE_NAMES) if (run.output.process_failures?.[name] === true) processFailures[name] += 1;
@@ -517,6 +660,11 @@ function isPathInside(root, candidate) {
   return `${candidate}${path.sep}`.startsWith(`${root}${path.sep}`);
 }
 
+/** @param {string} left @param {string} right */
+function pathsOverlap(left, right) {
+  return left === right || isPathInside(left, right) || isPathInside(right, left);
+}
+
 /** @param {string} caseRoot @param {string[]} files */
 async function digestSources(caseRoot, files) {
   const hash = createHash('sha256');
@@ -562,8 +710,17 @@ export async function loadBenchmarkInputs(manifestPath) {
   let realCaseRoot;
   let realCaptureRoot;
   try {
+    const realBenchmarkRoot = await realpath(benchmarkRoot);
+    const caseRootStat = await fsPromises.lstat(expectedCaseRoot);
+    const captureRootStat = await fsPromises.lstat(expectedCaptureRoot);
+    if (caseRootStat.isSymbolicLink() || captureRootStat.isSymbolicLink() || !caseRootStat.isDirectory() || !captureRootStat.isDirectory()) {
+      throw new Error('Top-level benchmark evidence roots must be real directories, never symlinks.');
+    }
     realCaseRoot = await realpath(expectedCaseRoot);
     realCaptureRoot = await realpath(expectedCaptureRoot);
+    if (!isPathInside(realBenchmarkRoot, realCaseRoot) || !isPathInside(realBenchmarkRoot, realCaptureRoot) || pathsOverlap(realCaseRoot, realCaptureRoot)) {
+      throw new Error('Resolved cases and captured roots must be separate descendants of the real benchmark root.');
+    }
   } catch (error) {
     loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: '/', message: error instanceof Error ? error.message : String(error) });
     return { manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
@@ -575,10 +732,19 @@ export async function loadBenchmarkInputs(manifestPath) {
       loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: `/cases/${caseIndex}`, message: `Benchmark case ${item.case_id} crosses the frozen hidden-label/capture boundary.` });
       continue;
     }
+    let realCase;
+    let realCapture;
     try {
-      const realCase = await realpath(caseRoot);
-      const realCapture = await realpath(captureRoot);
-      if (!isPathInside(realCaseRoot, realCase) || !isPathInside(realCaptureRoot, realCapture)) throw new Error('Benchmark path resolves outside its frozen evidence root.');
+      const caseStat = await fsPromises.lstat(caseRoot);
+      const captureStat = await fsPromises.lstat(captureRoot);
+      if (caseStat.isSymbolicLink() || captureStat.isSymbolicLink() || !caseStat.isDirectory() || !captureStat.isDirectory()) {
+        throw new Error('Per-case label and capture roots must be real directories, never symlinks.');
+      }
+      realCase = await realpath(caseRoot);
+      realCapture = await realpath(captureRoot);
+      if (!isPathInside(realCaseRoot, realCase) || !isPathInside(realCaptureRoot, realCapture) || pathsOverlap(realCase, realCapture)) {
+        throw new Error('Benchmark path resolves outside or overlaps its frozen evidence root.');
+      }
       await assertNoSymlinks(caseRoot);
       await assertNoSymlinks(captureRoot);
     } catch (error) {
@@ -614,7 +780,26 @@ export async function loadBenchmarkInputs(manifestPath) {
       loadIssues.push({ code: 'CAPTURE_RUN_MISSING', path: `/cases/${caseIndex}/captures`, message: error instanceof Error ? error.message : String(error) });
     }
     for (const filename of captureFiles) {
-      try { capturedRuns.push(await readJson(path.join(captureRoot, filename))); } catch (error) {
+      try {
+        const run = await readJson(path.join(captureRoot, filename));
+        if (CAPTURE_INTERNAL_FIELDS.some((field) => Object.hasOwn(run, field))) {
+          loadIssues.push({ code: 'CAPTURE_SCHEMA_INVALID', path: `/cases/${caseIndex}/captures/${filename}`, message: 'Capture files may not provide scorer-owned raw evidence fields.' });
+        }
+        let rawOutput = null;
+        let rawOutputDigest = null;
+        try {
+          if (!isSafeRelativePath(run.raw_output_path)) throw new Error('Raw output path must be a safe relative path beneath its capture root.');
+          const rawPath = path.resolve(captureRoot, run.raw_output_path);
+          if (!isPathInside(captureRoot, rawPath)) throw new Error('Raw output path resolves outside its capture root.');
+          const realRawPath = await realpath(rawPath);
+          if (!isPathInside(realCapture, realRawPath)) throw new Error('Raw output path resolves outside the real captured evidence root.');
+          rawOutput = await readJson(realRawPath);
+          rawOutputDigest = semanticDigest(rawOutput);
+        } catch (error) {
+          loadIssues.push({ code: 'CAPTURE_RAW_OUTPUT_INVALID', path: `/cases/${caseIndex}/captures/${filename}/raw_output_path`, message: error instanceof Error ? error.message : String(error) });
+        }
+        capturedRuns.push({ ...run, _raw_output: rawOutput, _raw_output_digest: rawOutputDigest });
+      } catch (error) {
         loadIssues.push({ code: 'CAPTURE_OUTPUT_INVALID', path: `/cases/${caseIndex}/captures/${filename}`, message: error instanceof Error ? error.message : String(error) });
       }
     }
