@@ -252,6 +252,37 @@ test('real runner accepts one conflicted Fact that owns both accepted normative 
   }
 });
 
+test('real runner rejects normative ownership laundered through a non-normative Fact', async () => {
+  for (const primaryKind of ['description', 'diagnostic']) {
+    for (const status of ['ambiguous', 'conflicted']) {
+      const runDirectory = await temporaryRun(`${primaryKind} ${status} fact laundering`);
+      const revision = await fixture();
+      revision.evidence_claims.claims.push({
+        ...structuredClone(revision.evidence_claims.claims[0]),
+        claim_id: 'claim_context', kind: primaryKind, value: 'checkout context'
+      });
+      Object.assign(revision.evidence_claims.fact_ledger[0], {
+        claim_id: 'claim_context', status,
+        source_claim_ids: ['claim_context', 'claim_checkout']
+      });
+      try {
+        await stage(runDirectory, 'source_pack', revision.source_pack);
+        assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+        await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+        const reply = await advance(runDirectory);
+        assert.equal(reply.status, 'need_revision', JSON.stringify({ primaryKind, status, reply }));
+        assert.equal(reply.stage, 'evidence_claims');
+        assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+          diagnostic.code === 'NORMATIVE_CLAIM_UNLEDGERED'), true,
+        JSON.stringify({ primaryKind, status, reply }));
+        await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+      } finally {
+        await rm(runDirectory, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
 test('invalid staging is deterministic and cannot move accepted state or checkpoint', async () => {
   const runDirectory = await temporaryRun('invalid staging');
   const revision = await fixture();

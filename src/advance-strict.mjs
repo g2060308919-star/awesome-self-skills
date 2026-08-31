@@ -364,45 +364,73 @@ function inferredCompilation(behaviorViews) {
 
 /** @param {Record<string, unknown>} evidenceClaims @param {Map<string,Record<string,unknown>>} claimsById */
 function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
-  /** @type {Record<string,unknown>[]} */
-  const ledgerEntries = [];
+  /** @type {Map<string,Array<{entry:Record<string,unknown>,valid:boolean}>>} */
+  const ownersByClaimId = new Map();
+  /** @param {string} claimId @param {Record<string,unknown>} entry @param {boolean} valid */
+  function addOwner(claimId, entry, valid) {
+    const owners = ownersByClaimId.get(claimId) ?? [];
+    owners.push({ entry, valid });
+    ownersByClaimId.set(claimId, owners);
+  }
   for (const value of arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []) {
     if (!value || typeof value !== 'object') continue;
     const entry = /** @type {Record<string,unknown>} */ (value);
-    ledgerEntries.push(entry);
+    if (typeof entry.claim_id !== 'string') continue;
+    const primaryClaim = claimsById.get(entry.claim_id);
+    const primaryNormative = primaryClaim?.kind === 'requirement'
+      || primaryClaim?.kind === 'assumption';
+    if (!primaryNormative) continue;
+    const sourceClaimIds = arrayIsArray(entry.source_claim_ids) ? entry.source_claim_ids : [];
+    let primaryInSources = false;
+    let aggregateScopesMatch = true;
+    let aggregateEvidenceAccepted = true;
+    let aggregateEvidenceHigher = true;
+    for (let index = 0; index < sourceClaimIds.length; index += 1) {
+      const sourceClaimId = sourceClaimIds[index];
+      if (sourceClaimId === entry.claim_id) primaryInSources = true;
+      const sourceClaim = typeof sourceClaimId === 'string' ? claimsById.get(sourceClaimId) : undefined;
+      if (!sourceClaim) aggregateEvidenceAccepted = false;
+      else {
+        if (sourceClaim.scope !== primaryClaim?.scope) aggregateScopesMatch = false;
+        if (sourceClaim.level !== 'E3' && sourceClaim.level !== 'E2') aggregateEvidenceHigher = false;
+      }
+    }
+    const groupedStatus = entry.status === 'conflicted' || entry.status === 'ambiguous';
+    const higherConflictEvidence = entry.status !== 'conflicted'
+      || (primaryClaim?.level === 'E3' || primaryClaim?.level === 'E2')
+      && aggregateEvidenceHigher;
+    const validAggregate = !groupedStatus || (sourceClaimIds.length >= 2
+      && primaryInSources && aggregateEvidenceAccepted && aggregateScopesMatch
+      && higherConflictEvidence);
+    addOwner(entry.claim_id, entry, primaryInSources && validAggregate);
+    if (!groupedStatus || !validAggregate) continue;
+    for (let index = 0; index < sourceClaimIds.length; index += 1) {
+      const sourceClaimId = sourceClaimIds[index];
+      if (typeof sourceClaimId !== 'string' || sourceClaimId === entry.claim_id) continue;
+      const sourceClaim = claimsById.get(sourceClaimId);
+      if (sourceClaim?.kind === 'requirement' || sourceClaim?.kind === 'assumption') {
+        addOwner(sourceClaimId, entry, true);
+      }
+    }
   }
   return [...claimsById.entries()]
     .filter(([, claim]) => (claim.kind === 'requirement' || claim.kind === 'assumption'))
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
     .flatMap(([claimId]) => {
-      /** @type {Record<string,unknown>[]} */
+      const indexedOwners = ownersByClaimId.get(claimId) ?? [];
+      /** @type {Array<{entry:Record<string,unknown>,valid:boolean}>} */
       const owners = [];
       let diagnosticOwner = false;
-      let primaryOwnsClaim = false;
-      for (const entry of ledgerEntries) {
-        const sourceClaimIds = arrayIsArray(entry.source_claim_ids) ? entry.source_claim_ids : [];
-        let sourceOwnsClaim = false;
-        for (let index = 0; index < sourceClaimIds.length; index += 1) {
-          if (sourceClaimIds[index] === claimId) sourceOwnsClaim = true;
-        }
-        const primary = entry.claim_id === claimId;
-        const groupedAlternative = sourceOwnsClaim
-          && (entry.status === 'conflicted' || entry.status === 'ambiguous');
-        if (!primary && !groupedAlternative) continue;
-        if (entry.status === 'diagnostic') diagnosticOwner = true;
-        else {
-          owners.push(entry);
-          if (primary && sourceOwnsClaim) primaryOwnsClaim = true;
-        }
+      for (const owner of indexedOwners) {
+        if (owner.entry.status === 'diagnostic') diagnosticOwner = true;
+        else owners.push(owner);
       }
       if (owners.length === 0 && !diagnosticOwner) return [{
         category: 'traceability', code: 'NORMATIVE_CLAIM_UNLEDGERED',
         path: `/claims/${encodeURIComponent(claimId)}`,
         message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
       }];
-      const groupedOnly = owners.length === 1 && owners[0].claim_id !== claimId;
-      if (owners.length !== 1 || diagnosticOwner
-        || (!primaryOwnsClaim && !groupedOnly)) return [{
+      if (owners.length !== 1 || diagnosticOwner || !owners[0].valid) return [{
         category: 'traceability', code: 'NORMATIVE_CLAIM_LEDGER_INVALID',
         path: `/claims/${encodeURIComponent(claimId)}`,
         message: `accepted normative claim "${claimId}" requires exactly one non-diagnostic Fact Ledger owner, either primary or a conflicted/ambiguous alternative`
