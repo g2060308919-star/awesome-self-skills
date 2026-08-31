@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TM-02",
-  "scope": "public-source-machine-pilot",
+  "scope": "Ayin plan entitlements, API rate limits, data retention windows, and quota enforcement",
   "stratum": "time-window/quota/entitlement",
   "source_paths": [
     "cases/pf-tm-02/source/Ayin-PRD-and-SaaS-Plan.md"

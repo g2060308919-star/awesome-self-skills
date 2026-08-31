@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TM-03",
-  "scope": "public-source-machine-pilot",
+  "scope": "YAT device data update freshness, sleep schedules, and time-window behavior",
   "stratum": "time-window/quota/entitlement",
   "source_paths": [
     "cases/pf-tm-03/source/PRD.md"

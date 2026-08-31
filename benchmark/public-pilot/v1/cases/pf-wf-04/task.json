@@ -1,6 +1,6 @@
 {
   "case_id": "PF-WF-04",
-  "scope": "public-source-machine-pilot",
+  "scope": "Runmill issue execution, review, approval, and governed merge state machine",
   "stratum": "workflow/approval/state",
   "source_paths": [
     "cases/pf-wf-04/source/prd.md"

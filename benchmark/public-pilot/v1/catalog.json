@@ -33,8 +33,9 @@
       "task": {
         "task_id": "task-pf-tr-01",
         "path": "cases/pf-tr-01/task.json",
-        "sha256": "104b9303d2ee32f07c878663c0a6af9ecd0cdb7cba5d8aed610164ae27053d76",
-        "source_id": "source-pf-tr-01"
+        "sha256": "d7397de75d6eba2cca31a3779e0e1bf8f60ecdb1c4777ad613dac2d1fdac1a11",
+        "source_id": "source-pf-tr-01",
+        "scope": "Direct ordering payment capture, fulfillment, and idempotent order processing"
       },
       "reviews": [],
       "defects": []
@@ -67,8 +68,9 @@
       "task": {
         "task_id": "task-pf-tr-02",
         "path": "cases/pf-tr-02/task.json",
-        "sha256": "247dd0684873e7188c42899cb2b6d20998862107335cb1bbd6c4bf7c7a66c932",
-        "source_id": "source-pf-tr-02"
+        "sha256": "58438f619573522601b78f829c1ce5051ccec108f0e3d714bcaba9d31d920109",
+        "source_id": "source-pf-tr-02",
+        "scope": "CoinPay checkout gateway and merchant plugin payment processing"
       },
       "reviews": [],
       "defects": []
@@ -101,8 +103,9 @@
       "task": {
         "task_id": "task-pf-tr-03",
         "path": "cases/pf-tr-03/task.json",
-        "sha256": "41a334bffb832481f0da01d08d7c77f7bfc98aa32aac70412329fa18962c5d31",
-        "source_id": "source-pf-tr-03"
+        "sha256": "1e208212c7201ffdcc19897aed79c0b7d0b7c9a9fd69cf2ee3cef7304894f7ec",
+        "source_id": "source-pf-tr-03",
+        "scope": "ISO 20022 payment message orchestration and scheme validation"
       },
       "reviews": [],
       "defects": []
@@ -135,8 +138,9 @@
       "task": {
         "task_id": "task-pf-tr-04",
         "path": "cases/pf-tr-04/task.json",
-        "sha256": "fd2f6eafe08c89704f53fba9c7e3ac6b762444f91745e18308c0d616094942bb",
-        "source_id": "source-pf-tr-04"
+        "sha256": "66a8ec95cab2a0646aacf17f4db2d18c67f7e06bc0750f7db53163ab54fde70a",
+        "source_id": "source-pf-tr-04",
+        "scope": "Agent payment intent authorization, transaction policy decisions, and constrained execution"
       },
       "reviews": [],
       "defects": []
@@ -169,8 +173,9 @@
       "task": {
         "task_id": "task-pf-tr-05",
         "path": "cases/pf-tr-05/task.json",
-        "sha256": "8003c0fdfd5bb7691a223c20d25a1f81c35189259a262a2266b9494b323dcef3",
-        "source_id": "source-pf-tr-05"
+        "sha256": "970225b9d6661f73acee0e3968f89b5189fcfb76b1bc6685642b3fada29dba96",
+        "source_id": "source-pf-tr-05",
+        "scope": "Tripletex order-to-invoice lifecycle and payment-term enforcement"
       },
       "reviews": [],
       "defects": []
@@ -203,8 +208,9 @@
       "task": {
         "task_id": "task-pf-id-01",
         "path": "cases/pf-id-01/task.json",
-        "sha256": "c2f396f9954c6a8231371a6069ce9cd6b9730d6af88dba559c513617e6d6a51d",
-        "source_id": "source-pf-id-01"
+        "sha256": "6e2d14b431a40c649b4e714243ddc433fef800c8f52cbc863dda7171409a0b4b",
+        "source_id": "source-pf-id-01",
+        "scope": "Hosted Jasper customer and staff authentication with OIDC, MFA, and role separation"
       },
       "reviews": [],
       "defects": []
@@ -237,8 +243,9 @@
       "task": {
         "task_id": "task-pf-id-02",
         "path": "cases/pf-id-02/task.json",
-        "sha256": "3fd91496d1a4e610597a84c1c983b83f7445de84f705a9c21bf4cb02247c5495",
-        "source_id": "source-pf-id-02"
+        "sha256": "e0f5ed462f81f1b4201ec77bd995048b6d75c4dc6034be53002220e9b9da1f58",
+        "source_id": "source-pf-id-02",
+        "scope": "Hierarchical RBAC assignment, scoped permissions, inheritance, and explicit denial"
       },
       "reviews": [],
       "defects": []
@@ -271,8 +278,9 @@
       "task": {
         "task_id": "task-pf-id-03",
         "path": "cases/pf-id-03/task.json",
-        "sha256": "391d0a5e2d4b995b844c99e001b38e327eddf99f5a34fbc568ccfc742260c5fd",
-        "source_id": "source-pf-id-03"
+        "sha256": "54d838c1fb2798a986826120fba8cce88733199a9dcc7c1e5f2c4019089b11c3",
+        "source_id": "source-pf-id-03",
+        "scope": "APCore MCP JWT authentication, claim mapping, ACL roles, and unauthorized responses"
       },
       "reviews": [],
       "defects": []
@@ -305,8 +313,9 @@
       "task": {
         "task_id": "task-pf-id-04",
         "path": "cases/pf-id-04/task.json",
-        "sha256": "9c94a37aa3c3a8b3f712667bc3f2d9fdd9154b108a6d1e45f5cfe0ec15827b4c",
-        "source_id": "source-pf-id-04"
+        "sha256": "36304b61b1458a748b2d4d7283f8a847e08f68836a64c05d7de9f061fc6632bd",
+        "source_id": "source-pf-id-04",
+        "scope": "ContextEngine tenant-isolated context access, ownership, sharing, and deletion permissions"
       },
       "reviews": [],
       "defects": []
@@ -339,8 +348,9 @@
       "task": {
         "task_id": "task-pf-id-05",
         "path": "cases/pf-id-05/task.json",
-        "sha256": "78bc7282244dc2d6f43a9acc4a9d0299b907564b1c2fb5dc381c75efd5d8e484",
-        "source_id": "source-pf-id-05"
+        "sha256": "6aa61970077c2da65b77263d87e6ef9acff18406796433e8a7d92a1379594e8f",
+        "source_id": "source-pf-id-05",
+        "scope": "AI agent identities, sessions, grants, delegated authority, and deny-by-default enforcement"
       },
       "reviews": [],
       "defects": []
@@ -373,8 +383,9 @@
       "task": {
         "task_id": "task-pf-wf-01",
         "path": "cases/pf-wf-01/task.json",
-        "sha256": "50fca8141e25106d90228206dc2d850884f9b6e90260afd0f9daf0df0c8bfd27",
-        "source_id": "source-pf-wf-01"
+        "sha256": "fd430f2e28a1358cee3554dd68ff8ccabd25d12304e9860062caa3e6850a924f",
+        "source_id": "source-pf-wf-01",
+        "scope": "Kherad contribution submission, review, approval, and merge workflow"
       },
       "reviews": [],
       "defects": []
@@ -407,8 +418,9 @@
       "task": {
         "task_id": "task-pf-wf-02",
         "path": "cases/pf-wf-02/task.json",
-        "sha256": "84fb051d3826d395edd8c359b2098d817e0ed31cc1e2981d94a401dcdf1e04f0",
-        "source_id": "source-pf-wf-02"
+        "sha256": "4315e05f41d18fbc1b14cb3dfae25dcb0458d0d402e8240e82f53b941ff14c72",
+        "source_id": "source-pf-wf-02",
+        "scope": "Pi Company event-sourced review, testing, acceptance, and merge gates"
       },
       "reviews": [],
       "defects": []
@@ -441,8 +453,9 @@
       "task": {
         "task_id": "task-pf-wf-03",
         "path": "cases/pf-wf-03/task.json",
-        "sha256": "e83fa32c6060c184524c0fe85f4df4245c3f699c021f20f3424dda3dbc4ebe8d",
-        "source_id": "source-pf-wf-03"
+        "sha256": "e81ebca1d8ee4b66527e4f070904b7cbb471496b684b1607b03108a22f8f3f98",
+        "source_id": "source-pf-wf-03",
+        "scope": "Pi Spine orchestration journal, run state machine, recovery, and human integration gates"
       },
       "reviews": [],
       "defects": []
@@ -475,8 +488,9 @@
       "task": {
         "task_id": "task-pf-wf-04",
         "path": "cases/pf-wf-04/task.json",
-        "sha256": "c9023ee236336e8d2851d1bbcce35d4c7802a3f8f44241254398cdcb7a197dd2",
-        "source_id": "source-pf-wf-04"
+        "sha256": "1c42fe1aa1192d5448ab64a5e975d783396dc8682b600d8da0eac3941ddfa866",
+        "source_id": "source-pf-wf-04",
+        "scope": "Runmill issue execution, review, approval, and governed merge state machine"
       },
       "reviews": [],
       "defects": []
@@ -509,8 +523,9 @@
       "task": {
         "task_id": "task-pf-wf-05",
         "path": "cases/pf-wf-05/task.json",
-        "sha256": "0d8fa723438936667cb73af9b5db0e0a04f399e8f5414a80291483b81c9abd7e",
-        "source_id": "source-pf-wf-05"
+        "sha256": "6db36dd5df52733b0faf760b5c96c04622ed9362529ccb650f4f7bc1755c7d00",
+        "source_id": "source-pf-wf-05",
+        "scope": "Incident response state transitions and human approval gates for communications and remediation"
       },
       "reviews": [],
       "defects": []
@@ -543,8 +558,9 @@
       "task": {
         "task_id": "task-pf-fm-01",
         "path": "cases/pf-fm-01/task.json",
-        "sha256": "6ed63d85d07e54af8eaf61ba2e11203b44d8b701ed30fb457536f47edaaf65b7",
-        "source_id": "source-pf-fm-01"
+        "sha256": "02be20dd4eeea79202562ef9560c620c728788865219114066dbc0aff144dc2c",
+        "source_id": "source-pf-fm-01",
+        "scope": "Kanea service configuration schema validation, invalid architecture rejection, and diagnostics"
       },
       "reviews": [],
       "defects": []
@@ -577,8 +593,9 @@
       "task": {
         "task_id": "task-pf-fm-02",
         "path": "cases/pf-fm-02/task.json",
-        "sha256": "fd3e32390f14af90bd5f6f9f3b72d36b411cce6a737fbe1481c3075b186594a4",
-        "source_id": "source-pf-fm-02"
+        "sha256": "d253517f5c03082553c3b544623658c1493c6d2d1db9e8c506561d19bc031ec2",
+        "source_id": "source-pf-fm-02",
+        "scope": "VoiceType provider settings, shortcut collision handling, migrations, and malformed provider responses"
       },
       "reviews": [],
       "defects": []
@@ -611,8 +628,9 @@
       "task": {
         "task_id": "task-pf-fm-03",
         "path": "cases/pf-fm-03/task.json",
-        "sha256": "83295f65754089bd0ad54415adf1be45a65492a6eea5adefb8292aa511f1b7f9",
-        "source_id": "source-pf-fm-03"
+        "sha256": "ad8f2eaaa5b94a429e2eea50f9fd32924e4106acfa4e69db295c9af26978b873",
+        "source_id": "source-pf-fm-03",
+        "scope": "The Loop setup, capability, and configuration validation with fail-closed collision handling"
       },
       "reviews": [],
       "defects": []
@@ -645,8 +663,9 @@
       "task": {
         "task_id": "task-pf-fm-04",
         "path": "cases/pf-fm-04/task.json",
-        "sha256": "de605d4e5652f2d41721eb213002823521dd8ce0f66bec5d0df90c347ad317c2",
-        "source_id": "source-pf-fm-04"
+        "sha256": "d8aff933b4b56c1860b8598f6d58b1e9cf7c1cc64b8fd407accc77e27df93c4f",
+        "source_id": "source-pf-fm-04",
+        "scope": "Agent ToolTrust JSON and YAML policy parsing, validation, and actionable configuration diagnostics"
       },
       "reviews": [],
       "defects": []
@@ -679,8 +698,9 @@
       "task": {
         "task_id": "task-pf-fm-05",
         "path": "cases/pf-fm-05/task.json",
-        "sha256": "6e10985a967a7acb0359c25891b88775c0419be983bdb08277696fca2372d85d",
-        "source_id": "source-pf-fm-05"
+        "sha256": "741de9a4da9354feda430f6fc08d390410d882fcbb18872d6ffca028216c61ca",
+        "source_id": "source-pf-fm-05",
+        "scope": "Cineprime request and form constraints with standardized field-level validation errors"
       },
       "reviews": [],
       "defects": []
@@ -713,8 +733,9 @@
       "task": {
         "task_id": "task-pf-as-01",
         "path": "cases/pf-as-01/task.json",
-        "sha256": "2d22307356ce30b6a6905a5d3ccabe1f63c0a7c75920db897199c5c0625c5918",
-        "source_id": "source-pf-as-01"
+        "sha256": "4a1ae1ef8659e250ea8d6d4f5501a23e1aff4603728e5ff35ce2eeea78293496",
+        "source_id": "source-pf-as-01",
+        "scope": "OpenAlgo scalping event triggers, message buses, reconnect handling, and asynchronous failure recovery"
       },
       "reviews": [],
       "defects": []
@@ -747,8 +768,9 @@
       "task": {
         "task_id": "task-pf-as-02",
         "path": "cases/pf-as-02/task.json",
-        "sha256": "c048a6219722395203664079dade5e67d8e6d55c9685f7dfad3cbccdb3d60e3b",
-        "source_id": "source-pf-as-02"
+        "sha256": "ff3737654d21b155c289696255ab01b1ed5552f089620a58b6a3f253c116574e",
+        "source_id": "source-pf-as-02",
+        "scope": "OCR scan watcher, batch processing pipeline, and terminal job states"
       },
       "reviews": [],
       "defects": []
@@ -781,8 +803,9 @@
       "task": {
         "task_id": "task-pf-as-03",
         "path": "cases/pf-as-03/task.json",
-        "sha256": "8ba10fd44d36a8735edf8cf6a1eee8e28c6c404ca6b54bda91a0f070daf62ab1",
-        "source_id": "source-pf-as-03"
+        "sha256": "3f7300f467de4128f50f8bfd9da64970b37c7f1b5b11d5d73911a7bfa4033bf7",
+        "source_id": "source-pf-as-03",
+        "scope": "MuJoCo queued concurrent and sequential simulation job execution"
       },
       "reviews": [],
       "defects": []
@@ -815,8 +838,9 @@
       "task": {
         "task_id": "task-pf-as-04",
         "path": "cases/pf-as-04/task.json",
-        "sha256": "5fcc8c90130b9d566522df5f37b16ba4f10096a6a1c4bcccc4e3753cb37997d4",
-        "source_id": "source-pf-as-04"
+        "sha256": "0bade7c65204cdc0b443292f3ca74f622601c37de53b142fa856bdae11a0d244",
+        "source_id": "source-pf-as-04",
+        "scope": "Local LLM asynchronous provider health, circuit breaking, failover, and request handling"
       },
       "reviews": [],
       "defects": []
@@ -849,8 +873,9 @@
       "task": {
         "task_id": "task-pf-as-05",
         "path": "cases/pf-as-05/task.json",
-        "sha256": "f5349c60d598fea07091916b84bbff6324344ac4de40d00a7e0b2df91d2e361e",
-        "source_id": "source-pf-as-05"
+        "sha256": "9e0b845290dd830be47509ccfd1871428c02423701f7e98720dbcd78be946c2a",
+        "source_id": "source-pf-as-05",
+        "scope": "ARR queued cross-service automation, event propagation, and partial-failure handling"
       },
       "reviews": [],
       "defects": []
@@ -883,8 +908,9 @@
       "task": {
         "task_id": "task-pf-tm-01",
         "path": "cases/pf-tm-01/task.json",
-        "sha256": "d8fd99387fe4e369ef88c77b6dfb6bbf94148de65c6203c08a0da2e322ba7036",
-        "source_id": "source-pf-tm-01"
+        "sha256": "2db27a21e9e4d3fad68bec991305dc8c972fb2943ae2b7203f611395b4cb44a5",
+        "source_id": "source-pf-tm-01",
+        "scope": "Kandji MCP hourly request limits, cache TTLs, and retry backoff behavior"
       },
       "reviews": [],
       "defects": []
@@ -917,8 +943,9 @@
       "task": {
         "task_id": "task-pf-tm-02",
         "path": "cases/pf-tm-02/task.json",
-        "sha256": "d15420bded3481e7b70115d20665f08a9d03d2d537dfad908c0a69513d1cdd1e",
-        "source_id": "source-pf-tm-02"
+        "sha256": "b65c3b00552535128da6e87363a87e18cf14df3785012ad93e0cb7cb7872a27f",
+        "source_id": "source-pf-tm-02",
+        "scope": "Ayin plan entitlements, API rate limits, data retention windows, and quota enforcement"
       },
       "reviews": [],
       "defects": []
@@ -951,8 +978,9 @@
       "task": {
         "task_id": "task-pf-tm-03",
         "path": "cases/pf-tm-03/task.json",
-        "sha256": "3a9d9636f220cbebf072af5fe278d5561417743eeb328be6f7fc33a1e6e7301d",
-        "source_id": "source-pf-tm-03"
+        "sha256": "b2acfe62970b324b68b3b8cd8cc71f9a35538a42803297f0ea3a962391ca554f",
+        "source_id": "source-pf-tm-03",
+        "scope": "YAT device data update freshness, sleep schedules, and time-window behavior"
       },
       "reviews": [],
       "defects": []
@@ -985,8 +1013,9 @@
       "task": {
         "task_id": "task-pf-tm-04",
         "path": "cases/pf-tm-04/task.json",
-        "sha256": "e2a25d2a12fc30dd7bbcc1bb720fdaf75353cc89b6252a0cebd4c47b2341dafe",
-        "source_id": "source-pf-tm-04"
+        "sha256": "48e3d00e0d9eeb7aa1773d92d252c2bc5ddfd900ae7c2d4e4ea0a8f9e7108c51",
+        "source_id": "source-pf-tm-04",
+        "scope": "OpenRAG monthly token allocations, reset-day behavior, debits, and exhaustion handling"
       },
       "reviews": [],
       "defects": []
@@ -1019,8 +1048,9 @@
       "task": {
         "task_id": "task-pf-tm-05",
         "path": "cases/pf-tm-05/task.json",
-        "sha256": "7185c5a43e1264a518db5aae0c377398c5bed691f08b79b3ce5ddcfed66301af",
-        "source_id": "source-pf-tm-05"
+        "sha256": "2e377f3f9fa59c7bf30f1dbdf7fcf67e54f8d59097579af0d4f1a7b2baee1e66",
+        "source_id": "source-pf-tm-05",
+        "scope": "AutoTube publishing schedules, daily volume limits, API quota queuing, and retry timing"
       },
       "reviews": [],
       "defects": []

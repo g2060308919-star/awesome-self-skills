@@ -1,6 +1,6 @@
 {
   "case_id": "PF-ID-05",
-  "scope": "public-source-machine-pilot",
+  "scope": "AI agent identities, sessions, grants, delegated authority, and deny-by-default enforcement",
   "stratum": "identity/role/permission",
   "source_paths": [
     "cases/pf-id-05/source/open-agent-policy-prd.md"

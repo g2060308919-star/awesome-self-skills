@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-02",
-  "scope": "public-source-machine-pilot",
+  "scope": "OCR scan watcher, batch processing pipeline, and terminal job states",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-02/source/PRD.md"

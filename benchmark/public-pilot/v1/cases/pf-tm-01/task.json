@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TM-01",
-  "scope": "public-source-machine-pilot",
+  "scope": "Kandji MCP hourly request limits, cache TTLs, and retry backoff behavior",
   "stratum": "time-window/quota/entitlement",
   "source_paths": [
     "cases/pf-tm-01/source/PRD.md"

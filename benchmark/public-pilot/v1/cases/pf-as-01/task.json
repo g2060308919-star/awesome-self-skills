@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-01",
-  "scope": "public-source-machine-pilot",
+  "scope": "OpenAlgo scalping event triggers, message buses, reconnect handling, and asynchronous failure recovery",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-01/source/PRD.md"

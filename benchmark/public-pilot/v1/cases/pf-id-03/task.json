@@ -1,6 +1,6 @@
 {
   "case_id": "PF-ID-03",
-  "scope": "public-source-machine-pilot",
+  "scope": "APCore MCP JWT authentication, claim mapping, ACL roles, and unauthorized responses",
   "stratum": "identity/role/permission",
   "source_paths": [
     "cases/pf-id-03/source/prd-apcore-mcp.md"

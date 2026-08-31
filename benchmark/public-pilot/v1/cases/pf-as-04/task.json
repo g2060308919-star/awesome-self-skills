@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-04",
-  "scope": "public-source-machine-pilot",
+  "scope": "Local LLM asynchronous provider health, circuit breaking, failover, and request handling",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-04/source/PRD.md"

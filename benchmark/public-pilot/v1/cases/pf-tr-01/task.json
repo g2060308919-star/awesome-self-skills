@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TR-01",
-  "scope": "public-source-machine-pilot",
+  "scope": "Direct ordering payment capture, fulfillment, and idempotent order processing",
   "stratum": "transaction/order/payment",
   "source_paths": [
     "cases/pf-tr-01/source/DIRECT-ORDERING-PLAN.md"

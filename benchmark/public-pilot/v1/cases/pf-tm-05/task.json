@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TM-05",
-  "scope": "public-source-machine-pilot",
+  "scope": "AutoTube publishing schedules, daily volume limits, API quota queuing, and retry timing",
   "stratum": "time-window/quota/entitlement",
   "source_paths": [
     "cases/pf-tm-05/source/PRD.md"

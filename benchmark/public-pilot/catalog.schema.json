@@ -52,6 +52,24 @@
         "time-window/quota/entitlement"
       ]
     },
+    "taskScope": {
+      "allOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        {
+          "not": {
+            "enum": [
+              "public-source-machine-pilot",
+              "transaction/order/payment",
+              "identity/role/permission",
+              "workflow/approval/state",
+              "form/configuration/input validation",
+              "asynchronous integration/event",
+              "time-window/quota/entitlement"
+            ]
+          }
+        }
+      ]
+    },
     "retainedArtifact": {
       "type": "object",
       "additionalProperties": false,
@@ -88,12 +106,13 @@
     "task": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["task_id", "path", "sha256", "source_id"],
+      "required": ["task_id", "path", "sha256", "source_id", "scope"],
       "properties": {
         "task_id": { "$ref": "#/$defs/nonEmptyString" },
         "path": { "$ref": "#/$defs/nonEmptyString" },
         "sha256": { "$ref": "#/$defs/sha256" },
-        "source_id": { "$ref": "#/$defs/nonEmptyString" }
+        "source_id": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "$ref": "#/$defs/taskScope" }
       }
     },
     "provenance": {

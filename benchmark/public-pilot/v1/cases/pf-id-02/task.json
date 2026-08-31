@@ -1,6 +1,6 @@
 {
   "case_id": "PF-ID-02",
-  "scope": "public-source-machine-pilot",
+  "scope": "Hierarchical RBAC assignment, scoped permissions, inheritance, and explicit denial",
   "stratum": "identity/role/permission",
   "source_paths": [
     "cases/pf-id-02/source/prd.md"

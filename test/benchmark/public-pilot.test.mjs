@@ -92,12 +92,23 @@ async function createFixture(context, { perStratum = 5 } = {}) {
       const reviewPath = `${directory}/review.json`;
       const defectPath = `${directory}/defect.json`;
       const leadPath = `${directory}/unbound-lead.json`;
-      const sourceBytes = `# ${pilotId} product requirements\nUnique requirement ${itemIndex}.\n`;
+      const scope = `Product ${itemIndex} checkout, authorization, and settlement behavior`;
+      const sourceBytes = `# ${pilotId} product requirements\nScope: ${scope}.\nUnique requirement ${itemIndex}.\n`;
       const licenseBytes = `MIT License\nCopyright fixture ${itemIndex}\n`;
       const acquiredAt = '2026-08-31T00:00:00Z';
       const sourceUrl = `https://github.com/${repository}/blob/${commit}/docs/prd.md`;
       const licenseUrl = `https://github.com/${repository}/blob/${commit}/LICENSE`;
-      const taskBytes = `${JSON.stringify({ task_id: taskId, source_id: sourceId, scope: stratum })}\n`;
+      const taskBytes = `${JSON.stringify({
+        case_id: pilotId,
+        scope,
+        stratum,
+        source_paths: [sourcePath],
+        clarification_candidate: {
+          status: 'unassessed',
+          evidence_class: 'machine-pilot-candidate',
+          reason: 'Clarification necessity has not been assessed.'
+        }
+      })}\n`;
       const reviewBytes = `${JSON.stringify({ review_id: `review-${pilotId}`, reviewer_class: 'machine-agent', review_scope: 'intake-only' })}\n`;
       const defectBytes = `${JSON.stringify({ defect_id: `defect-${pilotId}`, status: 'case-bound', source_id: sourceId })}\n`;
       const leadBytes = `${JSON.stringify({ defect_id: `lead-${pilotId}`, status: 'lead', source_id: null })}\n`;
@@ -151,7 +162,8 @@ async function createFixture(context, { perStratum = 5 } = {}) {
           task_id: taskId,
           path: taskPath,
           sha256: taskDigest,
-          source_id: sourceId
+          source_id: sourceId,
+          scope
         },
         reviews: [{
           review_id: `review-${pilotId}`,
@@ -218,6 +230,21 @@ async function updateProvenance(fixture, itemIndex, update) {
   const bytes = `${JSON.stringify(provenance)}\n`;
   await writeFile(absolutePath, bytes);
   item.provenance.sha256 = sha256(bytes);
+}
+
+/**
+ * @param {{ root: string, catalog: any }} fixture
+ * @param {number} itemIndex
+ * @param {(task: any) => void} update
+ */
+async function updateTask(fixture, itemIndex, update) {
+  const item = fixture.catalog.items[itemIndex];
+  const absolutePath = path.join(fixture.root, item.task.path);
+  const task = JSON.parse(await readFile(absolutePath, 'utf8'));
+  update(task);
+  const bytes = `${JSON.stringify(task)}\n`;
+  await writeFile(absolutePath, bytes);
+  item.task.sha256 = sha256(bytes);
 }
 
 /** @param {{ code: string }[]} issues @param {string} code */
@@ -338,6 +365,64 @@ test('task review and defect byte digests are recomputed from retained files', a
 
       assert.equal(report.status, 'invalid');
       assert.equal(hasIssue(report.issues, code), true);
+    });
+  }
+});
+
+test('retained task contract stays bound when rewritten bytes have a synchronized digest', async (context) => {
+  /** @type {Array<[string, (task: any) => void]>} */
+  const mutations = [
+    ['case_id', (task) => { task.case_id = 'PF-OTHER'; }],
+    ['scope', (task) => { task.scope = 'A different product capability'; }],
+    ['stratum', (task) => { task.stratum = FROZEN_STRATA[1]; }],
+    ['source_paths', (task) => { task.source_paths = ['retained/PF-OTHER/prd.md']; }],
+    ['clarification_candidate', (task) => { task.clarification_candidate.status = 'assessed'; }],
+    ['unknown field', (task) => { task.unexpected = true; }]
+  ];
+  for (const [label, update] of mutations) {
+    await context.test(label, async (/** @type {any} */ childContext) => {
+      const fixture = await createFixture(childContext);
+      await updateTask(fixture, 0, update);
+      await saveCatalog(fixture);
+
+      const report = await validatePublicPilot(fixture.catalogPath);
+
+      assert.equal(report.status, 'invalid');
+      assert.equal(hasIssue(report.issues, 'TASK_CONTENT_BINDING_INVALID'), true);
+    });
+  }
+
+  await context.test('malformed JSON', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    const item = fixture.catalog.items[0];
+    const bytes = '{\n';
+    await writeFile(path.join(fixture.root, item.task.path), bytes);
+    item.task.sha256 = sha256(bytes);
+    await saveCatalog(fixture);
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(hasIssue(report.issues, 'TASK_JSON_INVALID'), true);
+  });
+});
+
+test('catalog task scopes must identify a product capability', async (context) => {
+  for (const [label, scope] of [
+    ['generic evidence class', 'public-source-machine-pilot'],
+    ['stratum only', FROZEN_STRATA[0]],
+    ['different bare stratum', FROZEN_STRATA[1]],
+    ['blank', '   ']
+  ]) {
+    await context.test(label, async (/** @type {any} */ childContext) => {
+      const fixture = await createFixture(childContext);
+      fixture.catalog.items[0].task.scope = scope;
+      await saveCatalog(fixture);
+
+      const report = await validatePublicPilot(fixture.catalogPath);
+
+      assert.equal(report.status, 'invalid');
+      assert.equal(hasIssue(report.issues, 'TASK_SCOPE_INVALID'), true);
     });
   }
 });

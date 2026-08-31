@@ -61,11 +61,13 @@ function isRfc3339DateTime(value) {
  * @param {Set<string>} allowed
  * @param {string} issuePath
  * @param {Array<any>} issues
+ * @param {string} [code]
+ * @param {string} [message]
  */
-function rejectUnknownKeys(value, allowed, issuePath, issues) {
+function rejectUnknownKeys(value, allowed, issuePath, issues, code = 'CATALOG_CONTRACT_INVALID', message = 'Unknown catalog field.') {
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) {
-      addIssue(issues, 'CATALOG_CONTRACT_INVALID', `${issuePath}/${key}`, 'Unknown catalog field.');
+      addIssue(issues, code, `${issuePath}/${key}`, message);
     }
   }
 }
@@ -464,16 +466,77 @@ async function validateItem(item, itemIndex, context) {
 
   const task = requireObject(item.task, `${itemPath}/task`, issues);
   if (task) {
-    rejectUnknownKeys(task, new Set(['task_id', 'path', 'sha256', 'source_id']), `${itemPath}/task`, issues);
+    rejectUnknownKeys(task, new Set(['task_id', 'path', 'sha256', 'source_id', 'scope']), `${itemPath}/task`, issues);
     requireString(task.task_id, `${itemPath}/task/task_id`, issues);
     requireDigest(task.sha256, `${itemPath}/task/sha256`, issues);
     if (!nonEmptyString(task.source_id) || task.source_id !== source?.source_id) {
       addIssue(issues, 'TASK_BINDING_MISSING', `${itemPath}/task/source_id`, 'Task must bind explicitly to this item\'s source ID.');
     }
-    await readRetainedArtifact({
+    if (!nonEmptyString(task.scope)
+      || task.scope === 'public-source-machine-pilot'
+      || FROZEN_STRATA.includes(task.scope)) {
+      addIssue(issues, 'TASK_SCOPE_INVALID', `${itemPath}/task/scope`, 'Task scope must name a non-empty product capability and must not repeat the pilot evidence class or stratum.');
+    }
+    const taskArtifact = await readRetainedArtifact({
       root, rootReal, relativePath: task.path, expectedDigest: task.sha256,
       issuePath: `${itemPath}/task`, mismatchCode: 'TASK_DIGEST_MISMATCH', issues, physicalPaths
     });
+    if (taskArtifact) {
+      let retainedTask;
+      try {
+        retainedTask = JSON.parse(taskArtifact.bytes.toString('utf8'));
+      } catch {
+        addIssue(issues, 'TASK_JSON_INVALID', `${itemPath}/task/path`, 'Retained task must be valid JSON.');
+      }
+      if (retainedTask !== undefined) {
+        const taskRecord = requireObject(retainedTask, `${itemPath}/task/file`, issues, 'TASK_JSON_INVALID');
+        if (taskRecord) {
+          rejectUnknownKeys(
+            taskRecord,
+            new Set(['case_id', 'scope', 'stratum', 'source_paths', 'clarification_candidate']),
+            `${itemPath}/task/file`,
+            issues,
+            'TASK_CONTENT_BINDING_INVALID',
+            'Unknown retained task field.'
+          );
+          for (const [field, expected] of [
+            ['case_id', item.pilot_id],
+            ['scope', task.scope],
+            ['stratum', item.stratum]
+          ]) {
+            if (!Object.hasOwn(taskRecord, field) || taskRecord[field] !== expected) {
+              addIssue(issues, 'TASK_CONTENT_BINDING_INVALID', `${itemPath}/task/file/${field}`, `Retained task ${field} must match catalog metadata.`);
+            }
+          }
+          if (!Array.isArray(taskRecord.source_paths)
+            || taskRecord.source_paths.length !== 1
+            || taskRecord.source_paths[0] !== source?.path) {
+            addIssue(issues, 'TASK_CONTENT_BINDING_INVALID', `${itemPath}/task/file/source_paths`, 'Retained task source_paths must contain exactly this item\'s retained source path.');
+          }
+          const candidate = requireObject(
+            taskRecord.clarification_candidate,
+            `${itemPath}/task/file/clarification_candidate`,
+            issues,
+            'TASK_CONTENT_BINDING_INVALID'
+          );
+          if (candidate) {
+            rejectUnknownKeys(
+              candidate,
+              new Set(['status', 'evidence_class', 'reason']),
+              `${itemPath}/task/file/clarification_candidate`,
+              issues,
+              'TASK_CONTENT_BINDING_INVALID',
+              'Unknown clarification candidate field.'
+            );
+            if (candidate.status !== 'unassessed'
+              || candidate.evidence_class !== 'machine-pilot-candidate'
+              || !nonEmptyString(candidate.reason)) {
+              addIssue(issues, 'TASK_CONTENT_BINDING_INVALID', `${itemPath}/task/file/clarification_candidate`, 'Clarification candidate must remain an honest unassessed machine-pilot candidate with a non-empty reason.');
+            }
+          }
+        }
+      }
+    }
     if (typeof task.task_id === 'string') {
       const prior = stableIds.get(`task:${task.task_id}`);
       if (prior !== undefined) addIssue(issues, 'DUPLICATE_STABLE_ID', `${itemPath}/task/task_id`, `Task ID is already used at ${prior}.`);

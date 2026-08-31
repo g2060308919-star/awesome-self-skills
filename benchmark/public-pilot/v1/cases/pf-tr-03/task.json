@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TR-03",
-  "scope": "public-source-machine-pilot",
+  "scope": "ISO 20022 payment message orchestration and scheme validation",
   "stratum": "transaction/order/payment",
   "source_paths": [
     "cases/pf-tr-03/source/prd.md"

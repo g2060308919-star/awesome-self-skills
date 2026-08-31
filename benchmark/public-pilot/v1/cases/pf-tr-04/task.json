@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TR-04",
-  "scope": "public-source-machine-pilot",
+  "scope": "Agent payment intent authorization, transaction policy decisions, and constrained execution",
   "stratum": "transaction/order/payment",
   "source_paths": [
     "cases/pf-tr-04/source/PRD.md"

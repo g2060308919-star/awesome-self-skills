@@ -1,6 +1,6 @@
 {
   "case_id": "PF-FM-03",
-  "scope": "public-source-machine-pilot",
+  "scope": "The Loop setup, capability, and configuration validation with fail-closed collision handling",
   "stratum": "form/configuration/input validation",
   "source_paths": [
     "cases/pf-fm-03/source/prd.md"

@@ -1,6 +1,6 @@
 {
   "case_id": "PF-WF-02",
-  "scope": "public-source-machine-pilot",
+  "scope": "Pi Company event-sourced review, testing, acceptance, and merge gates",
   "stratum": "workflow/approval/state",
   "source_paths": [
     "cases/pf-wf-02/source/PRD.md"

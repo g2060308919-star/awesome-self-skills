@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TM-04",
-  "scope": "public-source-machine-pilot",
+  "scope": "OpenRAG monthly token allocations, reset-day behavior, debits, and exhaustion handling",
   "stratum": "time-window/quota/entitlement",
   "source_paths": [
     "cases/pf-tm-04/source/prd.md"

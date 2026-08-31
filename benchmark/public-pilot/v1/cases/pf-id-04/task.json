@@ -1,6 +1,6 @@
 {
   "case_id": "PF-ID-04",
-  "scope": "public-source-machine-pilot",
+  "scope": "ContextEngine tenant-isolated context access, ownership, sharing, and deletion permissions",
   "stratum": "identity/role/permission",
   "source_paths": [
     "cases/pf-id-04/source/prd-contextengine-implementation.md"

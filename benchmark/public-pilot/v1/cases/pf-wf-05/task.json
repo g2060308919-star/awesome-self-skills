@@ -1,6 +1,6 @@
 {
   "case_id": "PF-WF-05",
-  "scope": "public-source-machine-pilot",
+  "scope": "Incident response state transitions and human approval gates for communications and remediation",
   "stratum": "workflow/approval/state",
   "source_paths": [
     "cases/pf-wf-05/source/PRD.md"

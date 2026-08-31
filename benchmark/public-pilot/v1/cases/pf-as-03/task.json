@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-03",
-  "scope": "public-source-machine-pilot",
+  "scope": "MuJoCo queued concurrent and sequential simulation job execution",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-03/source/PRD.md"

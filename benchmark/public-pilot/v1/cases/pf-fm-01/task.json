@@ -1,6 +1,6 @@
 {
   "case_id": "PF-FM-01",
-  "scope": "public-source-machine-pilot",
+  "scope": "Kanea service configuration schema validation, invalid architecture rejection, and diagnostics",
   "stratum": "form/configuration/input validation",
   "source_paths": [
     "cases/pf-fm-01/source/PRD.md"

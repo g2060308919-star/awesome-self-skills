@@ -1,6 +1,6 @@
 {
   "case_id": "PF-WF-03",
-  "scope": "public-source-machine-pilot",
+  "scope": "Pi Spine orchestration journal, run state machine, recovery, and human integration gates",
   "stratum": "workflow/approval/state",
   "source_paths": [
     "cases/pf-wf-03/source/pi-spine-PRD.md"

@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TR-05",
-  "scope": "public-source-machine-pilot",
+  "scope": "Tripletex order-to-invoice lifecycle and payment-term enforcement",
   "stratum": "transaction/order/payment",
   "source_paths": [
     "cases/pf-tr-05/source/PRD-Tripletex-MCP-Rebuild.md"

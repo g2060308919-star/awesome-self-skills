@@ -1,6 +1,6 @@
 {
   "case_id": "PF-FM-04",
-  "scope": "public-source-machine-pilot",
+  "scope": "Agent ToolTrust JSON and YAML policy parsing, validation, and actionable configuration diagnostics",
   "stratum": "form/configuration/input validation",
   "source_paths": [
     "cases/pf-fm-04/source/PRD.md"

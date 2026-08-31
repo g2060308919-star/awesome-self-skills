@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TR-02",
-  "scope": "public-source-machine-pilot",
+  "scope": "CoinPay checkout gateway and merchant plugin payment processing",
   "stratum": "transaction/order/payment",
   "source_paths": [
     "cases/pf-tr-02/source/PRD.md"
