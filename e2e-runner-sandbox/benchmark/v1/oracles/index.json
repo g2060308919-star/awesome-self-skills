@@ -509,13 +509,45 @@
       ],
       "expectedAttribution": "external-evidence-gap",
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
-      "expectedDiff": [],
+      "expectedDiff": [
+        {
+          "targetAlias": "approval:created",
+          "change": "added",
+          "after": {
+            "status": "Approved",
+            "targetId": "PRJ-1001",
+            "requestedAction": "activate"
+          }
+        },
+        {
+          "pointer": "/projects/PRJ-1001/status",
+          "before": "Inactive",
+          "after": "Active"
+        }
+      ],
       "allowedMutations": [
         {
           "entity": "approval",
           "target": "created",
           "field": "*",
           "operation": "create",
+          "logicalOperation": "approval.submit",
+          "maxCount": 1
+        },
+        {
+          "entity": "approval",
+          "target": "created",
+          "field": "status",
+          "operation": "update",
+          "logicalOperation": "approval.external-decision",
+          "maxCount": 1
+        },
+        {
+          "entity": "project",
+          "target": "PRJ-1001",
+          "field": "status",
+          "operation": "update",
+          "logicalOperation": "approval.external-decision",
           "maxCount": 1
         }
       ],
@@ -541,6 +573,22 @@
           "after": [
             "B06-EVENT-2"
           ]
+        },
+        {
+          "checkId": "B06-EVENT-4",
+          "type": "state_mutation",
+          "count": 1,
+          "after": [
+            "B06-EVENT-3"
+          ]
+        },
+        {
+          "checkId": "B06-EVENT-5",
+          "type": "state_mutation",
+          "count": 1,
+          "after": [
+            "B06-EVENT-4"
+          ]
         }
       ],
       "expectedOutbox": [
@@ -559,7 +607,7 @@
         "activeElapsedMs": 60000,
         "browserReads": 12,
         "businessRequests": 30,
-        "writes": 1,
+        "writes": 3,
         "chromeStarts": 1
       },
       "prohibitedActions": [
@@ -613,7 +661,7 @@
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
       "expectedDiff": [
         {
-          "path": "/projects/PRJ-MER-2087/status",
+          "pointer": "/projects/PRJ-MER-2087/status",
           "before": "Active",
           "after": "Inactive"
         }
@@ -1093,7 +1141,13 @@
       ],
       "expectedAttribution": "authentication-interruption",
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
-      "expectedDiff": [],
+      "expectedDiff": [
+        {
+          "pointer": "/projects/PRJ-1001/description",
+          "before": "Annual synthetic renewal",
+          "after": "Approved renewal workspace"
+        }
+      ],
       "allowedMutations": [
         {
           "entity": "project",
@@ -1193,7 +1247,15 @@
       ],
       "expectedAttribution": "cleanup-failure",
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
-      "expectedDiff": [],
+      "expectedDiff": [
+        {
+          "targetAlias": "customer:created",
+          "change": "added",
+          "after": {
+            "status": "Active"
+          }
+        }
+      ],
       "allowedMutations": [
         {
           "entity": "customer",
@@ -1675,9 +1737,88 @@
       ],
       "expectedAttribution": "external-evidence-gap",
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
-      "expectedDiff": [],
-      "allowedMutations": [],
-      "expectedEvents": [],
+      "expectedDiff": [
+        {
+          "targetAlias": "approval:created",
+          "change": "added",
+          "after": {
+            "status": "Approved",
+            "targetId": "PRJ-1001",
+            "requestedAction": "activate"
+          }
+        },
+        {
+          "pointer": "/projects/PRJ-1001/status",
+          "before": "Inactive",
+          "after": "Active"
+        }
+      ],
+      "allowedMutations": [
+        {
+          "entity": "approval",
+          "target": "created",
+          "field": "*",
+          "operation": "create",
+          "logicalOperation": "approval.submit",
+          "maxCount": 1
+        },
+        {
+          "entity": "approval",
+          "target": "created",
+          "field": "status",
+          "operation": "update",
+          "logicalOperation": "approval.external-decision",
+          "maxCount": 1
+        },
+        {
+          "entity": "project",
+          "target": "PRJ-1001",
+          "field": "status",
+          "operation": "update",
+          "logicalOperation": "approval.external-decision",
+          "maxCount": 1
+        }
+      ],
+      "expectedEvents": [
+        {
+          "checkId": "B16-EVENT-1",
+          "type": "state_mutation",
+          "count": 1,
+          "after": []
+        },
+        {
+          "checkId": "B16-EVENT-2",
+          "type": "notification_enqueued",
+          "count": 1,
+          "after": [
+            "B16-EVENT-1"
+          ]
+        },
+        {
+          "checkId": "B16-EVENT-3",
+          "type": "external_action",
+          "count": 1,
+          "after": [
+            "B16-EVENT-2"
+          ]
+        },
+        {
+          "checkId": "B16-EVENT-4",
+          "type": "state_mutation",
+          "count": 1,
+          "after": [
+            "B16-EVENT-3"
+          ]
+        },
+        {
+          "checkId": "B16-EVENT-5",
+          "type": "state_mutation",
+          "count": 1,
+          "after": [
+            "B16-EVENT-4"
+          ]
+        }
+      ],
       "expectedOutbox": [
         {
           "count": 1,
@@ -1694,7 +1835,7 @@
         "activeElapsedMs": 60000,
         "browserReads": 12,
         "businessRequests": 30,
-        "writes": 0,
+        "writes": 3,
         "chromeStarts": 1
       },
       "prohibitedActions": [
@@ -1757,7 +1898,15 @@
       ],
       "expectedAttribution": "none",
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
-      "expectedDiff": [],
+      "expectedDiff": [
+        {
+          "pointer": "/customers/CUS-RUN-SCOPED/tags",
+          "before": [],
+          "after": [
+            "reviewed"
+          ]
+        }
+      ],
       "allowedMutations": [
         {
           "entity": "customer",
@@ -1840,7 +1989,15 @@
       ],
       "expectedAttribution": "none",
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
-      "expectedDiff": [],
+      "expectedDiff": [
+        {
+          "pointer": "/customers/CUS-RUN-SCOPED/tags",
+          "before": [],
+          "after": [
+            "reviewed"
+          ]
+        }
+      ],
       "allowedMutations": [
         {
           "entity": "customer",
@@ -1931,7 +2088,7 @@
       "expectedPreflightDisposition": "execute-after-scope-confirmation",
       "expectedDiff": [
         {
-          "path": "/projects/PRJ-1001/status",
+          "pointer": "/projects/PRJ-1001/status",
           "before": "Inactive",
           "after": "Active"
         }
@@ -1942,6 +2099,15 @@
           "target": "PRJ-1001",
           "field": "status",
           "operation": "update",
+          "logicalOperation": "project.status.update",
+          "maxCount": 1
+        },
+        {
+          "entity": "project",
+          "target": "PRJ-1001",
+          "field": "status",
+          "operation": "update",
+          "logicalOperation": "project.async-complete",
           "maxCount": 1
         }
       ],
@@ -1954,10 +2120,18 @@
         },
         {
           "checkId": "B18-EVENT-2",
-          "type": "state_mutation",
+          "type": "external_action",
           "count": 1,
           "after": [
             "B18-EVENT-1"
+          ]
+        },
+        {
+          "checkId": "B18-EVENT-3",
+          "type": "state_mutation",
+          "count": 1,
+          "after": [
+            "B18-EVENT-2"
           ]
         }
       ],
@@ -1976,7 +2150,7 @@
         "activeElapsedMs": 120000,
         "browserReads": 12,
         "businessRequests": 30,
-        "writes": 1,
+        "writes": 2,
         "chromeStarts": 1
       },
       "prohibitedActions": [

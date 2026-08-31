@@ -14,7 +14,7 @@
   "faults/transient-read-once.json": "aea6a3aa7ed65728eaa88ec2e932e39a5705a9968fc0d2b2ab4cb3b803cdee75",
   "fixtures/core-v1.json": "68bdc1e75a0279154a9e6cfda1fecb702c3b96ac25e2169237bbfe3c6b898351",
   "host-trace-classifier.json": "586355852b6394ba877ba85ca70705f2629c017a5139eaff758cac01fcc072e1",
-  "oracles/index.json": "81ef2424218dcdd9b3aa8cb84a99eb70a713127fce9d236c874c37c10b959448",
+  "oracles/index.json": "a629d7ee14f7c53415fe83482253d2fd9b34acb65564b5db845afa687362c2b9",
   "profiles/B01.json": "4cccc76c9a6e3d87859ec3651c8a645a44f9190738b78624f417703051a1c4b6",
   "profiles/B02.json": "81d397ea8161deaacf3879d79d92e5049e7a09fbe05c3125ecbd1d2e5b992c9e",
   "profiles/B03.json": "440fe0fe56a2ee8af626ca1699aa17876ee19286b2d714f26a037f1df974ec6f",

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "execution-log-v1",
+  "profileId": "B01",
+  "planId": "B01-PLAN",
+  "cases": [
+    {
+      "caseId": "B01-C1",
+      "verdict": "Passed",
+      "attribution": "none",
+      "assertions": [
+        { "assertionId": "B01-A1", "state": "verified-pass", "expected": "Avery Stone", "actual": "Avery Stone", "evidence": ["evidence/missing.txt"] }
+      ],
+      "cleanup": { "outcome": "clean", "residualRecords": [] }
+    }
+  ]
+}

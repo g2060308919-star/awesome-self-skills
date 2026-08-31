@@ -99,7 +99,7 @@ async function loadCorpus(bundleDirectory, manifest) {
       fault,
       runnerInput,
       inputTemplateDigest,
-      oracle: { ...oracle, componentDigests, inputTemplateDigest },
+      oracle: { ...oracle, assistance: assistanceScript, componentDigests, inputTemplateDigest },
       assistance: assistanceScript,
       allowedMutations: oracle.allowedMutations,
       componentDigests

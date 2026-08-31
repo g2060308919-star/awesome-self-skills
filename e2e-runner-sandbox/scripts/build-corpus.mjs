@@ -70,7 +70,11 @@ const mutationRules = Object.freeze({
     { entity: "customer", target: "created", field: "tags", operation: "update", maxCount: 1 },
     { entity: "customer", target: "created", field: "*", operation: "delete", maxCount: 1 }
   ],
-  B06: [{ entity: "approval", target: "created", field: "*", operation: "create", maxCount: 1 }],
+  B06: [
+    { entity: "approval", target: "created", field: "*", operation: "create", logicalOperation: "approval.submit", maxCount: 1 },
+    { entity: "approval", target: "created", field: "status", operation: "update", logicalOperation: "approval.external-decision", maxCount: 1 },
+    { entity: "project", target: "PRJ-1001", field: "status", operation: "update", logicalOperation: "approval.external-decision", maxCount: 1 }
+  ],
   B07: [{ entity: "project", target: "PRJ-MER-2087", field: "status", operation: "update", maxCount: 1 }],
   B09: [{ entity: "customer", target: "CUS-1012", field: "timezone", operation: "update", maxCount: 1 }],
   B11: [
@@ -85,19 +89,28 @@ const mutationRules = Object.freeze({
   B14: [{ entity: "project", target: "PRJ-1001", field: "status", operation: "update", maxCount: 1 }],
   "B17-separate-accounts": [{ entity: "customer", target: "CUS-RUN-SCOPED", field: "tags", operation: "update", maxCount: 1 }],
   "B17-role-change": [{ entity: "customer", target: "CUS-RUN-SCOPED", field: "tags", operation: "update", maxCount: 1 }],
-  B18: [{ entity: "project", target: "PRJ-1001", field: "status", operation: "update", maxCount: 1 }]
+  B16: [
+    { entity: "approval", target: "created", field: "*", operation: "create", logicalOperation: "approval.submit", maxCount: 1 },
+    { entity: "approval", target: "created", field: "status", operation: "update", logicalOperation: "approval.external-decision", maxCount: 1 },
+    { entity: "project", target: "PRJ-1001", field: "status", operation: "update", logicalOperation: "approval.external-decision", maxCount: 1 }
+  ],
+  B18: [
+    { entity: "project", target: "PRJ-1001", field: "status", operation: "update", logicalOperation: "project.status.update", maxCount: 1 },
+    { entity: "project", target: "PRJ-1001", field: "status", operation: "update", logicalOperation: "project.async-complete", maxCount: 1 }
+  ]
 });
 
 const eventExpectations = Object.freeze({
   B02: ["state_mutation", "state_mutation", "state_mutation"],
   B03: ["operation_attempt", "validation_rejection"],
-  B06: ["state_mutation", "notification_enqueued", "external_action"],
+  B06: ["state_mutation", "notification_enqueued", "external_action", "state_mutation", "state_mutation"],
   B07: ["state_mutation"], B09: ["operation_attempt"], B10: ["operation_attempt"],
   B11: ["state_mutation", "state_mutation"],
   B12: ["session_event", "state_mutation"], B13: ["state_mutation", "operation_attempt"],
   B14: ["operation_attempt"],
   "B17-separate-accounts": ["state_mutation"], "B17-role-change": ["state_mutation", "session_event"],
-  B18: ["state_mutation", "state_mutation"]
+  B16: ["state_mutation", "notification_enqueued", "external_action", "state_mutation", "state_mutation"],
+  B18: ["state_mutation", "external_action", "state_mutation"]
 });
 
 function assertion(id, text, state = "verified-pass") {
@@ -234,9 +247,21 @@ function makeOracle(id, runnerInput) {
     expectedAttribution: attributions[id] ?? "none",
     expectedPreflightDisposition: id === "B08-preflight" ? "case-issue"
       : noBrowser ? "blocked-before-browser" : "execute-after-scope-confirmation",
-    expectedDiff: id === "B07" ? [{ path: "/projects/PRJ-MER-2087/status", before: "Active", after: "Inactive" }]
-      : id === "B18" ? [{ path: "/projects/PRJ-1001/status", before: "Inactive", after: "Active" }]
-        : [],
+    expectedDiff: id === "B06" ? [
+      { targetAlias: "approval:created", change: "added", after: { status: "Approved", targetId: "PRJ-1001", requestedAction: "activate" } },
+      { pointer: "/projects/PRJ-1001/status", before: "Inactive", after: "Active" }
+    ]
+      : id === "B07" ? [{ pointer: "/projects/PRJ-MER-2087/status", before: "Active", after: "Inactive" }]
+        : id === "B12" ? [{ pointer: "/projects/PRJ-1001/description", before: "Annual synthetic renewal", after: "Approved renewal workspace" }]
+          : id === "B13" ? [{ targetAlias: "customer:created", change: "added", after: { status: "Active" } }]
+            : id === "B16" ? [
+              { targetAlias: "approval:created", change: "added", after: { status: "Approved", targetId: "PRJ-1001", requestedAction: "activate" } },
+              { pointer: "/projects/PRJ-1001/status", before: "Inactive", after: "Active" }
+            ]
+              : ["B17-separate-accounts", "B17-role-change"].includes(id)
+                ? [{ pointer: "/customers/CUS-RUN-SCOPED/tags", before: [], after: ["reviewed"] }]
+                : id === "B18" ? [{ pointer: "/projects/PRJ-1001/status", before: "Inactive", after: "Active" }]
+                  : [],
     allowedMutations: mutationRules[id] ?? [],
     expectedEvents: (eventExpectations[id] ?? []).map((type, index) => ({
       checkId: `${id}-EVENT-${index + 1}`, type, count: 1, after: index === 0 ? [] : [`${id}-EVENT-${index}`]

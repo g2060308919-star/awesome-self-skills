@@ -14,9 +14,25 @@ export function createSnapshot(state, options = {}) {
 
 function diffValue(before, after, pointer, changes) {
   if (JSON.stringify(before) === JSON.stringify(after)) return;
+  if (Array.isArray(before) && Array.isArray(after)) {
+    const entityArrays = before.every((item) => item && typeof item === "object" && typeof item.id === "string") &&
+      after.every((item) => item && typeof item === "object" && typeof item.id === "string");
+    if (entityArrays) {
+      const beforeById = new Map(before.map((item) => [item.id, item]));
+      const afterById = new Map(after.map((item) => [item.id, item]));
+      const ids = new Set([...beforeById.keys(), ...afterById.keys()]);
+      for (const id of [...ids].sort()) {
+        const escapedId = id.replaceAll("~", "~0").replaceAll("/", "~1");
+        diffValue(beforeById.get(id), afterById.get(id), `${pointer}/${escapedId}`, changes);
+      }
+      return;
+    }
+    changes.push({ pointer: pointer || "/", before, after });
+    return;
+  }
   const beforeObject = before !== null && typeof before === "object";
   const afterObject = after !== null && typeof after === "object";
-  if (!beforeObject || !afterObject || Array.isArray(before) || Array.isArray(after)) {
+  if (!beforeObject || !afterObject) {
     changes.push({ pointer: pointer || "/", before, after });
     return;
   }

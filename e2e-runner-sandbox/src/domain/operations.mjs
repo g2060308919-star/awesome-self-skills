@@ -542,6 +542,7 @@ export function createBusinessOperations(options) {
         const idempotencyKey = `${tools.runId}:${id}:submitted`;
         const outbox = {
           id: `OUT-${String(draft.outbox.length + 1).padStart(6, "0")}`,
+          kind: "approval-requested",
           runId: tools.runId,
           approvalId: id,
           recipientRole: "Approver",
@@ -709,6 +710,17 @@ export function createBusinessOperations(options) {
           entity: "approval", targetId: approval.id, field: "status", operation: "update"
         });
       }
+      const project = input.decision === "Approved" && approval.targetType === "project" &&
+        approval.requestedAction === "activate"
+        ? draft.projects.find(({ id }) => id === approval.targetId)
+        : null;
+      if (project && !mutationAllowed(tools.profile, draft, {
+        entity: "project", targetId: project.id, field: "status", operation: "update"
+      })) {
+        return recordDeniedMutation(draft, tools, operationContext, {
+          entity: "project", targetId: project.id, field: "status", operation: "update"
+        });
+      }
       const before = structuredClone(approval);
       approval.status = input.decision;
       approval.decisionBy = input.actor;
@@ -724,7 +736,20 @@ export function createBusinessOperations(options) {
         entity: "approval", targetId: approval.id, field: "status", operation: "update",
         before, after: approval
       }, `${input.actor} completed approval ${approval.id}`);
-      return { ok: true, status: 200, approval: structuredClone(approval) };
+      if (project) {
+        const projectBefore = structuredClone(project);
+        project.status = "Active";
+        recordMutation(draft, tools, operationContext, {
+          entity: "project", targetId: project.id, field: "status", operation: "update",
+          before: projectBefore, after: project
+        }, `${input.actor} activated project ${project.id}`);
+      }
+      return {
+        ok: true,
+        status: 200,
+        approval: structuredClone(approval),
+        appliedTarget: project ? { entity: "project", targetId: project.id, status: project.status } : null
+      };
     });
   }
 

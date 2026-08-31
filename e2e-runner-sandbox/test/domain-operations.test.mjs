@@ -57,6 +57,7 @@ test("approval submission commits mutation, notification event, and outbox exact
   const state = coordinator.read();
   assert.equal(state.approvals.length, 1);
   assert.equal(state.outbox.length, 1);
+  assert.equal(state.outbox[0].kind, "approval-requested");
   assert.equal(state.outbox[0].idempotencyKey, `run-domain:${result.approval.id}:submitted`);
   assert.deepEqual(
     state.oracleEvents.filter(({ logicalOperation }) => logicalOperation === "approval.submit").map(({ type }) => type),
@@ -99,6 +100,30 @@ test("approver decision and external action keep their provenance distinct", asy
         logicalOperation === "approval.external-decision"
     ).length,
     1
+  );
+});
+
+test("external approval atomically applies the declared project action", async () => {
+  const { coordinator, operations } = await setup();
+  const operator = await login(operations, "acct-operator");
+  const submitted = await operations.submitApproval(operator, {
+    targetType: "project",
+    targetId: "PRJ-1001",
+    action: "activate"
+  });
+
+  const result = await operations.completeExternalAction({
+    approvalId: submitted.approval.id,
+    decision: "Approved",
+    actor: "external-approver"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.approval.status, "Approved");
+  assert.equal(coordinator.read().projects[0].status, "Active");
+  assert.deepEqual(
+    coordinator.read().oracleEvents.filter(({ logicalOperation }) => logicalOperation === "approval.external-decision").map(({ type }) => type),
+    ["operation_attempt", "external_action", "state_mutation", "state_mutation"]
   );
 });
 

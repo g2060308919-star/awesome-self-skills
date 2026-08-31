@@ -1,0 +1,4 @@
+[
+  { "sequence": 1, "actor": "runner", "tool": "direct_fetch" },
+  { "sequence": 2, "actor": "runner", "tool": "invented_host_operation" }
+]
