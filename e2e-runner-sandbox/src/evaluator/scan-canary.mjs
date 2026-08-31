@@ -81,6 +81,7 @@ export async function scanPath(inputPath, registry, options = {}) {
     for await (const entry of await opendir(directory)) entries.push(entry);
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
+      if (entry.name === ".gitkeep") continue;
       const path = join(directory, entry.name);
       if (entry.isDirectory()) await visitDirectory(path);
       else await visitFile(path);

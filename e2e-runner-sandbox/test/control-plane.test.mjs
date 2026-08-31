@@ -7,7 +7,7 @@ import { createRuntimeFiles } from "../src/control/runtime-files.mjs";
 import { createControlServer } from "../src/control/server.mjs";
 import { profile, setup } from "./helpers/domain-harness.mjs";
 
-async function startControl(t) {
+async function startControl(t, profileResolver = async (profileId) => profile({ profileId })) {
   const harness = await setup();
   const runtime = await createRuntimeFiles({ businessUrl: "http://127.0.0.1:49001" });
   t.after(() => rm(runtime.runtimeDirectory, { recursive: true, force: true }));
@@ -16,7 +16,7 @@ async function startControl(t) {
     operations: harness.operations,
     socketPath: runtime.socketPath,
     token: runtime.token,
-    profileResolver: async (profileId) => profile({ profileId }),
+    profileResolver,
     onStop: () => undefined
   });
   await server.listen();
@@ -84,6 +84,31 @@ test("role changes and session expiry are available only as authenticated evalua
   });
   assert.equal(expired.ok, true);
   assert.equal(coordinator.read().sessions[0].active, false);
+});
+
+test("the evaluator can advance deterministic delayed jobs", async (t) => {
+  const delayedProfile = profile({
+    profileId: "B18",
+    fault: {
+      id: "delayed-completion",
+      effect: "delayed-completion",
+      logicalOperation: "project.status.update",
+      phase: "before-commit",
+      occurrence: 1,
+      triggered: 0,
+      consumed: false,
+      delayTicks: 2
+    }
+  });
+  const { client, operations, coordinator } = await startControl(t, async () => delayedProfile);
+  await client.request("reset", { profileId: "B18" });
+  const login = await operations.login("acct-operator", { provenance: "manual-evaluator" });
+  await operations.changeProjectStatus({ sessionId: login.session.id }, "PRJ-1001", "Active");
+
+  assert.equal(coordinator.read().projects.find(({ id }) => id === "PRJ-1001").status, "Processing");
+  assert.deepEqual((await client.request("run-jobs", { actor: "evaluator-worker" })).completed, []);
+  assert.deepEqual((await client.request("run-jobs", { actor: "evaluator-worker" })).completed, ["PRJ-1001"]);
+  assert.equal(coordinator.read().projects.find(({ id }) => id === "PRJ-1001").status, "Active");
 });
 
 test("prepare and reset resolve named profiles and advance the epoch", async (t) => {

@@ -486,7 +486,8 @@ export function createBusinessOperations(options) {
             projectId,
             finalStatus: status,
             runId: tools.runId,
-            epoch: tools.epoch
+            epoch: tools.epoch,
+            remainingTicks: tools.profile.fault.delayTicks ?? 1
           });
         } else {
           project.status = status;
@@ -502,6 +503,48 @@ export function createBusinessOperations(options) {
           project: structuredClone(project),
           ...(disconnect ? { throwAfterCommit: "RESPONSE_DISCONNECTED" } : {})
         };
+      }
+    );
+  }
+
+  async function updateProjectDescription(context, projectId, description) {
+    return withActor(
+      context,
+      {
+        logicalOperation: "project.description.update",
+        permission: "project.description.update",
+        entity: "project",
+        targetId: projectId
+      },
+      ({ draft, tools, account, operationContext }) => {
+        const project = draft.projects.find(({ id }) => id === projectId);
+        if (!project) return publicFailure("PROJECT_NOT_FOUND", "Project was not found", 404);
+        const normalized = String(description ?? "").trim();
+        if (!normalized || normalized.length > 500) {
+          emitEvent(draft, tools, {
+            ...operationContext,
+            type: "validation_rejection",
+            outcome: "rejected",
+            after: { description: "Enter a description between 1 and 500 characters" }
+          });
+          return publicFailure("VALIDATION_REJECTED", "Review the project description", 422, {
+            fields: { description: "Enter a description between 1 and 500 characters" }
+          });
+        }
+        if (!mutationAllowed(tools.profile, draft, {
+          entity: "project", targetId: projectId, field: "description", operation: "update"
+        })) {
+          return recordDeniedMutation(draft, tools, operationContext, {
+            entity: "project", targetId: projectId, field: "description", operation: "update"
+          });
+        }
+        const before = structuredClone(project);
+        project.description = normalized;
+        recordMutation(draft, tools, operationContext, {
+          entity: "project", targetId: projectId, field: "description", operation: "update",
+          before, after: project
+        }, `${account.displayName} updated project ${projectId} description`);
+        return { ok: true, status: 200, project: structuredClone(project) };
       }
     );
   }
@@ -756,8 +799,14 @@ export function createBusinessOperations(options) {
   async function runDueJobs(actor = "deterministic-worker") {
     return coordinator.transact({ logicalOperation: "worker.run" }, (draft, tools) => {
       const completed = [];
+      const pending = [];
       for (const job of draft.delayedJobs.splice(0)) {
         if (job.runId !== tools.runId || job.epoch !== tools.epoch) continue;
+        if ((job.remainingTicks ?? 1) > 1) {
+          job.remainingTicks -= 1;
+          pending.push(job);
+          continue;
+        }
         const project = draft.projects.find(({ id }) => id === job.projectId);
         if (!project) continue;
         const before = structuredClone(project);
@@ -782,6 +831,7 @@ export function createBusinessOperations(options) {
         }, `${actor} completed project ${project.id}`);
         completed.push(project.id);
       }
+      draft.delayedJobs.push(...pending);
       return { ok: true, status: 200, completed };
     });
   }
@@ -799,6 +849,7 @@ export function createBusinessOperations(options) {
     listProjects,
     getProject,
     changeProjectStatus,
+    updateProjectDescription,
     submitApproval,
     decideApproval,
     listApprovals,

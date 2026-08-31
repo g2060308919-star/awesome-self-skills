@@ -16,7 +16,7 @@ import {
 } from "./views/customers.mjs";
 import { renderDashboardContent } from "./views/dashboard.mjs";
 import { renderLogin } from "./views/login.mjs";
-import { renderProjectDetail, renderProjectList } from "./views/projects.mjs";
+import { renderProjectDetail, renderProjectExport, renderProjectList } from "./views/projects.mjs";
 import { renderStandalone, renderWorkspace } from "./views/shell.mjs";
 
 const SECURITY_HEADERS = {
@@ -68,6 +68,15 @@ function customerInput(form) {
     plan: form.plan ?? "Core",
     tags: String(form.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean)
   };
+}
+
+function changedCustomerFields(current, submitted) {
+  return Object.fromEntries(Object.entries(submitted).filter(([field, value]) => {
+    const prior = current[field];
+    return Array.isArray(value)
+      ? JSON.stringify(value) !== JSON.stringify(prior)
+      : value !== prior;
+  }));
 }
 
 export function createBusinessRouter({ coordinator, operations, loginRateLimit }) {
@@ -202,12 +211,32 @@ export function createBusinessRouter({ coordinator, operations, loginRateLimit }
     if (customerEdit && request.method === "POST") {
       const id = decodeURIComponent(customerEdit[1]);
       const input = customerInput(await readForm(request));
-      const result = await operations.updateCustomer(context, id, input);
+      const currentCustomer = await operations.getCustomer(context, id);
+      if (!currentCustomer.ok) throw new SandboxError(currentCustomer.code, currentCustomer.message, {}, currentCustomer.status);
+      const result = await operations.updateCustomer(context, id, changedCustomerFields(currentCustomer.customer, input));
       if (!result.ok) {
         workspace(response, current, "Edit customer", "customers", renderCustomerForm({ customer: { id, ...input }, errors: result.fields ?? {}, mode: "edit" }), { status: result.status });
         return;
       }
       redirect(response, `/customers/${encodeURIComponent(id)}?notice=Customer%20saved`);
+      return;
+    }
+
+    const customerDelete = url.pathname.match(/^\/customers\/([^/]+)\/delete$/);
+    if (customerDelete && request.method === "POST") {
+      const id = decodeURIComponent(customerDelete[1]);
+      const result = await operations.deleteCustomer(context, id);
+      if (!result.ok) {
+        const currentCustomer = coordinator.read().customers.find((customer) => customer.id === id);
+        if (!currentCustomer) throw new SandboxError(result.code, result.message, {}, result.status);
+        workspace(response, current, currentCustomer.name, "customers", renderCustomerDetail(
+          currentCustomer,
+          canMutate(current.account),
+          { kind: "alert", message: `${result.message}. Residual record: ${result.residualId ?? id}` }
+        ), { status: result.status });
+        return;
+      }
+      redirect(response, "/customers?notice=Customer%20deleted");
       return;
     }
 
@@ -233,7 +262,16 @@ export function createBusinessRouter({ coordinator, operations, loginRateLimit }
       const id = decodeURIComponent(projectStatus[1]);
       try {
         const result = await operations.changeProjectStatus(context, id, form.status);
-        if (!result.ok) throw new SandboxError(result.code, result.message, {}, result.status);
+        if (!result.ok) {
+          const project = coordinator.read().projects.find((candidate) => candidate.id === id);
+          workspace(response, current, project.name, "projects", renderProjectDetail(project, canMutate(current.account), {
+            kind: "alert",
+            message: result.message,
+            diagnostic: result.privateDiagnostic,
+            exportSummary: coordinator.read().featureFlags?.exportSummary === true
+          }), { status: result.status });
+          return;
+        }
         redirect(response, `/projects/${encodeURIComponent(id)}?notice=${encodeURIComponent(`Project is ${result.project.status}`)}`);
       } catch (error) {
         if (error.code === "RESPONSE_DISCONNECTED") {
@@ -245,11 +283,48 @@ export function createBusinessRouter({ coordinator, operations, loginRateLimit }
       return;
     }
 
+    const projectDescription = url.pathname.match(/^\/projects\/([^/]+)\/description$/);
+    if (projectDescription && request.method === "POST") {
+      const id = decodeURIComponent(projectDescription[1]);
+      const form = await readForm(request);
+      const result = await operations.updateProjectDescription(context, id, form.description);
+      if (result.code === "MANUAL_LOGIN_REQUIRED") {
+        redirect(response, "/", { "set-cookie": clearSessionCookie() });
+        return;
+      }
+      if (!result.ok) {
+        const project = coordinator.read().projects.find((candidate) => candidate.id === id);
+        workspace(response, current, project.name, "projects", renderProjectDetail(project, canMutate(current.account), {
+          kind: "alert", message: result.message,
+          exportSummary: coordinator.read().featureFlags?.exportSummary === true
+        }), { status: result.status });
+        return;
+      }
+      redirect(response, `/projects/${encodeURIComponent(id)}?notice=Project%20description%20saved`);
+      return;
+    }
+
+    const projectExport = url.pathname.match(/^\/projects\/([^/]+)\/export$/);
+    if (projectExport && request.method === "GET") {
+      if (coordinator.read().featureFlags?.exportSummary !== true) {
+        sendJson(response, 404, { error: { code: "FEATURE_UNAVAILABLE", message: "Export summary is unavailable" } });
+        return;
+      }
+      const result = await operations.getProject(context, decodeURIComponent(projectExport[1]));
+      if (!result.ok) throw new SandboxError(result.code, result.message, {}, result.status);
+      workspace(response, current, "Export project summary", "projects", renderProjectExport(result.project));
+      return;
+    }
+
     const projectDetail = url.pathname.match(/^\/projects\/([^/]+)$/);
     if (projectDetail && request.method === "GET") {
       const result = await operations.getProject(context, decodeURIComponent(projectDetail[1]));
       if (!result.ok) throw new SandboxError(result.code, result.message, {}, result.status);
-      workspace(response, current, result.project.name, "projects", renderProjectDetail(result.project, canMutate(current.account)), { notice: url.searchParams.get("notice") });
+      workspace(response, current, result.project.name, "projects", renderProjectDetail(result.project, canMutate(current.account), {
+        kind: "status",
+        message: url.searchParams.get("notice"),
+        exportSummary: coordinator.read().featureFlags?.exportSummary === true
+      }), { notice: null });
       return;
     }
 

@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { runEvaluatorCli } from "../bin/evaluator.mjs";
 import { createRuntimeFiles } from "../src/control/runtime-files.mjs";
 import { createControlServer } from "../src/control/server.mjs";
 import { profile, setup } from "./helpers/domain-harness.mjs";
+
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 async function cliHarness(t) {
   const harness = await setup();
@@ -69,4 +74,25 @@ test("CLI rejects missing runtime and unknown options without contacting control
 
   assert.equal(exitCode, 2);
   assert.equal(JSON.parse(lines[0]).error.code, "CLI_ARGUMENT_INVALID");
+});
+
+test("CLI materializes and archives an exact run-scoped Runner input", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "evaluator-cli-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const outputPath = join(directory, "runner-input.json");
+  const lines = [];
+
+  const exitCode = await runEvaluatorCli([
+    "materialize",
+    "--bundle-root", join(packageRoot, "benchmark"),
+    "--bundle-version", "v1",
+    "--profile", "B11",
+    "--run-id", "cli-materialized-run",
+    "--output", outputPath
+  ], { write: (line) => lines.push(line) });
+
+  assert.equal(exitCode, 0, lines.join("\n"));
+  const input = JSON.parse(await readFile(outputPath, "utf8"));
+  assert.equal(input.cases[0].data.customerName, "Bench-cli-materialized-run");
+  assert.equal(JSON.parse(lines[0]).result.outputPath, outputPath);
 });

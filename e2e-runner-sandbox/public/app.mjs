@@ -27,7 +27,15 @@ for (const tab of tabs) {
 }
 
 for (const form of document.querySelectorAll("form")) {
-  form.addEventListener("submit", () => {
+  form.addEventListener("submit", (event) => {
+    const submitter = event.submitter;
+    if (submitter?.name) {
+      const preserved = document.createElement("input");
+      preserved.type = "hidden";
+      preserved.name = submitter.name;
+      preserved.value = submitter.value;
+      form.append(preserved);
+    }
     form.setAttribute("aria-busy", "true");
     for (const button of form.querySelectorAll('button[type="submit"]')) {
       button.disabled = true;

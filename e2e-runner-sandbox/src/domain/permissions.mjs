@@ -12,6 +12,7 @@ export const ROLE_PERMISSIONS = Object.freeze({
     "customer.delete",
     "project.read",
     "project.status.update",
+    "project.description.update",
     "approval.read",
     "approval.submit",
     "business-audit.read"

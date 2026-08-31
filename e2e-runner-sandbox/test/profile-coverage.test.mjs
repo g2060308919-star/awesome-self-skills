@@ -79,6 +79,11 @@ test("special profiles encode the frozen benchmark truths", async () => {
   const byId = Object.fromEntries(bundle.profiles.map((profile) => [profile.profileId, profile]));
   const mercury = byId.B07.fixture.projects.filter((project) => project.name === "Mercury");
   assert.deepEqual(mercury.map((project) => project.id), ["PRJ-MER-1042", "PRJ-MER-2087"]);
+  for (const profileId of ["B02", "B11", "B13"]) {
+    assert.equal(byId[profileId].fixture.customers.some(({ id }) => id === "CUS-RUN-SCOPED"), false, profileId);
+  }
+  assert.equal(byId["B17-role-change"].fixture.customers.some(({ id }) => id === "CUS-RUN-SCOPED"), true);
+  assert.equal(byId.B14.fixture.projects.find(({ id }) => id === "PRJ-1001").status, "Active");
   assert.deepEqual(byId.B16.runnerInput.cases.map((entry) => entry.caseId), ["B16-A", "B16-B", "B16-C"]);
   assert.deepEqual(byId.B16.runnerInput.cases[2].dependsOn, ["B16-A"]);
   assert.equal(byId["B15-production"].oracle.budgets.chromeStarts, 0);

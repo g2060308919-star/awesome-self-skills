@@ -73,6 +73,8 @@ export function createControlServer(options) {
         return options.operations.changeAccountRole(args.accountId, args.role);
       case "external-action":
         return options.operations.completeExternalAction(args);
+      case "run-jobs":
+        return options.operations.runDueJobs(args.actor);
       case "stop":
         await options.coordinator.abort("evaluator stop");
         await options.onStop?.();

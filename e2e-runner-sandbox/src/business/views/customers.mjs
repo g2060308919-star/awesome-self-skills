@@ -67,9 +67,10 @@ export function renderCustomerForm({ customer = {}, errors = {}, mode = "create"
   </section>`;
 }
 
-export function renderCustomerDetail(customer, canEdit) {
+export function renderCustomerDetail(customer, canEdit, feedback = null) {
   return `<section class="content-card detail-card">
-    <div class="section-heading"><div><p class="eyebrow">${escapeHtml(customer.id)}</p><h2>${escapeHtml(customer.name)}</h2></div>${canEdit ? `<a class="secondary-button" href="/customers/${encodeURIComponent(customer.id)}/edit">Edit customer</a>` : ""}</div>
+    ${feedback ? `<p class="notice notice-${feedback.kind}" role="${feedback.kind === "alert" ? "alert" : "status"}">${escapeHtml(feedback.message)}</p>` : ""}
+    <div class="section-heading"><div><p class="eyebrow">${escapeHtml(customer.id)}</p><h2>${escapeHtml(customer.name)}</h2></div>${canEdit ? `<div class="inline-actions"><a class="secondary-button" href="/customers/${encodeURIComponent(customer.id)}/edit">Edit customer</a><form method="post" action="/customers/${encodeURIComponent(customer.id)}/delete"><button class="danger-button" type="submit">Delete customer</button></form></div>` : ""}</div>
     <dl class="detail-grid"><div><dt>Status</dt><dd>${escapeHtml(customer.status)}</dd></div><div><dt>Owner</dt><dd>${escapeHtml(customer.owner)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(customer.plan)}</dd></div><div><dt>Email</dt><dd>${escapeHtml(customer.email)}</dd></div><div><dt>Timezone</dt><dd>${escapeHtml(customer.timezone)}</dd></div><div><dt>Tags</dt><dd>${customer.tags.map(escapeHtml).join(", ")}</dd></div></dl>
   </section>`;
 }

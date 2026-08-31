@@ -1,9 +1,19 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { loadBundle } from "../src/bundle/load-bundle.mjs";
+import { materializeRunnerInput } from "../src/bundle/materialize-input.mjs";
 import { createControlClient } from "../src/control/client.mjs";
 import { readRuntimeFiles } from "../src/control/runtime-files.mjs";
+import { evaluateTrial } from "../src/evaluator/evaluate.mjs";
+import { createOfflineOcr, resolveInstalledOcrPaths } from "../src/evaluator/ocr.mjs";
+import { readArtifacts } from "../src/evaluator/read-artifacts.mjs";
+import { scanPath } from "../src/evaluator/scan-canary.mjs";
 import { SandboxError } from "../src/shared/errors.mjs";
+
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const OPTION_NAMES = Object.freeze({
   "--runtime": "runtimeDirectory",
@@ -14,7 +24,21 @@ const OPTION_NAMES = Object.freeze({
   "--session-id": "sessionId",
   "--approval-id": "approvalId",
   "--decision": "decision",
-  "--actor": "actor"
+  "--actor": "actor",
+  "--bundle-root": "bundleRoot",
+  "--bundle-version": "bundleVersion",
+  "--run-id": "runId",
+  "--output": "output",
+  "--path": "path",
+  "--registry": "registry",
+  "--artifacts": "artifacts",
+  "--snapshot": "snapshot",
+  "--events": "events",
+  "--outbox": "outbox",
+  "--fault": "fault",
+  "--host-trace": "hostTrace",
+  "--assistance": "assistance",
+  "--metrics": "metrics"
 });
 
 const COMMAND_OPTIONS = Object.freeze({
@@ -29,12 +53,23 @@ const COMMAND_OPTIONS = Object.freeze({
   "expire-session": ["runtimeDirectory", "sessionId"],
   "set-role": ["runtimeDirectory", "accountId", "role"],
   "external-action": ["runtimeDirectory", "approvalId", "decision", "actor"],
+  "run-jobs": ["runtimeDirectory", "actor"],
   stop: ["runtimeDirectory"]
+});
+
+const OFFLINE_COMMAND_OPTIONS = Object.freeze({
+  materialize: ["bundleRoot", "bundleVersion", "profileId", "runId", "output"],
+  "scan-canary": ["path", "registry", "output"],
+  evaluate: [
+    "bundleRoot", "bundleVersion", "profileId", "artifacts", "snapshot",
+    "events", "outbox", "fault", "hostTrace", "assistance", "metrics", "registry", "output"
+  ]
 });
 
 function parseArguments(argv) {
   const [command, ...rest] = argv;
-  if (!Object.hasOwn(COMMAND_OPTIONS, command)) {
+  const commandOptions = COMMAND_OPTIONS[command] ?? OFFLINE_COMMAND_OPTIONS[command];
+  if (!commandOptions) {
     throw new SandboxError("CLI_ARGUMENT_INVALID", "Unknown evaluator command");
   }
   if (rest.length % 2 !== 0) {
@@ -43,24 +78,90 @@ function parseArguments(argv) {
   const parsed = {};
   for (let index = 0; index < rest.length; index += 2) {
     const name = OPTION_NAMES[rest[index]];
-    if (!name || !COMMAND_OPTIONS[command].includes(name) || parsed[name] !== undefined) {
+    if (!name || !commandOptions.includes(name) || parsed[name] !== undefined) {
       throw new SandboxError("CLI_ARGUMENT_INVALID", `Unsupported or duplicate option: ${rest[index]}`);
     }
     parsed[name] = rest[index + 1];
   }
-  for (const required of COMMAND_OPTIONS[command]) {
+  for (const required of commandOptions) {
     if (!parsed[required]) {
       throw new SandboxError("CLI_ARGUMENT_INVALID", `Missing required option: ${required}`);
     }
   }
   const { runtimeDirectory, ...args } = parsed;
-  return { command, runtimeDirectory, args };
+  return { command, runtimeDirectory, args, offline: Object.hasOwn(OFFLINE_COMMAND_OPTIONS, command) };
+}
+
+async function readJson(path, label) {
+  try {
+    return JSON.parse(await readFile(resolve(path), "utf8"));
+  } catch {
+    throw new SandboxError("CLI_INPUT_INVALID", `${label} must be readable JSON`);
+  }
+}
+
+async function writeJson(path, value) {
+  const outputPath = resolve(path);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  return outputPath;
+}
+
+async function withOfflineOcr(action) {
+  const ocr = await createOfflineOcr(await resolveInstalledOcrPaths(packageRoot));
+  try {
+    return await action(ocr);
+  } finally {
+    await ocr.terminate();
+  }
+}
+
+async function runOfflineCommand(parsed) {
+  const { command, args } = parsed;
+  if (command === "materialize") {
+    const bundle = await loadBundle(resolve(args.bundleRoot), args.bundleVersion);
+    const profile = bundle.profiles.find(({ profileId }) => profileId === args.profileId);
+    if (!profile) throw new SandboxError("EVALUATION_PROFILE_UNKNOWN", "Evaluation profile was not found", {}, 404);
+    const input = materializeRunnerInput(profile.runnerInput, args.runId, profile.runnerInput.runIdPointers);
+    return { outputPath: await writeJson(args.output, input), profileId: profile.profileId, runId: args.runId };
+  }
+  if (command === "scan-canary") {
+    const registry = await readJson(args.registry, "registry");
+    const result = await withOfflineOcr((ocr) => scanPath(resolve(args.path), registry, { ocr }));
+    return { outputPath: await writeJson(args.output, result), result };
+  }
+  const bundle = await loadBundle(resolve(args.bundleRoot), args.bundleVersion);
+  const profile = bundle.profiles.find(({ profileId }) => profileId === args.profileId);
+  if (!profile) throw new SandboxError("EVALUATION_PROFILE_UNKNOWN", "Evaluation profile was not found", {}, 404);
+  const registry = await readJson(args.registry, "registry");
+  const artifacts = await readArtifacts(resolve(args.artifacts));
+  const canaryScan = await withOfflineOcr((ocr) => scanPath(artifacts.root, registry, { ocr }));
+  const result = evaluateTrial({
+    oracle: profile.oracle,
+    artifacts,
+    hostTraceClassifier: bundle.hostTraceClassifier,
+    scoring: bundle.scoring,
+    snapshot: await readJson(args.snapshot, "snapshot"),
+    events: await readJson(args.events, "events"),
+    outbox: await readJson(args.outbox, "outbox"),
+    fault: await readJson(args.fault, "fault"),
+    hostTrace: await readJson(args.hostTrace, "host trace"),
+    assistanceLog: await readJson(args.assistance, "assistance"),
+    metrics: await readJson(args.metrics, "metrics"),
+    canaryScan
+  });
+  return { outputPath: await writeJson(args.output, result), result };
 }
 
 export async function runEvaluatorCli(argv, options = {}) {
   const write = options.write ?? ((line) => process.stdout.write(`${line}\n`));
   try {
     const parsed = parseArguments(argv);
+    if (parsed.offline) {
+      const result = await runOfflineCommand(parsed);
+      write(JSON.stringify({ ok: true, command: parsed.command, result }));
+      return 0;
+    }
     const runtime = await (options.readRuntimeFiles ?? readRuntimeFiles)(parsed.runtimeDirectory);
     const client = (options.clientFactory ?? createControlClient)({
       socketPath: runtime.socketPath,

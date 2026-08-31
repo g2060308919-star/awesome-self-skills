@@ -313,9 +313,9 @@ const fixture = {
     { id: "CUS-RUN-SCOPED", name: "Bench-{{runId}}", status: "Active", owner: "Owen Operator", plan: "Core", email: "bench@example.invalid", timezone: "UTC", tags: [] }
   ],
   projects: [
-    { id: "PRJ-1001", businessId: "AR-4102", name: "Atlas Renewal", status: "Inactive", description: "Annual synthetic renewal" },
-    { id: "PRJ-MER-1042", businessId: "MER-1042", name: "Mercury", status: "Active", description: "Mercury east workspace" },
-    { id: "PRJ-MER-2087", businessId: "MER-2087", name: "Mercury", status: "Active", description: "Mercury west workspace" }
+    { id: "PRJ-1001", businessId: "AR-4102", customerId: "CUS-1001", name: "Atlas Renewal", status: "Inactive", description: "Annual synthetic renewal" },
+    { id: "PRJ-MER-1042", businessId: "MER-1042", customerId: "CUS-1011", name: "Mercury", status: "Active", description: "Mercury east workspace" },
+    { id: "PRJ-MER-2087", businessId: "MER-2087", customerId: "CUS-1012", name: "Mercury", status: "Active", description: "Mercury west workspace" }
   ],
   approvals: [], sessions: [],
   businessAudit: [{ id: "AUD-BASE-1", summary: "Atlas Renewal project created", createdAt: "2026-08-31T00:00:00.000Z" }],
@@ -355,6 +355,16 @@ for (const [index, id] of PROFILE_IDS.entries()) {
   oracles.entries[id] = makeOracle(id, runnerInput);
   assistance.entries[id] = { profileId: id, version: "1", events: assistanceEvents(id) };
   const uiVariant = index % 2 === 0 ? "northstar" : "harbor";
+  const fixtureOverrides = {};
+  if (id === "B05-unavailable") fixtureOverrides.featureFlags = { exportSummary: false };
+  if (["B02", "B11", "B13"].includes(id)) {
+    fixtureOverrides.customers = fixture.customers.filter(({ id: customerId }) => customerId !== "CUS-RUN-SCOPED");
+  }
+  if (id === "B14") {
+    fixtureOverrides.projects = fixture.projects.map((project) =>
+      project.id === "PRJ-1001" ? { ...project, status: "Active" } : project
+    );
+  }
   const profile = {
     profileId: id, version: "1", fixtureVersion: "core-v1", fixtureFile: "fixtures/core-v1.json",
     uiVariant, uiVariantFile: `ui-variants/${uiVariant}.json`,
@@ -362,7 +372,7 @@ for (const [index, id] of PROFILE_IDS.entries()) {
     faultFile: faultProfiles[id] ? `faults/${faultProfiles[id]}.json` : null,
     runnerInputKey: id, oracleKey: id, assistanceKey: id,
     randomSeed: 4100 + index, locale: "en-US", timezone: "UTC",
-    fixtureOverrides: id === "B05-unavailable" ? { featureFlags: { exportSummary: false } } : {},
+    fixtureOverrides,
     protectedRecords: [
       ...fixture.customers.map(({ id: customerId }) => `customer:${customerId}`),
       ...fixture.projects.map(({ id: projectId }) => `project:${projectId}`)

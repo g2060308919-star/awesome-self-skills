@@ -161,6 +161,15 @@ td small { display: block; margin-block-start: var(--space-1); }
 .detail-grid dd { margin: var(--space-2) 0 0; font-weight: 650; }
 .status-pill { padding: var(--space-1) var(--space-3); color: var(--brand-strong); background: var(--brand-soft); border-radius: 999px; font-size: 0.75rem; font-weight: 800; }
 .inline-actions { display: flex; gap: var(--space-2); }
+.project-actions { display: flex; align-items: start; gap: var(--space-3); margin-block-start: var(--space-5); }
+.project-description-form { margin-block-start: var(--space-5); }
+.project-description-form .field { grid-column: 1 / -1; }
+.project-description-form textarea { resize: vertical; }
+.more-actions { position: relative; }
+.more-actions summary { min-height: 2.5rem; padding: var(--space-2) var(--space-3); cursor: pointer; font-weight: 700; }
+.more-actions .secondary-button { margin-block-start: var(--space-2); }
+.diagnostic { margin-block-start: var(--space-4); padding: var(--space-3); color: var(--danger); background: var(--danger-soft); border: 0.0625rem solid #e2abab; }
+.diagnostic code { display: block; margin-block-start: var(--space-2); overflow-wrap: anywhere; }
 
 .timeline { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .timeline li { display: flex; gap: var(--space-3); }

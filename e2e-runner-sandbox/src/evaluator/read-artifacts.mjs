@@ -52,6 +52,7 @@ async function readEvidence(root, directory, output) {
   for await (const entry of await opendir(directory)) entries.push(entry);
   entries.sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
+    if (entry.name === ".gitkeep") continue;
     const path = join(directory, entry.name);
     const relativePath = relative(root, path);
     const checked = await safePath(root, relativePath, entry.isDirectory() ? "directory" : "file");

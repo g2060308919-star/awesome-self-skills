@@ -1,9 +1,13 @@
 export function classifyHostTrace(trace, classifier) {
   const allowed = new Set(classifier.allowed ?? []);
   const forbidden = new Set(classifier.forbidden ?? []);
-  const entries = (Array.isArray(trace) ? trace : []).map((entry, index) => {
+  const traceEntries = Array.isArray(trace) ? trace : Array.isArray(trace?.entries) ? trace.entries : [];
+  const forcedUntrusted = !Array.isArray(trace) && trace?.provenance === "trusted-reference";
+  const entries = traceEntries.map((entry, index) => {
     let classification;
-    if (entry.actor === "evaluator" && entry.provenance === "manual-evaluator" && allowed.has(entry.tool)) {
+    if (forcedUntrusted || entry.provenance === "trusted-reference") {
+      classification = "unknown";
+    } else if (entry.actor === "evaluator" && entry.provenance === "manual-evaluator" && allowed.has(entry.tool)) {
       classification = "manual-evaluator";
     } else if (entry.actor === "runner" && allowed.has(entry.tool)) {
       classification = "allowed-browser";

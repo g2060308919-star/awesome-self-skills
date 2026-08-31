@@ -17,6 +17,7 @@ export const CONTROL_COMMANDS = Object.freeze([
   "expire-session",
   "set-role",
   "external-action",
+  "run-jobs",
   "stop"
 ]);
 

@@ -13,7 +13,34 @@
   "randomSeed": 4115,
   "locale": "en-US",
   "timezone": "UTC",
-  "fixtureOverrides": {},
+  "fixtureOverrides": {
+    "projects": [
+      {
+        "id": "PRJ-1001",
+        "businessId": "AR-4102",
+        "customerId": "CUS-1001",
+        "name": "Atlas Renewal",
+        "status": "Active",
+        "description": "Annual synthetic renewal"
+      },
+      {
+        "id": "PRJ-MER-1042",
+        "businessId": "MER-1042",
+        "customerId": "CUS-1011",
+        "name": "Mercury",
+        "status": "Active",
+        "description": "Mercury east workspace"
+      },
+      {
+        "id": "PRJ-MER-2087",
+        "businessId": "MER-2087",
+        "customerId": "CUS-1012",
+        "name": "Mercury",
+        "status": "Active",
+        "description": "Mercury west workspace"
+      }
+    ]
+  },
   "protectedRecords": [
     "customer:CUS-1001",
     "customer:CUS-1002",

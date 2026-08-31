@@ -182,7 +182,17 @@ export function evaluateTrial(input) {
     ratios,
     metrics,
     mismatches: Object.values(checks).flatMap((check) => check.mismatches ?? []),
+    caseVerdicts: artifacts.executionLog.cases.map(({ caseId, verdict: actualVerdict, attribution }) => ({
+      caseId,
+      expectedVerdict: oracle.expectedCaseVerdicts.find((entry) => entry.caseId === caseId)?.verdict ?? null,
+      actualVerdict,
+      attribution
+    })),
     provenance,
+    hostTrace: {
+      eligible: provenance.eligible,
+      forbiddenActions: provenance.violations
+    },
     artifactDigests: artifacts.digests,
     sourceDigests: { inputTemplate: oracle.inputTemplateDigest, ...oracle.componentDigests },
     outcomeSignature: signature,

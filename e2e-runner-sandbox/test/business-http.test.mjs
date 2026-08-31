@@ -153,6 +153,121 @@ test("Viewer cannot see mutation controls while Operator can", async (t) => {
   assert.match(operatorHtml, /Activate project/);
 });
 
+test("customer edit submits only changed fields and delete exposes cleanup outcome", async (t) => {
+  const base = profile();
+  const { origin, coordinator } = await start(t, {
+    allowedMutations: [
+      { entity: "customer", target: "CUS-1001", field: "plan", operation: "update", maxCount: 1 },
+      { entity: "customer", target: "CUS-1001", field: "*", operation: "delete", maxCount: 1 }
+    ],
+    fixture: base.fixture
+  });
+  const { cookie } = await manualLogin(origin, "acct-operator");
+  const current = coordinator.read().customers[0];
+  const detail = await (await fetch(`${origin}/customers/CUS-1001`, { headers: { cookie } })).text();
+  assert.match(detail, /action="\/customers\/CUS-1001\/delete"/);
+
+  const edit = await fetch(`${origin}/customers/CUS-1001/edit`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { cookie, origin, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: current.name,
+      email: current.email,
+      timezone: current.timezone,
+      status: current.status,
+      owner: current.owner,
+      plan: "Scale",
+      tags: current.tags.join(", ")
+    })
+  });
+  assert.equal(edit.status, 303);
+  assert.equal(coordinator.read().customers[0].plan, "Scale");
+
+  const deleted = await fetch(`${origin}/customers/CUS-1001/delete`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { cookie, origin, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams()
+  });
+  assert.equal(deleted.status, 303);
+  assert.equal(coordinator.read().customers.length, 0);
+});
+
+test("project description expiry returns to visible manual login without writing", async (t) => {
+  const { origin, coordinator } = await start(t, {
+    allowedMutations: [
+      { entity: "project", target: "PRJ-1001", field: "description", operation: "update", maxCount: 1 }
+    ],
+    fault: {
+      id: "session-expiry", logicalOperation: "project.description.update",
+      phase: "before-authorization", effect: "expire-session", occurrence: 1
+    }
+  });
+  const { cookie } = await manualLogin(origin, "acct-operator");
+  const response = await fetch(`${origin}/projects/PRJ-1001/description`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { cookie, origin, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ description: "Approved renewal workspace" })
+  });
+
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "/");
+  assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
+  assert.equal(coordinator.read().projects[0].description, "Synthetic migration");
+});
+
+test("failed project save renders a visible diagnostic while preserving state", async (t) => {
+  const { origin, coordinator } = await start(t, {
+    fault: {
+      id: "canary-diagnostic", logicalOperation: "project.status.update",
+      phase: "before-commit", effect: "application-failure-with-canary", occurrence: 1,
+      diagnosticCanary: "secret"
+    }
+  });
+  const { cookie } = await manualLogin(origin, "acct-operator");
+  const response = await fetch(`${origin}/projects/PRJ-1001/status`, {
+    method: "POST",
+    headers: { cookie, origin, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ status: "Active" })
+  });
+  const html = await response.text();
+
+  assert.equal(response.status, 500);
+  assert.match(html, /role="alert"/);
+  assert.match(html, /Diagnostic details/);
+  assert.match(html, /BENCH_SECRET_[0-9A-HJKMNP-TV-Z]{20}_END/);
+  assert.equal(coordinator.read().projects[0].status, "Inactive");
+});
+
+test("project export is discoverable only when the deterministic feature flag is enabled", async (t) => {
+  const base = profile();
+  const enabled = await start(t, { fixture: { ...base.fixture, featureFlags: { exportSummary: true } } });
+  const enabledLogin = await manualLogin(enabled.origin, "acct-viewer");
+  const detail = await (await fetch(`${enabled.origin}/projects/PRJ-1001`, {
+    headers: { cookie: enabledLogin.cookie }
+  })).text();
+  const exportPanel = await (await fetch(`${enabled.origin}/projects/PRJ-1001/export`, {
+    headers: { cookie: enabledLogin.cookie }
+  })).text();
+  assert.match(detail, /More actions/);
+  assert.match(detail, /Export summary/);
+  assert.match(exportPanel, /role="tablist"/);
+  assert.match(exportPanel, /Export project summary/);
+
+  const disabled = await start(t, { fixture: { ...base.fixture, featureFlags: { exportSummary: false } } });
+  const disabledLogin = await manualLogin(disabled.origin, "acct-viewer");
+  const disabledDetail = await (await fetch(`${disabled.origin}/projects/PRJ-1001`, {
+    headers: { cookie: disabledLogin.cookie }
+  })).text();
+  const unavailable = await fetch(`${disabled.origin}/projects/PRJ-1001/export`, {
+    headers: { cookie: disabledLogin.cookie }
+  });
+  assert.doesNotMatch(disabledDetail, /Export summary/);
+  assert.equal(unavailable.status, 404);
+});
+
 test("static assets are same-origin and unknown routes do not reveal internals", async (t) => {
   const { origin } = await start(t);
 
