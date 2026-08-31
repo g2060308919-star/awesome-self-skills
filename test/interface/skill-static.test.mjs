@@ -30,7 +30,9 @@ async function installedFiles(directory = skillRoot, prefix = '') {
 async function prohibitedRunnerUses(source) {
   /** @type {string[]} */
   const violations = [];
-  const networkModules = new Set(['http', 'https', 'net', 'tls', 'dns']);
+  const networkModules = new Set([
+    'http', 'http2', 'https', 'net', 'tls', 'dns', 'dgram', 'undici', 'ws', 'websocket'
+  ]);
   const providerModules = new Set(['openai', 'anthropic', '@anthropic-ai/sdk']);
   const parsed = await build({
     stdin: { contents: source, resolveDir: repositoryRoot, sourcefile: 'test-compiler.mjs' },
@@ -43,11 +45,17 @@ async function prohibitedRunnerUses(source) {
     const normalized = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
     const root = normalized.split('/')[0];
     if (networkModules.has(root)) violations.push(`network-module:${specifier}`);
-    if (providerModules.has(normalized)) violations.push(`model-provider:${specifier}`);
+    if ([...providerModules].some((provider) =>
+      normalized === provider || normalized.startsWith(`${provider}/`))) {
+      violations.push(`model-provider:${specifier}`);
+    }
   }
   const normalizedOutput = parsed.outputFiles.map((file) => file.text).join('\n');
+  if (/\bimport\s*\(\s*(?!["'])/u.test(normalizedOutput)) violations.push('computed-dynamic-import');
   if (/(?:\bfetch|\bglobalThis\s*(?:\.\s*fetch|\[\s*["']fetch["']\s*\]))\s*\(/u
     .test(normalizedOutput)) violations.push('global-fetch');
+  if (/(?:\bWebSocket|\bglobalThis\s*(?:\.\s*WebSocket|\[\s*["']WebSocket["']\s*\]))\s*\(/u
+    .test(normalizedOutput)) violations.push('global-websocket');
   return [...new Set(violations)].sort();
 }
 
@@ -161,6 +169,13 @@ test('installed artifact excludes development surfaces model calls and network d
   const runner = await text('scripts/test-compiler.mjs');
   assert.deepEqual(await prohibitedRunnerUses(runner), []);
   assert.deepEqual(await prohibitedRunnerUses('import "node:http";'), ['network-module:node:http']);
+  assert.deepEqual(await prohibitedRunnerUses('import "node:http2";'), ['network-module:node:http2']);
+  assert.deepEqual(await prohibitedRunnerUses('import "node:dgram";'), ['network-module:node:dgram']);
+  assert.deepEqual(await prohibitedRunnerUses('import("undici");'), ['network-module:undici']);
+  assert.deepEqual(await prohibitedRunnerUses('import("openai/resources");'), ['model-provider:openai/resources']);
+  assert.deepEqual(await prohibitedRunnerUses('import("@anthropic-ai/sdk/resources");'), ['model-provider:@anthropic-ai/sdk/resources']);
+  assert.deepEqual(await prohibitedRunnerUses('const moduleName = "node:http"; import(moduleName);'), ['computed-dynamic-import']);
   assert.deepEqual(await prohibitedRunnerUses('globalThis["fetch"]("https://example.test");'), ['global-fetch']);
+  assert.deepEqual(await prohibitedRunnerUses('new WebSocket("wss://example.test");'), ['global-websocket']);
   assert.deepEqual(await prohibitedRunnerUses('// OpenAI is mentioned only in documentation.\nconst local = 1;'), []);
 });

@@ -362,12 +362,49 @@ function inferredCompilation(behaviorViews) {
   };
 }
 
+/** @param {Record<string, unknown>} evidenceClaims @param {Map<string,Record<string,unknown>>} claimsById */
+function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
+  const ledgeredClaimIds = new Set((arrayIsArray(evidenceClaims.fact_ledger)
+    ? evidenceClaims.fact_ledger : []).flatMap((entry) => entry && typeof entry === 'object'
+    && typeof entry.claim_id === 'string' ? [entry.claim_id] : []));
+  return [...claimsById.entries()]
+    .filter(([, claim]) => (claim.kind === 'requirement' || claim.kind === 'assumption'))
+    .filter(([claimId]) => !ledgeredClaimIds.has(claimId))
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .map(([claimId]) => ({
+      category: 'traceability', code: 'NORMATIVE_CLAIM_UNLEDGERED',
+      path: `/claims/${encodeURIComponent(claimId)}`,
+      message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
+    }));
+}
+
+/** @param {Record<string, unknown>} behaviorViews */
+function publicResponsibilityContextDiagnostics(behaviorViews) {
+  const responsibilityTypes = new Set(['input-domain', 'role', 'timing', 'integration']);
+  return (arrayIsArray(behaviorViews.views) ? behaviorViews.views : [])
+    .filter((view) => view && typeof view === 'object'
+      && typeof view.view_id === 'string' && responsibilityTypes.has(String(view.type)))
+    .sort((left, right) => String(left.view_id) < String(right.view_id) ? -1
+      : String(left.view_id) > String(right.view_id) ? 1 : 0)
+    .map((view) => ({
+      category: 'classification', code: 'OBLIGATION_CONTEXT_NOT_CLOSED',
+      path: `/views/${encodeURIComponent(String(view.view_id))}`,
+      message: `view "${String(view.view_id)}" requires responsibility-specific evidence, Oracle, risk, and capability bindings that the frozen public artifact does not provide`
+    }));
+}
+
 /** @param {Record<string, unknown>} sourcePack @param {Record<string, unknown>} evidenceClaims @param {Record<string, unknown>} behaviorViews @param {number} sourceRevision */
 function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevision) {
   const policy = resolveSourcePolicy(sourcePack);
   if (policy.diagnostics.length > 0) return { diagnostics: policy.diagnostics, artifact: null };
   const evidence = validateEvidenceGraph(sourcePack, evidenceClaims);
   if (evidence.diagnostics.length > 0) return { diagnostics: evidence.diagnostics, artifact: null };
+  const evidenceDiagnostics = adapterEvidenceDiagnostics(evidenceClaims, evidence.claimsById);
+  if (evidenceDiagnostics.length > 0) return { diagnostics: evidenceDiagnostics, artifact: null };
+  const responsibilityDiagnostics = publicResponsibilityContextDiagnostics(behaviorViews);
+  if (responsibilityDiagnostics.length > 0) return {
+    diagnostics: responsibilityDiagnostics, artifact: null
+  };
   const compilation = inferredCompilation(behaviorViews);
   const graph = {
     claimsById: evidence.claimsById,
@@ -562,7 +599,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       }
       if (typedStage === 'evidence_claims') {
         evidenceClaims = record;
-        if (validateEvidenceGraph(sourcePack, evidenceClaims).diagnostics.length > 0) return fatalReply(
+        const acceptedEvidence = validateEvidenceGraph(sourcePack, evidenceClaims);
+        if (acceptedEvidence.diagnostics.length > 0
+          || adapterEvidenceDiagnostics(evidenceClaims, acceptedEvidence.claimsById).length > 0) return fatalReply(
           'RUN_INTEGRITY_ERROR', 'Accepted evidence_claims failed deterministic semantic validation.'
         );
       } else if (typedStage === 'behavior_views') {
@@ -783,6 +822,10 @@ async function advanceStrictExclusive(runDirectory) {
           const evidence = validateEvidenceGraph(sourcePack, candidateRecord);
           if (evidence.diagnostics.length > 0) return revisionReply(
             runDirectory, typedStage, sourceRevision, candidate.value, evidence.diagnostics
+          );
+          const adapterDiagnostics = adapterEvidenceDiagnostics(candidateRecord, evidence.claimsById);
+          if (adapterDiagnostics.length > 0) return revisionReply(
+            runDirectory, typedStage, sourceRevision, candidate.value, adapterDiagnostics
           );
         }
         let candidateObligations = null;

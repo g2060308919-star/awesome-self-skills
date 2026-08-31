@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -9,11 +9,11 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const buildScript = path.join(repositoryRoot, 'build/build.mjs');
 
-/** @param {string} cwd @param {string[]} args */
-function runBuild(cwd, args = []) {
+/** @param {string} cwd @param {string[]} args @param {Record<string,string>} [environment] */
+function runBuild(cwd, args = [], environment = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [buildScript, ...args], {
-      cwd, stdio: ['ignore', 'pipe', 'pipe']
+      cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...environment }
     });
     let stdout = '';
     let stderr = '';
@@ -50,6 +50,18 @@ test('full check verifies committed generated artifacts without silently rewriti
     assert.equal(stale.code, 1, `${stale.stdout}\n${stale.stderr}`);
     assert.match(stale.stderr, /generated artifact is stale/u);
     assert.match(await readFile(runnerPath, 'utf8'), /stale generated artifact/u);
+
+    const isolatedTmp = path.join(temporary, 'isolated-tmp');
+    await mkdir(isolatedTmp);
+    const schemaPath = path.join(
+      temporary, 'skill/generate-test-cases/scripts/schemas/source-pack.schema.json'
+    );
+    await writeFile(schemaPath, '{ malformed schema', 'utf8');
+    const malformed = /** @type {any} */ (await runBuild(
+      temporary, ['--check'], { TMPDIR: isolatedTmp }
+    ));
+    assert.equal(malformed.code, 1);
+    assert.deepEqual(await readdir(isolatedTmp), [], 'failed --check must clean its temporary directory');
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

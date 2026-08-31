@@ -14,22 +14,24 @@ if (argumentsList.length > 1 || (argumentsList.length === 1 && argumentsList[0] 
   throw new Error('usage: node build/build.mjs [--check]');
 }
 const checkOnly = argumentsList[0] === '--check';
-const temporaryDirectory = checkOnly
-  ? await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-build-')) : null;
-const schemaFiles = /** @type {string[]} */ (await readdir(schemaDirectory)).filter((/** @type {string} */ file) => file.endsWith('.schema.json')).sort();
-const schemas = await Promise.all(schemaFiles.map(async (/** @type {string} */ file) => {
-  const schema = JSON.parse(await readFile(path.join(schemaDirectory, file), 'utf8'));
-  return { file, digest: digest(schema) };
-}));
-const manifestBase = { compiler_version: compilerVersion, schema_version: schemaVersion, schemas };
-const manifestDigest = digest(manifestBase);
-const manifestText = `${canonicalStringify({ ...manifestBase, digest: manifestDigest })}\n`;
-const generatedManifestPath = temporaryDirectory
-  ? path.join(temporaryDirectory, 'schema-manifest.json') : manifestPath;
-const generatedRunnerPath = temporaryDirectory
-  ? path.join(temporaryDirectory, 'test-compiler.mjs') : runnerPath;
+let temporaryDirectory = null;
 
 try {
+  temporaryDirectory = checkOnly
+    ? await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-build-')) : null;
+  const schemaFiles = /** @type {string[]} */ (await readdir(schemaDirectory))
+    .filter((/** @type {string} */ file) => file.endsWith('.schema.json')).sort();
+  const schemas = await Promise.all(schemaFiles.map(async (/** @type {string} */ file) => {
+    const schema = JSON.parse(await readFile(path.join(schemaDirectory, file), 'utf8'));
+    return { file, digest: digest(schema) };
+  }));
+  const manifestBase = { compiler_version: compilerVersion, schema_version: schemaVersion, schemas };
+  const manifestDigest = digest(manifestBase);
+  const manifestText = `${canonicalStringify({ ...manifestBase, digest: manifestDigest })}\n`;
+  const generatedManifestPath = temporaryDirectory
+    ? path.join(temporaryDirectory, 'schema-manifest.json') : manifestPath;
+  const generatedRunnerPath = temporaryDirectory
+    ? path.join(temporaryDirectory, 'test-compiler.mjs') : runnerPath;
   await writeFile(generatedManifestPath, manifestText);
   await build({
     entryPoints: ['src/entry.mjs'],
@@ -45,7 +47,7 @@ try {
     },
     outfile: generatedRunnerPath
   });
-  if (checkOnly) {
+  if (temporaryDirectory) {
     for (const [committedPath, generatedPath] of [
       [manifestPath, generatedManifestPath], [runnerPath, generatedRunnerPath]
     ]) {

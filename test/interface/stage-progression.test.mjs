@@ -166,7 +166,10 @@ test('real runner fails closed when an integration view omits responsibility-spe
       scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
       source_id: 'source_integration'
     })),
-    fact_ledger: []
+    fact_ledger: claimIds.map((claimId) => ({
+      fact_id: `fact_${claimId.slice('claim_'.length)}`, claim_id: claimId,
+      status: 'active', source_claim_ids: [claimId]
+    }))
   };
   try {
     await stage(runDirectory, 'source_pack', sourcePack);
@@ -179,10 +182,28 @@ test('real runner fails closed when an integration view omits responsibility-spe
     assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
     assert.equal(reply.stage, 'behavior_views');
     assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
-      diagnostic.code === 'OBLIGATION_STRATEGY_REJECTED'
-      && diagnostic.message.includes('missing responsibility binding')), true, JSON.stringify(reply));
+      diagnostic.code === 'OBLIGATION_CONTEXT_NOT_CLOSED'), true, JSON.stringify(reply));
     await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/behavior-views.json')));
     await assert.rejects(stat(path.join(runDirectory, 'derived/r000/test-obligations.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('real runner rejects accepted normative claims omitted from the Fact Ledger', async () => {
+  const runDirectory = await temporaryRun('unledgered normative claim');
+  const revision = await fixture();
+  revision.evidence_claims.fact_ledger = [];
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    const reply = await advance(runDirectory);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+      diagnostic.code === 'NORMATIVE_CLAIM_UNLEDGERED'), true, JSON.stringify(reply));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }

@@ -22,6 +22,10 @@ const groundedRevisionPath = path.join(
   repositoryRoot,
   'test/fixtures/recovery/grounded-revision.json'
 );
+const integrationFixturePath = path.join(
+  repositoryRoot,
+  'test/fixtures/views/integration-obligations.json'
+);
 
 /**
  * @param {string} runDirectory
@@ -94,6 +98,68 @@ test('installed runner accepts the requested source pack after an initial empty 
       schema_ref: 'evidence-claims.schema.json',
       scope: { source_revision: 0 }, diagnostics: []
     });
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('installed runner rejects an empty responsibility view without accepting or deriving it', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-empty-view-'));
+  const behaviorViews = JSON.parse(await readFile(integrationFixturePath, 'utf8'));
+  behaviorViews.source_revision = 0;
+  const view = behaviorViews.views[0];
+  view.elements = [];
+  const sourceDigest = 'd'.repeat(64);
+  const sourcePack = {
+    schema_version: '1.0.0', source_revision: 0, run_scope: view.scope,
+    sources: [{
+      source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
+      authority: 'owner', content: 'Integration contract requirements',
+      content_digest: sourceDigest, scope: view.scope
+    }],
+    locators: [{
+      locator_id: 'locator_integration', source_id: 'source_integration', type: 'text-range',
+      text_range: { start: 0, end: 33 }, content_digest: sourceDigest,
+      extraction_integrity: 'verified'
+    }],
+    source_policy: { rules: [{
+      rule_id: 'rule_integration', source_ids: ['source_integration'], scope: view.scope,
+      authority: 'owner', status: 'effective'
+    }] },
+    decision_records: [], clarification_events: []
+  };
+  const evidenceClaims = {
+    schema_version: '1.0.0', source_revision: 0,
+    claims: view.source_claim_ids.map((/** @type {string} */ claimId) => ({
+      claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
+      scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
+      source_id: 'source_integration'
+    })),
+    fact_ledger: view.source_claim_ids.map((/** @type {string} */ claimId) => ({
+      fact_id: `fact_${claimId.slice('claim_'.length)}`, claim_id: claimId,
+      status: 'active', source_claim_ids: [claimId]
+    }))
+  };
+  try {
+    await mkdir(path.join(runDirectory, 'staging'));
+    for (const [file, artifact] of [
+      ['source-pack.json', sourcePack],
+      ['evidence-claims.json', evidenceClaims],
+      ['behavior-views.json', behaviorViews]
+    ]) {
+      await writeFile(path.join(runDirectory, 'staging', file), `${JSON.stringify(artifact)}\n`, 'utf8');
+      const result = await runCompiler(runDirectory);
+      if (file !== 'behavior-views.json') assert.equal(result.code, 0, result.stderr);
+      else {
+        const reply = parseSingleJsonValue(result.stdout);
+        assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+        assert.equal(reply.stage, 'behavior_views');
+        assert.equal(reply.diagnostics.some((/** @type {any} */ item) =>
+          item.code === 'OBLIGATION_CONTEXT_NOT_CLOSED'), true, JSON.stringify(reply));
+      }
+    }
+    await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/behavior-views.json')));
+    await assert.rejects(readFile(path.join(runDirectory, 'derived/r000/test-obligations.json')));
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
