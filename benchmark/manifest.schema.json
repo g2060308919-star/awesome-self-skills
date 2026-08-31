@@ -83,7 +83,17 @@
           "case_id": { "type": "string", "minLength": 1 }, "domain": { "type": "string", "minLength": 1 },
           "stratum": { "enum": ["transaction/order/payment", "identity/role/permission", "workflow/approval/state", "form/configuration/input validation", "asynchronous integration/event", "time-window/quota/entitlement"] },
           "risk": { "enum": ["critical", "high", "medium", "low"] }, "high_risk": { "type": "boolean" },
-          "case_directory": { "type": "string", "pattern": "^cases/" }, "capture_directory": { "type": "string", "pattern": "^captured/" }
+          "case_directory": { "type": "string", "pattern": "^cases/" }, "capture_directory": { "type": "string", "pattern": "^captured/" },
+          "label_lineage_anchors": {
+            "type": "object",
+            "required": ["expert_obligations", "supported_assertions", "accepted_cases"],
+            "properties": {
+              "expert_obligations": { "type": "array", "uniqueItems": true, "items": { "type": "object", "required": ["label_version", "digest"], "properties": { "label_version": { "type": "string", "minLength": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } },
+              "supported_assertions": { "type": "array", "uniqueItems": true, "items": { "type": "object", "required": ["label_version", "digest"], "properties": { "label_version": { "type": "string", "minLength": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } },
+              "accepted_cases": { "type": "array", "uniqueItems": true, "items": { "type": "object", "required": ["label_version", "digest"], "properties": { "label_version": { "type": "string", "minLength": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } }
+            },
+            "additionalProperties": false
+          }
         },
         "additionalProperties": false
       }

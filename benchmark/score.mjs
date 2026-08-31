@@ -222,8 +222,8 @@ function validLabelValue(value, kind) {
   return typeof value.accepted_without_material_rewrite === 'boolean';
 }
 
-/** @param {any[]} issues @param {any} asset @param {string} pathValue @param {'obligation'|'assertion'|'case'} kind */
-function validateLabeledAsset(issues, asset, pathValue, kind) {
+/** @param {any[]} issues @param {any} asset @param {string} pathValue @param {'obligation'|'assertion'|'case'} kind @param {any} lineageAnchors */
+function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = []) {
   if (!asset || !Array.isArray(asset.final_labels) || !Array.isArray(asset.expert_annotations)) {
     issue(issues, 'EXPERT_LABELS_MISSING', pathValue, 'Final labels and two complete expert annotations are required.');
     return;
@@ -235,19 +235,23 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
   }
   if (typeof asset.correction_of === 'string') {
     const snapshots = Array.isArray(asset.prior_versions) ? asset.prior_versions : [];
+    const anchors = Array.isArray(lineageAnchors) ? lineageAnchors : [];
+    const anchorMap = new Map(anchors.filter(isRecord).map((/** @type {any} */ anchor) => [anchor.label_version, anchor.digest]));
     const versions = new Map();
-    let retained = snapshots.length > 0;
+    let retained = snapshots.length > 0 && anchors.length === snapshots.length && anchorMap.size === anchors.length &&
+      anchors.every((/** @type {any} */ anchor) => isRecord(anchor) && isNonblankString(anchor.label_version) &&
+        isNonblankString(anchor.digest) && /^[a-f0-9]{64}$/u.test(anchor.digest));
     for (const [snapshotIndex, snapshot] of snapshots.entries()) {
       if (!isRecord(snapshot) || !isNonblankString(snapshot.label_version) || !semanticVersion.test(snapshot.label_version) || versions.has(snapshot.label_version) ||
           !(snapshot.correction_of === null || (isNonblankString(snapshot.correction_of) && semanticVersion.test(snapshot.correction_of) && snapshot.correction_of !== snapshot.label_version)) ||
-          snapshot.digest !== retainedLabelDigest(snapshot)) {
+          snapshot.digest !== retainedLabelDigest(snapshot) || anchorMap.get(snapshot.label_version) !== snapshot.digest) {
         retained = false;
         continue;
       }
       versions.set(snapshot.label_version, snapshot);
       /** @type {any[]} */
       const snapshotIssues = [];
-      validateLabeledAsset(snapshotIssues, { ...snapshot, correction_of: null, prior_versions: [] }, `${pathValue}/prior_versions/${snapshotIndex}`, kind);
+      validateLabeledAsset(snapshotIssues, { ...snapshot, correction_of: null, prior_versions: [] }, `${pathValue}/prior_versions/${snapshotIndex}`, kind, []);
       if (snapshotIssues.length > 0 || snapshot.final_labels.length === 0) retained = false;
     }
     const visited = new Set();
@@ -262,7 +266,9 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
       version = snapshot.correction_of;
     }
     if (version !== null || visited.size !== snapshots.length) retained = false;
-    if (!retained) issue(issues, 'LABEL_LINEAGE_MISSING', `${pathValue}/prior_versions`, 'A correction must retain a complete, digest-verified, gap-free prior label chain.');
+    if (!retained) issue(issues, 'LABEL_LINEAGE_MISSING', `${pathValue}/prior_versions`, 'A correction must retain a complete, manifest-anchored, gap-free prior label chain.');
+  } else if (Array.isArray(lineageAnchors) && lineageAnchors.length > 0) {
+    issue(issues, 'LABEL_LINEAGE_MISSING', `${pathValue}/prior_versions`, 'Lineage anchors are allowed only when correction_of names a retained predecessor.');
   }
   const invalidCode = kind === 'obligation' ? 'OBLIGATION_LABEL_INVALID' : kind === 'assertion' ? 'ASSERTION_LABEL_INVALID' : 'CASE_LABEL_INVALID';
   for (const [index, label] of asset.final_labels.entries()) {
@@ -498,9 +504,9 @@ export function scoreBenchmark(manifest, capturedRuns) {
 
   for (const [caseIndex, benchmarkCase] of cases.entries()) {
     for (const asset of REQUIRED_ASSETS) if (!benchmarkCase.assets?.[asset]) issue(issues, 'CASE_ASSET_MISSING', `/cases/${caseIndex}/assets/${asset}`, 'Every case requires the complete frozen asset set.');
-    validateLabeledAsset(issues, benchmarkCase.assets?.expert_obligations, `/cases/${caseIndex}/expert-obligations`, 'obligation');
-    validateLabeledAsset(issues, benchmarkCase.assets?.supported_assertions, `/cases/${caseIndex}/supported-assertions`, 'assertion');
-    validateLabeledAsset(issues, benchmarkCase.assets?.accepted_cases, `/cases/${caseIndex}/accepted-cases`, 'case');
+    validateLabeledAsset(issues, benchmarkCase.assets?.expert_obligations, `/cases/${caseIndex}/expert-obligations`, 'obligation', benchmarkCase.label_lineage_anchors?.expert_obligations);
+    validateLabeledAsset(issues, benchmarkCase.assets?.supported_assertions, `/cases/${caseIndex}/supported-assertions`, 'assertion', benchmarkCase.label_lineage_anchors?.supported_assertions);
+    validateLabeledAsset(issues, benchmarkCase.assets?.accepted_cases, `/cases/${caseIndex}/accepted-cases`, 'case', benchmarkCase.label_lineage_anchors?.accepted_cases);
     const sourceFiles = benchmarkCase.assets?.sources?.files;
     const sourcePaths = benchmarkCase.assets?.task?.source_paths;
     if (!Array.isArray(sourceFiles) || sourceFiles.length === 0 || !Array.isArray(sourcePaths) || sourcePaths.length === 0 ||
@@ -778,7 +784,34 @@ function deepFreeze(value, seen = new WeakSet()) {
 export async function loadBenchmarkInputs(manifestPath) {
   const absoluteManifest = path.resolve(manifestPath);
   const benchmarkRoot = path.dirname(absoluteManifest);
-  const raw = await readJson(absoluteManifest);
+  /** @type {any} */
+  let raw;
+  try {
+    const benchmarkRootStat = await fsPromises.lstat(benchmarkRoot);
+    const manifestStat = await fsPromises.lstat(absoluteManifest);
+    if (benchmarkRootStat.isSymbolicLink() || !benchmarkRootStat.isDirectory() || manifestStat.isSymbolicLink() ||
+        !manifestStat.isFile() || manifestStat.nlink !== 1) {
+      throw new Error('Benchmark root and manifest must be real, singly linked filesystem entries.');
+    }
+    const realBenchmarkRoot = await realpath(benchmarkRoot);
+    const realManifest = await realpath(absoluteManifest);
+    if (path.dirname(realManifest) !== realBenchmarkRoot) throw new Error('Manifest canonical path must remain directly inside the benchmark root.');
+    const handle = await fsPromises.open(absoluteManifest, 'r');
+    try {
+      const handleStat = await handle.stat();
+      if (!handleStat.isFile() || handleStat.nlink !== 1 || handleStat.dev !== manifestStat.dev || handleStat.ino !== manifestStat.ino) {
+        throw new Error('Manifest identity changed before its verified read.');
+      }
+      raw = JSON.parse(await handle.readFile({ encoding: 'utf8' }));
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    return {
+      manifest: deepFreeze({ cases: [], load_issues: [{ code: 'BENCHMARK_PATH_INVALID', path: '/', message: error instanceof Error ? error.message : String(error) }] }),
+      capturedRuns: deepFreeze([])
+    };
+  }
   const manifestSchema = await readJson(path.join(path.dirname(nodeUrl.fileURLToPath(import.meta.url)), 'manifest.schema.json'));
   const schemaDiagnostics = validateAgainstSchema(raw, manifestSchema);
   const loadIssues = schemaDiagnostics.map((diagnostic) => ({

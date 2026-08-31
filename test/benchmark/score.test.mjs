@@ -80,6 +80,7 @@ function expectedProvenance(benchmarkVersion) {
 function benchmarkCase(caseId, domain, stratum, obligations, assertions, acceptedCases, defects) {
   return {
     case_id: caseId, domain, stratum, risk: 'high', high_risk: true,
+    label_lineage_anchors: { expert_obligations: [], supported_assertions: [], accepted_cases: [] },
     assets: {
       task: { case_id: caseId, scope: caseId, source_paths: ['sources/prd.md'], clarification_required: caseId === 'payment' },
       task_digest: `task-digest-${caseId}`,
@@ -568,6 +569,7 @@ test('benchmark rejects renamed source clones and incomplete retained label hist
     adjudications: emptySnapshot.adjudications
   })).digest('hex');
   asset.prior_versions = [emptySnapshot];
+  lineage.cases[0].label_lineage_anchors.supported_assertions = [{ label_version: '0.9.0', digest: emptySnapshot.digest }];
   assert.equal(hasIssue(scoreBenchmark(lineage, runs), 'LABEL_LINEAGE_MISSING'), true);
 
   const added = structuredClone(manifest);
@@ -576,8 +578,21 @@ test('benchmark rejects renamed source clones and incomplete retained label hist
   priorAsset.final_labels = priorAsset.final_labels.slice(0, -1);
   for (const annotation of priorAsset.expert_annotations) annotation.labels = annotation.labels.slice(0, -1);
   addedAsset.correction_of = '0.9.0';
-  addedAsset.prior_versions = [retainedLabelSnapshot(priorAsset, '0.9.0')];
+  const addedSnapshot = retainedLabelSnapshot(priorAsset, '0.9.0');
+  addedAsset.prior_versions = [addedSnapshot];
+  added.cases[0].label_lineage_anchors.supported_assertions = [{ label_version: '0.9.0', digest: addedSnapshot.digest }];
   assert.equal(hasIssue(scoreBenchmark(added, runs), 'LABEL_LINEAGE_MISSING'), false, 'a correction may add a newly recovered label while retaining complete history');
+
+  const tampered = structuredClone(added);
+  const tamperedSnapshot = tampered.cases[0].assets.supported_assertions.prior_versions[0];
+  tamperedSnapshot.final_labels = tamperedSnapshot.final_labels.slice(0, 1);
+  for (const annotation of tamperedSnapshot.expert_annotations) annotation.labels = annotation.labels.slice(0, 1);
+  tamperedSnapshot.digest = createHash('sha256').update(JSON.stringify({
+    label_version: tamperedSnapshot.label_version, correction_of: tamperedSnapshot.correction_of,
+    final_labels: tamperedSnapshot.final_labels, expert_annotations: tamperedSnapshot.expert_annotations,
+    adjudications: tamperedSnapshot.adjudications
+  })).digest('hex');
+  assert.equal(hasIssue(scoreBenchmark(tampered, runs), 'LABEL_LINEAGE_MISSING'), true, 'a retained snapshot cannot rewrite its digest anchor');
 });
 
 test('benchmark reviewer regressions fail closed instead of inflating or crashing completeness', () => {
@@ -663,7 +678,9 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   const retainedLineage = structuredClone(manifest);
   const correctedAsset = retainedLineage.cases[0].assets.supported_assertions;
   correctedAsset.correction_of = '0.9.0';
-  correctedAsset.prior_versions = [retainedLabelSnapshot(correctedAsset, '0.9.0')];
+  const retainedSnapshot = retainedLabelSnapshot(correctedAsset, '0.9.0');
+  correctedAsset.prior_versions = [retainedSnapshot];
+  retainedLineage.cases[0].label_lineage_anchors.supported_assertions = [{ label_version: '0.9.0', digest: retainedSnapshot.digest }];
   assert.equal(scoreBenchmark(retainedLineage, runs).completeness.issues.some(
     (/** @type {any} */ issue) => issue.code === 'LABEL_LINEAGE_MISSING'
   ), false);
@@ -680,6 +697,7 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   };
   invalidSnapshot.digest = createHash('sha256').update(JSON.stringify(invalidPayload)).digest('hex');
   invalidRetainedAsset.prior_versions = [invalidSnapshot];
+  invalidRetainedExperts.cases[0].label_lineage_anchors.supported_assertions = [{ label_version: '0.9.0', digest: invalidSnapshot.digest }];
   assert.equal(hasIssue(scoreBenchmark(invalidRetainedExperts, runs), 'LABEL_LINEAGE_MISSING'), true);
 
   const invalidAdjudication = structuredClone(manifest);
@@ -840,6 +858,15 @@ test('benchmark loader rejects a symlinked benchmark root and pairwise nested ca
   await symlink(realRoot, aliasRoot, 'dir');
   const aliasLoaded = await loadBenchmarkInputs(path.join(aliasRoot, 'manifest.json'));
   assert.equal(aliasLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+
+  const manifestLinkRoot = path.join(temporaryParent, 'manifest-link-v1');
+  await mkdir(path.join(manifestLinkRoot, 'cases'), { recursive: true });
+  await mkdir(path.join(manifestLinkRoot, 'captured'), { recursive: true });
+  const mutableManifest = path.join(temporaryParent, 'mutable-manifest.json');
+  await writeFile(mutableManifest, JSON.stringify(emptyManifest));
+  await symlink(mutableManifest, path.join(manifestLinkRoot, 'manifest.json'));
+  const manifestLinkLoaded = await loadBenchmarkInputs(path.join(manifestLinkRoot, 'manifest.json'));
+  assert.equal(manifestLinkLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
 
   const nestedRoot = path.join(temporaryParent, 'nested-v1');
   await mkdir(path.join(nestedRoot, 'cases/outer/sources/inner'), { recursive: true });
