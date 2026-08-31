@@ -4,6 +4,8 @@ Submit complete candidate `case_drafts` after formal Test Points exist; this sta
 
 ## Build Oracle-gated Cases
 
+Read `derived/rNNN/test-obligations.json` before drafting, using the zero-padded revision requested by the runner. Treat it as compiler output, never edit it. For each Case, copy only the formal obligation IDs it actually covers. Create one distinct expectation for each linked obligation; that expectation's `evidence_ref` must name an accepted claim whose ancestry covers every `required_oracle_refs` entry for that obligation. If accepted evidence has no such claim, do not merge unrelated expectations or invent an aggregate at this stage.
+
 For each candidate, bind this sequence:
 
 ```text
@@ -16,6 +18,8 @@ formal Test Point
 ```
 
 Each Case needs a stable ID, title, scope, risk, linked facts and Test Points, reachable preconditions, concrete sourced data, role, ordered actions, action-local expectations, postcondition, cleanup or a no-cleanup reason, evidence references, and any temporary assumption with its invalidation condition.
+
+Before submission, recompute the Case summary mechanically. `evidence_refs` must equal the exact sorted union of direct evidence roots named by its role, `source_claim_ids`, linked facts and obligations, preconditions, data, action and expectation references, Testability profile, post-state, cleanup, and temporary assumption. Include no ancestor merely because it is reachable and omit no direct reference. Set `execution_signature.oracle_refs` to the exact distinct expectation IDs and `execution_signature.test_point_ids` to the exact linked obligation IDs.
 
 One Case may cover several Test Points only when each owns a distinct locatable expectation. Merge only identical execution signatures: role, pre-state, data partition or boundary, action path, and Oracle must all match.
 

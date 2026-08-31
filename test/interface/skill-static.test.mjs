@@ -78,6 +78,7 @@ test('skill static policies freeze clarification and source-review boundaries', 
     '`enumeration-complement` → `test-data` or `model-element`',
     '`graph-reachability` → `model-element`'
   ]) assert.match(evidence, new RegExp(route, 'u'));
+  assert.match(evidence, /Before accepting `evidence_claims`[\s\S]*one replayable E2 `expected-value` child[\s\S]*all atomic Oracle parents/u);
 
   const behavior = await text('references/behavior-views.md');
   for (const viewType of [
@@ -108,6 +109,9 @@ test('skill static policies freeze clarification and source-review boundaries', 
     cases,
     /Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply/u
   );
+  assert.match(cases, /Read `derived\/rNNN\/test-obligations\.json` before drafting/u);
+  assert.match(cases, /one distinct expectation for each linked obligation[\s\S]*covers every `required_oracle_refs` entry/u);
+  assert.match(cases, /`evidence_refs` must equal the exact sorted union of direct evidence roots/u);
   assert.doesNotMatch(cases, /clarification has converged or delivery was requested/u);
 });
 

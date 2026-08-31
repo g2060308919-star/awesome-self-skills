@@ -31,6 +31,8 @@ Allow only this derivation-kind and target matrix:
 
 Match every derivation kind to its allowed target. Boundary analysis does not invent error text, persistence, events, or state changes. Graph reachability proves structure, not a business Oracle. Require an acyclic parent graph terminating in E3, with all inputs and parameters replayable.
 
+Before accepting `evidence_claims`, identify each complete source-defined business outcome that joins several atomic Oracle claims. When the accepted source supplies the conditions and outcome needed by the closed matrix, create one replayable E2 `expected-value` child with `derivation_kind = decision-table-instance`; set `parent_claim_ids` to all atomic Oracle parents that the outcome jointly proves. This gives a later concrete expectation one evidence reference whose ancestry covers the whole outcome. Do not create an aggregate merely to satisfy the compiler: when the conditions, outcome, or allowed derivation are absent, preserve the gap as Blocked.
+
 ## Build the fact ledger
 
 Split sources into atomic, independently true-or-false claims. For each claim preserve value, scope, locator, source identity, kind, and evidence level. Distinguish requirements, descriptions, examples, and diagnostics.
