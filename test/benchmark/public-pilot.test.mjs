@@ -497,6 +497,30 @@ test('schema and validator agree on non-empty strings and RFC 3339 acquisition t
   assert.equal(hasIssue(dateReport.issues, 'ACQUISITION_TIME_INVALID'), true);
 });
 
+test('RFC 3339 acquisition times enforce real calendar dates and leap years', async (context) => {
+  for (const [value, expectedStatus] of [
+    ['2026-02-29T00:00:00Z', 'invalid'],
+    ['2026-02-31T00:00:00Z', 'invalid'],
+    ['2026-04-31T23:59:59-07:00', 'invalid'],
+    ['2028-02-29T00:00:00Z', 'pilot_ready'],
+    ['2028-02-29T23:59:59+05:30', 'pilot_ready']
+  ]) {
+    await context.test(value, async (/** @type {any} */ childContext) => {
+      const fixture = await createFixture(childContext);
+      fixture.catalog.items[0].acquired_at = value;
+      await updateProvenance(fixture, 0, (provenance) => {
+        provenance.acquired_at = value;
+      });
+      await saveCatalog(fixture);
+
+      const report = await validatePublicPilot(fixture.catalogPath);
+
+      assert.equal(report.status, expectedStatus);
+      assert.equal(hasIssue(report.issues, 'ACQUISITION_TIME_INVALID'), expectedStatus === 'invalid');
+    });
+  }
+});
+
 test('absolute retained paths are rejected even when they point inside the catalog root', async (context) => {
   const fixture = await createFixture(context);
   fixture.catalog.items[0].source.path = path.join(fixture.root, fixture.catalog.items[0].source.path);

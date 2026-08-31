@@ -49,9 +49,11 @@ function nonEmptyString(value) {
 
 /** @param {unknown} value */
 function isRfc3339DateTime(value) {
-  return typeof value === 'string'
-    && RFC3339_DATE_TIME_PATTERN.test(value)
-    && Number.isFinite(Date.parse(value));
+  if (typeof value !== 'string' || !RFC3339_DATE_TIME_PATTERN.test(value)) return false;
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1] && Number.isFinite(Date.parse(value));
 }
 
 /**
