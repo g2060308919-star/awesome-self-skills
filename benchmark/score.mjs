@@ -252,7 +252,7 @@ function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = [
       /** @type {any[]} */
       const snapshotIssues = [];
       validateLabeledAsset(snapshotIssues, { ...snapshot, correction_of: null, prior_versions: [] }, `${pathValue}/prior_versions/${snapshotIndex}`, kind, []);
-      if (snapshotIssues.length > 0 || snapshot.final_labels.length === 0) retained = false;
+      if (snapshotIssues.length > 0) retained = false;
     }
     const visited = new Set();
     let version = asset.correction_of;

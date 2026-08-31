@@ -543,7 +543,7 @@ test('benchmark Jaccard identities cannot collide across case and Test Point del
   assert.equal(report.systems['generate-test-cases'].overall.test_point_signature_jaccard.value, 1 / 3);
 });
 
-test('benchmark rejects renamed source clones and incomplete retained label history', () => {
+test('benchmark rejects renamed source clones and accepts complete empty retained label history', () => {
   const { manifest, runs } = completeContractCorpus();
   const cloned = structuredClone(manifest);
   cloned.cases[1].assets.sources.content_digest = cloned.cases[0].assets.sources.content_digest = 'same-content-digest';
@@ -570,7 +570,11 @@ test('benchmark rejects renamed source clones and incomplete retained label hist
   })).digest('hex');
   asset.prior_versions = [emptySnapshot];
   lineage.cases[0].label_lineage_anchors.supported_assertions = [{ label_version: '0.9.0', digest: emptySnapshot.digest }];
-  assert.equal(hasIssue(scoreBenchmark(lineage, runs), 'LABEL_LINEAGE_MISSING'), true);
+  assert.equal(
+    hasIssue(scoreBenchmark(lineage, runs), 'LABEL_LINEAGE_MISSING'),
+    false,
+    'a manifest-anchored predecessor with two complete empty annotations is valid history'
+  );
 
   const added = structuredClone(manifest);
   const addedAsset = added.cases[0].assets.supported_assertions;
