@@ -14,6 +14,7 @@ export const FROZEN_STRATA = Object.freeze([
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
+const RFC3339_DATE_TIME_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 const ITEM_STATUSES = new Set(['pilot-admitted', 'hold', 'rejected']);
 const RELEASE_STATUS = /** @type {'insufficient_evidence'} */ ('insufficient_evidence');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
@@ -44,6 +45,13 @@ function addIssue(issues, code, issuePath, message, severity = 'error') {
 /** @param {unknown} value */
 function nonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+/** @param {unknown} value */
+function isRfc3339DateTime(value) {
+  return typeof value === 'string'
+    && RFC3339_DATE_TIME_PATTERN.test(value)
+    && Number.isFinite(Date.parse(value));
 }
 
 /**
@@ -230,11 +238,12 @@ async function readRetainedArtifact(options) {
 /**
  * @param {unknown} urlValue
  * @param {unknown} commitValue
+ * @param {unknown} repositoryValue
  * @param {string} issuePath
  * @param {Array<any>} issues
  */
-function validateImmutableGitHubUrl(urlValue, commitValue, issuePath, issues) {
-  if (!nonEmptyString(urlValue) || typeof commitValue !== 'string') {
+function validateImmutableGitHubUrl(urlValue, commitValue, repositoryValue, issuePath, issues) {
+  if (!nonEmptyString(urlValue) || typeof commitValue !== 'string' || typeof repositoryValue !== 'string') {
     addIssue(issues, 'MUTABLE_GITHUB_URL', issuePath, 'Source and license URLs must be immutable GitHub blob/raw URLs.');
     return;
   }
@@ -242,15 +251,49 @@ function validateImmutableGitHubUrl(urlValue, commitValue, issuePath, issues) {
   try {
     const url = new URL(/** @type {string} */ (urlValue));
     const match = url.hostname === 'github.com'
-      ? url.pathname.match(/^\/[^/]+\/[^/]+\/blob\/([a-f0-9]{40})\/.+/i)
+      ? url.pathname.match(/^\/([^/]+)\/([^/]+)\/blob\/([a-f0-9]{40})\/.+/i)
       : url.hostname === 'raw.githubusercontent.com'
-        ? url.pathname.match(/^\/[^/]+\/[^/]+\/([a-f0-9]{40})\/.+/i)
+        ? url.pathname.match(/^\/([^/]+)\/([^/]+)\/([a-f0-9]{40})\/.+/i)
         : null;
-    if (url.protocol !== 'https:' || match?.[1]?.toLowerCase() !== commitValue.toLowerCase()) {
+    if (url.protocol !== 'https:' || match?.[3]?.toLowerCase() !== commitValue.toLowerCase()) {
       addIssue(issues, 'MUTABLE_GITHUB_URL', issuePath, 'URL must contain the catalog item\'s exact 40-character commit.');
+      return;
+    }
+    const urlRepository = `${match[1]}/${match[2]}`;
+    if (urlRepository.toLowerCase() !== repositoryValue.toLowerCase()) {
+      addIssue(issues, 'UPSTREAM_REPOSITORY_MISMATCH', issuePath, 'URL repository must match the catalog item repository.');
     }
   } catch {
     addIssue(issues, 'MUTABLE_GITHUB_URL', issuePath, 'Source and license URLs must be valid immutable GitHub URLs.');
+  }
+}
+
+/**
+ * @param {unknown} urlValue
+ * @param {unknown} repositoryValue
+ * @param {string} issuePath
+ * @param {Array<any>} issues
+ */
+function validateGitHubIssueUrl(urlValue, repositoryValue, issuePath, issues) {
+  if (!nonEmptyString(urlValue) || typeof repositoryValue !== 'string') {
+    addIssue(issues, 'DEFECT_URL_INVALID', issuePath, 'Defect URL must be a GitHub issue URL for the catalog repository.');
+    return;
+  }
+  try {
+    const url = new URL(/** @type {string} */ (urlValue));
+    const match = url.hostname === 'github.com'
+      ? url.pathname.match(/^\/([^/]+)\/([^/]+)\/issues\/\d+$/i)
+      : null;
+    if (url.protocol !== 'https:' || !match) {
+      addIssue(issues, 'DEFECT_URL_INVALID', issuePath, 'Defect URL must be an HTTPS GitHub issue URL.');
+      return;
+    }
+    const urlRepository = `${match[1]}/${match[2]}`;
+    if (urlRepository.toLowerCase() !== repositoryValue.toLowerCase()) {
+      addIssue(issues, 'DEFECT_REPOSITORY_MISMATCH', issuePath, 'Defect URL repository must match the catalog item repository.');
+    }
+  } catch {
+    addIssue(issues, 'DEFECT_URL_INVALID', issuePath, 'Defect URL must be a valid GitHub issue URL.');
   }
 }
 
@@ -293,7 +336,7 @@ async function validateItem(item, itemIndex, context) {
 
   rejectUnknownKeys(item, new Set([
     'pilot_id', 'status', 'repository', 'commit', 'stratum', 'acquired_at',
-    'source', 'license', 'task', 'reviews', 'defects'
+    'source', 'license', 'provenance', 'task', 'reviews', 'defects'
   ]), itemPath, issues);
 
   for (const [field, code] of [
@@ -314,8 +357,8 @@ async function validateItem(item, itemIndex, context) {
   if (!FROZEN_STRATA.includes(item.stratum)) {
     addIssue(issues, 'STRATUM_INVALID', `${itemPath}/stratum`, 'Item must use exactly one frozen stratum.');
   }
-  if (typeof item.acquired_at === 'string' && !Number.isFinite(Date.parse(item.acquired_at))) {
-    addIssue(issues, 'ACQUISITION_TIME_INVALID', `${itemPath}/acquired_at`, 'Acquisition time must be a valid date-time.');
+  if (!isRfc3339DateTime(item.acquired_at)) {
+    addIssue(issues, 'ACQUISITION_TIME_INVALID', `${itemPath}/acquired_at`, 'Acquisition time must be an RFC 3339 date-time.');
   }
 
   if (typeof item.pilot_id === 'string') {
@@ -332,7 +375,7 @@ async function validateItem(item, itemIndex, context) {
     requireDigest(source.sha256, `${itemPath}/source/sha256`, issues);
     requireDigest(source.content_digest, `${itemPath}/source/content_digest`, issues);
     requireString(source.upstream_url, `${itemPath}/source/upstream_url`, issues);
-    validateImmutableGitHubUrl(source.upstream_url, item.commit, `${itemPath}/source/upstream_url`, issues);
+    validateImmutableGitHubUrl(source.upstream_url, item.commit, item.repository, `${itemPath}/source/upstream_url`, issues);
     sourceArtifact = await readRetainedArtifact({
       root, rootReal, relativePath: source.path, expectedDigest: source.sha256,
       issuePath: `${itemPath}/source`, mismatchCode: 'SOURCE_DIGEST_MISMATCH', issues, physicalPaths
@@ -362,7 +405,7 @@ async function validateItem(item, itemIndex, context) {
     requireString(license.upstream_url, `${itemPath}/license/upstream_url`, issues);
     requireString(license.reported_license, `${itemPath}/license/reported_license`, issues);
     requireString(license.scope_decision, `${itemPath}/license/scope_decision`, issues);
-    validateImmutableGitHubUrl(license.upstream_url, item.commit, `${itemPath}/license/upstream_url`, issues);
+    validateImmutableGitHubUrl(license.upstream_url, item.commit, item.repository, `${itemPath}/license/upstream_url`, issues);
     await readRetainedArtifact({
       root, rootReal, relativePath: license.path, expectedDigest: license.sha256,
       issuePath: `${itemPath}/license`, mismatchCode: 'LICENSE_DIGEST_MISMATCH', issues, physicalPaths
@@ -372,6 +415,48 @@ async function validateItem(item, itemIndex, context) {
     }
     if (item.status === 'pilot-admitted' && license.scope_decision !== 'applicable') {
       addIssue(issues, 'LICENSE_NOT_APPLICABLE', `${itemPath}/license/scope_decision`, 'A pilot-admitted item requires applicable copying and evaluation permission.');
+    }
+  }
+
+  const provenance = requireObject(item.provenance, `${itemPath}/provenance`, issues, 'PROVENANCE_REQUIRED');
+  if (provenance) {
+    rejectUnknownKeys(provenance, new Set(['path', 'sha256']), `${itemPath}/provenance`, issues);
+    requireString(provenance.path, `${itemPath}/provenance/path`, issues, 'PROVENANCE_REQUIRED');
+    requireDigest(provenance.sha256, `${itemPath}/provenance/sha256`, issues, 'PROVENANCE_REQUIRED');
+    const provenanceArtifact = await readRetainedArtifact({
+      root, rootReal, relativePath: provenance.path, expectedDigest: provenance.sha256,
+      issuePath: `${itemPath}/provenance`, mismatchCode: 'PROVENANCE_DIGEST_MISMATCH', issues, physicalPaths
+    });
+    if (provenanceArtifact) {
+      let retainedProvenance;
+      try {
+        retainedProvenance = JSON.parse(provenanceArtifact.bytes.toString('utf8'));
+      } catch {
+        addIssue(issues, 'PROVENANCE_JSON_INVALID', `${itemPath}/provenance/path`, 'Retained provenance must be valid JSON.');
+      }
+      if (retainedProvenance !== undefined) {
+        const provenanceRecord = requireObject(retainedProvenance, `${itemPath}/provenance/file`, issues, 'PROVENANCE_JSON_INVALID');
+        if (provenanceRecord) {
+          const expectedProvenance = {
+            repository: item.repository,
+            commit: item.commit,
+            source_url: source?.upstream_url,
+            source_sha256: source?.sha256,
+            content_digest: source?.content_digest,
+            license_url: license?.upstream_url,
+            license_sha256: license?.sha256,
+            reported_license: license?.reported_license,
+            scope_decision: license?.scope_decision,
+            acquired_at: item.acquired_at
+          };
+          rejectUnknownKeys(provenanceRecord, new Set(Object.keys(expectedProvenance)), `${itemPath}/provenance/file`, issues);
+          for (const [field, expected] of Object.entries(expectedProvenance)) {
+            if (!Object.hasOwn(provenanceRecord, field) || provenanceRecord[field] !== expected) {
+              addIssue(issues, 'PROVENANCE_BINDING_INVALID', `${itemPath}/provenance/file/${field}`, `Retained provenance ${field} must match catalog metadata.`);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -412,7 +497,7 @@ async function validateItem(item, itemIndex, context) {
     if (review.reviewer_class !== 'machine-agent') {
       addIssue(issues, 'REVIEWER_CLASS_INVALID', `${reviewPath}/reviewer_class`, 'Pilot reviews must identify reviewers only as machine-agent.');
     }
-    if (review.review_scope !== undefined && review.review_scope !== 'intake-only') {
+    if (review.review_scope !== 'intake-only') {
       addIssue(issues, 'REVIEW_SCOPE_INVALID', `${reviewPath}/review_scope`, 'Machine review scope must be intake-only.');
     }
     if (review.source_id !== source?.source_id || review.task_id !== task?.task_id) {
@@ -440,7 +525,8 @@ async function validateItem(item, itemIndex, context) {
     requireString(defect.defect_id, `${defectPath}/defect_id`, issues);
     requireDigest(defect.sha256, `${defectPath}/sha256`, issues);
     requireString(defect.upstream_url, `${defectPath}/upstream_url`, issues);
-    if (defect.status !== undefined && !['lead', 'case-bound'].includes(defect.status)) {
+    validateGitHubIssueUrl(defect.upstream_url, item.repository, `${defectPath}/upstream_url`, issues);
+    if (!['lead', 'case-bound'].includes(defect.status)) {
       addIssue(issues, 'DEFECT_STATUS_INVALID', `${defectPath}/status`, 'Unknown defect status.');
     }
     if (typeof defect.countable !== 'boolean') {
@@ -449,6 +535,15 @@ async function validateItem(item, itemIndex, context) {
     if (defect.countable === true && defect.bound_pilot_id !== item.pilot_id) {
       addIssue(issues, 'UNBOUND_DEFECT_COUNTED', `${defectPath}/countable`, 'Only a defect bound to this pilot item may be countable.');
     }
+    if (defect.countable === true && defect.status !== 'case-bound') {
+      addIssue(issues, 'COUNTABLE_DEFECT_STATUS_INVALID', `${defectPath}/status`, 'Only a case-bound defect may be countable.');
+    }
+    if (defect.status === 'lead' && (defect.bound_pilot_id !== null || defect.countable !== false)) {
+      addIssue(issues, 'LEAD_DEFECT_BINDING_INVALID', defectPath, 'A defect lead must remain unbound and uncountable.');
+    }
+    if (defect.status === 'case-bound' && defect.bound_pilot_id !== item.pilot_id) {
+      addIssue(issues, 'DEFECT_BINDING_INVALID', `${defectPath}/bound_pilot_id`, 'A case-bound defect must bind to this item.');
+    }
     if (defect.bound_pilot_id !== null && defect.bound_pilot_id !== item.pilot_id) {
       addIssue(issues, 'DEFECT_BINDING_INVALID', `${defectPath}/bound_pilot_id`, 'Defect binding must be null or this item\'s pilot ID.');
     }
@@ -456,7 +551,10 @@ async function validateItem(item, itemIndex, context) {
       root, rootReal, relativePath: defect.path, expectedDigest: defect.sha256,
       issuePath: defectPath, mismatchCode: 'DEFECT_DIGEST_MISMATCH', issues, physicalPaths
     });
-    if (defect.countable === true && defect.bound_pilot_id === item.pilot_id && artifact?.digestMatches) {
+    if (defect.status === 'case-bound'
+      && defect.countable === true
+      && defect.bound_pilot_id === item.pilot_id
+      && artifact?.digestMatches) {
       countableDefects += 1;
     }
   }

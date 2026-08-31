@@ -21,6 +21,8 @@ const unlink = fsPromises.unlink;
 const childProcess = /** @type {any} */ (await import('node:child_process'));
 const test = /** @type {(name: string, callback: (context: any) => Promise<any>) => any} */ (nodeTest);
 const validatorPath = fileURLToPath(new URL('../../benchmark/public-pilot/validate.mjs', import.meta.url));
+const schemaPath = fileURLToPath(new URL('../../benchmark/public-pilot/catalog.schema.json', import.meta.url));
+const catalogSchema = JSON.parse(await readFile(schemaPath, 'utf8'));
 
 /** @param {string} executable @param {string[]} args */
 async function execFileAsync(executable, args) {
@@ -45,6 +47,12 @@ const FROZEN_STRATA = Object.freeze([
 /** @param {string | Uint8Array} value */
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+/** @param {string} value @param {{minLength?: number, pattern?: string}} schema */
+function schemaAllowsString(value, schema) {
+  return (schema.minLength === undefined || value.length >= schema.minLength)
+    && (schema.pattern === undefined || new RegExp(schema.pattern).test(value));
 }
 
 /** @param {string} root @param {string} relativePath @param {string} contents */
@@ -79,19 +87,36 @@ async function createFixture(context, { perStratum = 5 } = {}) {
       const directory = `retained/${pilotId}`;
       const sourcePath = `${directory}/prd.md`;
       const licensePath = `${directory}/LICENSE`;
+      const provenancePath = `${directory}/provenance.json`;
       const taskPath = `${directory}/task.json`;
       const reviewPath = `${directory}/review.json`;
       const defectPath = `${directory}/defect.json`;
       const leadPath = `${directory}/unbound-lead.json`;
       const sourceBytes = `# ${pilotId} product requirements\nUnique requirement ${itemIndex}.\n`;
       const licenseBytes = `MIT License\nCopyright fixture ${itemIndex}\n`;
+      const acquiredAt = '2026-08-31T00:00:00Z';
+      const sourceUrl = `https://github.com/${repository}/blob/${commit}/docs/prd.md`;
+      const licenseUrl = `https://github.com/${repository}/blob/${commit}/LICENSE`;
       const taskBytes = `${JSON.stringify({ task_id: taskId, source_id: sourceId, scope: stratum })}\n`;
-      const reviewBytes = `${JSON.stringify({ review_id: `review-${pilotId}`, reviewer_class: 'machine-agent' })}\n`;
-      const defectBytes = `${JSON.stringify({ defect_id: `defect-${pilotId}`, source_id: sourceId })}\n`;
-      const leadBytes = `${JSON.stringify({ defect_id: `lead-${pilotId}`, source_id: null })}\n`;
+      const reviewBytes = `${JSON.stringify({ review_id: `review-${pilotId}`, reviewer_class: 'machine-agent', review_scope: 'intake-only' })}\n`;
+      const defectBytes = `${JSON.stringify({ defect_id: `defect-${pilotId}`, status: 'case-bound', source_id: sourceId })}\n`;
+      const leadBytes = `${JSON.stringify({ defect_id: `lead-${pilotId}`, status: 'lead', source_id: null })}\n`;
 
       const sourceDigest = await writeRetained(root, sourcePath, sourceBytes);
       const licenseDigest = await writeRetained(root, licensePath, licenseBytes);
+      const provenanceBytes = `${JSON.stringify({
+        repository,
+        commit,
+        source_url: sourceUrl,
+        source_sha256: sourceDigest,
+        content_digest: sourceDigest,
+        license_url: licenseUrl,
+        license_sha256: licenseDigest,
+        reported_license: 'MIT',
+        scope_decision: 'applicable',
+        acquired_at: acquiredAt
+      })}\n`;
+      const provenanceDigest = await writeRetained(root, provenancePath, provenanceBytes);
       const taskDigest = await writeRetained(root, taskPath, taskBytes);
       const reviewDigest = await writeRetained(root, reviewPath, reviewBytes);
       const defectDigest = await writeRetained(root, defectPath, defectBytes);
@@ -103,20 +128,24 @@ async function createFixture(context, { perStratum = 5 } = {}) {
         repository,
         commit,
         stratum,
-        acquired_at: '2026-08-31T00:00:00Z',
+        acquired_at: acquiredAt,
         source: {
           source_id: sourceId,
           path: sourcePath,
           sha256: sourceDigest,
           content_digest: sourceDigest,
-          upstream_url: `https://github.com/${repository}/blob/${commit}/docs/prd.md`
+          upstream_url: sourceUrl
         },
         license: {
           path: licensePath,
           sha256: licenseDigest,
-          upstream_url: `https://github.com/${repository}/blob/${commit}/LICENSE`,
+          upstream_url: licenseUrl,
           reported_license: 'MIT',
           scope_decision: 'applicable'
+        },
+        provenance: {
+          path: provenancePath,
+          sha256: provenanceDigest
         },
         task: {
           task_id: taskId,
@@ -129,6 +158,7 @@ async function createFixture(context, { perStratum = 5 } = {}) {
           path: reviewPath,
           sha256: reviewDigest,
           reviewer_class: 'machine-agent',
+          review_scope: 'intake-only',
           source_id: sourceId,
           task_id: taskId,
           decision: 'admit'
@@ -139,6 +169,7 @@ async function createFixture(context, { perStratum = 5 } = {}) {
             path: defectPath,
             sha256: defectDigest,
             upstream_url: `https://github.com/${repository}/issues/${itemIndex}`,
+            status: 'case-bound',
             bound_pilot_id: pilotId,
             countable: true
           },
@@ -147,6 +178,7 @@ async function createFixture(context, { perStratum = 5 } = {}) {
             path: leadPath,
             sha256: leadDigest,
             upstream_url: `https://github.com/${repository}/issues/${itemIndex + 1000}`,
+            status: 'lead',
             bound_pilot_id: null,
             countable: false
           }
@@ -171,6 +203,21 @@ async function createFixture(context, { perStratum = 5 } = {}) {
 /** @param {{ catalog: any, catalogPath: string }} fixture */
 async function saveCatalog(fixture) {
   await writeFile(fixture.catalogPath, `${JSON.stringify(fixture.catalog, null, 2)}\n`);
+}
+
+/**
+ * @param {{ root: string, catalog: any }} fixture
+ * @param {number} itemIndex
+ * @param {(provenance: any) => void} update
+ */
+async function updateProvenance(fixture, itemIndex, update) {
+  const item = fixture.catalog.items[itemIndex];
+  const absolutePath = path.join(fixture.root, item.provenance.path);
+  const provenance = JSON.parse(await readFile(absolutePath, 'utf8'));
+  update(provenance);
+  const bytes = `${JSON.stringify(provenance)}\n`;
+  await writeFile(absolutePath, bytes);
+  item.provenance.sha256 = sha256(bytes);
 }
 
 /** @param {{ code: string }[]} issues @param {string} code */
@@ -198,6 +245,58 @@ test('machine reviewers cannot be encoded as external experts', async (context) 
 
   assert.equal(report.status, 'invalid');
   assert.equal(hasIssue(report.issues, 'REVIEWER_CLASS_INVALID'), true);
+});
+
+test('every admitted item requires digest-bound provenance with catalog-consistent metadata', async (context) => {
+  await context.test('missing', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    delete fixture.catalog.items[0].provenance;
+    await saveCatalog(fixture);
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(hasIssue(report.issues, 'PROVENANCE_REQUIRED'), true);
+  });
+
+  await context.test('tampered bytes', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    await appendFile(path.join(fixture.root, fixture.catalog.items[0].provenance.path), 'tampered\n');
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(hasIssue(report.issues, 'PROVENANCE_DIGEST_MISMATCH'), true);
+  });
+
+  await context.test('metadata mismatch', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    await updateProvenance(fixture, 0, (provenance) => {
+      provenance.repository = 'other-owner/other-product';
+    });
+    await saveCatalog(fixture);
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(hasIssue(report.issues, 'PROVENANCE_BINDING_INVALID'), true);
+  });
+});
+
+test('machine reviews require the intake-only review scope', async (context) => {
+  for (const [label, value] of [['missing', undefined], ['wrong', 'release-adjudication']]) {
+    await context.test(label, async (/** @type {any} */ childContext) => {
+      const fixture = await createFixture(childContext);
+      if (value === undefined) delete fixture.catalog.items[0].reviews[0].review_scope;
+      else fixture.catalog.items[0].reviews[0].review_scope = value;
+      await saveCatalog(fixture);
+
+      const report = await validatePublicPilot(fixture.catalogPath);
+
+      assert.equal(report.status, 'invalid');
+      assert.equal(hasIssue(report.issues, 'REVIEW_SCOPE_INVALID'), true);
+    });
+  }
 });
 
 test('changed retained source bytes invalidate the declared source digest', async (context) => {
@@ -266,6 +365,38 @@ test('mutable GitHub blob and raw URLs are rejected', async (context) => {
   assert.equal(report.issues.filter((issue) => issue.code === 'MUTABLE_GITHUB_URL').length, 2);
 });
 
+test('source license and defect URLs must belong to the catalog repository', async (context) => {
+  for (const [field, code] of [
+    ['source', 'UPSTREAM_REPOSITORY_MISMATCH'],
+    ['license', 'UPSTREAM_REPOSITORY_MISMATCH'],
+    ['defect', 'DEFECT_REPOSITORY_MISMATCH']
+  ]) {
+    await context.test(field, async (/** @type {any} */ childContext) => {
+      const fixture = await createFixture(childContext);
+      const item = fixture.catalog.items[0];
+      if (field === 'source') {
+        item.source.upstream_url = `https://github.com/other-owner/other-product/blob/${item.commit}/docs/prd.md`;
+        await updateProvenance(fixture, 0, (provenance) => {
+          provenance.source_url = item.source.upstream_url;
+        });
+      } else if (field === 'license') {
+        item.license.upstream_url = `https://raw.githubusercontent.com/other-owner/other-product/${item.commit}/LICENSE`;
+        await updateProvenance(fixture, 0, (provenance) => {
+          provenance.license_url = item.license.upstream_url;
+        });
+      } else {
+        item.defects[0].upstream_url = 'https://github.com/other-owner/other-product/issues/1';
+      }
+      await saveCatalog(fixture);
+
+      const report = await validatePublicPilot(fixture.catalogPath);
+
+      assert.equal(report.status, 'invalid');
+      assert.equal(hasIssue(report.issues, code), true);
+    });
+  }
+});
+
 test('duplicate path-independent source content digests are invalid', async (context) => {
   const fixture = await createFixture(context);
   const first = fixture.catalog.items[0].source;
@@ -315,6 +446,55 @@ test('an unbound historical defect lead cannot be counted', async (context) => {
 
   assert.equal(report.status, 'invalid');
   assert.equal(hasIssue(report.issues, 'UNBOUND_DEFECT_COUNTED'), true);
+  assert.equal(hasIssue(report.issues, 'COUNTABLE_DEFECT_STATUS_INVALID'), true);
+});
+
+test('defect status is required and lead records stay unbound and uncountable', async (context) => {
+  /** @type {Array<[string, (defect: any) => void, string]>} */
+  const cases = [
+    ['missing status', (defect) => delete defect.status, 'DEFECT_STATUS_INVALID'],
+    ['countable lead', (defect) => { defect.status = 'lead'; }, 'COUNTABLE_DEFECT_STATUS_INVALID'],
+    ['bound lead', (defect) => { defect.bound_pilot_id = 'PF-01'; }, 'LEAD_DEFECT_BINDING_INVALID']
+  ];
+  for (const [label, update, code] of cases) {
+    await context.test(label, async (/** @type {any} */ childContext) => {
+      const fixture = await createFixture(childContext);
+      const defect = label === 'bound lead'
+        ? fixture.catalog.items[0].defects[1]
+        : fixture.catalog.items[0].defects[0];
+      update(defect);
+      await saveCatalog(fixture);
+
+      const report = await validatePublicPilot(fixture.catalogPath);
+
+      assert.equal(report.status, 'invalid');
+      assert.equal(hasIssue(report.issues, code), true);
+    });
+  }
+});
+
+test('schema and validator agree on non-empty strings and RFC 3339 acquisition times', async (context) => {
+  const nonEmptySchema = catalogSchema.$defs.nonEmptyString;
+  const acquiredAtSchema = catalogSchema.$defs.rfc3339DateTime;
+  assert.equal(schemaAllowsString('catalog', nonEmptySchema), true);
+  assert.equal(schemaAllowsString('   ', nonEmptySchema), false);
+  assert.equal(schemaAllowsString('2026-08-31T00:00:00Z', acquiredAtSchema), true);
+  assert.equal(schemaAllowsString('2026-08-31', acquiredAtSchema), false);
+
+  const blankFixture = await createFixture(context);
+  blankFixture.catalog.catalog_id = '   ';
+  await saveCatalog(blankFixture);
+  assert.equal((await validatePublicPilot(blankFixture.catalogPath)).status, 'invalid');
+
+  const dateFixture = await createFixture(context);
+  dateFixture.catalog.items[0].acquired_at = '2026-08-31';
+  await updateProvenance(dateFixture, 0, (provenance) => {
+    provenance.acquired_at = '2026-08-31';
+  });
+  await saveCatalog(dateFixture);
+  const dateReport = await validatePublicPilot(dateFixture.catalogPath);
+  assert.equal(dateReport.status, 'invalid');
+  assert.equal(hasIssue(dateReport.issues, 'ACQUISITION_TIME_INVALID'), true);
 });
 
 test('absolute retained paths are rejected even when they point inside the catalog root', async (context) => {

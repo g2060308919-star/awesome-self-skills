@@ -26,7 +26,13 @@
   "$defs": {
     "nonEmptyString": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "rfc3339DateTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
     },
     "sha256": {
       "type": "string",
@@ -90,6 +96,15 @@
         "source_id": { "$ref": "#/$defs/nonEmptyString" }
       }
     },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
     "review": {
       "type": "object",
       "additionalProperties": false,
@@ -98,6 +113,7 @@
         "path",
         "sha256",
         "reviewer_class",
+        "review_scope",
         "source_id",
         "task_id",
         "decision"
@@ -121,6 +137,7 @@
         "path",
         "sha256",
         "upstream_url",
+        "status",
         "bound_pilot_id",
         "countable"
       ],
@@ -151,6 +168,7 @@
         "acquired_at",
         "source",
         "license",
+        "provenance",
         "task",
         "reviews",
         "defects"
@@ -164,9 +182,10 @@
         },
         "commit": { "$ref": "#/$defs/commit" },
         "stratum": { "$ref": "#/$defs/stratum" },
-        "acquired_at": { "type": "string", "format": "date-time" },
+        "acquired_at": { "$ref": "#/$defs/rfc3339DateTime" },
         "source": { "$ref": "#/$defs/source" },
         "license": { "$ref": "#/$defs/license" },
+        "provenance": { "$ref": "#/$defs/provenance" },
         "task": { "$ref": "#/$defs/task" },
         "reviews": {
           "type": "array",
