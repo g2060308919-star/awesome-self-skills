@@ -5,5 +5,5 @@
   "phase": "before-commit",
   "effect": "application-failure-with-canary",
   "occurrence": 1,
-  "diagnostic": "BENCH_SECRET_0123456789ABCDEFGHJK_END"
+  "diagnosticCanary": "secret"
 }

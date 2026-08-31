@@ -6,7 +6,7 @@
   "contracts/snapshot-v1.json": "72a5ab113f8e8f1d3cb8b70e797d8cf45cce7407b54ecefc6432326a243dd34a",
   "execution-matrix.json": "6baf9db08e624c3c0ba418ab74a4dbea27dd934b407824b8e8d17ee15bb1dd21",
   "faults/async-completion.json": "32ae5bf4a5becbcc223ee4816df2ba4cb2645be0715541ae699d8476792ab555",
-  "faults/canary-diagnostic.json": "05c4fbd1c7249b351ae5ae135d0efc0ebbc8f82e2e23e6307b7a717a0a62f38d",
+  "faults/canary-diagnostic.json": "4b255ce561cf00369ddf798e7dc2357c2f12fc83015d3dee392e7df41f6b2b1e",
   "faults/cleanup-conflict.json": "2071b198a6c7a48873415d904dded741fd86d10938587b1554a56282a3bb297c",
   "faults/commit-then-disconnect.json": "482e5b5219cfb3f20ab0abfb2edef25c46de0fde63ef197c376190a507fa5b50",
   "faults/session-expiry.json": "a2c3aa09449b2433fdc160a29b665f69891dad903fee532897d07fdfe5baacdc",

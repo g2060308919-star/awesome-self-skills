@@ -12,5 +12,9 @@
     "self-test": "node bin/self-test.mjs",
     "bundle:digests": "node bin/bundle-digests.mjs --write",
     "bundle:verify": "node bin/bundle-digests.mjs --verify"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
+    "tesseract.js": "7.0.0"
   }
 }

@@ -131,7 +131,9 @@ export function evaluateTrial(input) {
   if (browserExpected && provenance.runnerBrowserActions === 0 && oracle.assertions.some(
     ({ expectedState }) => expectedState !== "not-run"
   )) gateFailures.push(gate("SILENT_REQUIRED_WORK_OMISSION", "Required browser execution was silently omitted"));
-  if (artifacts.canaryScan?.matched) gateFailures.push(gate("CANARY_LEAK", "A registered canary was detected in artifacts"));
+  if ((input.canaryScan ?? artifacts.canaryScan)?.matched) {
+    gateFailures.push(gate("CANARY_LEAK", "A registered canary was detected in artifacts"));
+  }
 
   const uniqueGateFailures = [...new Map(gateFailures.map((entry) => [entry.id, entry])).values()];
   const scoring = input.scoring ?? {

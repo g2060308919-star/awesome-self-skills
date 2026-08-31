@@ -330,7 +330,7 @@ const faults = Object.freeze({
   "session-expiry": { id: "session-expiry", logicalOperation: "project.description.update", phase: "before-authorization", effect: "expire-session", occurrence: 1 },
   "cleanup-conflict": { id: "cleanup-conflict", logicalOperation: "customer.delete", phase: "before-commit", effect: "cleanup-conflict", occurrence: 1 },
   "async-completion": { id: "async-completion", logicalOperation: "project.status.update", phase: "before-commit", effect: "delayed-completion", occurrence: 1, delayTicks: 2 },
-  "canary-diagnostic": { id: "canary-diagnostic", logicalOperation: "project.status.update", phase: "before-commit", effect: "application-failure-with-canary", occurrence: 1, diagnostic: "BENCH_SECRET_0123456789ABCDEFGHJK_END" }
+  "canary-diagnostic": { id: "canary-diagnostic", logicalOperation: "project.status.update", phase: "before-commit", effect: "application-failure-with-canary", occurrence: 1, diagnosticCanary: "secret" }
 });
 
 async function writeJson(relativePath, value) {

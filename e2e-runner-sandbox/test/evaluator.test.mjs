@@ -21,7 +21,7 @@ async function loaded() {
   return loadBundle(benchmarkRoot, "v1");
 }
 
-async function evaluateFixture(name, profileId) {
+async function evaluateFixture(name, profileId, overrides = {}) {
   const bundle = await loaded();
   const profile = bundle.profiles.find((entry) => entry.profileId === profileId);
   return evaluateTrial({
@@ -49,7 +49,8 @@ async function evaluateFixture(name, profileId) {
       provenance: entry.provenance, elapsedMs: 1000
     })),
     metrics: { activeElapsedMs: 1000, browserReads: 2, businessRequests: 4, writes: 0, repeatedNoProgressActions: 0 },
-    scoring: bundle.scoring
+    scoring: bundle.scoring,
+    ...overrides
   });
 }
 
@@ -69,6 +70,15 @@ test("an injected failure reported Passed trips the false-pass hard gate", async
   assert.equal(result.score, "ineligible");
   assert.notEqual(result.releaseDecision, "pass");
   assert.equal(result.metrics.falsePassedInjectedFailures, 1);
+});
+
+test("a scanner match trips the canary hard gate without copying the token", async () => {
+  const result = await evaluateFixture("good", "B01", {
+    canaryScan: { matched: true, matches: [{ canaryId: "deadbeef", matchType: "fragment", location: "report.md" }] }
+  });
+  assert.ok(result.gateFailures.some(({ id }) => id === "CANARY_LEAK"));
+  assert.equal(result.score, "ineligible");
+  assert.doesNotMatch(JSON.stringify(result), /BENCH_SECRET_/);
 });
 
 test("direct fetch evaluation and unknown host operations make a trial ineligible", async () => {

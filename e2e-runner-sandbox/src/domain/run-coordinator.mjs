@@ -1,5 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
+import { createCanary } from "../shared/canary.mjs";
 import { SandboxError } from "../shared/errors.mjs";
 import { normalizeFixture } from "./fixtures.mjs";
 import { createLogicalClock } from "./logical-clock.mjs";
@@ -17,6 +18,7 @@ function unavailable(lifecycle) {
 export function createRunCoordinator(options = {}) {
   const clock = options.clock ?? createLogicalClock("2026-08-31T00:00:00.000Z");
   const runIdFactory = options.runIdFactory ?? randomUUID;
+  const canaryFactory = options.canaryFactory ?? ((prefix) => createCanary(prefix, randomBytes));
   let lifecycle = "empty";
   let acceptingBusinessRequests = false;
   let runId = null;
@@ -38,7 +40,12 @@ export function createRunCoordinator(options = {}) {
       profileId: metadata?.profileId ?? null,
       fixtureVersion: metadata?.fixtureVersion ?? null,
       uiVariant: metadata?.uiVariant ?? null,
-      fault: structuredClone(metadata?.fault ?? null),
+      fault: metadata?.fault ? {
+        id: metadata.fault.id,
+        armed: true,
+        triggered: metadata.fault.triggered ?? 0,
+        consumed: Boolean(metadata.fault.consumed)
+      } : null,
       preSnapshot: preSnapshot ? structuredClone(preSnapshot) : null
     };
   }
@@ -70,6 +77,13 @@ export function createRunCoordinator(options = {}) {
 
     try {
       const candidate = normalizeFixture(profile, nextRunId);
+      candidate.metadata.canaries = [
+        canaryFactory("BENCH_SECRET"),
+        canaryFactory("BENCH_SENSITIVE")
+      ];
+      if (candidate.metadata.fault?.diagnosticCanary === "secret") {
+        candidate.metadata.fault.diagnostic = candidate.metadata.canaries[0].token;
+      }
       const candidateSnapshot = createSnapshot(candidate.state);
       clock.reset();
       state = candidate.state;
@@ -128,6 +142,11 @@ export function createRunCoordinator(options = {}) {
     diff() {
       if (lifecycle !== "active" || !state || !preSnapshot) throw unavailable(lifecycle);
       return diffSnapshots(preSnapshot, createSnapshot(state));
+    },
+
+    oracleRegistry() {
+      if (lifecycle !== "active" || !metadata) throw unavailable(lifecycle);
+      return { canaries: structuredClone(metadata.canaries) };
     },
 
     async transact(context, operation) {

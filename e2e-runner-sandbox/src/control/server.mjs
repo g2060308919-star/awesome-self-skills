@@ -63,6 +63,8 @@ export function createControlServer(options) {
         return options.coordinator.read().oracleEvents;
       case "outbox":
         return options.coordinator.read().outbox;
+      case "canaries":
+        return options.coordinator.oracleRegistry();
       case "fault":
         return options.operations.faultStatus();
       case "expire-session":

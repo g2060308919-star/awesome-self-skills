@@ -24,6 +24,7 @@ const COMMAND_OPTIONS = Object.freeze({
   snapshot: ["runtimeDirectory", "kind"],
   events: ["runtimeDirectory"],
   outbox: ["runtimeDirectory"],
+  canaries: ["runtimeDirectory"],
   fault: ["runtimeDirectory"],
   "expire-session": ["runtimeDirectory", "sessionId"],
   "set-role": ["runtimeDirectory", "accountId", "role"],

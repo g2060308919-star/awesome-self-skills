@@ -61,6 +61,14 @@ test("control inspection returns normalized snapshots, events, outbox, and fault
   assert.equal(fault, null);
 });
 
+test("run canaries are available only through the authenticated evaluator command", async (t) => {
+  const { client } = await startControl(t);
+  const registry = await client.request("canaries", {});
+  assert.deepEqual(registry.canaries.map(({ prefix }) => prefix), ["BENCH_SECRET_", "BENCH_SENSITIVE_"]);
+  assert.ok(registry.canaries.every(({ token }) => /_[0-9A-HJKMNP-TV-Z]{20}_END$/.test(token)));
+  assert.equal(JSON.stringify(await client.request("status", {})).includes(registry.canaries[0].token), false);
+});
+
 test("role changes and session expiry are available only as authenticated evaluator commands", async (t) => {
   const { client, operations, coordinator } = await startControl(t);
   const login = await operations.login("acct-viewer", { provenance: "manual-evaluator" });
