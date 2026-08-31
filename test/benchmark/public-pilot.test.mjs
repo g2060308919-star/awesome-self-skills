@@ -69,8 +69,8 @@ async function writeRetained(root, relativePath, contents) {
  */
 async function createFixture(context, { perStratum = 5 } = {}) {
   const base = await mkdtemp(path.join(os.tmpdir(), 'public-pilot-test-'));
-  const root = path.join(base, 'catalog-root');
-  await mkdir(root);
+  const root = path.join(base, 'benchmark', 'public-pilot', 'v1');
+  await mkdir(root, { recursive: true });
   context.after(async () => rm(base, { recursive: true, force: true }));
 
   /** @type {any[]} */
@@ -199,6 +199,7 @@ async function createFixture(context, { perStratum = 5 } = {}) {
     }
   }
 
+  /** @type {any} */
   const catalog = {
     schema_version: '1.0.0',
     catalog_id: 'public-source-machine-pilot-test',
@@ -206,6 +207,264 @@ async function createFixture(context, { perStratum = 5 } = {}) {
     release_eligible: false,
     release_status: 'insufficient_evidence',
     items
+  };
+
+  const corpusSnapshotBytes = `${JSON.stringify({
+    schema_version: catalog.schema_version,
+    catalog_id: catalog.catalog_id,
+    evidence_class: catalog.evidence_class,
+    release_eligible: catalog.release_eligible,
+    release_status: catalog.release_status,
+    items: catalog.items.map((/** @type {any} */ item) => ({ ...item, reviews: [], defects: [] }))
+  }, null, 2)}\n`;
+  const corpusSnapshotSha256 = sha256(corpusSnapshotBytes);
+  const intakeReportPath = 'intake-report.md';
+  const intakeReportDigest = await writeRetained(root, intakeReportPath, '# Frozen intake report fixture\n');
+  /** @param {string} reportId @param {string} reviewerId */
+  const makeReviewReport = (reportId, reviewerId) => ({
+    schema_version: '1.0.0',
+    report_id: reportId,
+    reviewer_id: reviewerId,
+    reviewer_class: 'machine-agent',
+    review_scope: 'intake-only',
+    external_expert_evidence: false,
+    formal_admit_count: 0,
+    release_eligible: false,
+    release_status: 'insufficient_evidence',
+    input_catalog_sha256: corpusSnapshotSha256,
+    input_intake_report_sha256: intakeReportDigest,
+    reviewed_at: '2026-08-31T01:00:00Z',
+    cases: catalog.items.map((/** @type {any} */ item) => ({
+      review_id: `${reportId}:${item.pilot_id}`,
+      case_id: item.pilot_id,
+      source_id: item.source.source_id,
+      task_id: item.task.task_id,
+      repository: item.repository,
+      stratum: item.stratum,
+      input_source_sha256: item.source.sha256,
+      input_task_sha256: item.task.sha256,
+      decision: 'admit',
+      reasons: ['The fixture source, task, provenance, and license are complete and consistently bound.']
+    }))
+  });
+  const reviewReports = [
+    makeReviewReport('machine-expert-a-v1', 'machine-test-expert-a'),
+    makeReviewReport('machine-expert-b-v1', 'machine-test-expert-b')
+  ];
+  const reviewPaths = ['evidence/machine-expert-a.json', 'evidence/machine-expert-b.json'];
+  const reviewDescriptors = [];
+  for (const [index, report] of reviewReports.entries()) {
+    const bytes = `${JSON.stringify(report, null, 2)}\n`;
+    reviewDescriptors.push({
+      report_id: report.report_id,
+      path: reviewPaths[index],
+      sha256: await writeRetained(root, reviewPaths[index], bytes),
+      reviewer_id: report.reviewer_id,
+      reviewer_class: report.reviewer_class,
+      review_scope: report.review_scope
+    });
+  }
+
+  const decisionCounts = { admit: catalog.items.length, hold: 0, reject: 0 };
+  const finalAdmitsByStratum = Object.fromEntries(FROZEN_STRATA.map((stratum) => [stratum, perStratum]));
+  const adjudication = {
+    schema_version: '1.0.0',
+    report_id: 'machine-adjudication-v1',
+    reviewer_id: 'machine-adjudicator',
+    reviewer_class: 'machine-agent',
+    review_scope: 'intake-only',
+    external_expert_evidence: false,
+    input_catalog_path: 'catalog.json',
+    input_catalog_sha256: corpusSnapshotSha256,
+    input_reports: reviewDescriptors.map(({ report_id, path: reportPath, sha256: digest }) => ({
+      report_id,
+      path: reportPath,
+      sha256: digest
+    })),
+    adjudicated_at: '2026-08-31T02:00:00Z',
+    boundary_note: 'Machine intake adjudication only; this is not external-human evidence.',
+    cases: catalog.items.map((/** @type {any} */ item) => ({
+      review_id: `machine-adjudication-v1:${item.pilot_id}`,
+      case_id: item.pilot_id,
+      source_id: item.source.source_id,
+      task_id: item.task.task_id,
+      repository: item.repository,
+      stratum: item.stratum,
+      input_source_sha256: item.source.sha256,
+      input_task_sha256: item.task.sha256,
+      expert_a_decision: 'admit',
+      expert_b_decision: 'admit',
+      disagreement: false,
+      final_decision: 'admit',
+      reasons: ['Both independent machine intake reports admitted the exact retained case.']
+    })),
+    disagreement_resolutions: [],
+    final_summary: {
+      ...decisionCounts,
+      disagreements: 0,
+      final_admits_by_stratum: finalAdmitsByStratum,
+      all_strata_meet_five: perStratum >= 5
+    },
+    formal_admit_count: 0,
+    release_eligible: false,
+    release_status: 'insufficient_evidence'
+  };
+  const adjudicationPath = 'evidence/machine-adjudication.json';
+  const adjudicationBytes = `${JSON.stringify(adjudication, null, 2)}\n`;
+  const adjudicationDigest = await writeRetained(root, adjudicationPath, adjudicationBytes);
+
+  const leads = Array.from({ length: 32 }, (_, index) => {
+    const item = catalog.items[index % catalog.items.length];
+    const issueNumber = index + 1;
+    return {
+      defect_id: `DEFECT-${String(issueNumber).padStart(3, '0')}`,
+      canonical_url: `https://github.com/${item.repository}/issues/${issueNumber}`,
+      repository: item.repository,
+      issue_number: issueNumber,
+      frozen_risk: 'medium',
+      suggested_strata: [item.stratum],
+      relevance: `Fixture defect lead ${issueNumber}.`,
+      status: 'lead',
+      bound_case_id: null,
+      countable: false,
+      source_version: null,
+      snapshot_sha256: null,
+      snapshot_status: 'not-retained',
+      source_report_path: 'docs/research/source-report.md',
+      source_report_sha256: 'b'.repeat(64),
+      risk_source: 'machine-normalized-from-report-summary',
+      source_occurrences: Array.from({ length: index === 0 ? 2 : 1 }, (_, occurrenceIndex) => ({
+        source_report_path: 'docs/research/source-report.md',
+        source_report_sha256: 'b'.repeat(64),
+        source_local_id: `fixture-${issueNumber}-${occurrenceIndex + 1}`
+      }))
+    };
+  });
+  const defectLedger = {
+    schema_version: '1.0.0',
+    ledger_id: 'public-defect-leads-v1',
+    evidence_class: 'public-source-machine-pilot',
+    external_expert_evidence: false,
+    release_eligible: false,
+    release_status: 'insufficient_evidence',
+    boundary: {
+      machine_generated: true,
+      formal_admit_count: 0,
+      immutable_snapshots_retained: 0,
+      current_case_bindings: 0,
+      note: 'Mutable issue research leads are not retained benchmark defects.'
+    },
+    normalization: {
+      raw_entry_count: 33,
+      unique_lead_count: 32,
+      deduplication_count: 1,
+      deduplicated_issue: {
+        canonical_url: leads[0].canonical_url,
+        canonical_defect_id: leads[0].defect_id,
+        merged_source_local_ids: leads[0].source_occurrences.map((entry) => entry.source_local_id)
+      }
+    },
+    controlling_sources: [],
+    source_reports: [],
+    leads
+  };
+  const defectLedgerPath = 'evidence/defect-ledger.json';
+  const defectLedgerBytes = `${JSON.stringify(defectLedger, null, 2)}\n`;
+  const defectLedgerDigest = await writeRetained(root, defectLedgerPath, defectLedgerBytes);
+
+  for (const item of catalog.items) {
+    item.reviews = [
+      ...reviewReports.map((report) => {
+        const review = report.cases.find((/** @type {any} */ entry) => entry.case_id === item.pilot_id);
+        if (!review) throw new Error(`Missing fixture review for ${item.pilot_id}.`);
+        return {
+          review_id: `${report.report_id}:${item.pilot_id}`,
+          report_id: report.report_id,
+          reviewer_class: report.reviewer_class,
+          review_scope: report.review_scope,
+          source_id: item.source.source_id,
+          task_id: item.task.task_id,
+          decision: review.decision
+        };
+      }),
+      {
+        review_id: `${adjudication.report_id}:${item.pilot_id}`,
+        report_id: adjudication.report_id,
+        reviewer_class: adjudication.reviewer_class,
+        review_scope: adjudication.review_scope,
+        source_id: item.source.source_id,
+        task_id: item.task.task_id,
+        decision: 'admit'
+      }
+    ];
+    item.defects = [];
+  }
+  catalog.corpus_snapshot_sha256 = corpusSnapshotSha256;
+  catalog.review_reports = reviewDescriptors;
+  catalog.adjudication_report = {
+    report_id: adjudication.report_id,
+    path: adjudicationPath,
+    sha256: adjudicationDigest,
+    reviewer_id: adjudication.reviewer_id,
+    reviewer_class: adjudication.reviewer_class,
+    review_scope: adjudication.review_scope
+  };
+  catalog.defect_ledger = {
+    ledger_id: defectLedger.ledger_id,
+    path: defectLedgerPath,
+    sha256: defectLedgerDigest
+  };
+  catalog.intake_report = {
+    path: intakeReportPath,
+    sha256: intakeReportDigest
+  };
+  const frozenSkillDigest = await writeRetained(base, 'skill/generate-test-cases/SKILL.md', '# Fixture Skill\n');
+  const frozenCompilerDigest = await writeRetained(base, 'skill/generate-test-cases/scripts/test-compiler.mjs', 'export const fixtureCompiler = true;\n');
+  const frozenSchemaDigest = await writeRetained(base, 'skill/generate-test-cases/scripts/schema-manifest.json', '{"schema_version":"1.0.0"}\n');
+  const comparatorRegistry = {
+    schema_version: '1.0.0',
+    registry_id: 'public-pilot-comparators-v1',
+    evidence_class: 'public-source-machine-pilot',
+    captures_allowed: false,
+    systems: [
+      {
+        system_id: 'generate-test-cases',
+        status: 'frozen',
+        version: '0.1.0',
+        repository_revision: '1'.repeat(40),
+        artifacts: [
+          { artifact_id: 'skill', kind: 'skill', repository_path: 'skill/generate-test-cases/SKILL.md', sha256: frozenSkillDigest },
+          { artifact_id: 'compiler', kind: 'compiler', repository_path: 'skill/generate-test-cases/scripts/test-compiler.mjs', sha256: frozenCompilerDigest },
+          { artifact_id: 'schema-manifest', kind: 'schema', repository_path: 'skill/generate-test-cases/scripts/schema-manifest.json', sha256: frozenSchemaDigest }
+        ],
+        model_identity: {
+          provider: 'openai',
+          model_id: 'fixture-model-v1',
+          reasoning_effort: 'high'
+        },
+        run_recipe: {
+          recipe_id: 'fixture-run-v1',
+          invocation: 'Invoke the frozen Skill in a fresh context.',
+          input_contract: 'Exact retained source and task bytes.',
+          output_contract: 'Retain the unmodified raw response.',
+          independent_runs: 3
+        }
+      },
+      ...['long-prompt', 'test-case-designer', 'technique-router'].map((systemId) => ({
+        system_id: systemId,
+        status: 'unresolved',
+        missing_fields: ['version', 'artifacts', 'model_identity', 'run_recipe'],
+        resolution_note: 'No licensed, authoritative implementation identity is available.'
+      }))
+    ]
+  };
+  const comparatorPath = 'comparators.json';
+  const comparatorBytes = `${JSON.stringify(comparatorRegistry, null, 2)}\n`;
+  const comparatorDigest = await writeRetained(root, comparatorPath, comparatorBytes);
+  catalog.comparators = {
+    registry_id: comparatorRegistry.registry_id,
+    path: comparatorPath,
+    sha256: comparatorDigest
   };
   const catalogPath = path.join(root, 'catalog.json');
   await saveCatalog({ catalog, catalogPath });
@@ -247,6 +506,60 @@ async function updateTask(fixture, itemIndex, update) {
   item.task.sha256 = sha256(bytes);
 }
 
+/**
+ * @param {{ root: string, catalog: any }} fixture
+ * @param {any} descriptor
+ * @param {(record: any) => void} update
+ */
+async function updateRetainedJson(fixture, descriptor, update) {
+  const absolutePath = path.join(fixture.root, descriptor.path);
+  const record = JSON.parse(await readFile(absolutePath, 'utf8'));
+  update(record);
+  const bytes = `${JSON.stringify(record, null, 2)}\n`;
+  await writeFile(absolutePath, bytes);
+  descriptor.sha256 = sha256(bytes);
+}
+
+/** @param {{ root: string, catalog: any }} fixture */
+async function refreshTask4SnapshotBindings(fixture) {
+  const projection = {
+    schema_version: fixture.catalog.schema_version,
+    catalog_id: fixture.catalog.catalog_id,
+    evidence_class: fixture.catalog.evidence_class,
+    release_eligible: fixture.catalog.release_eligible,
+    release_status: fixture.catalog.release_status,
+    items: fixture.catalog.items.map((/** @type {any} */ item) => ({
+      pilot_id: item.pilot_id,
+      status: item.status,
+      repository: item.repository,
+      commit: item.commit,
+      stratum: item.stratum,
+      acquired_at: item.acquired_at,
+      source: item.source,
+      license: item.license,
+      provenance: item.provenance,
+      task: item.task,
+      reviews: [],
+      defects: []
+    }))
+  };
+  const snapshotDigest = sha256(`${JSON.stringify(projection, null, 2)}\n`);
+  fixture.catalog.corpus_snapshot_sha256 = snapshotDigest;
+  for (const descriptor of fixture.catalog.review_reports) {
+    await updateRetainedJson(fixture, descriptor, (report) => {
+      report.input_catalog_sha256 = snapshotDigest;
+    });
+  }
+  await updateRetainedJson(fixture, fixture.catalog.adjudication_report, (adjudication) => {
+    adjudication.input_catalog_sha256 = snapshotDigest;
+    adjudication.input_reports = fixture.catalog.review_reports.map((/** @type {any} */ descriptor) => ({
+      report_id: descriptor.report_id,
+      path: descriptor.path,
+      sha256: descriptor.sha256
+    }));
+  });
+}
+
 /** @param {{ code: string }[]} issues @param {string} code */
 function hasIssue(issues, code) {
   return issues.some((issue) => issue.code === code);
@@ -259,8 +572,120 @@ test('public pilot can never claim release eligibility', async (context) => {
   assert.equal(report.status, 'pilot_ready');
   assert.equal(report.release_eligible, false);
   assert.equal(report.release_status, 'insufficient_evidence');
+  assert.equal(report.captures_ready, false);
   assert.deepEqual(Object.keys(report.counts.by_stratum), [...FROZEN_STRATA]);
   assert.deepEqual(Object.values(report.counts.by_stratum), [5, 5, 5, 5, 5, 5]);
+});
+
+test('captures stay closed while any comparator identity is unresolved', async (context) => {
+  const fixture = await createFixture(context);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'pilot_ready');
+  assert.equal(report.captures_ready, false);
+  assert.equal(hasIssue(report.issues, 'COMPARATOR_UNRESOLVED'), true);
+});
+
+test('frozen comparators require exact artifact digests, version, model identity, and run recipe', async (context) => {
+  const fixture = await createFixture(context);
+  await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
+    registry.systems[1].status = 'frozen';
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(report.captures_ready, false);
+  assert.equal(hasIssue(report.issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID'), true);
+});
+
+test('captures become ready only after all four comparator identities are frozen', async (context) => {
+  const fixture = await createFixture(context);
+  const baselineDigests = new Map();
+  for (const systemId of ['long-prompt', 'test-case-designer', 'technique-router']) {
+    const repositoryPath = `comparators/${systemId}.md`;
+    baselineDigests.set(systemId, {
+      repositoryPath,
+      digest: await writeRetained(fixture.base, repositoryPath, `# ${systemId} frozen prompt\n`)
+    });
+  }
+  await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
+    const template = registry.systems[0];
+    for (const system of registry.systems.slice(1)) {
+      Object.assign(system, {
+        status: 'frozen',
+        version: '1.0.0',
+        repository_revision: '2'.repeat(40),
+        artifacts: [{
+          artifact_id: `${system.system_id}-prompt`,
+          kind: 'prompt',
+          repository_path: baselineDigests.get(system.system_id).repositoryPath,
+          sha256: baselineDigests.get(system.system_id).digest
+        }],
+        model_identity: { ...template.model_identity },
+        run_recipe: { ...template.run_recipe, recipe_id: `${system.system_id}-run-v1` }
+      });
+      delete system.missing_fields;
+      delete system.resolution_note;
+    }
+    registry.captures_allowed = true;
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'pilot_ready');
+  assert.equal(report.captures_ready, true);
+  assert.equal(hasIssue(report.issues, 'COMPARATOR_UNRESOLVED'), false);
+
+  fixture.catalog.release_eligible = true;
+  await saveCatalog(fixture);
+  const invalidReport = await validatePublicPilot(fixture.catalogPath);
+  assert.equal(invalidReport.status, 'invalid');
+  assert.equal(invalidReport.captures_ready, false);
+});
+
+test('frozen comparator artifacts are read and digest-verified inside the repository root', async (context) => {
+  await context.test('tampered bytes', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    await appendFile(path.join(fixture.base, 'skill/generate-test-cases/SKILL.md'), 'tampered\n');
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(report.captures_ready, false);
+    assert.equal(hasIssue(report.issues, 'COMPARATOR_ARTIFACT_DIGEST_MISMATCH'), true);
+  });
+
+  await context.test('missing path', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
+      registry.systems[0].artifacts[0].repository_path = 'skill/generate-test-cases/MISSING.md';
+    });
+    await saveCatalog(fixture);
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(report.captures_ready, false);
+    assert.equal(hasIssue(report.issues, 'RETAINED_FILE_UNREADABLE'), true);
+  });
+
+  await context.test('parent traversal', async (/** @type {any} */ childContext) => {
+    const fixture = await createFixture(childContext);
+    await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
+      registry.systems[0].artifacts[0].repository_path = '../outside.md';
+    });
+    await saveCatalog(fixture);
+
+    const report = await validatePublicPilot(fixture.catalogPath);
+
+    assert.equal(report.status, 'invalid');
+    assert.equal(report.captures_ready, false);
+    assert.equal(hasIssue(report.issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID'), true);
+  });
 });
 
 test('machine reviewers cannot be encoded as external experts', async (context) => {
@@ -326,6 +751,143 @@ test('machine reviews require the intake-only review scope', async (context) => 
   }
 });
 
+test('the corpus snapshot digest is recomputed from the Task 3 projection', async (context) => {
+  const fixture = await createFixture(context);
+  fixture.catalog.corpus_snapshot_sha256 = '0'.repeat(64);
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'CORPUS_SNAPSHOT_DIGEST_MISMATCH'), true);
+});
+
+test('retained review reports cannot claim external human evidence', async (context) => {
+  const fixture = await createFixture(context);
+  await updateRetainedJson(fixture, fixture.catalog.review_reports[0], (review) => {
+    review.external_expert_evidence = true;
+    review.reviewer_class = 'external-human-expert';
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'EXTERNAL_EXPERT_EVIDENCE_FORBIDDEN'), true);
+});
+
+test('each independent report must review the complete frozen corpus', async (context) => {
+  const fixture = await createFixture(context);
+  await updateRetainedJson(fixture, fixture.catalog.review_reports[0], (review) => {
+    review.cases.pop();
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'REVIEW_CASE_COVERAGE_INVALID'), true);
+});
+
+test('review reports must bind the retained frozen intake bytes', async (context) => {
+  const fixture = await createFixture(context);
+  await appendFile(path.join(fixture.root, fixture.catalog.intake_report.path), 'tampered\n');
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'INTAKE_REPORT_DIGEST_MISMATCH'), true);
+});
+
+test('machine adjudication must digest-bind both independent reports', async (context) => {
+  const fixture = await createFixture(context);
+  await updateRetainedJson(fixture, fixture.catalog.adjudication_report, (adjudication) => {
+    adjudication.input_reports.pop();
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'ADJUDICATION_INPUT_MISSING'), true);
+});
+
+test('machine adjudication must structurally bind every disagreement resolution', async (context) => {
+  const fixture = await createFixture(context);
+  const item = fixture.catalog.items[0];
+  await updateRetainedJson(fixture, fixture.catalog.review_reports[1], (review) => {
+    review.cases[0].decision = 'hold';
+  });
+  item.reviews[1].decision = 'hold';
+  await updateRetainedJson(fixture, fixture.catalog.adjudication_report, (adjudication) => {
+    adjudication.input_reports = fixture.catalog.review_reports.map((/** @type {any} */ descriptor) => ({
+      report_id: descriptor.report_id,
+      path: descriptor.path,
+      sha256: descriptor.sha256
+    }));
+    adjudication.cases[0].expert_b_decision = 'hold';
+    adjudication.cases[0].disagreement = true;
+    adjudication.disagreement_resolutions = [{}];
+    adjudication.final_summary.disagreements = 1;
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'ADJUDICATION_RESOLUTIONS_INVALID'), true);
+});
+
+test('a case with an invalid report link is excluded from admitted counts', async (context) => {
+  const fixture = await createFixture(context);
+  fixture.catalog.items[0].reviews[0].review_id = 'wrong-review-id';
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(report.counts.pilot_admitted, 29);
+  assert.equal(report.counts.by_stratum[FROZEN_STRATA[0]], 4);
+});
+
+test('duplicate canonical issues are rejected even when routed to different strata', async (context) => {
+  const fixture = await createFixture(context);
+  await updateRetainedJson(fixture, fixture.catalog.defect_ledger, (ledger) => {
+    ledger.leads[1].canonical_url = ledger.leads[0].canonical_url;
+    ledger.leads[1].repository = ledger.leads[0].repository;
+    ledger.leads[1].issue_number = ledger.leads[0].issue_number;
+    ledger.leads[1].suggested_strata = [FROZEN_STRATA[1]];
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'DUPLICATE_DEFECT_ISSUE'), true);
+});
+
+test('a countable defect cannot bind to a non-admitted case', async (context) => {
+  const fixture = await createFixture(context);
+  const item = fixture.catalog.items[0];
+  item.status = 'hold';
+  await updateRetainedJson(fixture, fixture.catalog.defect_ledger, (ledger) => {
+    Object.assign(ledger.leads[0], {
+      status: 'case-bound',
+      bound_case_id: item.pilot_id,
+      countable: true,
+      source_version: item.commit,
+      snapshot_sha256: 'c'.repeat(64),
+      snapshot_status: 'retained'
+    });
+  });
+  await saveCatalog(fixture);
+
+  const report = await validatePublicPilot(fixture.catalogPath);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(hasIssue(report.issues, 'DEFECT_BOUND_TO_NON_ADMITTED'), true);
+});
+
 test('changed retained source bytes invalidate the declared source digest', async (context) => {
   const fixture = await createFixture(context);
   await appendFile(path.join(fixture.root, fixture.catalog.items[0].source.path), 'tampered\n');
@@ -357,8 +919,8 @@ test('task review and defect byte digests are recomputed from retained files', a
       const relativePath = field === 'task'
         ? fixture.catalog.items[0].task.path
         : field === 'review'
-          ? fixture.catalog.items[0].reviews[0].path
-          : fixture.catalog.items[0].defects[0].path;
+          ? fixture.catalog.review_reports[0].path
+          : fixture.catalog.defect_ledger.path;
       await appendFile(path.join(fixture.root, relativePath), 'tampered\n');
 
       const report = await validatePublicPilot(fixture.catalogPath);
@@ -470,7 +1032,9 @@ test('source license and defect URLs must belong to the catalog repository', asy
           provenance.license_url = item.license.upstream_url;
         });
       } else {
-        item.defects[0].upstream_url = 'https://github.com/other-owner/other-product/issues/1';
+        await updateRetainedJson(fixture, fixture.catalog.defect_ledger, (ledger) => {
+          ledger.leads[0].canonical_url = 'https://github.com/other-owner/other-product/issues/1';
+        });
       }
       await saveCatalog(fixture);
 
@@ -510,9 +1074,7 @@ test('an admitted item requires an explicit source-bound task', async (context) 
 });
 
 test('a structurally valid catalog below five admitted items in one stratum is pilot incomplete', async (context) => {
-  const fixture = await createFixture(context);
-  fixture.catalog.items.pop();
-  await saveCatalog(fixture);
+  const fixture = await createFixture(context, { perStratum: 4 });
 
   const report = await validatePublicPilot(fixture.catalogPath);
 
@@ -524,7 +1086,9 @@ test('a structurally valid catalog below five admitted items in one stratum is p
 
 test('an unbound historical defect lead cannot be counted', async (context) => {
   const fixture = await createFixture(context);
-  fixture.catalog.items[0].defects[1].countable = true;
+  await updateRetainedJson(fixture, fixture.catalog.defect_ledger, (ledger) => {
+    ledger.leads[0].countable = true;
+  });
   await saveCatalog(fixture);
 
   const report = await validatePublicPilot(fixture.catalogPath);
@@ -538,16 +1102,15 @@ test('defect status is required and lead records stay unbound and uncountable', 
   /** @type {Array<[string, (defect: any) => void, string]>} */
   const cases = [
     ['missing status', (defect) => delete defect.status, 'DEFECT_STATUS_INVALID'],
-    ['countable lead', (defect) => { defect.status = 'lead'; }, 'COUNTABLE_DEFECT_STATUS_INVALID'],
-    ['bound lead', (defect) => { defect.bound_pilot_id = 'PF-01'; }, 'LEAD_DEFECT_BINDING_INVALID']
+    ['countable lead', (defect) => { defect.countable = true; }, 'COUNTABLE_DEFECT_STATUS_INVALID'],
+    ['bound lead', (defect) => { defect.bound_case_id = 'PF-01'; }, 'LEAD_DEFECT_BINDING_INVALID']
   ];
   for (const [label, update, code] of cases) {
     await context.test(label, async (/** @type {any} */ childContext) => {
       const fixture = await createFixture(childContext);
-      const defect = label === 'bound lead'
-        ? fixture.catalog.items[0].defects[1]
-        : fixture.catalog.items[0].defects[0];
-      update(defect);
+      await updateRetainedJson(fixture, fixture.catalog.defect_ledger, (ledger) => {
+        update(ledger.leads[label === 'bound lead' ? 1 : 0]);
+      });
       await saveCatalog(fixture);
 
       const report = await validatePublicPilot(fixture.catalogPath);
@@ -596,6 +1159,7 @@ test('RFC 3339 acquisition times enforce real calendar dates and leap years', as
       await updateProvenance(fixture, 0, (provenance) => {
         provenance.acquired_at = value;
       });
+      await refreshTask4SnapshotBindings(fixture);
       await saveCatalog(fixture);
 
       const report = await validatePublicPilot(fixture.catalogPath);
@@ -643,8 +1207,8 @@ test('symlinked retained files are rejected', async (context) => {
 
 test('hardlinked retained files are rejected', async (context) => {
   const fixture = await createFixture(context);
-  const first = fixture.catalog.items[0].reviews[0];
-  const second = fixture.catalog.items[1].reviews[0];
+  const first = fixture.catalog.review_reports[0];
+  const second = fixture.catalog.review_reports[1];
   const firstPath = path.join(fixture.root, first.path);
   const secondPath = path.join(fixture.root, second.path);
   await unlink(secondPath);
@@ -660,8 +1224,8 @@ test('hardlinked retained files are rejected', async (context) => {
 
 test('one retained physical path cannot satisfy two catalog bindings', async (context) => {
   const fixture = await createFixture(context);
-  fixture.catalog.items[1].reviews[0].path = fixture.catalog.items[0].reviews[0].path;
-  fixture.catalog.items[1].reviews[0].sha256 = fixture.catalog.items[0].reviews[0].sha256;
+  fixture.catalog.review_reports[1].path = fixture.catalog.review_reports[0].path;
+  fixture.catalog.review_reports[1].sha256 = fixture.catalog.review_reports[0].sha256;
   await saveCatalog(fixture);
 
   const report = await validatePublicPilot(fixture.catalogPath);

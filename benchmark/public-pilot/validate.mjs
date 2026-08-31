@@ -16,6 +16,12 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
 const RFC3339_DATE_TIME_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 const ITEM_STATUSES = new Set(['pilot-admitted', 'hold', 'rejected']);
+const COMPARATOR_IDS = Object.freeze([
+  'long-prompt',
+  'test-case-designer',
+  'technique-router',
+  'generate-test-cases'
+]);
 const RELEASE_STATUS = /** @type {'insufficient_evidence'} */ ('insufficient_evidence');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const lstat = fsPromises.lstat;
@@ -129,7 +135,8 @@ function isWithin(root, candidate) {
  *   issuePath: string,
  *   mismatchCode: string,
  *   issues: Array<any>,
- *   physicalPaths: Map<string, string>
+ *   physicalPaths: Map<string, string>,
+ *   pathField?: string
  * }} options
  */
 async function readRetainedArtifact(options) {
@@ -141,33 +148,34 @@ async function readRetainedArtifact(options) {
     issuePath,
     mismatchCode,
     issues,
-    physicalPaths
+    physicalPaths,
+    pathField = 'path'
   } = options;
 
   if (!nonEmptyString(relativePath)) {
-    addIssue(issues, 'RETAINED_PATH_INVALID', `${issuePath}/path`, 'A retained artifact path is required.');
+    addIssue(issues, 'RETAINED_PATH_INVALID', `${issuePath}/${pathField}`, 'A retained artifact path is required.');
     return null;
   }
 
   const declaredPath = /** @type {string} */ (relativePath);
   if (path.isAbsolute(declaredPath) || path.win32.isAbsolute(declaredPath)) {
-    addIssue(issues, 'ABSOLUTE_PATH_FORBIDDEN', `${issuePath}/path`, 'Retained paths must be relative to the catalog root.');
+    addIssue(issues, 'ABSOLUTE_PATH_FORBIDDEN', `${issuePath}/${pathField}`, 'Retained paths must be relative to the artifact root.');
     return null;
   }
 
   const segments = declaredPath.split(/[\\/]+/);
   if (segments.includes('..')) {
-    addIssue(issues, 'PATH_TRAVERSAL_FORBIDDEN', `${issuePath}/path`, 'Parent traversal is forbidden in retained paths.');
+    addIssue(issues, 'PATH_TRAVERSAL_FORBIDDEN', `${issuePath}/${pathField}`, 'Parent traversal is forbidden in retained paths.');
     return null;
   }
   if (segments.some((segment) => segment === '' || segment === '.')) {
-    addIssue(issues, 'RETAINED_PATH_INVALID', `${issuePath}/path`, 'Retained paths must be normalized non-empty relative paths.');
+    addIssue(issues, 'RETAINED_PATH_INVALID', `${issuePath}/${pathField}`, 'Retained paths must be normalized non-empty relative paths.');
     return null;
   }
 
   const absolutePath = path.resolve(root, declaredPath);
   if (!isWithin(root, absolutePath)) {
-    addIssue(issues, 'PATH_OUTSIDE_CATALOG_ROOT', `${issuePath}/path`, 'Retained path resolves outside the catalog root.');
+    addIssue(issues, 'PATH_OUTSIDE_CATALOG_ROOT', `${issuePath}/${pathField}`, 'Retained path resolves outside the artifact root.');
     return null;
   }
 
@@ -175,16 +183,16 @@ async function readRetainedArtifact(options) {
   try {
     entry = await lstat(absolutePath);
   } catch (error) {
-    addIssue(issues, 'RETAINED_FILE_UNREADABLE', `${issuePath}/path`, `Cannot inspect retained file: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
+    addIssue(issues, 'RETAINED_FILE_UNREADABLE', `${issuePath}/${pathField}`, `Cannot inspect retained file: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
     return null;
   }
 
   if (entry.isSymbolicLink()) {
-    addIssue(issues, 'SYMLINK_FORBIDDEN', `${issuePath}/path`, 'Retained artifacts cannot be symbolic links.');
+    addIssue(issues, 'SYMLINK_FORBIDDEN', `${issuePath}/${pathField}`, 'Retained artifacts cannot be symbolic links.');
     return null;
   }
   if (!entry.isFile()) {
-    addIssue(issues, 'RETAINED_FILE_INVALID', `${issuePath}/path`, 'Retained artifact must be a regular file.');
+    addIssue(issues, 'RETAINED_FILE_INVALID', `${issuePath}/${pathField}`, 'Retained artifact must be a regular file.');
     return null;
   }
 
@@ -193,22 +201,22 @@ async function readRetainedArtifact(options) {
   try {
     [resolvedPath, fileStat] = await Promise.all([realpath(absolutePath), stat(absolutePath)]);
   } catch (error) {
-    addIssue(issues, 'RETAINED_FILE_UNREADABLE', `${issuePath}/path`, `Cannot resolve retained file: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
+    addIssue(issues, 'RETAINED_FILE_UNREADABLE', `${issuePath}/${pathField}`, `Cannot resolve retained file: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
     return null;
   }
 
   const expectedRealPath = path.resolve(rootReal, declaredPath);
   if (!isWithin(rootReal, resolvedPath)) {
-    addIssue(issues, 'PATH_OUTSIDE_CATALOG_ROOT', `${issuePath}/path`, 'Resolved retained path escapes the catalog root.');
+    addIssue(issues, 'PATH_OUTSIDE_CATALOG_ROOT', `${issuePath}/${pathField}`, 'Resolved retained path escapes the artifact root.');
     return null;
   }
   if (resolvedPath !== expectedRealPath) {
-    addIssue(issues, 'SYMLINK_FORBIDDEN', `${issuePath}/path`, 'A retained path component resolves through a symbolic link.');
+    addIssue(issues, 'SYMLINK_FORBIDDEN', `${issuePath}/${pathField}`, 'A retained path component resolves through a symbolic link.');
     return null;
   }
 
   if (fileStat.nlink !== 1) {
-    addIssue(issues, 'HARDLINK_FORBIDDEN', `${issuePath}/path`, 'Retained artifacts must have exactly one hard link.');
+    addIssue(issues, 'HARDLINK_FORBIDDEN', `${issuePath}/${pathField}`, 'Retained artifacts must have exactly one hard link.');
   }
 
   const physicalKeys = [
@@ -217,17 +225,17 @@ async function readRetainedArtifact(options) {
   ];
   const priorBinding = physicalKeys.map((key) => physicalPaths.get(key)).find(Boolean);
   if (priorBinding !== undefined) {
-    addIssue(issues, 'DUPLICATE_PHYSICAL_PATH', `${issuePath}/path`, `Retained file is already bound at ${priorBinding}.`);
+    addIssue(issues, 'DUPLICATE_PHYSICAL_PATH', `${issuePath}/${pathField}`, `Retained file is already bound at ${priorBinding}.`);
   }
   for (const key of physicalKeys) {
-    if (!physicalPaths.has(key)) physicalPaths.set(key, `${issuePath}/path`);
+    if (!physicalPaths.has(key)) physicalPaths.set(key, `${issuePath}/${pathField}`);
   }
 
   let bytes;
   try {
     bytes = await readFile(absolutePath);
   } catch (error) {
-    addIssue(issues, 'RETAINED_FILE_UNREADABLE', `${issuePath}/path`, `Cannot read retained file: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
+    addIssue(issues, 'RETAINED_FILE_UNREADABLE', `${issuePath}/${pathField}`, `Cannot read retained file: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
     return null;
   }
 
@@ -316,7 +324,73 @@ function rejectForbiddenExpertClaims(value, issuePath, issues) {
     if (key === 'expert_annotations') {
       addIssue(issues, 'EXPERT_EVIDENCE_FORBIDDEN', `${issuePath}/${key}`, 'Pilot records cannot contain formal expert annotations.');
     }
+    if (key === 'external_expert_evidence' && entry !== false) {
+      addIssue(issues, 'EXTERNAL_EXPERT_EVIDENCE_FORBIDDEN', `${issuePath}/${key}`, 'Machine-pilot evidence must explicitly deny external-expert status.');
+    }
     rejectForbiddenExpertClaims(entry, `${issuePath}/${key}`, issues);
+  }
+}
+
+/** @param {Record<string, any>} catalog */
+function corpusSnapshotDigest(catalog) {
+  const projection = {
+    schema_version: catalog.schema_version,
+    catalog_id: catalog.catalog_id,
+    evidence_class: catalog.evidence_class,
+    release_eligible: catalog.release_eligible,
+    release_status: catalog.release_status,
+    items: Array.isArray(catalog.items) ? catalog.items.map((item) => ({
+      pilot_id: item?.pilot_id,
+      status: item?.status,
+      repository: item?.repository,
+      commit: item?.commit,
+      stratum: item?.stratum,
+      acquired_at: item?.acquired_at,
+      source: item?.source,
+      license: item?.license,
+      provenance: item?.provenance,
+      task: item?.task,
+      reviews: [],
+      defects: []
+    })) : catalog.items
+  };
+  return sha256(`${JSON.stringify(projection, null, 2)}\n`);
+}
+
+/**
+ * @param {Record<string, any>} descriptor
+ * @param {string} issuePath
+ * @param {string} mismatchCode
+ * @param {{root: string, rootReal: string, issues: Array<any>, physicalPaths: Map<string, string>}} context
+ */
+async function readRetainedJson(descriptor, issuePath, mismatchCode, context) {
+  const artifact = await readRetainedArtifact({
+    root: context.root,
+    rootReal: context.rootReal,
+    relativePath: descriptor?.path,
+    expectedDigest: descriptor?.sha256,
+    issuePath,
+    mismatchCode,
+    issues: context.issues,
+    physicalPaths: context.physicalPaths
+  });
+  if (!artifact) return null;
+  let record;
+  try {
+    record = JSON.parse(artifact.bytes.toString('utf8'));
+  } catch {
+    addIssue(context.issues, 'RETAINED_JSON_INVALID', `${issuePath}/path`, 'Retained evidence must be valid JSON.');
+    return null;
+  }
+  const object = requireObject(record, `${issuePath}/file`, context.issues, 'RETAINED_JSON_INVALID');
+  if (object) rejectForbiddenExpertClaims(object, `${issuePath}/file`, context.issues);
+  return object;
+}
+
+/** @param {unknown} reasons @param {string} issuePath @param {Array<any>} issues */
+function validateReasons(reasons, issuePath, issues) {
+  if (!Array.isArray(reasons) || reasons.length === 0 || reasons.some((reason) => !nonEmptyString(reason))) {
+    addIssue(issues, 'REVIEW_REASONS_INVALID', issuePath, 'Review reasons must be a non-empty array of non-empty strings.');
   }
 }
 
@@ -336,7 +410,6 @@ async function validateItem(item, itemIndex, context) {
   const { root, rootReal, issues, physicalPaths, contentDigests, stableIds } = context;
   const itemPath = `/items/${itemIndex}`;
   const errorsBefore = issues.filter((entry) => entry.severity === 'error').length;
-  let countableDefects = 0;
 
   rejectUnknownKeys(item, new Set([
     'pilot_id', 'status', 'repository', 'commit', 'stratum', 'acquired_at',
@@ -546,19 +619,18 @@ async function validateItem(item, itemIndex, context) {
 
   const reviews = Array.isArray(item.reviews) ? item.reviews : null;
   if (!reviews) addIssue(issues, 'CATALOG_CONTRACT_INVALID', `${itemPath}/reviews`, 'Reviews must be an array.');
-  if (reviews?.length === 0 && item.status === 'pilot-admitted') {
-    addIssue(issues, 'MACHINE_REVIEW_MISSING', `${itemPath}/reviews`, 'Pilot item is retained but not yet machine-reviewed.', 'incomplete');
+  if (reviews && reviews.length !== 3) {
+    addIssue(issues, 'REVIEW_LINK_SET_INVALID', `${itemPath}/reviews`, 'Each item must link exactly machine expert A, machine expert B, and machine adjudication.');
   }
-  let hasAdmitReview = false;
   for (const [reviewIndex, reviewValue] of (reviews ?? []).entries()) {
     const reviewPath = `${itemPath}/reviews/${reviewIndex}`;
     const review = requireObject(reviewValue, reviewPath, issues);
     if (!review) continue;
     rejectUnknownKeys(review, new Set([
-      'review_id', 'path', 'sha256', 'reviewer_class', 'review_scope', 'source_id', 'task_id', 'decision'
+      'review_id', 'report_id', 'reviewer_class', 'review_scope', 'source_id', 'task_id', 'decision'
     ]), reviewPath, issues);
     requireString(review.review_id, `${reviewPath}/review_id`, issues);
-    requireDigest(review.sha256, `${reviewPath}/sha256`, issues);
+    requireString(review.report_id, `${reviewPath}/report_id`, issues);
     if (review.reviewer_class !== 'machine-agent') {
       addIssue(issues, 'REVIEWER_CLASS_INVALID', `${reviewPath}/reviewer_class`, 'Pilot reviews must identify reviewers only as machine-agent.');
     }
@@ -571,67 +643,711 @@ async function validateItem(item, itemIndex, context) {
     if (!['admit', 'hold', 'reject'].includes(review.decision)) {
       addIssue(issues, 'REVIEW_DECISION_INVALID', `${reviewPath}/decision`, 'Unknown machine intake decision.');
     }
-    if (review.decision === 'admit') hasAdmitReview = true;
-    await readRetainedArtifact({
-      root, rootReal, relativePath: review.path, expectedDigest: review.sha256,
-      issuePath: reviewPath, mismatchCode: 'REVIEW_DIGEST_MISMATCH', issues, physicalPaths
-    });
   }
 
   const defects = Array.isArray(item.defects) ? item.defects : null;
   if (!defects) addIssue(issues, 'CATALOG_CONTRACT_INVALID', `${itemPath}/defects`, 'Defects must be an array.');
-  for (const [defectIndex, defectValue] of (defects ?? []).entries()) {
-    const defectPath = `${itemPath}/defects/${defectIndex}`;
-    const defect = requireObject(defectValue, defectPath, issues);
-    if (!defect) continue;
-    rejectUnknownKeys(defect, new Set([
-      'defect_id', 'path', 'sha256', 'upstream_url', 'status', 'bound_pilot_id', 'countable'
-    ]), defectPath, issues);
-    requireString(defect.defect_id, `${defectPath}/defect_id`, issues);
-    requireDigest(defect.sha256, `${defectPath}/sha256`, issues);
-    requireString(defect.upstream_url, `${defectPath}/upstream_url`, issues);
-    validateGitHubIssueUrl(defect.upstream_url, item.repository, `${defectPath}/upstream_url`, issues);
-    if (!['lead', 'case-bound'].includes(defect.status)) {
-      addIssue(issues, 'DEFECT_STATUS_INVALID', `${defectPath}/status`, 'Unknown defect status.');
-    }
-    if (typeof defect.countable !== 'boolean') {
-      addIssue(issues, 'CATALOG_CONTRACT_INVALID', `${defectPath}/countable`, 'Defect countable must be boolean.');
-    }
-    if (defect.countable === true && defect.bound_pilot_id !== item.pilot_id) {
-      addIssue(issues, 'UNBOUND_DEFECT_COUNTED', `${defectPath}/countable`, 'Only a defect bound to this pilot item may be countable.');
-    }
-    if (defect.countable === true && defect.status !== 'case-bound') {
-      addIssue(issues, 'COUNTABLE_DEFECT_STATUS_INVALID', `${defectPath}/status`, 'Only a case-bound defect may be countable.');
-    }
-    if (defect.status === 'lead' && (defect.bound_pilot_id !== null || defect.countable !== false)) {
-      addIssue(issues, 'LEAD_DEFECT_BINDING_INVALID', defectPath, 'A defect lead must remain unbound and uncountable.');
-    }
-    if (defect.status === 'case-bound' && defect.bound_pilot_id !== item.pilot_id) {
-      addIssue(issues, 'DEFECT_BINDING_INVALID', `${defectPath}/bound_pilot_id`, 'A case-bound defect must bind to this item.');
-    }
-    if (defect.bound_pilot_id !== null && defect.bound_pilot_id !== item.pilot_id) {
-      addIssue(issues, 'DEFECT_BINDING_INVALID', `${defectPath}/bound_pilot_id`, 'Defect binding must be null or this item\'s pilot ID.');
-    }
-    const artifact = await readRetainedArtifact({
-      root, rootReal, relativePath: defect.path, expectedDigest: defect.sha256,
-      issuePath: defectPath, mismatchCode: 'DEFECT_DIGEST_MISMATCH', issues, physicalPaths
-    });
-    if (defect.status === 'case-bound'
-      && defect.countable === true
-      && defect.bound_pilot_id === item.pilot_id
-      && artifact?.digestMatches) {
-      countableDefects += 1;
-    }
+  if (defects && defects.length !== 0) {
+    addIssue(issues, 'ITEM_DEFECT_BINDING_FORBIDDEN', `${itemPath}/defects`, 'The global defect ledger is the only defect source of truth.');
   }
 
   const errorsAfter = issues.filter((entry) => entry.severity === 'error').length;
-  const ready = item.status === 'pilot-admitted'
-    && errorsAfter === errorsBefore
-    && license?.scope_decision === 'applicable'
-    && reviews !== null
-    && reviews.length > 0
-    && hasAdmitReview;
-  return { ready, countableDefects: ready ? countableDefects : 0 };
+  const baseValid = errorsAfter === errorsBefore && license?.scope_decision === 'applicable';
+  return { baseValid };
+}
+
+/**
+ * @param {Record<string, any>} catalog
+ * @param {{root: string, rootReal: string, issues: Array<any>, physicalPaths: Map<string, string>}} context
+ */
+async function validateIntakeReport(catalog, context) {
+  const issuePath = '/intake_report';
+  const descriptor = requireObject(catalog.intake_report, issuePath, context.issues);
+  if (!descriptor) return null;
+  rejectUnknownKeys(descriptor, new Set(['path', 'sha256']), issuePath, context.issues);
+  requireDigest(descriptor.sha256, `${issuePath}/sha256`, context.issues);
+  const artifact = await readRetainedArtifact({
+    root: context.root,
+    rootReal: context.rootReal,
+    relativePath: descriptor.path,
+    expectedDigest: descriptor.sha256,
+    issuePath,
+    mismatchCode: 'INTAKE_REPORT_DIGEST_MISMATCH',
+    issues: context.issues,
+    physicalPaths: context.physicalPaths
+  });
+  return artifact?.digestMatches ? artifact.digest : null;
+}
+
+/**
+ * @param {Record<string, any>} catalog
+ * @param {string} snapshotDigest
+ * @param {string | null} intakeReportDigest
+ * @param {{root: string, rootReal: string, issues: Array<any>, physicalPaths: Map<string, string>}} context
+ */
+async function validateReviewReports(catalog, snapshotDigest, intakeReportDigest, context) {
+  const { issues } = context;
+  const descriptors = Array.isArray(catalog.review_reports) ? catalog.review_reports : null;
+  if (!descriptors || descriptors.length !== 2) {
+    addIssue(issues, 'REVIEW_REPORT_COUNT_INVALID', '/review_reports', 'Exactly two independent machine review reports are required.');
+  }
+  const reports = new Map();
+  const seenReportIds = new Set();
+  const seenReviewerIds = new Set();
+  const seenDigests = new Set();
+
+  for (const [index, descriptorValue] of (descriptors ?? []).entries()) {
+    const issuePath = `/review_reports/${index}`;
+    const descriptor = requireObject(descriptorValue, issuePath, issues);
+    if (!descriptor) continue;
+    rejectUnknownKeys(descriptor, new Set([
+      'report_id', 'path', 'sha256', 'reviewer_id', 'reviewer_class', 'review_scope'
+    ]), issuePath, issues);
+    requireString(descriptor.report_id, `${issuePath}/report_id`, issues);
+    requireString(descriptor.reviewer_id, `${issuePath}/reviewer_id`, issues);
+    requireDigest(descriptor.sha256, `${issuePath}/sha256`, issues);
+    if (descriptor.reviewer_class !== 'machine-agent') {
+      addIssue(issues, 'REVIEWER_CLASS_INVALID', `${issuePath}/reviewer_class`, 'Review report descriptors must identify machine agents.');
+    }
+    if (descriptor.review_scope !== 'intake-only') {
+      addIssue(issues, 'REVIEW_SCOPE_INVALID', `${issuePath}/review_scope`, 'Review report scope must remain intake-only.');
+    }
+    for (const [value, seen, label] of [
+      [descriptor.report_id, seenReportIds, 'report ID'],
+      [descriptor.reviewer_id, seenReviewerIds, 'reviewer ID'],
+      [descriptor.sha256, seenDigests, 'report digest']
+    ]) {
+      if (typeof value === 'string' && seen.has(value)) {
+        addIssue(issues, 'DUPLICATE_REVIEW_REPORT', issuePath, `Independent reports must not share a ${label}.`);
+      }
+      if (typeof value === 'string') seen.add(value);
+    }
+
+    const report = await readRetainedJson(descriptor, issuePath, 'REVIEW_DIGEST_MISMATCH', context);
+    if (!report) continue;
+    rejectUnknownKeys(report, new Set([
+      'schema_version', 'report_id', 'reviewer_id', 'reviewer_class', 'review_scope',
+      'external_expert_evidence', 'input_catalog_sha256', 'input_intake_report_sha256',
+      'reviewed_at', 'cases', 'formal_admit_count', 'release_eligible', 'release_status'
+    ]), `${issuePath}/file`, issues, 'REVIEW_REPORT_BINDING_INVALID', 'Unknown review report field.');
+    if (report.schema_version !== '1.0.0'
+      || report.report_id !== descriptor.report_id
+      || report.reviewer_id !== descriptor.reviewer_id
+      || report.reviewer_class !== descriptor.reviewer_class
+      || report.review_scope !== descriptor.review_scope) {
+      addIssue(issues, 'REVIEW_REPORT_BINDING_INVALID', `${issuePath}/file`, 'Review report metadata must match its catalog descriptor.');
+    }
+    if (report.external_expert_evidence !== false) {
+      addIssue(issues, 'EXTERNAL_EXPERT_EVIDENCE_FORBIDDEN', `${issuePath}/file/external_expert_evidence`, 'Review reports are machine-only evidence.');
+    }
+    if (report.formal_admit_count !== 0
+      || report.release_eligible !== false
+      || report.release_status !== RELEASE_STATUS) {
+      addIssue(issues, 'REVIEW_REPORT_BOUNDARY_INVALID', `${issuePath}/file`, 'Review reports cannot create formal admits or release eligibility.');
+    }
+    if (report.input_catalog_sha256 !== snapshotDigest) {
+      addIssue(issues, 'CORPUS_SNAPSHOT_DIGEST_MISMATCH', `${issuePath}/file/input_catalog_sha256`, 'Review report must bind the recomputed corpus snapshot.');
+    }
+    if (!requireDigest(report.input_intake_report_sha256, `${issuePath}/file/input_intake_report_sha256`, issues, 'REVIEW_REPORT_BINDING_INVALID')
+      || intakeReportDigest === null
+      || report.input_intake_report_sha256 !== intakeReportDigest) {
+      addIssue(issues, 'REVIEW_INTAKE_DIGEST_MISMATCH', `${issuePath}/file/input_intake_report_sha256`, 'Every independent report must bind the exact retained frozen intake report.');
+    }
+    if (!isRfc3339DateTime(report.reviewed_at)) {
+      addIssue(issues, 'REVIEW_TIME_INVALID', `${issuePath}/file/reviewed_at`, 'Review time must be a real RFC 3339 date-time.');
+    }
+
+    const cases = Array.isArray(report.cases) ? report.cases : null;
+    const caseIndex = new Map();
+    const reviewIds = new Set();
+    if (!cases || cases.length !== catalog.items.length) {
+      addIssue(issues, 'REVIEW_CASE_COVERAGE_INVALID', `${issuePath}/file/cases`, 'Review report must cover every catalog case exactly once.');
+    }
+    for (const [caseIndexValue, caseValue] of (cases ?? []).entries()) {
+      const casePath = `${issuePath}/file/cases/${caseIndexValue}`;
+      const reviewCase = requireObject(caseValue, casePath, issues, 'REVIEW_REPORT_BINDING_INVALID');
+      if (!reviewCase) continue;
+      rejectUnknownKeys(reviewCase, new Set([
+        'review_id', 'case_id', 'source_id', 'task_id', 'repository', 'stratum',
+        'input_source_sha256', 'input_task_sha256', 'decision', 'reasons'
+      ]), casePath, issues, 'REVIEW_REPORT_BINDING_INVALID', 'Unknown review case field.');
+      requireString(reviewCase.review_id, `${casePath}/review_id`, issues, 'REVIEW_REPORT_BINDING_INVALID');
+      requireString(reviewCase.case_id, `${casePath}/case_id`, issues, 'REVIEW_REPORT_BINDING_INVALID');
+      if (caseIndex.has(reviewCase.case_id) || reviewIds.has(reviewCase.review_id)) {
+        addIssue(issues, 'REVIEW_CASE_COVERAGE_INVALID', casePath, 'Review case and review IDs must be unique.');
+      }
+      caseIndex.set(reviewCase.case_id, reviewCase);
+      reviewIds.add(reviewCase.review_id);
+      if (reviewCase.review_id !== `${report.report_id}:${reviewCase.case_id}`) {
+        addIssue(issues, 'REVIEW_REPORT_BINDING_INVALID', `${casePath}/review_id`, 'Review ID must be the stable report_id:case_id binding.');
+      }
+      const item = catalog.items.find((/** @type {any} */ entry) => entry?.pilot_id === reviewCase.case_id);
+      if (!item || reviewCase.source_id !== item.source?.source_id
+        || reviewCase.task_id !== item.task?.task_id
+        || reviewCase.repository !== item.repository
+        || reviewCase.stratum !== item.stratum
+        || reviewCase.input_source_sha256 !== item.source?.sha256
+        || reviewCase.input_task_sha256 !== item.task?.sha256) {
+        addIssue(issues, 'REVIEW_REPORT_BINDING_INVALID', casePath, 'Review case must bind the exact catalog source, task, repository, stratum, and digests.');
+      }
+      if (!['admit', 'hold', 'reject'].includes(reviewCase.decision)) {
+        addIssue(issues, 'REVIEW_DECISION_INVALID', `${casePath}/decision`, 'Unknown machine intake decision.');
+      }
+      validateReasons(reviewCase.reasons, `${casePath}/reasons`, issues);
+    }
+    for (const item of catalog.items) {
+      if (!caseIndex.has(item.pilot_id)) {
+        addIssue(issues, 'REVIEW_CASE_COVERAGE_INVALID', `${issuePath}/file/cases`, `Missing review case ${item.pilot_id}.`);
+      }
+    }
+    reports.set(descriptor.report_id, { descriptor, report, cases: caseIndex });
+  }
+  return reports;
+}
+
+/**
+ * @param {Record<string, any>} catalog
+ * @param {string} snapshotDigest
+ * @param {Map<string, any>} reports
+ * @param {{root: string, rootReal: string, issues: Array<any>, physicalPaths: Map<string, string>}} context
+ */
+async function validateAdjudication(catalog, snapshotDigest, reports, context) {
+  const { issues } = context;
+  const issuePath = '/adjudication_report';
+  const descriptor = requireObject(catalog.adjudication_report, issuePath, issues);
+  if (!descriptor) return new Map();
+  rejectUnknownKeys(descriptor, new Set([
+    'report_id', 'path', 'sha256', 'reviewer_id', 'reviewer_class', 'review_scope'
+  ]), issuePath, issues);
+  requireString(descriptor.report_id, `${issuePath}/report_id`, issues);
+  requireString(descriptor.reviewer_id, `${issuePath}/reviewer_id`, issues);
+  requireDigest(descriptor.sha256, `${issuePath}/sha256`, issues);
+  if (descriptor.reviewer_class !== 'machine-agent') {
+    addIssue(issues, 'REVIEWER_CLASS_INVALID', `${issuePath}/reviewer_class`, 'Adjudication must identify a machine agent.');
+  }
+  if (descriptor.review_scope !== 'intake-only') {
+    addIssue(issues, 'REVIEW_SCOPE_INVALID', `${issuePath}/review_scope`, 'Adjudication scope must remain intake-only.');
+  }
+  const adjudication = await readRetainedJson(descriptor, issuePath, 'ADJUDICATION_DIGEST_MISMATCH', context);
+  if (!adjudication) return new Map();
+  rejectUnknownKeys(adjudication, new Set([
+    'schema_version', 'report_id', 'reviewer_id', 'reviewer_class', 'review_scope',
+    'external_expert_evidence', 'input_catalog_path', 'input_catalog_sha256', 'input_reports', 'adjudicated_at',
+    'boundary_note', 'cases', 'disagreement_resolutions', 'final_summary',
+    'formal_admit_count', 'release_eligible', 'release_status'
+  ]), `${issuePath}/file`, issues, 'ADJUDICATION_BINDING_INVALID', 'Unknown adjudication field.');
+  if (adjudication.schema_version !== '1.0.0'
+    || adjudication.report_id !== descriptor.report_id
+    || adjudication.reviewer_id !== descriptor.reviewer_id
+    || adjudication.reviewer_class !== descriptor.reviewer_class
+    || adjudication.review_scope !== descriptor.review_scope) {
+    addIssue(issues, 'ADJUDICATION_BINDING_INVALID', `${issuePath}/file`, 'Adjudication metadata must match its catalog descriptor.');
+  }
+  if (adjudication.external_expert_evidence !== false) {
+    addIssue(issues, 'EXTERNAL_EXPERT_EVIDENCE_FORBIDDEN', `${issuePath}/file/external_expert_evidence`, 'Adjudication is machine-only evidence.');
+  }
+  if (adjudication.input_catalog_sha256 !== snapshotDigest) {
+    addIssue(issues, 'CORPUS_SNAPSHOT_DIGEST_MISMATCH', `${issuePath}/file/input_catalog_sha256`, 'Adjudication must bind the recomputed corpus snapshot.');
+  }
+  requireString(adjudication.input_catalog_path, `${issuePath}/file/input_catalog_path`, issues, 'ADJUDICATION_BINDING_INVALID');
+  if (!isRfc3339DateTime(adjudication.adjudicated_at)) {
+    addIssue(issues, 'ADJUDICATION_TIME_INVALID', `${issuePath}/file/adjudicated_at`, 'Adjudication time must be a real RFC 3339 date-time.');
+  }
+  requireString(adjudication.boundary_note, `${issuePath}/file/boundary_note`, issues, 'ADJUDICATION_BINDING_INVALID');
+  if (adjudication.formal_admit_count !== 0
+    || adjudication.release_eligible !== false
+    || adjudication.release_status !== RELEASE_STATUS) {
+    addIssue(issues, 'ADJUDICATION_BOUNDARY_INVALID', `${issuePath}/file`, 'Adjudication cannot create formal admits or release eligibility.');
+  }
+
+  const inputReports = Array.isArray(adjudication.input_reports) ? adjudication.input_reports : null;
+  if (!inputReports || inputReports.length !== 2) {
+    addIssue(issues, 'ADJUDICATION_INPUT_MISSING', `${issuePath}/file/input_reports`, 'Adjudication must bind exactly both independent reports.');
+  }
+  const seenInputs = new Set();
+  for (const [index, inputValue] of (inputReports ?? []).entries()) {
+    const inputPath = `${issuePath}/file/input_reports/${index}`;
+    const input = requireObject(inputValue, inputPath, issues, 'ADJUDICATION_INPUT_MISSING');
+    if (!input) continue;
+    rejectUnknownKeys(input, new Set(['report_id', 'path', 'sha256']), inputPath, issues, 'ADJUDICATION_INPUT_MISSING', 'Unknown adjudication input field.');
+    const expected = reports.get(input.report_id)?.descriptor;
+    const expectedRepositoryPath = typeof expected?.path === 'string'
+      ? `benchmark/public-pilot/v1/${expected.path}`
+      : null;
+    if (!expected
+      || (input.path !== expected.path && input.path !== expectedRepositoryPath)
+      || input.sha256 !== expected.sha256) {
+      addIssue(issues, 'ADJUDICATION_INPUT_MISSING', inputPath, 'Adjudication input must match an exact retained review report descriptor.');
+    }
+    if (seenInputs.has(input.report_id)) {
+      addIssue(issues, 'ADJUDICATION_INPUT_MISSING', inputPath, 'Adjudication input report IDs must be unique.');
+    }
+    seenInputs.add(input.report_id);
+  }
+  for (const reportId of reports.keys()) {
+    if (!seenInputs.has(reportId)) {
+      addIssue(issues, 'ADJUDICATION_INPUT_MISSING', `${issuePath}/file/input_reports`, `Missing adjudication input ${reportId}.`);
+    }
+  }
+
+  const reportEntries = [...reports.values()];
+  const cases = Array.isArray(adjudication.cases) ? adjudication.cases : null;
+  if (!cases || cases.length !== catalog.items.length) {
+    addIssue(issues, 'ADJUDICATION_COVERAGE_INVALID', `${issuePath}/file/cases`, 'Adjudication must cover every catalog case exactly once.');
+  }
+  const finalCases = new Map();
+  const reviewIds = new Set();
+  for (const [index, caseValue] of (cases ?? []).entries()) {
+    const casePath = `${issuePath}/file/cases/${index}`;
+    const adjudicatedCase = requireObject(caseValue, casePath, issues, 'ADJUDICATION_BINDING_INVALID');
+    if (!adjudicatedCase) continue;
+    rejectUnknownKeys(adjudicatedCase, new Set([
+      'review_id', 'case_id', 'source_id', 'task_id', 'repository', 'stratum',
+      'input_source_sha256', 'input_task_sha256',
+      'expert_a_decision', 'expert_b_decision', 'disagreement',
+      'final_decision', 'reasons'
+    ]), casePath, issues, 'ADJUDICATION_BINDING_INVALID', 'Unknown adjudication case field.');
+    requireString(adjudicatedCase.review_id, `${casePath}/review_id`, issues, 'ADJUDICATION_BINDING_INVALID');
+    requireString(adjudicatedCase.case_id, `${casePath}/case_id`, issues, 'ADJUDICATION_BINDING_INVALID');
+    if (finalCases.has(adjudicatedCase.case_id) || reviewIds.has(adjudicatedCase.review_id)) {
+      addIssue(issues, 'ADJUDICATION_COVERAGE_INVALID', casePath, 'Adjudication case and review IDs must be unique.');
+    }
+    finalCases.set(adjudicatedCase.case_id, adjudicatedCase);
+    reviewIds.add(adjudicatedCase.review_id);
+    if (adjudicatedCase.review_id !== `${adjudication.report_id}:${adjudicatedCase.case_id}`) {
+      addIssue(issues, 'ADJUDICATION_BINDING_INVALID', `${casePath}/review_id`, 'Adjudication review ID must be the stable report_id:case_id binding.');
+    }
+    const item = catalog.items.find((/** @type {any} */ entry) => entry?.pilot_id === adjudicatedCase.case_id);
+    if (!item || adjudicatedCase.source_id !== item.source?.source_id
+      || adjudicatedCase.task_id !== item.task?.task_id
+      || adjudicatedCase.repository !== item.repository
+      || adjudicatedCase.stratum !== item.stratum
+      || adjudicatedCase.input_source_sha256 !== item.source?.sha256
+      || adjudicatedCase.input_task_sha256 !== item.task?.sha256) {
+      addIssue(issues, 'ADJUDICATION_BINDING_INVALID', casePath, 'Adjudication case must bind the exact catalog case, source, task, repository, stratum, and digests.');
+    }
+    const firstDecision = reportEntries[0]?.cases.get(adjudicatedCase.case_id)?.decision;
+    const secondDecision = reportEntries[1]?.cases.get(adjudicatedCase.case_id)?.decision;
+    if (adjudicatedCase.expert_a_decision !== firstDecision
+      || adjudicatedCase.expert_b_decision !== secondDecision) {
+      addIssue(issues, 'ADJUDICATION_DECISION_INVALID', casePath, 'Adjudication must copy both independent report decisions exactly.');
+    }
+    const disagreement = firstDecision !== secondDecision;
+    if (adjudicatedCase.disagreement !== disagreement) {
+      addIssue(issues, 'ADJUDICATION_DECISION_INVALID', `${casePath}/disagreement`, 'Disagreement flag must be derived from the independent decisions.');
+    }
+    if (!['admit', 'hold', 'reject'].includes(adjudicatedCase.final_decision)
+      || (!disagreement && adjudicatedCase.final_decision !== firstDecision)) {
+      addIssue(issues, 'ADJUDICATION_DECISION_INVALID', `${casePath}/final_decision`, 'Agreement decisions cannot be rewritten, and every final decision must be valid.');
+    }
+    validateReasons(adjudicatedCase.reasons, `${casePath}/reasons`, issues);
+  }
+  for (const item of catalog.items) {
+    if (!finalCases.has(item.pilot_id)) {
+      addIssue(issues, 'ADJUDICATION_COVERAGE_INVALID', `${issuePath}/file/cases`, `Missing adjudication case ${item.pilot_id}.`);
+    }
+  }
+  const finalSummary = requireObject(adjudication.final_summary, `${issuePath}/file/final_summary`, issues, 'ADJUDICATION_BINDING_INVALID');
+  if (finalSummary) {
+    rejectUnknownKeys(finalSummary, new Set([
+      'admit', 'hold', 'reject', 'disagreements', 'final_admits_by_stratum', 'all_strata_meet_five'
+    ]), `${issuePath}/file/final_summary`, issues, 'ADJUDICATION_BINDING_INVALID', 'Unknown adjudication summary field.');
+    const expectedCounts = { admit: 0, hold: 0, reject: 0 };
+    let expectedDisagreements = 0;
+    const expectedByStratum = Object.fromEntries(FROZEN_STRATA.map((stratum) => [stratum, 0]));
+    for (const finalCase of finalCases.values()) {
+      if (finalCase.final_decision === 'admit') expectedCounts.admit += 1;
+      else if (finalCase.final_decision === 'hold') expectedCounts.hold += 1;
+      else if (finalCase.final_decision === 'reject') expectedCounts.reject += 1;
+      if (finalCase.disagreement === true) expectedDisagreements += 1;
+      if (finalCase.final_decision === 'admit' && FROZEN_STRATA.includes(finalCase.stratum)) {
+        expectedByStratum[finalCase.stratum] += 1;
+      }
+    }
+    const summaryMatches = finalSummary.admit === expectedCounts.admit
+      && finalSummary.hold === expectedCounts.hold
+      && finalSummary.reject === expectedCounts.reject
+      && finalSummary.disagreements === expectedDisagreements
+      && isObject(finalSummary.final_admits_by_stratum)
+      && FROZEN_STRATA.every((stratum) => finalSummary.final_admits_by_stratum[stratum] === expectedByStratum[stratum])
+      && Object.keys(finalSummary.final_admits_by_stratum ?? {}).length === FROZEN_STRATA.length
+      && finalSummary.all_strata_meet_five === FROZEN_STRATA.every((stratum) => expectedByStratum[stratum] >= 5);
+    if (!summaryMatches) {
+      addIssue(issues, 'ADJUDICATION_SUMMARY_INVALID', `${issuePath}/file/final_summary`, 'Adjudication summary must be recomputed from final case decisions.');
+    }
+  }
+  const resolutions = Array.isArray(adjudication.disagreement_resolutions) ? adjudication.disagreement_resolutions : null;
+  const disagreementCases = [...finalCases.values()].filter((entry) => entry.disagreement === true);
+  if (!resolutions || resolutions.length !== disagreementCases.length) {
+    addIssue(issues, 'ADJUDICATION_RESOLUTIONS_INVALID', `${issuePath}/file/disagreement_resolutions`, 'Disagreement resolutions must cover every disagreement exactly once.');
+  }
+  const resolvedCaseIds = new Set();
+  for (const [index, resolutionValue] of (resolutions ?? []).entries()) {
+    const resolutionPath = `${issuePath}/file/disagreement_resolutions/${index}`;
+    const resolution = requireObject(resolutionValue, resolutionPath, issues, 'ADJUDICATION_RESOLUTIONS_INVALID');
+    if (!resolution) continue;
+    rejectUnknownKeys(resolution, new Set([
+      'case_id', 'expert_a_decision', 'expert_b_decision', 'final_decision', 'reasons'
+    ]), resolutionPath, issues, 'ADJUDICATION_RESOLUTIONS_INVALID', 'Unknown disagreement resolution field.');
+    const finalCase = finalCases.get(resolution.case_id);
+    if (!nonEmptyString(resolution.case_id)
+      || resolvedCaseIds.has(resolution.case_id)
+      || finalCase?.disagreement !== true
+      || resolution.expert_a_decision !== finalCase?.expert_a_decision
+      || resolution.expert_b_decision !== finalCase?.expert_b_decision
+      || resolution.final_decision !== finalCase?.final_decision) {
+      addIssue(issues, 'ADJUDICATION_RESOLUTIONS_INVALID', resolutionPath, 'Resolution must uniquely bind one disagreement and copy both inputs plus the final decision exactly.');
+    }
+    validateReasons(resolution.reasons, `${resolutionPath}/reasons`, issues);
+    if (typeof resolution.case_id === 'string') resolvedCaseIds.add(resolution.case_id);
+  }
+  for (const disagreementCase of disagreementCases) {
+    if (!resolvedCaseIds.has(disagreementCase.case_id)) {
+      addIssue(issues, 'ADJUDICATION_RESOLUTIONS_INVALID', `${issuePath}/file/disagreement_resolutions`, `Missing disagreement resolution for ${disagreementCase.case_id}.`);
+    }
+  }
+  return finalCases;
+}
+
+/**
+ * @param {Record<string, any>} catalog
+ * @param {Map<string, any>} reports
+ * @param {Map<string, any>} finalCases
+ * @param {Array<any>} issues
+ */
+function validateReviewLinks(catalog, reports, finalCases, issues) {
+  const adjudicationId = catalog.adjudication_report?.report_id;
+  const expectedReportIds = new Set([...reports.keys(), adjudicationId].filter(Boolean));
+  const linkValidity = new Map();
+  for (const [itemIndex, item] of catalog.items.entries()) {
+    const errorsBefore = issues.filter((entry) => entry.severity === 'error').length;
+    const links = Array.isArray(item.reviews) ? item.reviews : [];
+    const seen = new Set();
+    if (links.length !== 3) {
+      addIssue(issues, 'REVIEW_LINK_SET_INVALID', `/items/${itemIndex}/reviews`, 'Each item must link both independent reports and adjudication exactly once.');
+    }
+    for (const [linkIndex, link] of links.entries()) {
+      const linkPath = `/items/${itemIndex}/reviews/${linkIndex}`;
+      if (!isObject(link)) continue;
+      if (seen.has(link.report_id) || !expectedReportIds.has(link.report_id)) {
+        addIssue(issues, 'REVIEW_LINK_SET_INVALID', linkPath, 'Review links must use each expected report ID exactly once.');
+      }
+      seen.add(link.report_id);
+      const expectedEntry = link.report_id === adjudicationId
+        ? finalCases.get(item.pilot_id)
+        : reports.get(link.report_id)?.cases.get(item.pilot_id);
+      if (!expectedEntry
+        || link.review_id !== expectedEntry.review_id
+        || link.reviewer_class !== 'machine-agent'
+        || link.review_scope !== 'intake-only'
+        || link.source_id !== item.source?.source_id
+        || link.task_id !== item.task?.task_id
+        || link.decision !== (link.report_id === adjudicationId ? expectedEntry.final_decision : expectedEntry.decision)) {
+        addIssue(issues, 'REVIEW_LINK_BINDING_INVALID', linkPath, 'Review link must match the exact digest-bound report entry.');
+      }
+    }
+    for (const reportId of expectedReportIds) {
+      if (!seen.has(reportId)) {
+        addIssue(issues, 'REVIEW_LINK_SET_INVALID', `/items/${itemIndex}/reviews`, `Missing review link ${reportId}.`);
+      }
+    }
+    const finalDecision = finalCases.get(item.pilot_id)?.final_decision;
+    const expectedStatus = finalDecision === 'admit' ? 'pilot-admitted'
+      : finalDecision === 'hold' ? 'hold'
+        : finalDecision === 'reject' ? 'rejected' : null;
+    if (expectedStatus !== null && item.status !== expectedStatus) {
+      addIssue(issues, 'ITEM_FINAL_DECISION_MISMATCH', `/items/${itemIndex}/status`, 'Catalog item status must match final machine adjudication.');
+    }
+    const errorsAfter = issues.filter((entry) => entry.severity === 'error').length;
+    linkValidity.set(item.pilot_id, errorsAfter === errorsBefore);
+  }
+  return linkValidity;
+}
+
+/**
+ * @param {Record<string, any>} catalog
+ * @param {Map<string, any>} finalCases
+ * @param {Map<string, boolean>} baseValidity
+ * @param {{root: string, rootReal: string, issues: Array<any>, physicalPaths: Map<string, string>}} context
+ */
+async function validateDefectLedger(catalog, finalCases, baseValidity, context) {
+  const { issues } = context;
+  const issuePath = '/defect_ledger';
+  const descriptor = requireObject(catalog.defect_ledger, issuePath, issues);
+  if (!descriptor) return 0;
+  rejectUnknownKeys(descriptor, new Set(['ledger_id', 'path', 'sha256']), issuePath, issues);
+  requireString(descriptor.ledger_id, `${issuePath}/ledger_id`, issues);
+  requireDigest(descriptor.sha256, `${issuePath}/sha256`, issues);
+  const ledger = await readRetainedJson(descriptor, issuePath, 'DEFECT_DIGEST_MISMATCH', context);
+  if (!ledger) return 0;
+  rejectUnknownKeys(ledger, new Set([
+    'schema_version', 'ledger_id', 'evidence_class', 'external_expert_evidence',
+    'release_eligible', 'release_status', 'boundary', 'normalization',
+    'controlling_sources', 'source_reports', 'leads'
+  ]), `${issuePath}/file`, issues, 'DEFECT_LEDGER_BINDING_INVALID', 'Unknown defect ledger field.');
+  if (ledger.schema_version !== '1.0.0'
+    || ledger.ledger_id !== descriptor.ledger_id
+    || ledger.evidence_class !== 'public-source-machine-pilot') {
+    addIssue(issues, 'DEFECT_LEDGER_BINDING_INVALID', `${issuePath}/file`, 'Defect ledger metadata must match the machine-pilot catalog.');
+  }
+  if (ledger.external_expert_evidence !== false
+    || ledger.release_eligible !== false
+    || ledger.release_status !== RELEASE_STATUS) {
+    addIssue(issues, 'DEFECT_LEDGER_BOUNDARY_INVALID', `${issuePath}/file`, 'Defect ledger cannot claim external expertise or release eligibility.');
+  }
+  const leads = Array.isArray(ledger.leads) ? ledger.leads : null;
+  if (!leads) {
+    addIssue(issues, 'DEFECT_LEDGER_BINDING_INVALID', `${issuePath}/file/leads`, 'Defect ledger leads must be an array.');
+    return 0;
+  }
+  const seenIds = new Set();
+  const seenIssues = new Set();
+  let countable = 0;
+  let occurrenceCount = 0;
+  for (const [index, leadValue] of leads.entries()) {
+    const leadPath = `${issuePath}/file/leads/${index}`;
+    const lead = requireObject(leadValue, leadPath, issues, 'DEFECT_LEDGER_BINDING_INVALID');
+    if (!lead) continue;
+    rejectUnknownKeys(lead, new Set([
+      'defect_id', 'canonical_url', 'repository', 'issue_number', 'frozen_risk',
+      'suggested_strata', 'relevance', 'status', 'bound_case_id', 'countable',
+      'source_version', 'snapshot_sha256', 'snapshot_status', 'source_report_path',
+      'source_report_sha256', 'risk_source', 'source_occurrences'
+    ]), leadPath, issues, 'DEFECT_LEDGER_BINDING_INVALID', 'Unknown defect lead field.');
+    requireString(lead.defect_id, `${leadPath}/defect_id`, issues, 'DEFECT_LEDGER_BINDING_INVALID');
+    requireString(lead.repository, `${leadPath}/repository`, issues, 'DEFECT_LEDGER_BINDING_INVALID');
+    requireString(lead.canonical_url, `${leadPath}/canonical_url`, issues, 'DEFECT_LEDGER_BINDING_INVALID');
+    if (!Number.isInteger(lead.issue_number) || lead.issue_number <= 0) {
+      addIssue(issues, 'DEFECT_URL_INVALID', `${leadPath}/issue_number`, 'Issue number must be a positive integer.');
+    }
+    const identity = `${String(lead.repository).toLowerCase()}#${lead.issue_number}`;
+    const expectedUrl = `https://github.com/${lead.repository}/issues/${lead.issue_number}`;
+    if (lead.canonical_url !== expectedUrl) {
+      addIssue(issues, 'DEFECT_REPOSITORY_MISMATCH', `${leadPath}/canonical_url`, 'Canonical issue URL must exactly match repository and issue number.');
+    }
+    if (seenIds.has(lead.defect_id) || seenIssues.has(identity)) {
+      addIssue(issues, 'DUPLICATE_DEFECT_ISSUE', leadPath, 'Defect IDs and canonical repository/issue identities must be globally unique.');
+    }
+    seenIds.add(lead.defect_id);
+    seenIssues.add(identity);
+    if (!Array.isArray(lead.suggested_strata) || lead.suggested_strata.length === 0
+      || new Set(lead.suggested_strata).size !== lead.suggested_strata.length
+      || lead.suggested_strata.some((stratum) => !FROZEN_STRATA.includes(stratum))) {
+      addIssue(issues, 'DEFECT_STRATUM_INVALID', `${leadPath}/suggested_strata`, 'Suggested strata must be a non-empty unique subset of frozen strata.');
+    }
+    if (!['lead', 'case-bound'].includes(lead.status)) {
+      addIssue(issues, 'DEFECT_STATUS_INVALID', `${leadPath}/status`, 'Unknown defect status.');
+    }
+    if (typeof lead.countable !== 'boolean') {
+      addIssue(issues, 'DEFECT_LEDGER_BINDING_INVALID', `${leadPath}/countable`, 'Defect countable must be boolean.');
+    }
+    if (lead.status === 'lead') {
+      if (lead.bound_case_id !== null || lead.countable !== false) {
+        addIssue(issues, 'LEAD_DEFECT_BINDING_INVALID', leadPath, 'A defect lead must remain unbound and uncountable.');
+      }
+      if (lead.countable === true) {
+        addIssue(issues, 'UNBOUND_DEFECT_COUNTED', `${leadPath}/countable`, 'An unbound defect lead cannot count.');
+        addIssue(issues, 'COUNTABLE_DEFECT_STATUS_INVALID', `${leadPath}/status`, 'Only a case-bound defect may be countable.');
+      }
+    }
+    if (lead.status === 'case-bound') {
+      const item = catalog.items.find((/** @type {any} */ entry) => entry?.pilot_id === lead.bound_case_id);
+      const finalAdmitted = item
+        && finalCases.get(item.pilot_id)?.final_decision === 'admit'
+        && item.status === 'pilot-admitted'
+        && baseValidity.get(item.pilot_id) === true;
+      if (!finalAdmitted) {
+        addIssue(issues, 'DEFECT_BOUND_TO_NON_ADMITTED', `${leadPath}/bound_case_id`, 'A case-bound defect may bind only to a final-admitted valid case.');
+      }
+      if (item && (lead.repository.toLowerCase() !== item.repository.toLowerCase()
+        || !lead.suggested_strata.includes(item.stratum))) {
+        addIssue(issues, 'DEFECT_BINDING_INVALID', leadPath, 'Defect repository and suggested stratum must match the bound case.');
+      }
+      const snapshotDeclared = nonEmptyString(lead.source_version)
+        && typeof lead.snapshot_sha256 === 'string'
+        && SHA256_PATTERN.test(lead.snapshot_sha256)
+        && lead.snapshot_status === 'retained';
+      // The v1 ledger has no retained snapshot path descriptor, so declarations
+      // alone can never make a historical issue countable.
+      const snapshotReady = false;
+      if (!snapshotReady) {
+        addIssue(issues, 'DEFECT_SNAPSHOT_INSUFFICIENT', leadPath, snapshotDeclared
+          ? 'Declared snapshot metadata is not enough without a digest-bound retained snapshot path.'
+          : 'Case-bound defects require an immutable retained version and snapshot digest.');
+      }
+      if (lead.countable === true && finalAdmitted && snapshotReady) countable += 1;
+    }
+    const occurrences = Array.isArray(lead.source_occurrences) ? lead.source_occurrences : null;
+    if (!occurrences || occurrences.length === 0) {
+      addIssue(issues, 'DEFECT_LINEAGE_INVALID', `${leadPath}/source_occurrences`, 'Every lead must retain at least one source occurrence.');
+    }
+    occurrenceCount += occurrences?.length ?? 0;
+  }
+  const normalization = isObject(ledger.normalization) ? ledger.normalization : null;
+  if (!normalization
+    || normalization.unique_lead_count !== leads.length
+    || normalization.raw_entry_count !== occurrenceCount
+    || normalization.deduplication_count !== occurrenceCount - leads.length) {
+    addIssue(issues, 'DEFECT_NORMALIZATION_INVALID', `${issuePath}/file/normalization`, 'Ledger normalization counts must be recomputed from unique leads and source occurrences.');
+  }
+  return countable;
+}
+
+/**
+ * @param {Record<string, any>} catalog
+ * @param {{root: string, rootReal: string, repositoryRoot: string, repositoryRootReal: string, issues: Array<any>, physicalPaths: Map<string, string>}} context
+ */
+async function validateComparatorRegistry(catalog, context) {
+  const { issues } = context;
+  const issuePath = '/comparators';
+  const descriptor = requireObject(catalog.comparators, issuePath, issues);
+  if (!descriptor) return false;
+  rejectUnknownKeys(descriptor, new Set(['registry_id', 'path', 'sha256']), issuePath, issues);
+  requireString(descriptor.registry_id, `${issuePath}/registry_id`, issues);
+  requireDigest(descriptor.sha256, `${issuePath}/sha256`, issues);
+  const registry = await readRetainedJson(descriptor, issuePath, 'COMPARATOR_REGISTRY_DIGEST_MISMATCH', context);
+  if (!registry) return false;
+  rejectUnknownKeys(registry, new Set([
+    'schema_version', 'registry_id', 'evidence_class', 'captures_allowed', 'systems'
+  ]), `${issuePath}/file`, issues, 'COMPARATOR_REGISTRY_INVALID', 'Unknown comparator registry field.');
+  if (registry.schema_version !== '1.0.0'
+    || registry.registry_id !== descriptor.registry_id
+    || registry.evidence_class !== 'public-source-machine-pilot') {
+    addIssue(issues, 'COMPARATOR_REGISTRY_INVALID', `${issuePath}/file`, 'Comparator registry metadata must match the machine-pilot catalog.');
+  }
+  if (typeof registry.captures_allowed !== 'boolean') {
+    addIssue(issues, 'COMPARATOR_REGISTRY_INVALID', `${issuePath}/file/captures_allowed`, 'captures_allowed must be boolean.');
+  }
+
+  const systems = Array.isArray(registry.systems) ? registry.systems : null;
+  if (!systems || systems.length !== COMPARATOR_IDS.length) {
+    addIssue(issues, 'COMPARATOR_SET_INVALID', `${issuePath}/file/systems`, 'Comparator registry must contain exactly the four frozen benchmark system identities.');
+  }
+  const seenSystems = new Set();
+  let allFrozen = systems?.length === COMPARATOR_IDS.length;
+  for (const [index, systemValue] of (systems ?? []).entries()) {
+    const systemPath = `${issuePath}/file/systems/${index}`;
+    const system = requireObject(systemValue, systemPath, issues, 'COMPARATOR_REGISTRY_INVALID');
+    if (!system) {
+      allFrozen = false;
+      continue;
+    }
+    rejectUnknownKeys(system, new Set([
+      'system_id', 'status', 'version', 'repository_revision', 'artifacts',
+      'model_identity', 'run_recipe', 'missing_fields', 'resolution_note'
+    ]), systemPath, issues, 'COMPARATOR_REGISTRY_INVALID', 'Unknown comparator identity field.');
+    if (!COMPARATOR_IDS.includes(system.system_id) || seenSystems.has(system.system_id)) {
+      addIssue(issues, 'COMPARATOR_SET_INVALID', `${systemPath}/system_id`, 'Comparator IDs must be unique members of the frozen four-system set.');
+    }
+    if (typeof system.system_id === 'string') seenSystems.add(system.system_id);
+    if (!['frozen', 'unresolved'].includes(system.status)) {
+      addIssue(issues, 'COMPARATOR_STATUS_INVALID', `${systemPath}/status`, 'Comparator status must be frozen or unresolved.');
+      allFrozen = false;
+      continue;
+    }
+    if (system.status === 'unresolved') {
+      allFrozen = false;
+      if (!Array.isArray(system.missing_fields)
+        || system.missing_fields.length === 0
+        || system.missing_fields.some((field) => !['version', 'artifacts', 'model_identity', 'run_recipe'].includes(field))
+        || !nonEmptyString(system.resolution_note)) {
+        addIssue(issues, 'COMPARATOR_UNRESOLVED_INVALID', systemPath, 'Unresolved comparators must name missing identity fields and an honest resolution note.');
+      }
+      addIssue(issues, 'COMPARATOR_UNRESOLVED', systemPath, `Comparator ${system.system_id ?? '(unknown)'} is unresolved; captures remain closed.`, 'incomplete');
+      continue;
+    }
+
+    let identityValid = true;
+    if (!nonEmptyString(system.version)
+      || typeof system.repository_revision !== 'string'
+      || !COMMIT_PATTERN.test(system.repository_revision)) {
+      identityValid = false;
+    }
+    const artifacts = Array.isArray(system.artifacts) ? system.artifacts : null;
+    const artifactIds = new Set();
+    const artifactKinds = new Set();
+    if (!artifacts || artifacts.length === 0) {
+      identityValid = false;
+    }
+    for (const [artifactIndex, artifactValue] of (artifacts ?? []).entries()) {
+      const artifactPath = `${systemPath}/artifacts/${artifactIndex}`;
+      const artifact = requireObject(artifactValue, artifactPath, issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID');
+      if (!artifact) {
+        identityValid = false;
+        continue;
+      }
+      rejectUnknownKeys(artifact, new Set(['artifact_id', 'kind', 'repository_path', 'sha256']), artifactPath, issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID', 'Unknown frozen artifact field.');
+      const artifactMetadataInvalid = !nonEmptyString(artifact.artifact_id)
+        || artifactIds.has(artifact.artifact_id)
+        || !['prompt', 'skill', 'compiler', 'schema', 'reference'].includes(artifact.kind)
+        || !nonEmptyString(artifact.repository_path)
+        || path.isAbsolute(artifact.repository_path)
+        || String(artifact.repository_path).split(/[\\/]+/).includes('..')
+        || typeof artifact.sha256 !== 'string'
+        || !SHA256_PATTERN.test(artifact.sha256);
+      if (artifactMetadataInvalid) {
+        identityValid = false;
+      } else {
+        const retainedArtifact = await readRetainedArtifact({
+          root: context.repositoryRoot,
+          rootReal: context.repositoryRootReal,
+          relativePath: artifact.repository_path,
+          expectedDigest: artifact.sha256,
+          issuePath: artifactPath,
+          mismatchCode: 'COMPARATOR_ARTIFACT_DIGEST_MISMATCH',
+          issues,
+          physicalPaths: context.physicalPaths,
+          pathField: 'repository_path'
+        });
+        if (!retainedArtifact?.digestMatches) identityValid = false;
+      }
+      artifactIds.add(artifact.artifact_id);
+      artifactKinds.add(artifact.kind);
+    }
+    if (!artifactKinds.has('prompt') && !artifactKinds.has('skill')) identityValid = false;
+    if (system.system_id === 'generate-test-cases'
+      && !['skill', 'compiler', 'schema'].every((kind) => artifactKinds.has(kind))) {
+      identityValid = false;
+    }
+    const model = isObject(system.model_identity) ? system.model_identity : null;
+    if (!model) {
+      identityValid = false;
+    } else {
+      rejectUnknownKeys(model, new Set(['provider', 'model_id', 'reasoning_effort']), `${systemPath}/model_identity`, issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID', 'Unknown model identity field.');
+      if (!nonEmptyString(model.provider) || !nonEmptyString(model.model_id) || !nonEmptyString(model.reasoning_effort)) {
+        identityValid = false;
+      }
+    }
+    const recipe = isObject(system.run_recipe) ? system.run_recipe : null;
+    if (!recipe) {
+      identityValid = false;
+    } else {
+      rejectUnknownKeys(recipe, new Set([
+        'recipe_id', 'invocation', 'input_contract', 'output_contract', 'independent_runs'
+      ]), `${systemPath}/run_recipe`, issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID', 'Unknown run recipe field.');
+      if (!nonEmptyString(recipe.recipe_id)
+        || !nonEmptyString(recipe.invocation)
+        || !nonEmptyString(recipe.input_contract)
+        || !nonEmptyString(recipe.output_contract)
+        || recipe.independent_runs !== 3) {
+        identityValid = false;
+      }
+    }
+    if (!identityValid) {
+      addIssue(issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID', systemPath, 'Frozen comparators require a version, immutable revision, exact prompt or Skill artifact digests, model identity, and three-run recipe.');
+      allFrozen = false;
+    }
+  }
+  for (const systemId of COMPARATOR_IDS) {
+    if (!seenSystems.has(systemId)) {
+      addIssue(issues, 'COMPARATOR_SET_INVALID', `${issuePath}/file/systems`, `Missing comparator ${systemId}.`);
+      allFrozen = false;
+    }
+  }
+  if (registry.captures_allowed === true && !allFrozen) {
+    addIssue(issues, 'CAPTURE_GATE_INVALID', `${issuePath}/file/captures_allowed`, 'Captures cannot open until all four comparator identities are frozen and complete.');
+  }
+  return allFrozen && registry.captures_allowed === true;
 }
 
 /**
@@ -642,6 +1358,7 @@ async function validateItem(item, itemIndex, context) {
  *   status: 'pilot_ready' | 'pilot_incomplete' | 'invalid',
  *   release_eligible: false,
  *   release_status: 'insufficient_evidence',
+ *   captures_ready: boolean,
  *   counts: {total: number, pilot_admitted: number, countable_defects: number, by_stratum: Record<string, number>},
  *   issues: Array<{code: string, path: string, message: string, severity: 'error' | 'incomplete'}>
  * }>}
@@ -651,6 +1368,7 @@ export async function validatePublicPilot(catalogPath) {
   const issues = [];
   const byStratum = Object.fromEntries(FROZEN_STRATA.map((stratum) => [stratum, 0]));
   const counts = { total: 0, pilot_admitted: 0, countable_defects: 0, by_stratum: byStratum };
+  let capturesReady = false;
 
   const finish = () => {
     for (const stratum of FROZEN_STRATA) {
@@ -668,6 +1386,7 @@ export async function validatePublicPilot(catalogPath) {
       status,
       release_eligible: /** @type {false} */ (false),
       release_status: RELEASE_STATUS,
+      captures_ready: capturesReady && !invalid,
       counts,
       issues
     };
@@ -680,10 +1399,16 @@ export async function validatePublicPilot(catalogPath) {
 
   const absoluteCatalogPath = path.resolve(catalogPath);
   const root = path.dirname(absoluteCatalogPath);
+  const repositoryRoot = path.resolve(root, '../../..');
   let rootReal;
+  let repositoryRootReal;
   let catalogBytes;
   try {
-    [rootReal, catalogBytes] = await Promise.all([realpath(root), readFile(absoluteCatalogPath)]);
+    [rootReal, repositoryRootReal, catalogBytes] = await Promise.all([
+      realpath(root),
+      realpath(repositoryRoot),
+      readFile(absoluteCatalogPath)
+    ]);
   } catch (error) {
     addIssue(issues, 'CATALOG_UNREADABLE', '/', `Cannot read catalog: ${/** @type {any} */ (error).code ?? 'unknown error'}.`);
     return finish();
@@ -703,7 +1428,8 @@ export async function validatePublicPilot(catalogPath) {
 
   const catalogObject = /** @type {Record<string, any>} */ (catalog);
   rejectUnknownKeys(catalogObject, new Set([
-    'schema_version', 'catalog_id', 'evidence_class', 'release_eligible', 'release_status', 'items'
+    'schema_version', 'catalog_id', 'evidence_class', 'release_eligible', 'release_status',
+    'corpus_snapshot_sha256', 'intake_report', 'review_reports', 'adjudication_report', 'defect_ledger', 'comparators', 'items'
   ]), '', issues);
   rejectForbiddenExpertClaims(catalogObject, '', issues);
 
@@ -720,6 +1446,7 @@ export async function validatePublicPilot(catalogPath) {
   if (catalogObject.release_status !== RELEASE_STATUS) {
     addIssue(issues, 'RELEASE_STATUS_INVALID', '/release_status', 'Pilot release status must remain insufficient_evidence.');
   }
+  requireDigest(catalogObject.corpus_snapshot_sha256, '/corpus_snapshot_sha256', issues, 'CORPUS_SNAPSHOT_DIGEST_MISMATCH');
   if (!Array.isArray(catalogObject.items)) {
     addIssue(issues, 'CATALOG_CONTRACT_INVALID', '/items', 'Catalog items must be an array.');
     return finish();
@@ -729,18 +1456,39 @@ export async function validatePublicPilot(catalogPath) {
   const context = {
     root,
     rootReal,
+    repositoryRoot,
+    repositoryRootReal,
     issues,
     physicalPaths: new Map(),
     contentDigests: new Map(),
     stableIds: new Map()
   };
+  const baseValidity = new Map();
   for (const [itemIndex, itemValue] of catalogObject.items.entries()) {
     const item = requireObject(itemValue, `/items/${itemIndex}`, issues);
     if (!item) continue;
     const result = await validateItem(item, itemIndex, context);
-    if (result.ready && FROZEN_STRATA.includes(item.stratum)) {
+    baseValidity.set(item.pilot_id, result.baseValid);
+  }
+
+  const snapshotDigest = corpusSnapshotDigest(catalogObject);
+  if (catalogObject.corpus_snapshot_sha256 !== snapshotDigest) {
+    addIssue(issues, 'CORPUS_SNAPSHOT_DIGEST_MISMATCH', '/corpus_snapshot_sha256', 'Catalog corpus snapshot digest does not match the recomputed Task 3 projection.');
+  }
+  const intakeReportDigest = await validateIntakeReport(catalogObject, context);
+  const reports = await validateReviewReports(catalogObject, snapshotDigest, intakeReportDigest, context);
+  const finalCases = await validateAdjudication(catalogObject, snapshotDigest, reports, context);
+  const linkValidity = validateReviewLinks(catalogObject, reports, finalCases, issues);
+  counts.countable_defects = await validateDefectLedger(catalogObject, finalCases, baseValidity, context);
+  capturesReady = await validateComparatorRegistry(catalogObject, context);
+
+  for (const item of catalogObject.items) {
+    if (baseValidity.get(item.pilot_id) === true
+      && item.status === 'pilot-admitted'
+      && finalCases.get(item.pilot_id)?.final_decision === 'admit'
+      && linkValidity.get(item.pilot_id) === true
+      && FROZEN_STRATA.includes(item.stratum)) {
       counts.pilot_admitted += 1;
-      counts.countable_defects += result.countableDefects;
       byStratum[item.stratum] += 1;
     }
   }

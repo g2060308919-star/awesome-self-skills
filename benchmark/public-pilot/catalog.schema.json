@@ -10,6 +10,12 @@
     "evidence_class",
     "release_eligible",
     "release_status",
+    "corpus_snapshot_sha256",
+    "intake_report",
+    "review_reports",
+    "adjudication_report",
+    "defect_ledger",
+    "comparators",
     "items"
   ],
   "properties": {
@@ -18,6 +24,17 @@
     "evidence_class": { "const": "public-source-machine-pilot" },
     "release_eligible": { "const": false },
     "release_status": { "const": "insufficient_evidence" },
+    "corpus_snapshot_sha256": { "$ref": "#/$defs/sha256" },
+    "intake_report": { "$ref": "#/$defs/retainedArtifact" },
+    "review_reports": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/reviewReportDescriptor" }
+    },
+    "adjudication_report": { "$ref": "#/$defs/adjudicationReportDescriptor" },
+    "defect_ledger": { "$ref": "#/$defs/defectLedgerDescriptor" },
+    "comparators": { "$ref": "#/$defs/comparatorRegistryDescriptor" },
     "items": {
       "type": "array",
       "items": { "$ref": "#/$defs/item" }
@@ -124,13 +141,72 @@
         "sha256": { "$ref": "#/$defs/sha256" }
       }
     },
-    "review": {
+    "reviewReportDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "path",
+        "sha256",
+        "reviewer_id",
+        "reviewer_class",
+        "review_scope"
+      ],
+      "properties": {
+        "report_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "reviewer_id": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewer_class": { "const": "machine-agent" },
+        "review_scope": { "const": "intake-only" }
+      }
+    },
+    "adjudicationReportDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "path",
+        "sha256",
+        "reviewer_id",
+        "reviewer_class",
+        "review_scope"
+      ],
+      "properties": {
+        "report_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "reviewer_id": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewer_class": { "const": "machine-agent" },
+        "review_scope": { "const": "intake-only" }
+      }
+    },
+    "defectLedgerDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ledger_id", "path", "sha256"],
+      "properties": {
+        "ledger_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "comparatorRegistryDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "path", "sha256"],
+      "properties": {
+        "registry_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "reviewLink": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "review_id",
-        "path",
-        "sha256",
+        "report_id",
         "reviewer_class",
         "review_scope",
         "source_id",
@@ -139,40 +215,12 @@
       ],
       "properties": {
         "review_id": { "$ref": "#/$defs/nonEmptyString" },
-        "path": { "$ref": "#/$defs/nonEmptyString" },
-        "sha256": { "$ref": "#/$defs/sha256" },
+        "report_id": { "$ref": "#/$defs/nonEmptyString" },
         "reviewer_class": { "const": "machine-agent" },
         "review_scope": { "const": "intake-only" },
         "source_id": { "$ref": "#/$defs/nonEmptyString" },
         "task_id": { "$ref": "#/$defs/nonEmptyString" },
         "decision": { "enum": ["admit", "hold", "reject"] }
-      }
-    },
-    "defect": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "defect_id",
-        "path",
-        "sha256",
-        "upstream_url",
-        "status",
-        "bound_pilot_id",
-        "countable"
-      ],
-      "properties": {
-        "defect_id": { "$ref": "#/$defs/nonEmptyString" },
-        "path": { "$ref": "#/$defs/nonEmptyString" },
-        "sha256": { "$ref": "#/$defs/sha256" },
-        "upstream_url": { "type": "string", "format": "uri" },
-        "status": { "enum": ["lead", "case-bound"] },
-        "bound_pilot_id": {
-          "oneOf": [
-            { "$ref": "#/$defs/nonEmptyString" },
-            { "type": "null" }
-          ]
-        },
-        "countable": { "type": "boolean" }
       }
     },
     "item": {
@@ -208,11 +256,13 @@
         "task": { "$ref": "#/$defs/task" },
         "reviews": {
           "type": "array",
-          "items": { "$ref": "#/$defs/review" }
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/reviewLink" }
         },
         "defects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/defect" }
+          "maxItems": 0
         }
       }
     }

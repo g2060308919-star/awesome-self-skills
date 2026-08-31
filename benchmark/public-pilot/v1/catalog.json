@@ -4,6 +4,10 @@
   "evidence_class": "public-source-machine-pilot",
   "release_eligible": false,
   "release_status": "insufficient_evidence",
+  "intake_report": {
+    "path": "intake-report.md",
+    "sha256": "bf21470b33ce6aec2c3643de070d7de5aa720160f6261a13c6c810f8089dac08"
+  },
   "items": [
     {
       "pilot_id": "PF-TR-01",
@@ -37,7 +41,35 @@
         "source_id": "source-pf-tr-01",
         "scope": "Direct ordering payment capture, fulfillment, and idempotent order processing"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-01",
+          "task_id": "task-pf-tr-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-01",
+          "task_id": "task-pf-tr-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-01",
+          "task_id": "task-pf-tr-01",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -72,7 +104,35 @@
         "source_id": "source-pf-tr-02",
         "scope": "CoinPay checkout gateway and merchant plugin payment processing"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-02",
+          "task_id": "task-pf-tr-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-02",
+          "task_id": "task-pf-tr-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-02",
+          "task_id": "task-pf-tr-02",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -107,7 +167,35 @@
         "source_id": "source-pf-tr-03",
         "scope": "Unbrowse paid-route admission, Stripe/crypto subscription checkout, x402 retries, and payment settlement"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-03",
+          "task_id": "task-pf-tr-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-03",
+          "task_id": "task-pf-tr-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-03",
+          "task_id": "task-pf-tr-03",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -142,7 +230,35 @@
         "source_id": "source-pf-tr-04",
         "scope": "Agent payment intent authorization, transaction policy decisions, and constrained execution"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-04",
+          "task_id": "task-pf-tr-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-04",
+          "task_id": "task-pf-tr-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-04",
+          "task_id": "task-pf-tr-04",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -177,7 +293,35 @@
         "source_id": "source-pf-tr-05",
         "scope": "Tripletex order-to-invoice lifecycle and payment-term enforcement"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-05",
+          "task_id": "task-pf-tr-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-05",
+          "task_id": "task-pf-tr-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-05",
+          "task_id": "task-pf-tr-05",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -212,7 +356,35 @@
         "source_id": "source-pf-id-01",
         "scope": "Hosted Jasper customer and staff authentication with OIDC, MFA, and role separation"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-01",
+          "task_id": "task-pf-id-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-01",
+          "task_id": "task-pf-id-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-01",
+          "task_id": "task-pf-id-01",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -247,7 +419,35 @@
         "source_id": "source-pf-id-02",
         "scope": "Scoped RBAC role assignments, object-level permission overrides, and explicit grant/deny outcomes"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-02",
+          "task_id": "task-pf-id-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-02",
+          "task_id": "task-pf-id-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-02",
+          "task_id": "task-pf-id-02",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -282,7 +482,35 @@
         "source_id": "source-pf-id-03",
         "scope": "APCore MCP JWT authentication, claim mapping, ACL roles, and unauthorized responses"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-03",
+          "task_id": "task-pf-id-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-03",
+          "task_id": "task-pf-id-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-03",
+          "task_id": "task-pf-id-03",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -317,7 +545,35 @@
         "source_id": "source-pf-id-04",
         "scope": "ContextEngine tenant-isolated context access, ownership, sharing, and deletion permissions"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-04",
+          "task_id": "task-pf-id-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-04",
+          "task_id": "task-pf-id-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-04",
+          "task_id": "task-pf-id-04",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -352,7 +608,35 @@
         "source_id": "source-pf-id-05",
         "scope": "AI agent identities, sessions, grants, delegated authority, and deny-by-default enforcement"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-05",
+          "task_id": "task-pf-id-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-05",
+          "task_id": "task-pf-id-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-05",
+          "task_id": "task-pf-id-05",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -387,7 +671,35 @@
         "source_id": "source-pf-wf-01",
         "scope": "Kherad contribution submission, review, approval, and merge workflow"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-01",
+          "task_id": "task-pf-wf-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-01",
+          "task_id": "task-pf-wf-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-01",
+          "task_id": "task-pf-wf-01",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -422,7 +734,35 @@
         "source_id": "source-pf-wf-02",
         "scope": "Pi Company event-sourced review, testing, acceptance, and merge gates"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-02",
+          "task_id": "task-pf-wf-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-02",
+          "task_id": "task-pf-wf-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-02",
+          "task_id": "task-pf-wf-02",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -457,7 +797,35 @@
         "source_id": "source-pf-wf-03",
         "scope": "Pi Spine orchestration journal, run state machine, recovery, and human integration gates"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-03",
+          "task_id": "task-pf-wf-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-03",
+          "task_id": "task-pf-wf-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-03",
+          "task_id": "task-pf-wf-03",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -492,7 +860,35 @@
         "source_id": "source-pf-wf-04",
         "scope": "AgentAction exact-action challenge, approval/grant binding, replay, and fail-closed context drift"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-04",
+          "task_id": "task-pf-wf-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-04",
+          "task_id": "task-pf-wf-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-04",
+          "task_id": "task-pf-wf-04",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -527,7 +923,35 @@
         "source_id": "source-pf-wf-05",
         "scope": "Incident response state transitions and human approval gates for communications and remediation"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-05",
+          "task_id": "task-pf-wf-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-05",
+          "task_id": "task-pf-wf-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-05",
+          "task_id": "task-pf-wf-05",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -562,7 +986,35 @@
         "source_id": "source-pf-fm-01",
         "scope": "Kanea service configuration schema validation, invalid architecture rejection, and diagnostics"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-01",
+          "task_id": "task-pf-fm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-01",
+          "task_id": "task-pf-fm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-01",
+          "task_id": "task-pf-fm-01",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -597,7 +1049,35 @@
         "source_id": "source-pf-fm-02",
         "scope": "VoiceType shortcut collision handling, configuration migrations, and malformed provider-response fallback"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-02",
+          "task_id": "task-pf-fm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-02",
+          "task_id": "task-pf-fm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-02",
+          "task_id": "task-pf-fm-02",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -632,7 +1112,35 @@
         "source_id": "source-pf-fm-03",
         "scope": "The Loop setup, capability, and configuration validation with fail-closed collision handling"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-03",
+          "task_id": "task-pf-fm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-03",
+          "task_id": "task-pf-fm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-03",
+          "task_id": "task-pf-fm-03",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -667,7 +1175,35 @@
         "source_id": "source-pf-fm-04",
         "scope": "Agent ToolTrust JSON and YAML policy parsing, validation, and actionable configuration diagnostics"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-04",
+          "task_id": "task-pf-fm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-04",
+          "task_id": "task-pf-fm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-04",
+          "task_id": "task-pf-fm-04",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -702,7 +1238,35 @@
         "source_id": "source-pf-fm-05",
         "scope": "Cineprime request and form constraints with standardized field-level validation errors"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-05",
+          "task_id": "task-pf-fm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-05",
+          "task_id": "task-pf-fm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-05",
+          "task_id": "task-pf-fm-05",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -737,7 +1301,35 @@
         "source_id": "source-pf-as-01",
         "scope": "OpenAlgo scalping event triggers, message buses, reconnect handling, and asynchronous failure recovery"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-01",
+          "task_id": "task-pf-as-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-01",
+          "task_id": "task-pf-as-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-01",
+          "task_id": "task-pf-as-01",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -772,7 +1364,35 @@
         "source_id": "source-pf-as-02",
         "scope": "OCR scan watcher behavior and multi-page batch-processing pipeline"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-02",
+          "task_id": "task-pf-as-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-02",
+          "task_id": "task-pf-as-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-02",
+          "task_id": "task-pf-as-02",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -807,7 +1427,35 @@
         "source_id": "source-pf-as-03",
         "scope": "Isolated background MuJoCo simulation jobs with start, stop, status, and completed-job listing"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-03",
+          "task_id": "task-pf-as-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-03",
+          "task_id": "task-pf-as-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-03",
+          "task_id": "task-pf-as-03",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -842,7 +1490,35 @@
         "source_id": "source-pf-as-04",
         "scope": "Cloudflare Agents persistent FIFO callback queue, automatic processing, bounded retry, and dequeue outcomes"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-04",
+          "task_id": "task-pf-as-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-04",
+          "task_id": "task-pf-as-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-04",
+          "task_id": "task-pf-as-04",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -877,7 +1553,35 @@
         "source_id": "source-pf-as-05",
         "scope": "Runmill immediate run-ID submission, durable events, checkpoint recovery, reconciliation, and terminal retry disposition"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-05",
+          "task_id": "task-pf-as-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-05",
+          "task_id": "task-pf-as-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-05",
+          "task_id": "task-pf-as-05",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -912,7 +1616,35 @@
         "source_id": "source-pf-tm-01",
         "scope": "Kandji MCP cache TTL behavior and rate-limit retry/backoff"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-01",
+          "task_id": "task-pf-tm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-01",
+          "task_id": "task-pf-tm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-01",
+          "task_id": "task-pf-tm-01",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -947,7 +1679,35 @@
         "source_id": "source-pf-tm-02",
         "scope": "Ayin plan entitlements, API rate limits, data retention windows, and quota enforcement"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-02",
+          "task_id": "task-pf-tm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-02",
+          "task_id": "task-pf-tm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-02",
+          "task_id": "task-pf-tm-02",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -982,7 +1742,35 @@
         "source_id": "source-pf-tm-03",
         "scope": "YAT device data update freshness, sleep schedules, and time-window behavior"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-03",
+          "task_id": "task-pf-tm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-03",
+          "task_id": "task-pf-tm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-03",
+          "task_id": "task-pf-tm-03",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -1017,7 +1805,35 @@
         "source_id": "source-pf-tm-04",
         "scope": "OpenRAG monthly token allocations, reset-day behavior, debits, and exhaustion handling"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-04",
+          "task_id": "task-pf-tm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-04",
+          "task_id": "task-pf-tm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-04",
+          "task_id": "task-pf-tm-04",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     },
     {
@@ -1052,8 +1868,73 @@
         "source_id": "source-pf-tm-05",
         "scope": "AutoTube publishing cadence, daily volume, API-quota preflight, and quota-exhaustion queuing"
       },
-      "reviews": [],
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-05",
+          "task_id": "task-pf-tm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-05",
+          "task_id": "task-pf-tm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-05",
+          "task_id": "task-pf-tm-05",
+          "decision": "admit"
+        }
+      ],
       "defects": []
     }
-  ]
+  ],
+  "corpus_snapshot_sha256": "cfa0ca2dbc2f985951f6ea20e9ac6e7570172a6c76f6157485ab484c9b66bfa6",
+  "review_reports": [
+    {
+      "report_id": "machine-expert-a-v3",
+      "path": "reviews/machine-expert-a.json",
+      "sha256": "49f22e117113831736cc91faa87d883df5f5b520327b2a2cdb081fe793f7b439",
+      "reviewer_id": "machine-test-expert-a",
+      "reviewer_class": "machine-agent",
+      "review_scope": "intake-only"
+    },
+    {
+      "report_id": "machine-expert-b-v3",
+      "path": "reviews/machine-expert-b.json",
+      "sha256": "80319d452bdfcc6c76b91eec85f74767fd69bec51e92f4d4f4921851969f3f5e",
+      "reviewer_id": "machine-test-expert-b",
+      "reviewer_class": "machine-agent",
+      "review_scope": "intake-only"
+    }
+  ],
+  "adjudication_report": {
+    "report_id": "machine-adjudication-v3",
+    "path": "reviews/machine-adjudication.json",
+    "sha256": "7cc727f8beee455c37df48de279423c565b9c0f015e3049109bfca84042307c0",
+    "reviewer_id": "machine-adjudicator",
+    "reviewer_class": "machine-agent",
+    "review_scope": "intake-only"
+  },
+  "defect_ledger": {
+    "ledger_id": "public-defect-leads-v1",
+    "path": "defect-leads.json",
+    "sha256": "399ec5e83e08b6f9e277fb19ab987847ef4022b9751bc805585f6569aab5737b"
+  },
+  "comparators": {
+    "registry_id": "public-pilot-comparators-v1",
+    "path": "comparators.json",
+    "sha256": "cb9a2c382f4a3641d0ed6de849b711fc681b2afd1b6ee8dea72a5bafa70db9aa"
+  }
 }
