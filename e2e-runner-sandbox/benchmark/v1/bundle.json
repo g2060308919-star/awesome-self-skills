@@ -1,0 +1,14 @@
+{
+  "bundleVersion": "v1",
+  "releasedAt": "2026-08-31T00:00:00.000Z",
+  "fixtureVersion": "core-v1",
+  "normalizerVersion": "snapshot-v1",
+  "profiles": [],
+  "files": {
+    "runnerInputContract": "contracts/runner-input-v1.json",
+    "oracleContract": "contracts/oracle-v1.json",
+    "snapshotContract": "contracts/snapshot-v1.json",
+    "scoring": "scoring.json",
+    "hostTraceClassifier": "host-trace-classifier.json"
+  }
+}

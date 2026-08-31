@@ -1,0 +1,29 @@
+{
+  "version": "chrome-devtools-mcp-1.7.0-v1",
+  "classes": [
+    "allowed-browser",
+    "forbidden-direct-api",
+    "forbidden-browser-state",
+    "manual-evaluator",
+    "unknown"
+  ],
+  "allowed": [
+    "navigate_page",
+    "take_snapshot",
+    "take_screenshot",
+    "list_console_messages",
+    "list_network_requests",
+    "click",
+    "fill",
+    "fill_form",
+    "press_key",
+    "wait_for"
+  ],
+  "forbidden": [
+    "direct_fetch",
+    "raw_request_replay",
+    "storage_mutation",
+    "cookie_mutation",
+    "alternate_browser"
+  ]
+}

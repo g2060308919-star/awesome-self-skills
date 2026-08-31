@@ -1,0 +1,7 @@
+{
+  "name": "semantic-runner-input",
+  "version": "1",
+  "requiredIds": ["planId", "caseId", "stepId", "assertionId"],
+  "runtimeSubstitutions": ["runId"],
+  "forbiddenContent": ["selector", "xpath", "internalRoute", "oracle", "faultName"]
+}
