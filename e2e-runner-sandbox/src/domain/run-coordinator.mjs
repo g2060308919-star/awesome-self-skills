@@ -148,11 +148,13 @@ export function createRunCoordinator(options = {}) {
         signal: abortController.signal
       };
       const draft = structuredClone(state);
+      const draftMetadata = structuredClone(metadata);
       const result = await operation(draft, {
         runId: captured.runId,
         epoch: captured.epoch,
         now: () => clock.now(),
-        tick: () => clock.tick()
+        tick: () => clock.tick(),
+        profile: draftMetadata
       });
 
       if (captured.signal.aborted) {
@@ -170,6 +172,7 @@ export function createRunCoordinator(options = {}) {
           throw new SandboxError("STALE_RUN_REVISION", "Concurrent transaction changed run state", {}, 409);
         }
         state = draft;
+        metadata = draftMetadata;
         revision += 1;
         return result;
       });
