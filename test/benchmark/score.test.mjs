@@ -491,6 +491,55 @@ test('benchmark closes capture lanes, case evidence IDs, and capture identity wi
   const prefixReport = scoreBenchmark(prefixManifest, prefixRuns);
   assert.equal(prefixReport.completeness.status, 'complete');
   assert.deepEqual(fraction(prefixReport.systems['generate-test-cases'].overall.grounded_factual_support_precision), [359, 360, 359 / 360]);
+
+  const crossManifest = structuredClone(manifest);
+  const crossRuns = structuredClone(runs);
+  const crossCase = crossManifest.cases[0];
+  const targetRun = crossRuns.find((/** @type {any} */ run) => run.case_id === crossCase.case_id && run.system === 'generate-test-cases' && run.repeat === 1);
+  const baselineRun = crossRuns.find((/** @type {any} */ run) => run.case_id === crossCase.case_id && run.system === 'long-prompt' && run.repeat === 1);
+  const renames = new Map([[targetRun.capture_id, 'cross-system-prefix'], [baselineRun.capture_id, 'cross-system-prefix::nested']]);
+  targetRun.capture_id = renames.get(targetRun.capture_id);
+  baselineRun.capture_id = renames.get(baselineRun.capture_id);
+  for (const assetName of ['supported_assertions', 'accepted_cases']) {
+    const asset = crossCase.assets[assetName];
+    for (const labels of [asset.final_labels, ...asset.expert_annotations.map((/** @type {any} */ annotation) => annotation.labels)]) {
+      for (const row of labels) for (const [oldId, newId] of renames) {
+        if (row.label_key.startsWith(`${oldId}::`)) row.label_key = row.label_key.replace(oldId, newId);
+      }
+    }
+  }
+  const crossUnsupportedKey = `${targetRun.capture_id}::assertion-critical`;
+  const crossAssertions = crossCase.assets.supported_assertions;
+  for (const labels of [crossAssertions.final_labels, ...crossAssertions.expert_annotations.map((/** @type {any} */ annotation) => annotation.labels)]) {
+    labels.find((/** @type {any} */ row) => row.label_key === crossUnsupportedKey).value.supported = false;
+  }
+  rebindOutput(targetRun);
+  rebindOutput(baselineRun);
+  const crossReport = scoreBenchmark(crossManifest, crossRuns);
+  assert.equal(crossReport.completeness.status, 'complete');
+  assert.deepEqual(fraction(crossReport.systems['generate-test-cases'].overall.grounded_factual_support_precision), [359, 360, 359 / 360]);
+});
+
+test('benchmark Jaccard identities cannot collide across case and Test Point delimiters', () => {
+  const caseA = benchmarkCase('a', 'collision', BENCHMARK_STRATA[0], [
+    label('b::c', { expected: true, groundable: true, risk: 'critical' })
+  ], [], [], []);
+  const caseB = benchmarkCase('a::b', 'collision', BENCHMARK_STRATA[0], [
+    label('c', { expected: true, groundable: true, risk: 'critical' })
+  ], [], [], []);
+  const collisionManifest = {
+    ...metricManifest, cases: [caseA, caseB], expected_provenance: metricExpectedProvenance
+  };
+  const collisionRuns = [
+    captured('a', 1, { test_point_signatures: ['b::c'], grounded_test_point_signatures: ['b::c'], grounded_coverage_signatures: ['b::c'] }),
+    captured('a', 2, {}),
+    captured('a', 3, { test_point_signatures: ['b::c'], grounded_test_point_signatures: ['b::c'], grounded_coverage_signatures: ['b::c'] }),
+    captured('a::b', 1, {}),
+    captured('a::b', 2, { test_point_signatures: ['c'], grounded_test_point_signatures: ['c'], grounded_coverage_signatures: ['c'] }),
+    captured('a::b', 3, {})
+  ];
+  const report = scoreBenchmark(collisionManifest, collisionRuns);
+  assert.equal(report.systems['generate-test-cases'].overall.test_point_signature_jaccard.value, 1 / 3);
 });
 
 test('benchmark rejects renamed source clones and incomplete retained label history', () => {
@@ -520,6 +569,15 @@ test('benchmark rejects renamed source clones and incomplete retained label hist
   })).digest('hex');
   asset.prior_versions = [emptySnapshot];
   assert.equal(hasIssue(scoreBenchmark(lineage, runs), 'LABEL_LINEAGE_MISSING'), true);
+
+  const added = structuredClone(manifest);
+  const addedAsset = added.cases[0].assets.supported_assertions;
+  const priorAsset = structuredClone(addedAsset);
+  priorAsset.final_labels = priorAsset.final_labels.slice(0, -1);
+  for (const annotation of priorAsset.expert_annotations) annotation.labels = annotation.labels.slice(0, -1);
+  addedAsset.correction_of = '0.9.0';
+  addedAsset.prior_versions = [retainedLabelSnapshot(priorAsset, '0.9.0')];
+  assert.equal(hasIssue(scoreBenchmark(added, runs), 'LABEL_LINEAGE_MISSING'), false, 'a correction may add a newly recovered label while retaining complete history');
 });
 
 test('benchmark reviewer regressions fail closed instead of inflating or crashing completeness', () => {
@@ -763,6 +821,41 @@ test('benchmark loader rejects hardlinks between hidden labels and generation so
   }));
   const loaded = await loadBenchmarkInputs(manifestPath);
   assert.equal(loaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+});
+
+test('benchmark loader rejects a symlinked benchmark root and pairwise nested case roots', async () => {
+  const temporaryParent = await mkdtemp(path.join(os.tmpdir(), 'benchmark-root-alias-'));
+  const realRoot = path.join(temporaryParent, 'real-v1');
+  await mkdir(path.join(realRoot, 'cases'), { recursive: true });
+  await mkdir(path.join(realRoot, 'captured'), { recursive: true });
+  const emptyManifest = {
+    schema_version: '1.0.0', benchmark_version: 'v1-root-alias', manifest_id: 'root-alias',
+    evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    expected_provenance: expectedProvenance('v1-root-alias'),
+    strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
+    cases: []
+  };
+  await writeFile(path.join(realRoot, 'manifest.json'), JSON.stringify(emptyManifest));
+  const aliasRoot = path.join(temporaryParent, 'alias-v1');
+  await symlink(realRoot, aliasRoot, 'dir');
+  const aliasLoaded = await loadBenchmarkInputs(path.join(aliasRoot, 'manifest.json'));
+  assert.equal(aliasLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+
+  const nestedRoot = path.join(temporaryParent, 'nested-v1');
+  await mkdir(path.join(nestedRoot, 'cases/outer/sources/inner'), { recursive: true });
+  await mkdir(path.join(nestedRoot, 'captured/outer/inner'), { recursive: true });
+  const nestedManifest = {
+    ...emptyManifest, benchmark_version: 'v1-nested', manifest_id: 'nested-roots',
+    expected_provenance: expectedProvenance('v1-nested'),
+    cases: [
+      { case_id: 'outer', domain: 'security', stratum: BENCHMARK_STRATA[0], risk: 'low', high_risk: false, case_directory: 'cases/outer', capture_directory: 'captured/outer' },
+      { case_id: 'inner', domain: 'security', stratum: BENCHMARK_STRATA[0], risk: 'low', high_risk: false, case_directory: 'cases/outer/sources/inner', capture_directory: 'captured/outer/inner' }
+    ]
+  };
+  await writeFile(path.join(nestedRoot, 'manifest.json'), JSON.stringify(nestedManifest));
+  const nestedLoaded = await loadBenchmarkInputs(path.join(nestedRoot, 'manifest.json'));
+  assert.equal(nestedLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+  assert.deepEqual(nestedLoaded.manifest.cases, []);
 });
 
 test('benchmark V1 pilot has required hidden-label assets and only external capture paths', async () => {

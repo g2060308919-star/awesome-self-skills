@@ -236,7 +236,6 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
   if (typeof asset.correction_of === 'string') {
     const snapshots = Array.isArray(asset.prior_versions) ? asset.prior_versions : [];
     const versions = new Map();
-    const currentKeys = new Set(finalLabelMap(asset).keys());
     let retained = snapshots.length > 0;
     for (const [snapshotIndex, snapshot] of snapshots.entries()) {
       if (!isRecord(snapshot) || !isNonblankString(snapshot.label_version) || !semanticVersion.test(snapshot.label_version) || versions.has(snapshot.label_version) ||
@@ -249,7 +248,7 @@ function validateLabeledAsset(issues, asset, pathValue, kind) {
       /** @type {any[]} */
       const snapshotIssues = [];
       validateLabeledAsset(snapshotIssues, { ...snapshot, correction_of: null, prior_versions: [] }, `${pathValue}/prior_versions/${snapshotIndex}`, kind);
-      if (snapshotIssues.length > 0 || !setsEqual(currentKeys, new Set(finalLabelMap(snapshot).keys()))) retained = false;
+      if (snapshotIssues.length > 0 || snapshot.final_labels.length === 0) retained = false;
     }
     const visited = new Set();
     let version = asset.correction_of;
@@ -348,7 +347,7 @@ function scoreCohort(cases, runs, historicalByCase, system, risk = null) {
     );
     const defectIds = new Set(defects.map((/** @type {any} */ item) => item.defect_id));
     const caseRuns = runs.filter((run) => run.system === system && run.case_id === benchmarkCase.case_id);
-    const caseCaptureIds = caseRuns.map((run) => run.capture_id);
+    const caseCaptureIds = runs.filter((run) => run.case_id === benchmarkCase.case_id).map((run) => run.capture_id);
     for (const run of caseRuns) {
       const generated = new Set(run.output.test_point_signatures.filter((/** @type {string} */ signature) => obligationMap.has(signature)));
       const expected = obligationLabels.filter((item) => item.expected === true);
@@ -387,13 +386,13 @@ function scoreCohort(cases, runs, historicalByCase, system, risk = null) {
       const testSet = testPointsByRepeat.get(run.repeat) ?? new Set();
       for (const signature of run.output.test_point_signatures) {
         const label = allObligationMap.get(signature);
-        if (risk === null || !label || label.risk === risk) testSet.add(`${benchmarkCase.case_id}::${signature}`);
+        if (risk === null || !label || label.risk === risk) testSet.add(JSON.stringify([benchmarkCase.case_id, signature]));
       }
       testPointsByRepeat.set(run.repeat, testSet);
       const coverageSet = groundedCoverageByRepeat.get(run.repeat) ?? new Set();
       for (const signature of run.output.grounded_coverage_signatures) {
         const label = allObligationMap.get(signature);
-        if (risk === null || !label || label.risk === risk) coverageSet.add(`${benchmarkCase.case_id}::${signature}`);
+        if (risk === null || !label || label.risk === risk) coverageSet.add(JSON.stringify([benchmarkCase.case_id, signature]));
       }
       groundedCoverageByRepeat.set(run.repeat, coverageSet);
     }
@@ -800,6 +799,10 @@ export async function loadBenchmarkInputs(manifestPath) {
   let realCaseRoot;
   let realCaptureRoot;
   try {
+    const benchmarkRootStat = await fsPromises.lstat(benchmarkRoot);
+    if (benchmarkRootStat.isSymbolicLink() || !benchmarkRootStat.isDirectory()) {
+      throw new Error('The benchmark root must be a real directory, never a symlink.');
+    }
     const realBenchmarkRoot = await realpath(benchmarkRoot);
     const caseRootStat = await fsPromises.lstat(expectedCaseRoot);
     const captureRootStat = await fsPromises.lstat(expectedCaptureRoot);
@@ -815,6 +818,44 @@ export async function loadBenchmarkInputs(manifestPath) {
     loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: '/', message: error instanceof Error ? error.message : String(error) });
     return { manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
   }
+  /** @type {Array<{index:number, caseRoot:string, captureRoot:string}>} */
+  const resolvedRoots = [];
+  for (const [caseIndex, item] of (raw.cases ?? []).entries()) {
+    try {
+      const caseRoot = path.resolve(benchmarkRoot, item.case_directory);
+      const captureRoot = path.resolve(benchmarkRoot, item.capture_directory);
+      if (!isPathInside(expectedCaseRoot, caseRoot) || !isPathInside(expectedCaptureRoot, captureRoot)) {
+        throw new Error(`Benchmark case ${item.case_id} crosses the frozen hidden-label/capture boundary.`);
+      }
+      const caseStat = await fsPromises.lstat(caseRoot);
+      const captureStat = await fsPromises.lstat(captureRoot);
+      if (caseStat.isSymbolicLink() || captureStat.isSymbolicLink() || !caseStat.isDirectory() || !captureStat.isDirectory()) {
+        throw new Error('Per-case label and capture roots must be real directories, never symlinks.');
+      }
+      const realCase = await realpath(caseRoot);
+      const realCapture = await realpath(captureRoot);
+      if (!isPathInside(realCaseRoot, realCase) || !isPathInside(realCaptureRoot, realCapture) || pathsOverlap(realCase, realCapture)) {
+        throw new Error('Benchmark path resolves outside or overlaps its frozen evidence root.');
+      }
+      resolvedRoots.push({ index: caseIndex, caseRoot: realCase, captureRoot: realCapture });
+    } catch (error) {
+      loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: `/cases/${caseIndex}`, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  for (let left = 0; left < resolvedRoots.length; left += 1) for (let right = left + 1; right < resolvedRoots.length; right += 1) {
+    const first = resolvedRoots[left];
+    const second = resolvedRoots[right];
+    if (pathsOverlap(first.caseRoot, second.caseRoot) || pathsOverlap(first.captureRoot, second.captureRoot)) {
+      loadIssues.push({
+        code: 'BENCHMARK_PATH_INVALID', path: `/cases/${second.index}`,
+        message: `Per-case evidence roots must be pairwise separate from case ${first.index}.`
+      });
+    }
+  }
+  if (loadIssues.some((loadIssue) => loadIssue.code === 'BENCHMARK_PATH_INVALID')) {
+    return { manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
+  }
+  const seenPhysicalEvidencePaths = new Set();
   for (const [caseIndex, item] of (raw.cases ?? []).entries()) {
     const caseRoot = path.resolve(benchmarkRoot, item.case_directory);
     const captureRoot = path.resolve(benchmarkRoot, item.capture_directory);
@@ -892,6 +933,11 @@ export async function loadBenchmarkInputs(manifestPath) {
           const realRawPath = await realpath(rawPath);
           const realExtractionPath = await realpath(extractionPath);
           if (!isPathInside(realCapture, realRawPath) || !isPathInside(realCapture, realExtractionPath)) throw new Error('Capture evidence path resolves outside the real captured evidence root.');
+          if (seenPhysicalEvidencePaths.has(realRawPath) || seenPhysicalEvidencePaths.has(realExtractionPath) || realRawPath === realExtractionPath) {
+            throw new Error('Raw and extraction artifacts must have globally unique physical paths.');
+          }
+          seenPhysicalEvidencePaths.add(realRawPath);
+          seenPhysicalEvidencePaths.add(realExtractionPath);
           rawOutputDigest = createHash('sha256').update(await readFile(realRawPath)).digest('hex');
           const extractionBytes = await readFile(realExtractionPath);
           extractionDigest = createHash('sha256').update(extractionBytes).digest('hex');
