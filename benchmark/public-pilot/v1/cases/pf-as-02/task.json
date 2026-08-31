@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-02",
-  "scope": "OCR scan watcher, batch processing pipeline, and terminal job states",
+  "scope": "OCR scan watcher behavior and multi-page batch-processing pipeline",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-02/source/PRD.md"

@@ -78,34 +78,34 @@
     {
       "pilot_id": "PF-TR-03",
       "status": "pilot-admitted",
-      "repository": "socrates8300/k2payments",
-      "commit": "48d352294a4c35c1e8624c29812cd2912d385d3f",
+      "repository": "unbrowse-ai/unbrowse",
+      "commit": "e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca",
       "stratum": "transaction/order/payment",
-      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "acquired_at": "2026-08-31T20:10:30Z",
       "source": {
         "source_id": "source-pf-tr-03",
         "path": "cases/pf-tr-03/source/prd.md",
-        "sha256": "7d158b4e84e1668eda89c8058e70ad544029dc663e1e31df9816e98a777e541a",
-        "content_digest": "7d158b4e84e1668eda89c8058e70ad544029dc663e1e31df9816e98a777e541a",
-        "upstream_url": "https://raw.githubusercontent.com/socrates8300/k2payments/48d352294a4c35c1e8624c29812cd2912d385d3f/prd.md"
+        "sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+        "content_digest": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+        "upstream_url": "https://raw.githubusercontent.com/unbrowse-ai/unbrowse/e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca/docs/architecture/ACCEPTANCE-CRITERIA.md"
       },
       "license": {
         "path": "cases/pf-tr-03/license/LICENSE",
-        "sha256": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
-        "upstream_url": "https://raw.githubusercontent.com/socrates8300/k2payments/48d352294a4c35c1e8624c29812cd2912d385d3f/LICENSE",
-        "reported_license": "AGPL-3.0-only",
+        "sha256": "53ba032af8ce6e762d8a0f97b1c946bc49d1f9edf9fee41a3555c2eb1ed907c2",
+        "upstream_url": "https://raw.githubusercontent.com/unbrowse-ai/unbrowse/e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca/LICENSE",
+        "reported_license": "MIT",
         "scope_decision": "applicable"
       },
       "provenance": {
         "path": "cases/pf-tr-03/provenance.json",
-        "sha256": "8861a9890ebbdb64c14a008c9df0640107e7aa30eddc7beb83f7ba2f604fabcd"
+        "sha256": "a25101542f5e65b54c54d6a840d4196941bd8cee75d008b07fde8d590bf805a8"
       },
       "task": {
         "task_id": "task-pf-tr-03",
         "path": "cases/pf-tr-03/task.json",
-        "sha256": "1e208212c7201ffdcc19897aed79c0b7d0b7c9a9fd69cf2ee3cef7304894f7ec",
+        "sha256": "890d5fbf68a97f486ed54702ae91fa00225925ed4c2119a4f26f9c55cc297ad9",
         "source_id": "source-pf-tr-03",
-        "scope": "ISO 20022 payment message orchestration and scheme validation"
+        "scope": "Unbrowse paid-route admission, Stripe/crypto subscription checkout, x402 retries, and payment settlement"
       },
       "reviews": [],
       "defects": []
@@ -243,9 +243,9 @@
       "task": {
         "task_id": "task-pf-id-02",
         "path": "cases/pf-id-02/task.json",
-        "sha256": "e0f5ed462f81f1b4201ec77bd995048b6d75c4dc6034be53002220e9b9da1f58",
+        "sha256": "32408e3b865de34872daeed3fbf56b10cdb27f3f3a9b54edf510740d942d84ca",
         "source_id": "source-pf-id-02",
-        "scope": "Hierarchical RBAC assignment, scoped permissions, inheritance, and explicit denial"
+        "scope": "Scoped RBAC role assignments, object-level permission overrides, and explicit grant/deny outcomes"
       },
       "reviews": [],
       "defects": []
@@ -463,34 +463,34 @@
     {
       "pilot_id": "PF-WF-04",
       "status": "pilot-admitted",
-      "repository": "mikigraf/runmill",
-      "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
+      "repository": "brightbeanxyz/brightbean-studio",
+      "commit": "d85fce192e687d20e8fd7e9449a40ad7952ec7c3",
       "stratum": "workflow/approval/state",
-      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "acquired_at": "2026-08-31T20:10:30Z",
       "source": {
         "source_id": "source-pf-wf-04",
         "path": "cases/pf-wf-04/source/prd.md",
-        "sha256": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
-        "content_digest": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
-        "upstream_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/prd.md"
+        "sha256": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
+        "content_digest": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
+        "upstream_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/development_specs/feature-spec-social-media-management-v2.md"
       },
       "license": {
         "path": "cases/pf-wf-04/license/LICENSE",
-        "sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
-        "upstream_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
-        "reported_license": "MIT",
+        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+        "upstream_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/LICENSE",
+        "reported_license": "AGPL-3.0-only",
         "scope_decision": "applicable"
       },
       "provenance": {
         "path": "cases/pf-wf-04/provenance.json",
-        "sha256": "411f6ee49708e4b4af14c1ec8042b1dce1c892a8c3e1abb84570b124d4985681"
+        "sha256": "1d177b73ee991588b5e2abf09faebcb07c9a9dda2a4b7b409bda395e87d2e63a"
       },
       "task": {
         "task_id": "task-pf-wf-04",
         "path": "cases/pf-wf-04/task.json",
-        "sha256": "1c42fe1aa1192d5448ab64a5e975d783396dc8682b600d8da0eac3941ddfa866",
+        "sha256": "4ea437ea0ae3a16d94fdd836a5bfacee49f3ae8de6b66e6c0845770b0da3e29c",
         "source_id": "source-pf-wf-04",
-        "scope": "Runmill issue execution, review, approval, and governed merge state machine"
+        "scope": "Brightbean internal/client social-media approval transitions, change-request resubmission, and reminder exhaustion"
       },
       "reviews": [],
       "defects": []
@@ -593,9 +593,9 @@
       "task": {
         "task_id": "task-pf-fm-02",
         "path": "cases/pf-fm-02/task.json",
-        "sha256": "d253517f5c03082553c3b544623658c1493c6d2d1db9e8c506561d19bc031ec2",
+        "sha256": "4ef5112f78411c084f3f18d5f657edc634404ce3ff90b5bbea63f34b8773546b",
         "source_id": "source-pf-fm-02",
-        "scope": "VoiceType provider settings, shortcut collision handling, migrations, and malformed provider responses"
+        "scope": "VoiceType shortcut collision handling, configuration migrations, and malformed provider-response fallback"
       },
       "reviews": [],
       "defects": []
@@ -768,9 +768,9 @@
       "task": {
         "task_id": "task-pf-as-02",
         "path": "cases/pf-as-02/task.json",
-        "sha256": "ff3737654d21b155c289696255ab01b1ed5552f089620a58b6a3f253c116574e",
+        "sha256": "ff803d7a0fcc2951cf4f6c43c0e12fd1a9be0ea64678622721d7cc00e85346d3",
         "source_id": "source-pf-as-02",
-        "scope": "OCR scan watcher, batch processing pipeline, and terminal job states"
+        "scope": "OCR scan watcher behavior and multi-page batch-processing pipeline"
       },
       "reviews": [],
       "defects": []
@@ -803,9 +803,9 @@
       "task": {
         "task_id": "task-pf-as-03",
         "path": "cases/pf-as-03/task.json",
-        "sha256": "3f7300f467de4128f50f8bfd9da64970b37c7f1b5b11d5d73911a7bfa4033bf7",
+        "sha256": "333a1391f72f0254b0c53607e980cb125d5693628579426f83df55879b124a44",
         "source_id": "source-pf-as-03",
-        "scope": "MuJoCo queued concurrent and sequential simulation job execution"
+        "scope": "Isolated background MuJoCo simulation jobs with start, stop, status, and completed-job listing"
       },
       "reviews": [],
       "defects": []
@@ -838,9 +838,9 @@
       "task": {
         "task_id": "task-pf-as-04",
         "path": "cases/pf-as-04/task.json",
-        "sha256": "0bade7c65204cdc0b443292f3ca74f622601c37de53b142fa856bdae11a0d244",
+        "sha256": "2d7708743646788846edde6b1eb864eb03c66ccff302519e6ea0e8d432d25204",
         "source_id": "source-pf-as-04",
-        "scope": "Local LLM asynchronous provider health, circuit breaking, failover, and request handling"
+        "scope": "Local LLM provider selection, request dispatch, and health/diagnostic reporting"
       },
       "reviews": [],
       "defects": []
@@ -873,9 +873,9 @@
       "task": {
         "task_id": "task-pf-as-05",
         "path": "cases/pf-as-05/task.json",
-        "sha256": "9e0b845290dd830be47509ccfd1871428c02423701f7e98720dbcd78be946c2a",
+        "sha256": "3479b588dbe9967ce6c2ebd0799c6c3410b07e8dcbd235f51d3bd9e81e6aaf70",
         "source_id": "source-pf-as-05",
-        "scope": "ARR queued cross-service automation, event propagation, and partial-failure handling"
+        "scope": "Cross-service media automation with Jellyfin-aware service routing and SSE dashboard log streaming"
       },
       "reviews": [],
       "defects": []
@@ -908,9 +908,9 @@
       "task": {
         "task_id": "task-pf-tm-01",
         "path": "cases/pf-tm-01/task.json",
-        "sha256": "2db27a21e9e4d3fad68bec991305dc8c972fb2943ae2b7203f611395b4cb44a5",
+        "sha256": "ff1c30f21c12bf424fba0d033845ad1b87f7a63e93e020dca7aefdf05269615c",
         "source_id": "source-pf-tm-01",
-        "scope": "Kandji MCP hourly request limits, cache TTLs, and retry backoff behavior"
+        "scope": "Kandji MCP cache TTL behavior and rate-limit retry/backoff"
       },
       "reviews": [],
       "defects": []
@@ -1048,9 +1048,9 @@
       "task": {
         "task_id": "task-pf-tm-05",
         "path": "cases/pf-tm-05/task.json",
-        "sha256": "2e377f3f9fa59c7bf30f1dbdf7fcf67e54f8d59097579af0d4f1a7b2baee1e66",
+        "sha256": "6d9b937a19191deb5b0e301eed40e3279eadb632513c0529d0f87c67d42526f5",
         "source_id": "source-pf-tm-05",
-        "scope": "AutoTube publishing schedules, daily volume limits, API quota queuing, and retry timing"
+        "scope": "AutoTube publishing cadence, daily volume, API-quota preflight, and quota-exhaustion queuing"
       },
       "reviews": [],
       "defects": []

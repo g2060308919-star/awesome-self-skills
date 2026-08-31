@@ -1,12 +1,12 @@
 {
-  "repository": "mikigraf/runmill",
-  "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
-  "source_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/prd.md",
-  "source_sha256": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
-  "content_digest": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
-  "license_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
-  "license_sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
-  "reported_license": "MIT",
+  "repository": "brightbeanxyz/brightbean-studio",
+  "commit": "d85fce192e687d20e8fd7e9449a40ad7952ec7c3",
+  "source_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/development_specs/feature-spec-social-media-management-v2.md",
+  "source_sha256": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
+  "content_digest": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
+  "license_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/LICENSE",
+  "license_sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+  "reported_license": "AGPL-3.0-only",
   "scope_decision": "applicable",
-  "acquired_at": "2026-08-31T18:23:03.336Z"
+  "acquired_at": "2026-08-31T20:10:30Z"
 }

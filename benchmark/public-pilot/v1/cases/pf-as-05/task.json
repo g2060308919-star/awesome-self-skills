@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-05",
-  "scope": "ARR queued cross-service automation, event propagation, and partial-failure handling",
+  "scope": "Cross-service media automation with Jellyfin-aware service routing and SSE dashboard log streaming",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-05/source/PRD.md"

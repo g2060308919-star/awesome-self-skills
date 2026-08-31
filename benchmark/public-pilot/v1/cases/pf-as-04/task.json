@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-04",
-  "scope": "Local LLM asynchronous provider health, circuit breaking, failover, and request handling",
+  "scope": "Local LLM provider selection, request dispatch, and health/diagnostic reporting",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-04/source/PRD.md"

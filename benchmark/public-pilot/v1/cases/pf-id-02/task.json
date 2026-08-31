@@ -1,6 +1,6 @@
 {
   "case_id": "PF-ID-02",
-  "scope": "Hierarchical RBAC assignment, scoped permissions, inheritance, and explicit denial",
+  "scope": "Scoped RBAC role assignments, object-level permission overrides, and explicit grant/deny outcomes",
   "stratum": "identity/role/permission",
   "source_paths": [
     "cases/pf-id-02/source/prd.md"

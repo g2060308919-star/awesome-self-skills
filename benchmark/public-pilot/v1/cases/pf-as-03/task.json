@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-03",
-  "scope": "MuJoCo queued concurrent and sequential simulation job execution",
+  "scope": "Isolated background MuJoCo simulation jobs with start, stop, status, and completed-job listing",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-03/source/PRD.md"

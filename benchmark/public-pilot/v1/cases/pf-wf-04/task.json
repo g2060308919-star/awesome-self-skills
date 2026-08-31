@@ -1,6 +1,6 @@
 {
   "case_id": "PF-WF-04",
-  "scope": "Runmill issue execution, review, approval, and governed merge state machine",
+  "scope": "Brightbean internal/client social-media approval transitions, change-request resubmission, and reminder exhaustion",
   "stratum": "workflow/approval/state",
   "source_paths": [
     "cases/pf-wf-04/source/prd.md"

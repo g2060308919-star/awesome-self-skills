@@ -1,6 +1,6 @@
 {
   "case_id": "PF-FM-02",
-  "scope": "VoiceType provider settings, shortcut collision handling, migrations, and malformed provider responses",
+  "scope": "VoiceType shortcut collision handling, configuration migrations, and malformed provider-response fallback",
   "stratum": "form/configuration/input validation",
   "source_paths": [
     "cases/pf-fm-02/source/PRD.md"

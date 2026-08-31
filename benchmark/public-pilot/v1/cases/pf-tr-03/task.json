@@ -1,6 +1,6 @@
 {
   "case_id": "PF-TR-03",
-  "scope": "ISO 20022 payment message orchestration and scheme validation",
+  "scope": "Unbrowse paid-route admission, Stripe/crypto subscription checkout, x402 retries, and payment settlement",
   "stratum": "transaction/order/payment",
   "source_paths": [
     "cases/pf-tr-03/source/prd.md"
