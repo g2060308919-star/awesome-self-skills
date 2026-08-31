@@ -269,6 +269,80 @@ test('installed runner rejects a single-source conflicted Fact owner', async () 
   }
 });
 
+test('installed runner rejects grouped normative alternatives in disjoint sibling scopes', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-sibling-conflict-'));
+  const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+  revision.evidence_claims.claims[0].scope = 'checkout/a';
+  revision.evidence_claims.claims.push({
+    ...structuredClone(revision.evidence_claims.claims[0]),
+    claim_id: 'claim_checkout_sibling', scope: 'checkout/b', value: 'checkout rejected'
+  });
+  Object.assign(revision.evidence_claims.fact_ledger[0], {
+    status: 'conflicted',
+    source_claim_ids: ['claim_checkout', 'claim_checkout_sibling']
+  });
+  try {
+    await mkdir(path.join(runDirectory, 'staging'));
+    await writeFile(
+      path.join(runDirectory, 'staging/source-pack.json'),
+      `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+    );
+    assert.equal((await runCompiler(runDirectory)).code, 0);
+    await writeFile(
+      path.join(runDirectory, 'staging/evidence-claims.json'),
+      `${JSON.stringify(revision.evidence_claims)}\n`, 'utf8'
+    );
+    const result = await runCompiler(runDirectory);
+    const reply = parseSingleJsonValue(result.stdout);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ item) =>
+      item.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true, JSON.stringify(reply));
+    await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('installed runner rejects a grouped primary broader than an alternative scope', async () => {
+  for (const status of ['conflicted', 'ambiguous']) {
+    const runDirectory = await mkdtemp(path.join(os.tmpdir(), `test-compiler-${status}-broad-primary-`));
+    const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+    revision.evidence_claims.claims.push({
+      ...structuredClone(revision.evidence_claims.claims[0]),
+      claim_id: 'claim_checkout_child', scope: 'checkout/child', value: 'checkout rejected'
+    });
+    Object.assign(revision.evidence_claims.fact_ledger[0], {
+      status,
+      source_claim_ids: ['claim_checkout', 'claim_checkout_child']
+    });
+    try {
+      await mkdir(path.join(runDirectory, 'staging'));
+      await writeFile(
+        path.join(runDirectory, 'staging/source-pack.json'),
+        `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+      );
+      assert.equal((await runCompiler(runDirectory)).code, 0);
+      await writeFile(
+        path.join(runDirectory, 'staging/evidence-claims.json'),
+        `${JSON.stringify(revision.evidence_claims)}\n`, 'utf8'
+      );
+      const result = await runCompiler(runDirectory);
+      const reply = parseSingleJsonValue(result.stdout);
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(reply.status, 'need_revision', JSON.stringify({ status, reply }));
+      assert.equal(reply.stage, 'evidence_claims');
+      assert.equal(reply.diagnostics.some((/** @type {any} */ item) =>
+        item.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true,
+      JSON.stringify({ status, reply }));
+      await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
 test('installed runner rejects normative ownership laundered through a non-normative Fact', async () => {
   for (const primaryKind of ['description', 'diagnostic']) {
     for (const status of ['ambiguous', 'conflicted']) {

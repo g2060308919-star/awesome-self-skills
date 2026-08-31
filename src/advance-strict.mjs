@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest } from './canonical.mjs';
 import { evaluateRevision } from './core.mjs';
+import { scopeContains } from './decision-record.mjs';
 import { validateEvidenceGraph } from './evidence.mjs';
 import {
   compileObligations, ObligationCompilationError
@@ -384,6 +385,7 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
     let primaryInSources = false;
     let aggregateEvidenceAccepted = true;
     let aggregateEvidenceHigher = true;
+    let aggregateScopesContainPrimary = true;
     for (let index = 0; index < sourceClaimIds.length; index += 1) {
       const sourceClaimId = sourceClaimIds[index];
       if (sourceClaimId === entry.claim_id) primaryInSources = true;
@@ -391,6 +393,8 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
       if (!sourceClaim) aggregateEvidenceAccepted = false;
       else {
         if (sourceClaim.level !== 'E3' && sourceClaim.level !== 'E2') aggregateEvidenceHigher = false;
+        if (typeof primaryClaim?.scope !== 'string' || typeof sourceClaim.scope !== 'string'
+          || !scopeContains(sourceClaim.scope, primaryClaim.scope)) aggregateScopesContainPrimary = false;
       }
     }
     const groupedStatus = entry.status === 'conflicted' || entry.status === 'ambiguous';
@@ -399,9 +403,9 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
       && aggregateEvidenceHigher;
     const validAggregate = entry.status === 'conflicted'
       ? sourceClaimIds.length >= 2 && primaryInSources
-        && aggregateEvidenceAccepted && higherConflictEvidence
+        && aggregateEvidenceAccepted && aggregateScopesContainPrimary && higherConflictEvidence
       : entry.status === 'ambiguous'
-        ? primaryInSources && aggregateEvidenceAccepted
+        ? primaryInSources && aggregateEvidenceAccepted && aggregateScopesContainPrimary
         : true;
     addOwner(entry.claim_id, entry, primaryInSources && validAggregate);
     if (!groupedStatus || !validAggregate) continue;

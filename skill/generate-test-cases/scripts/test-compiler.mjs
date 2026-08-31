@@ -15526,6 +15526,7 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
     let primaryInSources = false;
     let aggregateEvidenceAccepted = true;
     let aggregateEvidenceHigher = true;
+    let aggregateScopesContainPrimary = true;
     for (let index = 0; index < sourceClaimIds.length; index += 1) {
       const sourceClaimId = sourceClaimIds[index];
       if (sourceClaimId === entry.claim_id) primaryInSources = true;
@@ -15533,11 +15534,12 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
       if (!sourceClaim) aggregateEvidenceAccepted = false;
       else {
         if (sourceClaim.level !== "E3" && sourceClaim.level !== "E2") aggregateEvidenceHigher = false;
+        if (typeof primaryClaim?.scope !== "string" || typeof sourceClaim.scope !== "string" || !scopeContains(sourceClaim.scope, primaryClaim.scope)) aggregateScopesContainPrimary = false;
       }
     }
     const groupedStatus = entry.status === "conflicted" || entry.status === "ambiguous";
     const higherConflictEvidence = entry.status !== "conflicted" || (primaryClaim?.level === "E3" || primaryClaim?.level === "E2") && aggregateEvidenceHigher;
-    const validAggregate = entry.status === "conflicted" ? sourceClaimIds.length >= 2 && primaryInSources && aggregateEvidenceAccepted && higherConflictEvidence : entry.status === "ambiguous" ? primaryInSources && aggregateEvidenceAccepted : true;
+    const validAggregate = entry.status === "conflicted" ? sourceClaimIds.length >= 2 && primaryInSources && aggregateEvidenceAccepted && aggregateScopesContainPrimary && higherConflictEvidence : entry.status === "ambiguous" ? primaryInSources && aggregateEvidenceAccepted && aggregateScopesContainPrimary : true;
     addOwner(entry.claim_id, entry, primaryInSources && validAggregate);
     if (!groupedStatus || !validAggregate) continue;
     for (let index = 0; index < sourceClaimIds.length; index += 1) {

@@ -315,6 +315,62 @@ test('real runner accepts conflicted normative alternatives across nested scopes
   }
 });
 
+test('real runner rejects grouped normative alternatives in disjoint sibling scopes', async () => {
+  const runDirectory = await temporaryRun('sibling scope conflict ownership');
+  const revision = await fixture();
+  revision.evidence_claims.claims[0].scope = 'checkout/a';
+  revision.evidence_claims.claims.push({
+    ...structuredClone(revision.evidence_claims.claims[0]),
+    claim_id: 'claim_checkout_sibling', scope: 'checkout/b', value: 'checkout rejected'
+  });
+  Object.assign(revision.evidence_claims.fact_ledger[0], {
+    status: 'conflicted',
+    source_claim_ids: ['claim_checkout', 'claim_checkout_sibling']
+  });
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    const reply = await advance(runDirectory);
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.stage, 'evidence_claims');
+    assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+      diagnostic.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true, JSON.stringify(reply));
+    await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('real runner rejects a grouped primary broader than an alternative scope', async () => {
+  for (const status of ['conflicted', 'ambiguous']) {
+    const runDirectory = await temporaryRun(`${status} broad primary ownership`);
+    const revision = await fixture();
+    revision.evidence_claims.claims.push({
+      ...structuredClone(revision.evidence_claims.claims[0]),
+      claim_id: 'claim_checkout_child', scope: 'checkout/child', value: 'checkout rejected'
+    });
+    Object.assign(revision.evidence_claims.fact_ledger[0], {
+      status,
+      source_claim_ids: ['claim_checkout', 'claim_checkout_child']
+    });
+    try {
+      await stage(runDirectory, 'source_pack', revision.source_pack);
+      assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+      await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+      const reply = await advance(runDirectory);
+      assert.equal(reply.status, 'need_revision', JSON.stringify({ status, reply }));
+      assert.equal(reply.stage, 'evidence_claims');
+      assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
+        diagnostic.code === 'NORMATIVE_CLAIM_LEDGER_INVALID'), true,
+      JSON.stringify({ status, reply }));
+      await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json')));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
 test('real runner rejects normative ownership laundered through a non-normative Fact', async () => {
   for (const primaryKind of ['description', 'diagnostic']) {
     for (const status of ['ambiguous', 'conflicted']) {
