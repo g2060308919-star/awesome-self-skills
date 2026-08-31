@@ -16,6 +16,7 @@ import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const symlink = fsPromises.symlink;
+const link = fsPromises.link;
 
 /** @param {string} key @param {unknown} value */
 function label(key, value) {
@@ -38,6 +39,7 @@ function labeledAsset(labels, second = labels, adjudications = []) {
 function retainedLabelSnapshot(asset, labelVersion) {
   const payload = {
     label_version: labelVersion,
+    correction_of: null,
     final_labels: structuredClone(asset.final_labels),
     expert_annotations: structuredClone(asset.expert_annotations),
     adjudications: structuredClone(asset.adjudications)
@@ -52,9 +54,11 @@ function outputDigest(output) {
 
 /** @param {any} run */
 function rebindOutput(run) {
-  run.raw_output_digest = outputDigest(run.output);
-  run._raw_output_digest = run.raw_output_digest;
-  run._raw_output = structuredClone(run.output);
+  run._extraction.capture_id = run.capture_id;
+  run._extraction.raw_output_digest = run.raw_output_digest;
+  run._extraction.output = structuredClone(run.output);
+  run.extraction_digest = outputDigest(run._extraction);
+  run._extraction_digest = run.extraction_digest;
 }
 
 /** @param {any} report @param {string} code */
@@ -79,7 +83,7 @@ function benchmarkCase(caseId, domain, stratum, obligations, assertions, accepte
     assets: {
       task: { case_id: caseId, scope: caseId, source_paths: ['sources/prd.md'], clarification_required: caseId === 'payment' },
       task_digest: `task-digest-${caseId}`,
-      sources: { files: ['sources/prd.md'], digest: `source-digest-${caseId}` },
+      sources: { files: ['sources/prd.md'], digest: `source-digest-${caseId}`, content_digest: `source-content-digest-${caseId}` },
       expert_obligations: labeledAsset(obligations),
       supported_assertions: labeledAsset(assertions),
       accepted_cases: labeledAsset(acceptedCases),
@@ -161,8 +165,15 @@ function captured(caseId, repeat, output) {
     },
     ...output
   };
+  const captureId = `${caseId}-generate-test-cases-${repeat}`;
+  const rawOutputDigest = createHash('sha256').update(`opaque-raw:${captureId}`).digest('hex');
+  const extraction = {
+    capture_id: captureId, raw_output_digest: rawOutputDigest,
+    reviewer_id: 'fixture-reviewer', reviewed_at: '2026-08-31T00:00:00Z', method: 'offline-human-v1',
+    output: structuredClone(completeOutput)
+  };
   return {
-    capture_id: `${caseId}-generate-test-cases-${repeat}`,
+    capture_id: captureId,
     case_id: caseId, system: 'generate-test-cases', repeat, capture_kind: 'synthetic-test-fixture',
     provenance: {
       skill_version: 'test-skill', compiler_version: 'test-compiler', schema_version: '1.0.0',
@@ -171,22 +182,21 @@ function captured(caseId, repeat, output) {
       source_digest: `source-digest-${caseId}`, task_digest: `task-digest-${caseId}`
     },
     review_time_minutes: 5,
-    raw_output_path: `raw/${caseId}-generate-test-cases-${repeat}.json`,
-    raw_output_digest: outputDigest(completeOutput),
-    _raw_output_digest: outputDigest(completeOutput),
-    _raw_output: structuredClone(completeOutput),
+    raw_output_path: `raw/${caseId}-generate-test-cases-${repeat}.txt`, raw_output_digest: rawOutputDigest,
+    extraction_path: `extracted/${caseId}-generate-test-cases-${repeat}.json`, extraction_digest: outputDigest(extraction),
+    _raw_output_digest: rawOutputDigest, _extraction: extraction, _extraction_digest: outputDigest(extraction),
     output: completeOutput
   };
 }
 
 const metricRuns = [
   captured('payment', 1, {
-    test_point_signatures: ['p1', 'p2'], grounded_test_point_signatures: ['p1', 'p2'], grounded_coverage_signatures: ['p1', 'p2'],
+    test_point_signatures: ['p1', 'p2', 'p3'], grounded_test_point_signatures: ['p1', 'p2'], grounded_coverage_signatures: ['p1', 'p2'],
     blocked_test_point_signatures: ['p3'], grounded_assertions: ['a1', 'a2'], grounded_cases: ['c1', 'c2'],
     detected_historical_defect_ids: ['d1'], killed_mutation_ids: ['payment-mutation']
   }),
   captured('payment', 2, {
-    test_point_signatures: ['p1', 'p3'], grounded_test_point_signatures: ['p1', 'p3'], grounded_coverage_signatures: ['p1', 'p3'],
+    test_point_signatures: ['p1', 'p2', 'p3'], grounded_test_point_signatures: ['p1', 'p3'], grounded_coverage_signatures: ['p1', 'p3'],
     blocked_test_point_signatures: ['p2'], grounded_assertions: ['a1', 'a2'], grounded_cases: ['c1', 'c2'],
     detected_historical_defect_ids: ['d1', 'd2'], killed_mutation_ids: []
   }),
@@ -215,16 +225,16 @@ test('benchmark scorer keeps all eight hand-calculated metrics separate by domai
 
   assert.deepEqual(fraction(overall.grounded_factual_support_precision), [7, 8, 7 / 8]);
   assert.deepEqual(fraction(overall.expert_critical_test_point_recall), [6, 6, 1]);
-  assert.deepEqual(fraction(overall.expert_overall_test_point_recall), [9, 12, 9 / 12]);
+  assert.deepEqual(fraction(overall.expert_overall_test_point_recall), [11, 12, 11 / 12]);
   assert.deepEqual(fraction(overall.grounded_no_material_rewrite_acceptance), [7, 8, 7 / 8]);
   assert.deepEqual(fraction(overall.historical_defect_recall), [7, 9, 7 / 9]);
   assert.deepEqual(fraction(overall.false_grounded_rate), [1, 8, 1 / 8]);
   assert.deepEqual(fraction(overall.false_blocked_rate), [2, 3, 2 / 3]);
-  assert.equal(overall.test_point_signature_jaccard.value, 2 / 3);
+  assert.equal(overall.test_point_signature_jaccard.value, 5 / 6);
   assert.ok(Math.abs(overall.grounded_coverage_signature_jaccard.value - (11 / 18)) < 1e-12);
 
   const payments = report.systems['generate-test-cases'].by_domain.payments;
-  assert.ok(Math.abs(payments.test_point_signature_jaccard.value - (5 / 9)) < 1e-12);
+  assert.ok(Math.abs(payments.test_point_signature_jaccard.value - (7 / 9)) < 1e-12);
   assert.ok(Math.abs(payments.grounded_coverage_signature_jaccard.value - (4 / 9)) < 1e-12);
   assert.deepEqual(fraction(payments.historical_defect_recall), [4, 6, 4 / 6]);
   assert.deepEqual(fraction(report.systems['generate-test-cases'].by_risk.high.grounded_factual_support_precision), [0, 1, 0]);
@@ -300,6 +310,12 @@ function completeContractCorpus() {
             auto_repeat_unknown_or_deferred: false, old_revision_recovery: false
           }
         };
+        const rawOutputDigest = createHash('sha256').update(`opaque-raw:${captureId}`).digest('hex');
+        const extraction = {
+          capture_id: captureId, raw_output_digest: rawOutputDigest,
+          reviewer_id: 'fixture-reviewer', reviewed_at: '2026-08-31T00:00:00Z', method: 'offline-human-v1',
+          output: structuredClone(output)
+        };
         runs.push({
           capture_id: captureId, case_id: caseId, system, repeat, capture_kind: 'external-captured',
           provenance: {
@@ -310,8 +326,9 @@ function completeContractCorpus() {
             source_digest: `source-digest-${caseId}`, task_digest: `task-digest-${caseId}`
           },
           review_time_minutes: 10,
-          raw_output_path: `raw/${captureId}.json`, raw_output_digest: outputDigest(output),
-          _raw_output_digest: outputDigest(output), _raw_output: structuredClone(output), output
+          raw_output_path: `raw/${captureId}.txt`, raw_output_digest: rawOutputDigest,
+          extraction_path: `extracted/${captureId}.json`, extraction_digest: outputDigest(extraction),
+          _raw_output_digest: rawOutputDigest, _extraction: extraction, _extraction_digest: outputDigest(extraction), output
         });
       }
       cases.push(benchmarkCase(
@@ -415,7 +432,7 @@ test('benchmark closes metric inflation, provenance impersonation, and cloned-co
   const unboundRuns = structuredClone(runs);
   unboundRuns[0].raw_output_digest = '0'.repeat(64);
   unboundRuns[1].raw_output_path = '../labels.json';
-  unboundRuns[2]._raw_output = undefined;
+  unboundRuns[2]._extraction = undefined;
   const unboundReport = scoreBenchmark(manifest, unboundRuns);
   assert.equal(hasIssue(unboundReport, 'CAPTURE_RAW_OUTPUT_INVALID'), true);
   const sharedRawRuns = structuredClone(runs);
@@ -429,6 +446,80 @@ test('benchmark closes metric inflation, provenance impersonation, and cloned-co
     run.provenance.source_digest = clonedCase.assets.sources.digest;
   }
   assert.equal(hasIssue(scoreBenchmark(clonedManifest, runs), 'DUPLICATE_SOURCE_IDENTITY'), true);
+});
+
+test('benchmark closes capture lanes, case evidence IDs, and capture identity without prefix ambiguity', () => {
+  const { manifest, runs } = completeContractCorpus();
+  const contradictory = structuredClone(runs);
+  const target = contradictory.find((/** @type {any} */ run) => run.system === 'generate-test-cases');
+  target.output.test_point_signatures = target.output.test_point_signatures.filter((/** @type {string} */ id) => id !== 'ground-low');
+  target.output.blocked_test_point_signatures.push('ground-low');
+  target.output.detected_historical_defect_ids.push('not-a-corpus-defect');
+  target.output.killed_mutation_ids.push('not-a-case-mutation');
+  rebindOutput(target);
+  const contradictoryReport = scoreBenchmark(manifest, contradictory);
+  assert.equal(hasIssue(contradictoryReport, 'CAPTURE_TEST_POINT_LANES_INVALID'), true);
+  assert.equal(hasIssue(contradictoryReport, 'CAPTURE_DEFECT_EVIDENCE_INVALID'), true);
+  assert.equal(hasIssue(contradictoryReport, 'CAPTURE_MUTATION_EVIDENCE_INVALID'), true);
+  assert.equal(contradictoryReport.completeness.status, 'insufficient_evidence');
+
+  const prefixManifest = structuredClone(manifest);
+  const prefixRuns = structuredClone(runs);
+  const caseId = prefixManifest.cases[0].case_id;
+  const left = prefixRuns.find((/** @type {any} */ run) => run.case_id === caseId && run.system === 'generate-test-cases' && run.repeat === 1);
+  const right = prefixRuns.find((/** @type {any} */ run) => run.case_id === caseId && run.system === 'generate-test-cases' && run.repeat === 2);
+  const oldLeft = left.capture_id;
+  const oldRight = right.capture_id;
+  left.capture_id = 'capture-prefix';
+  right.capture_id = 'capture-prefix::nested';
+  for (const assetName of ['supported_assertions', 'accepted_cases']) {
+    const asset = prefixManifest.cases[0].assets[assetName];
+    for (const labels of [asset.final_labels, ...asset.expert_annotations.map((/** @type {any} */ annotation) => annotation.labels)]) {
+      for (const row of labels) {
+        if (row.label_key.startsWith(`${oldLeft}::`)) row.label_key = row.label_key.replace(oldLeft, left.capture_id);
+        if (row.label_key.startsWith(`${oldRight}::`)) row.label_key = row.label_key.replace(oldRight, right.capture_id);
+      }
+    }
+  }
+  const unsupportedKey = `${left.capture_id}::assertion-critical`;
+  const assertionAsset = prefixManifest.cases[0].assets.supported_assertions;
+  for (const labels of [assertionAsset.final_labels, ...assertionAsset.expert_annotations.map((/** @type {any} */ annotation) => annotation.labels)]) {
+    labels.find((/** @type {any} */ row) => row.label_key === unsupportedKey).value.supported = false;
+  }
+  rebindOutput(left);
+  rebindOutput(right);
+  const prefixReport = scoreBenchmark(prefixManifest, prefixRuns);
+  assert.equal(prefixReport.completeness.status, 'complete');
+  assert.deepEqual(fraction(prefixReport.systems['generate-test-cases'].overall.grounded_factual_support_precision), [359, 360, 359 / 360]);
+});
+
+test('benchmark rejects renamed source clones and incomplete retained label history', () => {
+  const { manifest, runs } = completeContractCorpus();
+  const cloned = structuredClone(manifest);
+  cloned.cases[1].assets.sources.content_digest = cloned.cases[0].assets.sources.content_digest = 'same-content-digest';
+  assert.equal(hasIssue(scoreBenchmark(cloned, runs), 'DUPLICATE_SOURCE_CONTENT'), true);
+
+  const lineage = structuredClone(manifest);
+  const asset = lineage.cases[0].assets.supported_assertions;
+  asset.correction_of = '0.9.0';
+  /** @type {any[]} */
+  const emptyLabels = [];
+  /** @type {any} */
+  const emptySnapshot = {
+    label_version: '0.9.0', correction_of: null, final_labels: emptyLabels,
+    expert_annotations: [
+      { expert_id: 'expert-a', complete: true, labels: emptyLabels },
+      { expert_id: 'expert-b', complete: true, labels: emptyLabels }
+    ],
+    adjudications: []
+  };
+  emptySnapshot.digest = createHash('sha256').update(JSON.stringify({
+    label_version: emptySnapshot.label_version, correction_of: emptySnapshot.correction_of,
+    final_labels: emptySnapshot.final_labels, expert_annotations: emptySnapshot.expert_annotations,
+    adjudications: emptySnapshot.adjudications
+  })).digest('hex');
+  asset.prior_versions = [emptySnapshot];
+  assert.equal(hasIssue(scoreBenchmark(lineage, runs), 'LABEL_LINEAGE_MISSING'), true);
 });
 
 test('benchmark reviewer regressions fail closed instead of inflating or crashing completeness', () => {
@@ -525,7 +616,8 @@ test('benchmark reviewer regressions fail closed instead of inflating or crashin
   const invalidSnapshot = retainedLabelSnapshot(invalidRetainedAsset, '0.9.0');
   invalidSnapshot.expert_annotations[1].expert_id = invalidSnapshot.expert_annotations[0].expert_id;
   const invalidPayload = {
-    label_version: invalidSnapshot.label_version, final_labels: invalidSnapshot.final_labels,
+    label_version: invalidSnapshot.label_version, correction_of: invalidSnapshot.correction_of,
+    final_labels: invalidSnapshot.final_labels,
     expert_annotations: invalidSnapshot.expert_annotations, adjudications: invalidSnapshot.adjudications
   };
   invalidSnapshot.digest = createHash('sha256').update(JSON.stringify(invalidPayload)).digest('hex');
@@ -651,6 +743,28 @@ test('benchmark loader rejects symlinked or overlapping top-level evidence roots
   assert.equal(overlapLoaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
 });
 
+test('benchmark loader rejects hardlinks between hidden labels and generation sources', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'benchmark-hardlink-'));
+  const caseRoot = path.join(temporaryRoot, 'cases/hardlink');
+  await mkdir(path.join(caseRoot, 'sources'), { recursive: true });
+  await mkdir(path.join(temporaryRoot, 'captured/hardlink'), { recursive: true });
+  await writeFile(path.join(caseRoot, 'expert-obligations.json'), '{}');
+  await link(path.join(caseRoot, 'expert-obligations.json'), path.join(caseRoot, 'sources/leaked-hidden-label.json'));
+  const manifestPath = path.join(temporaryRoot, 'manifest.json');
+  await writeFile(manifestPath, JSON.stringify({
+    schema_version: '1.0.0', benchmark_version: 'v1-hardlink-test', manifest_id: 'hardlink-test',
+    evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    expected_provenance: expectedProvenance('v1-hardlink-test'),
+    strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
+    cases: [{
+      case_id: 'hardlink', domain: 'security', stratum: BENCHMARK_STRATA[0], risk: 'low', high_risk: false,
+      case_directory: 'cases/hardlink', capture_directory: 'captured/hardlink'
+    }]
+  }));
+  const loaded = await loadBenchmarkInputs(manifestPath);
+  assert.equal(loaded.manifest.load_issues.some((/** @type {any} */ issue) => issue.code === 'BENCHMARK_PATH_INVALID'), true);
+});
+
 test('benchmark V1 pilot has required hidden-label assets and only external capture paths', async () => {
   const manifestPath = path.join(root, 'benchmark/v1/manifest.json');
   const { manifest, capturedRuns } = await loadBenchmarkInputs(manifestPath);
@@ -672,6 +786,9 @@ test('benchmark V1 pilot has required hidden-label assets and only external capt
   assert.equal(capturedRuns.every((/** @type {any} */ run) => run.capture_kind === 'synthetic-pilot'), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => !Object.hasOwn(run, 'expert_labels')), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => typeof run.raw_output_path === 'string' && /^[a-f0-9]{64}$/.test(run.raw_output_digest)), true);
+  assert.equal(capturedRuns.every((/** @type {any} */ run) => typeof run.extraction_path === 'string' && /^[a-f0-9]{64}$/.test(run.extraction_digest)), true);
+  assert.equal(capturedRuns.every((/** @type {any} */ run) => run._extraction?.capture_id === run.capture_id), true);
+  assert.equal(capturedRuns.every((/** @type {any} */ run) => run.raw_output_digest !== outputDigest(run.output)), true, 'raw evidence must be the original opaque artifact, not a copied score summary');
   assert.equal(scoreBenchmark(manifest, capturedRuns).completeness.status, 'insufficient_evidence');
 });
 

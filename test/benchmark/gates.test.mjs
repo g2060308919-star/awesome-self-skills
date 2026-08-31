@@ -96,3 +96,21 @@ test('benchmark gate treats a missing domain defect report as insufficient evide
   assert.equal(result.status, 'insufficient_evidence');
   assert.equal(result.failures[0].code, 'DOMAIN_METRICS_MISSING');
 });
+
+test('benchmark release gates fail closed for non-finite or internally inconsistent metric evidence', () => {
+  for (const invalidValue of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    const report = passingReport();
+    report.systems['generate-test-cases'].overall.grounded_factual_support_precision.value = invalidValue;
+    assert.equal(evaluateReleaseGates(report).status, 'insufficient_evidence');
+  }
+
+  const inconsistent = passingReport();
+  inconsistent.systems['generate-test-cases'].overall.expert_overall_test_point_recall = {
+    ...metric(0.9), numerator: 1, denominator: 2
+  };
+  assert.equal(evaluateReleaseGates(inconsistent).status, 'insufficient_evidence');
+
+  const invalidDomain = passingReport();
+  invalidDomain.systems['generate-test-cases'].by_domain.payments.historical_defect_recall.value = Number.NaN;
+  assert.equal(evaluateReleaseGates(invalidDomain).status, 'insufficient_evidence');
+});

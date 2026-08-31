@@ -21,6 +21,14 @@ function failure(code, path, message, actual, required) {
   return { code, path, message, ...(actual === undefined ? {} : { actual }), ...(required === undefined ? {} : { required }) };
 }
 
+/** @param {any} metric */
+function validUnitMetric(metric) {
+  if (!metric || !Number.isFinite(metric.numerator) || !Number.isFinite(metric.denominator) ||
+      !Number.isFinite(metric.value) || metric.denominator <= 0 || metric.numerator < 0 ||
+      metric.numerator > metric.denominator || metric.value < 0 || metric.value > 1) return false;
+  return Math.abs(metric.value - (metric.numerator / metric.denominator)) <= 1e-12;
+}
+
 /**
  * Apply only the frozen release gates. Confidence intervals and mutation kills
  * remain visible evaluation signals and never replace point-estimate gates.
@@ -51,13 +59,28 @@ export function evaluateReleaseGates(metrics) {
   const domainReports = Object.entries(target.by_domain ?? {});
   if (domainReports.length === 0 || domainReports.some(([, report]) => {
     const metric = /** @type {any} */ (report).historical_defect_recall;
-    return !metric || metric.denominator === 0 || typeof metric.value !== 'number';
+    return !validUnitMetric(metric);
   })) {
     return {
       status: 'insufficient_evidence',
       failures: [failure(
         'DOMAIN_METRICS_MISSING', `/systems/${TARGET_SYSTEM}/by_domain`,
         'Every benchmark domain requires a non-zero historical-defect report.'
+      )]
+    };
+  }
+
+  const invalidOverallMetric = Object.keys(METRIC_GATES).find((name) => !validUnitMetric(target.overall[name]));
+  const invalidCount = !Number.isInteger(metrics.unsupported_critical_high_grounded_oracle_count) ||
+    metrics.unsupported_critical_high_grounded_oracle_count < 0 || PROCESS_FAILURES.some((name) =>
+    !Number.isInteger(metrics.process_failures?.[name]) || metrics.process_failures[name] < 0);
+  if (invalidOverallMetric || invalidCount) {
+    return {
+      status: 'insufficient_evidence',
+      failures: [failure(
+        'RELEASE_METRIC_EVIDENCE_INVALID', invalidOverallMetric ? `/systems/${TARGET_SYSTEM}/overall/${invalidOverallMetric}` : '/process_failures',
+        'Release metrics and process counts must be finite, internally consistent evidence.',
+        invalidOverallMetric ? target.overall[invalidOverallMetric] : metrics.process_failures
       )]
     };
   }
@@ -72,7 +95,7 @@ export function evaluateReleaseGates(metrics) {
 
   for (const [name, threshold] of Object.entries(METRIC_GATES)) {
     const value = target.overall[name]?.value;
-    if (typeof value !== 'number' || value < threshold) failures.push(failure(
+    if (value < threshold) failures.push(failure(
       'METRIC_BELOW_GATE', `/systems/${TARGET_SYSTEM}/overall/${name}`,
       `${name} is below its frozen release threshold.`, value ?? null, threshold
     ));
@@ -80,7 +103,7 @@ export function evaluateReleaseGates(metrics) {
 
   for (const [domain, report] of domainReports) {
     const value = /** @type {any} */ (report).historical_defect_recall?.value;
-    if (typeof value !== 'number' || value < 0.80) failures.push(failure(
+    if (value < 0.80) failures.push(failure(
       'HISTORICAL_DEFECT_RECALL_BELOW_GATE', `/systems/${TARGET_SYSTEM}/by_domain/${domain}/historical_defect_recall`,
       'Historical defect recall must meet the gate in every domain.', value ?? null, 0.80
     ));
