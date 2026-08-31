@@ -5,7 +5,9 @@
 **Author class:** machine research agent; this is not external-human expert evidence
 
 **Scope:** only the missing strict candidates for `transaction/order/payment` and `identity/role/permission`
-**Result:** `transaction 2 accepted-for-pilot-freeze / target 3`; `identity 2 accepted-for-pilot-freeze / target 4`
+**Initial bounded-pass result:** `transaction 2 accepted-for-pilot-freeze / target 3`; `identity 2 accepted-for-pilot-freeze / target 4`
+
+**Current controlling result (after fix round 1):** `transaction 3 accepted-for-pilot-freeze / target 3`; `identity 4 accepted-for-pilot-freeze / target 4`
 
 This supplement applies the frozen admission rubric conservatively. `accepted-for-pilot-freeze` means that the public first-party repository, a 40-character commit, a strict PRD path, an applicable same-revision license path, real-project binding, and the requested stratum fit were verified. It is not final benchmark `ADMIT`. `HOLD` means that at least one mandatory fact was not established; public visibility alone is not copying or redistribution permission.
 
