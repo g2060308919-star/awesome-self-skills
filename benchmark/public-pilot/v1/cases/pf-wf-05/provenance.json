@@ -1,0 +1,12 @@
+{
+  "repository": "deghosal-2026/ai-incident-commander",
+  "commit": "ea0d3867a390cb94bfa51cf76054212ccef8f000",
+  "source_url": "https://raw.githubusercontent.com/deghosal-2026/ai-incident-commander/ea0d3867a390cb94bfa51cf76054212ccef8f000/docs/PRD.md",
+  "source_sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+  "content_digest": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+  "license_url": "https://raw.githubusercontent.com/deghosal-2026/ai-incident-commander/ea0d3867a390cb94bfa51cf76054212ccef8f000/LICENSE",
+  "license_sha256": "dd8ad7eec2a658b99c50281a286b8cdc6676b392019ac981e7d67f932331b0f6",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

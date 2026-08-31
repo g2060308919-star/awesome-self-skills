@@ -1,0 +1,12 @@
+{
+  "repository": "sandraschi/local-llm-mcp",
+  "commit": "c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0",
+  "source_url": "https://raw.githubusercontent.com/sandraschi/local-llm-mcp/c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0/PRD.md",
+  "source_sha256": "ea4b2ef517f241e1e72fe81746fe585d99e4b1e888242e391ca0538306d91e7e",
+  "content_digest": "ea4b2ef517f241e1e72fe81746fe585d99e4b1e888242e391ca0538306d91e7e",
+  "license_url": "https://raw.githubusercontent.com/sandraschi/local-llm-mcp/c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0/LICENSE",
+  "license_sha256": "3a984a578f2d70cbfa7a9fbb8fef13ea7c9cca43d3d20f1994c27dcdb1af74fb",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

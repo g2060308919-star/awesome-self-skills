@@ -1,0 +1,1029 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "public-source-machine-pilot-v1",
+  "evidence_class": "public-source-machine-pilot",
+  "release_eligible": false,
+  "release_status": "insufficient_evidence",
+  "items": [
+    {
+      "pilot_id": "PF-TR-01",
+      "status": "pilot-admitted",
+      "repository": "clintecker/press",
+      "commit": "5848b6990d6632c0d543a861af590036e9dc8533",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-01",
+        "path": "cases/pf-tr-01/source/DIRECT-ORDERING-PLAN.md",
+        "sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+        "content_digest": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+        "upstream_url": "https://raw.githubusercontent.com/clintecker/press/5848b6990d6632c0d543a861af590036e9dc8533/docs/DIRECT-ORDERING-PLAN.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-01/license/LICENSE",
+        "sha256": "707445a9840fb3e9321d712a456d7d833f41baf777719bd9877676bfddd9f38c",
+        "upstream_url": "https://raw.githubusercontent.com/clintecker/press/5848b6990d6632c0d543a861af590036e9dc8533/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-01/provenance.json",
+        "sha256": "d249c0ff77357e1cfba789192980a4da3716742adf68d9cef917e1fc303fbc17"
+      },
+      "task": {
+        "task_id": "task-pf-tr-01",
+        "path": "cases/pf-tr-01/task.json",
+        "sha256": "104b9303d2ee32f07c878663c0a6af9ecd0cdb7cba5d8aed610164ae27053d76",
+        "source_id": "source-pf-tr-01"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-02",
+      "status": "pilot-admitted",
+      "repository": "profullstack/coinpayportal",
+      "commit": "13f160c0897168931e407eccd6411e88946d0f23",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-02",
+        "path": "cases/pf-tr-02/source/PRD.md",
+        "sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+        "content_digest": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+        "upstream_url": "https://raw.githubusercontent.com/profullstack/coinpayportal/13f160c0897168931e407eccd6411e88946d0f23/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-02/license/LICENSE",
+        "sha256": "de1b680e8cf8ebf3641646e14f5c0730f726da2d9d6d211d498032c20d0d9e2c",
+        "upstream_url": "https://raw.githubusercontent.com/profullstack/coinpayportal/13f160c0897168931e407eccd6411e88946d0f23/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-02/provenance.json",
+        "sha256": "7cc7436bb79cf6273c0af8588a3e298582ec041964e0031717f8ddc81e687990"
+      },
+      "task": {
+        "task_id": "task-pf-tr-02",
+        "path": "cases/pf-tr-02/task.json",
+        "sha256": "247dd0684873e7188c42899cb2b6d20998862107335cb1bbd6c4bf7c7a66c932",
+        "source_id": "source-pf-tr-02"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-03",
+      "status": "pilot-admitted",
+      "repository": "socrates8300/k2payments",
+      "commit": "48d352294a4c35c1e8624c29812cd2912d385d3f",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-03",
+        "path": "cases/pf-tr-03/source/prd.md",
+        "sha256": "7d158b4e84e1668eda89c8058e70ad544029dc663e1e31df9816e98a777e541a",
+        "content_digest": "7d158b4e84e1668eda89c8058e70ad544029dc663e1e31df9816e98a777e541a",
+        "upstream_url": "https://raw.githubusercontent.com/socrates8300/k2payments/48d352294a4c35c1e8624c29812cd2912d385d3f/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-03/license/LICENSE",
+        "sha256": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
+        "upstream_url": "https://raw.githubusercontent.com/socrates8300/k2payments/48d352294a4c35c1e8624c29812cd2912d385d3f/LICENSE",
+        "reported_license": "AGPL-3.0-only",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-03/provenance.json",
+        "sha256": "8861a9890ebbdb64c14a008c9df0640107e7aa30eddc7beb83f7ba2f604fabcd"
+      },
+      "task": {
+        "task_id": "task-pf-tr-03",
+        "path": "cases/pf-tr-03/task.json",
+        "sha256": "41a334bffb832481f0da01d08d7c77f7bfc98aa32aac70412329fa18962c5d31",
+        "source_id": "source-pf-tr-03"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-04",
+      "status": "pilot-admitted",
+      "repository": "chuhemiao/agentic-transaction-firewall",
+      "commit": "b652229d87d4e5b8f732184c779fb54ed83dd2bf",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-04",
+        "path": "cases/pf-tr-04/source/PRD.md",
+        "sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+        "content_digest": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+        "upstream_url": "https://raw.githubusercontent.com/chuhemiao/agentic-transaction-firewall/b652229d87d4e5b8f732184c779fb54ed83dd2bf/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-04/license/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream_url": "https://raw.githubusercontent.com/chuhemiao/agentic-transaction-firewall/b652229d87d4e5b8f732184c779fb54ed83dd2bf/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-04/provenance.json",
+        "sha256": "0bd22981d3149531f0ea533a77e560949a71f2696bbb18bc86393ff764ae794d"
+      },
+      "task": {
+        "task_id": "task-pf-tr-04",
+        "path": "cases/pf-tr-04/task.json",
+        "sha256": "fd2f6eafe08c89704f53fba9c7e3ac6b762444f91745e18308c0d616094942bb",
+        "source_id": "source-pf-tr-04"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-05",
+      "status": "pilot-admitted",
+      "repository": "cwvedvik/tripletex-mcp",
+      "commit": "3b88f1644511d7266ccd0d19bc62a8ecebd6d48c",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-05",
+        "path": "cases/pf-tr-05/source/PRD-Tripletex-MCP-Rebuild.md",
+        "sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+        "content_digest": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+        "upstream_url": "https://raw.githubusercontent.com/cwvedvik/tripletex-mcp/3b88f1644511d7266ccd0d19bc62a8ecebd6d48c/docs/PRD-Tripletex-MCP-Rebuild.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-05/license/LICENSE",
+        "sha256": "7891d3a7ea07b88c47528cfa399de5d085b63f4592b8fde6d739e9b0b5043a88",
+        "upstream_url": "https://raw.githubusercontent.com/cwvedvik/tripletex-mcp/3b88f1644511d7266ccd0d19bc62a8ecebd6d48c/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-05/provenance.json",
+        "sha256": "a4960e780035166634e0385b8c798eb067b9e34757e63bf0785528be6d9c16c2"
+      },
+      "task": {
+        "task_id": "task-pf-tr-05",
+        "path": "cases/pf-tr-05/task.json",
+        "sha256": "8003c0fdfd5bb7691a223c20d25a1f81c35189259a262a2266b9494b323dcef3",
+        "source_id": "source-pf-tr-05"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-01",
+      "status": "pilot-admitted",
+      "repository": "sakibtamim/Jasper",
+      "commit": "73d7e8f6b54c4fedd04a26f98ba9711cf74bef54",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-01",
+        "path": "cases/pf-id-01/source/prd.md",
+        "sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+        "content_digest": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+        "upstream_url": "https://raw.githubusercontent.com/sakibtamim/Jasper/73d7e8f6b54c4fedd04a26f98ba9711cf74bef54/docs/hosted-jasper/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-id-01/license/LICENSE",
+        "sha256": "6c07710a2f51e0b496d3f528e7731ce9f925d90359e8ebced5de97e074551f4d",
+        "upstream_url": "https://raw.githubusercontent.com/sakibtamim/Jasper/73d7e8f6b54c4fedd04a26f98ba9711cf74bef54/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-01/provenance.json",
+        "sha256": "cb52eb473a52c77175582322b85e50791cf2e384d7fdf95ce041aa5672fffc86"
+      },
+      "task": {
+        "task_id": "task-pf-id-01",
+        "path": "cases/pf-id-01/task.json",
+        "sha256": "c2f396f9954c6a8231371a6069ce9cd6b9730d6af88dba559c513617e6d6a51d",
+        "source_id": "source-pf-id-01"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-02",
+      "status": "pilot-admitted",
+      "repository": "christag/moss",
+      "commit": "9c35e52f6525a34adec63c94063c58b08019096e",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-02",
+        "path": "cases/pf-id-02/source/prd.md",
+        "sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+        "content_digest": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+        "upstream_url": "https://raw.githubusercontent.com/christag/moss/9c35e52f6525a34adec63c94063c58b08019096e/planning/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-id-02/license/LICENSE",
+        "sha256": "3090fc30c6d96160ea49c0e7d1971137b98089e87c02280720741a76046b7c17",
+        "upstream_url": "https://raw.githubusercontent.com/christag/moss/9c35e52f6525a34adec63c94063c58b08019096e/LICENSE",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-02/provenance.json",
+        "sha256": "911bdee3b33af7e566f3fe5b969f209209108d932c817a580507a053ef1db6b7"
+      },
+      "task": {
+        "task_id": "task-pf-id-02",
+        "path": "cases/pf-id-02/task.json",
+        "sha256": "3fd91496d1a4e610597a84c1c983b83f7445de84f705a9c21bf4cb02247c5495",
+        "source_id": "source-pf-id-02"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-03",
+      "status": "pilot-admitted",
+      "repository": "aiperceivable/apcore-mcp",
+      "commit": "7ef64c6b7d9b5b57399b82aa6f10c629207120e4",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-03",
+        "path": "cases/pf-id-03/source/prd-apcore-mcp.md",
+        "sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+        "content_digest": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+        "upstream_url": "https://raw.githubusercontent.com/aiperceivable/apcore-mcp/7ef64c6b7d9b5b57399b82aa6f10c629207120e4/docs/prd-apcore-mcp.md"
+      },
+      "license": {
+        "path": "cases/pf-id-03/license/LICENSE",
+        "sha256": "d33d844565d01a24cad007e6991cf468421b6f7b9737d19b84840cf4e02eeb1a",
+        "upstream_url": "https://raw.githubusercontent.com/aiperceivable/apcore-mcp/7ef64c6b7d9b5b57399b82aa6f10c629207120e4/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-03/provenance.json",
+        "sha256": "c3185d1b647c1a6af422ad6b1707d64ccbd03b0743b58449fba1332421996fbd"
+      },
+      "task": {
+        "task_id": "task-pf-id-03",
+        "path": "cases/pf-id-03/task.json",
+        "sha256": "391d0a5e2d4b995b844c99e001b38e327eddf99f5a34fbc568ccfc742260c5fd",
+        "source_id": "source-pf-id-03"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-04",
+      "status": "pilot-admitted",
+      "repository": "stone16/context-engine",
+      "commit": "f180a976796a50e98ba43845409ddbc1bf3299a9",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-04",
+        "path": "cases/pf-id-04/source/prd-contextengine-implementation.md",
+        "sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+        "content_digest": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+        "upstream_url": "https://raw.githubusercontent.com/stone16/context-engine/f180a976796a50e98ba43845409ddbc1bf3299a9/docs/agents/prd-contextengine-implementation.md"
+      },
+      "license": {
+        "path": "cases/pf-id-04/license/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream_url": "https://raw.githubusercontent.com/stone16/context-engine/f180a976796a50e98ba43845409ddbc1bf3299a9/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-04/provenance.json",
+        "sha256": "92891a6e6404d07bb517cf8b28af13adb331404684469138e8e18364680e1748"
+      },
+      "task": {
+        "task_id": "task-pf-id-04",
+        "path": "cases/pf-id-04/task.json",
+        "sha256": "9c94a37aa3c3a8b3f712667bc3f2d9fdd9154b108a6d1e45f5cfe0ec15827b4c",
+        "source_id": "source-pf-id-04"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-05",
+      "status": "pilot-admitted",
+      "repository": "proishan11/open-agent-policy",
+      "commit": "e4866fde2ed9ebe1005410203faf6343819e31ff",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-05",
+        "path": "cases/pf-id-05/source/open-agent-policy-prd.md",
+        "sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+        "content_digest": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+        "upstream_url": "https://raw.githubusercontent.com/proishan11/open-agent-policy/e4866fde2ed9ebe1005410203faf6343819e31ff/open-agent-policy-prd.md"
+      },
+      "license": {
+        "path": "cases/pf-id-05/license/LICENSE",
+        "sha256": "e83572966daa76934f1fbeedd9ed372605c56b97c54f6d1b5e8acf33b603e8b4",
+        "upstream_url": "https://raw.githubusercontent.com/proishan11/open-agent-policy/e4866fde2ed9ebe1005410203faf6343819e31ff/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-05/provenance.json",
+        "sha256": "112dd55d3a49330b8596d63f75baf89143f7e7e6724f9cf9bf2d0776d85bb2a2"
+      },
+      "task": {
+        "task_id": "task-pf-id-05",
+        "path": "cases/pf-id-05/task.json",
+        "sha256": "78bc7282244dc2d6f43a9acc4a9d0299b907564b1c2fb5dc381c75efd5d8e484",
+        "source_id": "source-pf-id-05"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-01",
+      "status": "pilot-admitted",
+      "repository": "mohammadmaso/kherad",
+      "commit": "2a8d6992b87a33760688e1f956653c21a6292294",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-01",
+        "path": "cases/pf-wf-01/source/PRD.md",
+        "sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+        "content_digest": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+        "upstream_url": "https://raw.githubusercontent.com/mohammadmaso/kherad/2a8d6992b87a33760688e1f956653c21a6292294/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-01/license/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream_url": "https://raw.githubusercontent.com/mohammadmaso/kherad/2a8d6992b87a33760688e1f956653c21a6292294/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-01/provenance.json",
+        "sha256": "5b2eb051481e788ea8718079cfbd2857babc4e43ea3310804eb87643bc6ac400"
+      },
+      "task": {
+        "task_id": "task-pf-wf-01",
+        "path": "cases/pf-wf-01/task.json",
+        "sha256": "50fca8141e25106d90228206dc2d850884f9b6e90260afd0f9daf0df0c8bfd27",
+        "source_id": "source-pf-wf-01"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-02",
+      "status": "pilot-admitted",
+      "repository": "aa2246740/pi-company",
+      "commit": "e4c27fdf626b28d3adf59d245a66cb8f3791b70e",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-02",
+        "path": "cases/pf-wf-02/source/PRD.md",
+        "sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+        "content_digest": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+        "upstream_url": "https://raw.githubusercontent.com/aa2246740/pi-company/e4c27fdf626b28d3adf59d245a66cb8f3791b70e/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-02/license/LICENSE",
+        "sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+        "upstream_url": "https://raw.githubusercontent.com/aa2246740/pi-company/e4c27fdf626b28d3adf59d245a66cb8f3791b70e/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-02/provenance.json",
+        "sha256": "92660ee59d7c20bc5665748109353201b78adada5513dc932ec97a47b72fc07e"
+      },
+      "task": {
+        "task_id": "task-pf-wf-02",
+        "path": "cases/pf-wf-02/task.json",
+        "sha256": "84fb051d3826d395edd8c359b2098d817e0ed31cc1e2981d94a401dcdf1e04f0",
+        "source_id": "source-pf-wf-02"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-03",
+      "status": "pilot-admitted",
+      "repository": "beettlle/pi-spine",
+      "commit": "528f2fd128ac1878c700d9248f22f36500e27aa9",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-03",
+        "path": "cases/pf-wf-03/source/pi-spine-PRD.md",
+        "sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+        "content_digest": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+        "upstream_url": "https://raw.githubusercontent.com/beettlle/pi-spine/528f2fd128ac1878c700d9248f22f36500e27aa9/pi-spine-PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-03/license/LICENSE",
+        "sha256": "41bc36dc57bcc0d6154887b7993dc22bd4a0be15d8e74dc8fbb946d0a4ce7d92",
+        "upstream_url": "https://raw.githubusercontent.com/beettlle/pi-spine/528f2fd128ac1878c700d9248f22f36500e27aa9/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-03/provenance.json",
+        "sha256": "5351a59297292459981eb9dc184307fe47ce52cb79cc98c79b7d09cebabcd85f"
+      },
+      "task": {
+        "task_id": "task-pf-wf-03",
+        "path": "cases/pf-wf-03/task.json",
+        "sha256": "e83fa32c6060c184524c0fe85f4df4245c3f699c021f20f3424dda3dbc4ebe8d",
+        "source_id": "source-pf-wf-03"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-04",
+      "status": "pilot-admitted",
+      "repository": "mikigraf/runmill",
+      "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-04",
+        "path": "cases/pf-wf-04/source/prd.md",
+        "sha256": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
+        "content_digest": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
+        "upstream_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-04/license/LICENSE",
+        "sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
+        "upstream_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-04/provenance.json",
+        "sha256": "411f6ee49708e4b4af14c1ec8042b1dce1c892a8c3e1abb84570b124d4985681"
+      },
+      "task": {
+        "task_id": "task-pf-wf-04",
+        "path": "cases/pf-wf-04/task.json",
+        "sha256": "c9023ee236336e8d2851d1bbcce35d4c7802a3f8f44241254398cdcb7a197dd2",
+        "source_id": "source-pf-wf-04"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-05",
+      "status": "pilot-admitted",
+      "repository": "deghosal-2026/ai-incident-commander",
+      "commit": "ea0d3867a390cb94bfa51cf76054212ccef8f000",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-05",
+        "path": "cases/pf-wf-05/source/PRD.md",
+        "sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+        "content_digest": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/ai-incident-commander/ea0d3867a390cb94bfa51cf76054212ccef8f000/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-05/license/LICENSE",
+        "sha256": "dd8ad7eec2a658b99c50281a286b8cdc6676b392019ac981e7d67f932331b0f6",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/ai-incident-commander/ea0d3867a390cb94bfa51cf76054212ccef8f000/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-05/provenance.json",
+        "sha256": "e9f0cb7a4e23921de5a5824704d68ffa6229a6f3adf2cd06107555a8fa5d4185"
+      },
+      "task": {
+        "task_id": "task-pf-wf-05",
+        "path": "cases/pf-wf-05/task.json",
+        "sha256": "0d8fa723438936667cb73af9b5db0e0a04f399e8f5414a80291483b81c9abd7e",
+        "source_id": "source-pf-wf-05"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-01",
+      "status": "pilot-admitted",
+      "repository": "m18h/kanea",
+      "commit": "c5407e089e9d44098871cb00f883fcf5f7132fa2",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-01",
+        "path": "cases/pf-fm-01/source/PRD.md",
+        "sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+        "content_digest": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+        "upstream_url": "https://raw.githubusercontent.com/m18h/kanea/c5407e089e9d44098871cb00f883fcf5f7132fa2/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-01/license/LICENSE",
+        "sha256": "8787ce0a1184eaed0b190d84bb34a3f89d63bc298fea53805c5054cb326d6e79",
+        "upstream_url": "https://raw.githubusercontent.com/m18h/kanea/c5407e089e9d44098871cb00f883fcf5f7132fa2/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-01/provenance.json",
+        "sha256": "633dbc748e141b28fbf4f137ff07df589314557a4ed337937919c700a76adc72"
+      },
+      "task": {
+        "task_id": "task-pf-fm-01",
+        "path": "cases/pf-fm-01/task.json",
+        "sha256": "6ed63d85d07e54af8eaf61ba2e11203b44d8b701ed30fb457536f47edaaf65b7",
+        "source_id": "source-pf-fm-01"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-02",
+      "status": "pilot-admitted",
+      "repository": "devaxl/VoiceType-AI",
+      "commit": "26334e5143cddc28bfa6351751df36b67efdac4f",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-02",
+        "path": "cases/pf-fm-02/source/PRD.md",
+        "sha256": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+        "content_digest": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+        "upstream_url": "https://raw.githubusercontent.com/devaxl/VoiceType-AI/26334e5143cddc28bfa6351751df36b67efdac4f/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-02/license/LICENSE",
+        "sha256": "7ead18f6607bd81d06662843a66adacbfbb78670405272abe698528f86b92b7e",
+        "upstream_url": "https://raw.githubusercontent.com/devaxl/VoiceType-AI/26334e5143cddc28bfa6351751df36b67efdac4f/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-02/provenance.json",
+        "sha256": "1fbc19bb0c6df34e3f63f71fcd2b6ab218060d064a4c61f2bdffedd88c2e57e5"
+      },
+      "task": {
+        "task_id": "task-pf-fm-02",
+        "path": "cases/pf-fm-02/task.json",
+        "sha256": "fd3e32390f14af90bd5f6f9f3b72d36b411cce6a737fbe1481c3075b186594a4",
+        "source_id": "source-pf-fm-02"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-03",
+      "status": "pilot-admitted",
+      "repository": "System-Error-Worldwide/the-loop",
+      "commit": "e53bda761fc0f2467e5f686b0e1d9e2b773ab870",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-03",
+        "path": "cases/pf-fm-03/source/prd.md",
+        "sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+        "content_digest": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+        "upstream_url": "https://raw.githubusercontent.com/System-Error-Worldwide/the-loop/e53bda761fc0f2467e5f686b0e1d9e2b773ab870/docs/specs/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-03/license/LICENSE",
+        "sha256": "f008c1469cc26b68c21d912a0083a2fc1161e11ccbc0ec9c35a39de8e3c16787",
+        "upstream_url": "https://raw.githubusercontent.com/System-Error-Worldwide/the-loop/e53bda761fc0f2467e5f686b0e1d9e2b773ab870/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-03/provenance.json",
+        "sha256": "8751939510d152856d5697103da54c506963aa3ab11aec7fcbb0619b27636948"
+      },
+      "task": {
+        "task_id": "task-pf-fm-03",
+        "path": "cases/pf-fm-03/task.json",
+        "sha256": "83295f65754089bd0ad54415adf1be45a65492a6eea5adefb8292aa511f1b7f9",
+        "source_id": "source-pf-fm-03"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-04",
+      "status": "pilot-admitted",
+      "repository": "deghosal-2026/agent-tooltrust",
+      "commit": "e4a8522df2613b1ad94373a4e5b40e930654e452",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-04",
+        "path": "cases/pf-fm-04/source/PRD.md",
+        "sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+        "content_digest": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/agent-tooltrust/e4a8522df2613b1ad94373a4e5b40e930654e452/docs/design/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-04/license/LICENSE",
+        "sha256": "f6feb22ed5d9fadd7db789aafddd3b32b3c849791fa45983270482f6204bdf25",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/agent-tooltrust/e4a8522df2613b1ad94373a4e5b40e930654e452/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-04/provenance.json",
+        "sha256": "7feab19fb82773ec7f0cf1aa85bbcc494b6254f58bd1b8250989d6f3062b2a47"
+      },
+      "task": {
+        "task_id": "task-pf-fm-04",
+        "path": "cases/pf-fm-04/task.json",
+        "sha256": "de605d4e5652f2d41721eb213002823521dd8ce0f66bec5d0df90c347ad317c2",
+        "source_id": "source-pf-fm-04"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-05",
+      "status": "pilot-admitted",
+      "repository": "arthursantos67/cineprime-api",
+      "commit": "e66b7ec1485ecbb2970043b459db32c1bd85f436",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-05",
+        "path": "cases/pf-fm-05/source/product-requirements-document.md",
+        "sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+        "content_digest": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+        "upstream_url": "https://raw.githubusercontent.com/arthursantos67/cineprime-api/e66b7ec1485ecbb2970043b459db32c1bd85f436/product-requirements-document.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-05/license/LICENSE",
+        "sha256": "6a7276de4d2e7a6cf5a239444c122be86ce7bcc699f94f8910eeb58ae645c1ba",
+        "upstream_url": "https://raw.githubusercontent.com/arthursantos67/cineprime-api/e66b7ec1485ecbb2970043b459db32c1bd85f436/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-05/provenance.json",
+        "sha256": "d3828059a33e2d02a5545951faef238905edaee471d850e4365def77398e5cfc"
+      },
+      "task": {
+        "task_id": "task-pf-fm-05",
+        "path": "cases/pf-fm-05/task.json",
+        "sha256": "6e10985a967a7acb0359c25891b88775c0419be983bdb08277696fca2372d85d",
+        "source_id": "source-pf-fm-05"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-01",
+      "status": "pilot-admitted",
+      "repository": "marketcalls/openalgo",
+      "commit": "01910584c4c7e89583ebdaaf8a3ce3a006155e68",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-01",
+        "path": "cases/pf-as-01/source/PRD.md",
+        "sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+        "content_digest": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openalgo/01910584c4c7e89583ebdaaf8a3ce3a006155e68/docs/scalping/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-01/license/License.md",
+        "sha256": "76a97c878c9c7a8321bb395c2b44d3fe2f8d81314d219b20138ed0e2dddd5182",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openalgo/01910584c4c7e89583ebdaaf8a3ce3a006155e68/License.md",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-01/provenance.json",
+        "sha256": "fcb79c669c6aed784e743c35a14d603724967c3e2fb4120493c730d3bcc58177"
+      },
+      "task": {
+        "task_id": "task-pf-as-01",
+        "path": "cases/pf-as-01/task.json",
+        "sha256": "2d22307356ce30b6a6905a5d3ccabe1f63c0a7c75920db897199c5c0625c5918",
+        "source_id": "source-pf-as-01"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-02",
+      "status": "pilot-admitted",
+      "repository": "sandraschi/ocr-mcp",
+      "commit": "f5c662299fc13925daa5760a3ee17cb9cc34eff5",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-02",
+        "path": "cases/pf-as-02/source/PRD.md",
+        "sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+        "content_digest": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/ocr-mcp/f5c662299fc13925daa5760a3ee17cb9cc34eff5/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-02/license/LICENSE",
+        "sha256": "57bd85d017f3eaea7a2de0b78323f1bfa92b05ae53c73d07ba8dc622c50009ca",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/ocr-mcp/f5c662299fc13925daa5760a3ee17cb9cc34eff5/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-02/provenance.json",
+        "sha256": "fabd3f06725f80a7869d28be88fa1592b0f4a8bc1422729b679f8cf87241ef9d"
+      },
+      "task": {
+        "task_id": "task-pf-as-02",
+        "path": "cases/pf-as-02/task.json",
+        "sha256": "c048a6219722395203664079dade5e67d8e6d55c9685f7dfad3cbccdb3d60e3b",
+        "source_id": "source-pf-as-02"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-03",
+      "status": "pilot-admitted",
+      "repository": "sandraschi/mujoco-mcp",
+      "commit": "778c332f990434f5a1009bb4d11620dae5c75791",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-03",
+        "path": "cases/pf-as-03/source/PRD.md",
+        "sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+        "content_digest": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/mujoco-mcp/778c332f990434f5a1009bb4d11620dae5c75791/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-03/license/LICENSE",
+        "sha256": "408dff2e3167a75e92d211f7f7f5c96f314ba08adc4fbed701a9543deff8c216",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/mujoco-mcp/778c332f990434f5a1009bb4d11620dae5c75791/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-03/provenance.json",
+        "sha256": "4b0300a45c3526de6016ec2fba91ad8c3805f779b944a0848e0a8c0d0a12c288"
+      },
+      "task": {
+        "task_id": "task-pf-as-03",
+        "path": "cases/pf-as-03/task.json",
+        "sha256": "8ba10fd44d36a8735edf8cf6a1eee8e28c6c404ca6b54bda91a0f070daf62ab1",
+        "source_id": "source-pf-as-03"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-04",
+      "status": "pilot-admitted",
+      "repository": "sandraschi/local-llm-mcp",
+      "commit": "c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-04",
+        "path": "cases/pf-as-04/source/PRD.md",
+        "sha256": "ea4b2ef517f241e1e72fe81746fe585d99e4b1e888242e391ca0538306d91e7e",
+        "content_digest": "ea4b2ef517f241e1e72fe81746fe585d99e4b1e888242e391ca0538306d91e7e",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/local-llm-mcp/c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-04/license/LICENSE",
+        "sha256": "3a984a578f2d70cbfa7a9fbb8fef13ea7c9cca43d3d20f1994c27dcdb1af74fb",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/local-llm-mcp/c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-04/provenance.json",
+        "sha256": "c4533f9e89a940f300eaa1874903f8034488ca768d1e61e7f2b0aa2390485554"
+      },
+      "task": {
+        "task_id": "task-pf-as-04",
+        "path": "cases/pf-as-04/task.json",
+        "sha256": "5fcc8c90130b9d566522df5f37b16ba4f10096a6a1c4bcccc4e3753cb37997d4",
+        "source_id": "source-pf-as-04"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-05",
+      "status": "pilot-admitted",
+      "repository": "sandraschi/arr-mcp",
+      "commit": "01bb2f1a7f8a100fca5dd09ca4ef115781652016",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-05",
+        "path": "cases/pf-as-05/source/PRD.md",
+        "sha256": "b46161bbd6e18f2afd15531fa523c85cdbb7d378c160f3d654902f1ca5d01d04",
+        "content_digest": "b46161bbd6e18f2afd15531fa523c85cdbb7d378c160f3d654902f1ca5d01d04",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/arr-mcp/01bb2f1a7f8a100fca5dd09ca4ef115781652016/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-05/license/LICENSE",
+        "sha256": "408dff2e3167a75e92d211f7f7f5c96f314ba08adc4fbed701a9543deff8c216",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/arr-mcp/01bb2f1a7f8a100fca5dd09ca4ef115781652016/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-05/provenance.json",
+        "sha256": "422b2242ade95938dfa560fbcf242557a3b14011ede1d30f32bf842e1624f862"
+      },
+      "task": {
+        "task_id": "task-pf-as-05",
+        "path": "cases/pf-as-05/task.json",
+        "sha256": "f5349c60d598fea07091916b84bbff6324344ac4de40d00a7e0b2df91d2e361e",
+        "source_id": "source-pf-as-05"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-01",
+      "status": "pilot-admitted",
+      "repository": "mangopudding/mcp-server-iru-api",
+      "commit": "6743958ad8fa3329035a663d60b931cf0419058e",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-01",
+        "path": "cases/pf-tm-01/source/PRD.md",
+        "sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+        "content_digest": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+        "upstream_url": "https://raw.githubusercontent.com/mangopudding/mcp-server-iru-api/6743958ad8fa3329035a663d60b931cf0419058e/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-01/license/LICENSE",
+        "sha256": "4847b39a59a0b59db4f878b7236c77502e79120dccfd34c859b31a40295cc224",
+        "upstream_url": "https://raw.githubusercontent.com/mangopudding/mcp-server-iru-api/6743958ad8fa3329035a663d60b931cf0419058e/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-01/provenance.json",
+        "sha256": "42d635e881b345ed33d40e47ff31e66e80b61c901e5c7373c3dbc9105bebb3ad"
+      },
+      "task": {
+        "task_id": "task-pf-tm-01",
+        "path": "cases/pf-tm-01/task.json",
+        "sha256": "d8fd99387fe4e369ef88c77b6dfb6bbf94148de65c6203c08a0da2e322ba7036",
+        "source_id": "source-pf-tm-01"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-02",
+      "status": "pilot-admitted",
+      "repository": "juniper-tc02e/ayin",
+      "commit": "773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-02",
+        "path": "cases/pf-tm-02/source/Ayin-PRD-and-SaaS-Plan.md",
+        "sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+        "content_digest": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+        "upstream_url": "https://raw.githubusercontent.com/juniper-tc02e/ayin/773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8/docs/Ayin-PRD-and-SaaS-Plan.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-02/license/LICENSE",
+        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+        "upstream_url": "https://raw.githubusercontent.com/juniper-tc02e/ayin/773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8/LICENSE",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-02/provenance.json",
+        "sha256": "2ef58e00c70cf787ab30d138be5566226f9bbbfee6057c11532cd023f1e59448"
+      },
+      "task": {
+        "task_id": "task-pf-tm-02",
+        "path": "cases/pf-tm-02/task.json",
+        "sha256": "d15420bded3481e7b70115d20665f08a9d03d2d537dfad908c0a69513d1cdd1e",
+        "source_id": "source-pf-tm-02"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-03",
+      "status": "pilot-admitted",
+      "repository": "yat-hk/yat",
+      "commit": "0c206d5ea88b5fe256904d960875d9d0af5c6309",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-03",
+        "path": "cases/pf-tm-03/source/PRD.md",
+        "sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+        "content_digest": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+        "upstream_url": "https://raw.githubusercontent.com/yat-hk/yat/0c206d5ea88b5fe256904d960875d9d0af5c6309/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-03/license/LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "upstream_url": "https://raw.githubusercontent.com/yat-hk/yat/0c206d5ea88b5fe256904d960875d9d0af5c6309/LICENSE",
+        "reported_license": "GPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-03/provenance.json",
+        "sha256": "7659e6156b6f7f1fb623c4d482de49fe4c69b81641a4a5b905a7baa93e5570d9"
+      },
+      "task": {
+        "task_id": "task-pf-tm-03",
+        "path": "cases/pf-tm-03/task.json",
+        "sha256": "3a9d9636f220cbebf072af5fe278d5561417743eeb328be6f7fc33a1e6e7301d",
+        "source_id": "source-pf-tm-03"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-04",
+      "status": "pilot-admitted",
+      "repository": "marketcalls/openrag",
+      "commit": "76303a9a88cbb779093a682b2be6c645eef7ed8b",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-04",
+        "path": "cases/pf-tm-04/source/prd.md",
+        "sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+        "content_digest": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openrag/76303a9a88cbb779093a682b2be6c645eef7ed8b/docs/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-04/license/LICENSE",
+        "sha256": "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openrag/76303a9a88cbb779093a682b2be6c645eef7ed8b/LICENSE",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-04/provenance.json",
+        "sha256": "653c84ce97ef197d0a7107aec95d71f4857a09194b93b31bf7c097a2fa10ba65"
+      },
+      "task": {
+        "task_id": "task-pf-tm-04",
+        "path": "cases/pf-tm-04/task.json",
+        "sha256": "e2a25d2a12fc30dd7bbcc1bb720fdaf75353cc89b6252a0cebd4c47b2341dafe",
+        "source_id": "source-pf-tm-04"
+      },
+      "reviews": [],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-05",
+      "status": "pilot-admitted",
+      "repository": "girish-kor/AutoTube",
+      "commit": "d88a214be289c0f44df4c37aa6f2d2b04e613bac",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-05",
+        "path": "cases/pf-tm-05/source/PRD.md",
+        "sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+        "content_digest": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+        "upstream_url": "https://raw.githubusercontent.com/girish-kor/AutoTube/d88a214be289c0f44df4c37aa6f2d2b04e613bac/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-05/license/LICENSE",
+        "sha256": "e8e8f198d6b831e3e3442ab0066382dd06e9c791a1f5167518cf8394cf74aef5",
+        "upstream_url": "https://raw.githubusercontent.com/girish-kor/AutoTube/d88a214be289c0f44df4c37aa6f2d2b04e613bac/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-05/provenance.json",
+        "sha256": "33bc06cf1bffaa64f1a08abd42bffced02828d336098fb87e18a64e8c0581a73"
+      },
+      "task": {
+        "task_id": "task-pf-tm-05",
+        "path": "cases/pf-tm-05/task.json",
+        "sha256": "7185c5a43e1264a518db5aae0c377398c5bed691f08b79b3ce5ddcfed66301af",
+        "source_id": "source-pf-tm-05"
+      },
+      "reviews": [],
+      "defects": []
+    }
+  ]
+}

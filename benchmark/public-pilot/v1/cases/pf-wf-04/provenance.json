@@ -1,0 +1,12 @@
+{
+  "repository": "mikigraf/runmill",
+  "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
+  "source_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/prd.md",
+  "source_sha256": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
+  "content_digest": "1bc05ce30cf9aa4c671d459672aa96a209bbdb0131175b7e18529c2b920ec7a0",
+  "license_url": "https://raw.githubusercontent.com/mikigraf/runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
+  "license_sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

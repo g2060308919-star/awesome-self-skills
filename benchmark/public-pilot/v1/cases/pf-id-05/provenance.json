@@ -1,0 +1,12 @@
+{
+  "repository": "proishan11/open-agent-policy",
+  "commit": "e4866fde2ed9ebe1005410203faf6343819e31ff",
+  "source_url": "https://raw.githubusercontent.com/proishan11/open-agent-policy/e4866fde2ed9ebe1005410203faf6343819e31ff/open-agent-policy-prd.md",
+  "source_sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+  "content_digest": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+  "license_url": "https://raw.githubusercontent.com/proishan11/open-agent-policy/e4866fde2ed9ebe1005410203faf6343819e31ff/LICENSE",
+  "license_sha256": "e83572966daa76934f1fbeedd9ed372605c56b97c54f6d1b5e8acf33b603e8b4",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

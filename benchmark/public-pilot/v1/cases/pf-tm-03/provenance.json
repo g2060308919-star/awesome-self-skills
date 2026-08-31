@@ -1,0 +1,12 @@
+{
+  "repository": "yat-hk/yat",
+  "commit": "0c206d5ea88b5fe256904d960875d9d0af5c6309",
+  "source_url": "https://raw.githubusercontent.com/yat-hk/yat/0c206d5ea88b5fe256904d960875d9d0af5c6309/PRD.md",
+  "source_sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+  "content_digest": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+  "license_url": "https://raw.githubusercontent.com/yat-hk/yat/0c206d5ea88b5fe256904d960875d9d0af5c6309/LICENSE",
+  "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+  "reported_license": "GPL-3.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

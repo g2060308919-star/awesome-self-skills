@@ -1,0 +1,12 @@
+{
+  "repository": "socrates8300/k2payments",
+  "commit": "48d352294a4c35c1e8624c29812cd2912d385d3f",
+  "source_url": "https://raw.githubusercontent.com/socrates8300/k2payments/48d352294a4c35c1e8624c29812cd2912d385d3f/prd.md",
+  "source_sha256": "7d158b4e84e1668eda89c8058e70ad544029dc663e1e31df9816e98a777e541a",
+  "content_digest": "7d158b4e84e1668eda89c8058e70ad544029dc663e1e31df9816e98a777e541a",
+  "license_url": "https://raw.githubusercontent.com/socrates8300/k2payments/48d352294a4c35c1e8624c29812cd2912d385d3f/LICENSE",
+  "license_sha256": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
+  "reported_license": "AGPL-3.0-only",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

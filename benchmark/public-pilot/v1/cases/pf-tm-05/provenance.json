@@ -1,0 +1,12 @@
+{
+  "repository": "girish-kor/AutoTube",
+  "commit": "d88a214be289c0f44df4c37aa6f2d2b04e613bac",
+  "source_url": "https://raw.githubusercontent.com/girish-kor/AutoTube/d88a214be289c0f44df4c37aa6f2d2b04e613bac/docs/PRD.md",
+  "source_sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+  "content_digest": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+  "license_url": "https://raw.githubusercontent.com/girish-kor/AutoTube/d88a214be289c0f44df4c37aa6f2d2b04e613bac/LICENSE",
+  "license_sha256": "e8e8f198d6b831e3e3442ab0066382dd06e9c791a1f5167518cf8394cf74aef5",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

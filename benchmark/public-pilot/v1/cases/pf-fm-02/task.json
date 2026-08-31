@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-FM-02",
+  "scope": "public-source-machine-pilot",
+  "stratum": "form/configuration/input validation",
+  "source_paths": [
+    "cases/pf-fm-02/source/PRD.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

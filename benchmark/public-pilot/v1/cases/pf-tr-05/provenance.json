@@ -1,0 +1,12 @@
+{
+  "repository": "cwvedvik/tripletex-mcp",
+  "commit": "3b88f1644511d7266ccd0d19bc62a8ecebd6d48c",
+  "source_url": "https://raw.githubusercontent.com/cwvedvik/tripletex-mcp/3b88f1644511d7266ccd0d19bc62a8ecebd6d48c/docs/PRD-Tripletex-MCP-Rebuild.md",
+  "source_sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+  "content_digest": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+  "license_url": "https://raw.githubusercontent.com/cwvedvik/tripletex-mcp/3b88f1644511d7266ccd0d19bc62a8ecebd6d48c/LICENSE",
+  "license_sha256": "7891d3a7ea07b88c47528cfa399de5d085b63f4592b8fde6d739e9b0b5043a88",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}
