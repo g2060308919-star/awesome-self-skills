@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-05",
-  "scope": "Cross-service media automation with Jellyfin-aware service routing and SSE dashboard log streaming",
+  "scope": "Runmill immediate run-ID submission, durable events, checkpoint recovery, reconciliation, and terminal retry disposition",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-05/source/PRD.md"

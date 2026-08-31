@@ -1,6 +1,6 @@
 {
   "case_id": "PF-AS-04",
-  "scope": "Local LLM provider selection, request dispatch, and health/diagnostic reporting",
+  "scope": "Cloudflare Agents persistent FIFO callback queue, automatic processing, bounded retry, and dequeue outcomes",
   "stratum": "asynchronous integration/event",
   "source_paths": [
     "cases/pf-as-04/source/PRD.md"

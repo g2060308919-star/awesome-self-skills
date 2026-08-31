@@ -1,12 +1,12 @@
 {
-  "repository": "brightbeanxyz/brightbean-studio",
-  "commit": "d85fce192e687d20e8fd7e9449a40ad7952ec7c3",
-  "source_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/development_specs/feature-spec-social-media-management-v2.md",
-  "source_sha256": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
-  "content_digest": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
-  "license_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/LICENSE",
-  "license_sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
-  "reported_license": "AGPL-3.0-only",
+  "repository": "dinpd/AgentAction",
+  "commit": "84722312663cc46a7d928d0d883332f8d6d1d821",
+  "source_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/docs/agentaction-gateway-prd.md",
+  "source_sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+  "content_digest": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+  "license_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/LICENSE",
+  "license_sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+  "reported_license": "Apache-2.0",
   "scope_decision": "applicable",
-  "acquired_at": "2026-08-31T20:10:30Z"
+  "acquired_at": "2026-08-31T20:46:16Z"
 }

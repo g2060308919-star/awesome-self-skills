@@ -1,12 +1,12 @@
 {
-  "repository": "sandraschi/arr-mcp",
-  "commit": "01bb2f1a7f8a100fca5dd09ca4ef115781652016",
-  "source_url": "https://raw.githubusercontent.com/sandraschi/arr-mcp/01bb2f1a7f8a100fca5dd09ca4ef115781652016/PRD.md",
-  "source_sha256": "b46161bbd6e18f2afd15531fa523c85cdbb7d378c160f3d654902f1ca5d01d04",
-  "content_digest": "b46161bbd6e18f2afd15531fa523c85cdbb7d378c160f3d654902f1ca5d01d04",
-  "license_url": "https://raw.githubusercontent.com/sandraschi/arr-mcp/01bb2f1a7f8a100fca5dd09ca4ef115781652016/LICENSE",
-  "license_sha256": "408dff2e3167a75e92d211f7f7f5c96f314ba08adc4fbed701a9543deff8c216",
+  "repository": "mikigraf/Runmill",
+  "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
+  "source_url": "https://raw.githubusercontent.com/mikigraf/Runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/docs/asf-production-worker-prd.md",
+  "source_sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+  "content_digest": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+  "license_url": "https://raw.githubusercontent.com/mikigraf/Runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
+  "license_sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
   "reported_license": "MIT",
   "scope_decision": "applicable",
-  "acquired_at": "2026-08-31T18:23:03.336Z"
+  "acquired_at": "2026-08-31T20:46:16Z"
 }

@@ -463,34 +463,34 @@
     {
       "pilot_id": "PF-WF-04",
       "status": "pilot-admitted",
-      "repository": "brightbeanxyz/brightbean-studio",
-      "commit": "d85fce192e687d20e8fd7e9449a40ad7952ec7c3",
+      "repository": "dinpd/AgentAction",
+      "commit": "84722312663cc46a7d928d0d883332f8d6d1d821",
       "stratum": "workflow/approval/state",
-      "acquired_at": "2026-08-31T20:10:30Z",
+      "acquired_at": "2026-08-31T20:46:16Z",
       "source": {
         "source_id": "source-pf-wf-04",
         "path": "cases/pf-wf-04/source/prd.md",
-        "sha256": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
-        "content_digest": "493e5f5e697a3896fbe38b4a8c9afaea4235d18376a8369dc871c13ebd9a7b1f",
-        "upstream_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/development_specs/feature-spec-social-media-management-v2.md"
+        "sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+        "content_digest": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+        "upstream_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/docs/agentaction-gateway-prd.md"
       },
       "license": {
         "path": "cases/pf-wf-04/license/LICENSE",
-        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
-        "upstream_url": "https://raw.githubusercontent.com/brightbeanxyz/brightbean-studio/d85fce192e687d20e8fd7e9449a40ad7952ec7c3/LICENSE",
-        "reported_license": "AGPL-3.0-only",
+        "sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+        "upstream_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/LICENSE",
+        "reported_license": "Apache-2.0",
         "scope_decision": "applicable"
       },
       "provenance": {
         "path": "cases/pf-wf-04/provenance.json",
-        "sha256": "1d177b73ee991588b5e2abf09faebcb07c9a9dda2a4b7b409bda395e87d2e63a"
+        "sha256": "dc077b126d52bf96681129c0c4de0968a106b95e8ceba4f3611d196f7d86b67c"
       },
       "task": {
         "task_id": "task-pf-wf-04",
         "path": "cases/pf-wf-04/task.json",
-        "sha256": "4ea437ea0ae3a16d94fdd836a5bfacee49f3ae8de6b66e6c0845770b0da3e29c",
+        "sha256": "619614e2b9d7c006ca7685ce9e8c7681cb872c76e7ff191e941065f54c3dd27f",
         "source_id": "source-pf-wf-04",
-        "scope": "Brightbean internal/client social-media approval transitions, change-request resubmission, and reminder exhaustion"
+        "scope": "AgentAction exact-action challenge, approval/grant binding, replay, and fail-closed context drift"
       },
       "reviews": [],
       "defects": []
@@ -813,34 +813,34 @@
     {
       "pilot_id": "PF-AS-04",
       "status": "pilot-admitted",
-      "repository": "sandraschi/local-llm-mcp",
-      "commit": "c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0",
+      "repository": "cloudflare/agents",
+      "commit": "73d2ed457ba02035d2b1d3efc785c012254ac216",
       "stratum": "asynchronous integration/event",
-      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "acquired_at": "2026-08-31T20:46:16Z",
       "source": {
         "source_id": "source-pf-as-04",
         "path": "cases/pf-as-04/source/PRD.md",
-        "sha256": "ea4b2ef517f241e1e72fe81746fe585d99e4b1e888242e391ca0538306d91e7e",
-        "content_digest": "ea4b2ef517f241e1e72fe81746fe585d99e4b1e888242e391ca0538306d91e7e",
-        "upstream_url": "https://raw.githubusercontent.com/sandraschi/local-llm-mcp/c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0/PRD.md"
+        "sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+        "content_digest": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+        "upstream_url": "https://raw.githubusercontent.com/cloudflare/agents/73d2ed457ba02035d2b1d3efc785c012254ac216/docs/agents/queue.md"
       },
       "license": {
         "path": "cases/pf-as-04/license/LICENSE",
-        "sha256": "3a984a578f2d70cbfa7a9fbb8fef13ea7c9cca43d3d20f1994c27dcdb1af74fb",
-        "upstream_url": "https://raw.githubusercontent.com/sandraschi/local-llm-mcp/c57c1bfd8fa6af0a7c43fb58d668e60f90ccb1a0/LICENSE",
+        "sha256": "b33ae783f02478cd31787cd07cbf61cd3a6fbee1a50b2baf832b8f0fb7c600f7",
+        "upstream_url": "https://raw.githubusercontent.com/cloudflare/agents/73d2ed457ba02035d2b1d3efc785c012254ac216/LICENSE",
         "reported_license": "MIT",
         "scope_decision": "applicable"
       },
       "provenance": {
         "path": "cases/pf-as-04/provenance.json",
-        "sha256": "c4533f9e89a940f300eaa1874903f8034488ca768d1e61e7f2b0aa2390485554"
+        "sha256": "a012986a303e20158837f5840c6648f2a483a8fa0c125b608b4b48578b64b77a"
       },
       "task": {
         "task_id": "task-pf-as-04",
         "path": "cases/pf-as-04/task.json",
-        "sha256": "2d7708743646788846edde6b1eb864eb03c66ccff302519e6ea0e8d432d25204",
+        "sha256": "b087039cd553edadbc09ccb4da90d5959296d17583294a85e6b0583ca9086eab",
         "source_id": "source-pf-as-04",
-        "scope": "Local LLM provider selection, request dispatch, and health/diagnostic reporting"
+        "scope": "Cloudflare Agents persistent FIFO callback queue, automatic processing, bounded retry, and dequeue outcomes"
       },
       "reviews": [],
       "defects": []
@@ -848,34 +848,34 @@
     {
       "pilot_id": "PF-AS-05",
       "status": "pilot-admitted",
-      "repository": "sandraschi/arr-mcp",
-      "commit": "01bb2f1a7f8a100fca5dd09ca4ef115781652016",
+      "repository": "mikigraf/Runmill",
+      "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
       "stratum": "asynchronous integration/event",
-      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "acquired_at": "2026-08-31T20:46:16Z",
       "source": {
         "source_id": "source-pf-as-05",
         "path": "cases/pf-as-05/source/PRD.md",
-        "sha256": "b46161bbd6e18f2afd15531fa523c85cdbb7d378c160f3d654902f1ca5d01d04",
-        "content_digest": "b46161bbd6e18f2afd15531fa523c85cdbb7d378c160f3d654902f1ca5d01d04",
-        "upstream_url": "https://raw.githubusercontent.com/sandraschi/arr-mcp/01bb2f1a7f8a100fca5dd09ca4ef115781652016/PRD.md"
+        "sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+        "content_digest": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+        "upstream_url": "https://raw.githubusercontent.com/mikigraf/Runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/docs/asf-production-worker-prd.md"
       },
       "license": {
         "path": "cases/pf-as-05/license/LICENSE",
-        "sha256": "408dff2e3167a75e92d211f7f7f5c96f314ba08adc4fbed701a9543deff8c216",
-        "upstream_url": "https://raw.githubusercontent.com/sandraschi/arr-mcp/01bb2f1a7f8a100fca5dd09ca4ef115781652016/LICENSE",
+        "sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
+        "upstream_url": "https://raw.githubusercontent.com/mikigraf/Runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
         "reported_license": "MIT",
         "scope_decision": "applicable"
       },
       "provenance": {
         "path": "cases/pf-as-05/provenance.json",
-        "sha256": "422b2242ade95938dfa560fbcf242557a3b14011ede1d30f32bf842e1624f862"
+        "sha256": "9e618748548d544c57b5ed40fc06212b7bf53dabe1b1c335d7c907a1bcebf03e"
       },
       "task": {
         "task_id": "task-pf-as-05",
         "path": "cases/pf-as-05/task.json",
-        "sha256": "3479b588dbe9967ce6c2ebd0799c6c3410b07e8dcbd235f51d3bd9e81e6aaf70",
+        "sha256": "e6bc81c6f85228b5bfead5b3c97260a1f5d67062631530795256ec26615847ff",
         "source_id": "source-pf-as-05",
-        "scope": "Cross-service media automation with Jellyfin-aware service routing and SSE dashboard log streaming"
+        "scope": "Runmill immediate run-ID submission, durable events, checkpoint recovery, reconciliation, and terminal retry disposition"
       },
       "reviews": [],
       "defects": []

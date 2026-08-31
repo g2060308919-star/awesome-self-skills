@@ -1,6 +1,6 @@
 {
   "case_id": "PF-WF-04",
-  "scope": "Brightbean internal/client social-media approval transitions, change-request resubmission, and reminder exhaustion",
+  "scope": "AgentAction exact-action challenge, approval/grant binding, replay, and fail-closed context drift",
   "stratum": "workflow/approval/state",
   "source_paths": [
     "cases/pf-wf-04/source/prd.md"
