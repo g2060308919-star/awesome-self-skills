@@ -228,6 +228,30 @@ test('real runner rejects a normative claim disguised as a diagnostic Fact', asy
   }
 });
 
+test('real runner accepts one conflicted Fact that owns both accepted normative alternatives', async () => {
+  const runDirectory = await temporaryRun('conflicted fact ownership');
+  const revision = await fixture();
+  revision.evidence_claims.claims.push({
+    ...structuredClone(revision.evidence_claims.claims[0]),
+    claim_id: 'claim_checkout_rejected', value: 'checkout rejected'
+  });
+  Object.assign(revision.evidence_claims.fact_ledger[0], {
+    status: 'conflicted',
+    source_claim_ids: ['claim_checkout', 'claim_checkout_rejected']
+  });
+  try {
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    const reply = await advance(runDirectory);
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.stage, 'behavior_views');
+    await stat(path.join(runDirectory, 'accepted/r000/evidence-claims.json'));
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('invalid staging is deterministic and cannot move accepted state or checkpoint', async () => {
   const runDirectory = await temporaryRun('invalid staging');
   const revision = await fixture();

@@ -364,37 +364,48 @@ function inferredCompilation(behaviorViews) {
 
 /** @param {Record<string, unknown>} evidenceClaims @param {Map<string,Record<string,unknown>>} claimsById */
 function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
-  /** @type {Map<string,Record<string,unknown>[]>} */
-  const entriesByClaimId = new Map();
+  /** @type {Record<string,unknown>[]} */
+  const ledgerEntries = [];
   for (const value of arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []) {
     if (!value || typeof value !== 'object') continue;
     const entry = /** @type {Record<string,unknown>} */ (value);
-    if (typeof entry.claim_id !== 'string') continue;
-    const entries = entriesByClaimId.get(entry.claim_id) ?? [];
-    entries.push(entry);
-    entriesByClaimId.set(entry.claim_id, entries);
+    ledgerEntries.push(entry);
   }
   return [...claimsById.entries()]
     .filter(([, claim]) => (claim.kind === 'requirement' || claim.kind === 'assumption'))
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
     .flatMap(([claimId]) => {
-      const entries = entriesByClaimId.get(claimId) ?? [];
-      if (entries.length === 0) return [{
+      /** @type {Record<string,unknown>[]} */
+      const owners = [];
+      let diagnosticOwner = false;
+      let primaryOwnsClaim = false;
+      for (const entry of ledgerEntries) {
+        const sourceClaimIds = arrayIsArray(entry.source_claim_ids) ? entry.source_claim_ids : [];
+        let sourceOwnsClaim = false;
+        for (let index = 0; index < sourceClaimIds.length; index += 1) {
+          if (sourceClaimIds[index] === claimId) sourceOwnsClaim = true;
+        }
+        const primary = entry.claim_id === claimId;
+        const groupedAlternative = sourceOwnsClaim
+          && (entry.status === 'conflicted' || entry.status === 'ambiguous');
+        if (!primary && !groupedAlternative) continue;
+        if (entry.status === 'diagnostic') diagnosticOwner = true;
+        else {
+          owners.push(entry);
+          if (primary && sourceOwnsClaim) primaryOwnsClaim = true;
+        }
+      }
+      if (owners.length === 0 && !diagnosticOwner) return [{
         category: 'traceability', code: 'NORMATIVE_CLAIM_UNLEDGERED',
         path: `/claims/${encodeURIComponent(claimId)}`,
         message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
       }];
-      const entry = entries[0];
-      const sourceClaimIds = arrayIsArray(entry.source_claim_ids) ? entry.source_claim_ids : [];
-      let ownsClaim = false;
-      for (let index = 0; index < sourceClaimIds.length; index += 1) {
-        if (sourceClaimIds[index] === claimId) ownsClaim = true;
-      }
-      if (entries.length !== 1 || entry.status === 'diagnostic'
-        || !ownsClaim) return [{
+      const groupedOnly = owners.length === 1 && owners[0].claim_id !== claimId;
+      if (owners.length !== 1 || diagnosticOwner
+        || (!primaryOwnsClaim && !groupedOnly)) return [{
         category: 'traceability', code: 'NORMATIVE_CLAIM_LEDGER_INVALID',
         path: `/claims/${encodeURIComponent(claimId)}`,
-        message: `accepted normative claim "${claimId}" requires exactly one non-diagnostic Fact Ledger entry that owns the claim`
+        message: `accepted normative claim "${claimId}" requires exactly one non-diagnostic Fact Ledger owner, either primary or a conflicted/ambiguous alternative`
       }];
       return [];
     });
