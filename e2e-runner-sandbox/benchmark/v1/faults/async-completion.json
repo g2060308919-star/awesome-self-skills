@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "id": "async-completion",
+  "logicalOperation": "project.status.update",
+  "phase": "before-commit",
+  "effect": "delayed-completion",
+  "occurrence": 1,
+  "delayTicks": 2
+}

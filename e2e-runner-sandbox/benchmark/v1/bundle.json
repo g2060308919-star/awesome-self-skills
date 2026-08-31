@@ -9,6 +9,12 @@
     "oracleContract": "contracts/oracle-v1.json",
     "snapshotContract": "contracts/snapshot-v1.json",
     "scoring": "scoring.json",
-    "hostTraceClassifier": "host-trace-classifier.json"
+    "hostTraceClassifier": "host-trace-classifier.json",
+    "profileIndex": "profiles/index.json",
+    "runnerInputIndex": "runner-inputs/index.json",
+    "oracleIndex": "oracles/index.json",
+    "assistanceIndex": "assistance/index.json",
+    "executionMatrix": "execution-matrix.json",
+    "digestManifest": "SHA256SUMS.json"
   }
 }

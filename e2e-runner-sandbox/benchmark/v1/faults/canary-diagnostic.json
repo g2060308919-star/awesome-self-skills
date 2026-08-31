@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "id": "canary-diagnostic",
+  "logicalOperation": "project.status.update",
+  "phase": "before-commit",
+  "effect": "application-failure-with-canary",
+  "occurrence": 1,
+  "diagnostic": "BENCH_SECRET_0123456789ABCDEFGHJK_END"
+}

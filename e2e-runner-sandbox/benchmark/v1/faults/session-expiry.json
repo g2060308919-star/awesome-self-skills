@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "id": "session-expiry",
+  "logicalOperation": "project.description.update",
+  "phase": "before-authorization",
+  "effect": "expire-session",
+  "occurrence": 1
+}

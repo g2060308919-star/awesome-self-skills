@@ -69,7 +69,7 @@ export function createRunCoordinator(options = {}) {
     const nextEpoch = epoch + 1;
 
     try {
-      const candidate = normalizeFixture(profile);
+      const candidate = normalizeFixture(profile, nextRunId);
       const candidateSnapshot = createSnapshot(candidate.state);
       clock.reset();
       state = candidate.state;

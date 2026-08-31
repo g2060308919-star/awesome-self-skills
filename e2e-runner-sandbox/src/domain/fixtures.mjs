@@ -12,7 +12,23 @@ const REQUIRED_ARRAYS = [
   "delayedJobs"
 ];
 
-export function normalizeFixture(profile) {
+function materializeRunScopedFixture(value, runId) {
+  if (Array.isArray(value)) return value.map((item) => materializeRunScopedFixture(item, runId));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(
+      ([key, child]) => [key, materializeRunScopedFixture(child, runId)]
+    ));
+  }
+  if (typeof value === "string" && value.includes("{{runId}}")) {
+    if (value !== "Bench-{{runId}}" || typeof runId !== "string" || runId.length === 0) {
+      throw new SandboxError("FIXTURE_INVALID", "Fixture runId placeholder is not allowlisted");
+    }
+    return `Bench-${runId}`;
+  }
+  return value;
+}
+
+export function normalizeFixture(profile, runId) {
   if (!profile || typeof profile !== "object" || typeof profile.profileId !== "string") {
     throw new SandboxError("FIXTURE_INVALID", "Profile metadata is incomplete");
   }
@@ -50,6 +66,6 @@ export function normalizeFixture(profile) {
       allowedMutations: structuredClone(profile.allowedMutations ?? []),
       fault: structuredClone(profile.fault ?? null)
     },
-    state: structuredClone(profile.fixture)
+    state: materializeRunScopedFixture(profile.fixture, runId)
   };
 }
