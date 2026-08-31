@@ -78,6 +78,8 @@ test('skill static policies freeze clarification and source-review boundaries', 
     '`enumeration-complement` → `test-data` or `model-element`',
     '`graph-reachability` → `model-element`'
   ]) assert.match(evidence, new RegExp(route, 'u'));
+  assert.match(evidence, /Scope strings are compiler identities, not prose summaries[\s\S]*reuse it verbatim for `run_scope`[\s\S]*Source Policy[\s\S]*Claim[\s\S]*Behavior View/u);
+  assert.match(evidence, /For `decision-table-instance`, `value` must exactly equal `rule_input\.outcome`/u);
   assert.match(evidence, /Before accepting `evidence_claims`[\s\S]*one replayable E2 `expected-value` child[\s\S]*all atomic Oracle parents/u);
 
   const behavior = await text('references/behavior-views.md');

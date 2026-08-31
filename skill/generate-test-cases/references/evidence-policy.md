@@ -6,6 +6,8 @@ Use this policy while creating Source Packs and Evidence Claims. The bundled sch
 
 Record each source's kind, version, status, authority, content digest, and applicable scope. Treat historical defects and production behavior as diagnostic signals unless an effective source explicitly makes them normative.
 
+Scope strings are compiler identities, not prose summaries. Choose one canonical slash-delimited path for the run, then reuse it verbatim for `run_scope` and every in-scope Source, Source Policy rule, Claim, Fact, and Behavior View; use child paths only for a deliberate narrower scope. Never paraphrase the same scope between stages. `*` is universal only when the corresponding source and claim are also universal—it cannot broaden a previously accepted narrow scope.
+
 Create a typed locator for every relied-on text range, table cell, or page region. Preserve table coordinates and page/region summaries. Mark extraction as `verified`, `machine-extracted`, or `uncertain`. An uncertain extraction cannot directly support E3; verify the original region or keep the affected fact Blocked.
 
 Build Source Policy from explicit authority and scope. A newer date or more official-looking document does not silently supersede another source. Accept supersession only when a source declares it or an authorized task-scoped decision resolves it. Limit unresolved conflicts to their intersecting scope.
@@ -30,6 +32,8 @@ Allow only this derivation-kind and target matrix:
 - `graph-reachability` → `model-element`; use it for structural reachability only.
 
 Match every derivation kind to its allowed target. Boundary analysis does not invent error text, persistence, events, or state changes. Graph reachability proves structure, not a business Oracle. Require an acyclic parent graph terminating in E3, with all inputs and parameters replayable.
+
+For `decision-table-instance`, `value` must exactly equal `rule_input.outcome`, and that outcome must be explicitly source-backed by the parents. Do not use a label, summary, or reformatted sentence as a substitute.
 
 Before accepting `evidence_claims`, identify each complete source-defined business outcome that joins several atomic Oracle claims. When the accepted source supplies the conditions and outcome needed by the closed matrix, create one replayable E2 `expected-value` child with `derivation_kind = decision-table-instance`; set `parent_claim_ids` to all atomic Oracle parents that the outcome jointly proves. This gives a later concrete expectation one evidence reference whose ancestry covers the whole outcome. Do not create an aggregate merely to satisfy the compiler: when the conditions, outcome, or allowed derivation are absent, preserve the gap as Blocked.
 
