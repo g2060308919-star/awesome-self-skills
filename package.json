@@ -8,7 +8,8 @@
     "build": "node build/build.mjs",
     "test": "node --test test/**/*.test.mjs && node --test test/repeatability/*.repeat.mjs",
     "check": "tsc --noEmit -p jsconfig.json && node build/build.mjs --check && npm test",
-    "benchmark": "node benchmark/score.mjs benchmark/v1/manifest.json"
+    "benchmark": "node benchmark/score.mjs benchmark/v1/manifest.json",
+    "public-pilot": "node benchmark/public-pilot/validate.mjs benchmark/public-pilot/v1/catalog.json"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

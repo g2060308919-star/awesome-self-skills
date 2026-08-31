@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "generate-test-cases-public-pilot-catalog.schema.json",
+  "title": "Public-source machine pilot catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_id",
+    "evidence_class",
+    "release_eligible",
+    "release_status",
+    "items"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "catalog_id": { "$ref": "#/$defs/nonEmptyString" },
+    "evidence_class": { "const": "public-source-machine-pilot" },
+    "release_eligible": { "const": false },
+    "release_status": { "const": "insufficient_evidence" },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "stratum": {
+      "enum": [
+        "transaction/order/payment",
+        "identity/role/permission",
+        "workflow/approval/state",
+        "form/configuration/input validation",
+        "asynchronous integration/event",
+        "time-window/quota/entitlement"
+      ]
+    },
+    "retainedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "path", "sha256", "content_digest", "upstream_url"],
+      "properties": {
+        "source_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "content_digest": { "$ref": "#/$defs/sha256" },
+        "upstream_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "upstream_url", "reported_license", "scope_decision"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "upstream_url": { "type": "string", "format": "uri" },
+        "reported_license": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_decision": { "enum": ["applicable", "hold", "inapplicable"] }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "path", "sha256", "source_id"],
+      "properties": {
+        "task_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "source_id": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_id",
+        "path",
+        "sha256",
+        "reviewer_class",
+        "source_id",
+        "task_id",
+        "decision"
+      ],
+      "properties": {
+        "review_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "reviewer_class": { "const": "machine-agent" },
+        "review_scope": { "const": "intake-only" },
+        "source_id": { "$ref": "#/$defs/nonEmptyString" },
+        "task_id": { "$ref": "#/$defs/nonEmptyString" },
+        "decision": { "enum": ["admit", "hold", "reject"] }
+      }
+    },
+    "defect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defect_id",
+        "path",
+        "sha256",
+        "upstream_url",
+        "bound_pilot_id",
+        "countable"
+      ],
+      "properties": {
+        "defect_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "upstream_url": { "type": "string", "format": "uri" },
+        "status": { "enum": ["lead", "case-bound"] },
+        "bound_pilot_id": {
+          "oneOf": [
+            { "$ref": "#/$defs/nonEmptyString" },
+            { "type": "null" }
+          ]
+        },
+        "countable": { "type": "boolean" }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pilot_id",
+        "status",
+        "repository",
+        "commit",
+        "stratum",
+        "acquired_at",
+        "source",
+        "license",
+        "task",
+        "reviews",
+        "defects"
+      ],
+      "properties": {
+        "pilot_id": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "enum": ["pilot-admitted", "hold", "rejected"] },
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
+        },
+        "commit": { "$ref": "#/$defs/commit" },
+        "stratum": { "$ref": "#/$defs/stratum" },
+        "acquired_at": { "type": "string", "format": "date-time" },
+        "source": { "$ref": "#/$defs/source" },
+        "license": { "$ref": "#/$defs/license" },
+        "task": { "$ref": "#/$defs/task" },
+        "reviews": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/review" }
+        },
+        "defects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/defect" }
+        }
+      }
+    }
+  }
+}
