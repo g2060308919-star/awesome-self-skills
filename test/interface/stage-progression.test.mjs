@@ -13,6 +13,7 @@ import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const fixturePath = path.join(repositoryRoot, 'test/fixtures/recovery/grounded-revision.json');
+const integrationFixturePath = path.join(repositoryRoot, 'test/fixtures/views/integration-obligations.json');
 const entryPath = path.join(repositoryRoot, 'src/entry.mjs');
 const stdoutFailurePreload = path.join(
   repositoryRoot, 'test/fixtures/recovery/stdout-write-failure.cjs'
@@ -128,6 +129,60 @@ test('real advanceStrict progresses every fixed artifact stage and atomically pu
       bundle_digest: finished.bundle_digest,
       markdown_path: finished.markdown_path
     });
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('real runner derives the closed responsibility context for an integration view', async () => {
+  const runDirectory = await temporaryRun('integration context');
+  const behaviorViews = JSON.parse(await readFile(integrationFixturePath, 'utf8'));
+  behaviorViews.source_revision = 0;
+  const view = behaviorViews.views[0];
+  const claimIds = [...new Set(view.source_claim_ids)];
+  const sourceDigest = 'd'.repeat(64);
+  const sourcePack = {
+    schema_version: '1.0.0', source_revision: 0, run_scope: view.scope,
+    sources: [{
+      source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
+      authority: 'owner', content: 'Integration contract requirements',
+      content_digest: sourceDigest, scope: view.scope
+    }],
+    locators: [{
+      locator_id: 'locator_integration', source_id: 'source_integration', type: 'text-range',
+      text_range: { start: 0, end: 33 }, content_digest: sourceDigest,
+      extraction_integrity: 'verified'
+    }],
+    source_policy: { rules: [{
+      rule_id: 'rule_integration', source_ids: ['source_integration'], scope: view.scope,
+      authority: 'owner', status: 'effective'
+    }] },
+    decision_records: [], clarification_events: []
+  };
+  const evidenceClaims = {
+    schema_version: '1.0.0', source_revision: 0,
+    claims: claimIds.map((claimId) => ({
+      claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
+      scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
+      source_id: 'source_integration'
+    })),
+    fact_ledger: []
+  };
+  try {
+    await stage(runDirectory, 'source_pack', sourcePack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', evidenceClaims);
+    assert.equal((await advance(runDirectory)).stage, 'behavior_views');
+    await stage(runDirectory, 'behavior_views', behaviorViews);
+    const reply = await advance(runDirectory);
+
+    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.stage, 'case_drafts');
+    const obligations = JSON.parse(await readFile(
+      path.join(runDirectory, 'derived/r000/test-obligations.json'), 'utf8'
+    ));
+    assert.ok(obligations.obligations.length > 0);
+    assert.equal(obligations.obligations.every((/** @type {any} */ obligation) => obligation.kind === 'integration'), true);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }

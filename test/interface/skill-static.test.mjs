@@ -15,7 +15,7 @@ async function text(relativePath) {
 /** @param {string} [directory] @param {string} [prefix] */
 async function installedFiles(directory = skillRoot, prefix = '') {
   const entries = await readdir(directory, { withFileTypes: true });
-  const files = await Promise.all(entries.map(async (entry) => {
+  const files = await Promise.all(entries.map(async (/** @type {any} */ entry) => {
     const relativePath = path.join(prefix, entry.name);
     return entry.isDirectory()
       ? installedFiles(path.join(directory, entry.name), relativePath)
@@ -126,7 +126,7 @@ test('installed artifact excludes development surfaces model calls and network d
   for (const file of files) {
     const segments = file.split(path.sep);
     assert.equal(segments.includes('package.json'), false, `package manifest leaked into installed artifact: ${file}`);
-    assert.equal(segments.some((segment) => ['src', 'test', 'tests', 'benchmark', 'labels', 'bin', 'node_modules'].includes(segment)), false, `development or public surface leaked into installed artifact: ${file}`);
+    assert.equal(segments.some((/** @type {string} */ segment) => ['src', 'test', 'tests', 'benchmark', 'labels', 'bin', 'node_modules'].includes(segment)), false, `development or public surface leaked into installed artifact: ${file}`);
   }
 
   const runner = await text('scripts/test-compiler.mjs');
