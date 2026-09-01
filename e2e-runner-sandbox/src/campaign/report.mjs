@@ -28,7 +28,12 @@ export function renderCampaignMarkdown(summary) {
     );
     lines.push("", "### Scoring dimensions", "");
     for (const [category, ratio] of Object.entries(summary.aggregate.ratios)) {
-      lines.push(`- ${category}: ${percent(ratio)} (weight ${summary.weights?.[category] ?? "n/a"})`);
+      const counts = summary.aggregate.ratioCounts?.[category];
+      lines.push(`- ${category}: ${percent(ratio)} (${counts?.passed ?? "n/a"} / ${counts?.total ?? "n/a"}; weight ${summary.weights?.[category] ?? "n/a"})`);
+    }
+    lines.push("", "### Key Profiles", "");
+    for (const profile of summary.aggregate.keyProfiles ?? []) {
+      lines.push(`- ${profile.profileId}: ${profile.passed} / ${profile.required} passed (${profile.total} observed)`);
     }
     lines.push(
       "",

@@ -45,6 +45,10 @@ function existingCommand(manifest, command, input) {
   return true;
 }
 
+function assistanceCommandKey(kind, eventId) {
+  return `${kind}:${eventId}`;
+}
+
 function pathOverlaps(left, right) {
   const leftToRight = relative(left, right);
   const rightToLeft = relative(right, left);
@@ -68,6 +72,26 @@ async function writeJson(path, value) {
 
 function artifactDigest(artifacts) {
   return digest(artifacts.digests);
+}
+
+const RESPONSIBILITY_DOMAIN_ORDER = Object.freeze([
+  "runner", "host-evidence", "sandbox", "artifact", "assistance", "budget", "campaign-integrity"
+]);
+
+function evaluationResponsibilityDomains(rawEvaluation, bridgeEligibility) {
+  const domains = new Set(rawEvaluation.responsibilityDomains ?? []);
+  const checks = rawEvaluation.checks ?? {};
+  const failed = (name) => checks[name]?.applicable !== false && checks[name]?.passed === false;
+  if (failed("verdictAttribution") || failed("stateAction") || failed("navigation")) domains.add("runner");
+  if (failed("artifact")) domains.add("artifact");
+  if (failed("collaboration")) domains.add("assistance");
+  if (failed("stabilityEfficiency")) domains.add("budget");
+  for (const reason of bridgeEligibility.reasons ?? []) {
+    if (String(reason.code).startsWith("ASSISTANCE_")) domains.add("assistance");
+    else if (String(reason.code).startsWith("METRIC_")) domains.add("budget");
+    else domains.add("host-evidence");
+  }
+  return RESPONSIBILITY_DOMAIN_ORDER.filter((domain) => domains.has(domain));
 }
 
 function publicStatus(manifest) {
@@ -94,6 +118,12 @@ export function createTrialOrchestrator(options) {
   const now = options.now ?? (() => new Date().toISOString());
   const nowMs = options.nowMs ?? Date.now;
   const bundleVersion = bundle.version ?? bundle.bundleVersion ?? "v1";
+  let businessOrigin;
+  try {
+    businessOrigin = new URL(businessUrl).origin;
+  } catch {
+    fail("TRIAL_STATE_INVALID", "Business URL must contain a valid origin");
+  }
 
   function unitFor(unitId) {
     const unit = bundle.executionMatrix.units.find((candidate) => candidate.unitId === unitId);
@@ -107,6 +137,27 @@ export function createTrialOrchestrator(options) {
     return profile;
   }
 
+  async function assertSandboxIdentity(manifest, lockedIdentity = null) {
+    const status = await client.request("status", {});
+    const profile = profileFor(manifest.profileId);
+    const mismatch = status.lifecycle !== "active" || status.runId !== manifest.runId ||
+      status.epoch !== manifest.sandboxEpoch || status.profileId !== manifest.profileId ||
+      (status.fixtureVersion != null && status.fixtureVersion !== profile.fixtureVersion) ||
+      (status.uiVariant != null && status.uiVariant !== profile.uiVariant) ||
+      (lockedIdentity && Object.entries(lockedIdentity).some(([key, value]) => status[key] !== value));
+    if (mismatch) {
+      fail("SANDBOX_RUN_MISMATCH", "Sandbox identity does not match the confirmed Trial");
+    }
+    const identity = {
+      runId: status.runId,
+      epoch: status.epoch,
+      profileId: status.profileId
+    };
+    if (status.fixtureVersion != null) identity.fixtureVersion = status.fixtureVersion;
+    if (status.uiVariant != null) identity.uiVariant = status.uiVariant;
+    return identity;
+  }
+
   function exchangePaths(trialId) {
     const root = join(exchangeRoot, trialId);
     return { root, inputPath: join(root, "runner-input.json"), artifactRoot: join(root, "artifacts") };
@@ -116,13 +167,36 @@ export function createTrialOrchestrator(options) {
     return join(store.paths(trialId).trialDirectory, name);
   }
 
-  async function create(input) {
+  async function sandboxPreparationCommand() {
+    const status = await client.request("status", {});
+    if (status.lifecycle !== "active") return "prepare";
+    const manifests = await store.list();
+    const owner = manifests.find((manifest) =>
+      manifest.runId === status.runId || manifest.reset?.runId === status.runId
+    );
+    if (!owner || owner.state !== "completed" || owner.reset?.succeeded !== true ||
+      owner.reset.runId !== status.runId) {
+      fail("SANDBOX_RUN_MISMATCH", "Active Sandbox run belongs to an unfinished or unknown Trial");
+    }
+    return "reset";
+  }
+
+  async function assertTrialOwnsActiveRun(manifest) {
+    const status = await client.request("status", {});
+    if (!["active", "failed-reset"].includes(status.lifecycle) || status.runId !== manifest.runId ||
+      status.epoch !== manifest.sandboxEpoch) {
+      fail("SANDBOX_RUN_MISMATCH", "Sandbox active run or epoch does not match the Trial being reset");
+    }
+  }
+
+  async function createUnlocked(input) {
     const unit = unitFor(input.unitId);
     const profile = profileFor(unit.profileId);
     if (!input.runner || typeof input.runner.version !== "string" ||
       !/^sha256:[a-f0-9]{64}$/.test(input.runner.digest)) {
       fail("TRIAL_STATE_INVALID", "Runner version and SHA-256 digest are required");
     }
+    await sandboxPreparationCommand();
     const trialId = trialIdFactory();
     const paths = exchangePaths(trialId);
     await mkdir(paths.artifactRoot, { recursive: true, mode: 0o700 });
@@ -153,8 +227,8 @@ export function createTrialOrchestrator(options) {
       createdAt: now()
     });
     const prepared = await store.transact(trialId, initial.revision, async (current) => {
-      const status = await client.request("status", {});
-      const result = await client.request(status.lifecycle === "active" ? "reset" : "prepare", {
+      const prepareCommand = await sandboxPreparationCommand();
+      const result = await client.request(prepareCommand, {
         profileId: profile.profileId
       });
       const materialized = materializeRunnerInput(
@@ -189,6 +263,10 @@ export function createTrialOrchestrator(options) {
       })
     );
     return publicStatus(awaiting);
+  }
+
+  async function create(input) {
+    return store.withGlobalLock(() => createUnlocked(input));
   }
 
   async function status(trialId) {
@@ -226,12 +304,15 @@ export function createTrialOrchestrator(options) {
     if (input.environmentClassification !== "non-production" || typeof input.scope !== "string" || !input.scope) {
       fail("TRIAL_STATE_INVALID", "Exact non-production scope confirmation is required");
     }
+    const sandboxIdentity = await assertSandboxIdentity(current);
     return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
       transitionTrial({
         ...withCommand(manifest, "confirm-scope", input),
         scopeConfirmation: {
           environmentClassification: input.environmentClassification,
           scope: input.scope,
+          allowedOrigins: [businessOrigin],
+          sandboxIdentity,
           confirmedAt: now()
         }
       }, "awaiting_runner", {
@@ -294,7 +375,8 @@ export function createTrialOrchestrator(options) {
 
   async function startAssistance(trialId, input) {
     const current = await store.read(trialId);
-    if (existingCommand(current, "assist-start", input)) return publicStatus(current);
+    const commandKey = assistanceCommandKey("assist-start", input.eventId);
+    if (existingCommand(current, commandKey, input)) return publicStatus(current);
     if (current.state !== "running") fail("TRIAL_STATE_INVALID", "Assistance can start only while a Trial is running");
     const profile = profileFor(current.profileId);
     const expected = profile.assistance.events.find(({ eventId }) => eventId === input.eventId);
@@ -304,7 +386,7 @@ export function createTrialOrchestrator(options) {
     }
     return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
       transitionTrial({
-        ...withCommand(manifest, "assist-start", input),
+        ...withCommand(manifest, commandKey, input),
         pendingAssistance: { eventId: input.eventId, startedAtMs: input.startedAtMs }
       }, "awaiting_assistance", {
         at: now(), reason: `assistance-started:${input.eventId}`, idempotencyKey: input.idempotencyKey
@@ -314,7 +396,8 @@ export function createTrialOrchestrator(options) {
 
   async function completeAssistance(trialId, input) {
     const current = await store.read(trialId);
-    if (existingCommand(current, "assist-complete", input)) return publicStatus(current);
+    const commandKey = assistanceCommandKey("assist-complete", input.eventId);
+    if (existingCommand(current, commandKey, input)) return publicStatus(current);
     if (current.state !== "awaiting_assistance" || current.pendingAssistance?.eventId !== input.eventId) {
       fail("TRIAL_STATE_INVALID", "No matching assistance wait is active");
     }
@@ -343,17 +426,62 @@ export function createTrialOrchestrator(options) {
     };
     return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
       transitionTrial({
-        ...withCommand(manifest, "assist-complete", input),
+        ...withCommand(manifest, commandKey, input),
         pendingAssistance: null,
         assistanceMarks: [...manifest.assistanceMarks, mark],
         timing: {
           ...manifest.timing,
           waitIntervals: [...manifest.timing.waitIntervals, {
-            startMs, endMs, sessionDigest: manifest.hostSession.sessionDigest
+            startMs, endMs, sessionDigest: manifest.hostSession?.sessionDigest ?? null
           }]
         }
       }, "running", {
         at: now(), reason: `assistance-completed:${input.eventId}`, idempotencyKey: input.idempotencyKey
+      })
+    ));
+  }
+
+  async function expireAssistance(trialId, input) {
+    const current = await store.read(trialId);
+    const commandKey = assistanceCommandKey("assist-timeout", input.eventId);
+    if (existingCommand(current, commandKey, input)) return publicStatus(current);
+    if (current.state !== "awaiting_assistance" || current.pendingAssistance?.eventId !== input.eventId) {
+      fail("TRIAL_STATE_INVALID", "No matching assistance wait is active");
+    }
+    const profile = profileFor(current.profileId);
+    const expected = profile.assistance.events.find(({ eventId }) => eventId === input.eventId);
+    const startMs = current.pendingAssistance.startedAtMs;
+    const endMs = Number(input.endedAtMs);
+    const elapsedMs = endMs - startMs;
+    if (!expected || !Number.isFinite(endMs) || elapsedMs <= expected.deadlineMs) {
+      fail("ASSISTANCE_PROVENANCE_MISSING", "Assistance timeout is not beyond the immutable deadline");
+    }
+    const failure = {
+      code: "ASSISTANCE_DEADLINE_EXCEEDED",
+      message: "Assistance exceeded the immutable script deadline"
+    };
+    const mark = {
+      eventId: expected.eventId,
+      trigger: expected.trigger,
+      reply: expected.reply,
+      action: expected.action,
+      provenance: expected.provenance,
+      startedAtMs: startMs,
+      endedAtMs: endMs,
+      elapsedMs,
+      valid: false,
+      failure,
+      hostEventDigests: [],
+      controlEventIds: []
+    };
+    return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
+      transitionTrial({
+        ...withCommand(manifest, commandKey, input),
+        pendingAssistance: null,
+        assistanceMarks: [...manifest.assistanceMarks, mark],
+        releaseEligibility: { eligible: false, reasons: [failure] }
+      }, "running", {
+        at: now(), reason: `assistance-timeout:${input.eventId}`, idempotencyKey: input.idempotencyKey
       })
     ));
   }
@@ -366,6 +494,25 @@ export function createTrialOrchestrator(options) {
       transitionTrial(withCommand(manifest, "resume", input), manifest.blocking.resumeState, {
         at: now(), reason: "operator-resume", reconciled: input.reconciled === true,
         idempotencyKey: input.idempotencyKey
+      })
+    ));
+  }
+
+  async function abandon(trialId, input) {
+    const current = await store.read(trialId);
+    if (existingCommand(current, "abandon", input)) return publicStatus(current);
+    if (typeof input.reason !== "string" || input.reason.trim() === "" || input.reason.length > 512) {
+      fail("TRIAL_STATE_INVALID", "Trial abandonment requires a concise reason");
+    }
+    const failure = { code: "TRIAL_ABANDONED", message: input.reason };
+    return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
+      transitionTrial({
+        ...withCommand(manifest, "abandon", input),
+        pendingAssistance: null,
+        abandonment: { reason: input.reason, recordedAt: now() },
+        releaseEligibility: { eligible: false, reasons: [failure] }
+      }, "abandoned", {
+        at: now(), reason: `trial-abandoned:${input.reason}`, idempotencyKey: input.idempotencyKey
       })
     ));
   }
@@ -394,24 +541,25 @@ export function createTrialOrchestrator(options) {
 
   async function importHost(trialId, input) {
     const current = await store.read(trialId);
+    const normalizedEnvelopeDigest = digest(input.normalized);
     if (current.hostSession?.sessionDigest &&
       input.normalized.sessionDigest !== current.hostSession.sessionDigest) {
       fail("HOST_SESSION_MISMATCH", "Imported Host session does not match the Trial binding");
     }
     if (current.hostEvidence) {
-      if (current.hostEvidence.normalizedEventsDigest !== input.normalized.normalizedEventsDigest) {
+      if (current.hostEvidence.normalizedEnvelopeDigest !== normalizedEnvelopeDigest) {
         fail("TRIAL_ALREADY_BOUND_TO_SESSION", "Trial already has a different Host evidence stream");
       }
-      if (existingCommand(current, "import-host", { normalizedEventsDigest: input.normalized.normalizedEventsDigest, idempotencyKey: input.idempotencyKey })) {
+      if (existingCommand(current, "import-host", { normalizedEnvelopeDigest, idempotencyKey: input.idempotencyKey })) {
         return publicStatus(current);
       }
     }
     if (!["running", "collecting"].includes(current.state)) {
       fail("TRIAL_STATE_INVALID", "Host evidence cannot be imported in the current Trial state");
     }
-    const normalizedPath = privateOutputPath(trialId, "normalized-events.jsonl");
-    await writeAtomic(normalizedPath, input.normalized.events.map((event) => JSON.stringify(event)).join("\n") + "\n");
-    const commandInput = { normalizedEventsDigest: input.normalized.normalizedEventsDigest, idempotencyKey: input.idempotencyKey };
+    const normalizedPath = privateOutputPath(trialId, "normalized-envelope.json");
+    await writeJson(normalizedPath, input.normalized);
+    const commandInput = { normalizedEnvelopeDigest, idempotencyKey: input.idempotencyKey };
     return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
       reviseTrial(withCommand(manifest, "import-host", commandInput), {
         at: now(), reason: "host-evidence-imported", idempotencyKey: input.idempotencyKey,
@@ -419,6 +567,13 @@ export function createTrialOrchestrator(options) {
           hostSession: manifest.hostSession ?? {
             sessionDigest: input.normalized.sessionDigest,
             boundAt: now()
+          },
+          timing: {
+            ...manifest.timing,
+            waitIntervals: manifest.timing.waitIntervals.map((interval) => ({
+              ...interval,
+              sessionDigest: interval.sessionDigest ?? input.normalized.sessionDigest
+            }))
           },
           hostEvidence: {
             adapter: input.normalized.adapter,
@@ -428,6 +583,7 @@ export function createTrialOrchestrator(options) {
             sessionDigest: input.normalized.sessionDigest,
             sourceManifestDigest: input.normalized.sourceManifestDigest,
             normalizedEventsDigest: input.normalized.normalizedEventsDigest,
+            normalizedEnvelopeDigest,
             normalizedPath,
             sourcePackageDirectory: input.sourcePackage?.packageDirectory ?? null
           }
@@ -437,22 +593,17 @@ export function createTrialOrchestrator(options) {
   }
 
   async function normalizedFor(manifest) {
-    const text = await readFile(manifest.hostEvidence.normalizedPath, "utf8");
-    const events = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    if (digest(events) !== manifest.hostEvidence.normalizedEventsDigest) {
-      fail("TRIAL_INPUT_CHANGED", "Normalized Host events changed after import");
+    let normalized;
+    try {
+      normalized = JSON.parse(await readFile(manifest.hostEvidence.normalizedPath, "utf8"));
+    } catch {
+      fail("TRIAL_INPUT_CHANGED", "Normalized Host envelope is missing or invalid");
     }
-    return {
-      schemaVersion: "host-event-v1",
-      adapter: manifest.hostEvidence.adapter,
-      mappingVersion: manifest.hostEvidence.mappingVersion,
-      trustLevel: manifest.hostEvidence.trustLevel,
-      sourceValidated: manifest.hostEvidence.sourceValidated,
-      sessionDigest: manifest.hostEvidence.sessionDigest,
-      sourceManifestDigest: manifest.hostEvidence.sourceManifestDigest,
-      normalizedEventsDigest: manifest.hostEvidence.normalizedEventsDigest,
-      events
-    };
+    if (digest(normalized) !== manifest.hostEvidence.normalizedEnvelopeDigest ||
+      normalized.normalizedEventsDigest !== manifest.hostEvidence.normalizedEventsDigest) {
+      fail("TRIAL_INPUT_CHANGED", "Normalized Host envelope changed after import");
+    }
+    return normalized;
   }
 
   async function collectTruth() {
@@ -467,6 +618,44 @@ export function createTrialOrchestrator(options) {
     return { snapshot, events, outbox, requestTrace, fault, registry };
   }
 
+  async function freezeEvaluationInput(current, input) {
+    await assertSandboxIdentity(current, current.scopeConfirmation?.sandboxIdentity);
+    const truth = await collectTruth();
+    const frozen = {
+      schemaVersion: "trial-evaluation-input-v1",
+      trialId: current.trialId,
+      runId: current.runId,
+      terminalAtMs: nowMs(),
+      truth
+    };
+    const path = privateOutputPath(current.trialId, "evaluation-input.json");
+    await writeJson(path, frozen);
+    const frozenDigest = digest(frozen);
+    return store.transact(current.trialId, current.revision, (manifest) =>
+      transitionTrial({
+        ...withCommand(manifest, "evaluate", input),
+        evaluationInput: { path, digest: frozenDigest, terminalAtMs: frozen.terminalAtMs }
+      }, "evaluating", {
+        at: now(), reason: "evaluation-input-frozen", idempotencyKey: input.idempotencyKey
+      })
+    );
+  }
+
+  async function readEvaluationInput(manifest) {
+    let frozen;
+    try {
+      frozen = JSON.parse(await readFile(manifest.evaluationInput.path, "utf8"));
+    } catch {
+      fail("TRIAL_INPUT_CHANGED", "Frozen evaluation input is missing or invalid");
+    }
+    if (digest(frozen) !== manifest.evaluationInput.digest ||
+      frozen.trialId !== manifest.trialId || frozen.runId !== manifest.runId ||
+      frozen.terminalAtMs !== manifest.evaluationInput.terminalAtMs) {
+      fail("TRIAL_INPUT_CHANGED", "Frozen evaluation input changed after capture");
+    }
+    return frozen;
+  }
+
   async function evaluate(trialId, input) {
     let current = await store.read(trialId);
     if (current.state === "evaluated" && existingCommand(current, "evaluate", input)) {
@@ -475,11 +664,7 @@ export function createTrialOrchestrator(options) {
       return publicStatus(current);
     }
     if (current.state === "collecting") {
-      current = await store.transact(trialId, current.revision, (manifest) =>
-        transitionTrial(withCommand(manifest, "evaluate", input), "evaluating", {
-          at: now(), reason: "evaluation-started", idempotencyKey: input.idempotencyKey
-        })
-      );
+      current = await freezeEvaluationInput(current, input);
     }
     if (current.state !== "evaluating" || !current.hostEvidence || !current.artifacts) {
       fail("TRIAL_STATE_INVALID", "Trial is missing collected artifacts or Host evidence");
@@ -498,7 +683,8 @@ export function createTrialOrchestrator(options) {
         fail("TRIAL_INPUT_CHANGED", "Host source package changed after import");
       }
     }
-    const truth = await collectTruth();
+    const frozenInput = await readEvaluationInput(current);
+    const truth = frozenInput.truth;
     const bridge = bridgeBuilder({
       normalized,
       trial: {
@@ -506,10 +692,11 @@ export function createTrialOrchestrator(options) {
         runId: current.runId,
         sessionDigest: current.hostSession.sessionDigest,
         executionStartedAtMs: current.timing.executionStartedAtMs,
-        terminalAtMs: nowMs(),
+        terminalAtMs: frozenInput.terminalAtMs,
         waitIntervals: current.timing.waitIntervals,
         environmentClassification: current.scopeConfirmation.environmentClassification,
-        scopeConfirmedAtMs: Date.parse(current.scopeConfirmation.confirmedAt)
+        scopeConfirmedAtMs: Date.parse(current.scopeConfirmation.confirmedAt),
+        allowedOrigins: current.scopeConfirmation.allowedOrigins
       },
       assistanceScript: profile.assistance,
       assistanceMarks: input.assistanceMarks ?? current.assistanceMarks,
@@ -559,7 +746,7 @@ export function createTrialOrchestrator(options) {
         sourceManifestDigest: current.hostEvidence.sourceManifestDigest,
         normalizedEventsDigest: current.hostEvidence.normalizedEventsDigest
       },
-      responsibilityDomains: bridge.releaseEligibility.eligible ? [] : ["host-evidence"]
+      responsibilityDomains: evaluationResponsibilityDomains(rawEvaluation, bridge.releaseEligibility)
     };
     const outputValues = {
       hostTrace: bridge.hostTrace,
@@ -592,43 +779,74 @@ export function createTrialOrchestrator(options) {
     ));
   }
 
-  async function reset(trialId, input) {
+  async function resetUnlocked(trialId, input) {
     let current = await store.read(trialId);
     if (current.state === "completed" && existingCommand(current, "reset", input)) return publicStatus(current);
     if (["evaluated", "reset_failed", "invalid", "abandoned"].includes(current.state)) {
+      if (current.state === "reset_failed") {
+        if (!existingCommand(current, "reset", input)) {
+          fail("TRIAL_STATE_INVALID", "Failed reset is missing its persisted intent");
+        }
+      } else {
+        await assertTrialOwnsActiveRun(current);
+      }
       current = await store.transact(trialId, current.revision, (manifest) =>
-        transitionTrial(withCommand(manifest, "reset", input), "resetting", {
+        transitionTrial({
+          ...withCommand(manifest, "reset", input),
+          resetIntent: manifest.resetIntent ?? {
+            operationId: digest({ trialId, command: "reset", inputDigest: commandDigest(input) }),
+            expectedRunId: manifest.runId,
+            expectedEpoch: manifest.sandboxEpoch,
+            targetProfileId: manifest.profileId,
+            startedAt: now()
+          }
+        }, "resetting", {
           at: now(), reason: "reset-started", idempotencyKey: input.idempotencyKey
         })
       );
     }
     if (current.state !== "resetting") fail("TRIAL_STATE_INVALID", "Trial cannot reset in its current state");
-    let resetError = null;
-    const saved = await store.transact(trialId, current.revision, async (manifest) => {
-      try {
-        const result = await client.request("reset", { profileId: manifest.profileId });
-        return transitionTrial({
-          ...manifest,
-          reset: { succeeded: true, runId: result.runId, epoch: result.epoch, completedAt: now() }
-        }, "completed", {
-          at: now(), reason: "sandbox-reset-verified", idempotencyKey: input.idempotencyKey
-        });
-      } catch (error) {
-        resetError = error;
-        return transitionTrial({
+    if (!existingCommand(current, "reset", input) || !current.resetIntent) {
+      fail("TRIAL_STATE_INVALID", "Resetting Trial is missing its persisted intent");
+    }
+    let result;
+    try {
+      result = await client.request("reset", {
+        profileId: current.resetIntent.targetProfileId,
+        operationId: current.resetIntent.operationId,
+        expectedRunId: current.resetIntent.expectedRunId,
+        expectedEpoch: current.resetIntent.expectedEpoch
+      });
+      if (result.lifecycle !== "active" || result.profileId !== current.resetIntent.targetProfileId ||
+        result.epoch !== current.resetIntent.expectedEpoch + 1 ||
+        typeof result.runId !== "string" || result.runId === current.resetIntent.expectedRunId) {
+        fail("SANDBOX_RUN_MISMATCH", "Sandbox reset result does not match the persisted reset intent");
+      }
+    } catch (error) {
+      await store.transact(trialId, current.revision, (manifest) =>
+        transitionTrial({
           ...manifest,
           reset: { succeeded: false, errorCode: error.code ?? "UNKNOWN", failedAt: now() }
         }, "reset_failed", {
           at: now(), reason: "sandbox-reset-failed", idempotencyKey: input.idempotencyKey
-        });
-      }
-    });
-    if (resetError) {
+        })
+      );
       throw new SandboxError("SANDBOX_RESET_FAILED", "Sandbox reset failed and the Trial is fenced", {
-        causeCode: resetError.code ?? "UNKNOWN"
+        causeCode: error.code ?? "UNKNOWN"
       });
     }
-    return publicStatus(saved);
+    return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
+      transitionTrial({
+        ...manifest,
+        reset: { succeeded: true, runId: result.runId, epoch: result.epoch, completedAt: now() }
+      }, "completed", {
+        at: now(), reason: "sandbox-reset-verified", idempotencyKey: input.idempotencyKey
+      })
+    ));
+  }
+
+  async function reset(trialId, input) {
+    return store.withGlobalLock(() => resetUnlocked(trialId, input));
   }
 
   return Object.freeze({
@@ -640,8 +858,10 @@ export function createTrialOrchestrator(options) {
     startRunner,
     startAssistance,
     completeAssistance,
+    expireAssistance,
     markInterrupted,
     resume,
+    abandon,
     collect,
     importHost,
     evaluate,

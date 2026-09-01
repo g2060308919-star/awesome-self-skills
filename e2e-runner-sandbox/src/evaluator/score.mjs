@@ -68,9 +68,12 @@ export function aggregateEvaluationResults(allResults, scoring) {
   const numericResults = allResults.filter((result) => !result.excludeFromNumericScoring);
   const flake = flakeMetrics(numericResults);
   const ratios = {};
+  const ratioCounts = {};
   for (const category of ["verdictAttribution", "stateAction", "navigation", "collaboration", "artifact"]) {
     const applicable = numericResults.map((result) => result.checks[category]).filter((check) => check?.applicable !== false);
-    ratios[category] = ratio(applicable.filter((check) => check.passed).length, applicable.length);
+    const passed = applicable.filter((check) => check.passed).length;
+    ratioCounts[category] = { passed, total: applicable.length };
+    ratios[category] = ratio(passed, applicable.length);
   }
   const efficiencyChecks = numericResults.map((result) => result.checks.stabilityEfficiency)
     .filter((check) => check?.applicable !== false);
@@ -78,7 +81,14 @@ export function aggregateEvaluationResults(allResults, scoring) {
     ...efficiencyChecks.map(({ passed }) => passed),
     ...flake.stabilityChecks.map(({ passed }) => passed)
   ];
-  ratios.stabilityEfficiency = ratio(stabilityPool.filter(Boolean).length, stabilityPool.length);
+  ratioCounts.stabilityEfficiency = {
+    passed: stabilityPool.filter(Boolean).length,
+    total: stabilityPool.length
+  };
+  ratios.stabilityEfficiency = ratio(
+    ratioCounts.stabilityEfficiency.passed,
+    ratioCounts.stabilityEfficiency.total
+  );
   const diagnosticScore = weightedScore(ratios, scoring.weights);
   const gateFailures = [...new Map(allResults.flatMap((result) => result.gateFailures).map(
     (entry) => [entry.id, entry]
@@ -100,10 +110,25 @@ export function aggregateEvaluationResults(allResults, scoring) {
     flakeRate: flake.rate
   };
 
-  const keyProfilesSatisfied = scoring.keyProfiles.every((profileId) => {
+  const metricCounts = {
+    caseVerdictCorrectness: { passed: exactVerdicts, total: expectedVerdicts },
+    faultAttributionRate: { passed: faultCorrect, total: faultExpected },
+    artifactConsistencyRate: { passed: artifactConsistent, total: artifactRequired },
+    flakeRate: { failed: flake.flaky, total: flake.denominator }
+  };
+
+  const keyProfiles = scoring.keyProfiles.map((profileId) => {
     const results = numericResults.filter((result) => result.profileId === profileId);
-    return results.length === scoring.keyProfileRepetitions && results.every((result) => result.completeOraclePassed);
+    return {
+      profileId,
+      passed: results.filter((result) => result.completeOraclePassed).length,
+      total: results.length,
+      required: scoring.keyProfileRepetitions
+    };
   });
+  const keyProfilesSatisfied = keyProfiles.every(({ passed, total, required }) =>
+    total === required && passed === required
+  );
   const eligible = gateFailures.length === 0;
   const releaseDecision = eligible && diagnosticScore >= scoring.thresholds.overall &&
     metrics.caseVerdictCorrectness >= scoring.thresholds.caseVerdictCorrectness &&
@@ -117,9 +142,12 @@ export function aggregateEvaluationResults(allResults, scoring) {
     diagnosticScore,
     releaseDecision,
     ratios,
+    ratioCounts,
     metrics,
+    metricCounts,
     gateFailures,
     keyProfilesSatisfied,
+    keyProfiles,
     stabilityGroups: flake.stabilityChecks
   };
 }

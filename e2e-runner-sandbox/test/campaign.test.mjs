@@ -169,6 +169,12 @@ test("Release plan is gated by a matching passing calibration", async () => {
     bundle, runner, calibrationSummary: { ...calibration, conclusion: "fail" },
     campaignId: "release-bad", createdAt: "2026-09-01T02:00:00.000Z"
   }), { code: "CALIBRATION_REQUIRED" });
+
+  assert.throws(() => createReleasePlan({
+    bundle, runner,
+    calibrationSummary: { ...calibration, completedUnits: 5 },
+    campaignId: "release-tampered", createdAt: "2026-09-01T02:00:00.000Z"
+  }), { code: "CALIBRATION_REQUIRED" });
 });
 
 test("complete consistent Release Matrix aggregates to a passing decision and matching Markdown", async () => {
@@ -183,9 +189,16 @@ test("complete consistent Release Matrix aggregates to a passing decision and ma
   assert.equal(summary.conclusion, "pass");
   assert.equal(summary.completedUnits, 130);
   assert.equal(summary.aggregate.score, 100);
+  assert.deepEqual(summary.aggregate.ratioCounts.verdictAttribution, { passed: 125, total: 125 });
+  assert.deepEqual(summary.aggregate.metricCounts.caseVerdictCorrectness, { passed: 125, total: 125 });
+  assert.ok(summary.aggregate.keyProfiles.every(({ passed, total, required }) =>
+    passed === required && total === required
+  ));
   assert.match(markdown, /Decision: pass/);
   assert.match(markdown, /130 \/ 130/);
   assert.match(markdown, /100(?:\.0)?/);
+  assert.match(markdown, /verdictAttribution: 100\.0% \(125 \/ 125/);
+  assert.match(markdown, /B02: 5 \/ 5/);
 });
 
 test("Release aggregation identifies missing, duplicate, mixed-source, reused, and untrusted Trials", async () => {

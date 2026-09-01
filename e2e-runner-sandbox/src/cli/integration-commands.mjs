@@ -1,31 +1,43 @@
 import { chmod, mkdir, opendir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { aggregateCalibration, aggregateReleaseCampaign } from "../campaign/aggregate.mjs";
 import { campaignStatus, createCalibrationPlan, createReleasePlan, nextCampaignUnit } from "../campaign/planner.mjs";
 import { renderCampaignMarkdown } from "../campaign/report.mjs";
+import { canonicalStringify } from "../bundle/canonical-json.mjs";
+import { sha256Text } from "../bundle/digests.mjs";
 import { loadBundle } from "../bundle/load-bundle.mjs";
 import { normalizeCodexRollout } from "../host-evidence/codex-rollout-adapter.mjs";
-import { createCodexSourcePackage, readHostSourcePackage } from "../host-evidence/source-package.mjs";
+import {
+  createCodexNativeSourcePackage,
+  createCodexSourcePackage,
+  readHostSourcePackage
+} from "../host-evidence/source-package.mjs";
 import { scanPath } from "../evaluator/scan-canary.mjs";
 import { SandboxError } from "../shared/errors.mjs";
 import { createTrialOrchestrator } from "../trial/orchestrator.mjs";
+import { nextTrialActions } from "../trial/state-machine.mjs";
 import { createTrialStore } from "../trial/store.mjs";
 
 export const INTEGRATION_OFFLINE_COMMANDS = new Set([
   "host-export", "host-normalize", "calibration-create", "release-create",
-  "campaign-next", "campaign-status", "campaign-aggregate"
+  "campaign-next", "campaign-status", "campaign-aggregate", "trial-status"
 ]);
 
 export const INTEGRATION_RUNTIME_COMMANDS = new Set([
-  "trial-create", "trial-status", "trial-show-input", "trial-confirm-scope",
-  "trial-start", "trial-bind-session", "trial-assist-start", "trial-assist-complete",
-  "trial-interrupt", "trial-resume", "trial-import-host", "trial-collect",
+  "trial-create", "trial-show-input", "trial-confirm-scope",
+  "trial-start", "trial-bind-session", "trial-assist-start", "trial-assist-complete", "trial-assist-timeout",
+  "trial-interrupt", "trial-resume", "trial-abandon", "trial-import-host", "trial-collect",
   "trial-evaluate", "trial-reset"
 ]);
 
 function fail(code, message) {
   throw new SandboxError(code, message);
+}
+
+function digest(value) {
+  return `sha256:${sha256Text(canonicalStringify(JSON.parse(JSON.stringify(value))))}`;
 }
 
 function safeId(value, label) {
@@ -110,7 +122,6 @@ async function runTrialCommand(context) {
     campaignId: args.campaignId,
     runner: { version: args.runnerVersion, digest: args.runnerDigest }
   });
-  else if (command === "trial-status") result = await orchestrator.status(args.trialDirectory);
   else if (command === "trial-show-input") return orchestrator.showRunnerInput(args.trialDirectory);
   else if (command === "trial-confirm-scope") result = await orchestrator.confirmScope(args.trialDirectory, {
     environmentClassification: args.environmentClassification,
@@ -133,12 +144,18 @@ async function runTrialCommand(context) {
     provenance: args.provenance, endedAtMs: Number(args.endedAtMs),
     idempotencyKey: args.idempotencyKey
   });
+  else if (command === "trial-assist-timeout") result = await orchestrator.expireAssistance(args.trialDirectory, {
+    eventId: args.eventId, endedAtMs: Number(args.endedAtMs), idempotencyKey: args.idempotencyKey
+  });
   else if (command === "trial-interrupt") result = await orchestrator.markInterrupted(args.trialDirectory, {
     uncertainWrites: args.uncertainWrites === "true", reason: args.reason,
     idempotencyKey: args.idempotencyKey
   });
   else if (command === "trial-resume") result = await orchestrator.resume(args.trialDirectory, {
     reconciled: args.reconciled === "true", idempotencyKey: args.idempotencyKey
+  });
+  else if (command === "trial-abandon") result = await orchestrator.abandon(args.trialDirectory, {
+    reason: args.reason, idempotencyKey: args.idempotencyKey
   });
   else if (command === "trial-import-host") {
     const sourcePackage = await readHostSourcePackage(resolve(args.source));
@@ -186,24 +203,40 @@ async function readCampaignTrials(privateRoot, campaignId, includeIncomplete) {
     if (isAbsolute(containment) || containment.startsWith("..")) {
       fail("CAMPAIGN_SOURCE_MISMATCH", "Evaluation output path escapes its private Trial directory");
     }
-    entries.push({ manifest, evaluation: await readJson(evaluationPath, "evaluation") });
+    const evaluation = await readJson(evaluationPath, "evaluation");
+    if (manifest.outputs.evaluation.digest !== digest(evaluation)) {
+      fail("CAMPAIGN_SOURCE_MISMATCH", "Evaluation output digest differs from the Trial manifest");
+    }
+    entries.push({ manifest, evaluation });
   }
   return entries;
 }
 
 async function runOfflineCommand(context) {
   const { command, args } = context.parsed;
+  if (command === "trial-status") {
+    const store = await createTrialStore({ root: resolve(args.privateRoot) });
+    const manifest = await store.read(args.trialDirectory);
+    return safeTrialSummary({ ...manifest, nextActions: nextTrialActions(manifest) });
+  }
   if (command === "host-export") {
-    const created = await createCodexSourcePackage({
+    const common = {
       sourcePath: resolve(args.source),
       outputDirectory: resolve(args.output),
-      trustLevel: args.trustLevel,
       authorization: {
         explicit: true,
         actor: args.authorizationActor,
         authorizedAt: args.authorizedAt
       }
-    });
+    };
+    const created = args.taskId
+      ? await createCodexNativeSourcePackage({
+        ...common,
+        taskId: args.taskId,
+        nativeSessionRoot: context.nativeSessionRoot ??
+          join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "sessions")
+      })
+      : await createCodexSourcePackage({ ...common, trustLevel: "operator-attested" });
     return {
       trustLevel: created.manifest.trustLevel,
       sessionDigest: created.manifest.sessionDigest,

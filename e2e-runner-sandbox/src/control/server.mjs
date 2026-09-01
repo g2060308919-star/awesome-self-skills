@@ -54,7 +54,11 @@ export function createControlServer(options) {
       case "prepare":
         return options.coordinator.prepare(await options.profileResolver(args.profileId));
       case "reset":
-        return options.coordinator.reset(await options.profileResolver(args.profileId));
+        return options.coordinator.reset(await options.profileResolver(args.profileId), args.operationId ? {
+          operationId: args.operationId,
+          expectedRunId: args.expectedRunId,
+          expectedEpoch: args.expectedEpoch
+        } : null);
       case "snapshot":
         if (args.kind === "before") return options.coordinator.status().preSnapshot;
         if (args.kind === "diff") return options.coordinator.diff();

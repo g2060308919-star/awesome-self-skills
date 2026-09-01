@@ -18,19 +18,21 @@ function binding(input) {
   };
 }
 
-function traceEntry(event, trial) {
+function traceEntry(event, trial, trustLevel) {
+  const startedAtMs = Number(event.startedAtMs ?? event.timestampMs);
   const confirmedByTrial = Number.isFinite(trial.scopeConfirmedAtMs) &&
-    event.timestampMs >= trial.scopeConfirmedAtMs;
+    startedAtMs >= trial.scopeConfirmedAtMs;
   return {
     sequence: event.sequence,
+    startedAtMs,
     timestampMs: event.timestampMs,
     actor: event.actor,
-    provenance: ["user", "evaluator"].includes(event.actor) ? "manual-evaluator" : "host-native",
+    provenance: ["user", "evaluator"].includes(event.actor) ? "manual-evaluator" : trustLevel,
     tool: event.tool,
     toolNamespace: event.toolNamespace,
     targetOrigin: event.targetOrigin,
-    environmentClassification: event.environmentClassification ?? trial.environmentClassification ?? null,
-    scopeConfirmed: event.scopeConfirmed ?? confirmedByTrial,
+    environmentClassification: trial.environmentClassification ?? null,
+    scopeConfirmed: confirmedByTrial,
     sourceEventDigest: event.sourceEventDigest,
     ...(event.semanticAction ? { semanticAction: event.semanticAction } : {})
   };
@@ -59,9 +61,10 @@ export function buildHostEvidence(input) {
     provenance: input.normalized.trustLevel,
     adapter: input.normalized.adapter,
     mappingVersion: input.normalized.mappingVersion,
+    integrityIssues: structuredClone(input.normalized.integrityIssues ?? []),
     ...shared,
     entries: input.normalized.events.filter(({ type }) => type === "tool_call_completed")
-      .map((event) => traceEntry(event, input.trial))
+      .map((event) => traceEntry(event, input.trial, input.normalized.trustLevel))
   };
   hostTrace.outputDigest = digest(hostTrace);
   const assistance = {
@@ -82,6 +85,10 @@ export function buildHostEvidence(input) {
   metrics.outputDigest = digest(metrics);
 
   const reasons = [];
+  reasons.push(...(input.normalized.integrityIssues ?? []).map((issue) => ({
+    code: issue.code,
+    message: issue.message
+  })));
   if (input.normalized.trustLevel !== "host-native") {
     reasons.push({ code: "HOST_EXPORT_UNAUTHORIZED", message: "Host evidence trust level is diagnostic only" });
   }
@@ -91,10 +98,25 @@ export function buildHostEvidence(input) {
   if (hostTrace.entries.some(({ tool }) => tool === "unknown")) {
     reasons.push({ code: "HOST_EVENT_UNKNOWN", message: "Host evidence contains an unknown tool" });
   }
-  const firstRunnerBrowser = hostTrace.entries.find(({ actor }) => actor === "runner");
-  if (firstRunnerBrowser && (firstRunnerBrowser.environmentClassification !== "non-production" ||
-    firstRunnerBrowser.scopeConfirmed !== true)) {
+  if (assistanceEvents.some(({ valid }) => valid === false)) {
+    reasons.push({
+      code: "ASSISTANCE_DEADLINE_EXCEEDED",
+      message: "One or more assistance events exceeded the immutable script deadline"
+    });
+  }
+  const unsafeRunnerBrowser = hostTrace.entries.find(({ actor, environmentClassification, scopeConfirmed }) =>
+    actor === "runner" && (environmentClassification !== "non-production" || scopeConfirmed !== true)
+  );
+  if (unsafeRunnerBrowser) {
     reasons.push({ code: "HOST_EVENT_ORDER_INVALID", message: "Runner browser activity preceded safe scope confirmation" });
+  }
+  const allowedOrigins = new Set(input.trial.allowedOrigins ?? []);
+  const outOfScopeTarget = hostTrace.entries.find(({ actor, targetOrigin, tool }) => actor === "runner" && (
+    (targetOrigin !== null && !allowedOrigins.has(targetOrigin)) ||
+    (["navigate_page", "new_page"].includes(tool) && targetOrigin === null)
+  ));
+  if (outOfScopeTarget) {
+    reasons.push({ code: "HOST_TARGET_OUT_OF_SCOPE", message: "Runner browser activity targeted an origin outside the evaluator-locked scope" });
   }
   const missingMetrics = Object.entries(metrics.sources).filter(([, sourceValue]) => !sourceValue.derivable)
     .map(([metric]) => metric);

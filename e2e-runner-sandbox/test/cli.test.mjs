@@ -9,8 +9,11 @@ import { runEvaluatorCli } from "../bin/evaluator.mjs";
 import { createRuntimeFiles } from "../src/control/runtime-files.mjs";
 import { createControlServer } from "../src/control/server.mjs";
 import { loadBundle } from "../src/bundle/load-bundle.mjs";
+import { canonicalStringify } from "../src/bundle/canonical-json.mjs";
+import { sha256Text } from "../src/bundle/digests.mjs";
 import { createBusinessOperations } from "../src/domain/operations.mjs";
 import { createRunCoordinator } from "../src/domain/run-coordinator.mjs";
+import { createTrialStore } from "../src/trial/store.mjs";
 import { profile, setup } from "./helpers/domain-harness.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -28,7 +31,7 @@ async function cliHarness(t) {
   await server.listen();
   t.after(() => server.close());
   t.after(() => rm(runtime.runtimeDirectory, { recursive: true, force: true }));
-  return runtime;
+  return { ...runtime, coordinator: harness.coordinator };
 }
 
 test("evaluator CLI prints one stable JSON result for a control command", async (t) => {
@@ -162,7 +165,7 @@ test("CLI exports and normalizes exactly one explicitly authorized Host session"
   const exportLines = [];
   const exportCode = await runEvaluatorCli([
     "host-export", "--source", sourcePath, "--output", sourcePackage,
-    "--trust", "recorded-fixture", "--authorization-actor", "test-operator",
+    "--authorization-actor", "test-operator",
     "--authorized-at", "2026-09-01T01:00:00.000Z"
   ], { write: (line) => exportLines.push(line) });
   assert.equal(exportCode, 0, exportLines.join("\n"));
@@ -180,8 +183,31 @@ test("CLI exports and normalizes exactly one explicitly authorized Host session"
   assert.equal(JSON.stringify(normalized).includes("snapshot redacted"), false);
 });
 
+test("CLI grants host-native only to an exact task under the controlled session root", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "host-native-cli-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const taskId = "01a04b49-b487-7c73-9469-a9e535f66805";
+  const nativeRoot = join(directory, "sessions");
+  const day = join(nativeRoot, "2026", "09", "02");
+  await mkdir(day, { recursive: true, mode: 0o700 });
+  const sourcePath = join(day, `rollout-${taskId}.jsonl`);
+  await writeFile(sourcePath, `${JSON.stringify({
+    timestamp: "2026-09-02T00:00:00.000Z", type: "session_meta",
+    payload: { id: taskId, cli_version: "0.144.1", source: "codex_app" }
+  })}\n`, { mode: 0o644 });
+  const lines = [];
+  const exitCode = await runEvaluatorCli([
+    "host-export", "--source", sourcePath, "--task-id", taskId,
+    "--output", join(directory, "package"), "--authorization-actor", "task-owner",
+    "--authorized-at", "2026-09-02T00:00:01.000Z"
+  ], { write: (line) => lines.push(line), nativeSessionRoot: nativeRoot });
+  assert.equal(exitCode, 0, lines.join("\n"));
+  assert.equal(JSON.parse(lines[0]).result.trustLevel, "host-native");
+});
+
 test("CLI drives a persisted Trial while keeping private paths and Oracle snapshots off stdout", async (t) => {
   const runtime = await cliHarness(t);
+  await runtime.coordinator.abort();
   const directory = await mkdtemp(join(tmpdir(), "trial-cli-state-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const privateRoot = join(directory, "private", "trials");
@@ -201,12 +227,33 @@ test("CLI drives a persisted Trial while keeping private paths and Oracle snapsh
 
   const statusLines = [];
   const statusCode = await runEvaluatorCli([
-    "trial-status", "--runtime", runtime.runtimeDirectory,
-    "--private-root", privateRoot, "--exchange-root", exchangeRoot,
+    "trial-status", "--private-root", privateRoot,
     "--trial", created.trialId
   ], { write: (line) => statusLines.push(line) });
   assert.equal(statusCode, 0, statusLines.join("\n"));
-  assert.deepEqual(JSON.parse(statusLines[0]).result.nextActions, ["confirm-scope", "status"]);
+  assert.deepEqual(JSON.parse(statusLines[0]).result.nextActions, ["confirm-scope", "abandon", "status"]);
+});
+
+test("trial-status remains available offline after the Sandbox runtime is lost", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "trial-status-offline-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const privateRoot = join(directory, "private", "trials");
+  const store = await createTrialStore({ root: privateRoot });
+  await store.create({
+    schemaVersion: "trial-manifest-v1", trialId: "trial-offline", campaignId: "calibration",
+    profileId: "B01", unitId: "B01-R1", state: "blocked", revision: 0,
+    timeline: [], commands: {}, outputs: {},
+    blocking: { reason: "runtime-lost", resumeState: "running", requiresManualReconciliation: true }
+  });
+  const lines = [];
+  const exitCode = await runEvaluatorCli([
+    "trial-status", "--private-root", privateRoot, "--trial", "trial-offline"
+  ], {
+    write: (line) => lines.push(line),
+    readRuntimeFiles: async () => { throw new Error("runtime must not be read"); }
+  });
+  assert.equal(exitCode, 0, lines.join("\n"));
+  assert.deepEqual(JSON.parse(lines[0]).result.nextActions, ["reconcile", "abandon", "status"]);
 });
 
 test("CLI creates the versioned six-unit calibration plan", async (t) => {
@@ -225,6 +272,44 @@ test("CLI creates the versioned six-unit calibration plan", async (t) => {
   assert.equal(plan.planVersion, "calibration-v1");
 });
 
+test("campaign aggregation rejects an evaluation whose persisted digest no longer matches", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "campaign-evaluation-integrity-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const campaignRoot = join(directory, "campaigns");
+  const privateRoot = join(directory, "private", "trials");
+  const planLines = [];
+  assert.equal(await runEvaluatorCli([
+    "calibration-create", "--campaign-root", campaignRoot,
+    "--campaign-id", "calibration-integrity", "--runner-version", "runner-cli-1",
+    "--runner-digest", `sha256:${"a".repeat(64)}`,
+    "--created-at", "2026-09-01T01:00:00.000Z"
+  ], { write: (line) => planLines.push(line) }), 0, planLines.join("\n"));
+
+  const store = await createTrialStore({ root: privateRoot });
+  const trialId = "trial-integrity";
+  const evaluationPath = join(store.paths(trialId).trialDirectory, "evaluation.json");
+  const originalEvaluation = { profileId: "H01", eligible: true };
+  const evaluationDigest = `sha256:${sha256Text(canonicalStringify(originalEvaluation))}`;
+  await store.create({
+    schemaVersion: "trial-manifest-v1", trialId, campaignId: "calibration-integrity",
+    profileId: "H01", unitId: "H01-R1", state: "completed", revision: 0,
+    outputs: { evaluation: { path: evaluationPath, digest: evaluationDigest } }
+  });
+  await writeFile(evaluationPath, `${JSON.stringify({ ...originalEvaluation, eligible: false })}\n`, {
+    mode: 0o600
+  });
+
+  const lines = [];
+  const exitCode = await runEvaluatorCli([
+    "campaign-aggregate",
+    "--campaign", join(campaignRoot, "calibration-integrity", "campaign-plan.json"),
+    "--private-root", privateRoot,
+    "--output", join(directory, "summary.json")
+  ], { write: (line) => lines.push(line) });
+  assert.equal(exitCode, 4);
+  assert.equal(JSON.parse(lines[0]).error.code, "CAMPAIGN_SOURCE_MISMATCH");
+});
+
 test("CLI errors include stable codes, actionable next steps, and distinct exits", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "host-cli-error-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -232,7 +317,7 @@ test("CLI errors include stable codes, actionable next steps, and distinct exits
   const exitCode = await runEvaluatorCli([
     "host-export",
     "--source", join(packageRoot, "test", "fixtures", "host-evidence", "codex-rollout.jsonl"),
-    "--output", join(directory, "package"), "--trust", "recorded-fixture",
+    "--output", join(directory, "package"),
     "--authorization-actor", "operator", "--authorized-at", "not-a-time"
   ], { write: (line) => lines.push(line) });
   assert.equal(exitCode, 3);

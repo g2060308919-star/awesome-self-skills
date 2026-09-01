@@ -1,19 +1,44 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import {
   createCodexSourcePackage,
-  readHostSourcePackage
+  createCodexNativeSourcePackage,
+  readHostSourcePackage,
+  MAX_SOURCE_BYTES
 } from "../src/host-evidence/source-package.mjs";
 import {
   detectCodexRollout,
   normalizeCodexRollout
 } from "../src/host-evidence/codex-rollout-adapter.mjs";
+import { sha256Text } from "../src/bundle/digests.mjs";
 
 const fixturePath = new URL("./fixtures/host-evidence/codex-rollout.jsonl", import.meta.url);
+
+test("Host source packages remain bounded at 128 MiB", () => {
+  assert.equal(MAX_SOURCE_BYTES, 128 * 1024 * 1024);
+});
+
+test("Host source package creation rejects a file above the bounded size", async (t) => {
+  const directory = await tempDirectory(t);
+  const sourcePath = join(directory, "oversized.jsonl");
+  await writeFile(sourcePath, "", { mode: 0o600 });
+  await truncate(sourcePath, MAX_SOURCE_BYTES + 1);
+
+  await assert.rejects(createCodexSourcePackage({
+    sourcePath,
+    outputDirectory: join(directory, "source-package"),
+    authorization: {
+      explicit: true,
+      actor: "fixture-author",
+      authorizedAt: "2026-09-01T02:00:00.000Z"
+    },
+    trustLevel: "recorded-fixture"
+  }), { code: "HOST_EXPORT_UNSUPPORTED" });
+});
 
 async function tempDirectory(t) {
   const directory = await mkdtemp(join(tmpdir(), "host-evidence-adapter-"));
@@ -72,6 +97,53 @@ test("export requires explicit authorization and a supported trust level", async
   await assert.rejects(createPackage(t, { trustLevel: "claimed-native" }), {
     code: "HOST_EXPORT_UNSUPPORTED"
   });
+  await assert.rejects(createPackage(t, { trustLevel: "host-native" }), {
+    code: "HOST_EXPORT_UNAUTHORIZED"
+  });
+});
+
+test("only the controlled exact-task exporter can establish host-native provenance", async (t) => {
+  const directory = await tempDirectory(t);
+  const taskId = "01a04b49-b487-7c73-9469-a9e535f66805";
+  const nativeRoot = join(directory, "sessions");
+  const day = join(nativeRoot, "2026", "09", "02");
+  await import("node:fs/promises").then(({ mkdir }) => mkdir(day, { recursive: true, mode: 0o700 }));
+  const sourcePath = join(day, `rollout-2026-09-02T00-00-00-${taskId}.jsonl`);
+  await writeFile(sourcePath, `${JSON.stringify({
+    timestamp: "2026-09-02T00:00:00.000Z",
+    type: "session_meta",
+    payload: { id: taskId, cli_version: "0.144.1", source: "codex_app" }
+  })}\n`, { mode: 0o600 });
+
+  const created = await createCodexNativeSourcePackage({
+    sourcePath,
+    nativeSessionRoot: nativeRoot,
+    taskId,
+    outputDirectory: join(directory, "native-package"),
+    authorization: {
+      explicit: true,
+      actor: "task-owner",
+      authorizedAt: "2026-09-02T00:00:01.000Z"
+    }
+  });
+  const source = await readHostSourcePackage(created.packageDirectory);
+  assert.equal(source.manifest.trustLevel, "host-native");
+  assert.equal(source.manifest.nativeSource.verified, true);
+  assert.match(source.manifest.nativeSource.taskIdDigest, /^sha256:[a-f0-9]{64}$/);
+
+  const outsidePath = join(directory, `copy-${taskId}.jsonl`);
+  await writeFile(outsidePath, await readFile(sourcePath), { mode: 0o600 });
+  await assert.rejects(createCodexNativeSourcePackage({
+    sourcePath: outsidePath,
+    nativeSessionRoot: nativeRoot,
+    taskId,
+    outputDirectory: join(directory, "forged-package"),
+    authorization: {
+      explicit: true,
+      actor: "task-owner",
+      authorizedAt: "2026-09-02T00:00:01.000Z"
+    }
+  }), { code: "HOST_EXPORT_UNAUTHORIZED" });
 });
 
 test("repeating the same explicit export is idempotent and never rewrites another package", async (t) => {
@@ -96,6 +168,16 @@ test("repeating the same explicit export is idempotent and never rewrites anothe
 test("package reader rejects source tampering", async (t) => {
   const created = await createPackage(t);
   await writeFile(created.sourcePath, "{}\n", "utf8");
+  await assert.rejects(readHostSourcePackage(created.packageDirectory), {
+    code: "HOST_EXPORT_INTEGRITY_FAILED"
+  });
+});
+
+test("package reader rejects files not declared by the source manifest", async (t) => {
+  const created = await createPackage(t);
+  await writeFile(join(created.packageDirectory, "undeclared.txt"), "not part of the package", {
+    mode: 0o600
+  });
   await assert.rejects(readHostSourcePackage(created.packageDirectory), {
     code: "HOST_EXPORT_INTEGRITY_FAILED"
   });
@@ -149,7 +231,7 @@ test("adapter preserves user and Runner message provenance as digests without ra
   await writeFile(sourcePath, [
     { timestamp: "2026-09-01T01:00:00.000Z", type: "session_meta", payload: { id: "session-messages", cli_version: "1", source: "codex_app" } },
     { timestamp: "2026-09-01T01:00:01.000Z", type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Please log in manually" }] } },
-    { timestamp: "2026-09-01T01:00:02.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "done" }] } }
+    { timestamp: "2026-09-01T01:00:02.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "done\n" }] } }
   ].map((line) => JSON.stringify(line)).join("\n") + "\n", "utf8");
   const created = await createPackage(t, { sourcePath });
   const source = await readHostSourcePackage(created.packageDirectory);
@@ -159,7 +241,64 @@ test("adapter preserves user and Runner message provenance as digests without ra
     ["runner", "message_completed"], ["user", "message_completed"]
   ]);
   assert.ok(normalized.events.every(({ contentDigest }) => /^sha256:[a-f0-9]{64}$/.test(contentDigest)));
+  assert.equal(normalized.events[1].contentDigest, `sha256:${sha256Text("done")}`);
   assert.equal(JSON.stringify(normalized).includes("Please log in manually"), false);
+});
+
+test("adapter recognizes current Codex metadata and collaborator messages without exposing content", async (t) => {
+  const directory = await tempDirectory(t);
+  const sourcePath = join(directory, "current-metadata.jsonl");
+  await writeFile(sourcePath, [
+    { timestamp: "2026-09-01T01:00:00.000Z", type: "session_meta", payload: { id: "session-current", cli_version: "0.144.1", source: "codex_app" } },
+    { timestamp: "2026-09-01T01:00:01.000Z", type: "world_state", payload: { full: true, state: {} } },
+    { timestamp: "2026-09-01T01:00:02.000Z", type: "inter_agent_communication_metadata", payload: { trigger_turn: true } },
+    { timestamp: "2026-09-01T01:00:03.000Z", type: "response_item", payload: { type: "agent_message", author: "agent-a", recipient: "agent-b", content: [{ type: "input_text", text: "private collaborator message" }] } }
+  ].map((line) => JSON.stringify(line)).join("\n") + "\n", "utf8");
+  const created = await createPackage(t, { sourcePath });
+  const source = await readHostSourcePackage(created.packageDirectory);
+  const normalized = await normalizeCodexRollout(source);
+
+  assert.equal(normalized.events.length, 1);
+  assert.equal(normalized.events[0].actor, "collaborator");
+  assert.equal(normalized.events[0].type, "message_completed");
+  assert.equal(JSON.stringify(normalized).includes("private collaborator message"), false);
+});
+
+test("a trailing active Host call is retained as an integrity issue instead of release evidence", async (t) => {
+  const directory = await tempDirectory(t);
+  const sourcePath = join(directory, "active-session.jsonl");
+  await writeFile(sourcePath, [
+    { timestamp: "2026-09-01T01:00:00.000Z", type: "session_meta", payload: { id: "session-active", cli_version: "0.144.1", source: "codex_app" } },
+    { timestamp: "2026-09-01T01:00:01.000Z", type: "response_item", payload: { type: "custom_tool_call", call_id: "still-running", name: "exec", input: "redacted" } }
+  ].map((line) => JSON.stringify(line)).join("\n") + "\n", "utf8");
+  const created = await createPackage(t, { sourcePath });
+  const source = await readHostSourcePackage(created.packageDirectory);
+  const normalized = await normalizeCodexRollout(source);
+
+  assert.deepEqual(normalized.integrityIssues, [{
+    code: "HOST_EVENT_INCOMPLETE",
+    message: "Host export ended with 1 incomplete tool call"
+  }]);
+  assert.equal(normalized.events.length, 0);
+});
+
+test("security-relevant Computer and Web events are retained as unknown evidence", async (t) => {
+  const directory = await tempDirectory(t);
+  const sourcePath = join(directory, "alternate-tools.jsonl");
+  await writeFile(sourcePath, [
+    { timestamp: "2026-09-01T01:00:00.000Z", type: "session_meta", payload: { id: "session-alternate", cli_version: "0.144.1", source: "codex_app" } },
+    { timestamp: "2026-09-01T01:00:01.000Z", type: "response_item", payload: { type: "web_search_call", id: "search-1", status: "completed", query: "private" } },
+    { timestamp: "2026-09-01T01:00:02.000Z", type: "response_item", payload: { type: "computer_call", call_id: "computer-1", action: { type: "click", x: 1, y: 2 } } },
+    { timestamp: "2026-09-01T01:00:03.000Z", type: "response_item", payload: { type: "computer_call_output", call_id: "computer-1", output: "redacted" } }
+  ].map((line) => JSON.stringify(line)).join("\n") + "\n", "utf8");
+  const created = await createPackage(t, { sourcePath });
+  const normalized = await normalizeCodexRollout(await readHostSourcePackage(created.packageDirectory));
+
+  assert.equal(normalized.events.length, 3);
+  assert.ok(normalized.events.every(({ tool, toolNamespace }) =>
+    tool === "unknown" && toolNamespace === "unknown"
+  ));
+  assert.ok(normalized.events.every(({ startedAtMs, timestampMs }) => startedAtMs === timestampMs));
 });
 
 test("a recognized rollout with an unknown event fails with HOST_EVENT_UNKNOWN", async (t) => {

@@ -21,7 +21,7 @@ node bin/evaluator.mjs snapshot --kind before --runtime <runtime-directory>
 
 The service must remain bound to the printed `127.0.0.1` URL. Never add a public listener, tunnel, or reverse proxy.
 
-For formal evaluation, create `trial-results/evaluation-private/trials` and `trial-results/runner-exchange` only through `trial-create`; do not manually edit their manifests. `trial-create` prepares the selected precommitted unit, materializes its run-bound input and records the pre-state. Use `trial-status` after any interruption and follow its `nextActions`.
+For formal evaluation, create `trial-results/evaluation-private/trials` and `trial-results/runner-exchange` only through `trial-create`; do not manually edit their manifests. `trial-create` prepares the selected precommitted unit, materializes its run-bound input and records the pre-state. Use the offline `trial-status --private-root <private-root> --trial <trial-id>` after any interruption and follow its `nextActions`; it does not require a live Sandbox runtime.
 
 ## B01 single Trial
 
@@ -30,7 +30,7 @@ For formal evaluation, create `trial-results/evaluation-private/trials` and `tri
 3. Run `trial-show-input`; give only that result to the Runner.
 4. Run `trial-start` with the execution start epoch milliseconds. This command records authorization; it does not open or operate a browser.
 5. Complete the scripted manual login as described below, using `trial-assist-start` and `trial-assist-complete` around the wait.
-6. When the Runner has written `report.md`, `execution-log.json` and `evidence/`, explicitly export exactly the current Host rollout with `host-export`. Do not enumerate `~/.codex/sessions` or import another task.
+6. When the Runner has written `report.md`, `execution-log.json` and `evidence/`, explicitly export exactly the current native Host rollout with `host-export --task-id <exact-authorized-task-id>`. Do not enumerate `~/.codex/sessions` or import another task. Omitting `--task-id` deliberately creates only diagnostic `operator-attested` evidence; callers cannot assign `host-native` themselves.
 7. Run `trial-import-host`, `trial-collect`, `trial-evaluate`, then `trial-reset`, each with a stable idempotency key.
 
 `trial-evaluate` revalidates the Host source package and collected artifact digests before producing private `host-trace.json`, `assistance.json`, `metrics.json` and `evaluation.json`. Only an unmodified `host-native` source can be release-eligible.
@@ -50,6 +50,8 @@ Manual account selection, re-login after B12 session expiry, and account switchi
 Use only the immutable assistance events attached to the selected profile. Wait until the exact trigger is reported, send the exact scripted reply, record evaluator provenance and wait duration, and exclude that valid wait from active elapsed time. Do not improvise target identifiers, environment classification, expected results, permissions, or recovery instructions.
 
 Start the wait before revealing the scripted response. Complete it with the exact event ID, trigger, reply, action and provenance from the immutable script. The Orchestrator validates content and deadline, merges overlapping wait intervals for active-time derivation, and later cross-checks the Host messages plus Sandbox control events. External-action claims without both sources fail closed.
+
+If the person completes the action only after the immutable deadline, do not invent an earlier timestamp. Use `trial-assist-timeout` with the actual end time. The Trial returns to `running` so diagnostic artifacts can be collected and the Sandbox can be reset, but the expired interval is not excluded from active time and the Trial remains ineligible for release evidence.
 
 For B06 and B16, the Runner submits one request and pauses. The evaluator performs the designated external approval through the private control plane; it is deliberately not a Runner-observed approver click:
 
@@ -72,8 +74,9 @@ Create `calibration-v1` once for the exact Runner/component set. Run `H01-R1`, `
 - Before `running`, rerun only the same idempotent Trial command after checking `trial-status`.
 - During `running`, run `trial-interrupt --uncertain-writes true`; do not restart the Runner. Re-observe Sandbox state, explicitly reconcile the uncertain write, then use `trial-resume --reconciled true`.
 - During `collecting` or `evaluating`, the same idempotency key is safe only while all source digests are unchanged.
-- After `evaluated`, continue with `trial-reset`.
-- `reset_failed` fences the Sandbox. Do not create another Trial until reset is repaired and verified.
+- After `evaluated`, continue with `trial-reset`. The Trial persists a reset intent before changing the Sandbox, so rerunning the exact command and idempotency key safely reconciles a lost response without installing another fixture.
+- `reset_failed` fences the Sandbox. Rerun only the same `trial-reset` command and idempotency key; the control plane uses that intent for explicit fixture recovery. Do not create another Trial until the recovered reset is verified as `completed`.
+- If a locked source or component version must change, use `trial-abandon` with the factual reason and then `trial-reset`; never rewrite the existing Trial manifest or fixed evidence.
 
 Resume commands update the audit state only. They never call Chrome, replay a form submission or repeat an external action.
 

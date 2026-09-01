@@ -4,9 +4,9 @@
 
 Each owner-only `trial-manifest-v1` uses atomic replacement, a SHA-256 self-digest, monotonic revision, timeline and Trial lock. A terminated-process lock can be recovered; a live concurrent lock is rejected. The private Trial root and Runner exchange root must not overlap.
 
-The main states are `created → prepared → awaiting_scope_confirmation → awaiting_runner → running → collecting → evaluating → evaluated → resetting → completed`. Auxiliary states are `awaiting_assistance`, `blocked`, `invalid`, `reset_failed` and `abandoned`. Commands record input digests and idempotency keys. Collected artifacts, normalized Host events and materialized input are rehashed before later steps.
+The main states are `created → prepared → awaiting_scope_confirmation → awaiting_runner → running → collecting → evaluating → evaluated → resetting → completed`. Auxiliary states are `awaiting_assistance`, `blocked`, `invalid`, `reset_failed` and `abandoned`. Commands record input digests and idempotency keys. Scope confirmation freezes the normalized business origin and current Sandbox run, epoch, profile and available fixture/UI identity; evaluation rechecks that identity before reading private truth. Collected artifacts, normalized Host events and materialized input are rehashed before later steps.
 
-An interrupted `running` Trial is blocked. If a write may have been submitted, resume requires explicit reconciliation. Resume changes the manifest only; it never invokes a Runner, browser or business mutation. `reset_failed` fences subsequent work.
+An interrupted `running` Trial is blocked. If a write may have been submitted, resume requires explicit reconciliation. Resume changes the manifest only; it never invokes a Runner, browser or business mutation. Reset first persists an intent bound to the old run/epoch and command idempotency key. Repeating that exact command reconciles a lost successful response or explicitly recovers a `failed-reset`; changed reset inputs fail closed. Until this succeeds, `reset_failed` fences subsequent work.
 
 ## Calibration
 

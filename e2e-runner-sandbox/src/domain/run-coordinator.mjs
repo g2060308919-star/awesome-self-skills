@@ -31,6 +31,7 @@ export function createRunCoordinator(options = {}) {
   let businessRequestSequence = 0;
   let abortController = new AbortController();
   let commitQueue = Promise.resolve();
+  let lastResetOperation = null;
 
   function publicRun() {
     return {
@@ -58,7 +59,29 @@ export function createRunCoordinator(options = {}) {
     return pending;
   }
 
-  async function install(profile, mode) {
+  function resetOperationFor(profile, input) {
+    if (!input?.operationId) return null;
+    if (typeof input.operationId !== "string" || !input.operationId ||
+      typeof input.expectedRunId !== "string" || !input.expectedRunId ||
+      !Number.isInteger(input.expectedEpoch) || input.expectedEpoch < 0) {
+      throw new SandboxError("RESET_INTENT_INVALID", "Reset intent is incomplete", {}, 400);
+    }
+    return {
+      operationId: input.operationId,
+      expectedRunId: input.expectedRunId,
+      expectedEpoch: input.expectedEpoch,
+      profileId: profile.profileId
+    };
+  }
+
+  function sameResetOperation(left, right) {
+    return left.operationId === right.operationId &&
+      left.expectedRunId === right.expectedRunId &&
+      left.expectedEpoch === right.expectedEpoch &&
+      left.profileId === right.profileId;
+  }
+
+  async function install(profile, mode, resetOperation = null) {
     if (lifecycle === "failed-reset" && mode !== "recovering") {
       throw unavailable(lifecycle);
     }
@@ -76,6 +99,8 @@ export function createRunCoordinator(options = {}) {
     abortController = new AbortController();
     const nextRunId = runIdFactory();
     const nextEpoch = epoch + 1;
+    if (resetOperation) lastResetOperation = { ...resetOperation, outcome: "in-progress" };
+    else if (mode !== "recovering") lastResetOperation = null;
 
     try {
       const candidate = normalizeFixture(profile, nextRunId);
@@ -98,6 +123,14 @@ export function createRunCoordinator(options = {}) {
       businessRequestSequence = 0;
       lifecycle = "active";
       acceptingBusinessRequests = true;
+      if (resetOperation) {
+        lastResetOperation = {
+          ...resetOperation,
+          outcome: "succeeded",
+          resultRunId: runId,
+          resultEpoch: epoch
+        };
+      }
       return publicRun();
     } catch (error) {
       state = null;
@@ -109,6 +142,7 @@ export function createRunCoordinator(options = {}) {
       businessRequestSequence = 0;
       lifecycle = "failed-reset";
       acceptingBusinessRequests = false;
+      if (resetOperation) lastResetOperation = { ...resetOperation, outcome: "failed" };
       throw new SandboxError(
         "RESET_FAILED",
         "Sandbox fixture installation failed",
@@ -123,8 +157,29 @@ export function createRunCoordinator(options = {}) {
       return install(profile, "preparing");
     },
 
-    reset(profile) {
-      return install(profile, "resetting");
+    reset(profile, input = null) {
+      const operation = resetOperationFor(profile, input);
+      if (!operation) return install(profile, "resetting");
+      if (lastResetOperation?.operationId === operation.operationId) {
+        if (!sameResetOperation(lastResetOperation, operation)) {
+          throw new SandboxError("RESET_INTENT_MISMATCH", "Repeated reset intent changed its binding", {}, 409);
+        }
+        if (lastResetOperation.outcome === "succeeded") {
+          if (lifecycle !== "active" || runId !== lastResetOperation.resultRunId ||
+            epoch !== lastResetOperation.resultEpoch) {
+            throw new SandboxError("RESET_INTENT_MISMATCH", "Completed reset no longer matches the active Sandbox", {}, 409);
+          }
+          return Promise.resolve(publicRun());
+        }
+        if (lastResetOperation.outcome === "failed" && lifecycle === "failed-reset") {
+          return install(profile, "recovering", operation);
+        }
+        throw new SandboxError("RESET_INTENT_MISMATCH", "Reset intent is not safely repeatable", {}, 409);
+      }
+      if (lifecycle !== "active" || runId !== operation.expectedRunId || epoch !== operation.expectedEpoch) {
+        throw new SandboxError("RESET_INTENT_MISMATCH", "Reset intent does not match the active Sandbox", {}, 409);
+      }
+      return install(profile, "resetting", operation);
     },
 
     recoverPrepare(profile) {

@@ -101,6 +101,53 @@ test("failed reset fences business operations until explicit recovery succeeds",
   assert.equal(recovered.runId, "run-c");
 });
 
+test("a reset operation is idempotent after its response is lost", async () => {
+  const coordinator = coordinatorWithIds("run-a", "run-b", "run-c");
+  await coordinator.prepare(profile());
+  const intent = {
+    operationId: "trial-reset-1",
+    expectedRunId: "run-a",
+    expectedEpoch: 1
+  };
+
+  const first = await coordinator.reset(profile(), intent);
+  const repeated = await coordinator.reset(profile(), intent);
+
+  assert.equal(first.runId, "run-b");
+  assert.equal(repeated.runId, "run-b");
+  assert.equal(repeated.epoch, 2);
+});
+
+test("repeating the same reset intent explicitly recovers failed-reset", async () => {
+  let canaryCalls = 0;
+  const coordinator = createRunCoordinator({
+    clock: createLogicalClock("2026-08-31T00:00:00.000Z"),
+    runIdFactory: (() => {
+      const ids = ["run-a", "run-b", "run-c"];
+      return () => ids.shift();
+    })(),
+    canaryFactory: (prefix) => {
+      canaryCalls += 1;
+      if (canaryCalls === 3) throw new Error("one-shot fixture failure");
+      return { canaryId: `${prefix}-${canaryCalls}`, prefix: `${prefix}_`, token: `${prefix}_${canaryCalls}_END` };
+    }
+  });
+  await coordinator.prepare(profile());
+  const intent = {
+    operationId: "trial-reset-recover",
+    expectedRunId: "run-a",
+    expectedEpoch: 1
+  };
+
+  await assert.rejects(coordinator.reset(profile(), intent), { code: "RESET_FAILED" });
+  assert.equal(coordinator.status().lifecycle, "failed-reset");
+
+  const recovered = await coordinator.reset(profile(), intent);
+  assert.equal(recovered.lifecycle, "active");
+  assert.equal(recovered.runId, "run-c");
+  assert.equal(recovered.epoch, 2);
+});
+
 test("reset removes sessions, events, outbox, jobs, and one-shot fault state", async () => {
   const coordinator = coordinatorWithIds("run-a", "run-b");
   await coordinator.prepare(profile({ fault: { id: "transient", consumed: true } }));

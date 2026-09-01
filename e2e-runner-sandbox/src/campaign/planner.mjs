@@ -86,12 +86,13 @@ export function createReleasePlan(input) {
   const expectedComponents = componentDigests(input.bundle);
   const expectedHost = hostEvidenceContract(input.hostEvidence);
   const calibration = input.calibrationSummary;
+  const { summaryDigest, ...calibrationBody } = calibration ?? {};
   if (!calibration || calibration.kind !== "calibration" || calibration.conclusion !== "pass" ||
     !same(calibration.runner, input.runner) ||
     calibration.bundleVersion !== input.bundle.bundleVersion ||
     !same(calibration.componentDigests, expectedComponents) ||
     !same(calibration.hostEvidence, expectedHost) ||
-    !/^sha256:[a-f0-9]{64}$/.test(calibration.summaryDigest ?? "")) {
+    !/^sha256:[a-f0-9]{64}$/.test(summaryDigest ?? "") || summaryDigest !== digest(calibrationBody)) {
     fail("CALIBRATION_REQUIRED", "A matching passing calibration is required before Release Matrix creation");
   }
   return finalizePlan({

@@ -6,6 +6,8 @@ V1 imports one explicitly named Codex rollout JSONL. The exporter never discover
 
 Trust levels are `host-native`, `recorded-fixture`, `operator-attested`, `runner-self-reported` and `untrusted`. Only a validated `host-native` package may qualify a real Trial. The other levels intentionally remain diagnostic.
 
+`host-native` is assigned only by the controlled exact-task exporter after it verifies a regular rollout beneath the native Codex session root, the exact authorized task ID in both filename and session metadata, and package digests. The exported package copy is owner-only. Arbitrary file export defaults to `operator-attested`; there is no caller-controlled trust flag.
+
 ## Adapter and normalization
 
 `codex-rollout-v1` recognizes actual Codex `session_meta`, message and tool call/output records. Calls are paired by call ID, timestamps and sequence must be ordered, and exactly one session boundary is required. It handles both `function_call` and `custom_tool_call` record families.

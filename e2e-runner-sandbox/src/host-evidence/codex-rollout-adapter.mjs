@@ -12,11 +12,12 @@ import {
 } from "./contracts.mjs";
 
 const KNOWN_TOP_LEVEL_TYPES = new Set([
-  "session_meta", "response_item", "event_msg", "turn_context", "compacted", "ghost_snapshot"
+  "session_meta", "response_item", "event_msg", "turn_context", "compacted", "ghost_snapshot",
+  "world_state", "inter_agent_communication_metadata"
 ]);
 const KNOWN_RESPONSE_ITEM_TYPES = new Set([
   "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output",
-  "message", "reasoning", "web_search_call", "computer_call", "computer_call_output"
+  "message", "agent_message", "reasoning", "web_search_call", "computer_call", "computer_call_output"
 ]);
 
 function digest(value) {
@@ -72,8 +73,13 @@ function messageText(payload) {
   }).filter(Boolean).join("\n");
 }
 
+function canonicalMessageText(payload) {
+  const normalized = messageText(payload).replace(/\r\n?/g, "\n");
+  return normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+}
+
 function normalizeMessage(entry, sequence, sessionDigest, actor) {
-  const text = messageText(entry.record.payload ?? {});
+  const text = canonicalMessageText(entry.record.payload ?? {});
   return {
     schemaVersion: HOST_EVENT_SCHEMA_VERSION,
     sequence,
@@ -126,6 +132,7 @@ function normalizeCompletedCall(call, output, sequence, sessionDigest) {
     sequence,
     eventId: digest(`${call.payload.call_id}:${call.sourceSequence}`).slice(7, 31),
     sessionDigest,
+    startedAtMs: Date.parse(call.record.timestamp),
     timestampMs: Date.parse(output.record.timestamp),
     actor: "runner",
     type: "tool_call_completed",
@@ -138,6 +145,30 @@ function normalizeCompletedCall(call, output, sequence, sessionDigest) {
     scopeConfirmed: Object.hasOwn(argumentsValue, "scopeConfirmed")
       ? argumentsValue.scopeConfirmed === true : null,
     sourceEventDigest: digest([call.line, output.line]),
+    mappingVersion: TOOL_MAPPING_VERSION
+  };
+}
+
+function normalizeUnsupportedToolEvent(entry, sequence, sessionDigest) {
+  const payload = entry.record.payload ?? {};
+  const timestampMs = Date.parse(entry.record.timestamp);
+  return {
+    schemaVersion: HOST_EVENT_SCHEMA_VERSION,
+    sequence,
+    eventId: digest(`unsupported:${entry.sourceSequence}`).slice(7, 31),
+    sessionDigest,
+    startedAtMs: timestampMs,
+    timestampMs,
+    actor: "runner",
+    type: "tool_call_completed",
+    tool: "unknown",
+    toolNamespace: "unknown",
+    argumentsDigest: digest(canonicalStringify(payload)),
+    resultDigest: digest(canonicalStringify(payload)),
+    targetOrigin: null,
+    environmentClassification: null,
+    scopeConfirmed: null,
+    sourceEventDigest: digest(entry.line),
     mappingVersion: TOOL_MAPPING_VERSION
   };
 }
@@ -182,14 +213,19 @@ export async function normalizeCodexRollout(source) {
     if (!KNOWN_RESPONSE_ITEM_TYPES.has(payloadType)) {
       fail("HOST_EVENT_UNKNOWN", "Codex rollout contains an unknown response item");
     }
-    if (payloadType === "message") {
+    if (["message", "agent_message"].includes(payloadType)) {
       const role = entry.record.payload.role;
       events.push(normalizeMessage(
         entry,
         events.length + 1,
         expectedSessionDigest,
-        role === "assistant" ? "runner" : role === "user" ? "user" : "evaluator"
+        payloadType === "agent_message" ? "collaborator" :
+          role === "assistant" ? "runner" : role === "user" ? "user" : "evaluator"
       ));
+      continue;
+    }
+    if (["web_search_call", "computer_call", "computer_call_output"].includes(payloadType)) {
+      events.push(normalizeUnsupportedToolEvent(entry, events.length + 1, expectedSessionDigest));
       continue;
     }
     if (["function_call", "custom_tool_call"].includes(payloadType)) {
@@ -213,9 +249,10 @@ export async function normalizeCodexRollout(source) {
       ));
     }
   }
-  if (pending.size > 0) {
-    fail("HOST_EVENT_ORDER_INVALID", "Host export ended with incomplete tool calls");
-  }
+  const integrityIssues = pending.size > 0 ? [{
+    code: "HOST_EVENT_INCOMPLETE",
+    message: `Host export ended with ${pending.size} incomplete tool call${pending.size === 1 ? "" : "s"}`
+  }] : [];
   const normalizedEventsDigest = digest(events);
   return {
     schemaVersion: HOST_EVENT_SCHEMA_VERSION,
@@ -226,6 +263,7 @@ export async function normalizeCodexRollout(source) {
     sessionDigest: expectedSessionDigest,
     sourceManifestDigest: source.manifest.sourceManifestDigest,
     normalizedEventsDigest,
+    integrityIssues,
     events
   };
 }

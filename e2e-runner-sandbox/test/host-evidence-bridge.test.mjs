@@ -38,7 +38,7 @@ function normalized(overrides = {}) {
       },
       {
         schemaVersion: "host-event-v1", sequence: 3, eventId: "snapshot-1",
-        sessionDigest, timestampMs: 5000, actor: "runner", type: "tool_call_completed",
+        sessionDigest, startedAtMs: 4900, timestampMs: 5000, actor: "runner", type: "tool_call_completed",
         tool: "take_snapshot", toolNamespace: "chrome-devtools-mcp",
         argumentsDigest: textDigest("same"), resultDigest: textDigest("page-a"),
         targetOrigin: "http://127.0.0.1:43100", environmentClassification: "non-production",
@@ -46,7 +46,7 @@ function normalized(overrides = {}) {
       },
       {
         schemaVersion: "host-event-v1", sequence: 4, eventId: "snapshot-2",
-        sessionDigest, timestampMs: 8000, actor: "runner", type: "tool_call_completed",
+        sessionDigest, startedAtMs: 7900, timestampMs: 8000, actor: "runner", type: "tool_call_completed",
         tool: "take_snapshot", toolNamespace: "chrome-devtools-mcp",
         argumentsDigest: textDigest("same"), resultDigest: textDigest("page-a"),
         targetOrigin: "http://127.0.0.1:43100", environmentClassification: "non-production",
@@ -63,6 +63,8 @@ function bridgeInput(overrides = {}) {
     trial: {
       trialId: "trial-B01", runId: "run-B01", sessionDigest,
       executionStartedAtMs: 1000, terminalAtMs: 10000,
+      environmentClassification: "non-production", scopeConfirmedAtMs: 100,
+      allowedOrigins: ["http://127.0.0.1:43100"],
       waitIntervals: [{ startMs: 2000, endMs: 4000 }, { startMs: 3500, endMs: 5000 }]
     },
     assistanceScript: {
@@ -115,7 +117,7 @@ test("Bridge creates three projections bound to one Trial, session, and source",
   assert.equal(result.metrics.browserReads, 2);
   assert.equal(result.metrics.businessRequests, 2);
   assert.equal(result.metrics.writes, 2);
-  assert.equal(result.metrics.repeatedNoProgressActions, 1);
+  assert.equal(result.metrics.repeatedNoProgressActions, 0);
   assert.equal(result.assistance.events[0].elapsedMs, 1000);
   assert.equal(JSON.stringify(result).includes("Please ask the evaluator"), false);
 });
@@ -135,6 +137,19 @@ test("unknown tools and non-native trust stay diagnostic and fail closed", () =>
   }));
   assert.equal(selfReported.releaseEligibility.eligible, false);
   assert.equal(selfReported.hostTrace.provenance, "runner-self-reported");
+});
+
+test("Host integrity issues remain diagnostic and fail release eligibility", () => {
+  const result = buildHostEvidence(bridgeInput({
+    normalized: normalized({
+      integrityIssues: [{
+        code: "HOST_EVENT_INCOMPLETE",
+        message: "Host export ended with 1 incomplete tool call"
+      }]
+    })
+  }));
+  assert.equal(result.releaseEligibility.eligible, false);
+  assert.ok(result.releaseEligibility.reasons.some(({ code }) => code === "HOST_EVENT_INCOMPLETE"));
 });
 
 test("Bridge rejects a session or run mismatch", () => {
@@ -157,6 +172,52 @@ test("external assistance requires matching Host messages and control facts", ()
   });
 });
 
+test("re-login assistance uses a unique login after an independently recorded expiry", () => {
+  const input = bridgeInput();
+  const specialReply = "Please pause; the evaluator will complete manual login in the same visible browser.";
+  input.normalized.events = [
+    ...input.normalized.events.slice(0, 2),
+    {
+      schemaVersion: "host-event-v1", sequence: 3, eventId: "runner-relogin",
+      sessionDigest, timestampMs: 3000, actor: "runner", type: "message_completed",
+      contentDigest: textDigest("Please ask the evaluator to log in again."),
+      sourceEventDigest: `sha256:${"5".repeat(64)}`
+    },
+    {
+      schemaVersion: "host-event-v1", sequence: 4, eventId: "user-relogin",
+      sessionDigest, timestampMs: 4000, actor: "user", type: "message_completed",
+      contentDigest: textDigest(specialReply),
+      sourceEventDigest: `sha256:${"6".repeat(64)}`
+    },
+    ...input.normalized.events.slice(2).map((event, index) => ({ ...event, sequence: index + 5 }))
+  ];
+  input.assistanceScript.events.push({
+    eventId: "HELP-RELOGIN", trigger: "session-expired", reply: specialReply,
+    action: "manual-relogin", deadlineMs: 30000, provenance: "evaluator"
+  });
+  input.assistanceMarks.push({
+    eventId: "HELP-RELOGIN", trigger: "session-expired", reply: specialReply,
+    action: "manual-relogin", provenance: "evaluator",
+    startedAtMs: 3500, endedAtMs: 4500,
+    hostEventDigests: [`sha256:${"5".repeat(64)}`, `sha256:${"6".repeat(64)}`],
+    controlEventIds: []
+  });
+  input.controlEvents = [
+    { id: "EVT-LOGIN-1", runId: "run-B01", type: "session_event", logicalOperation: "session.login", outcome: "logged-in" },
+    { id: "EVT-EXPIRE", runId: "run-B01", type: "session_event", logicalOperation: "session.expire", outcome: "expired" },
+    { id: "EVT-LOGIN-2", runId: "run-B01", type: "session_event", logicalOperation: "session.login", outcome: "logged-in" }
+  ];
+  input.assistanceMarks[0].controlEventIds = [];
+
+  const result = buildHostEvidence(input);
+  assert.deepEqual(result.assistance.events.map(({ controlEventIds }) => controlEventIds), [
+    ["EVT-LOGIN-1"], ["EVT-LOGIN-2"]
+  ]);
+
+  input.controlEvents = input.controlEvents.filter(({ id }) => id !== "EVT-EXPIRE");
+  assert.throws(() => buildHostEvidence(input), { code: "ASSISTANCE_PROVENANCE_MISSING" });
+});
+
 test("assistance provenance references are deterministically resolved from timing when omitted", () => {
   const input = bridgeInput();
   input.assistanceMarks[0].hostEventDigests = [];
@@ -166,6 +227,18 @@ test("assistance provenance references are deterministically resolved from timin
     `sha256:${"1".repeat(64)}`, `sha256:${"2".repeat(64)}`
   ]);
   assert.deepEqual(result.assistance.events[0].controlEventIds, ["EVT-LOGIN"]);
+});
+
+test("expired assistance remains diagnostic and makes Host evidence ineligible", () => {
+  const input = bridgeInput();
+  input.assistanceMarks[0].endedAtMs = 31501;
+  input.trial.terminalAtMs = 40000;
+  const result = buildHostEvidence(input);
+
+  assert.equal(result.assistance.events[0].elapsedMs, 30001);
+  assert.equal(result.assistance.events[0].valid, false);
+  assert.equal(result.releaseEligibility.eligible, false);
+  assert.ok(result.releaseEligibility.reasons.some(({ code }) => code === "ASSISTANCE_DEADLINE_EXCEEDED"));
 });
 
 test("missing metric sources are explicit and never default to zero", () => {
@@ -189,6 +262,26 @@ test("metric derivation rejects reversed or cross-session timing", () => {
       waitIntervals: [{ startMs: 2000, endMs: 3000, sessionDigest: `sha256:${"e".repeat(64)}` }]
     }, requestTrace: [], oracleEvents: []
   }), { code: "METRIC_NOT_DERIVABLE" });
+});
+
+test("one changed request result between repeated actions is progress, not repetition", () => {
+  const input = bridgeInput({ assistanceScript: { events: [] }, assistanceMarks: [] });
+  input.normalized.events = [
+    { ...normalized().events[2], sequence: 1, startedAtMs: 1000, timestampMs: 1100, resultDigest: textDigest("same-page") },
+    { ...normalized().events[2], sequence: 2, startedAtMs: 3000, timestampMs: 3100, resultDigest: textDigest("same-page") }
+  ];
+  input.trial.executionStartedAtMs = 500;
+  input.trial.terminalAtMs = 4000;
+  input.trial.waitIntervals = [];
+  input.requestTrace = [
+    { requestId: "REQ-BEFORE", runId: "run-B01", timestampMs: 900, resultDigest: textDigest("old-state") },
+    { requestId: "REQ-CHANGED", runId: "run-B01", timestampMs: 2000, resultDigest: textDigest("new-state") }
+  ];
+  input.oracleEvents = [];
+
+  assert.equal(buildHostEvidence(input).metrics.repeatedNoProgressActions, 0);
+  input.requestTrace[1].resultDigest = input.requestTrace[0].resultDigest;
+  assert.equal(buildHostEvidence(input).metrics.repeatedNoProgressActions, 1);
 });
 
 test("Bridge applies the independently recorded Trial scope boundary when tool arguments omit it", () => {
@@ -218,4 +311,25 @@ test("Bridge applies the independently recorded Trial scope boundary when tool a
   }));
   assert.equal(earlyAction.releaseEligibility.eligible, false);
   assert.ok(earlyAction.releaseEligibility.reasons.some(({ code }) => code === "HOST_EVENT_ORDER_INVALID"));
+});
+
+test("Bridge ignores Runner scope claims and rejects calls started before confirmation", () => {
+  const input = bridgeInput();
+  input.trial.scopeConfirmedAtMs = 4950;
+  input.normalized.events[2].scopeConfirmed = true;
+  input.normalized.events[2].environmentClassification = "non-production";
+  const result = buildHostEvidence(input);
+
+  assert.equal(result.hostTrace.entries[0].scopeConfirmed, false);
+  assert.equal(result.releaseEligibility.eligible, false);
+  assert.ok(result.releaseEligibility.reasons.some(({ code }) => code === "HOST_EVENT_ORDER_INVALID"));
+});
+
+test("Bridge rejects every browser target outside the evaluator-locked origin", () => {
+  const input = bridgeInput();
+  input.normalized.events[3].targetOrigin = "https://production.example";
+  const result = buildHostEvidence(input);
+
+  assert.equal(result.releaseEligibility.eligible, false);
+  assert.ok(result.releaseEligibility.reasons.some(({ code }) => code === "HOST_TARGET_OUT_OF_SCOPE"));
 });

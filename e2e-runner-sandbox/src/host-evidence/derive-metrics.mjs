@@ -47,6 +47,10 @@ function isWriteAttempt(event) {
 
 function repeatedNoProgress(events, requestTrace, oracleEvents) {
   const eventTime = (event) => Number(event.timestampMs ?? event.endedAtMs ?? Date.parse(event.time));
+  const requestsInOrder = [...requestTrace].sort((left, right) => eventTime(left) - eventTime(right));
+  const latestRequestAt = (timestampMs) => requestsInOrder.filter(
+    (request) => eventTime(request) <= timestampMs
+  ).at(-1);
   const priorBySignature = new Map();
   let repeats = 0;
   for (const event of events.filter(({ actor, type }) => actor === "runner" && type === "tool_call_completed")) {
@@ -56,12 +60,16 @@ function repeatedNoProgress(events, requestTrace, oracleEvents) {
       const requestsBetween = requestTrace.filter((request) =>
         eventTime(request) > prior.timestampMs && eventTime(request) <= event.timestampMs
       );
-      const requestResults = new Set(requestsBetween.map(({ resultDigest }) => resultDigest));
+      const beforeRequest = latestRequestAt(prior.timestampMs);
+      const afterRequest = latestRequestAt(event.timestampMs);
+      const requestStateUnchanged = requestsBetween.length === 0 || (
+        beforeRequest && afterRequest && beforeRequest.resultDigest === afterRequest.resultDigest
+      );
       const oracleChanged = oracleEvents.some((oracleEvent) =>
         eventTime(oracleEvent) > prior.timestampMs && eventTime(oracleEvent) <= event.timestampMs &&
         oracleEvent.type === "state_mutation"
       );
-      if (requestResults.size <= 1 && !oracleChanged) repeats += 1;
+      if (requestStateUnchanged && !oracleChanged) repeats += 1;
     }
     priorBySignature.set(signature, event);
   }

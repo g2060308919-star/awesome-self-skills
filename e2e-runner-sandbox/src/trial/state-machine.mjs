@@ -108,14 +108,14 @@ export function nextTrialActions(manifest) {
       : ["resume", "abandon", "status"];
   }
   return {
-    created: ["prepare", "status"],
-    prepared: ["confirm-scope", "status"],
-    awaiting_scope_confirmation: ["confirm-scope", "status"],
-    awaiting_runner: ["show-runner-input", "bind-session", "status"],
-    running: ["assist", "collect", "mark-interrupted", "status"],
-    awaiting_assistance: ["assist-complete", "status"],
-    collecting: ["import-host", "evaluate", "status"],
-    evaluating: ["evaluate", "status"],
+    created: ["prepare", "abandon", "status"],
+    prepared: ["confirm-scope", "abandon", "status"],
+    awaiting_scope_confirmation: ["confirm-scope", "abandon", "status"],
+    awaiting_runner: ["show-runner-input", "bind-session", "abandon", "status"],
+    running: ["assist", "collect", "mark-interrupted", "abandon", "status"],
+    awaiting_assistance: ["assist-complete", "assist-timeout", "abandon", "status"],
+    collecting: ["import-host", "evaluate", "abandon", "status"],
+    evaluating: ["evaluate", "abandon", "status"],
     evaluated: ["reset", "status"],
     resetting: ["reset", "status"],
     completed: [],

@@ -19,10 +19,19 @@ function replyDigest(reply) {
   return `sha256:${sha256Text(reply)}`;
 }
 
-function controlMatches(action, event) {
-  if (["manual-account-selection", "manual-relogin"].includes(action)) {
+function controlMatches(action, event, controlEvents, eventIndex) {
+  if (action === "manual-account-selection") {
     return event.type === "session_event" && event.logicalOperation === "session.login" &&
       event.outcome === "logged-in";
+  }
+  if (action === "manual-relogin") {
+    const isLogin = event.type === "session_event" && event.logicalOperation === "session.login" &&
+      event.outcome === "logged-in";
+    const priorExpiry = controlEvents.slice(0, eventIndex).some((candidate) =>
+      candidate.runId === event.runId && candidate.type === "session_event" &&
+      candidate.logicalOperation === "session.expire" && candidate.outcome === "expired"
+    );
+    return isLogin && priorExpiry;
   }
   if (action === "external-approval") {
     return event.logicalOperation === "approval.external-decision";
@@ -42,6 +51,9 @@ export function deriveAssistance(input) {
   }
   const hostByDigest = new Map(input.normalized.events.map((event) => [event.sourceEventDigest, event]));
   const controlById = new Map((input.controlEvents ?? []).map((event) => [event.id, event]));
+  const controlEventsInOrder = input.controlEvents ?? [];
+  const controlIndexById = new Map(controlEventsInOrder.map((event, index) => [event.id, index]));
+  const usedControlEventIds = new Set();
   const output = [];
   let priorEnd = -Infinity;
   for (let index = 0; index < expectedEvents.length; index += 1) {
@@ -54,9 +66,10 @@ export function deriveAssistance(input) {
     const endedAtMs = Number(mark.endedAtMs);
     const elapsedMs = endedAtMs - startedAtMs;
     if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs) ||
-      startedAtMs < priorEnd || elapsedMs < 0 || elapsedMs > expected.deadlineMs) {
+      startedAtMs < priorEnd || elapsedMs < 0) {
       fail("Assistance timing is invalid or out of order");
     }
+    const deadlineExceeded = elapsedMs > expected.deadlineMs;
     priorEnd = endedAtMs;
     const messagesDuringWait = input.normalized.events.filter((event) =>
       event.type === "message_completed" && event.timestampMs >= startedAtMs && event.timestampMs <= endedAtMs
@@ -77,16 +90,21 @@ export function deriveAssistance(input) {
       event.type === "message_completed" && event.contentDigest === replyDigest(expected.reply))) {
       fail("Assistance reply is not independently present in the Host export");
     }
-    const controlEventIds = Array.isArray(mark.controlEventIds) && mark.controlEventIds.length > 0
-      ? mark.controlEventIds
-      : [...controlById.values()].filter((event) => event.runId === input.runId &&
-        controlMatches(mark.action, event)
-      ).map((event) => event.id);
+    const explicitControlIds = Array.isArray(mark.controlEventIds) && mark.controlEventIds.length > 0
+      ? mark.controlEventIds : null;
+    const controlEventIds = explicitControlIds ?? controlEventsInOrder.filter((event, eventIndex) =>
+      event.runId === input.runId && !usedControlEventIds.has(event.id) &&
+      controlMatches(mark.action, event, controlEventsInOrder, eventIndex)
+    ).slice(0, 1).map((event) => event.id);
     const controlEvents = controlEventIds.map((eventId) => controlById.get(eventId));
     if (CONTROL_REQUIRED_ACTIONS.has(mark.action) && (
       controlEvents.length === 0 || controlEvents.some((event) => !event) ||
-      !controlEvents.some((event) => event.runId === input.runId && controlMatches(mark.action, event))
+      controlEventIds.some((eventId) => usedControlEventIds.has(eventId)) ||
+      !controlEvents.some((event) => event.runId === input.runId && controlMatches(
+        mark.action, event, controlEventsInOrder, controlIndexById.get(event.id)
+      ))
     )) fail("Assistance external action lacks matching Sandbox control evidence");
+    for (const eventId of controlEventIds) usedControlEventIds.add(eventId);
     output.push({
       eventId: mark.eventId,
       trigger: mark.trigger,
@@ -96,6 +114,13 @@ export function deriveAssistance(input) {
       startedAtMs,
       endedAtMs,
       elapsedMs,
+      valid: !deadlineExceeded,
+      ...(deadlineExceeded ? {
+        failure: {
+          code: "ASSISTANCE_DEADLINE_EXCEEDED",
+          message: "Assistance exceeded the immutable script deadline"
+        }
+      } : {}),
       hostEventDigests: [...hostEventDigests],
       controlEventIds: [...controlEventIds]
     });

@@ -46,7 +46,7 @@ const OPTION_NAMES = Object.freeze({
   "--metrics": "metrics",
   "--trial": "trialDirectory",
   "--source": "source",
-  "--trust": "trustLevel",
+  "--task-id": "taskId",
   "--authorization-actor": "authorizationActor",
   "--authorized-at": "authorizedAt",
   "--private-root": "privateRoot",
@@ -92,15 +92,16 @@ const COMMAND_OPTIONS = Object.freeze({
   evaluate: ["runtimeDirectory", "trialDirectory"],
   stop: ["runtimeDirectory"],
   "trial-create": ["runtimeDirectory", "privateRoot", "exchangeRoot", "unitId", "campaignId", "runnerVersion", "runnerDigest"],
-  "trial-status": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory"],
   "trial-show-input": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory"],
   "trial-confirm-scope": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "environmentClassification", "scope", "idempotencyKey"],
   "trial-start": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "startedAtMs", "idempotencyKey"],
   "trial-bind-session": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "sessionDigest", "startedAtMs", "idempotencyKey"],
   "trial-assist-start": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "eventId", "startedAtMs", "idempotencyKey"],
   "trial-assist-complete": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "eventId", "trigger", "reply", "action", "provenance", "endedAtMs", "idempotencyKey"],
+  "trial-assist-timeout": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "eventId", "endedAtMs", "idempotencyKey"],
   "trial-interrupt": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "uncertainWrites", "reason", "idempotencyKey"],
   "trial-resume": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "reconciled", "idempotencyKey"],
+  "trial-abandon": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "reason", "idempotencyKey"],
   "trial-import-host": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "source", "idempotencyKey"],
   "trial-collect": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "artifacts", "idempotencyKey"],
   "trial-evaluate": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "idempotencyKey"],
@@ -110,13 +111,18 @@ const COMMAND_OPTIONS = Object.freeze({
 const OFFLINE_COMMAND_OPTIONS = Object.freeze({
   materialize: ["bundleRoot", "bundleVersion", "profileId", "runId", "output"],
   "scan-canary": ["path", "registry", "output"],
-  "host-export": ["source", "output", "trustLevel", "authorizationActor", "authorizedAt"],
+  "host-export": ["source", "output", "authorizationActor", "authorizedAt"],
   "host-normalize": ["source", "output"],
   "calibration-create": ["campaignRoot", "campaignId", "runnerVersion", "runnerDigest", "createdAt"],
   "release-create": ["campaignRoot", "campaignId", "runnerVersion", "runnerDigest", "calibrationSummary", "createdAt"],
   "campaign-next": ["campaignPath", "privateRoot"],
   "campaign-status": ["campaignPath", "privateRoot"],
-  "campaign-aggregate": ["campaignPath", "privateRoot", "output"]
+  "campaign-aggregate": ["campaignPath", "privateRoot", "output"],
+  "trial-status": ["privateRoot", "trialDirectory"]
+});
+
+const OPTIONAL_COMMAND_OPTIONS = Object.freeze({
+  "host-export": ["taskId"]
 });
 
 export function parseArguments(argv) {
@@ -131,7 +137,8 @@ export function parseArguments(argv) {
   const parsed = {};
   for (let index = 0; index < rest.length; index += 2) {
     const name = OPTION_NAMES[rest[index]];
-    if (!name || !commandOptions.includes(name) || parsed[name] !== undefined) {
+    const allowedOptions = [...commandOptions, ...(OPTIONAL_COMMAND_OPTIONS[command] ?? [])];
+    if (!name || !allowedOptions.includes(name) || parsed[name] !== undefined) {
       throw new SandboxError("CLI_ARGUMENT_INVALID", `Unsupported or duplicate option: ${rest[index]}`);
     }
     parsed[name] = rest[index + 1];
@@ -245,7 +252,7 @@ export async function runEvaluatorCli(argv, options = {}) {
     const parsed = parseArguments(argv);
     if (INTEGRATION_OFFLINE_COMMANDS.has(parsed.command)) {
       const result = await runIntegrationCommand({
-        parsed, packageRoot, withOfflineOcr
+        parsed, packageRoot, withOfflineOcr, nativeSessionRoot: options.nativeSessionRoot
       });
       write(JSON.stringify({ ok: true, command: parsed.command, result }));
       return 0;

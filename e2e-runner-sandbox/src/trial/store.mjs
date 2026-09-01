@@ -4,6 +4,7 @@ import {
   lstat,
   mkdir,
   open,
+  opendir,
   readFile,
   realpath,
   rename,
@@ -82,6 +83,16 @@ export async function createTrialStore(options) {
     }
     verifyDigest(manifest);
     return structuredClone(manifest);
+  }
+
+  async function list() {
+    const manifests = [];
+    for await (const entry of await opendir(root)) {
+      if (!entry.isDirectory()) continue;
+      safeId(entry.name);
+      manifests.push(await read(entry.name));
+    }
+    return manifests.sort((left, right) => left.trialId.localeCompare(right.trialId));
   }
 
   async function writeAtomic(trialId, manifest) {
@@ -167,5 +178,19 @@ export async function createTrialStore(options) {
     }
   }
 
-  return Object.freeze({ root, paths, create, read, transact });
+  async function withGlobalLock(action) {
+    const lockPath = join(root, ".sandbox-run.lock");
+    let lock = await acquireLock(lockPath);
+    try {
+      await lock.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })}\n`);
+      await lock.close();
+      lock = null;
+      return await action();
+    } finally {
+      await lock?.close();
+      await rm(lockPath, { force: true });
+    }
+  }
+
+  return Object.freeze({ root, paths, create, read, list, transact, withGlobalLock });
 }

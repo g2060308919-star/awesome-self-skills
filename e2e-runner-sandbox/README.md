@@ -50,7 +50,7 @@ The Runner receives only the `trial-show-input` result: materialized input, loca
 After that one Host session is complete, explicitly export that one Codex rollout file and bind it to the Trial. The exporter never searches Host history:
 
 ```bash
-node bin/evaluator.mjs host-export --source <one-codex-rollout-jsonl> --output trial-results/host-source-B01-R1 --trust host-native --authorization-actor <authorization-actor> --authorized-at <authorized-at>
+node bin/evaluator.mjs host-export --source <one-native-codex-rollout-jsonl> --task-id <exact-authorized-task-id> --output trial-results/host-source-B01-R1 --authorization-actor <authorization-actor> --authorized-at <authorized-at>
 node bin/evaluator.mjs trial-import-host --runtime <runtime-directory> --private-root trial-results/evaluation-private/trials --exchange-root trial-results/runner-exchange --trial <trial-id> --source trial-results/host-source-B01-R1 --idempotency-key import-B01-R1
 node bin/evaluator.mjs trial-collect --runtime <runtime-directory> --private-root trial-results/evaluation-private/trials --exchange-root trial-results/runner-exchange --trial <trial-id> --artifacts <artifacts> --idempotency-key collect-B01-R1
 node bin/evaluator.mjs trial-evaluate --runtime <runtime-directory> --private-root trial-results/evaluation-private/trials --exchange-root trial-results/runner-exchange --trial <trial-id> --idempotency-key evaluate-B01-R1
@@ -104,3 +104,4 @@ The bundle verification checks every immutable V1 JSON component. The self-test 
 - [Security model](docs/security-model.md)
 - [Host evidence contract](docs/host-evidence-contract.md)
 - [Trial and Campaign contract](docs/trial-and-campaign-contract.md)
+- [Real B01 diagnostic rehearsal](docs/real-b01-rehearsal.md)

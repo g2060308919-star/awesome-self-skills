@@ -4,10 +4,11 @@ import {
   lstat,
   mkdir,
   readFile,
+  readdir,
   realpath,
   writeFile
 } from "node:fs/promises";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 
 import { canonicalStringify } from "../bundle/canonical-json.mjs";
 import { sha256File, sha256Text } from "../bundle/digests.mjs";
@@ -19,7 +20,8 @@ import {
   HOST_TRUST_LEVELS
 } from "./contracts.mjs";
 
-const MAX_SOURCE_BYTES = 64 * 1024 * 1024;
+export const MAX_SOURCE_BYTES = 128 * 1024 * 1024;
+const NATIVE_ATTESTATION = Symbol("codex-native-source-attestation");
 
 function digest(value) {
   return `sha256:${sha256Text(typeof value === "string" ? value : canonicalStringify(value))}`;
@@ -57,7 +59,8 @@ function sourceBoundary(text) {
     startTimestampMs: timestamps.length > 0 ? Math.min(...timestamps) : null,
     endTimestampMs: timestamps.length > 0 ? Math.max(...timestamps) : null,
     sourceRecordCount: text.split(/\r?\n/).filter(Boolean).length,
-    sessionDigest: digest(uniqueSessionIds.length === 1 ? uniqueSessionIds[0] : text)
+    sessionDigest: digest(uniqueSessionIds.length === 1 ? uniqueSessionIds[0] : text),
+    sessionIds: uniqueSessionIds
   };
 }
 
@@ -69,6 +72,9 @@ export async function createCodexSourcePackage(options) {
   }
   if (!HOST_TRUST_LEVELS.includes(options.trustLevel)) {
     fail("HOST_EXPORT_UNSUPPORTED", "Host export trust level is unsupported");
+  }
+  if (options.trustLevel === "host-native" && options[NATIVE_ATTESTATION] !== true) {
+    fail("HOST_EXPORT_UNAUTHORIZED", "Arbitrary file export cannot establish host-native provenance");
   }
   const sourceMetadata = await lstat(options.sourcePath);
   if (sourceMetadata.isSymbolicLink() || !sourceMetadata.isFile() || sourceMetadata.size > MAX_SOURCE_BYTES) {
@@ -85,6 +91,7 @@ export async function createCodexSourcePackage(options) {
     const existing = await readHostSourcePackage(outputDirectory);
     if (existing.manifest.trustLevel !== options.trustLevel ||
       canonicalStringify(existing.manifest.authorization) !== canonicalStringify(options.authorization) ||
+      canonicalStringify(existing.manifest.nativeSource ?? null) !== canonicalStringify(options.nativeSource ?? null) ||
       existing.manifest.files[0].sha256 !== originalSourceSha256) {
       fail("HOST_EXPORT_INTEGRITY_FAILED", "Existing Host source package has different inputs");
     }
@@ -109,6 +116,7 @@ export async function createCodexSourcePackage(options) {
     exporter: HOST_EXPORTER,
     authorization: structuredClone(options.authorization),
     trustLevel: options.trustLevel,
+    ...(options.nativeSource ? { nativeSource: structuredClone(options.nativeSource) } : {}),
     sessionDigest: boundary.sessionDigest,
     sessionBoundary: {
       startTimestampMs: boundary.startTimestampMs,
@@ -130,6 +138,51 @@ export async function createCodexSourcePackage(options) {
   return { packageDirectory, manifestPath, sourcePath, manifest };
 }
 
+export async function createCodexNativeSourcePackage(options) {
+  const taskId = String(options.taskId ?? "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)) {
+    fail("HOST_EXPORT_UNAUTHORIZED", "Native Host export requires the exact authorized task identifier");
+  }
+  if (!isAbsolute(options.nativeSessionRoot) || !isAbsolute(options.sourcePath)) {
+    fail("HOST_EXPORT_UNAUTHORIZED", "Native Host source paths must be absolute");
+  }
+  const [requestedRootMetadata, requestedSourceMetadata] = await Promise.all([
+    lstat(options.nativeSessionRoot),
+    lstat(options.sourcePath)
+  ]);
+  if (requestedRootMetadata.isSymbolicLink() || !requestedRootMetadata.isDirectory() ||
+    requestedSourceMetadata.isSymbolicLink() || !requestedSourceMetadata.isFile()) {
+    fail("HOST_EXPORT_UNAUTHORIZED", "Native Host source must use real directories and a regular file");
+  }
+  const [nativeSessionRoot, sourcePath] = await Promise.all([
+    realpath(options.nativeSessionRoot),
+    realpath(options.sourcePath)
+  ]);
+  const containment = relative(nativeSessionRoot, sourcePath);
+  const metadata = await lstat(sourcePath);
+  if (isAbsolute(containment) || containment.startsWith("..") || containment === "" ||
+    metadata.isSymbolicLink() || !metadata.isFile() || !basename(sourcePath).includes(taskId)) {
+    fail("HOST_EXPORT_UNAUTHORIZED", "Source is not the exact task file under the native Codex session root");
+  }
+  const boundary = sourceBoundary(await readFile(sourcePath, "utf8"));
+  if (boundary.sessionIds.length !== 1 || boundary.sessionIds[0] !== taskId) {
+    fail("HOST_SESSION_MISMATCH", "Native Host source session does not match the authorized task identifier");
+  }
+  return createCodexSourcePackage({
+    sourcePath,
+    outputDirectory: options.outputDirectory,
+    authorization: options.authorization,
+    trustLevel: "host-native",
+    nativeSource: {
+      kind: "codex-task-session-file",
+      verified: true,
+      taskIdDigest: digest(taskId),
+      nativeRootDigest: digest(nativeSessionRoot)
+    },
+    [NATIVE_ATTESTATION]: true
+  });
+}
+
 export async function readHostSourcePackage(packageDirectoryInput) {
   const input = String(packageDirectoryInput);
   if (!isAbsolute(input)) {
@@ -141,6 +194,10 @@ export async function readHostSourcePackage(packageDirectoryInput) {
     fail("HOST_EXPORT_INTEGRITY_FAILED", "Host source package must be an owner-only real directory");
   }
   const packageDirectory = await realpath(input);
+  const packageEntries = (await readdir(packageDirectory)).sort();
+  if (canonicalStringify(packageEntries) !== canonicalStringify(["manifest.json", "session-rollout.jsonl"])) {
+    fail("HOST_EXPORT_INTEGRITY_FAILED", "Host source package contains undeclared files");
+  }
   const manifestPath = join(packageDirectory, "manifest.json");
   await assertOwnerOnlyFile(manifestPath);
   let manifest;
@@ -158,6 +215,14 @@ export async function readHostSourcePackage(packageDirectoryInput) {
     !HOST_TRUST_LEVELS.includes(manifest.trustLevel) ||
     !Array.isArray(manifest.files) || manifest.files.length !== 1) {
     fail("HOST_EXPORT_INTEGRITY_FAILED", "Host source manifest is invalid or modified");
+  }
+  if (manifest.trustLevel === "host-native" && (
+    manifest.nativeSource?.kind !== "codex-task-session-file" ||
+    manifest.nativeSource?.verified !== true ||
+    !/^sha256:[a-f0-9]{64}$/.test(manifest.nativeSource?.taskIdDigest ?? "") ||
+    !/^sha256:[a-f0-9]{64}$/.test(manifest.nativeSource?.nativeRootDigest ?? "")
+  )) {
+    fail("HOST_EXPORT_INTEGRITY_FAILED", "host-native package lacks controlled source provenance");
   }
   const entry = manifest.files[0];
   if (entry.path !== basename(entry.path) || entry.path !== "session-rollout.jsonl") {
