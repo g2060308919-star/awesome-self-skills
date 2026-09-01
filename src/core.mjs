@@ -14,8 +14,6 @@ import {
 import { renderMarkdown, BundleRenderError } from './render-markdown.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
-import { auditInteractionMatrix } from './views/interaction-matrix.mjs';
-import { validateBehaviorViews } from './views/validate-views.mjs';
 
 /** @typedef {{category:string,code:string,path:string,message:string,related_id?:string}} Diagnostic */
 
@@ -1813,12 +1811,6 @@ function evaluateRevisionCaptured(submittedInput, options) {
     const evidenceDiagnostics = diagnosticArray(evidence.diagnostics);
     if (evidenceDiagnostics.length > 0) return revisionRequired('evidence_claims', sourceRevision, evidenceDiagnostics);
     const graph = evidenceContext(input, evidence.claimsById, records(sourcePolicy.conflicts));
-
-    const viewValidation = validateBehaviorViews(graph, input.behavior_views);
-    const interactionAudit = auditInteractionMatrix(input.behavior_views);
-    const viewDiagnostics = diagnosticArray(viewValidation.diagnostics);
-    appendArray(viewDiagnostics, diagnosticArray(interactionAudit.diagnostics));
-    if (viewDiagnostics.length > 0) return revisionRequired('behavior_views', sourceRevision, viewDiagnostics);
 
     let obligations;
     try {

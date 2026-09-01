@@ -148,6 +148,22 @@ test('skill static policies freeze clarification and source-review boundaries', 
     behavior,
     /custom responsibility[\s\S]*`facts` or `view-elements`[\s\S]*single modeled fact route/u
   );
+  assert.match(
+    behavior,
+    /structural and modeling pass[\s\S]*built-in[\s\S]*custom responsibilities[\s\S]*single final reconciliation/u
+  );
+  assert.match(
+    behavior,
+    /terminal issue scope[\s\S]*fact scope[\s\S]*evidence reference[\s\S]*cover the issue scope[\s\S]*directionally connected/u
+  );
+  assert.match(
+    behavior,
+    /interaction issue scope[\s\S]*candidate module[\s\S]*every semantic subject scope/u
+  );
+  assert.match(
+    behavior,
+    /fact owner[\s\S]*scope must contain the custom responsibility scope/u
+  );
   assert.match(behavior, /requirement-gap[\s\S]*`caseable=false`/u);
 
   const clarification = await text('references/clarification-policy.md');

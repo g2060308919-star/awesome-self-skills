@@ -4,7 +4,9 @@ import { canonicalStringify, stableId } from '../canonical.mjs';
 import { scopeContains } from '../decision-record.mjs';
 import { E2_TARGETS } from '../evidence.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../schema-validator.mjs';
-import { auditInteractionMatrix } from '../views/interaction-matrix.mjs';
+import {
+  auditInteractionMatrix, reconcileInteractionMatrix
+} from '../views/interaction-matrix.mjs';
 import { validateBehaviorViews } from '../views/validate-views.mjs';
 import { compile as compileDecision } from './decision.mjs';
 import { compile as compileFlow } from './flow.mjs';
@@ -248,11 +250,9 @@ function isE2ModelElement(claim) {
  * Validate Task 3's accepted in-memory graph without coercing an invalid graph
  * into an empty formal denominator.
  * @param {Record<string, unknown>} graph
- * @param {CompilationInputs} inputs
- * @param {Record<string, unknown>} artifact
  * @param {Diagnostic[]} diagnostics
  */
-function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
+function validateEvidenceInputs(graph, diagnostics) {
   if (!Object.hasOwn(graph, 'runScope') || !isNonblankUnpadded(graph.runScope)) diagnostics.push(diagnostic(
     'schema', 'EVIDENCE_RUN_SCOPE_INVALID', '/runScope',
     'accepted evidence graph requires an own nonblank unpadded runScope'
@@ -422,10 +422,6 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
       if (valid) facts.push(fact);
     }
   }
-  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic(
-    'reference', 'OBLIGATION_SOURCE_REVISION_MISMATCH', '/obligationCompilation/sourceRevision',
-    `compilation source revision ${inputs.sourceRevision} does not match behavior revision ${String(artifact.source_revision)}`
-  ));
   const relations = claimRelations(claimsById);
   return { claimsById, facts, relations };
 }
@@ -907,6 +903,13 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
           ));
           continue;
         }
+        const primaryClaim = claimsById.get(String(fact.claim_id));
+        if (!primaryClaim || !isNonblankUnpadded(primaryClaim.scope)
+          || !isNonblankUnpadded(seed.scope)
+          || !scopeContains(String(primaryClaim.scope), String(seed.scope))) diagnostics.push(diagnostic(
+          'classification', 'CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH', `${path}/scope`,
+          `fact owner "${factId}" does not contain custom obligation scope "${String(seed.scope)}"`
+        ));
         const roots = [String(fact.claim_id), ...stringArray(fact.source_claim_ids)];
         owners.push({ ref: factId, roots });
         ownerFactIds.add(factId);
@@ -1241,6 +1244,48 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
           diagnostics.push(diagnostic('classification', 'FACT_BLOCKED_INTENT_INVALID', `${path}/issue_intent`, 'Blocked fact intent must satisfy the closed typed issue contract'));
           continue;
         }
+        const fact = factsById.get(factId);
+        const primaryClaim = fact ? claimsById.get(String(fact.claim_id)) : undefined;
+        let valid = Boolean(fact && primaryClaim);
+        if (primaryClaim && (!isNonblankUnpadded(primaryClaim.scope)
+          || !scopeContains(String(intent.scope), String(primaryClaim.scope)))) {
+          diagnostics.push(diagnostic(
+            'classification', 'TERMINAL_ISSUE_SCOPE_MISMATCH', `${path}/issue_intent/scope`,
+            `terminal issue scope "${String(intent.scope)}" must cover formal fact scope "${String(primaryClaim.scope)}"`
+          ));
+          valid = false;
+        }
+        const factRoots = fact
+          ? [String(fact.claim_id), ...stringArray(fact.source_claim_ids)] : [];
+        for (const evidenceId of stringArray(intent.evidence_refs)) {
+          const evidenceClaim = claimsById.get(evidenceId);
+          const evidencePath = `${path}/issue_intent/evidence_refs/${pointerPart(evidenceId)}`;
+          if (!evidenceClaim) {
+            diagnostics.push(diagnostic(
+              'reference', 'TERMINAL_ISSUE_EVIDENCE_DANGLING', evidencePath,
+              `terminal issue intent references unknown accepted evidence "${evidenceId}"`
+            ));
+            valid = false;
+            continue;
+          }
+          if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) {
+            diagnostics.push(diagnostic(
+              'classification', 'TERMINAL_ISSUE_EVIDENCE_SCOPE_MISMATCH', evidencePath,
+              'terminal issue evidence scope must cover the issue scope'
+            ));
+            valid = false;
+          }
+          if (!factRoots.some((root) => claimsDirectionallyRelated(
+            relations, evidenceId, root
+          ))) {
+            diagnostics.push(diagnostic(
+              'traceability', 'TERMINAL_ISSUE_EVIDENCE_UNRELATED', evidencePath,
+              'every terminal issue evidence claim must connect directionally to its fact subject'
+            ));
+            valid = false;
+          }
+        }
+        if (!valid) continue;
         const subject = { kind: 'facts', fact_ids: [factId] };
         const semanticRefs = [canonicalStringify(subject)];
         const signature = {
@@ -1252,7 +1297,6 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
           kind: 'requirement-gap', owner: { kind: 'fact', fact_id: factId },
           missing_type: intent.missing_type, scope: intent.scope
         });
-        const fact = factsById.get(factId);
         const sourceClaimIds = fact ? [...new Set([
           String(fact.claim_id), ...stringArray(fact.source_claim_ids)
         ])].sort(compareCodePoints) : [];
@@ -1460,6 +1504,8 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
     const sourceIds = stringArray(candidate.source_claim_ids);
     const subjectRoots = new Set();
     const subjectRootGroups = [];
+    /** @type {Array<{path: string, scope: string}>} */
+    const subjectScopes = [];
     for (const [index, ref] of objectArray(candidate.semantic_subject_refs).entries()) {
       const refPath = `${path}/semantic_subject_refs/${index}`;
       /** @type {string[]} */
@@ -1512,6 +1558,7 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
         'classification', 'INTERACTION_SUBJECT_MODULE_MISMATCH', refPath,
         'interaction semantic subject scope must overlap a candidate module'
       ));
+      if (ownerScope) subjectScopes.push({ path: refPath, scope: ownerScope });
       for (const root of roots) subjectRoots.add(root);
       if (roots.length > 0) subjectRootGroups.push({ path: refPath, roots });
     }
@@ -1544,6 +1591,17 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
     ));
     const intent = isObject(candidate.issue_intent) ? candidate.issue_intent : null;
     if (candidate.disposition === 'blocker' && intent) {
+      const issueScope = String(intent.scope ?? '');
+      if (!stringArray(candidate.module_ids).some((moduleId) => (
+        scopeContains(moduleId, issueScope) || scopeContains(issueScope, moduleId)
+      ))) diagnostics.push(diagnostic(
+        'classification', 'INTERACTION_ISSUE_SCOPE_MISMATCH', `${path}/issue_intent/scope`,
+        'interaction issue scope must overlap a candidate module'
+      ));
+      for (const subject of subjectScopes) if (!scopeContains(issueScope, subject.scope)) diagnostics.push(diagnostic(
+        'classification', 'INTERACTION_ISSUE_SCOPE_MISMATCH', subject.path,
+        `interaction issue scope "${issueScope}" must cover semantic subject scope "${subject.scope}"`
+      ));
       for (const evidenceId of stringArray(intent.evidence_refs)) {
         const evidenceClaim = claimsById.get(evidenceId);
         const evidencePath = `${path}/issue_intent/evidence_refs/${pointerPart(evidenceId)}`;
@@ -1671,6 +1729,21 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     .../** @type {Diagnostic[]} */ (validateAgainstSchema(artifact, behaviorViewsSchema)),
     .../** @type {Diagnostic[]} */ (validateUniqueStableIds(artifact))
   ];
+  const diagnostics = [...structuralDiagnostics];
+  const evidence = validateEvidenceInputs(graph, diagnostics);
+  const task4Evidence = {
+    claimsById: evidence.claimsById,
+    factLedger: evidence.facts,
+    runScope: Object.hasOwn(graph, 'runScope') && isNonblankUnpadded(graph.runScope)
+      ? graph.runScope : ''
+  };
+  const viewValidation = validateBehaviorViews(task4Evidence, artifact);
+  const interactionAudit = auditInteractionMatrix(artifact);
+  diagnostics.push(
+    .../** @type {Diagnostic[]} */ (viewValidation.diagnostics),
+    .../** @type {Diagnostic[]} */ (interactionAudit.diagnostics)
+  );
+
   const compiledInputs = compileObligationInputs(graph, artifact);
   const inputs = {
     contextsByViewId: compiledInputs.contextsByViewId,
@@ -1682,42 +1755,41 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     notApplicableReviewPaths: compiledInputs.notApplicableReviewPaths,
     sourceRevision: compiledInputs.sourceRevision
   };
-  const diagnostics = [...structuralDiagnostics, ...compiledInputs.diagnostics];
-  const evidence = validateEvidenceInputs(graph, inputs, artifact, diagnostics);
-  const task4Evidence = {
-    claimsById: evidence.claimsById,
-    factLedger: evidence.facts,
-    runScope: Object.hasOwn(graph, 'runScope') && isNonblankUnpadded(graph.runScope)
-      ? graph.runScope : ''
-  };
-  const viewValidation = validateBehaviorViews(task4Evidence, artifact);
-  const interactionAudit = auditInteractionMatrix(artifact);
+  diagnostics.push(...compiledInputs.diagnostics);
+  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic(
+    'reference', 'OBLIGATION_SOURCE_REVISION_MISMATCH', '/obligationCompilation/sourceRevision',
+    `compilation source revision ${inputs.sourceRevision} does not match behavior revision ${String(artifact.source_revision)}`
+  ));
   const facts = formalFacts(evidence.facts, evidence.claimsById);
   const factsById = new Map(facts.flatMap((fact) => typeof fact.fact_id === 'string' ? [[fact.fact_id, fact]] : []));
   const claimsById = evidence.claimsById;
   const terminalRoutes = terminalFactRoutes(inputs, factsById, claimsById, evidence.relations, diagnostics);
-  diagnostics.push(
-    .../** @type {Diagnostic[]} */ (viewValidation.diagnostics),
-    .../** @type {Diagnostic[]} */ (interactionAudit.diagnostics)
-  );
   validateInteractionSubjects(
     /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates),
     factsById, viewValidation.viewsById, claimsById, evidence.relations, diagnostics
   );
-  const customValidation = validateCustomObligations(
-    inputs, viewValidation.viewsById, factsById, claimsById, evidence.relations, diagnostics
-  );
-  assertNoDiagnostics(diagnostics);
 
   const strategySeeds = compileViewObligations(claimsById, viewValidation.viewsById, inputs, diagnostics);
   const systemObligations = mergeSystemObligations(strategySeeds, diagnostics);
+  const customValidation = validateCustomObligations(
+    inputs, viewValidation.viewsById, factsById, claimsById, evidence.relations, diagnostics
+  );
   const customObligations = mergeCustomObligations(
     customValidation.seeds, customValidation.ownerBySeed,
     inputs.customResponsibilityPaths,
     systemObligations, diagnostics
   );
+  const interactionReconciliation = reconcileInteractionMatrix(
+    artifact,
+    /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates),
+    viewValidation.viewsById,
+    viewValidation.viewModeledClaims,
+    claimsById
+  );
+  diagnostics.push(.../** @type {Diagnostic[]} */ (interactionReconciliation.diagnostics));
+  assertNoDiagnostics(diagnostics);
   const interactionCompilation = reconcileInteractionRoutes(
-    /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates)
+    /** @type {Record<string, unknown>[]} */ (interactionReconciliation.candidates)
   );
   const gapObligations = [...terminalRoutes.values()].flatMap((entry) => (
     isObject(entry.gap) ? [entry.gap] : []
@@ -1732,9 +1804,10 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     terminalRoutes, customObligationIdsByFactId, evidence.relations, diagnostics
   );
   const interactionRoutes = interactionCompilation.routes;
+  assertNoDiagnostics(diagnostics);
   validateRouteIdentity(facts, factRoutes, 'fact_id', 'fact_id', 'FACT', diagnostics);
   validateRouteIdentity(
-    /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates), interactionRoutes,
+    /** @type {Record<string, unknown>[]} */ (interactionReconciliation.candidates), interactionRoutes,
     'candidate_id', 'candidate_id', 'INTERACTION', diagnostics
   );
 

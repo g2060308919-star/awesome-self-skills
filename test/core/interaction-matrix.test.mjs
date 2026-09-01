@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { auditInteractionMatrix, INTERACTION_DIMENSIONS } from '../../src/views/interaction-matrix.mjs';
+import {
+  auditInteractionMatrix, INTERACTION_DIMENSIONS, reconcileInteractionMatrix
+} from '../../src/views/interaction-matrix.mjs';
 import { validateBehaviorViews } from '../../src/views/validate-views.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 
@@ -16,6 +18,40 @@ const behaviorViewsSchema = JSON.parse(await readFile(path.join(
 /** @param {string} name @returns {Promise<any>} */
 async function fixture(name) {
   return JSON.parse(await readFile(path.join(repositoryRoot, 'test/fixtures/views', name), 'utf8'));
+}
+
+/** @param {any} artifact */
+function behaviorEvidence(artifact) {
+  const evidence = { claimsById: new Map(), factLedger: [] };
+    const modeledItems = artifact.views.flatMap((/** @type {any} */ view) => [
+      ...view.elements, ...view.relations
+    ]);
+    for (const claimId of new Set([
+      ...modeledItems.flatMap((/** @type {any} */ item) => item.source_claim_ids ?? []),
+      ...artifact.interaction_candidates.flatMap(
+        (/** @type {any} */ candidate) => candidate.source_claim_ids ?? []
+      )
+    ])) evidence.claimsById.set(claimId, {
+      claim_id: claimId, level: 'E3', kind: 'requirement', scope: '*'
+    });
+    for (const claimId of new Set(modeledItems.flatMap(
+      (/** @type {any} */ item) => item.model_refs ?? []
+    ))) evidence.claimsById.set(claimId, {
+      claim_id: claimId, level: 'E2', kind: 'model-element',
+      derivation_target: 'model-element', scope: '*', parent_claim_ids: []
+    });
+  return evidence;
+}
+
+/** @param {any} artifact @param {any} [graph] */
+function finalInteractionReconciliation(artifact, graph) {
+  const evidence = graph ?? behaviorEvidence(artifact);
+  const viewValidation = validateBehaviorViews(evidence, artifact);
+  const audit = auditInteractionMatrix(artifact);
+  return reconcileInteractionMatrix(
+    artifact, audit.candidates, viewValidation.viewsById,
+    viewValidation.viewModeledClaims, evidence.claimsById
+  );
 }
 
 test('interaction matrix uses exactly the seven frozen dimensions', () => {
@@ -63,6 +99,23 @@ test('interaction matrix requires all seven dimensions for every unordered pair 
     && item.message.includes(JSON.stringify(['accounts', 'payments'])) && item.message.includes('time')), true);
 });
 
+test('interaction matrix audit defers terminal candidate routing to final reconciliation', async () => {
+  const artifact = await fixture('interaction-valid.json');
+  artifact.interaction_candidates = [];
+
+  const result = auditInteractionMatrix(artifact);
+
+  assert.equal(result.diagnostics.some((item) => [
+    'CANDIDATE_DISPOSITION_NOT_EXACT',
+    'FORMAL_INTERACTION_VIEW_DANGLING',
+    'FORMAL_INTERACTION_VIEW_INVALID',
+    'INTERACTION_CANDIDATE_WITHOUT_CELL',
+    'INTERACTION_CANDIDATE_ON_NO_SIGNAL',
+    'INTERACTION_CANDIDATE_CELL_AMBIGUOUS',
+    'INTERACTION_CANDIDATE_MISSING'
+  ].includes(item.code)), false, JSON.stringify(result.diagnostics));
+});
+
 test('interaction matrix rejects an empty audit instead of treating it as no signal', () => {
   const result = auditInteractionMatrix({ schema_version: '1.0.0', source_revision: 0, views: [], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] });
 
@@ -78,9 +131,13 @@ test('interaction matrix diagnoses duplicate, missing, extra, disappearing, and 
   assert.equal(codes.has('INTERACTION_CELL_DUPLICATE'), true);
   assert.equal(codes.has('INTERACTION_CELL_MISSING'), true);
   assert.equal(codes.has('INTERACTION_CELL_EXTRA'), true);
-  assert.equal(codes.has('INTERACTION_CANDIDATE_MISSING'), true);
-  assert.equal(codes.has('INTERACTION_CANDIDATE_WITHOUT_CELL'), true);
-  assert.equal(codes.has('INTERACTION_CANDIDATE_ON_NO_SIGNAL'), true);
+  assert.equal(codes.has('INTERACTION_CANDIDATE_MISSING'), false);
+  const finalCodes = new Set(finalInteractionReconciliation(artifact).diagnostics.map(
+    (item) => item.code
+  ));
+  assert.equal(finalCodes.has('INTERACTION_CANDIDATE_MISSING'), true);
+  assert.equal(finalCodes.has('INTERACTION_CANDIDATE_WITHOUT_CELL'), true);
+  assert.equal(finalCodes.has('INTERACTION_CANDIDATE_ON_NO_SIGNAL'), true);
 });
 
 test('interaction matrix reports the exact missing pair and dimension without depending on module order', async () => {
@@ -109,15 +166,21 @@ test('interaction matrix tuple keys cannot collide when schema-valid module IDs 
 test('interaction matrix rejects dangling, cross-type, and multiple candidate dispositions', async () => {
   const crossType = await fixture('interaction-valid.json');
   crossType.interaction_candidates[0].disposition = 'blocker';
-  assert.equal(auditInteractionMatrix(crossType).diagnostics.some((item) => item.code === 'CANDIDATE_DISPOSITION_NOT_EXACT'), true);
+  assert.equal(finalInteractionReconciliation(crossType).diagnostics.some(
+    (item) => item.code === 'CANDIDATE_DISPOSITION_NOT_EXACT'
+  ), true);
 
   const dangling = await fixture('interaction-valid.json');
   dangling.interaction_candidates[0].formal_view_id = 'view_missing';
-  assert.equal(auditInteractionMatrix(dangling).diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_DANGLING'), true);
+  assert.equal(finalInteractionReconciliation(dangling).diagnostics.some(
+    (item) => item.code === 'FORMAL_INTERACTION_VIEW_DANGLING'
+  ), true);
 
   const multiple = await fixture('interaction-valid.json');
   multiple.interaction_candidates[0].exploratory_id = 'exploratory_extra';
-  assert.equal(auditInteractionMatrix(multiple).diagnostics.some((item) => item.code === 'CANDIDATE_DISPOSITION_NOT_EXACT'), true);
+  assert.equal(finalInteractionReconciliation(multiple).diagnostics.some(
+    (item) => item.code === 'CANDIDATE_DISPOSITION_NOT_EXACT'
+  ), true);
 
   const evidenceFree = await fixture('interaction-valid.json');
   evidenceFree.interaction_candidates[0].source_claim_ids = [];
@@ -130,13 +193,15 @@ test('interaction matrix rejects dangling, cross-type, and multiple candidate di
 
   const unsupportedView = await fixture('interaction-valid.json');
   unsupportedView.views[0].type = 'unsupported';
-  assert.equal(auditInteractionMatrix(unsupportedView).diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_TYPE_INVALID'), true);
+  assert.equal(finalInteractionReconciliation(unsupportedView).diagnostics.some(
+    (item) => item.code === 'FORMAL_INTERACTION_VIEW_TYPE_INVALID'
+  ), true);
 });
 
 test('interaction matrix returns and counts only candidates attached to one candidate-status cell', async () => {
   const noCell = await fixture('interaction-valid.json');
   noCell.interaction_candidates[0].module_ids = ['orders', 'shipping'];
-  const noCellResult = auditInteractionMatrix(noCell);
+  const noCellResult = finalInteractionReconciliation(noCell);
   assert.equal(noCellResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   assert.equal(noCellResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_WITHOUT_CELL'), true);
   assert.equal(noCellResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
@@ -144,7 +209,7 @@ test('interaction matrix returns and counts only candidates attached to one cand
 
   const noSignal = await fixture('interaction-valid.json');
   noSignal.interaction_candidates[0].dimension = 'time';
-  const noSignalResult = auditInteractionMatrix(noSignal);
+  const noSignalResult = finalInteractionReconciliation(noSignal);
   assert.equal(noSignalResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   assert.equal(noSignalResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_ON_NO_SIGNAL'), true);
   assert.equal(noSignalResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
@@ -152,7 +217,7 @@ test('interaction matrix returns and counts only candidates attached to one cand
 
   const invalidOnly = await fixture('interaction-valid.json');
   invalidOnly.interaction_candidates[0].formal_view_id = 'view_missing';
-  const invalidOnlyResult = auditInteractionMatrix(invalidOnly);
+  const invalidOnlyResult = finalInteractionReconciliation(invalidOnly);
   assert.equal(invalidOnlyResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   assert.equal(invalidOnlyResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
     && item.message.includes('shared-entity')), true);
@@ -176,13 +241,17 @@ test('interaction matrix invalidates every duplicate candidate ID deterministica
   assert.deepEqual(auditInteractionMatrix(reversed), result);
   assert.equal(result.candidates.some((candidate) => candidate.candidate_id === 'candidate_duplicate'), false);
   assert.equal(result.diagnostics.filter((item) => item.code === 'INTERACTION_CANDIDATE_ID_INVALID').length, 1);
-  assert.equal(result.diagnostics.filter((item) => item.code === 'INTERACTION_CANDIDATE_MISSING').length, 2);
+  const finalResult = finalInteractionReconciliation(artifact);
+  assert.deepEqual(finalInteractionReconciliation(reversed), finalResult);
+  assert.equal(finalResult.diagnostics.filter(
+    (item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
+  ).length, 2);
 });
 
 test('interaction matrix rejects empty and unrelated formal target views without counting the candidate', async () => {
   const empty = await fixture('interaction-valid.json');
   empty.views[0].elements = [];
-  const emptyResult = auditInteractionMatrix(empty);
+  const emptyResult = finalInteractionReconciliation(empty);
   assert.equal(emptyResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   assert.equal(emptyResult.diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_EMPTY'), true);
   assert.equal(emptyResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
@@ -190,9 +259,11 @@ test('interaction matrix rejects empty and unrelated formal target views without
 
   const unrelated = await fixture('interaction-valid.json');
   unrelated.views[0].elements[0].source_claim_ids = ['claim_other'];
-  const unrelatedResult = auditInteractionMatrix(unrelated);
+  const unrelatedResult = finalInteractionReconciliation(unrelated);
   assert.equal(unrelatedResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
-  assert.equal(unrelatedResult.diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_SUPPORT_MISMATCH'), true);
+  assert.equal(unrelatedResult.diagnostics.some(
+    (item) => item.code === 'FORMAL_CANDIDATE_CLAIM_UNMODELED'
+  ), true);
 
   const invalidGraph = await fixture('interaction-valid.json');
   invalidGraph.views[0] = {
@@ -205,7 +276,7 @@ test('interaction matrix rejects empty and unrelated formal target views without
   };
   assert.deepEqual(validateAgainstSchema(invalidGraph, behaviorViewsSchema), []);
   assert.deepEqual(validateUniqueStableIds(invalidGraph), []);
-  const invalidGraphResult = auditInteractionMatrix(invalidGraph);
+  const invalidGraphResult = finalInteractionReconciliation(invalidGraph);
   assert.equal(invalidGraphResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   assert.equal(invalidGraphResult.diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_INVALID'), true);
 });
@@ -243,15 +314,16 @@ test('interaction matrix rejects duplicate state and nested class identities in 
   };
   assert.deepEqual(validateAgainstSchema(duplicateState, behaviorViewsSchema), []);
   assert.deepEqual(validateUniqueStableIds(duplicateState), []);
-  const stateResult = auditInteractionMatrix(duplicateState);
-  assert.equal(stateResult.diagnostics.some((item) => item.code === 'STATE_NAME_DUPLICATE'
+  const stateViewResult = validateBehaviorViews(behaviorEvidence(duplicateState), duplicateState);
+  assert.equal(stateViewResult.diagnostics.some((item) => item.code === 'STATE_NAME_DUPLICATE'
     && item.path === '/views/view_orders/state_names/ready'), true);
+  const stateResult = finalInteractionReconciliation(duplicateState);
   assert.equal(stateResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   assert.equal(stateResult.diagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
     && item.message.includes('shared-entity')), true);
   const reversedState = structuredClone(duplicateState);
   reversedState.views[0].elements.reverse();
-  assert.deepEqual(auditInteractionMatrix(reversedState), stateResult);
+  assert.deepEqual(finalInteractionReconciliation(reversedState), stateResult);
 
   const duplicateClass = await fixture('interaction-valid.json');
   duplicateClass.views[0] = {
@@ -264,13 +336,14 @@ test('interaction matrix rejects duplicate state and nested class identities in 
   };
   assert.deepEqual(validateAgainstSchema(duplicateClass, behaviorViewsSchema), []);
   assert.deepEqual(validateUniqueStableIds(duplicateClass), []);
-  const classResult = auditInteractionMatrix(duplicateClass);
-  assert.equal(classResult.diagnostics.some((item) => item.code === 'INPUT_CLASS_ID_DUPLICATE'
+  const classViewResult = validateBehaviorViews(behaviorEvidence(duplicateClass), duplicateClass);
+  assert.equal(classViewResult.diagnostics.some((item) => item.code === 'INPUT_CLASS_ID_DUPLICATE'
     && item.path === '/views/view_orders/elements/input_primary/classes/class_shared'), true);
+  const classResult = finalInteractionReconciliation(duplicateClass);
   assert.equal(classResult.candidates.some((candidate) => candidate.candidate_id === 'candidate_formal'), false);
   const reversedClass = structuredClone(duplicateClass);
   reversedClass.views[0].elements[0].classes.reverse();
-  assert.deepEqual(auditInteractionMatrix(reversedClass), classResult);
+  assert.deepEqual(finalInteractionReconciliation(reversedClass), classResult);
 });
 
 test('interaction matrix accepts a unique state self-transition and class IDs reused across input elements', async () => {

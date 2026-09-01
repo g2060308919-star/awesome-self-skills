@@ -335,49 +335,6 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
     }
   });
 
-  objectArray(input.interaction_candidates).forEach((candidate, candidateIndex) => {
-    if (candidate.disposition !== 'formal-view') return;
-    const candidateId = typeof candidate.candidate_id === 'string' && candidate.candidate_id.length > 0
-      ? escapePointerSegment(candidate.candidate_id) : String(candidateIndex);
-    const candidatePath = `/interaction_candidates/${candidateId}`;
-    const sourceIds = stringArray(candidate.source_claim_ids);
-    if (sourceIds.length === 0) diagnostics.push(diagnostic(
-      'classification', 'FORMAL_CANDIDATE_EVIDENCE_REQUIRED', `${candidatePath}/source_claim_ids`, 'a formal interaction candidate requires accepted source evidence'
-    ));
-    const formalViewId = typeof candidate.formal_view_id === 'string' ? candidate.formal_view_id : '';
-    const submittedView = views.find((view) => view.view_id === formalViewId);
-    const formalView = validViews.get(formalViewId);
-    if (!submittedView) diagnostics.push(diagnostic(
-      'reference', 'FORMAL_INTERACTION_VIEW_DANGLING', `${candidatePath}/formal_view_id`, `formal interaction view "${formalViewId}" does not exist`
-    ));
-    else if (!formalView) diagnostics.push(diagnostic(
-      'traceability', 'FORMAL_INTERACTION_VIEW_INVALID', `${candidatePath}/formal_view_id`, `formal interaction view "${formalViewId}" did not pass behavior-view validation`
-    ));
-    else if (objectArray(formalView.elements).length + objectArray(formalView.relations).length === 0) diagnostics.push(diagnostic(
-      'traceability', 'FORMAL_INTERACTION_VIEW_EMPTY', `${candidatePath}/formal_view_id`, 'a formal interaction candidate must route to a nonempty behavior view'
-    ));
-    const modeledClaims = viewModeledClaims.get(formalViewId) ?? new Set();
-    const targetScope = formalView && typeof formalView.scope === 'string' ? formalView.scope : '';
-    sourceIds.forEach((claimId, claimIndex) => {
-      const claim = claimsById.get(claimId);
-      const claimPath = `${candidatePath}/source_claim_ids/${escapePointerSegment(claimId || String(claimIndex))}`;
-      if (!claim) diagnostics.push(diagnostic(
-        'reference', 'SOURCE_CLAIM_DANGLING', claimPath, `source claim "${claimId}" is not in the accepted evidence graph`
-      ));
-      else if (!isBehaviorSourceClaim(claim) && !isE2ModelElement(claim)) diagnostics.push(diagnostic(
-        'classification', 'FORMAL_CANDIDATE_EVIDENCE_INVALID', claimPath, `source claim "${claimId}" cannot support a formal interaction`
-      ));
-      else {
-        if (targetScope.length > 0 && (typeof claim.scope !== 'string' || !scopeContains(claim.scope, targetScope))) diagnostics.push(diagnostic(
-          'classification', 'FORMAL_CANDIDATE_SCOPE_MISMATCH', claimPath, `source claim "${claimId}" does not cover formal view scope "${targetScope}"`
-        ));
-        if (formalView && !modeledClaims.has(claimId)) diagnostics.push(diagnostic(
-          'traceability', 'FORMAL_CANDIDATE_CLAIM_UNMODELED', claimPath, `formal view "${formalViewId}" does not model source claim "${claimId}"`
-        ));
-      }
-    });
-  });
-
   /** @type {Array<Record<string, unknown>>} */
   const factRoutes = [];
 
@@ -396,5 +353,12 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
 
   const sortedViews = new Map([...validViews].sort(([left], [right]) => compareCodePoints(left, right)));
   factRoutes.sort((left, right) => compareCodePoints(/** @type {string} */ (left.fact_id), /** @type {string} */ (right.fact_id)));
-  return { viewsById: sortedViews, factRoutes, diagnostics: sortDiagnostics(diagnostics) };
+  return {
+    viewsById: sortedViews,
+    viewModeledClaims: new Map([...viewModeledClaims].sort(
+      ([left], [right]) => compareCodePoints(left, right)
+    )),
+    factRoutes,
+    diagnostics: sortDiagnostics(diagnostics)
+  };
 }

@@ -8110,16 +8110,6 @@ function candidatePath(candidate) {
   const candidateId = typeof candidate.candidate_id === "string" && candidate.candidate_id.length > 0 ? candidate.candidate_id : candidateSemanticKey(candidate);
   return `/interaction_candidates/${escapePointerSegment2(candidateId)}`;
 }
-function modeledSupport(view) {
-  const claimIds = /* @__PURE__ */ new Set();
-  let hasModelRefs = false;
-  for (const item of [...objectArray5(view.elements), ...objectArray5(view.relations)]) {
-    const modelRefs = normalizedStrings(item.model_refs);
-    if (modelRefs.length > 0) hasModelRefs = true;
-    for (const claimId of [...normalizedStrings(item.source_claim_ids), ...modelRefs]) claimIds.add(claimId);
-  }
-  return { claimIds, hasModelRefs };
-}
 function relationEndpointKind(viewType) {
   if (viewType === "flow") return "flow-node";
   if (viewType === "state") return "state";
@@ -8200,14 +8190,6 @@ function auditInteractionMatrix(artifact) {
   const input = isObject4(artifact) ? artifact : {};
   const matrix = objectArray5(input.interaction_matrix);
   const submittedCandidates = objectArray5(input.interaction_candidates);
-  const views = objectArray5(input.views);
-  const viewsById = /* @__PURE__ */ new Map();
-  for (const view of views) {
-    if (typeof view.view_id !== "string") continue;
-    const matches = viewsById.get(view.view_id) ?? [];
-    matches.push(view);
-    viewsById.set(view.view_id, matches);
-  }
   const diagnostics = [];
   if (matrix.length === 0) diagnostics.push(diagnostic8(
     "coverage",
@@ -8304,7 +8286,6 @@ function auditInteractionMatrix(artifact) {
       "candidate_id must be nonblank and unique"
     ));
   }
-  const candidatesByCell = /* @__PURE__ */ new Map();
   const candidates = [];
   const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints5(
     `${candidateSemanticKey(left)}\0${String(left.candidate_id ?? "")}`,
@@ -8316,7 +8297,6 @@ function auditInteractionMatrix(artifact) {
     const modulesForCandidate = normalizedStrings(candidate.module_ids);
     const rawModuleCount = Array.isArray(candidate.module_ids) ? candidate.module_ids.length : 0;
     const dimension = typeof candidate.dimension === "string" ? candidate.dimension : "";
-    const disposition = typeof candidate.disposition === "string" ? candidate.disposition : "";
     let valid = true;
     if (candidateId.length === 0) {
       diagnostics.push(diagnostic8("schema", "INTERACTION_CANDIDATE_ID_INVALID", `${path4}/candidate_id`, "candidate_id must be nonblank and unique"));
@@ -8345,51 +8325,162 @@ function auditInteractionMatrix(artifact) {
       diagnostics.push(diagnostic8("classification", "INTERACTION_CANDIDATE_SUBJECT_REQUIRED", `${path4}/semantic_subject_refs`, "every interaction candidate requires nonempty unique semantic subject references"));
       valid = false;
     }
-    const destinationFields = DISPOSITION_FIELDS.filter((field) => typeof candidate[field] === "string" && /** @type {string} */
-    candidate[field].trim().length > 0);
-    const expectedField = disposition === "formal-view" ? "formal_view_id" : disposition === "blocker" ? null : disposition === "exploratory" ? "exploratory_id" : null;
+    if (valid) {
+      const normalized = { ...candidate, module_ids: modulesForCandidate };
+      normalized.source_claim_ids = sourceClaimIds;
+      normalized.semantic_subject_refs = objectArray5(candidate.semantic_subject_refs).sort((left, right) => compareCodePoints5(JSON.stringify(left), JSON.stringify(right)));
+      candidates.push(normalized);
+    }
+  }
+  candidates.sort((left, right) => compareCodePoints5(
+    /** @type {string} */
+    left.candidate_id,
+    /** @type {string} */
+    right.candidate_id
+  ));
+  return { candidates, diagnostics: sortDiagnostics(diagnostics) };
+}
+function isFormalInteractionEvidence(claim) {
+  return claim.level === "E3" && claim.kind === "requirement" || claim.level === "E1" && claim.kind === "assumption" || claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
+}
+function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeledClaims, claimsById) {
+  const input = isObject4(artifact) ? artifact : {};
+  const submittedViews = objectArray5(input.views);
+  const cells = objectArray5(input.interaction_matrix).map((record2) => ({
+    modules: normalizedStrings(record2.module_ids),
+    dimension: typeof record2.dimension === "string" ? record2.dimension : "",
+    status: typeof record2.status === "string" ? record2.status : ""
+  }));
+  const cellsByKey = /* @__PURE__ */ new Map();
+  for (const cell of cells) {
+    const key = cellKey(cell.modules, cell.dimension);
+    const matches = cellsByKey.get(key) ?? [];
+    matches.push(cell);
+    cellsByKey.set(key, matches);
+  }
+  const acceptedByCell = /* @__PURE__ */ new Map();
+  const acceptedCandidates = [];
+  const diagnostics = [];
+  for (const candidate of candidates) {
+    const path4 = candidatePath(candidate);
+    const candidateId = String(candidate.candidate_id ?? "");
+    const modules = normalizedStrings(candidate.module_ids);
+    const dimension = typeof candidate.dimension === "string" ? candidate.dimension : "";
+    const disposition = typeof candidate.disposition === "string" ? candidate.disposition : "";
+    let valid = true;
+    const destinationFields = DISPOSITION_FIELDS.filter((field) => typeof candidate[field] === "string" && String(candidate[field]).trim().length > 0);
+    const expectedField = disposition === "formal-view" ? "formal_view_id" : disposition === "exploratory" ? "exploratory_id" : null;
     const dispositionExact = disposition === "blocker" ? destinationFields.length === 0 && isObject4(candidate.issue_intent) : destinationFields.length === 1 && expectedField !== null && destinationFields[0] === expectedField;
     if (!dispositionExact) {
-      diagnostics.push(diagnostic8("classification", "CANDIDATE_DISPOSITION_NOT_EXACT", path4, "candidate must have exactly one destination matching its disposition"));
+      diagnostics.push(diagnostic8(
+        "classification",
+        "CANDIDATE_DISPOSITION_NOT_EXACT",
+        path4,
+        "candidate must have exactly one destination matching its disposition"
+      ));
       valid = false;
     }
     if (disposition === "formal-view") {
       const viewId = typeof candidate.formal_view_id === "string" ? candidate.formal_view_id : "";
-      const matchingViews = viewsById.get(viewId) ?? [];
-      if (matchingViews.length === 0) {
-        diagnostics.push(diagnostic8("reference", "FORMAL_INTERACTION_VIEW_DANGLING", `${path4}/formal_view_id`, `formal interaction view "${viewId}" does not exist`));
+      const matchingSubmittedViews = submittedViews.filter((view) => view.view_id === viewId);
+      const formalView = viewsById.get(viewId);
+      if (matchingSubmittedViews.length === 0) {
+        diagnostics.push(diagnostic8(
+          "reference",
+          "FORMAL_INTERACTION_VIEW_DANGLING",
+          `${path4}/formal_view_id`,
+          `formal interaction view "${viewId}" does not exist`
+        ));
         valid = false;
-      } else if (matchingViews.length !== 1) {
-        diagnostics.push(diagnostic8("reference", "FORMAL_INTERACTION_VIEW_AMBIGUOUS", `${path4}/formal_view_id`, `formal interaction view "${viewId}" is not uniquely defined`));
+      } else if (matchingSubmittedViews.length !== 1) {
+        diagnostics.push(diagnostic8(
+          "reference",
+          "FORMAL_INTERACTION_VIEW_AMBIGUOUS",
+          `${path4}/formal_view_id`,
+          `formal interaction view "${viewId}" is not uniquely defined`
+        ));
         valid = false;
       } else {
-        const view = matchingViews[0];
-        const identityDiagnostics = formalViewIdentityDiagnostics(view);
-        if (typeof view.type !== "string" || !FORMAL_VIEW_TYPES.has(view.type)) {
-          diagnostics.push(diagnostic8("classification", "FORMAL_INTERACTION_VIEW_TYPE_INVALID", `${path4}/formal_view_id`, "a formal interaction candidate must route to one of the seven formal behavior views"));
+        const submittedView = matchingSubmittedViews[0];
+        if (typeof submittedView.type !== "string" || !FORMAL_VIEW_TYPES.has(submittedView.type)) {
+          diagnostics.push(diagnostic8(
+            "classification",
+            "FORMAL_INTERACTION_VIEW_TYPE_INVALID",
+            `${path4}/formal_view_id`,
+            "a formal interaction candidate must route to one of the seven formal behavior views"
+          ));
           valid = false;
-        } else if (objectArray5(view.elements).length + objectArray5(view.relations).length === 0) {
-          diagnostics.push(diagnostic8("traceability", "FORMAL_INTERACTION_VIEW_EMPTY", `${path4}/formal_view_id`, "a formal interaction candidate must route to a nonempty behavior view"));
+        } else if (objectArray5(submittedView.elements).length + objectArray5(submittedView.relations).length === 0) {
+          diagnostics.push(diagnostic8(
+            "traceability",
+            "FORMAL_INTERACTION_VIEW_EMPTY",
+            `${path4}/formal_view_id`,
+            "a formal interaction candidate must route to a nonempty behavior view"
+          ));
           valid = false;
-        } else if (identityDiagnostics.length > 0) {
-          diagnostics.push(...identityDiagnostics);
-          valid = false;
-        } else if (!formalViewStructureValid(view)) {
-          diagnostics.push(diagnostic8("traceability", "FORMAL_INTERACTION_VIEW_INVALID", `${path4}/formal_view_id`, "the formal interaction target is not a valid behavior-view graph"));
+        } else if (formalViewIdentityDiagnostics(submittedView).length > 0 || !formalViewStructureValid(submittedView) || !formalView) {
+          diagnostics.push(diagnostic8(
+            "traceability",
+            "FORMAL_INTERACTION_VIEW_INVALID",
+            `${path4}/formal_view_id`,
+            `formal interaction view "${viewId}" did not pass behavior-view validation`
+          ));
           valid = false;
         } else {
-          const support = modeledSupport(view);
-          if (!support.hasModelRefs && sourceClaimIds.some((claimId) => !support.claimIds.has(claimId))) {
-            diagnostics.push(diagnostic8("traceability", "FORMAL_INTERACTION_VIEW_SUPPORT_MISMATCH", `${path4}/formal_view_id`, "the formal interaction view does not model every candidate source claim"));
-            valid = false;
+          const modeledClaims = viewModeledClaims.get(viewId) ?? /* @__PURE__ */ new Set();
+          const targetScope = typeof formalView.scope === "string" ? formalView.scope : "";
+          for (const claimId of normalizedStrings(candidate.source_claim_ids)) {
+            const claim = claimsById.get(claimId);
+            const claimPath = `${path4}/source_claim_ids/${escapePointerSegment2(claimId)}`;
+            if (!claim) {
+              diagnostics.push(diagnostic8(
+                "reference",
+                "SOURCE_CLAIM_DANGLING",
+                claimPath,
+                `source claim "${claimId}" is not in the accepted evidence graph`
+              ));
+              valid = false;
+            } else if (!isFormalInteractionEvidence(claim)) {
+              diagnostics.push(diagnostic8(
+                "classification",
+                "FORMAL_CANDIDATE_EVIDENCE_INVALID",
+                claimPath,
+                `source claim "${claimId}" cannot support a formal interaction`
+              ));
+              valid = false;
+            } else {
+              if (targetScope.length > 0 && (typeof claim.scope !== "string" || !scopeContains(claim.scope, targetScope))) {
+                diagnostics.push(diagnostic8(
+                  "classification",
+                  "FORMAL_CANDIDATE_SCOPE_MISMATCH",
+                  claimPath,
+                  `source claim "${claimId}" does not cover formal view scope "${targetScope}"`
+                ));
+                valid = false;
+              }
+              if (!modeledClaims.has(claimId)) {
+                diagnostics.push(diagnostic8(
+                  "traceability",
+                  "FORMAL_CANDIDATE_CLAIM_UNMODELED",
+                  claimPath,
+                  `formal view "${viewId}" does not model source claim "${claimId}"`
+                ));
+                valid = false;
+              }
+            }
           }
         }
       }
     }
-    const key = cellKey(modulesForCandidate, dimension);
+    const key = cellKey(modules, dimension);
     const matchingCells = cellsByKey.get(key) ?? [];
     if (matchingCells.length === 0) {
-      diagnostics.push(diagnostic8("traceability", "INTERACTION_CANDIDATE_WITHOUT_CELL", path4, `candidate ${candidateId} does not match an audited cell`));
+      diagnostics.push(diagnostic8(
+        "traceability",
+        "INTERACTION_CANDIDATE_WITHOUT_CELL",
+        path4,
+        `candidate ${candidateId} does not match an audited cell`
+      ));
       valid = false;
     } else {
       if (matchingCells.every((cell) => cell.status === "checked-no-signal")) {
@@ -8402,40 +8493,37 @@ function auditInteractionMatrix(artifact) {
         valid = false;
       }
       if (matchingCells.length !== 1) {
-        diagnostics.push(diagnostic8("traceability", "INTERACTION_CANDIDATE_CELL_AMBIGUOUS", path4, `candidate ${candidateId} does not match exactly one audited cell`));
+        diagnostics.push(diagnostic8(
+          "traceability",
+          "INTERACTION_CANDIDATE_CELL_AMBIGUOUS",
+          path4,
+          `candidate ${candidateId} does not match exactly one audited cell`
+        ));
         valid = false;
       }
     }
-    if (valid) {
-      const normalized = { ...candidate, module_ids: modulesForCandidate };
-      normalized.source_claim_ids = sourceClaimIds;
-      normalized.semantic_subject_refs = objectArray5(candidate.semantic_subject_refs).sort((left, right) => compareCodePoints5(JSON.stringify(left), JSON.stringify(right)));
-      candidates.push(normalized);
-      const matches = candidatesByCell.get(key) ?? [];
-      matches.push(normalized);
-      candidatesByCell.set(key, matches);
-    }
+    if (!valid) continue;
+    acceptedCandidates.push(candidate);
+    const matches = acceptedByCell.get(key) ?? [];
+    matches.push(candidate);
+    acceptedByCell.set(key, matches);
   }
   for (const [key, matchingCells] of cellsByKey) {
     const candidateCells = matchingCells.filter((cell) => cell.status === "candidate");
-    if (candidateCells.length === 0) continue;
-    const dispositions = candidatesByCell.get(key) ?? [];
+    if (candidateCells.length === 0 || (acceptedByCell.get(key) ?? []).length > 0) continue;
     const sample = candidateCells[0];
-    const path4 = cellPath(sample.modules, sample.dimension);
-    if (dispositions.length === 0) diagnostics.push(diagnostic8(
+    diagnostics.push(diagnostic8(
       "traceability",
       "INTERACTION_CANDIDATE_MISSING",
-      path4,
+      cellPath(sample.modules, sample.dimension),
       `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has no valid disposition`
     ));
   }
-  candidates.sort((left, right) => compareCodePoints5(
-    /** @type {string} */
-    left.candidate_id,
-    /** @type {string} */
-    right.candidate_id
+  acceptedCandidates.sort((left, right) => compareCodePoints5(
+    String(left.candidate_id),
+    String(right.candidate_id)
   ));
-  return { candidates, diagnostics: sortDiagnostics(diagnostics) };
+  return { candidates: acceptedCandidates, diagnostics: sortDiagnostics(diagnostics) };
 }
 
 // src/views/validate-views.mjs
@@ -8728,71 +8816,6 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       viewModeledClaims.set(viewId, modeledClaims);
     }
   });
-  objectArray6(input.interaction_candidates).forEach((candidate, candidateIndex) => {
-    if (candidate.disposition !== "formal-view") return;
-    const candidateId = typeof candidate.candidate_id === "string" && candidate.candidate_id.length > 0 ? escapePointerSegment3(candidate.candidate_id) : String(candidateIndex);
-    const candidatePath2 = `/interaction_candidates/${candidateId}`;
-    const sourceIds = stringArray4(candidate.source_claim_ids);
-    if (sourceIds.length === 0) diagnostics.push(diagnostic9(
-      "classification",
-      "FORMAL_CANDIDATE_EVIDENCE_REQUIRED",
-      `${candidatePath2}/source_claim_ids`,
-      "a formal interaction candidate requires accepted source evidence"
-    ));
-    const formalViewId = typeof candidate.formal_view_id === "string" ? candidate.formal_view_id : "";
-    const submittedView = views.find((view) => view.view_id === formalViewId);
-    const formalView = validViews.get(formalViewId);
-    if (!submittedView) diagnostics.push(diagnostic9(
-      "reference",
-      "FORMAL_INTERACTION_VIEW_DANGLING",
-      `${candidatePath2}/formal_view_id`,
-      `formal interaction view "${formalViewId}" does not exist`
-    ));
-    else if (!formalView) diagnostics.push(diagnostic9(
-      "traceability",
-      "FORMAL_INTERACTION_VIEW_INVALID",
-      `${candidatePath2}/formal_view_id`,
-      `formal interaction view "${formalViewId}" did not pass behavior-view validation`
-    ));
-    else if (objectArray6(formalView.elements).length + objectArray6(formalView.relations).length === 0) diagnostics.push(diagnostic9(
-      "traceability",
-      "FORMAL_INTERACTION_VIEW_EMPTY",
-      `${candidatePath2}/formal_view_id`,
-      "a formal interaction candidate must route to a nonempty behavior view"
-    ));
-    const modeledClaims = viewModeledClaims.get(formalViewId) ?? /* @__PURE__ */ new Set();
-    const targetScope = formalView && typeof formalView.scope === "string" ? formalView.scope : "";
-    sourceIds.forEach((claimId, claimIndex) => {
-      const claim = claimsById.get(claimId);
-      const claimPath = `${candidatePath2}/source_claim_ids/${escapePointerSegment3(claimId || String(claimIndex))}`;
-      if (!claim) diagnostics.push(diagnostic9(
-        "reference",
-        "SOURCE_CLAIM_DANGLING",
-        claimPath,
-        `source claim "${claimId}" is not in the accepted evidence graph`
-      ));
-      else if (!isBehaviorSourceClaim(claim) && !isE2ModelElement(claim)) diagnostics.push(diagnostic9(
-        "classification",
-        "FORMAL_CANDIDATE_EVIDENCE_INVALID",
-        claimPath,
-        `source claim "${claimId}" cannot support a formal interaction`
-      ));
-      else {
-        if (targetScope.length > 0 && (typeof claim.scope !== "string" || !scopeContains(claim.scope, targetScope))) diagnostics.push(diagnostic9(
-          "classification",
-          "FORMAL_CANDIDATE_SCOPE_MISMATCH",
-          claimPath,
-          `source claim "${claimId}" does not cover formal view scope "${targetScope}"`
-        ));
-        if (formalView && !modeledClaims.has(claimId)) diagnostics.push(diagnostic9(
-          "traceability",
-          "FORMAL_CANDIDATE_CLAIM_UNMODELED",
-          claimPath,
-          `formal view "${formalViewId}" does not model source claim "${claimId}"`
-        ));
-      }
-    });
-  });
   const factRoutes = [];
   for (const fact of facts) {
     const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
@@ -8810,7 +8833,14 @@ function validateBehaviorViews(evidenceGraph, artifact) {
     /** @type {string} */
     right.fact_id
   ));
-  return { viewsById: sortedViews, factRoutes, diagnostics: sortDiagnostics2(diagnostics) };
+  return {
+    viewsById: sortedViews,
+    viewModeledClaims: new Map([...viewModeledClaims].sort(
+      ([left], [right]) => compareCodePoints6(left, right)
+    )),
+    factRoutes,
+    diagnostics: sortDiagnostics2(diagnostics)
+  };
 }
 
 // src/obligations/registry.mjs
@@ -10375,7 +10405,7 @@ var CLAIM_KINDS_BY_LEVEL = /* @__PURE__ */ new Map([
 function isE2ModelElement2(claim) {
   return claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
 }
-function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
+function validateEvidenceInputs(graph, diagnostics) {
   if (!Object.hasOwn(graph, "runScope") || !isNonblankUnpadded(graph.runScope)) diagnostics.push(diagnostic11(
     "schema",
     "EVIDENCE_RUN_SCOPE_INVALID",
@@ -10569,12 +10599,6 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
       if (valid) facts.push(fact);
     }
   }
-  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic11(
-    "reference",
-    "OBLIGATION_SOURCE_REVISION_MISMATCH",
-    "/obligationCompilation/sourceRevision",
-    `compilation source revision ${inputs.sourceRevision} does not match behavior revision ${String(artifact.source_revision)}`
-  ));
   const relations = claimRelations(claimsById);
   return { claimsById, facts, relations };
 }
@@ -11047,6 +11071,13 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
           ));
           continue;
         }
+        const primaryClaim = claimsById.get(String(fact.claim_id));
+        if (!primaryClaim || !isNonblankUnpadded(primaryClaim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(primaryClaim.scope), String(seed.scope))) diagnostics.push(diagnostic11(
+          "classification",
+          "CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH",
+          `${path4}/scope`,
+          `fact owner "${factId}" does not contain custom obligation scope "${String(seed.scope)}"`
+        ));
         const roots = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
         owners.push({ ref: factId, roots });
         ownerFactIds.add(factId);
@@ -11390,6 +11421,56 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
           diagnostics.push(diagnostic11("classification", "FACT_BLOCKED_INTENT_INVALID", `${path4}/issue_intent`, "Blocked fact intent must satisfy the closed typed issue contract"));
           continue;
         }
+        const fact2 = factsById.get(factId);
+        const primaryClaim2 = fact2 ? claimsById.get(String(fact2.claim_id)) : void 0;
+        let valid = Boolean(fact2 && primaryClaim2);
+        if (primaryClaim2 && (!isNonblankUnpadded(primaryClaim2.scope) || !scopeContains(String(intent.scope), String(primaryClaim2.scope)))) {
+          diagnostics.push(diagnostic11(
+            "classification",
+            "TERMINAL_ISSUE_SCOPE_MISMATCH",
+            `${path4}/issue_intent/scope`,
+            `terminal issue scope "${String(intent.scope)}" must cover formal fact scope "${String(primaryClaim2.scope)}"`
+          ));
+          valid = false;
+        }
+        const factRoots = fact2 ? [String(fact2.claim_id), ...stringArray5(fact2.source_claim_ids)] : [];
+        for (const evidenceId of stringArray5(intent.evidence_refs)) {
+          const evidenceClaim = claimsById.get(evidenceId);
+          const evidencePath = `${path4}/issue_intent/evidence_refs/${pointerPart5(evidenceId)}`;
+          if (!evidenceClaim) {
+            diagnostics.push(diagnostic11(
+              "reference",
+              "TERMINAL_ISSUE_EVIDENCE_DANGLING",
+              evidencePath,
+              `terminal issue intent references unknown accepted evidence "${evidenceId}"`
+            ));
+            valid = false;
+            continue;
+          }
+          if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) {
+            diagnostics.push(diagnostic11(
+              "classification",
+              "TERMINAL_ISSUE_EVIDENCE_SCOPE_MISMATCH",
+              evidencePath,
+              "terminal issue evidence scope must cover the issue scope"
+            ));
+            valid = false;
+          }
+          if (!factRoots.some((root) => claimsDirectionallyRelated(
+            relations,
+            evidenceId,
+            root
+          ))) {
+            diagnostics.push(diagnostic11(
+              "traceability",
+              "TERMINAL_ISSUE_EVIDENCE_UNRELATED",
+              evidencePath,
+              "every terminal issue evidence claim must connect directionally to its fact subject"
+            ));
+            valid = false;
+          }
+        }
+        if (!valid) continue;
         const subject = { kind: "facts", fact_ids: [factId] };
         const semanticRefs2 = [canonicalStringify(subject)];
         const signature = {
@@ -11405,7 +11486,6 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
           missing_type: intent.missing_type,
           scope: intent.scope
         });
-        const fact2 = factsById.get(factId);
         const sourceClaimIds = fact2 ? [.../* @__PURE__ */ new Set([
           String(fact2.claim_id),
           ...stringArray5(fact2.source_claim_ids)
@@ -11612,6 +11692,7 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
     const sourceIds = stringArray5(candidate.source_claim_ids);
     const subjectRoots = /* @__PURE__ */ new Set();
     const subjectRootGroups = [];
+    const subjectScopes = [];
     for (const [index, ref] of objectArray8(candidate.semantic_subject_refs).entries()) {
       const refPath = `${path4}/semantic_subject_refs/${index}`;
       let roots = [];
@@ -11667,6 +11748,7 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
         refPath,
         "interaction semantic subject scope must overlap a candidate module"
       ));
+      if (ownerScope) subjectScopes.push({ path: refPath, scope: ownerScope });
       for (const root of roots) subjectRoots.add(root);
       if (roots.length > 0) subjectRootGroups.push({ path: refPath, roots });
     }
@@ -11703,6 +11785,19 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
     ));
     const intent = isObject7(candidate.issue_intent) ? candidate.issue_intent : null;
     if (candidate.disposition === "blocker" && intent) {
+      const issueScope = String(intent.scope ?? "");
+      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, issueScope) || scopeContains(issueScope, moduleId))) diagnostics.push(diagnostic11(
+        "classification",
+        "INTERACTION_ISSUE_SCOPE_MISMATCH",
+        `${path4}/issue_intent/scope`,
+        "interaction issue scope must overlap a candidate module"
+      ));
+      for (const subject of subjectScopes) if (!scopeContains(issueScope, subject.scope)) diagnostics.push(diagnostic11(
+        "classification",
+        "INTERACTION_ISSUE_SCOPE_MISMATCH",
+        subject.path,
+        `interaction issue scope "${issueScope}" must cover semantic subject scope "${subject.scope}"`
+      ));
       for (const evidenceId of stringArray5(intent.evidence_refs)) {
         const evidenceClaim = claimsById.get(evidenceId);
         const evidencePath = `${path4}/issue_intent/evidence_refs/${pointerPart5(evidenceId)}`;
@@ -11830,6 +11925,21 @@ function compileObligations(evidenceGraph, behaviorViews) {
     .../** @type {Diagnostic[]} */
     validateUniqueStableIds(artifact)
   ];
+  const diagnostics = [...structuralDiagnostics];
+  const evidence = validateEvidenceInputs(graph, diagnostics);
+  const task4Evidence = {
+    claimsById: evidence.claimsById,
+    factLedger: evidence.facts,
+    runScope: Object.hasOwn(graph, "runScope") && isNonblankUnpadded(graph.runScope) ? graph.runScope : ""
+  };
+  const viewValidation = validateBehaviorViews(task4Evidence, artifact);
+  const interactionAudit = auditInteractionMatrix(artifact);
+  diagnostics.push(
+    .../** @type {Diagnostic[]} */
+    viewValidation.diagnostics,
+    .../** @type {Diagnostic[]} */
+    interactionAudit.diagnostics
+  );
   const compiledInputs = compileObligationInputs(graph, artifact);
   const inputs = {
     contextsByViewId: compiledInputs.contextsByViewId,
@@ -11841,25 +11951,17 @@ function compileObligations(evidenceGraph, behaviorViews) {
     notApplicableReviewPaths: compiledInputs.notApplicableReviewPaths,
     sourceRevision: compiledInputs.sourceRevision
   };
-  const diagnostics = [...structuralDiagnostics, ...compiledInputs.diagnostics];
-  const evidence = validateEvidenceInputs(graph, inputs, artifact, diagnostics);
-  const task4Evidence = {
-    claimsById: evidence.claimsById,
-    factLedger: evidence.facts,
-    runScope: Object.hasOwn(graph, "runScope") && isNonblankUnpadded(graph.runScope) ? graph.runScope : ""
-  };
-  const viewValidation = validateBehaviorViews(task4Evidence, artifact);
-  const interactionAudit = auditInteractionMatrix(artifact);
+  diagnostics.push(...compiledInputs.diagnostics);
+  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic11(
+    "reference",
+    "OBLIGATION_SOURCE_REVISION_MISMATCH",
+    "/obligationCompilation/sourceRevision",
+    `compilation source revision ${inputs.sourceRevision} does not match behavior revision ${String(artifact.source_revision)}`
+  ));
   const facts = formalFacts(evidence.facts, evidence.claimsById);
   const factsById = new Map(facts.flatMap((fact) => typeof fact.fact_id === "string" ? [[fact.fact_id, fact]] : []));
   const claimsById = evidence.claimsById;
   const terminalRoutes = terminalFactRoutes(inputs, factsById, claimsById, evidence.relations, diagnostics);
-  diagnostics.push(
-    .../** @type {Diagnostic[]} */
-    viewValidation.diagnostics,
-    .../** @type {Diagnostic[]} */
-    interactionAudit.diagnostics
-  );
   validateInteractionSubjects(
     /** @type {Record<string, unknown>[]} */
     interactionAudit.candidates,
@@ -11869,6 +11971,8 @@ function compileObligations(evidenceGraph, behaviorViews) {
     evidence.relations,
     diagnostics
   );
+  const strategySeeds = compileViewObligations(claimsById, viewValidation.viewsById, inputs, diagnostics);
+  const systemObligations = mergeSystemObligations(strategySeeds, diagnostics);
   const customValidation = validateCustomObligations(
     inputs,
     viewValidation.viewsById,
@@ -11877,9 +11981,6 @@ function compileObligations(evidenceGraph, behaviorViews) {
     evidence.relations,
     diagnostics
   );
-  assertNoDiagnostics(diagnostics);
-  const strategySeeds = compileViewObligations(claimsById, viewValidation.viewsById, inputs, diagnostics);
-  const systemObligations = mergeSystemObligations(strategySeeds, diagnostics);
   const customObligations = mergeCustomObligations(
     customValidation.seeds,
     customValidation.ownerBySeed,
@@ -11887,9 +11988,20 @@ function compileObligations(evidenceGraph, behaviorViews) {
     systemObligations,
     diagnostics
   );
+  const interactionReconciliation = reconcileInteractionMatrix(
+    artifact,
+    /** @type {Record<string, unknown>[]} */
+    interactionAudit.candidates,
+    viewValidation.viewsById,
+    viewValidation.viewModeledClaims,
+    claimsById
+  );
+  diagnostics.push(.../** @type {Diagnostic[]} */
+  interactionReconciliation.diagnostics);
+  assertNoDiagnostics(diagnostics);
   const interactionCompilation = reconcileInteractionRoutes(
     /** @type {Record<string, unknown>[]} */
-    interactionAudit.candidates
+    interactionReconciliation.candidates
   );
   const gapObligations = [...terminalRoutes.values()].flatMap((entry) => isObject7(entry.gap) ? [entry.gap] : []).concat(interactionCompilation.gaps);
   const obligations = [...systemObligations, ...customObligations, ...gapObligations].sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
@@ -11908,10 +12020,11 @@ function compileObligations(evidenceGraph, behaviorViews) {
     diagnostics
   );
   const interactionRoutes = interactionCompilation.routes;
+  assertNoDiagnostics(diagnostics);
   validateRouteIdentity(facts, factRoutes, "fact_id", "fact_id", "FACT", diagnostics);
   validateRouteIdentity(
     /** @type {Record<string, unknown>[]} */
-    interactionAudit.candidates,
+    interactionReconciliation.candidates,
     interactionRoutes,
     "candidate_id",
     "candidate_id",
@@ -14108,11 +14221,6 @@ function evaluateRevisionCaptured(submittedInput, options) {
     const evidenceDiagnostics = diagnosticArray(evidence.diagnostics);
     if (evidenceDiagnostics.length > 0) return revisionRequired("evidence_claims", sourceRevision, evidenceDiagnostics);
     const graph = evidenceContext(input, evidence.claimsById, records2(sourcePolicy.conflicts));
-    const viewValidation = validateBehaviorViews(graph, input.behavior_views);
-    const interactionAudit = auditInteractionMatrix(input.behavior_views);
-    const viewDiagnostics = diagnosticArray(viewValidation.diagnostics);
-    appendArray2(viewDiagnostics, diagnosticArray(interactionAudit.diagnostics));
-    if (viewDiagnostics.length > 0) return revisionRequired("behavior_views", sourceRevision, viewDiagnostics);
     let obligations;
     try {
       obligations = compileObligations(graph, input.behavior_views);

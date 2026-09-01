@@ -1044,7 +1044,29 @@ test('obligation ledger surfaces Task 4 interaction omissions and mutually exclu
   multiple.interaction_candidates[0].exploratory_id = 'exploratory_extra';
   const multipleError = compilationError(() => compileObligations(interactionGraph(multiple), multiple));
   assert.equal(multipleError.diagnostics.some((item) => item.category === 'classification'
-    && (item.code === 'CANDIDATE_DISPOSITION_NOT_EXACT' || item.code === 'ONE_OF_MISMATCH')), true);
+    && (item.code === 'CANDIDATE_DISPOSITION_NOT_EXACT' || item.code === 'ONE_OF_MISMATCH')), true,
+    JSON.stringify(multipleError.diagnostics));
+
+  const dangling = await interactionFixture();
+  dangling.interaction_candidates[0].formal_view_id = 'view_missing';
+  const danglingError = compilationError(() => compileObligations(
+    interactionGraph(dangling), dangling
+  ));
+  assert.equal(danglingError.diagnostics.some(
+    (item) => item.code === 'FORMAL_INTERACTION_VIEW_DANGLING'
+  ), true, JSON.stringify(danglingError.diagnostics));
+
+  const noSignal = await interactionFixture();
+  noSignal.interaction_candidates[0].dimension = 'time';
+  const noSignalError = compilationError(() => compileObligations(
+    interactionGraph(noSignal), noSignal
+  ));
+  assert.equal(noSignalError.diagnostics.some(
+    (item) => item.code === 'INTERACTION_CANDIDATE_ON_NO_SIGNAL'
+  ), true, JSON.stringify(noSignalError.diagnostics));
+  assert.equal(noSignalError.diagnostics.some(
+    (item) => item.code === 'INTERACTION_CANDIDATE_MISSING'
+  ), true, JSON.stringify(noSignalError.diagnostics));
 });
 
 test('obligation ledger orchestrates the closed seven-strategy registry and rejects unknown or duplicate registrations', () => {

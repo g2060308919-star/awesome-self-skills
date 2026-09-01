@@ -4,6 +4,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateBehaviorViews } from '../../src/views/validate-views.mjs';
+import {
+  auditInteractionMatrix, reconcileInteractionMatrix
+} from '../../src/views/interaction-matrix.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -24,6 +27,16 @@ function evidenceGraph(input) {
     factLedger: input.facts,
     runScope: input.run_scope
   };
+}
+
+/** @param {any} graph @param {any} artifact */
+function finalInteractionReconciliation(graph, artifact) {
+  const viewValidation = validateBehaviorViews(graph, artifact);
+  const audit = auditInteractionMatrix(artifact);
+  return reconcileInteractionMatrix(
+    artifact, audit.candidates, viewValidation.viewsById,
+    viewValidation.viewModeledClaims, graph.claimsById
+  );
 }
 
 /** @param {string} viewId @param {string} scope @param {string} claimId */
@@ -272,7 +285,9 @@ test('behavior view validation excludes disjoint views before fact routing and f
   assert.equal(globalResult.diagnostics.some((item) => item.code === 'VIEW_SCOPE_DISJOINT'
     && item.path === '/views/view_shipping/scope'), true);
   assert.equal(globalResult.diagnostics.some((item) => item.path === '/facts/fact_global'), false);
-  assert.equal(globalResult.diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_INVALID'), true);
+  assert.equal(finalInteractionReconciliation(
+    evidenceGraph(globalInput), globalInput.artifact
+  ).diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_INVALID'), true);
   assert.equal(globalResult.viewsById.has('view_shipping'), false);
   assert.deepEqual(globalResult.factRoutes, []);
 
@@ -405,11 +420,13 @@ test('behavior view validation binds a formal interaction candidate to a valid m
 
   const dangling = structuredClone(artifact);
   dangling.interaction_candidates[0].source_claim_ids = ['claim_missing'];
-  assert.equal(validateBehaviorViews(graph, dangling).diagnostics.some((item) => item.code === 'SOURCE_CLAIM_DANGLING'), true);
+  assert.equal(finalInteractionReconciliation(graph, dangling).diagnostics.some(
+    (item) => item.code === 'SOURCE_CLAIM_DANGLING'
+  ), true);
 
   const empty = structuredClone(artifact);
   empty.views[0].elements = [];
-  assert.equal(validateBehaviorViews(graph, empty).diagnostics.some(
+  assert.equal(finalInteractionReconciliation(graph, empty).diagnostics.some(
     (item) => item.code === 'FORMAL_INTERACTION_VIEW_EMPTY'
   ), true);
 
@@ -420,7 +437,7 @@ test('behavior view validation binds a formal interaction candidate to a valid m
     ['claim_shared', { claim_id: 'claim_shared', level: 'E3', kind: 'requirement', scope: '*' }],
     ['claim_other', { claim_id: 'claim_other', level: 'E3', kind: 'requirement', scope: '*' }]
   ]) };
-  assert.equal(validateBehaviorViews(unrelatedGraph, unrelated).diagnostics.some(
+  assert.equal(finalInteractionReconciliation(unrelatedGraph, unrelated).diagnostics.some(
     (item) => item.code === 'FORMAL_CANDIDATE_CLAIM_UNMODELED'
   ), true);
 
@@ -433,7 +450,7 @@ test('behavior view validation binds a formal interaction candidate to a valid m
     ['claim_narrow', { claim_id: 'claim_narrow', level: 'E3', kind: 'requirement', scope: 'orders.child' }],
     ['claim_model', { claim_id: 'claim_model', level: 'E2', kind: 'model-element', derivation_target: 'model-element', scope: 'orders', parent_claim_ids: ['claim_narrow'] }]
   ]) };
-  assert.equal(validateBehaviorViews(narrowGraph, narrowScope).diagnostics.some(
+  assert.equal(finalInteractionReconciliation(narrowGraph, narrowScope).diagnostics.some(
     (item) => item.code === 'FORMAL_CANDIDATE_SCOPE_MISMATCH'
   ), true);
 });

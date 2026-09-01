@@ -224,6 +224,60 @@ test('installed terminal fact route compiles one compiler-owned requirement gap 
   ).length, 1);
 });
 
+test('terminal issue intent rejects unrelated scope and dangling evidence before deriving a gap', async (
+  /** @type {any} */ t
+) => {
+  const cases = [
+    {
+      name: 'unrelated scope',
+      prepare: (/** @type {any} */ revision) => {
+        revision.behavior_views.obligation_inputs.terminal_fact_routes[0]
+          .issue_intent.scope = 'unrelated';
+      },
+      code: 'TERMINAL_ISSUE_SCOPE_MISMATCH'
+    },
+    {
+      name: 'dangling evidence',
+      prepare: (/** @type {any} */ revision) => {
+        revision.behavior_views.obligation_inputs.terminal_fact_routes[0]
+          .issue_intent.evidence_refs = ['claim_missing'];
+      },
+      code: 'TERMINAL_ISSUE_EVIDENCE_DANGLING'
+    },
+    {
+      name: 'evidence scope does not cover issue',
+      prepare: (/** @type {any} */ revision) => {
+        revision.evidence_claims.claims.find(
+          (/** @type {any} */ claim) => claim.claim_id === 'claim_failure_rule'
+        ).scope = 'checkout/detail';
+      },
+      code: 'TERMINAL_ISSUE_EVIDENCE_SCOPE_MISMATCH'
+    },
+    {
+      name: 'evidence is unrelated to fact subject',
+      prepare: (/** @type {any} */ revision) => {
+        addClaim(revision, 'claim_unrelated_terminal_evidence', 'checkout', 'description');
+        revision.behavior_views.obligation_inputs.terminal_fact_routes[0]
+          .issue_intent.evidence_refs = ['claim_unrelated_terminal_evidence'];
+      },
+      code: 'TERMINAL_ISSUE_EVIDENCE_UNRELATED'
+    }
+  ];
+  for (const scenario of cases) await t.test(scenario.name, async () => {
+      const revision = terminalGapRevision();
+      scenario.prepare(revision);
+      const run = await runInstalledRevision(revision, { stageNames: runnerStages });
+      try {
+        assert.equal(run.reply.status, 'need_revision', `${scenario.name}: ${JSON.stringify(run.reply)}`);
+        assert.equal(run.reply.diagnostics.some(
+          (/** @type {any} */ item) => item.code === scenario.code
+        ), true, `${scenario.name}: ${JSON.stringify(run.reply)}`);
+      } finally {
+        await rm(run.runDirectory, { recursive: true, force: true });
+      }
+    });
+});
+
 test('installed final reconciliation rejects the same fact when its terminal route is deleted', async () => {
   const revision = terminalGapRevision();
   revision.behavior_views.obligation_inputs.terminal_fact_routes = [];
@@ -306,6 +360,29 @@ test('installed blocked interaction derives identity from semantic subject inste
   assert.equal(gap.kind, 'requirement-gap');
   assert.equal(gap.caseable, false);
   assert.equal(gap.gap_issue.root_issue_id, rootId);
+});
+
+test('blocked interaction issue scope must cover candidate modules and every semantic subject', async (
+  /** @type {any} */ t
+) => {
+  for (const scenario of [
+    { name: 'outside every candidate module', scope: 'unrelated', path: '/issue_intent/scope' },
+    { name: 'narrower than its semantic subject', scope: 'checkout/detail', path: '/semantic_subject_refs/' }
+  ]) await t.test(scenario.name, async () => {
+    const revision = interactionGapRevision();
+    revision.behavior_views.interaction_candidates[0].issue_intent.scope = scenario.scope;
+    revision.behavior_views.interaction_candidates[0].issue_intent.evidence_refs = [];
+    const run = await runInstalledRevision(revision, { stageNames: runnerStages });
+    try {
+      assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+      assert.equal(run.reply.diagnostics.some(
+        (/** @type {any} */ item) => item.code === 'INTERACTION_ISSUE_SCOPE_MISMATCH'
+          && item.path.includes(scenario.path)
+      ), true, JSON.stringify(run.reply));
+    } finally {
+      await rm(run.runDirectory, { recursive: true, force: true });
+    }
+  });
 });
 
 test('interaction root ignores candidate and provenance churn plus module/ref reorder', async () => {
@@ -476,6 +553,31 @@ test('installed fact-owned custom responsibility enriches the modeled fact route
     assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
     assert.equal(run.reply.diagnostics.some(
       (/** @type {any} */ item) => item.code === 'CUSTOM_RESPONSIBILITY_DUPLICATE'
+    ), true, JSON.stringify(run.reply));
+  } finally {
+    await rm(run.runDirectory, { recursive: true, force: true });
+  }
+});
+
+test('fact-owned custom responsibility scope must stay within every owner fact scope', async () => {
+  const revision = buildJourney('all-e3');
+  addClaim(revision, 'claim_global_secondary', '*');
+  const ownerFact = revision.evidence_claims.fact_ledger.find(
+    (/** @type {any} */ fact) => fact.fact_id === 'fact_checkout'
+  );
+  ownerFact.status = 'ambiguous';
+  ownerFact.source_claim_ids.push('claim_global_secondary');
+  revision.behavior_views.obligation_inputs.custom_responsibilities.push({
+    responsibility_type: 'cross-module-interaction', semantic_key: 'wrong-owner-scope',
+    owner: { kind: 'facts', fact_ids: ['fact_checkout'] }, scope: 'other', risk: 'medium',
+    source_claim_ids: ['claim_global_secondary'], required_oracle_refs: [],
+    required_capabilities: []
+  });
+  const run = await runInstalledRevision(revision, { stageNames: runnerStages });
+  try {
+    assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+    assert.equal(run.reply.diagnostics.some(
+      (/** @type {any} */ item) => item.code === 'CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH'
     ), true, JSON.stringify(run.reply));
   } finally {
     await rm(run.runDirectory, { recursive: true, force: true });
