@@ -211,7 +211,9 @@ test('flow obligations hand-count every explicit edge, terminal, sourced excepti
   assert.equal(actual.length, 9);
   assert.deepEqual(actual, expectedFlowSeeds);
   const obligationsArtifact = {
-    schema_version: '1.0.0', source_revision: 4, obligations: actual, fact_routes: [], interaction_routes: []
+    schema_version: '1.0.0', source_revision: 4,
+    obligations: actual.map((seed) => ({ ...seed, caseable: true })),
+    fact_routes: [], interaction_routes: []
   };
   assert.deepEqual(validateAgainstSchema(obligationsArtifact, testObligationsSchema), []);
   assert.deepEqual(validateUniqueStableIds(obligationsArtifact), []);

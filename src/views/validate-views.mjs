@@ -387,18 +387,10 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
     if (!primaryClaim || (primaryClaim.kind !== 'requirement' && primaryClaim.kind !== 'assumption') || fact.status === 'diagnostic') continue;
     const factClaimIds = [...new Set([...(typeof fact.claim_id === 'string' ? [fact.claim_id] : []), ...stringArray(fact.source_claim_ids)])];
     const viewIds = [...new Set(factClaimIds.flatMap((claimId) => [...(claimViews.get(claimId) ?? [])]))].sort(compareCodePoints);
-    if (viewIds.length === 0) {
-      const claimScope = typeof primaryClaim.scope === 'string' ? primaryClaim.scope : '';
-      const overlapsRun = runScope === null || claimScope.length === 0
-        || scopesOverlap(runScope, claimScope);
-      diagnostics.push(diagnostic(
-        'traceability', overlapsRun ? 'NORMATIVE_FACT_UNMODELED' : 'OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED', `/facts/${factId}`,
-        overlapsRun
-          ? `in-scope normative fact "${factId}" is not modeled by a valid behavior view`
-          : `out-of-scope normative fact "${factId}" is not modeled; Blocked/NotApplicable routing is owned by the Test Obligations stage`
-      ));
-      continue;
-    }
+    // Fact closure is intentionally deferred until terminal intents and every
+    // obligation strategy have been compiled. This pass owns only the modeled
+    // side of that later modeled-xor-terminal reconciliation.
+    if (viewIds.length === 0) continue;
     factRoutes.push({ fact_id: factId, route_type: 'views', view_ids: viewIds });
   }
 

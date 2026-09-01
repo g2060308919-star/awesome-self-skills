@@ -127,6 +127,7 @@ export function baseObligation(overrides = {}) {
   return {
     obligation_id: IDS.obligation,
     kind: 'flow',
+    caseable: true,
     risk: 'high',
     scope: 'checkout',
     source_claim_ids: ['claim_fact'],
@@ -135,6 +136,36 @@ export function baseObligation(overrides = {}) {
     required_capabilities: ['checkout-control'],
     ...overrides
   };
+}
+
+/**
+ * Public grouped blocker input. Root identity remains compiler-owned and is
+ * derived from issue intent plus the typed semantic subject.
+ * @param {{affectedObligationIds?:string[],evidenceRefs?:string[],missingType?:string,reasons?:string[],subject?:Record<string,unknown>,scope?:string,risk?:string,answerable?:boolean}} [options]
+ */
+export function blockerDisposition(options = {}) {
+  return {
+    status: 'blocker',
+    affected_obligation_ids: options.affectedObligationIds ?? [IDS.obligation],
+    issue_intent: {
+      missing_type: options.missingType ?? 'oracle',
+      scope: options.scope ?? 'checkout',
+      answerable: options.answerable ?? true,
+      risk: options.risk ?? 'high',
+      reasons: options.reasons ?? ['FORMAL_ORACLE_MISSING'],
+      evidence_refs: options.evidenceRefs ?? ['claim_fact']
+    },
+    subject: options.subject ?? { kind: 'facts', fact_ids: [IDS.fact] }
+  };
+}
+
+/** @param {ReturnType<typeof blockerDisposition>} disposition */
+export function expectedBlockerRootId(disposition) {
+  return stableId('root', {
+    missing_type: disposition.issue_intent.missing_type,
+    semantic_refs: [canonicalStringify(disposition.subject)],
+    scope: disposition.issue_intent.scope
+  });
 }
 
 /** @param {Record<string, unknown>} [overrides] @returns {any} */

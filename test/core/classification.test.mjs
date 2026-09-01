@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { canonicalStringify, stableId } from '../../src/canonical.mjs';
 import { classifyCaseDrafts } from '../../src/classify.mjs';
 import {
-  IDS, acceptedClaim, baseCase, baseClaims, baseObligation, classificationContext, clone,
-  refreshExecutionSignature
+  IDS, acceptedClaim, baseCase, baseClaims, baseObligation, blockerDisposition,
+  classificationContext, clone, expectedBlockerRootId, refreshExecutionSignature
 } from '../helpers/classification-context.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -109,20 +110,16 @@ test('a formal obligation with no Oracle is Blocked and never reclassified Explo
 
 test('a schema-legal explicit blocker stays Blocked when its formal Oracle is missing', () => {
   const obligation = baseObligation({ required_oracle_refs: [] });
+  const disposition = blockerDisposition();
   const result = classifyCaseDrafts(classificationContext({
     obligations: [obligation],
     cases: [],
-    dispositions: [{
-      obligation_id: IDS.obligation,
-      status: 'blocker',
-      blocker_root_issue_id: 'root_missing_oracle',
-      evidence_refs: ['claim_fact']
-    }]
+    dispositions: [disposition]
   }));
 
   assert.deepEqual(result.blocked, [{
     obligation_id: IDS.obligation,
-    root_issue_id: 'root_missing_oracle',
+    root_issue_id: expectedBlockerRootId(disposition),
     reason: 'FORMAL_ORACLE_MISSING',
     risk: 'high',
     evidence_refs: ['claim_fact']
@@ -134,12 +131,7 @@ test('a fully groundable obligation submitted as blocker requires case-draft rev
   const result = classifyCaseDrafts(classificationContext({
     obligations: [obligation],
     cases: [],
-    dispositions: [{
-      obligation_id: IDS.obligation,
-      status: 'blocker',
-      blocker_root_issue_id: 'root_unjustified',
-      evidence_refs: ['claim_fact', 'claim_oracle']
-    }]
+    dispositions: [blockerDisposition({ evidenceRefs: ['claim_fact', 'claim_oracle'] })]
   }));
 
   assert.equal(result.blocked.length, 0);
@@ -323,14 +315,39 @@ test('every Case fact must route formally to one of that Case’s linked obligat
   missingRoute.caseDrafts.cases[0].evidence_refs.push(claim.claim_id);
 
   const terminalRoute = clone(missingRoute);
+  const semanticRefs = [canonicalStringify({ kind: 'facts', fact_ids: [fact.fact_id] })];
+  const gapSignature = {
+    missing_type: 'requirement', semantic_refs: semanticRefs, scope: 'checkout'
+  };
+  const rootIssueId = stableId('root', gapSignature);
+  const gapObligationId = stableId('obligation', {
+    kind: 'requirement-gap', owner: { kind: 'fact', fact_id: fact.fact_id },
+    missing_type: 'requirement', scope: 'checkout'
+  });
+  terminalRoute.obligations.obligations.push({
+    obligation_id: gapObligationId, kind: 'requirement-gap', caseable: false,
+    risk: 'high', scope: 'checkout', source_claim_ids: [claim.claim_id],
+    view_element_refs: [], required_oracle_refs: [], required_capabilities: [],
+    gap_issue: {
+      root_issue_id: rootIssueId, root_issue_key: canonicalStringify(gapSignature),
+      missing_type: 'requirement', semantic_refs: semanticRefs, scope: 'checkout',
+      answerable: false, reasons: ['Formal fact is terminally blocked.'],
+      evidence_refs: [claim.claim_id]
+    }
+  });
   terminalRoute.obligations.fact_routes.push({
-    fact_id: fact.fact_id, route_type: 'blocked', blocker_root_issue_id: 'root_unrouted_fact'
+    fact_id: fact.fact_id, route_type: 'blocked', blocker_root_issue_id: rootIssueId,
+    gap_obligation_id: gapObligationId
   });
 
   for (const context of [missingRoute, terminalRoute]) {
     const result = classifyCaseDrafts(context);
     assert.equal(result.grounded.length + result.conditional.length, 0);
-    assert.match(result.blocked[0].reason, /CASE_FACT_ROUTE_INVALID/u);
+    const blockedCase = result.blocked.find(
+      (item) => item.obligation_id === IDS.obligation
+    );
+    if (!blockedCase) throw new Error(`expected blocked obligation ${IDS.obligation}`);
+    assert.match(blockedCase.reason, /CASE_FACT_ROUTE_INVALID/u);
   }
 });
 
@@ -386,24 +403,30 @@ test('Grounded rejects a stray temporary assumption that is not a consumed downg
 
 test('explicit blocker evidence refs must be canonical, known, and related to the formal obligation closure', () => {
   const obligation = baseObligation({ required_oracle_refs: [] });
-  const baseDisposition = {
-    obligation_id: IDS.obligation,
-    status: 'blocker',
-    blocker_root_issue_id: 'root_missing_oracle',
-    evidence_refs: ['claim_fact']
-  };
+  const baseDisposition = blockerDisposition();
   const dangling = classificationContext({
-    obligations: [obligation], cases: [], dispositions: [{ ...baseDisposition, evidence_refs: ['claim_missing'] }]
+    obligations: [obligation], cases: [],
+    dispositions: [{ ...baseDisposition, issue_intent: {
+      ...baseDisposition.issue_intent, evidence_refs: ['claim_missing']
+    } }]
   });
   const unrelated = classificationContext({
     claims: [...baseClaims(), acceptedClaim('claim_unrelated')], obligations: [obligation], cases: [],
-    dispositions: [{ ...baseDisposition, evidence_refs: ['claim_unrelated'] }]
+    dispositions: [{ ...baseDisposition, issue_intent: {
+      ...baseDisposition.issue_intent, evidence_refs: ['claim_unrelated']
+    } }]
   });
   const padded = classificationContext({
-    obligations: [obligation], cases: [], dispositions: [{ ...baseDisposition, evidence_refs: [' claim_fact'] }]
+    obligations: [obligation], cases: [],
+    dispositions: [{ ...baseDisposition, issue_intent: {
+      ...baseDisposition.issue_intent, evidence_refs: [' claim_fact']
+    } }]
   });
   const duplicate = classificationContext({
-    obligations: [obligation], cases: [], dispositions: [{ ...baseDisposition, evidence_refs: ['claim_fact', 'claim_fact'] }]
+    obligations: [obligation], cases: [],
+    dispositions: [{ ...baseDisposition, issue_intent: {
+      ...baseDisposition.issue_intent, evidence_refs: ['claim_fact', 'claim_fact']
+    } }]
   });
 
   for (const [context, code] of [
@@ -633,12 +656,10 @@ test('capability blocker state must be structured in a candidate Case instead of
   const classifyBlocker = (claim) => classifyCaseDrafts(classificationContext({
     claims: [...baseClaims(), claim],
     cases: [],
-    dispositions: [{
-      obligation_id: IDS.obligation,
-      status: 'blocker',
-      blocker_root_issue_id: 'root_capability_unavailable',
-      evidence_refs: [claim.claim_id]
-    }]
+    dispositions: [blockerDisposition({
+      evidenceRefs: [claim.claim_id], missingType: 'capability',
+      reasons: ['CAPABILITY_UNAVAILABLE']
+    })]
   }));
 
   for (const claim of [positiveCapability, unavailableCapability, unrelated]) {
@@ -675,12 +696,10 @@ test('explicit blocker evidence relation is batched instead of rescanning every 
       claims: [...baseClaims(), ...roots, ...children],
       obligations: [obligation],
       cases: [],
-      dispositions: [{
-        obligation_id: obligation.obligation_id,
-        status: 'blocker',
-        blocker_root_issue_id: 'root_missing_oracle',
-        evidence_refs: children.map((item) => item.claim_id)
-      }]
+      dispositions: [blockerDisposition({
+        affectedObligationIds: [obligation.obligation_id],
+        evidenceRefs: children.map((item) => item.claim_id)
+      })]
     });
     const nativeSome = Array.prototype.some;
     let visits = 0;
@@ -724,12 +743,9 @@ test('blocker evidence relation includes ancestors and descendants but excludes 
     claims: [...baseClaims(), sharedParent, formalChild, sibling],
     obligations: [obligation],
     cases: [],
-    dispositions: [{
-      obligation_id: obligation.obligation_id,
-      status: 'blocker',
-      blocker_root_issue_id: 'root_sibling_is_not_related',
-      evidence_refs: [sibling.claim_id]
-    }]
+    dispositions: [blockerDisposition({
+      affectedObligationIds: [obligation.obligation_id], evidenceRefs: [sibling.claim_id]
+    })]
   }));
 
   assert.equal(result.blocked.length, 0);

@@ -306,15 +306,6 @@ function caseDraft(rule) {
   return draft;
 }
 
-/** @param {any} rule */
-function blockerRootId(rule) {
-  return stableId('root', {
-    missing_type: 'oracle',
-    semantic_refs: [rule.claimId, `${rule.viewId}#${rule.elementId}`].sort(),
-    scope: rule.scope
-  });
-}
-
 /**
  * Build an independently authored complete core revision. The helper uses only
  * the frozen stable-ID primitive to bind Case references to Test Points.
@@ -359,10 +350,13 @@ export function revisionFromRules(rules, options = {}) {
   const dispositions = rules.map((rule) => {
     const id = obligationId(rule);
     if (rule.mode === 'blocker') return {
-      obligation_id: id,
       status: 'blocker',
-      blocker_root_issue_id: blockerRootId(rule),
-      evidence_refs: [rule.claimId]
+      affected_obligation_ids: [id],
+      issue_intent: {
+        missing_type: 'oracle', scope: rule.scope, answerable: true, risk: rule.risk,
+        reasons: ['FORMAL_ORACLE_MISSING'], evidence_refs: [rule.claimId]
+      },
+      subject: { kind: 'facts', fact_ids: [rule.factId] }
     };
     if (rule.mode === 'not_applicable') return {
       obligation_id: id,
@@ -491,6 +485,15 @@ export function addExploratory(input) {
     claim_id: 'claim_latency', claim_form: 'direct', level: 'E3',
     kind: 'description', scope: 'checkout', value: 'Latency is an investigation signal.',
     source_locator_ids: ['locator_latency'], source_id: 'source_prd'
+  }, {
+    claim_id: 'claim_latency_model', claim_form: 'derived', level: 'E2',
+    kind: 'model-element', scope: 'checkout', value: 'Latency is an investigation signal.',
+    source_locator_ids: ['locator_latency'], derivation_kind: 'decision-table-instance',
+    derivation_target: 'model-element', parent_claim_ids: ['claim_latency'],
+    parameters: { table_id: 'latency-signal' },
+    rule_input: {
+      conditions: ['latency signal exists'], outcome: 'Latency is an investigation signal.'
+    }
   });
   const cell = next.behavior_views.interaction_matrix.find(
     (/** @type {any} */ item) => item.dimension === 'time'
@@ -498,7 +501,9 @@ export function addExploratory(input) {
   cell.status = 'candidate';
   next.behavior_views.interaction_candidates.push({
     candidate_id: 'candidate_latency', module_ids: [...cell.module_ids], dimension: 'time',
-    disposition: 'exploratory', exploratory_id: 'exploratory_latency'
+    disposition: 'exploratory', source_claim_ids: ['claim_latency'],
+    semantic_subject_refs: [{ kind: 'model-element', model_ref: 'claim_latency_model' }],
+    exploratory_id: 'exploratory_latency'
   });
   next.case_drafts.exploratory_candidates.push({
     exploratory_id: 'exploratory_latency', title: 'Explore latency', scope: 'checkout',
@@ -537,15 +542,16 @@ export function buildJourney(name) {
   if (name === 'multi-module-interaction') {
     const candidate = {
       candidate_id: 'candidate_orders_payments',
-      module_ids: ['orders', 'payments'],
+      module_ids: ['checkout', 'payments'],
       dimension: 'interface-event',
       disposition: 'formal-view',
       source_claim_ids: ['claim_checkout'],
+      semantic_subject_refs: [{ kind: 'fact', fact_id: 'fact_checkout' }],
       formal_view_id: 'view_checkout'
     };
     return revisionFromRules([journeyRule('checkout', { scope: 'checkout' })], {
-      modules: ['orders', 'payments'],
-      interaction: interactionArtifacts(['orders', 'payments'], candidate)
+      modules: ['checkout', 'payments'],
+      interaction: interactionArtifacts(['checkout', 'payments'], candidate)
     });
   }
   throw new Error(`unknown Task 14 journey ${name}`);

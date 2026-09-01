@@ -121,7 +121,12 @@ test('interaction matrix rejects dangling, cross-type, and multiple candidate di
 
   const evidenceFree = await fixture('interaction-valid.json');
   evidenceFree.interaction_candidates[0].source_claim_ids = [];
-  assert.equal(auditInteractionMatrix(evidenceFree).diagnostics.some((item) => item.code === 'FORMAL_CANDIDATE_EVIDENCE_REQUIRED'), true);
+  const evidenceFreeDiagnostics = auditInteractionMatrix(evidenceFree).diagnostics;
+  assert.equal(
+    evidenceFreeDiagnostics.some((item) => item.code === 'INTERACTION_CANDIDATE_EVIDENCE_REQUIRED'),
+    true,
+    JSON.stringify(evidenceFreeDiagnostics)
+  );
 
   const unsupportedView = await fixture('interaction-valid.json');
   unsupportedView.views[0].type = 'unsupported';

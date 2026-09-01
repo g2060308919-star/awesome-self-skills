@@ -186,12 +186,14 @@ function interactionStringDiagnostics(artifact) {
     const candidateId = typeof candidate.candidate_id === 'string' ? candidate.candidate_id : String(index);
     const path = `/interaction_candidates/${pointerPart(candidateId)}`;
     let valid = isNonblankUnpadded(candidate.candidate_id)
-      && isDenseUniqueStringArray(candidate.module_ids, true);
+      && isDenseUniqueStringArray(candidate.module_ids, true)
+      && isDenseUniqueStringArray(candidate.source_claim_ids, true)
+      && isDenseObjectArray(candidate.semantic_subject_refs)
+      && candidate.semantic_subject_refs.length > 0;
     if (candidate.disposition === 'formal-view') {
-      valid = valid && isNonblankUnpadded(candidate.formal_view_id)
-        && isDenseUniqueStringArray(candidate.source_claim_ids, true);
+      valid = valid && isNonblankUnpadded(candidate.formal_view_id);
     } else if (candidate.disposition === 'blocker') {
-      valid = valid && isNonblankUnpadded(candidate.blocker_root_issue_id);
+      valid = valid && isObject(candidate.issue_intent);
     } else if (candidate.disposition === 'exploratory') {
       valid = valid && isNonblankUnpadded(candidate.exploratory_id);
     }
@@ -235,6 +237,12 @@ const CLAIM_KINDS_BY_LEVEL = new Map([
   ['E2', new Set(['test-data', 'expected-value', 'model-element'])],
   ['E3', new Set(['requirement', 'description', 'example', 'diagnostic'])]
 ]);
+
+/** @param {Record<string, unknown>} claim */
+function isE2ModelElement(claim) {
+  return claim.level === 'E2' && claim.kind === 'model-element'
+    && claim.derivation_target === 'model-element';
+}
 
 /**
  * Validate Task 3's accepted in-memory graph without coercing an invalid graph
@@ -758,10 +766,10 @@ function validateViewContext(viewId, view, context, diagnostics) {
   return valid;
 }
 
-/** @param {CompilationInputs} inputs @param {Map<string, Record<string, unknown>>} viewsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
-function validateCustomObligations(inputs, viewsById, claimsById, relations, diagnostics) {
+/** @param {CompilationInputs} inputs @param {Map<string, Record<string, unknown>>} viewsById @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
+function validateCustomObligations(inputs, viewsById, factsById, claimsById, relations, diagnostics) {
   const submittedObligations = inputs.customObligations.flatMap((entry) => (
-    isObject(entry.obligation) ? [entry.obligation] : []
+    isObject(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []
   ));
   diagnostics.push(.../** @type {Diagnostic[]} */ (validateAgainstSchema({
     schema_version: '1.0.0',
@@ -772,8 +780,19 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
   }, testObligationsSchema)));
   /** @type {Map<Record<string, unknown>, string>} */
   const ownerBySeed = new Map();
+  /** @type {Map<Record<string, unknown>, string[]>} */
+  const ownerFactIdsBySeed = new Map();
   /** @type {Map<string, {view: Record<string, unknown>, element: Record<string, unknown>, roots: string[]}>} */
   const ownerElementsByRef = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const factIdsByClaimId = new Map();
+  for (const [factId, fact] of factsById) {
+    for (const claimId of new Set([String(fact.claim_id), ...stringArray(fact.source_claim_ids)])) {
+      const factIds = factIdsByClaimId.get(claimId) ?? new Set();
+      factIds.add(factId);
+      factIdsByClaimId.set(claimId, factIds);
+    }
+  }
   for (const [viewId, view] of viewsById) {
     for (const element of objectArray(view.elements)) {
       const elementId = typeof element.element_id === 'string' ? element.element_id : '';
@@ -793,8 +812,9 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
   inputs.customObligations.forEach((entry, index) => {
     const wrapperPath = inputs.customResponsibilityPaths.get(entry)
       ?? `/obligation_inputs/custom_responsibilities/${index}`;
-    if (!hasExactKeys(entry, ['obligation', 'semantic_key']) || !isNonblankUnpadded(entry.semantic_key)
-      || !isObject(entry.obligation)) {
+    if (!hasExactKeys(entry, ['obligation', 'owner', 'responsibility_key', 'semantic_key'])
+      || !isNonblankUnpadded(entry.semantic_key) || !isNonblankUnpadded(entry.responsibility_key)
+      || !isObject(entry.owner) || !isObject(entry.obligation)) {
       diagnostics.push(diagnostic(
         'schema', 'CUSTOM_OBLIGATION_WRAPPER_INVALID', wrapperPath,
         'custom obligation input must be a closed semantic_key/obligation wrapper'
@@ -818,8 +838,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     ));
     const identity = {
       kind: seed.kind,
-      scope: seed.scope,
-      semantic_key: entry.semantic_key
+      responsibility_key: entry.responsibility_key
     };
     const expectedId = stableId('obligation', identity);
     if (obligationId !== expectedId) diagnostics.push(diagnostic(
@@ -877,6 +896,22 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
 
     /** @type {Array<{ref: string, roots: string[]}>} */
     const owners = [];
+    const ownerFactIds = new Set();
+    if (entry.owner.kind === 'facts') {
+      for (const factId of stringArray(entry.owner.fact_ids)) {
+        const fact = factsById.get(factId);
+        if (!fact) {
+          diagnostics.push(diagnostic(
+            'reference', 'CUSTOM_RESPONSIBILITY_FACT_OWNER_DANGLING', `${path}/owner/fact_ids/${pointerPart(factId)}`,
+            `custom responsibility references unknown formal fact "${factId}"`
+          ));
+          continue;
+        }
+        const roots = [String(fact.claim_id), ...stringArray(fact.source_claim_ids)];
+        owners.push({ ref: factId, roots });
+        ownerFactIds.add(factId);
+      }
+    }
     for (const viewElementRef of stringArray(seed.view_element_refs)) {
       const parsedRef = parseQualifiedViewElementRef(viewElementRef);
       const viewId = parsedRef?.viewId ?? '';
@@ -903,10 +938,19 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         continue;
       }
       owners.push({ ref: viewElementRef, roots });
-    }
-    if (stringArray(seed.view_element_refs).length === 0
-      && sourceIds.length > 0 && sourceIds.every((claimId) => claimsById.has(claimId))) {
-      owners.push({ ref: '', roots: sourceIds });
+      const relatedClaims = directionallyRelatedClaims(relations, roots);
+      const modeledFacts = [...new Set([...relatedClaims].flatMap(
+        (claimId) => [...(factIdsByClaimId.get(claimId) ?? [])]
+      ))].sort(compareCodePoints);
+      if (modeledFacts.length === 0) diagnostics.push(diagnostic(
+        'traceability', 'CUSTOM_RESPONSIBILITY_VIEW_OWNER_UNRESOLVED', `${path}/owner/view_element_refs`,
+        `view element owner "${viewElementRef}" does not resolve to a modeled formal fact`
+      ));
+      else if (modeledFacts.length > 1) diagnostics.push(diagnostic(
+        'traceability', 'CUSTOM_RESPONSIBILITY_VIEW_OWNER_AMBIGUOUS', `${path}/owner/view_element_refs`,
+        `view element owner "${viewElementRef}" resolves ambiguously to multiple formal facts`
+      ));
+      for (const factId of modeledFacts) ownerFactIds.add(factId);
     }
 
     const relatedToAnyOwner = directionallyRelatedClaims(
@@ -933,13 +977,11 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
     }
     ownerBySeed.set(seed, canonicalStringify({
-      kind: seed.kind,
-      risk: seed.risk,
-      scope: seed.scope,
-      semantic_key: entry.semantic_key
+      responsibility_key: entry.responsibility_key
     }));
+    ownerFactIdsBySeed.set(seed, [...ownerFactIds].sort(compareCodePoints));
   });
-  return { ownerBySeed, seeds };
+  return { ownerBySeed, ownerFactIdsBySeed, seeds };
 }
 
 /** @param {Record<string, unknown>} accumulator @param {Record<string, unknown>} seed */
@@ -955,6 +997,7 @@ function finishObligationMerge(byId) {
   return [...byId.values()].map((entry) => ({
     obligation_id: entry.obligation_id,
     kind: entry.kind,
+    caseable: true,
     risk: entry.risk,
     scope: entry.scope,
     ...Object.fromEntries(OBLIGATION_SET_FIELDS.map((field) => [
@@ -1042,6 +1085,10 @@ function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligatio
       byId.set(obligationId, obligationAccumulator(seed, owner));
       return;
     }
+    diagnostics.push(diagnostic(
+      'traceability', 'CUSTOM_RESPONSIBILITY_DUPLICATE', path,
+      'custom responsibilities with the same type, owner, scope, and responsibility semantics must not be duplicated'
+    ));
     if (existing.owner !== owner) {
       diagnostics.push(diagnostic(
         'classification', 'CUSTOM_OBLIGATION_OWNER_CONFLICT', path,
@@ -1181,12 +1228,53 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
         continue;
       }
       if (routeType === 'blocked') {
-        if (!hasExactKeys(route, ['blocker_root_issue_id', 'fact_id', 'route_type'])
-          || !isNonblankUnpadded(route.blocker_root_issue_id)) {
-          diagnostics.push(diagnostic('classification', 'FACT_BLOCKED_ROUTE_INVALID', path, 'Blocked route must contain one nonblank unpadded blocker_root_issue_id'));
+        if (!hasExactKeys(route, ['fact_id', 'issue_intent', 'route_type'])
+          || !isObject(route.issue_intent)) {
+          diagnostics.push(diagnostic('classification', 'FACT_BLOCKED_ROUTE_INVALID', path, 'Blocked route must contain one closed typed issue_intent'));
           continue;
         }
-        normalizedByRoute.set(route, { fact_id: factId, route_type: 'blocked', blocker_root_issue_id: route.blocker_root_issue_id });
+        const intent = route.issue_intent;
+        if (!hasExactKeys(intent, ['answerable', 'evidence_refs', 'missing_type', 'reasons', 'risk', 'scope'])
+          || !isNonblankUnpadded(intent.missing_type) || !isNonblankUnpadded(intent.scope)
+          || typeof intent.answerable !== 'boolean' || !['critical', 'high', 'medium', 'low'].includes(String(intent.risk))
+          || !isDenseUniqueStringArray(intent.reasons) || !isDenseUniqueStringArray(intent.evidence_refs)) {
+          diagnostics.push(diagnostic('classification', 'FACT_BLOCKED_INTENT_INVALID', `${path}/issue_intent`, 'Blocked fact intent must satisfy the closed typed issue contract'));
+          continue;
+        }
+        const subject = { kind: 'facts', fact_ids: [factId] };
+        const semanticRefs = [canonicalStringify(subject)];
+        const signature = {
+          missing_type: intent.missing_type, semantic_refs: semanticRefs, scope: intent.scope
+        };
+        const rootIssueKey = canonicalStringify(signature);
+        const rootIssueId = stableId('root', signature);
+        const gapObligationId = stableId('obligation', {
+          kind: 'requirement-gap', owner: { kind: 'fact', fact_id: factId },
+          missing_type: intent.missing_type, scope: intent.scope
+        });
+        const fact = factsById.get(factId);
+        const sourceClaimIds = fact ? [...new Set([
+          String(fact.claim_id), ...stringArray(fact.source_claim_ids)
+        ])].sort(compareCodePoints) : [];
+        normalizedByRoute.set(route, {
+          route: {
+            fact_id: factId, route_type: 'blocked',
+            blocker_root_issue_id: rootIssueId, gap_obligation_id: gapObligationId
+          },
+          gap: {
+            obligation_id: gapObligationId, kind: 'requirement-gap', caseable: false,
+            risk: intent.risk, scope: intent.scope,
+            source_claim_ids: sourceClaimIds, view_element_refs: [],
+            required_oracle_refs: [], required_capabilities: [],
+            gap_issue: {
+              root_issue_id: rootIssueId, root_issue_key: rootIssueKey,
+              missing_type: intent.missing_type, semantic_refs: semanticRefs,
+              scope: intent.scope, answerable: intent.answerable,
+              reasons: [...stringArray(intent.reasons)].sort(compareCodePoints),
+              evidence_refs: [...stringArray(intent.evidence_refs)].sort(compareCodePoints)
+            }
+          }
+        });
         continue;
       }
       if (routeType === 'not_applicable') {
@@ -1196,7 +1284,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
           diagnostics.push(diagnostic('classification', 'FACT_NOT_APPLICABLE_ROUTE_INVALID', path, 'NotApplicable route must contain one nonblank unpadded exclusion claim ID'));
           continue;
         }
-        normalizedByRoute.set(route, { fact_id: factId, route_type: 'not_applicable', not_applicable_claim_id: claimId });
+        normalizedByRoute.set(route, { route: { fact_id: factId, route_type: 'not_applicable', not_applicable_claim_id: claimId } });
         continue;
       }
       diagnostics.push(diagnostic('classification', 'FACT_ROUTE_TYPE_INVALID', `${path}/route_type`, 'explicit fact route must be Blocked or NotApplicable'));
@@ -1205,7 +1293,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     const route = submittedRoutes[0];
     const normalized = normalizedByRoute.get(route);
     if (!normalized) continue;
-    if (normalized.route_type === 'blocked') {
+    if (isObject(normalized.gap)) {
       routes.set(factId, normalized);
       continue;
     }
@@ -1216,7 +1304,8 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     }
     if (reviews.length !== 1 || !validReviews.has(reviews[0])) continue;
     const review = reviews[0];
-    const exclusionId = String(normalized.not_applicable_claim_id);
+    const normalizedRoute = /** @type {Record<string, unknown>} */ (normalized.route);
+    const exclusionId = String(normalizedRoute.not_applicable_claim_id);
     const exclusion = claimsById.get(exclusionId);
     if (!exclusion) {
       diagnostics.push(diagnostic('reference', 'NOT_APPLICABLE_CLAIM_DANGLING', `${path}/not_applicable_claim_id`, `NotApplicable route references unknown claim "${exclusionId}"`));
@@ -1257,13 +1346,6 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   return routes;
 }
 
-/** @param {Diagnostic} item @param {Set<string>} terminalFactIds */
-function isResolvedTask4FactDiagnostic(item, terminalFactIds) {
-  if (item.code !== 'NORMATIVE_FACT_UNMODELED' && item.code !== 'OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED') return false;
-  const prefix = '/facts/';
-  return item.path.startsWith(prefix) && terminalFactIds.has(item.path.slice(prefix.length));
-}
-
 /**
  * Bucket exact obligation sources once. A modeled fact expands only its own
  * descendants and reads the selected view buckets, so repeated obligations do
@@ -1298,8 +1380,23 @@ function indexObligationsByViewAndDirectClaim(obligations) {
   return index;
 }
 
-/** @param {Record<string, unknown>[]} facts @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>[]} viewRoutes @param {Map<string, Record<string, unknown>>} terminalRoutes @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
-function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, relations, diagnostics) {
+/** @param {Record<string, unknown>[]} seeds @param {Map<Record<string, unknown>, string[]>} ownerFactIdsBySeed */
+function indexCustomObligationsByOwnerFact(seeds, ownerFactIdsBySeed) {
+  /** @type {Map<string, Set<string>>} */
+  const index = new Map();
+  for (const seed of seeds) {
+    const obligationId = String(seed.obligation_id ?? '');
+    for (const factId of ownerFactIdsBySeed.get(seed) ?? []) {
+      const obligationIds = index.get(factId) ?? new Set();
+      obligationIds.add(obligationId);
+      index.set(factId, obligationIds);
+    }
+  }
+  return index;
+}
+
+/** @param {Record<string, unknown>[]} facts @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>[]} viewRoutes @param {Map<string, Record<string, unknown>>} terminalRoutes @param {Map<string, Set<string>>} customObligationIdsByFactId @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
+function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, customObligationIdsByFactId, relations, diagnostics) {
   const viewsByFact = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === 'string'
     ? [[route.fact_id, new Set(stringArray(route.view_ids))]] : []));
   const obligationIndex = indexObligationsByViewAndDirectClaim(obligations);
@@ -1308,15 +1405,16 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
     const factId = String(fact.fact_id);
     const terminal = terminalRoutes.get(factId);
     const viewIds = viewsByFact.get(factId);
-    if (terminal && viewIds) {
+    const customObligationIds = customObligationIdsByFactId.get(factId);
+    if (terminal && (viewIds || customObligationIds)) {
       diagnostics.push(diagnostic('traceability', 'FACT_ROUTE_MULTIPLE', `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
       continue;
     }
     if (terminal) {
-      routes.push({ ...terminal });
+      routes.push({ .../** @type {Record<string, unknown>} */ (terminal.route) });
       continue;
     }
-    if (!viewIds) {
+    if (!viewIds && !customObligationIds) {
       diagnostics.push(diagnostic('traceability', 'FACT_ROUTE_MISSING', `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
       continue;
     }
@@ -1324,8 +1422,8 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
     const descendantClaimIds = cachedReachableClaims(
       relations.childrenById, claimIds, relations.descendantsByRootSet
     );
-    const obligationIds = new Set();
-    for (const viewId of viewIds) {
+    const obligationIds = new Set(customObligationIds ?? []);
+    for (const viewId of viewIds ?? []) {
       const claims = obligationIndex.get(viewId);
       if (!claims) continue;
       for (const claimId of descendantClaimIds) {
@@ -1341,14 +1439,188 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
   return routes.sort((left, right) => compareCodePoints(String(left.fact_id), String(right.fact_id)));
 }
 
+/**
+ * @param {Record<string, unknown>[]} candidates
+ * @param {Map<string, Record<string, unknown>>} factsById
+ * @param {Map<string, Record<string, unknown>>} viewsById
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ * @param {ReturnType<typeof claimRelations>} relations
+ * @param {Diagnostic[]} diagnostics
+ */
+function validateInteractionSubjects(candidates, factsById, viewsById, claimsById, relations, diagnostics) {
+  const ownerByViewElement = new Map();
+  for (const [viewId, view] of viewsById) {
+    for (const element of objectArray(view.elements)) ownerByViewElement.set(
+      qualifyViewElementRef(viewId, String(element.element_id ?? '')), { view, element }
+    );
+  }
+  for (const candidate of candidates) {
+    const candidateId = String(candidate.candidate_id ?? '');
+    const path = `/interaction_candidates/${pointerPart(candidateId)}`;
+    const sourceIds = stringArray(candidate.source_claim_ids);
+    const subjectRoots = new Set();
+    const subjectRootGroups = [];
+    for (const [index, ref] of objectArray(candidate.semantic_subject_refs).entries()) {
+      const refPath = `${path}/semantic_subject_refs/${index}`;
+      /** @type {string[]} */
+      let roots = [];
+      let ownerScope = '';
+      if (ref.kind === 'fact') {
+        const fact = factsById.get(String(ref.fact_id ?? ''));
+        if (!fact) diagnostics.push(diagnostic('reference', 'INTERACTION_SUBJECT_FACT_DANGLING', refPath, 'interaction semantic fact reference is unknown'));
+        else {
+          roots = [String(fact.claim_id), ...stringArray(fact.source_claim_ids)];
+          ownerScope = String(claimsById.get(String(fact.claim_id))?.scope ?? '');
+        }
+      } else if (ref.kind === 'view-element' || ref.kind === 'integration-surface') {
+        const owner = ownerByViewElement.get(qualifyViewElementRef(String(ref.view_id ?? ''), String(ref.element_id ?? '')));
+        if (!owner) diagnostics.push(diagnostic('reference', 'INTERACTION_SUBJECT_VIEW_ELEMENT_DANGLING', refPath, 'interaction semantic view element reference is unknown'));
+        else {
+          roots = elementEvidenceRefs(owner.element);
+          ownerScope = String(owner.view.scope ?? '');
+          if (ref.kind === 'integration-surface') {
+            if (owner.view.type !== 'integration' || owner.element.kind !== 'integration-contract') diagnostics.push(diagnostic(
+              'classification', 'INTERACTION_SUBJECT_SURFACE_OWNER_INVALID', refPath,
+              'integration-surface references must own an integration-contract element'
+            ));
+            else if (ref.surface === 'side-effect') {
+              const matches = objectArray(owner.element.side_effects).filter((item) => (
+                item.kind === ref.side_effect_kind && item.target === ref.target
+              ));
+              if (matches.length !== 1) diagnostics.push(diagnostic(
+                'reference', 'INTERACTION_SUBJECT_SIDE_EFFECT_NOT_UNIQUE', refPath,
+                'integration side-effect subject must resolve uniquely by (side_effect_kind, target)'
+              ));
+            } else if (!['request', 'response', 'persistence', 'event', 'callback', 'compensation'].includes(String(ref.surface))) diagnostics.push(diagnostic(
+              'classification', 'INTERACTION_SUBJECT_SURFACE_INVALID', refPath,
+              'integration surface is outside the closed surface set'
+            ));
+          }
+        }
+      } else if (ref.kind === 'model-element') {
+        const claim = claimsById.get(String(ref.model_ref ?? ''));
+        if (!claim) diagnostics.push(diagnostic('reference', 'INTERACTION_SUBJECT_MODEL_DANGLING', refPath, 'interaction model reference is unknown'));
+        else if (!isE2ModelElement(claim)) diagnostics.push(diagnostic('classification', 'INTERACTION_SUBJECT_MODEL_INVALID', refPath, 'interaction model reference must be an accepted E2 model element'));
+        else {
+          roots = [String(ref.model_ref)];
+          ownerScope = String(claim.scope ?? '');
+        }
+      }
+      if (ownerScope && !stringArray(candidate.module_ids).some((moduleId) => (
+        scopeContains(moduleId, ownerScope) || scopeContains(ownerScope, moduleId)
+      ))) diagnostics.push(diagnostic(
+        'classification', 'INTERACTION_SUBJECT_MODULE_MISMATCH', refPath,
+        'interaction semantic subject scope must overlap a candidate module'
+      ));
+      for (const root of roots) subjectRoots.add(root);
+      if (roots.length > 0) subjectRootGroups.push({ path: refPath, roots });
+    }
+    for (const claimId of sourceIds) {
+      const claim = claimsById.get(claimId);
+      const claimPath = `${path}/source_claim_ids/${pointerPart(claimId)}`;
+      if (!claim) {
+        diagnostics.push(diagnostic(
+          'reference', 'INTERACTION_SOURCE_CLAIM_DANGLING', claimPath,
+          `interaction candidate references unknown accepted claim "${claimId}"`
+        ));
+        continue;
+      }
+      if (!stringArray(candidate.module_ids).some((moduleId) => (
+        scopeContains(moduleId, String(claim.scope)) || scopeContains(String(claim.scope), moduleId)
+      ))) diagnostics.push(diagnostic(
+        'classification', 'INTERACTION_SOURCE_SCOPE_MISMATCH', claimPath,
+        'interaction provenance scope must overlap a candidate module'
+      ));
+      if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, claimId, root))) diagnostics.push(diagnostic(
+        'traceability', 'INTERACTION_SOURCE_EVIDENCE_UNRELATED', claimPath,
+        'every interaction provenance claim must connect directionally to its semantic subject'
+      ));
+    }
+    for (const group of subjectRootGroups) if (!group.roots.some((root) => sourceIds.some((claimId) => (
+      claimsById.has(claimId) && claimsDirectionallyRelated(relations, claimId, root)
+    )))) diagnostics.push(diagnostic(
+      'traceability', 'INTERACTION_SUBJECT_EVIDENCE_UNRELATED', group.path,
+      'every interaction semantic subject must connect directionally to provenance evidence'
+    ));
+    const intent = isObject(candidate.issue_intent) ? candidate.issue_intent : null;
+    if (candidate.disposition === 'blocker' && intent) {
+      for (const evidenceId of stringArray(intent.evidence_refs)) {
+        const evidenceClaim = claimsById.get(evidenceId);
+        const evidencePath = `${path}/issue_intent/evidence_refs/${pointerPart(evidenceId)}`;
+        if (!evidenceClaim) {
+          diagnostics.push(diagnostic(
+            'reference', 'INTERACTION_ISSUE_EVIDENCE_DANGLING', evidencePath,
+            'interaction issue intent references unknown accepted evidence'
+          ));
+          continue;
+        }
+        if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) diagnostics.push(diagnostic(
+          'classification', 'INTERACTION_ISSUE_EVIDENCE_SCOPE_MISMATCH', evidencePath,
+          'interaction issue evidence scope must cover the issue scope'
+        ));
+        if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, evidenceId, root))) diagnostics.push(diagnostic(
+          'traceability', 'INTERACTION_ISSUE_EVIDENCE_UNRELATED', evidencePath,
+          'every interaction issue evidence claim must connect directionally to its semantic subject'
+        ));
+      }
+    }
+  }
+}
+
 /** @param {Record<string, unknown>[]} candidates */
 function reconcileInteractionRoutes(candidates) {
-  return candidates.map((candidate) => candidate.disposition === 'formal-view'
-    ? { candidate_id: candidate.candidate_id, route_type: 'formal-view', formal_view_id: candidate.formal_view_id }
-    : candidate.disposition === 'blocker'
-      ? { candidate_id: candidate.candidate_id, route_type: 'blocked', blocker_root_issue_id: candidate.blocker_root_issue_id }
-      : { candidate_id: candidate.candidate_id, route_type: 'exploratory', exploratory_id: candidate.exploratory_id })
-    .sort((left, right) => compareCodePoints(String(left.candidate_id), String(right.candidate_id)));
+  const routes = [];
+  const gaps = [];
+  for (const candidate of candidates) {
+    if (candidate.disposition === 'formal-view') {
+      routes.push({ candidate_id: candidate.candidate_id, route_type: 'formal-view', formal_view_id: candidate.formal_view_id });
+      continue;
+    }
+    if (candidate.disposition === 'exploratory') {
+      routes.push({ candidate_id: candidate.candidate_id, route_type: 'exploratory', exploratory_id: candidate.exploratory_id });
+      continue;
+    }
+    const intent = /** @type {Record<string, unknown>} */ (candidate.issue_intent);
+    const subject = {
+      kind: 'interactions',
+      module_ids: [...stringArray(candidate.module_ids)].sort(compareCodePoints),
+      dimension: candidate.dimension,
+      semantic_subject_refs: [...objectArray(candidate.semantic_subject_refs)]
+        .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right)))
+    };
+    const semanticRefs = [canonicalStringify(subject)];
+    const signature = { missing_type: intent.missing_type, semantic_refs: semanticRefs, scope: intent.scope };
+    const rootIssueKey = canonicalStringify(signature);
+    const rootIssueId = stableId('root', signature);
+    const gapObligationId = stableId('obligation', {
+      kind: 'requirement-gap', owner: { kind: 'interaction', subject },
+      missing_type: intent.missing_type, scope: intent.scope
+    });
+    routes.push({
+      candidate_id: candidate.candidate_id, route_type: 'blocked',
+      blocker_root_issue_id: rootIssueId, gap_obligation_id: gapObligationId
+    });
+    gaps.push({
+      obligation_id: gapObligationId, kind: 'requirement-gap', caseable: false,
+      risk: intent.risk, scope: intent.scope,
+      source_claim_ids: [...stringArray(candidate.source_claim_ids)].sort(compareCodePoints),
+      view_element_refs: [...new Set(objectArray(candidate.semantic_subject_refs).flatMap((ref) => (
+        ref.kind === 'view-element' || ref.kind === 'integration-surface'
+          ? [qualifyViewElementRef(String(ref.view_id), String(ref.element_id))] : []
+      )))].sort(compareCodePoints),
+      required_oracle_refs: [], required_capabilities: [],
+      gap_issue: {
+        root_issue_id: rootIssueId, root_issue_key: rootIssueKey,
+        missing_type: intent.missing_type, semantic_refs: semanticRefs,
+        scope: intent.scope, answerable: intent.answerable,
+        reasons: [...stringArray(intent.reasons)].sort(compareCodePoints),
+        evidence_refs: [...stringArray(intent.evidence_refs)].sort(compareCodePoints)
+      }
+    });
+  }
+  routes.sort((left, right) => compareCodePoints(String(left.candidate_id), String(right.candidate_id)));
+  gaps.sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id)));
+  return { routes, gaps };
 }
 
 /**
@@ -1425,12 +1697,15 @@ export function compileObligations(evidenceGraph, behaviorViews) {
   const claimsById = evidence.claimsById;
   const terminalRoutes = terminalFactRoutes(inputs, factsById, claimsById, evidence.relations, diagnostics);
   diagnostics.push(
-    .../** @type {Diagnostic[]} */ (viewValidation.diagnostics)
-      .filter((item) => !isResolvedTask4FactDiagnostic(item, new Set(terminalRoutes.keys()))),
+    .../** @type {Diagnostic[]} */ (viewValidation.diagnostics),
     .../** @type {Diagnostic[]} */ (interactionAudit.diagnostics)
   );
+  validateInteractionSubjects(
+    /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates),
+    factsById, viewValidation.viewsById, claimsById, evidence.relations, diagnostics
+  );
   const customValidation = validateCustomObligations(
-    inputs, viewValidation.viewsById, claimsById, evidence.relations, diagnostics
+    inputs, viewValidation.viewsById, factsById, claimsById, evidence.relations, diagnostics
   );
   assertNoDiagnostics(diagnostics);
 
@@ -1441,15 +1716,22 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     inputs.customResponsibilityPaths,
     systemObligations, diagnostics
   );
-  const obligations = [...systemObligations, ...customObligations]
-    .sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id)));
-  const factRoutes = reconcileFactRoutes(
-    facts, obligations, /** @type {Record<string, unknown>[]} */ (viewValidation.factRoutes),
-    terminalRoutes, evidence.relations, diagnostics
-  );
-  const interactionRoutes = reconcileInteractionRoutes(
+  const interactionCompilation = reconcileInteractionRoutes(
     /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates)
   );
+  const gapObligations = [...terminalRoutes.values()].flatMap((entry) => (
+    isObject(entry.gap) ? [entry.gap] : []
+  )).concat(interactionCompilation.gaps);
+  const obligations = [...systemObligations, ...customObligations, ...gapObligations]
+    .sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id)));
+  const customObligationIdsByFactId = indexCustomObligationsByOwnerFact(
+    customValidation.seeds, customValidation.ownerFactIdsBySeed
+  );
+  const factRoutes = reconcileFactRoutes(
+    facts, obligations, /** @type {Record<string, unknown>[]} */ (viewValidation.factRoutes),
+    terminalRoutes, customObligationIdsByFactId, evidence.relations, diagnostics
+  );
+  const interactionRoutes = interactionCompilation.routes;
   validateRouteIdentity(facts, factRoutes, 'fact_id', 'fact_id', 'FACT', diagnostics);
   validateRouteIdentity(
     /** @type {Record<string, unknown>[]} */ (interactionAudit.candidates), interactionRoutes,

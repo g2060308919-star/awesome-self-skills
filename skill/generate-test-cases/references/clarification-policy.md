@@ -2,6 +2,8 @@
 
 Clarify only after the complete A–G analysis. Merge current fresh answerable root issues into one risk-ordered set; do not ask per Case or impose a fixed total round count.
 
+Only an answerable, open/fresh, and unsuppressed compiler root is eligible for a question. Non-answerable compiler-owned gaps remain Blocked with their recovery guidance and never become questions. Copy terminal-fact, interaction, and case-blocker root IDs exactly from the runner reply into a Decision or `reopen_root_issues` event. Never recompute, infer, or mint those IDs from wording, evidence, risk, or affected Test Points.
+
 ## Present one convergent set
 
 For each returned root issue show the missing rule or capability, scope, affected critical/high/medium/low counts, and a short answer form. Ask every current fresh root in the returned reply. Technical or environmental blockers that a user answer cannot resolve remain Blocked without becoming business questions.

@@ -1331,12 +1331,78 @@ function semanticRefs(obligation, reason) {
   return sortArray(setValuesArray(refs), compareCodePoints);
 }
 
-/** @param {any} classification @param {Record<string, unknown>[]} obligations */
-function bindBlockedRootIdentity(classification, obligations) {
+/** @param {Record<string, unknown>} caseDrafts */
+function blockerInputsByObligation(caseDrafts) {
+  const byObligation = makeMap();
+  const dispositions = records(caseDrafts.obligation_dispositions);
+  for (let index = 0; index < dispositions.length; index += 1) {
+    const disposition = dispositions[index];
+    if (disposition.status !== 'blocker' || !isRecord(disposition.issue_intent)
+      || !isRecord(disposition.subject)) continue;
+    const ids = strings(disposition.affected_obligation_ids);
+    for (let idIndex = 0; idIndex < ids.length; idIndex += 1) mapSet(byObligation, ids[idIndex], {
+      intent: disposition.issue_intent, subject: disposition.subject
+    });
+  }
+  return byObligation;
+}
+
+/** @param {Record<string, unknown>} subject */
+function normalizedBlockerSubject(subject) {
+  if (subject.kind === 'facts') return {
+    kind: 'facts', fact_ids: sortArray(strings(subject.fact_ids), compareCodePoints)
+  };
+  if (subject.kind === 'view-elements') return {
+    kind: 'view-elements',
+    view_element_refs: sortArray(mapArray(records(subject.view_element_refs), (ref) => ({
+      view_id: String(ref.view_id), element_id: String(ref.element_id)
+    })), (left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right)))
+  };
+  if (subject.kind === 'capabilities') return {
+    kind: 'capabilities', capabilities: sortArray(strings(subject.capabilities), compareCodePoints)
+  };
+  return {
+    kind: 'evidence-conflict', claim_refs: sortArray(strings(subject.claim_refs), compareCodePoints)
+  };
+}
+
+/** @param {Record<string, unknown>} obligation @param {any} submitted */
+function compilerIssueDescriptor(obligation, submitted) {
+  if (obligation.kind === 'requirement-gap' && isRecord(obligation.gap_issue)) {
+    return {
+      missing_type: String(obligation.gap_issue.missing_type),
+      semantic_refs: strings(obligation.gap_issue.semantic_refs),
+      scope: String(obligation.gap_issue.scope),
+      answerable: obligation.gap_issue.answerable === true,
+      reasons: strings(obligation.gap_issue.reasons),
+      evidence_refs: strings(obligation.gap_issue.evidence_refs)
+    };
+  }
+  if (submitted && isRecord(submitted.intent) && isRecord(submitted.subject)) return {
+    missing_type: String(submitted.intent.missing_type),
+    semantic_refs: [canonicalStringify(normalizedBlockerSubject(submitted.subject))],
+    scope: String(submitted.intent.scope),
+    answerable: submitted.intent.answerable === true,
+    reasons: strings(submitted.intent.reasons),
+    evidence_refs: strings(submitted.intent.evidence_refs)
+  };
+  return null;
+}
+
+/** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>} caseDrafts */
+function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
+  const submittedByObligation = blockerInputsByObligation(caseDrafts);
   const blocked = mapArray(records(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
-    const signature = {
+    const compilerIssue = compilerIssueDescriptor(
+      obligation, mapGet(submittedByObligation, String(item.obligation_id))
+    );
+    const signature = compilerIssue ? {
+      missing_type: compilerIssue.missing_type,
+      semantic_refs: compilerIssue.semantic_refs,
+      scope: compilerIssue.scope
+    } : {
       missing_type: missingType(String(item.reason)),
       semantic_refs: semanticRefs(obligation, String(item.reason)),
       scope: String(obligation.scope ?? '')
@@ -1346,22 +1412,27 @@ function bindBlockedRootIdentity(classification, obligations) {
   return { ...classification, blocked };
 }
 
-/** @param {any} classification @param {Record<string, unknown>[]} obligations */
-function blockedDescriptors(classification, obligations) {
+/** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>} caseDrafts */
+function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
+  const submittedByObligation = blockerInputsByObligation(caseDrafts);
   return sortArray(mapArray(records(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const reason = String(item.reason);
-    const type = missingType(reason);
-    const scope = String(obligation.scope ?? 'unknown');
+    const compilerIssue = compilerIssueDescriptor(
+      obligation, mapGet(submittedByObligation, String(item.obligation_id))
+    );
+    const type = compilerIssue?.missing_type ?? missingType(reason);
+    const scope = compilerIssue?.scope ?? String(obligation.scope ?? 'unknown');
     const technical = reason.includes('UNAVAILABLE') || reason.includes('UNKNOWN')
       || reason.includes('MISSING_CAPABILITY') || reason.includes('MISSING_OBSERVER')
       || reason.includes('MISSING_CONTROL');
     return {
       obligation_id: String(item.obligation_id), missing_type: type,
-      semantic_refs: semanticRefs(obligation, reason), scope,
-      risk: String(item.risk), reason, evidence_refs: sortArray(strings(item.evidence_refs), compareCodePoints),
-      answerable: !technical,
+      semantic_refs: compilerIssue?.semantic_refs ?? semanticRefs(obligation, reason), scope,
+      risk: String(item.risk), reason,
+      evidence_refs: sortArray(compilerIssue?.evidence_refs ?? strings(item.evidence_refs), compareCodePoints),
+      answerable: compilerIssue?.answerable ?? !technical,
       question: `Clarification required for ${type} in ${scope}.`
     };
   }), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
@@ -1801,7 +1872,10 @@ function evaluateRevisionCaptured(submittedInput, options) {
     );
     const clarification = evaluateClarification({
       source_revision: sourceRevision,
-      blocked_obligations: blockedDescriptors(classification, records(obligations.obligations)),
+      blocked_obligations: blockedDescriptors(
+        classification, records(obligations.obligations),
+        /** @type {Record<string, unknown>} */ (input.case_drafts)
+      ),
       prior_state: translatedClarification.prior_state,
       append_batch: translatedClarification.append_batch,
       semantic_snapshot: semantics
@@ -1822,7 +1896,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
     let bundle;
     try {
       const bundleClassification = bindBlockedRootIdentity(
-        classification, records(obligations.obligations)
+        classification, records(obligations.obligations),
+        /** @type {Record<string, unknown>} */ (input.case_drafts)
       );
       bundle = buildBundle({
         schema_version: '1.0.0', source_revision: sourceRevision,

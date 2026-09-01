@@ -92,7 +92,7 @@ function sharedAssumptionClosureContext(size) {
     const obligationId = `obligation_shared_${suffix}`;
     facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#shared_${suffix}`],
       required_oracle_refs: [finalClaim], required_capabilities: ['checkout-control']
     });
@@ -426,7 +426,7 @@ test('each covered Test Point owns one distinct expectation through accepted Ora
   const input = context();
   const candidate = input.classification.grounded[0];
   input.obligations_artifact.obligations.push({
-    obligation_id: 'obligation_second', kind: 'flow', risk: 'medium', scope: 'checkout',
+    obligation_id: 'obligation_second', kind: 'flow', caseable: true, risk: 'medium', scope: 'checkout',
     source_claim_ids: ['claim_second'], view_element_refs: ['view_checkout#second'],
     required_oracle_refs: ['claim_oracle_second'], required_capabilities: []
   });
@@ -626,7 +626,8 @@ test('duplicate fact routes fail before order-dependent semantic use', () => {
     const index = routes.findIndex((/** @type {any} */ route) => route.fact_id === 'fact_grounded');
     const original = structuredClone(routes[index]);
     const duplicate = {
-      fact_id: 'fact_grounded', route_type: 'blocked', blocker_root_issue_id: 'root_duplicate_probe'
+      fact_id: 'fact_grounded', route_type: 'blocked', blocker_root_issue_id: 'root_duplicate_probe',
+      gap_obligation_id: 'obligation_duplicate_probe'
     };
     routes.splice(index, 1, ...(duplicateFirst ? [duplicate, original] : [original, duplicate]));
     try { buildBundle(input); } catch (error) { return /** @type {any} */ (error).diagnostics; }
@@ -1350,7 +1351,7 @@ function blockedScaleContext(size) {
     });
     facts.push({ fact_id: factId, claim_id: claimId, status: 'active', source_claim_ids: [claimId] });
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'medium', scope: `scale/${suffix}`,
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'medium', scope: `scale/${suffix}`,
       source_claim_ids: [claimId], view_element_refs: [`view_scale#${suffix}`],
       required_oracle_refs: [claimId], required_capabilities: []
     });
@@ -1600,7 +1601,7 @@ function notApplicableScaleContext(size) {
     );
     facts.push({ fact_id: factId, claim_id: factClaimId, status: 'active', source_claim_ids: [factClaimId] });
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'low', scope: `checkout/legacy/${suffix}`,
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'low', scope: `checkout/legacy/${suffix}`,
       source_claim_ids: [factClaimId], view_element_refs: [`view_checkout#legacy_${suffix}`],
       required_oracle_refs: [], required_capabilities: []
     });
@@ -1709,7 +1710,7 @@ function denseOracleContext(size) {
     const expectationId = `expectation_dense_${suffix}`;
     const evidenceRef = `claim_dense_${suffix}`;
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#dense_${suffix}`],
       required_oracle_refs: ['claim_oracle_grounded'], required_capabilities: ['checkout-control']
     });
@@ -1789,7 +1790,7 @@ function prefixOracleContext(size) {
     });
     const obligationId = `obligation_prefix_${suffix}`;
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#prefix_${suffix}`],
       required_oracle_refs: [oracleId], required_capabilities: ['checkout-control']
     });
@@ -1907,7 +1908,7 @@ function componentIsolatedForestContext(size) {
     });
     facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#component_${suffix}`],
       required_oracle_refs: ['claim_component_root'], required_capabilities: ['checkout-control']
     });
@@ -2044,7 +2045,7 @@ function multiRootOracleContext(size) {
     fact_id: 'fact_multi', claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded']
   }];
   input.obligations_artifact.obligations = [{
-    obligation_id: 'obligation_multi', kind: 'flow', risk: 'high', scope: 'checkout',
+    obligation_id: 'obligation_multi', kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
     source_claim_ids: ['claim_grounded'], view_element_refs: ['view_checkout#multi'],
     required_oracle_refs: roots.map((item) => item.claim_id), required_capabilities: ['checkout-control']
   }];
@@ -2134,7 +2135,7 @@ function sharedMultiRootExpectationsContext(size) {
     });
     routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#multi_${suffix}`],
       required_oracle_refs: [...roots], required_capabilities: ['checkout-control']
     });
@@ -2215,7 +2216,7 @@ function manyCaseForestContext(size) {
     );
     facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
     obligations.push({
-      obligation_id: obligationId, kind: 'flow', risk: 'high', scope: 'checkout',
+      obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#case_${suffix}`],
       required_oracle_refs: [oracleId], required_capabilities: ['checkout-control']
     });

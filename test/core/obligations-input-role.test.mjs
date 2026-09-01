@@ -176,7 +176,9 @@ test('input role obligations hand-count two explicit classes plus inclusive lowe
   assert.equal(actual.some((seed) => seed.source_claim_ids.some((id) => id.includes('generic'))), false);
   assert.equal(JSON.stringify(view), before);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: 6, obligations: actual, fact_routes: [], interaction_routes: []
+    schema_version: '1.0.0', source_revision: 6,
+    obligations: actual.map((seed) => ({ ...seed, caseable: true })),
+    fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);
   assert.deepEqual(validateUniqueStableIds({ obligations: actual }), []);
 });
@@ -194,7 +196,9 @@ test('input role obligations preserve every sourced role-permission combination 
   ]);
   assert.equal(actual.every((seed) => seed.required_oracle_refs.every((id) => !id.includes('generic-denial'))), true);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: 6, obligations: actual, fact_routes: [], interaction_routes: []
+    schema_version: '1.0.0', source_revision: 6,
+    obligations: actual.map((seed) => ({ ...seed, caseable: true })),
+    fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);
 });
 

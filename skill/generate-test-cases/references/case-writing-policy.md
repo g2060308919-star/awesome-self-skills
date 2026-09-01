@@ -6,6 +6,10 @@ Submit complete candidate `case_drafts` after formal Test Points exist; this sta
 
 Read `derived/rNNN/test-obligations.json` before drafting, using the zero-padded revision requested by the runner. Treat it as compiler output, never edit it. For each Case, copy only the formal obligation IDs it actually covers. Create one distinct expectation for each linked obligation; that expectation's `evidence_ref` must name an accepted claim whose ancestry covers every `required_oracle_refs` entry for that obligation. If accepted evidence has no such claim, do not merge unrelated expectations or invent an aggregate at this stage.
 
+Never resubmit a compiler-owned requirement-gap obligation in `obligation_dispositions`. It is marked `caseable=false` and remains compiler-owned Blocked output. Never calculate or submit a root key or root ID, and never let a Case, NotApplicable disposition, or expectation close a requirement gap.
+
+When several caseable Test Points share one real missing rule or resource, submit one grouped blocker with nonempty disjoint `affected_obligation_ids`, one typed `subject`, and one typed `issue_intent`. The subject must be reachable from every affected Test Point and use exactly one closed kind: facts, view elements, capabilities, or evidence conflict. Use accepted related evidence in the intent; the compiler derives the root and expands the group into formal per-Test-Point dispositions.
+
 For each candidate, bind this sequence:
 
 ```text

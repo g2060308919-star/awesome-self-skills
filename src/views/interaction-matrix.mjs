@@ -16,7 +16,7 @@ const VIEW_ELEMENT_KINDS = Object.freeze({
   integration: Object.freeze(['integration-contract'])
 });
 const DISPOSITION_FIELDS = Object.freeze([
-  'formal_view_id', 'blocker_root_issue_id', 'exploratory_id'
+  'formal_view_id', 'exploratory_id'
 ]);
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -94,13 +94,18 @@ function cellPath(moduleIds, dimension) {
 /** @param {Record<string, unknown>} candidate */
 function candidateSemanticKey(candidate) {
   return JSON.stringify([
-    typeof candidate.candidate_id === 'string' ? candidate.candidate_id : '',
     normalizedStrings(candidate.module_ids),
     typeof candidate.dimension === 'string' ? candidate.dimension : '',
-    typeof candidate.disposition === 'string' ? candidate.disposition : '',
-    DISPOSITION_FIELDS.map((field) => typeof candidate[field] === 'string' ? candidate[field] : ''),
-    normalizedStrings(candidate.source_claim_ids)
+    normalizedSemanticRefs(candidate.semantic_subject_refs)
   ]);
+}
+
+/** @param {unknown} value */
+function normalizedSemanticRefs(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Map(value.filter(isObject).map((item) => [JSON.stringify(
+    Object.fromEntries(Object.entries(item).sort(([left], [right]) => compareCodePoints(left, right)))
+  ), item])).keys()].sort(compareCodePoints);
 }
 
 /** @param {Record<string, unknown>} candidate */
@@ -301,6 +306,12 @@ export function auditInteractionMatrix(artifact) {
     const candidateId = typeof candidate.candidate_id === 'string' ? candidate.candidate_id : '';
     candidateIdCounts.set(candidateId, (candidateIdCounts.get(candidateId) ?? 0) + 1);
   }
+
+  const candidateSemanticCounts = new Map();
+  for (const candidate of submittedCandidates) {
+    const key = candidateSemanticKey(candidate);
+    candidateSemanticCounts.set(key, (candidateSemanticCounts.get(key) ?? 0) + 1);
+  }
   for (const [candidateId, count] of [...candidateIdCounts.entries()].sort(([left], [right]) => compareCodePoints(left, right))) {
     if (candidateId.length === 0 || count < 2) continue;
     diagnostics.push(diagnostic(
@@ -314,7 +325,10 @@ export function auditInteractionMatrix(artifact) {
   const candidatesByCell = new Map();
   /** @type {Record<string, unknown>[]} */
   const candidates = [];
-  const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints(candidateSemanticKey(left), candidateSemanticKey(right)));
+  const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints(
+    `${candidateSemanticKey(left)}\0${String(left.candidate_id ?? '')}`,
+    `${candidateSemanticKey(right)}\0${String(right.candidate_id ?? '')}`
+  ));
   for (const candidate of orderedCandidates) {
     const path = candidatePath(candidate);
     const candidateId = typeof candidate.candidate_id === 'string' ? candidate.candidate_id : '';
@@ -327,24 +341,39 @@ export function auditInteractionMatrix(artifact) {
       diagnostics.push(diagnostic('schema', 'INTERACTION_CANDIDATE_ID_INVALID', `${path}/candidate_id`, 'candidate_id must be nonblank and unique'));
       valid = false;
     } else if ((candidateIdCounts.get(candidateId) ?? 0) > 1) valid = false;
+    if ((candidateSemanticCounts.get(candidateSemanticKey(candidate)) ?? 0) > 1) {
+      diagnostics.push(diagnostic(
+        'traceability', 'INTERACTION_CANDIDATE_SUBJECT_DUPLICATE', path,
+        'module_ids, dimension, and semantic_subject_refs must identify one interaction candidate'
+      ));
+      valid = false;
+    }
     if (modulesForCandidate.length !== rawModuleCount || modulesForCandidate.length === 0 || !DIMENSION_SET.has(dimension)) {
       diagnostics.push(diagnostic('reference', 'INTERACTION_CANDIDATE_CELL_INVALID', path, 'candidate must name one valid audit cell'));
       valid = false;
     }
+    const sourceClaimIds = normalizedStrings(candidate.source_claim_ids);
+    const semanticSubjectRefs = normalizedSemanticRefs(candidate.semantic_subject_refs);
+    if (sourceClaimIds.length === 0) {
+      diagnostics.push(diagnostic('classification', 'INTERACTION_CANDIDATE_EVIDENCE_REQUIRED', `${path}/source_claim_ids`, 'every interaction candidate requires nonempty provenance evidence'));
+      valid = false;
+    }
+    if (semanticSubjectRefs.length === 0 || semanticSubjectRefs.length !== (Array.isArray(candidate.semantic_subject_refs) ? candidate.semantic_subject_refs.length : 0)) {
+      diagnostics.push(diagnostic('classification', 'INTERACTION_CANDIDATE_SUBJECT_REQUIRED', `${path}/semantic_subject_refs`, 'every interaction candidate requires nonempty unique semantic subject references'));
+      valid = false;
+    }
     const destinationFields = DISPOSITION_FIELDS.filter((field) => typeof candidate[field] === 'string' && /** @type {string} */ (candidate[field]).trim().length > 0);
     const expectedField = disposition === 'formal-view' ? 'formal_view_id'
-      : disposition === 'blocker' ? 'blocker_root_issue_id'
+      : disposition === 'blocker' ? null
         : disposition === 'exploratory' ? 'exploratory_id' : null;
-    if (destinationFields.length !== 1 || expectedField === null || destinationFields[0] !== expectedField) {
+    const dispositionExact = disposition === 'blocker'
+      ? destinationFields.length === 0 && isObject(candidate.issue_intent)
+      : destinationFields.length === 1 && expectedField !== null && destinationFields[0] === expectedField;
+    if (!dispositionExact) {
       diagnostics.push(diagnostic('classification', 'CANDIDATE_DISPOSITION_NOT_EXACT', path, 'candidate must have exactly one destination matching its disposition'));
       valid = false;
     }
     if (disposition === 'formal-view') {
-      const sourceClaimIds = normalizedStrings(candidate.source_claim_ids);
-      if (sourceClaimIds.length === 0) {
-        diagnostics.push(diagnostic('classification', 'FORMAL_CANDIDATE_EVIDENCE_REQUIRED', `${path}/source_claim_ids`, 'a formal interaction candidate requires source evidence'));
-        valid = false;
-      }
       const viewId = typeof candidate.formal_view_id === 'string' ? candidate.formal_view_id : '';
       const matchingViews = viewsById.get(viewId) ?? [];
       if (matchingViews.length === 0) {
@@ -402,7 +431,9 @@ export function auditInteractionMatrix(artifact) {
     if (valid) {
       /** @type {Record<string, unknown>} */
       const normalized = { ...candidate, module_ids: modulesForCandidate };
-      if (Array.isArray(candidate.source_claim_ids)) normalized.source_claim_ids = normalizedStrings(candidate.source_claim_ids);
+      normalized.source_claim_ids = sourceClaimIds;
+      normalized.semantic_subject_refs = objectArray(candidate.semantic_subject_refs)
+        .sort((left, right) => compareCodePoints(JSON.stringify(left), JSON.stringify(right)));
       candidates.push(normalized);
       const matches = candidatesByCell.get(key) ?? [];
       matches.push(normalized);
@@ -419,10 +450,6 @@ export function auditInteractionMatrix(artifact) {
     if (dispositions.length === 0) diagnostics.push(diagnostic(
       'traceability', 'INTERACTION_CANDIDATE_MISSING', path,
       `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has no valid disposition`
-    ));
-    else if (dispositions.length > 1) diagnostics.push(diagnostic(
-      'traceability', 'INTERACTION_CANDIDATE_MULTIPLE', path,
-      `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has more than one valid disposition`
     ));
   }
 

@@ -128,6 +128,27 @@ test('skill static policies freeze clarification and source-review boundaries', 
     behavior,
     /`shared-entity`, `role`, `client`, `interface-event`, `time`, `concurrency`, and `side-effect`/u
   );
+  assert.match(
+    behavior,
+    /Every interaction candidate[\s\S]*nonempty `source_claim_ids`[\s\S]*nonempty `semantic_subject_refs`/u
+  );
+  assert.match(
+    behavior,
+    /`fact`, `view-element`, `model-element`, or `integration-surface`[\s\S]*`\(side_effect_kind, target\)`/u
+  );
+  assert.match(
+    behavior,
+    /Blocked candidate[\s\S]*typed `issue_intent`[\s\S]*never[\s\S]*root key or root ID/u
+  );
+  assert.match(
+    behavior,
+    /provenance[\s\S]*not part of root identity[\s\S]*`module_ids`[\s\S]*`dimension`[\s\S]*`semantic_subject_refs`/u
+  );
+  assert.match(
+    behavior,
+    /custom responsibility[\s\S]*`facts` or `view-elements`[\s\S]*single modeled fact route/u
+  );
+  assert.match(behavior, /requirement-gap[\s\S]*`caseable=false`/u);
 
   const clarification = await text('references/clarification-policy.md');
   assert.match(clarification, /task-scoped E3/u);
@@ -139,6 +160,18 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(clarification, /complete pending-root set/u);
   assert.match(clarification, /reopen_root_issues/u);
   assert.match(clarification, /new Source Pack revision/u);
+  assert.match(
+    clarification,
+    /answerable, open\/fresh, and unsuppressed[\s\S]*eligible for a question/u
+  );
+  assert.match(
+    clarification,
+    /Non-answerable compiler-owned gaps[\s\S]*Blocked[\s\S]*recovery[\s\S]*never become questions/u
+  );
+  assert.match(
+    clarification,
+    /copy[\s\S]*root IDs[\s\S]*runner reply[\s\S]*Decision[\s\S]*reopen[\s\S]*Never recompute/iu
+  );
 
   const cases = await text('references/case-writing-policy.md');
   assert.match(cases, /read-only source rebuttal pass/u);
@@ -151,6 +184,15 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(cases, /Read `derived\/rNNN\/test-obligations\.json` before drafting/u);
   assert.match(cases, /one distinct expectation for each linked obligation[\s\S]*covers every `required_oracle_refs` entry/u);
   assert.match(cases, /`evidence_refs` must equal the exact sorted union of direct evidence roots/u);
+  assert.match(
+    cases,
+    /grouped blocker[\s\S]*`affected_obligation_ids`[\s\S]*typed `subject`[\s\S]*typed `issue_intent`/u
+  );
+  assert.match(cases, /Never resubmit a compiler-owned requirement-gap obligation/u);
+  assert.match(
+    cases,
+    /Never[\s\S]*root key or root ID[\s\S]*Case[\s\S]*NotApplicable[\s\S]*expectation[\s\S]*close a requirement gap/u
+  );
   assert.doesNotMatch(cases, /clarification has converged or delivery was requested/u);
 });
 

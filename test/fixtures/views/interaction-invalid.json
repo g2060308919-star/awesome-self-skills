@@ -13,8 +13,8 @@
   ],
   "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
   "interaction_candidates": [
-    { "candidate_id": "candidate_wrong_view", "module_ids": ["orders", "payments"], "dimension": "time", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "formal_view_id": "view_flow" },
-    { "candidate_id": "candidate_no_signal", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "exploratory", "exploratory_id": "exploratory_role" },
-    { "candidate_id": "candidate_orphan", "module_ids": ["orders", "payments"], "dimension": "concurrency", "disposition": "blocker", "blocker_root_issue_id": "root_concurrency" }
+    { "candidate_id": "candidate_wrong_view", "module_ids": ["orders", "payments"], "dimension": "time", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "semantic_subject_refs": [{ "kind": "view-element", "view_id": "view_flow", "element_id": "missing" }], "formal_view_id": "view_flow" },
+    { "candidate_id": "candidate_no_signal", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "exploratory", "source_claim_ids": ["claim_shared"], "semantic_subject_refs": [{ "kind": "view-element", "view_id": "view_flow", "element_id": "missing" }], "exploratory_id": "exploratory_role" },
+    { "candidate_id": "candidate_orphan", "module_ids": ["orders", "payments"], "dimension": "concurrency", "disposition": "blocker", "source_claim_ids": ["claim_shared"], "semantic_subject_refs": [{ "kind": "view-element", "view_id": "view_flow", "element_id": "missing" }], "issue_intent": { "missing_type": "concurrency-contract", "scope": "orders", "answerable": false, "risk": "high", "reasons": ["Concurrency behavior is unspecified."], "evidence_refs": ["claim_shared"] } }
   ]
 }

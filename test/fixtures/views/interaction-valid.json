@@ -37,8 +37,8 @@
   ],
   "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
   "interaction_candidates": [
-    { "candidate_id": "candidate_formal", "module_ids": ["orders", "payments"], "dimension": "shared-entity", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "formal_view_id": "view_orders" },
-    { "candidate_id": "candidate_blocked", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "blocker", "blocker_root_issue_id": "root_cross_role" },
-    { "candidate_id": "candidate_exploratory", "module_ids": ["orders", "payments"], "dimension": "client", "disposition": "exploratory", "exploratory_id": "exploratory_cross_client" }
+    { "candidate_id": "candidate_formal", "module_ids": ["orders", "payments"], "dimension": "shared-entity", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "semantic_subject_refs": [{ "kind": "view-element", "view_id": "view_orders", "element_id": "integration_shared_order" }], "formal_view_id": "view_orders" },
+    { "candidate_id": "candidate_blocked", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "blocker", "source_claim_ids": ["claim_shared"], "semantic_subject_refs": [{ "kind": "view-element", "view_id": "view_orders", "element_id": "integration_shared_order" }], "issue_intent": { "missing_type": "role-contract", "scope": "orders", "answerable": true, "risk": "high", "reasons": ["Cross-module role behavior is unspecified."], "evidence_refs": ["claim_shared"] } },
+    { "candidate_id": "candidate_exploratory", "module_ids": ["orders", "payments"], "dimension": "client", "disposition": "exploratory", "source_claim_ids": ["claim_shared"], "semantic_subject_refs": [{ "kind": "view-element", "view_id": "view_orders", "element_id": "integration_shared_order" }], "exploratory_id": "exploratory_cross_client" }
   ]
 }

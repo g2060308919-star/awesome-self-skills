@@ -286,11 +286,7 @@ function terminalRoute(route) {
     route: {
       fact_id: factId,
       route_type: 'blocked',
-      blocker_root_issue_id: stableId('root', {
-        missing_type: intent.missing_type,
-        subject: { kind: 'facts', fact_ids: [factId] },
-        scope: intent.scope
-      })
+      issue_intent: structuredClone(intent)
     }
   };
 }
@@ -298,24 +294,27 @@ function terminalRoute(route) {
 /** @param {Record<string, unknown>} responsibility */
 function customResponsibilitySeed(responsibility) {
   const owner = isObject(responsibility.owner) ? responsibility.owner : {};
+  const normalizedOwner = owner.kind === 'facts'
+    ? { kind: 'facts', fact_ids: sortedStrings(owner.fact_ids, true) }
+    : { kind: 'view-elements', view_element_refs: objectArray(owner.view_element_refs)
+      .map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id }))
+      .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right))) };
   const viewElementRefs = owner.kind === 'view-elements'
     ? objectArray(owner.view_element_refs).map((ref) => (
       qualifyViewElementRef(String(ref.view_id ?? ''), String(ref.element_id ?? ''))
     )).sort(compareCodePoints) : [];
   const sourceClaimIds = sortedStrings(responsibility.source_claim_ids, true);
-  const semanticKey = canonicalStringify({
+  const responsibilityKey = canonicalStringify({
     responsibility_type: responsibility.responsibility_type,
-    owner: owner.kind === 'facts'
-      ? { kind: 'facts', fact_ids: sortedStrings(owner.fact_ids, true) }
-      : { kind: 'view-elements', view_element_refs: objectArray(owner.view_element_refs)
-        .map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id }))
-        .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right))) },
+    owner: normalizedOwner,
     scope: responsibility.scope
   });
   const kind = CUSTOM_KINDS.get(String(responsibility.responsibility_type ?? '')) ?? '';
-  const identity = { kind, scope: responsibility.scope, semantic_key: semanticKey };
+  const identity = { kind, responsibility_key: responsibilityKey };
   return {
-    semantic_key: semanticKey,
+    semantic_key: responsibility.semantic_key,
+    responsibility_key: responsibilityKey,
+    owner: normalizedOwner,
     obligation: {
       obligation_id: stableId('obligation', identity), kind,
       risk: responsibility.risk, scope: responsibility.scope,

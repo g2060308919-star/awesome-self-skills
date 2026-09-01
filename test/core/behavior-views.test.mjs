@@ -74,18 +74,12 @@ test('behavior view validation accepts all seven closed view kinds and derives c
   ]);
 });
 
-test('behavior view validation diagnoses every unmodeled fact and classifies scope by hierarchical overlap', async () => {
+test('behavior view validation reports only modeled routes and defers unmodeled fact closure', async () => {
   const input = await fixture('view-validation-invalid.json');
 
   const result = validateBehaviorViews(evidenceGraph(input), input.artifact);
 
-  for (const factId of ['fact_broad', 'fact_global', 'fact_narrow']) assert.equal(result.diagnostics.some(
-    (item) => item.code === 'NORMATIVE_FACT_UNMODELED' && item.path === `/facts/${factId}`
-  ), true, factId);
-  assert.equal(result.diagnostics.some(
-    (item) => item.code === 'OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED' && item.path === '/facts/fact_disjoint'
-  ), true);
-  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_present'), false);
+  assert.equal(result.diagnostics.some((item) => item.path.startsWith('/facts/')), false);
   assert.deepEqual(result.factRoutes, [{ fact_id: 'fact_present', route_type: 'views', view_ids: ['view_present'] }]);
 });
 
@@ -104,9 +98,7 @@ test('behavior view validation ignores unfrozen submitted fact routes including 
   const result = validateBehaviorViews(graph, input.artifact);
 
   assert.equal(result.factRoutes.some((route) => route.fact_id !== 'fact_present'), false);
-  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_broad'), true);
-  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_narrow'), true);
-  assert.equal(result.diagnostics.some((item) => item.path === '/facts/fact_disjoint'), true);
+  assert.equal(result.diagnostics.some((item) => item.path.startsWith('/facts/')), false);
 });
 
 test('behavior view validation requires claim or valid E2 model-element support for every modeled element and relation', async () => {
@@ -207,8 +199,7 @@ test('behavior view validation rejects duplicate state names and nested input cl
   assert.equal(stateResult.diagnostics.some((item) => item.code === 'STATE_NAME_DUPLICATE'
     && item.path.endsWith('/state_names/draft')), true);
   assert.equal(stateResult.viewsById.has('view_state'), false);
-  assert.equal(stateResult.diagnostics.some((item) => item.path === '/facts/fact_state'
-    && item.code === 'NORMATIVE_FACT_UNMODELED'), true);
+  assert.equal(stateResult.factRoutes.some((item) => item.fact_id === 'fact_state'), false);
   const reversedState = structuredClone(duplicateState);
   reversedState.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_state').elements.reverse();
   assert.deepEqual(
@@ -225,8 +216,7 @@ test('behavior view validation rejects duplicate state names and nested input cl
   assert.equal(classResult.diagnostics.some((item) => item.code === 'INPUT_CLASS_ID_DUPLICATE'
     && item.path.endsWith('/elements/input_quantity/classes/class_valid')), true);
   assert.equal(classResult.viewsById.has('view_input'), false);
-  assert.equal(classResult.diagnostics.some((item) => item.path === '/facts/fact_input'
-    && item.code === 'NORMATIVE_FACT_UNMODELED'), true);
+  assert.equal(classResult.factRoutes.some((item) => item.fact_id === 'fact_input'), false);
   const reversedClass = structuredClone(duplicateClass);
   reversedClass.artifact.views.find((/** @type {any} */ view) => view.view_id === 'view_input').elements[0].classes.reverse();
   assert.deepEqual(
@@ -270,7 +260,9 @@ test('behavior view validation excludes disjoint views before fact routing and f
       interaction_matrix: [],
       obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{
         candidate_id: 'candidate_shipping', module_ids: ['shipping'], dimension: 'shared-entity',
-        disposition: 'formal-view', source_claim_ids: ['claim_global'], formal_view_id: 'view_shipping'
+        disposition: 'formal-view', source_claim_ids: ['claim_global'],
+        semantic_subject_refs: [{ kind: 'view-element', view_id: 'view_shipping', element_id: 'node_view_shipping' }],
+        formal_view_id: 'view_shipping'
       }]
     }
   };
@@ -279,8 +271,7 @@ test('behavior view validation excludes disjoint views before fact routing and f
   const globalResult = validateBehaviorViews(evidenceGraph(globalInput), globalInput.artifact);
   assert.equal(globalResult.diagnostics.some((item) => item.code === 'VIEW_SCOPE_DISJOINT'
     && item.path === '/views/view_shipping/scope'), true);
-  assert.equal(globalResult.diagnostics.some((item) => item.code === 'NORMATIVE_FACT_UNMODELED'
-    && item.path === '/facts/fact_global'), true);
+  assert.equal(globalResult.diagnostics.some((item) => item.path === '/facts/fact_global'), false);
   assert.equal(globalResult.diagnostics.some((item) => item.code === 'FORMAL_INTERACTION_VIEW_INVALID'), true);
   assert.equal(globalResult.viewsById.has('view_shipping'), false);
   assert.deepEqual(globalResult.factRoutes, []);
@@ -294,8 +285,7 @@ test('behavior view validation excludes disjoint views before fact routing and f
   assert.deepEqual(validateUniqueStableIds(shippingInput.artifact), []);
   const shippingResult = validateBehaviorViews(evidenceGraph(shippingInput), shippingInput.artifact);
   assert.equal(shippingResult.diagnostics.some((item) => item.code === 'VIEW_SCOPE_DISJOINT'), true);
-  assert.equal(shippingResult.diagnostics.some((item) => item.code === 'OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED'
-    && item.path === '/facts/fact_shipping'), true);
+  assert.equal(shippingResult.diagnostics.some((item) => item.path === '/facts/fact_shipping'), false);
   assert.deepEqual(shippingResult.factRoutes, []);
 });
 

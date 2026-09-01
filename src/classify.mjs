@@ -33,7 +33,9 @@ const KEYS = Object.freeze({
   evidence: ['claimsById', 'factLedger', 'conflicts'],
   obligationsArtifact: ['schema_version', 'source_revision', 'obligations', 'fact_routes', 'interaction_routes'],
   caseDraftsArtifact: ['schema_version', 'source_revision', 'cases', 'obligation_dispositions', 'exploratory_candidates'],
-  obligation: ['obligation_id', 'kind', 'risk', 'scope', 'source_claim_ids', 'view_element_refs', 'required_oracle_refs', 'required_capabilities'],
+  obligation: ['obligation_id', 'kind', 'caseable', 'risk', 'scope', 'source_claim_ids', 'view_element_refs', 'required_oracle_refs', 'required_capabilities'],
+  gapObligation: ['obligation_id', 'kind', 'caseable', 'risk', 'scope', 'source_claim_ids', 'view_element_refs', 'required_oracle_refs', 'required_capabilities', 'gap_issue'],
+  gapIssue: ['root_issue_id', 'root_issue_key', 'missing_type', 'semantic_refs', 'scope', 'answerable', 'reasons', 'evidence_refs'],
   fact: ['fact_id', 'claim_id', 'status', 'source_claim_ids'],
   conflict: ['conflict_id', 'root_issue_id', 'scope', 'rule_ids', 'source_ids'],
   caseDraft: ['case_id', 'title', 'scope', 'risk', 'role', 'fact_ids', 'obligation_ids', 'source_claim_ids', 'preconditions', 'data', 'steps', 'testability_profile', 'post_state', 'cleanup', 'evidence_refs', 'temporary_assumption', 'execution_signature'],
@@ -356,6 +358,25 @@ function normalizeSemanticString(value) {
   return value.normalize('NFC').trim().replace(/\s+/gu, ' ');
 }
 
+/** @param {Record<string, unknown>} subject */
+function normalizedBlockerSubject(subject) {
+  if (subject.kind === 'facts') return {
+    kind: 'facts', fact_ids: [...(stringArray(subject.fact_ids) ?? [])].sort(compareCodePoints)
+  };
+  if (subject.kind === 'view-elements') return {
+    kind: 'view-elements',
+    view_element_refs: [...(objectArray(subject.view_element_refs) ?? [])]
+      .map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id }))
+      .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right)))
+  };
+  if (subject.kind === 'capabilities') return {
+    kind: 'capabilities', capabilities: [...(stringArray(subject.capabilities) ?? [])].sort(compareCodePoints)
+  };
+  return {
+    kind: 'evidence-conflict', claim_refs: [...(stringArray(subject.claim_refs) ?? [])].sort(compareCodePoints)
+  };
+}
+
 /** @param {Record<string, unknown>[]} entries */
 function canonicalSetProjection(entries) {
   const byCanonicalValue = new Map();
@@ -474,8 +495,11 @@ function validateClosedShape(context, diagnostics) {
     if (isRecord(conflict)) checkCanonical(conflict.scope, `/evidence/conflicts/${index}/scope`, diagnostics);
   });
   obligations.obligations.forEach((obligation, index) => {
-    checkKeys(obligation, KEYS.obligation, `/obligations/obligations/${index}`, diagnostics);
+    checkKeys(obligation, obligation?.kind === 'requirement-gap' ? KEYS.gapObligation : KEYS.obligation, `/obligations/obligations/${index}`, diagnostics);
     if (!isRecord(obligation)) return;
+    if (obligation.kind === 'requirement-gap' && isRecord(obligation.gap_issue)) checkKeys(
+      obligation.gap_issue, KEYS.gapIssue, `/obligations/obligations/${index}/gap_issue`, diagnostics
+    );
     for (const [field, value] of [['obligation_id', obligation.obligation_id], ['scope', obligation.scope]]) {
       checkCanonical(value, `/obligations/obligations/${index}/${field}`, diagnostics);
     }
@@ -485,14 +509,14 @@ function validateClosedShape(context, diagnostics) {
   obligations.fact_routes.forEach((route, index) => {
     if (!isRecord(route)) return;
     const allowed = route.route_type === 'obligations' ? ['fact_id', 'route_type', 'obligation_ids']
-      : route.route_type === 'blocked' ? ['fact_id', 'route_type', 'blocker_root_issue_id']
+      : route.route_type === 'blocked' ? ['fact_id', 'route_type', 'blocker_root_issue_id', 'gap_obligation_id']
         : ['fact_id', 'route_type', 'not_applicable_claim_id'];
     checkKeys(route, allowed, `/obligations/fact_routes/${index}`, diagnostics);
   });
   obligations.interaction_routes.forEach((route, index) => {
     if (!isRecord(route)) return;
     const allowed = route.route_type === 'formal-view' ? ['candidate_id', 'route_type', 'formal_view_id']
-      : route.route_type === 'blocked' ? ['candidate_id', 'route_type', 'blocker_root_issue_id']
+      : route.route_type === 'blocked' ? ['candidate_id', 'route_type', 'blocker_root_issue_id', 'gap_obligation_id']
         : ['candidate_id', 'route_type', 'exploratory_id'];
     checkKeys(route, allowed, `/obligations/interaction_routes/${index}`, diagnostics);
   });
@@ -532,10 +556,24 @@ function validateClosedShape(context, diagnostics) {
   drafts.obligation_dispositions.forEach((disposition, index) => {
     if (!isRecord(disposition)) return;
     const allowed = disposition.status === 'case_candidate' ? ['obligation_id', 'status', 'case_ids']
-      : disposition.status === 'blocker' ? ['obligation_id', 'status', 'blocker_root_issue_id', 'evidence_refs']
+      : disposition.status === 'blocker' ? ['status', 'affected_obligation_ids', 'issue_intent', 'subject']
         : disposition.status === 'not_applicable' ? ['obligation_id', 'status', 'exclusion_claim_id', 'scope', 'support_review']
           : ['obligation_id', 'status', 'case_ids', 'blocker_root_issue_id', 'evidence_refs', 'exclusion_claim_id', 'scope', 'support_review'];
     checkKeys(disposition, allowed, `/caseDrafts/obligation_dispositions/${index}`, diagnostics);
+    if (disposition.status === 'blocker') {
+      if (isRecord(disposition.issue_intent)) checkKeys(
+        disposition.issue_intent,
+        ['missing_type', 'scope', 'answerable', 'risk', 'reasons', 'evidence_refs'],
+        `/caseDrafts/obligation_dispositions/${index}/issue_intent`, diagnostics
+      );
+      if (isRecord(disposition.subject)) {
+        const subjectAllowed = disposition.subject.kind === 'facts' ? ['kind', 'fact_ids']
+          : disposition.subject.kind === 'view-elements' ? ['kind', 'view_element_refs']
+            : disposition.subject.kind === 'capabilities' ? ['kind', 'capabilities']
+              : ['kind', 'claim_refs'];
+        checkKeys(disposition.subject, subjectAllowed, `/caseDrafts/obligation_dispositions/${index}/subject`, diagnostics);
+      }
+    }
   });
   drafts.exploratory_candidates.forEach((candidate, index) => checkKeys(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics));
 }
@@ -1301,7 +1339,7 @@ export function classifyCaseDrafts(submittedContext) {
     const conflicts = /** @type {Record<string, unknown>[]} */ (evidenceContext.conflicts);
     const obligations = /** @type {Record<string, unknown>[]} */ (obligationArtifact.obligations);
     const drafts = /** @type {Record<string, unknown>[]} */ (draftArtifact.cases);
-    const dispositions = /** @type {Record<string, unknown>[]} */ (draftArtifact.obligation_dispositions);
+    const submittedDispositions = /** @type {Record<string, unknown>[]} */ (draftArtifact.obligation_dispositions);
     const exploratory = /** @type {Record<string, unknown>[]} */ (draftArtifact.exploratory_candidates);
     const factRoutes = /** @type {Record<string, unknown>[]} */ (obligationArtifact.fact_routes);
     const interactionRoutes = /** @type {Record<string, unknown>[]} */ (obligationArtifact.interaction_routes);
@@ -1320,6 +1358,27 @@ export function classifyCaseDrafts(submittedContext) {
       const id = typeof obligation.obligation_id === 'string' ? obligation.obligation_id : '';
       if (obligationsById.has(id)) diagnostics.push(diagnostic('traceability', 'OBLIGATION_ID_DUPLICATE', `/obligations/${pointerPart(id)}`, 'formal obligation IDs must be unique'));
       else obligationsById.set(id, obligation);
+      if (obligation.kind === 'requirement-gap') {
+        if (obligation.caseable !== false || !isRecord(obligation.gap_issue)) diagnostics.push(diagnostic(
+          'classification', 'REQUIREMENT_GAP_CONTRACT_INVALID', `/obligations/${pointerPart(id)}`,
+          'compiler-owned requirement gaps must be non-caseable and contain a gap issue'
+        ));
+        else {
+          const signature = {
+            missing_type: obligation.gap_issue.missing_type,
+            semantic_refs: stringArray(obligation.gap_issue.semantic_refs) ?? [],
+            scope: obligation.gap_issue.scope
+          };
+          if (obligation.gap_issue.root_issue_key !== canonicalStringify(signature)
+            || obligation.gap_issue.root_issue_id !== stableId('root', signature)) diagnostics.push(diagnostic(
+            'traceability', 'REQUIREMENT_GAP_ROOT_INVALID', `/obligations/${pointerPart(id)}/gap_issue`,
+            'compiler-owned gap root key and ID must match its immutable semantic identity'
+          ));
+        }
+      } else if (obligation.caseable !== true) diagnostics.push(diagnostic(
+        'classification', 'CASEABLE_OBLIGATION_CONTRACT_INVALID', `/obligations/${pointerPart(id)}/caseable`,
+        'normal compiler-owned obligations must be caseable'
+      ));
     }
     /** @type {Map<string, Set<string>>} */
     const routedFactsByObligation = new Map();
@@ -1333,6 +1392,24 @@ export function classifyCaseDrafts(submittedContext) {
       if (!factsById.has(factId)) diagnostics.push(diagnostic(
         'reference', 'FACT_ROUTE_FACT_UNKNOWN', `/obligations/fact_routes/${routeIndex}/fact_id`, 'fact route references an unknown fact'
       ));
+      if (route.route_type === 'blocked') {
+        const gapId = typeof route.gap_obligation_id === 'string' ? route.gap_obligation_id : '';
+        const gap = obligationsById.get(gapId);
+        if (!gap || gap.kind !== 'requirement-gap' || gap.caseable !== false) diagnostics.push(diagnostic(
+          'reference', 'FACT_ROUTE_GAP_UNKNOWN', `/obligations/fact_routes/${routeIndex}/gap_obligation_id`,
+          'blocked fact route must reference one compiler-owned requirement gap'
+        ));
+        else {
+          const routed = routedFactsByObligation.get(gapId) ?? new Set();
+          routed.add(factId);
+          routedFactsByObligation.set(gapId, routed);
+          if (!isRecord(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic(
+            'traceability', 'FACT_ROUTE_GAP_ROOT_MISMATCH', `/obligations/fact_routes/${routeIndex}`,
+            'blocked fact route root must equal its compiler-owned gap root'
+          ));
+        }
+        continue;
+      }
       if (route.route_type !== 'obligations') continue;
       const routedObligations = stringArray(route.obligation_ids, true);
       if (!routedObligations) diagnostics.push(diagnostic(
@@ -1347,6 +1424,60 @@ export function classifyCaseDrafts(submittedContext) {
         routedFactsByObligation.set(obligationId, routed);
       }
     }
+    /** @type {Record<string, unknown>[]} */
+    const dispositions = [];
+    /** @type {Map<number, string[]>} */
+    const blockerAffectedBySubmittedIndex = new Map();
+    for (const [index, submitted] of submittedDispositions.entries()) {
+      if (submitted.status !== 'blocker') {
+        dispositions.push(submitted);
+        continue;
+      }
+      const affected = stringArray(submitted.affected_obligation_ids, true);
+      if (!affected) {
+        diagnostics.push(diagnostic(
+          'schema', 'BLOCKER_AFFECTED_OBLIGATIONS_INVALID', `/obligation_dispositions/${index}/affected_obligation_ids`,
+          'grouped blocker requires a nonempty dense unique affected obligation list'
+        ));
+        continue;
+      }
+      const intent = isRecord(submitted.issue_intent) ? submitted.issue_intent : {};
+      const subject = isRecord(submitted.subject) ? submitted.subject : {};
+      const signature = {
+        missing_type: intent.missing_type,
+        semantic_refs: [canonicalStringify(normalizedBlockerSubject(subject))],
+        scope: intent.scope
+      };
+      const rootIssueId = stableId('root', signature);
+      blockerAffectedBySubmittedIndex.set(index, affected);
+      for (const obligationId of affected) dispositions.push({
+        obligation_id: obligationId, status: 'blocker',
+        blocker_root_issue_id: rootIssueId,
+        evidence_refs: intent.evidence_refs,
+        issue_intent: intent, subject, submitted_index: index
+      });
+    }
+    for (const obligation of obligations) {
+      if (obligation.kind !== 'requirement-gap' || !isRecord(obligation.gap_issue)) continue;
+      dispositions.push({
+        obligation_id: obligation.obligation_id, status: 'blocker',
+        blocker_root_issue_id: obligation.gap_issue.root_issue_id,
+        evidence_refs: stringArray(obligation.gap_issue.evidence_refs) ?? [],
+        compiler_gap: true, issue_intent: obligation.gap_issue
+      });
+    }
+    for (const [routeIndex, route] of interactionRoutes.entries()) {
+      if (route.route_type !== 'blocked') continue;
+      const gap = obligationsById.get(String(route.gap_obligation_id ?? ''));
+      if (!gap || gap.kind !== 'requirement-gap' || gap.caseable !== false) diagnostics.push(diagnostic(
+        'reference', 'INTERACTION_ROUTE_GAP_UNKNOWN', `/obligations/interaction_routes/${routeIndex}/gap_obligation_id`,
+        'blocked interaction route must reference one compiler-owned requirement gap'
+      ));
+      else if (!isRecord(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic(
+        'traceability', 'INTERACTION_ROUTE_GAP_ROOT_MISMATCH', `/obligations/interaction_routes/${routeIndex}`,
+        'blocked interaction route root must equal its compiler-owned gap root'
+      ));
+    }
     /** @type {Map<string, Record<string, unknown>>} */
     const casesById = new Map();
     for (const draft of drafts) {
@@ -1356,6 +1487,7 @@ export function classifyCaseDrafts(submittedContext) {
     }
     /** @type {Map<string, Record<string, unknown>>} */
     const dispositionByObligation = new Map();
+    const validatedBlockerGroups = new Set();
     for (const disposition of dispositions) {
       const obligationId = typeof disposition.obligation_id === 'string' ? disposition.obligation_id : '';
       if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic(
@@ -1369,6 +1501,62 @@ export function classifyCaseDrafts(submittedContext) {
         'classification', 'OBLIGATION_DISPOSITION_STATUS_INVALID', `/obligation_dispositions/${pointerPart(obligationId)}/status`,
         'formal obligation disposition status is outside the frozen lanes'
       ));
+      const obligation = obligationsById.get(obligationId);
+      if (obligation?.caseable === false && !disposition.compiler_gap) diagnostics.push(diagnostic(
+        'classification', 'REQUIREMENT_GAP_AGENT_DISPOSITION_FORBIDDEN', `/obligation_dispositions/${pointerPart(obligationId)}`,
+        'Agent case drafts must not resubmit a compiler-owned requirement gap disposition'
+      ));
+      if (disposition.status === 'blocker' && !disposition.compiler_gap
+        && !validatedBlockerGroups.has(disposition.submitted_index)) {
+        validatedBlockerGroups.add(disposition.submitted_index);
+        const subject = isRecord(disposition.subject) ? disposition.subject : {};
+        const intent = isRecord(disposition.issue_intent) ? disposition.issue_intent : {};
+        const affected = blockerAffectedBySubmittedIndex.get(
+          /** @type {number} */ (disposition.submitted_index)
+        ) ?? [];
+        const linked = affected.flatMap((id) => obligationsById.has(id)
+          ? [/** @type {Record<string, unknown>} */ (obligationsById.get(id))] : []);
+        if (linked.some((item) => item.caseable !== true)) diagnostics.push(diagnostic(
+          'classification', 'BLOCKER_AFFECTED_OBLIGATION_NOT_CASEABLE', `/obligation_dispositions/${disposition.submitted_index}/affected_obligation_ids`,
+          'case-draft blocker groups may affect only compiler-derived caseable obligations'
+        ));
+        if (linked.some((item) => !scopeContains(String(intent.scope ?? ''), String(item.scope ?? '')))) diagnostics.push(diagnostic(
+          'classification', 'BLOCKER_SCOPE_MISMATCH', `/obligation_dispositions/${disposition.submitted_index}/issue_intent/scope`,
+          'case-draft blocker scope must cover every affected obligation scope'
+        ));
+        let reachable = false;
+        if (subject.kind === 'facts') {
+          const refs = stringArray(subject.fact_ids, true) ?? [];
+          reachable = refs.length > 0
+            && refs.every((factId) => factsById.has(factId)
+              && affected.some((id) => routedFactsByObligation.get(id)?.has(factId)))
+            && affected.every((id) => refs.some((factId) => routedFactsByObligation.get(id)?.has(factId)));
+        }
+        else if (subject.kind === 'view-elements') {
+          const refs = objectArray(subject.view_element_refs)?.map((ref) => `${String(ref.view_id)}#${String(ref.element_id)}`) ?? [];
+          reachable = refs.length > 0
+            && refs.every((ref) => linked.some((item) => (stringArray(item.view_element_refs) ?? []).includes(ref)))
+            && linked.every((item) => refs.some((ref) => (stringArray(item.view_element_refs) ?? []).includes(ref)));
+        } else if (subject.kind === 'capabilities') {
+          const capabilities = stringArray(subject.capabilities, true) ?? [];
+          reachable = capabilities.length > 0
+            && capabilities.every((capability) => linked.some((item) => (stringArray(item.required_capabilities) ?? []).includes(capability)))
+            && linked.every((item) => capabilities.some((capability) => (stringArray(item.required_capabilities) ?? []).includes(capability)));
+        }
+        else if (subject.kind === 'evidence-conflict') {
+          const refs = stringArray(subject.claim_refs, true) ?? [];
+          const relatedByObligation = linked.map((item) => relatedEvidenceClosure([
+            ...(stringArray(item.source_claim_ids) ?? []), ...(stringArray(item.required_oracle_refs) ?? [])
+          ], evidence, evidenceCache, relatedEvidenceCache));
+          reachable = refs.length > 0
+            && refs.every((ref) => evidence.has(ref) && relatedByObligation.some((related) => related.has(ref)))
+            && relatedByObligation.every((related) => refs.some((ref) => related.has(ref)));
+        }
+        if (!reachable) diagnostics.push(diagnostic(
+          'traceability', 'BLOCKER_SUBJECT_UNREACHABLE', `/obligation_dispositions/${disposition.submitted_index}/subject`,
+          'typed blocker subject must be reachable from every referenced owner/evidence/capability closure'
+        ));
+      }
       if (disposition.status === 'case_candidate') {
         const caseIds = stringArray(disposition.case_ids) ?? [];
         if (caseIds.length === 0) {
@@ -1422,6 +1610,18 @@ export function classifyCaseDrafts(submittedContext) {
       const obligation = /** @type {Record<string, unknown>} */ (obligationsById.get(/** @type {string} */ (disposition.obligation_id)));
       const obligationId = /** @type {string} */ (obligation.obligation_id);
       if (disposition.status === 'blocker') {
+        const explicitIntent = isRecord(disposition.issue_intent) ? disposition.issue_intent : null;
+        if (disposition.compiler_gap && explicitIntent) {
+          addBlocked(
+            blocked, obligation,
+            (stringArray(explicitIntent.reasons, true) ?? []).length > 0
+              ? /** @type {string[]} */ (stringArray(explicitIntent.reasons, true))
+              : [String(explicitIntent.missing_type ?? 'requirement-gap')],
+            stringArray(explicitIntent.evidence_refs, true) ?? [],
+            isCanonicalString(disposition.blocker_root_issue_id) ? String(disposition.blocker_root_issue_id) : null
+          );
+          continue;
+        }
         const roots = [
           ...(stringArray(obligation.source_claim_ids) ?? []), ...(stringArray(obligation.required_oracle_refs) ?? []),
           ...[...(routedFactsByObligation.get(obligationId) ?? [])].flatMap((factId) => {
@@ -1431,7 +1631,7 @@ export function classifyCaseDrafts(submittedContext) {
         ];
         const evidenceResult = assessEvidenceRoots(roots, evidence, evidenceCache);
         const relatedEvidence = relatedEvidenceClosure(roots, evidence, evidenceCache, relatedEvidenceCache);
-        const blockerEvidenceRefs = stringArray(disposition.evidence_refs, true);
+        const blockerEvidenceRefs = stringArray(disposition.evidence_refs, !explicitIntent);
         if (!blockerEvidenceRefs) {
           diagnostics.push(diagnostic(
             'classification', 'BLOCKER_EVIDENCE_REFS_INVALID', `/obligation_dispositions/${pointerPart(obligationId)}/evidence_refs`,
@@ -1465,14 +1665,17 @@ export function classifyCaseDrafts(submittedContext) {
         if (!blockerRefsValid) continue;
         const oracles = stringArray(obligation.required_oracle_refs) ?? [];
         const capabilities = stringArray(obligation.required_capabilities) ?? [];
-        if (oracles.length > 0 && capabilities.length === 0 && evidenceResult.rank === 2 && evidenceResult.reasons.size === 0) {
+        if (explicitIntent?.missing_type === 'oracle'
+          && oracles.length > 0 && capabilities.length === 0
+          && evidenceResult.rank === 2 && evidenceResult.reasons.size === 0) {
           diagnostics.push(diagnostic(
             'classification', 'GROUNDABLE_OBLIGATION_CASE_MISSING', `/obligation_dispositions/${pointerPart(obligationId)}`,
             'fully groundable formal obligation requires a candidate Case instead of an unjustified blocker'
           ));
           continue;
         }
-        const reasons = oracles.length === 0 ? ['FORMAL_ORACLE_MISSING']
+        const intentReasons = explicitIntent ? stringArray(explicitIntent.reasons, true) ?? [] : [];
+        const reasons = intentReasons.length > 0 ? intentReasons : oracles.length === 0 ? ['FORMAL_ORACLE_MISSING']
           : evidenceResult.reasons.size > 0 ? [...evidenceResult.reasons].sort(compareCodePoints) : ['EXPLICIT_BLOCKER'];
         addBlocked(
           blocked, obligation, reasons,
@@ -1512,6 +1715,10 @@ export function classifyCaseDrafts(submittedContext) {
       for (const obligationId of obligationIds) {
         if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic(
           'reference', 'CASE_OBLIGATION_UNKNOWN', `/cases/${pointerPart(String(draft.case_id))}/obligation_ids/${pointerPart(obligationId)}`, 'Case references an unknown formal obligation'
+        ));
+        else if (obligationsById.get(obligationId)?.caseable === false) diagnostics.push(diagnostic(
+          'classification', 'REQUIREMENT_GAP_CASE_FORBIDDEN', `/cases/${pointerPart(String(draft.case_id))}/obligation_ids/${pointerPart(obligationId)}`,
+          'compiler-owned requirement gaps cannot be Case targets'
         ));
         const disposition = dispositionByObligation.get(obligationId);
         if (disposition?.status !== 'case_candidate' || !(stringArray(disposition.case_ids) ?? []).includes(/** @type {string} */ (draft.case_id))) {

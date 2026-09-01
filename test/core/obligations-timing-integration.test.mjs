@@ -215,7 +215,9 @@ test('timing integration obligations hand-count before equal after and only evid
   const retry = actual.find((seed) => seed.source_claim_ids.includes('claim_retry_signal'));
   assert.deepEqual(retry?.required_oracle_refs, []);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: 6, obligations: actual, fact_routes: [], interaction_routes: []
+    schema_version: '1.0.0', source_revision: 6,
+    obligations: actual.map((seed) => ({ ...seed, caseable: true })),
+    fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);
 });
 
@@ -238,7 +240,9 @@ test('timing integration obligations keep every request response persistence eve
   assert.equal(actual.filter((seed) => seed.source_claim_ids.includes('claim_security_signal')).length, 1);
   assert.equal(actual.some((seed) => seed.source_claim_ids.some((claim) => claim.includes('generic'))), false);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: 6, obligations: actual, fact_routes: [], interaction_routes: []
+    schema_version: '1.0.0', source_revision: 6,
+    obligations: actual.map((seed) => ({ ...seed, caseable: true })),
+    fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);
   assert.deepEqual(validateUniqueStableIds({ obligations: actual }), []);
 });

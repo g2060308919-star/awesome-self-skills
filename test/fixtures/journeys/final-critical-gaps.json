@@ -207,6 +207,7 @@
       {
         "obligation_id": "obligation_blocked",
         "kind": "flow",
+        "caseable": true,
         "risk": "critical",
         "scope": "checkout/refund",
         "source_claim_ids": ["claim_blocked"],
@@ -217,6 +218,7 @@
       {
         "obligation_id": "obligation_grounded",
         "kind": "flow",
+        "caseable": true,
         "risk": "high",
         "scope": "checkout",
         "source_claim_ids": ["claim_grounded"],
@@ -227,6 +229,7 @@
       {
         "obligation_id": "obligation_na",
         "kind": "state",
+        "caseable": true,
         "risk": "low",
         "scope": "checkout/legacy",
         "source_claim_ids": ["claim_legacy"],

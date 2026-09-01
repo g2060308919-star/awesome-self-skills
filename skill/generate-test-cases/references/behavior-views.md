@@ -20,6 +20,10 @@ Do not generate generic negative behavior merely because a technique suggests it
 
 Every `behavior_views` artifact must contain the closed `obligation_inputs` object with these four arrays: `view_contexts`, `terminal_fact_routes`, `custom_responsibilities`, and `combination_requests`. Read the Behavior Views schema before writing a nonempty terminal route or custom responsibility; submit only its public semantic fields and never an obligation or root ID. A custom responsibility's `semantic_key` is an audit label only: changing it never creates a new responsibility. Identity comes from `responsibility_type`, normalized `owner`, and `scope`; with no separate semantics payload, two records with those same fields describe one responsibility. Keep `combination_requests` empty until its dedicated workflow semantics are available. `view_contexts` may be empty only when the artifact has no `input-domain`, `role`, `timing`, or `integration` view.
 
+Use `terminal_fact_routes` only for a formal fact that has no modeled view route. A Blocked terminal fact supplies a typed `issue_intent`; a NotApplicable terminal fact supplies its independently supported E3/E2 exclusion and review. Never submit a root key, root ID, obligation ID, or final fact route. The compiler derives one `caseable=false` requirement-gap obligation for a Blocked fact and performs the single final modeled-xor-terminal reconciliation.
+
+A custom responsibility uses one closed `responsibility_type` and an owner of either `facts` or `view-elements`. Every owner must resolve unambiguously to real modeled facts; the compiler derives its responsibility key and obligation ID and enriches each owner's single modeled fact route. A custom responsibility cannot create a requirement-gap, and its `semantic_key` cannot split one semantic responsibility into several Test Points.
+
 Provide exactly one context for each of those four view types. A context contains only `view_id` and `bindings`. Every binding contains only `selector`, `risk`, `source_claim_ids`, `required_oracle_refs`, and `required_capabilities`. Bind every required responsibility exactly once:
 
 - input-domain: one `{kind: "equivalence-class", element_id, class_id}` selector per class and one `{kind: "boundary", element_id, boundary}` selector for each of `lower` and `upper`;
@@ -40,6 +44,10 @@ Route each candidate to exactly one destination:
 - a sourced formal interaction view;
 - Blocked with a concrete missing rule, Oracle, scope, or capability;
 - independent Exploratory with accepted diagnostic evidence.
+
+Every interaction candidate supplies distinct nonempty `source_claim_ids` and distinct nonempty `semantic_subject_refs`. Semantic subjects use only `fact`, `view-element`, `model-element`, or `integration-surface`; a side-effect surface is selected uniquely by `(side_effect_kind, target)`. Every selector must exist, overlap a named module, and remain related to the candidate provenance. Provenance is validated but is not part of root identity: identity comes from canonical `module_ids`, `dimension`, and `semantic_subject_refs`, so evidence, candidate ID, wording, risk, revision, and array reorder do not change it.
+
+A Blocked candidate supplies a typed `issue_intent`; never calculate or submit its root key or root ID. The compiler creates its `caseable=false` requirement-gap obligation and links that gap, root, and interaction route. Different semantic subjects in the same matrix cell remain separate candidates with separate compiler-owned routes.
 
 Check shared quotas, cross-role and cross-client consistency, asynchronous callbacks, duplicate submission, concurrency, long state chains, and external side effects only when a recorded signal exists.
 

@@ -209,15 +209,6 @@ function caseDraft(rule) {
   return draft;
 }
 
-/** @param {any} rule */
-function blockerRootId(rule) {
-  return stableId('root', {
-    missing_type: 'oracle',
-    semantic_refs: [rule.claimId, `${rule.viewId}#${rule.elementId}`].sort(),
-    scope: rule.scope
-  });
-}
-
 /**
  * Build one complete raw revision without calling any Task 3–10 production
  * function. Only the already-frozen Task 2 stable-ID primitive is used to bind
@@ -260,8 +251,12 @@ function revisionFromRules(rules, options = {}) {
   const dispositions = rules.map((rule) => {
     const id = obligationId(rule);
     if (rule.mode === 'blocker') return {
-      obligation_id: id, status: 'blocker', blocker_root_issue_id: blockerRootId(rule),
-      evidence_refs: [rule.claimId]
+      status: 'blocker', affected_obligation_ids: [id],
+      issue_intent: {
+        missing_type: 'oracle', scope: rule.scope, answerable: true, risk: rule.risk,
+        reasons: ['FORMAL_ORACLE_MISSING'], evidence_refs: [rule.claimId]
+      },
+      subject: { kind: 'facts', fact_ids: [rule.factId] }
     };
     if (rule.mode === 'not_applicable') return {
       obligation_id: id, status: 'not_applicable', exclusion_claim_id: 'claim_exclusion',
@@ -344,24 +339,37 @@ function buildRevision(scenario) {
   }
   if (scenario === 'interaction') {
     const candidate = {
-      candidate_id: 'candidate_orders_payments', module_ids: ['orders', 'payments'],
+      candidate_id: 'candidate_checkout_payments', module_ids: ['checkout', 'payments'],
       dimension: 'interface-event', disposition: 'formal-view',
-      source_claim_ids: ['claim_checkout'], formal_view_id: 'view_checkout'
+      source_claim_ids: ['claim_checkout'],
+      semantic_subject_refs: [{ kind: 'view-element', view_id: 'view_checkout', element_id: 'rule_checkout' }],
+      formal_view_id: 'view_checkout'
     };
     return revisionFromRules([rule('checkout')], {
-      interaction: interactionArtifacts(['orders', 'payments'], candidate)
+      interaction: interactionArtifacts(['checkout', 'payments'], candidate)
     });
   }
   if (scenario === 'risk-only') {
     const candidate = {
       candidate_id: 'candidate_latency', module_ids: ['checkout'], dimension: 'time',
-      disposition: 'exploratory', exploratory_id: 'exploratory_latency'
+      disposition: 'exploratory', source_claim_ids: ['claim_latency_signal'],
+      semantic_subject_refs: [{ kind: 'model-element', model_ref: 'claim_latency' }],
+      exploratory_id: 'exploratory_latency'
     };
     const input = revisionFromRules([], {
       extraClaims: [{
-        claim_id: 'claim_latency', claim_form: 'direct', level: 'E3', kind: 'description',
+        claim_id: 'claim_latency_signal', claim_form: 'direct', level: 'E3', kind: 'description',
         scope: 'checkout', value: 'Latency is an investigation signal.',
         source_locator_ids: ['locator_latency'], source_id: 'source_prd'
+      }, {
+        claim_id: 'claim_latency', claim_form: 'derived', level: 'E2', kind: 'model-element',
+        scope: 'checkout', value: 'Latency is an investigation signal.',
+        source_locator_ids: ['locator_latency'], derivation_kind: 'decision-table-instance',
+        derivation_target: 'model-element', parent_claim_ids: ['claim_latency_signal'],
+        parameters: { table_id: 'latency-signal' },
+        rule_input: {
+          conditions: ['latency signal exists'], outcome: 'Latency is an investigation signal.'
+        }
       }],
       extraLocators: [{
         locator_id: 'locator_latency', source_id: 'source_prd', type: 'text-range',
@@ -371,7 +379,7 @@ function buildRevision(scenario) {
     });
     input.case_drafts.exploratory_candidates = [{
       exploratory_id: 'exploratory_latency', title: 'Explore latency', scope: 'checkout',
-      risk: 'medium', source_claim_ids: ['claim_latency']
+      risk: 'medium', source_claim_ids: ['claim_latency_signal']
     }];
     return input;
   }
@@ -515,7 +523,7 @@ test('core journey one missing capability pauses strict while preserving its una
   assert.equal(delivered.bundle.grounded[0].scope, 'checkout');
   const blockerDisposition = input.case_drafts.obligation_dispositions.find((/** @type {any} */ item) => item.status === 'blocker');
   assert.ok(blockerDisposition);
-  assert.equal(delivered.bundle.blocked[0].obligation_id, blockerDisposition.obligation_id);
+  assert.equal(delivered.bundle.blocked[0].obligation_id, blockerDisposition.affected_obligation_ids[0]);
 });
 
 test('core journey risk-only stays Exploratory and outside every formal denominator', () => {
