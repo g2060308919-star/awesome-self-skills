@@ -58,10 +58,18 @@ export function deriveAssistance(input) {
       fail("Assistance timing is invalid or out of order");
     }
     priorEnd = endedAtMs;
-    if (!Array.isArray(mark.hostEventDigests) || mark.hostEventDigests.length === 0) {
-      fail("Assistance has no Host evidence references");
-    }
-    const hostEvents = mark.hostEventDigests.map((eventDigest) => hostByDigest.get(eventDigest));
+    const messagesDuringWait = input.normalized.events.filter((event) =>
+      event.type === "message_completed" && event.timestampMs >= startedAtMs && event.timestampMs <= endedAtMs
+    );
+    const precedingRunnerRequest = input.normalized.events.filter((event) =>
+      event.type === "message_completed" && event.actor === "runner" && event.timestampMs <= startedAtMs
+    ).at(-1);
+    const hostEventDigests = Array.isArray(mark.hostEventDigests) && mark.hostEventDigests.length > 0
+      ? mark.hostEventDigests
+      : [...(precedingRunnerRequest ? [precedingRunnerRequest] : []), ...messagesDuringWait]
+        .map((event) => event.sourceEventDigest);
+    if (hostEventDigests.length === 0) fail("Assistance has no Host evidence references");
+    const hostEvents = hostEventDigests.map((eventDigest) => hostByDigest.get(eventDigest));
     if (hostEvents.some((event) => !event || event.sessionDigest !== input.normalized.sessionDigest)) {
       fail("Assistance Host evidence is missing or belongs to another session");
     }
@@ -69,7 +77,11 @@ export function deriveAssistance(input) {
       event.type === "message_completed" && event.contentDigest === replyDigest(expected.reply))) {
       fail("Assistance reply is not independently present in the Host export");
     }
-    const controlEventIds = mark.controlEventIds ?? [];
+    const controlEventIds = Array.isArray(mark.controlEventIds) && mark.controlEventIds.length > 0
+      ? mark.controlEventIds
+      : [...controlById.values()].filter((event) => event.runId === input.runId &&
+        controlMatches(mark.action, event)
+      ).map((event) => event.id);
     const controlEvents = controlEventIds.map((eventId) => controlById.get(eventId));
     if (CONTROL_REQUIRED_ACTIONS.has(mark.action) && (
       controlEvents.length === 0 || controlEvents.some((event) => !event) ||
@@ -84,7 +96,7 @@ export function deriveAssistance(input) {
       startedAtMs,
       endedAtMs,
       elapsedMs,
-      hostEventDigests: [...mark.hostEventDigests],
+      hostEventDigests: [...hostEventDigests],
       controlEventIds: [...controlEventIds]
     });
   }

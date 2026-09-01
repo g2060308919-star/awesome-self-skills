@@ -156,6 +156,17 @@ test("external assistance requires matching Host messages and control facts", ()
   });
 });
 
+test("assistance provenance references are deterministically resolved from timing when omitted", () => {
+  const input = bridgeInput();
+  input.assistanceMarks[0].hostEventDigests = [];
+  input.assistanceMarks[0].controlEventIds = [];
+  const result = buildHostEvidence(input);
+  assert.deepEqual(result.assistance.events[0].hostEventDigests, [
+    `sha256:${"1".repeat(64)}`, `sha256:${"2".repeat(64)}`
+  ]);
+  assert.deepEqual(result.assistance.events[0].controlEventIds, ["EVT-LOGIN"]);
+});
+
 test("missing metric sources are explicit and never default to zero", () => {
   const result = buildHostEvidence(bridgeInput({ requestTrace: undefined }));
   assert.equal(result.metrics.businessRequests, null);
