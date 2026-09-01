@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "calibration-plan-definition-v1",
+  "version": "calibration-v1",
+  "createdAt": "2026-09-01T00:00:00.000Z",
+  "units": [
+    { "profileId": "H01", "unitId": "H01-R1" },
+    { "profileId": "B01", "unitId": "B01-R1" },
+    { "profileId": "B02", "unitId": "B02-R1" },
+    { "profileId": "B09", "unitId": "B09-R1" },
+    { "profileId": "B11", "unitId": "B11-R1" },
+    { "profileId": "B12", "unitId": "B12-R1" }
+  ]
+}
