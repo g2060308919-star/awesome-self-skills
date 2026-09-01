@@ -135,7 +135,8 @@ function normalizeCompletedCall(call, output, sequence, sessionDigest) {
     resultDigest: digest(typeof outputRaw === "string" ? outputRaw : canonicalStringify(outputRaw)),
     targetOrigin: targetOrigin(argumentsValue),
     environmentClassification: argumentsValue.environmentClassification ?? null,
-    scopeConfirmed: argumentsValue.scopeConfirmed === true,
+    scopeConfirmed: Object.hasOwn(argumentsValue, "scopeConfirmed")
+      ? argumentsValue.scopeConfirmed === true : null,
     sourceEventDigest: digest([call.line, output.line]),
     mappingVersion: TOOL_MAPPING_VERSION
   };
@@ -221,6 +222,7 @@ export async function normalizeCodexRollout(source) {
     adapter: CODEX_ADAPTER,
     mappingVersion: TOOL_MAPPING_VERSION,
     trustLevel: source.manifest.trustLevel,
+    sourceValidated: true,
     sessionDigest: expectedSessionDigest,
     sourceManifestDigest: source.manifest.sourceManifestDigest,
     normalizedEventsDigest,

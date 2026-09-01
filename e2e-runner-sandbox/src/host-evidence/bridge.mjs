@@ -18,7 +18,9 @@ function binding(input) {
   };
 }
 
-function traceEntry(event) {
+function traceEntry(event, trial) {
+  const confirmedByTrial = Number.isFinite(trial.scopeConfirmedAtMs) &&
+    event.timestampMs >= trial.scopeConfirmedAtMs;
   return {
     sequence: event.sequence,
     timestampMs: event.timestampMs,
@@ -27,8 +29,8 @@ function traceEntry(event) {
     tool: event.tool,
     toolNamespace: event.toolNamespace,
     targetOrigin: event.targetOrigin,
-    environmentClassification: event.environmentClassification,
-    scopeConfirmed: event.scopeConfirmed,
+    environmentClassification: event.environmentClassification ?? trial.environmentClassification ?? null,
+    scopeConfirmed: event.scopeConfirmed ?? confirmedByTrial,
     sourceEventDigest: event.sourceEventDigest,
     ...(event.semanticAction ? { semanticAction: event.semanticAction } : {})
   };
@@ -58,7 +60,8 @@ export function buildHostEvidence(input) {
     adapter: input.normalized.adapter,
     mappingVersion: input.normalized.mappingVersion,
     ...shared,
-    entries: input.normalized.events.filter(({ type }) => type === "tool_call_completed").map(traceEntry)
+    entries: input.normalized.events.filter(({ type }) => type === "tool_call_completed")
+      .map((event) => traceEntry(event, input.trial))
   };
   hostTrace.outputDigest = digest(hostTrace);
   const assistance = {
@@ -81,6 +84,9 @@ export function buildHostEvidence(input) {
   const reasons = [];
   if (input.normalized.trustLevel !== "host-native") {
     reasons.push({ code: "HOST_EXPORT_UNAUTHORIZED", message: "Host evidence trust level is diagnostic only" });
+  }
+  if (input.normalized.sourceValidated !== true) {
+    reasons.push({ code: "HOST_EXPORT_INTEGRITY_FAILED", message: "Host source package was not validated by its Adapter" });
   }
   if (hostTrace.entries.some(({ tool }) => tool === "unknown")) {
     reasons.push({ code: "HOST_EVENT_UNKNOWN", message: "Host evidence contains an unknown tool" });

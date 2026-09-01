@@ -1,0 +1,7 @@
+{"timestamp":"2026-09-01T01:00:00.000Z","type":"session_meta","payload":{"id":"session-fixture-allowed","cwd":"/private/workspace","cli_version":"1.2.3","source":"codex_app"}}
+{"timestamp":"2026-09-01T01:00:01.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Please ask the evaluator to select the test account."}]}}
+{"timestamp":"2026-09-01T01:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Select the requested synthetic account in the visible browser."}]}}
+{"timestamp":"2026-09-01T01:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"mcp__chrome_devtools__navigate_page","arguments":"{\"url\":\"http://127.0.0.1:43100/customers\",\"environmentClassification\":\"non-production\",\"scopeConfirmed\":true}","call_id":"call-1"}}
+{"timestamp":"2026-09-01T01:00:04.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"{\"ok\":true,\"pageDigest\":\"page-a\"}"}}
+{"timestamp":"2026-09-01T01:00:05.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"mcp__chrome_devtools__take_snapshot","input":"{\"targetOrigin\":\"http://127.0.0.1:43100\",\"environmentClassification\":\"non-production\",\"scopeConfirmed\":true}","call_id":"call-2"}}
+{"timestamp":"2026-09-01T01:00:06.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-2","output":"snapshot redacted","status":"success"}}

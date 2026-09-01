@@ -205,6 +205,33 @@ test("running interruption blocks without replay and resumes only after reconcil
   assert.equal(client.commands.length, commandCount);
 });
 
+test("execution may start before the final export and import binds the one completed Host session", async (t) => {
+  const { orchestrator } = await setup(t);
+  let trial = await orchestrator.create({
+    unitId: "B01-R1", campaignId: "calibration-one",
+    runner: { version: "runner-1", digest: `sha256:${"a".repeat(64)}` }
+  });
+  trial = await orchestrator.confirmScope(trial.trialId, {
+    environmentClassification: "non-production", scope: "local", idempotencyKey: "scope"
+  });
+  trial = await orchestrator.startRunner(trial.trialId, {
+    executionStartedAtMs: 2000, idempotencyKey: "start"
+  });
+  assert.equal(trial.state, "running");
+  assert.equal(trial.hostSession, null);
+  trial = await orchestrator.importHost(trial.trialId, {
+    normalized: {
+      schemaVersion: "host-event-v1", adapter: { name: "codex-rollout", version: "1.0.0" },
+      mappingVersion: "chrome-devtools-tools-v1", trustLevel: "host-native",
+      sessionDigest: `sha256:${"b".repeat(64)}`,
+      sourceManifestDigest: `sha256:${"c".repeat(64)}`,
+      normalizedEventsDigest: emptyEventsDigest, events: []
+    },
+    idempotencyKey: "host"
+  });
+  assert.equal(trial.hostSession.sessionDigest, `sha256:${"b".repeat(64)}`);
+});
+
 test("collected artifact changes and Host session rebinding are rejected", async (t) => {
   const { orchestrator, exchangeRoot } = await setup(t);
   let trial = await orchestrator.create({

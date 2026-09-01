@@ -19,6 +19,7 @@ function normalized(overrides = {}) {
     adapter: { name: "codex-rollout", version: "1.0.0" },
     mappingVersion: "chrome-devtools-tools-v1",
     trustLevel: "host-native",
+    sourceValidated: true,
     sessionDigest,
     sourceManifestDigest: sourceDigest,
     normalizedEventsDigest: normalizedDigest,
@@ -188,4 +189,33 @@ test("metric derivation rejects reversed or cross-session timing", () => {
       waitIntervals: [{ startMs: 2000, endMs: 3000, sessionDigest: `sha256:${"e".repeat(64)}` }]
     }, requestTrace: [], oracleEvents: []
   }), { code: "METRIC_NOT_DERIVABLE" });
+});
+
+test("Bridge applies the independently recorded Trial scope boundary when tool arguments omit it", () => {
+  const withoutEmbeddedScope = normalized({
+    events: normalized().events.map((event) => event.type === "tool_call_completed"
+      ? { ...event, environmentClassification: null, scopeConfirmed: null }
+      : event)
+  });
+  const accepted = buildHostEvidence(bridgeInput({
+    normalized: withoutEmbeddedScope,
+    trial: {
+      ...bridgeInput().trial,
+      environmentClassification: "non-production",
+      scopeConfirmedAtMs: 4000
+    }
+  }));
+  assert.equal(accepted.releaseEligibility.eligible, true);
+  assert.ok(accepted.hostTrace.entries.every(({ scopeConfirmed }) => scopeConfirmed));
+
+  const earlyAction = buildHostEvidence(bridgeInput({
+    normalized: withoutEmbeddedScope,
+    trial: {
+      ...bridgeInput().trial,
+      environmentClassification: "non-production",
+      scopeConfirmedAtMs: 6000
+    }
+  }));
+  assert.equal(earlyAction.releaseEligibility.eligible, false);
+  assert.ok(earlyAction.releaseEligibility.reasons.some(({ code }) => code === "HOST_EVENT_ORDER_INVALID"));
 });

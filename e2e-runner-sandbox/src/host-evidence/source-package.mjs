@@ -7,7 +7,7 @@ import {
   realpath,
   writeFile
 } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 
 import { canonicalStringify } from "../bundle/canonical-json.mjs";
 import { sha256File, sha256Text } from "../bundle/digests.mjs";
@@ -76,8 +76,25 @@ export async function createCodexSourcePackage(options) {
   }
   const sourceText = await readFile(options.sourcePath, "utf8");
   const boundary = sourceBoundary(sourceText);
+  const originalSourceSha256 = await sha256File(options.sourcePath);
   const outputDirectory = resolve(options.outputDirectory);
-  await mkdir(outputDirectory, { recursive: false, mode: 0o700 });
+  try {
+    await mkdir(outputDirectory, { recursive: false, mode: 0o700 });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    const existing = await readHostSourcePackage(outputDirectory);
+    if (existing.manifest.trustLevel !== options.trustLevel ||
+      canonicalStringify(existing.manifest.authorization) !== canonicalStringify(options.authorization) ||
+      existing.manifest.files[0].sha256 !== originalSourceSha256) {
+      fail("HOST_EXPORT_INTEGRITY_FAILED", "Existing Host source package has different inputs");
+    }
+    return {
+      packageDirectory: existing.packageDirectory,
+      manifestPath: existing.manifestPath,
+      sourcePath: existing.sourcePath,
+      manifest: existing.manifest
+    };
+  }
   await chmod(outputDirectory, 0o700);
   const packageDirectory = await realpath(outputDirectory);
   const sourceFile = "session-rollout.jsonl";

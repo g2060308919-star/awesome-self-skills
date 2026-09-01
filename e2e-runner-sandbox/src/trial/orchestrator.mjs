@@ -9,6 +9,7 @@ import { evaluateTrial } from "../evaluator/evaluate.mjs";
 import { readArtifacts } from "../evaluator/read-artifacts.mjs";
 import { buildHostEvidence } from "../host-evidence/bridge.mjs";
 import { METRIC_DERIVER_VERSION } from "../host-evidence/derive-metrics.mjs";
+import { readHostSourcePackage } from "../host-evidence/source-package.mjs";
 import { SandboxError } from "../shared/errors.mjs";
 import { nextTrialActions, reviseTrial, transitionTrial } from "./state-machine.mjs";
 
@@ -84,6 +85,7 @@ export function createTrialOrchestrator(options) {
     artifactReader = readArtifacts,
     canaryScanner
   } = options;
+  const sourcePackageReader = options.sourcePackageReader ?? readHostSourcePackage;
   const exchangeRoot = resolve(options.exchangeRoot);
   if (!isAbsolute(options.exchangeRoot) || pathOverlaps(store.root, exchangeRoot)) {
     fail("TRIAL_STATE_INVALID", "Private Trial and Runner exchange roots must be separate");
@@ -260,6 +262,23 @@ export function createTrialOrchestrator(options) {
     ));
   }
 
+  async function startRunner(trialId, input) {
+    const current = await store.read(trialId);
+    if (existingCommand(current, "start-runner", input)) return publicStatus(current);
+    if (!Number.isFinite(input.executionStartedAtMs)) {
+      fail("TRIAL_STATE_INVALID", "Runner execution start timestamp is required");
+    }
+    return publicStatus(await store.transact(trialId, current.revision, (manifest) =>
+      transitionTrial({
+        ...withCommand(manifest, "start-runner", input),
+        hostSession: null,
+        timing: { executionStartedAtMs: input.executionStartedAtMs, waitIntervals: [] }
+      }, "running", {
+        at: now(), reason: "runner-start-authorized", idempotencyKey: input.idempotencyKey
+      })
+    ));
+  }
+
   async function markInterrupted(trialId, input) {
     const current = await store.read(trialId);
     if (existingCommand(current, "mark-interrupted", input)) return publicStatus(current);
@@ -375,7 +394,8 @@ export function createTrialOrchestrator(options) {
 
   async function importHost(trialId, input) {
     const current = await store.read(trialId);
-    if (input.normalized.sessionDigest !== current.hostSession?.sessionDigest) {
+    if (current.hostSession?.sessionDigest &&
+      input.normalized.sessionDigest !== current.hostSession.sessionDigest) {
       fail("HOST_SESSION_MISMATCH", "Imported Host session does not match the Trial binding");
     }
     if (current.hostEvidence) {
@@ -396,14 +416,20 @@ export function createTrialOrchestrator(options) {
       reviseTrial(withCommand(manifest, "import-host", commandInput), {
         at: now(), reason: "host-evidence-imported", idempotencyKey: input.idempotencyKey,
         patch: {
+          hostSession: manifest.hostSession ?? {
+            sessionDigest: input.normalized.sessionDigest,
+            boundAt: now()
+          },
           hostEvidence: {
             adapter: input.normalized.adapter,
             mappingVersion: input.normalized.mappingVersion,
             trustLevel: input.normalized.trustLevel,
+            sourceValidated: input.normalized.sourceValidated === true,
             sessionDigest: input.normalized.sessionDigest,
             sourceManifestDigest: input.normalized.sourceManifestDigest,
             normalizedEventsDigest: input.normalized.normalizedEventsDigest,
-            normalizedPath
+            normalizedPath,
+            sourcePackageDirectory: input.sourcePackage?.packageDirectory ?? null
           }
         }
       })
@@ -421,6 +447,7 @@ export function createTrialOrchestrator(options) {
       adapter: manifest.hostEvidence.adapter,
       mappingVersion: manifest.hostEvidence.mappingVersion,
       trustLevel: manifest.hostEvidence.trustLevel,
+      sourceValidated: manifest.hostEvidence.sourceValidated,
       sessionDigest: manifest.hostEvidence.sessionDigest,
       sourceManifestDigest: manifest.hostEvidence.sourceManifestDigest,
       normalizedEventsDigest: manifest.hostEvidence.normalizedEventsDigest,
@@ -464,6 +491,13 @@ export function createTrialOrchestrator(options) {
       fail("TRIAL_INPUT_CHANGED", "Runner artifacts changed after collection");
     }
     const normalized = await normalizedFor(current);
+    if (current.hostEvidence.sourcePackageDirectory) {
+      const source = await sourcePackageReader(current.hostEvidence.sourcePackageDirectory);
+      if (source.manifest.sourceManifestDigest !== current.hostEvidence.sourceManifestDigest ||
+        source.manifest.sessionDigest !== current.hostEvidence.sessionDigest) {
+        fail("TRIAL_INPUT_CHANGED", "Host source package changed after import");
+      }
+    }
     const truth = await collectTruth();
     const bridge = bridgeBuilder({
       normalized,
@@ -473,7 +507,9 @@ export function createTrialOrchestrator(options) {
         sessionDigest: current.hostSession.sessionDigest,
         executionStartedAtMs: current.timing.executionStartedAtMs,
         terminalAtMs: nowMs(),
-        waitIntervals: current.timing.waitIntervals
+        waitIntervals: current.timing.waitIntervals,
+        environmentClassification: current.scopeConfirmation.environmentClassification,
+        scopeConfirmedAtMs: Date.parse(current.scopeConfirmation.confirmedAt)
       },
       assistanceScript: profile.assistance,
       assistanceMarks: input.assistanceMarks ?? current.assistanceMarks,
@@ -601,6 +637,7 @@ export function createTrialOrchestrator(options) {
     showRunnerInput,
     confirmScope,
     bindSession,
+    startRunner,
     startAssistance,
     completeAssistance,
     markInterrupted,

@@ -74,6 +74,25 @@ test("export requires explicit authorization and a supported trust level", async
   });
 });
 
+test("repeating the same explicit export is idempotent and never rewrites another package", async (t) => {
+  const directory = await tempDirectory(t);
+  const outputDirectory = join(directory, "source-package");
+  const options = {
+    sourcePath: fixturePath,
+    outputDirectory,
+    authorization: {
+      explicit: true, actor: "fixture-author", authorizedAt: "2026-09-01T02:00:00.000Z"
+    },
+    trustLevel: "recorded-fixture"
+  };
+  const first = await createCodexSourcePackage(options);
+  const second = await createCodexSourcePackage(options);
+  assert.equal(second.manifest.sourceManifestDigest, first.manifest.sourceManifestDigest);
+  await assert.rejects(createCodexSourcePackage({ ...options, trustLevel: "operator-attested" }), {
+    code: "HOST_EXPORT_INTEGRITY_FAILED"
+  });
+});
+
 test("package reader rejects source tampering", async (t) => {
   const created = await createPackage(t);
   await writeFile(created.sourcePath, "{}\n", "utf8");

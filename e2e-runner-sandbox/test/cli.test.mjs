@@ -146,6 +146,97 @@ test("CLI evaluates the documented trial directory through private control truth
 
   assert.equal(exitCode, 0, lines.join("\n"));
   const evaluation = JSON.parse(await readFile(join(trialDirectory, "evaluation.json"), "utf8"));
-  assert.equal(evaluation.releaseDecision, "pass");
-  assert.equal(evaluation.score, 100);
+  assert.equal(evaluation.releaseDecision, "fail");
+  assert.equal(evaluation.diagnosticReleaseDecision, "pass");
+  assert.equal(evaluation.score, "ineligible");
+  assert.equal(evaluation.diagnosticScore, 100);
+  assert.equal(evaluation.hostEvidence.trustLevel, "operator-attested");
+});
+
+test("CLI exports and normalizes exactly one explicitly authorized Host session", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "host-cli-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const sourcePackage = join(directory, "source-package");
+  const normalizedPath = join(directory, "normalized.json");
+  const sourcePath = join(packageRoot, "test", "fixtures", "host-evidence", "codex-rollout.jsonl");
+  const exportLines = [];
+  const exportCode = await runEvaluatorCli([
+    "host-export", "--source", sourcePath, "--output", sourcePackage,
+    "--trust", "recorded-fixture", "--authorization-actor", "test-operator",
+    "--authorized-at", "2026-09-01T01:00:00.000Z"
+  ], { write: (line) => exportLines.push(line) });
+  assert.equal(exportCode, 0, exportLines.join("\n"));
+  assert.equal(exportLines.length, 1);
+  assert.equal(JSON.stringify(JSON.parse(exportLines[0])).includes(sourcePath), false);
+
+  const normalizeLines = [];
+  const normalizeCode = await runEvaluatorCli([
+    "host-normalize", "--source", sourcePackage, "--output", normalizedPath
+  ], { write: (line) => normalizeLines.push(line) });
+  assert.equal(normalizeCode, 0, normalizeLines.join("\n"));
+  const normalized = JSON.parse(await readFile(normalizedPath, "utf8"));
+  assert.equal(normalized.sourceValidated, true);
+  assert.equal(normalized.events.length, 3);
+  assert.equal(JSON.stringify(normalized).includes("snapshot redacted"), false);
+});
+
+test("CLI drives a persisted Trial while keeping private paths and Oracle snapshots off stdout", async (t) => {
+  const runtime = await cliHarness(t);
+  const directory = await mkdtemp(join(tmpdir(), "trial-cli-state-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const privateRoot = join(directory, "private", "trials");
+  const exchangeRoot = join(directory, "exchange");
+  const createLines = [];
+  const createCode = await runEvaluatorCli([
+    "trial-create", "--runtime", runtime.runtimeDirectory,
+    "--private-root", privateRoot, "--exchange-root", exchangeRoot,
+    "--unit", "B01-R1", "--campaign-id", "calibration-cli",
+    "--runner-version", "runner-cli-1", "--runner-digest", `sha256:${"a".repeat(64)}`
+  ], { write: (line) => createLines.push(line) });
+  assert.equal(createCode, 0, createLines.join("\n"));
+  const created = JSON.parse(createLines[0]).result;
+  assert.equal(created.state, "awaiting_scope_confirmation");
+  assert.doesNotMatch(createLines[0], new RegExp(privateRoot));
+  assert.doesNotMatch(createLines[0], /preSnapshot|oracle/i);
+
+  const statusLines = [];
+  const statusCode = await runEvaluatorCli([
+    "trial-status", "--runtime", runtime.runtimeDirectory,
+    "--private-root", privateRoot, "--exchange-root", exchangeRoot,
+    "--trial", created.trialId
+  ], { write: (line) => statusLines.push(line) });
+  assert.equal(statusCode, 0, statusLines.join("\n"));
+  assert.deepEqual(JSON.parse(statusLines[0]).result.nextActions, ["confirm-scope", "status"]);
+});
+
+test("CLI creates the versioned six-unit calibration plan", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "campaign-cli-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const lines = [];
+  const exitCode = await runEvaluatorCli([
+    "calibration-create", "--campaign-root", directory,
+    "--campaign-id", "calibration-cli", "--runner-version", "runner-cli-1",
+    "--runner-digest", `sha256:${"a".repeat(64)}`,
+    "--created-at", "2026-09-01T01:00:00.000Z"
+  ], { write: (line) => lines.push(line) });
+  assert.equal(exitCode, 0, lines.join("\n"));
+  assert.equal(JSON.parse(lines[0]).result.plannedUnits, 6);
+  const plan = JSON.parse(await readFile(join(directory, "calibration-cli", "campaign-plan.json"), "utf8"));
+  assert.equal(plan.planVersion, "calibration-v1");
+});
+
+test("CLI errors include stable codes, actionable next steps, and distinct exits", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "host-cli-error-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const lines = [];
+  const exitCode = await runEvaluatorCli([
+    "host-export",
+    "--source", join(packageRoot, "test", "fixtures", "host-evidence", "codex-rollout.jsonl"),
+    "--output", join(directory, "package"), "--trust", "recorded-fixture",
+    "--authorization-actor", "operator", "--authorized-at", "not-a-time"
+  ], { write: (line) => lines.push(line) });
+  assert.equal(exitCode, 3);
+  const result = JSON.parse(lines[0]);
+  assert.equal(result.error.code, "HOST_EXPORT_UNAUTHORIZED");
+  assert.match(result.error.nextStep, /authorized Host session/i);
 });

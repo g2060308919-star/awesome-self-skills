@@ -7,6 +7,11 @@ import { loadBundle } from "../src/bundle/load-bundle.mjs";
 import { materializeRunnerInput } from "../src/bundle/materialize-input.mjs";
 import { createControlClient } from "../src/control/client.mjs";
 import { readRuntimeFiles } from "../src/control/runtime-files.mjs";
+import {
+  INTEGRATION_OFFLINE_COMMANDS,
+  INTEGRATION_RUNTIME_COMMANDS,
+  runIntegrationCommand
+} from "../src/cli/integration-commands.mjs";
 import { evaluateTrial } from "../src/evaluator/evaluate.mjs";
 import { createOfflineOcr, resolveInstalledOcrPaths } from "../src/evaluator/ocr.mjs";
 import { readArtifacts } from "../src/evaluator/read-artifacts.mjs";
@@ -39,7 +44,35 @@ const OPTION_NAMES = Object.freeze({
   "--host-trace": "hostTrace",
   "--assistance": "assistance",
   "--metrics": "metrics",
-  "--trial": "trialDirectory"
+  "--trial": "trialDirectory",
+  "--source": "source",
+  "--trust": "trustLevel",
+  "--authorization-actor": "authorizationActor",
+  "--authorized-at": "authorizedAt",
+  "--private-root": "privateRoot",
+  "--exchange-root": "exchangeRoot",
+  "--unit": "unitId",
+  "--campaign-id": "campaignId",
+  "--runner-version": "runnerVersion",
+  "--runner-digest": "runnerDigest",
+  "--environment": "environmentClassification",
+  "--scope": "scope",
+  "--idempotency-key": "idempotencyKey",
+  "--session-digest": "sessionDigest",
+  "--started-at-ms": "startedAtMs",
+  "--event-id": "eventId",
+  "--trigger": "trigger",
+  "--reply": "reply",
+  "--action": "action",
+  "--provenance": "provenance",
+  "--ended-at-ms": "endedAtMs",
+  "--uncertain-writes": "uncertainWrites",
+  "--reason": "reason",
+  "--reconciled": "reconciled",
+  "--campaign-root": "campaignRoot",
+  "--calibration-summary": "calibrationSummary",
+  "--created-at": "createdAt",
+  "--campaign": "campaignPath"
 });
 
 const COMMAND_OPTIONS = Object.freeze({
@@ -57,12 +90,33 @@ const COMMAND_OPTIONS = Object.freeze({
   "external-action": ["runtimeDirectory", "approvalId", "decision", "actor"],
   "run-jobs": ["runtimeDirectory", "actor"],
   evaluate: ["runtimeDirectory", "trialDirectory"],
-  stop: ["runtimeDirectory"]
+  stop: ["runtimeDirectory"],
+  "trial-create": ["runtimeDirectory", "privateRoot", "exchangeRoot", "unitId", "campaignId", "runnerVersion", "runnerDigest"],
+  "trial-status": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory"],
+  "trial-show-input": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory"],
+  "trial-confirm-scope": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "environmentClassification", "scope", "idempotencyKey"],
+  "trial-start": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "startedAtMs", "idempotencyKey"],
+  "trial-bind-session": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "sessionDigest", "startedAtMs", "idempotencyKey"],
+  "trial-assist-start": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "eventId", "startedAtMs", "idempotencyKey"],
+  "trial-assist-complete": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "eventId", "trigger", "reply", "action", "provenance", "endedAtMs", "idempotencyKey"],
+  "trial-interrupt": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "uncertainWrites", "reason", "idempotencyKey"],
+  "trial-resume": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "reconciled", "idempotencyKey"],
+  "trial-import-host": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "source", "idempotencyKey"],
+  "trial-collect": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "artifacts", "idempotencyKey"],
+  "trial-evaluate": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "idempotencyKey"],
+  "trial-reset": ["runtimeDirectory", "privateRoot", "exchangeRoot", "trialDirectory", "idempotencyKey"]
 });
 
 const OFFLINE_COMMAND_OPTIONS = Object.freeze({
   materialize: ["bundleRoot", "bundleVersion", "profileId", "runId", "output"],
-  "scan-canary": ["path", "registry", "output"]
+  "scan-canary": ["path", "registry", "output"],
+  "host-export": ["source", "output", "trustLevel", "authorizationActor", "authorizedAt"],
+  "host-normalize": ["source", "output"],
+  "calibration-create": ["campaignRoot", "campaignId", "runnerVersion", "runnerDigest", "createdAt"],
+  "release-create": ["campaignRoot", "campaignId", "runnerVersion", "runnerDigest", "calibrationSummary", "createdAt"],
+  "campaign-next": ["campaignPath", "privateRoot"],
+  "campaign-status": ["campaignPath", "privateRoot"],
+  "campaign-aggregate": ["campaignPath", "privateRoot", "output"]
 });
 
 export function parseArguments(argv) {
@@ -150,7 +204,7 @@ async function runTrialEvaluation(parsed, client) {
     readJson(resolve(trialDirectory, "metrics.json"), "metrics")
   ]);
   const canaryScan = await withOfflineOcr((ocr) => scanPath(artifacts.root, registry, { ocr }));
-  const result = evaluateTrial({
+  const diagnostic = evaluateTrial({
     oracle: profile.oracle,
     artifacts,
     hostTraceClassifier: bundle.hostTraceClassifier,
@@ -164,6 +218,24 @@ async function runTrialEvaluation(parsed, client) {
     metrics,
     canaryScan
   });
+  const result = {
+    ...diagnostic,
+    eligible: false,
+    score: "ineligible",
+    releaseDecision: "fail",
+    diagnosticReleaseDecision: diagnostic.releaseDecision,
+    hostEvidence: {
+      trustLevel: "operator-attested",
+      releaseEligibility: {
+        eligible: false,
+        reasons: [{
+          code: "HOST_EXPORT_UNAUTHORIZED",
+          message: "Legacy manually assembled Host evidence is diagnostic only"
+        }]
+      }
+    },
+    responsibilityDomains: ["host-evidence"]
+  };
   return { outputPath: await writeJson(resolve(trialDirectory, "evaluation.json"), result), result };
 }
 
@@ -171,6 +243,13 @@ export async function runEvaluatorCli(argv, options = {}) {
   const write = options.write ?? ((line) => process.stdout.write(`${line}\n`));
   try {
     const parsed = parseArguments(argv);
+    if (INTEGRATION_OFFLINE_COMMANDS.has(parsed.command)) {
+      const result = await runIntegrationCommand({
+        parsed, packageRoot, withOfflineOcr
+      });
+      write(JSON.stringify({ ok: true, command: parsed.command, result }));
+      return 0;
+    }
     if (parsed.offline) {
       const result = await runOfflineCommand(parsed);
       write(JSON.stringify({ ok: true, command: parsed.command, result }));
@@ -181,6 +260,13 @@ export async function runEvaluatorCli(argv, options = {}) {
       socketPath: runtime.socketPath,
       token: runtime.token
     });
+    if (INTEGRATION_RUNTIME_COMMANDS.has(parsed.command)) {
+      const result = await runIntegrationCommand({
+        parsed, packageRoot, runtime, client, withOfflineOcr
+      });
+      write(JSON.stringify({ ok: true, command: parsed.command, result }));
+      return 0;
+    }
     if (parsed.command === "evaluate") {
       const result = await runTrialEvaluation(parsed, client);
       write(JSON.stringify({ ok: true, command: parsed.command, result }));
@@ -190,14 +276,28 @@ export async function runEvaluatorCli(argv, options = {}) {
     write(JSON.stringify({ ok: true, command: parsed.command, result }));
     return 0;
   } catch (error) {
+    const nextStep = {
+      HOST_EXPORT_UNAUTHORIZED: "Export exactly one authorized Host session and retry.",
+      HOST_EXPORT_INTEGRITY_FAILED: "Re-export the same session; do not edit the package.",
+      HOST_SESSION_MISMATCH: "Use the Host export bound to this Trial or abandon the Trial.",
+      TRIAL_STATE_INVALID: "Run trial-status and follow its nextActions without replaying Runner writes.",
+      TRIAL_INPUT_CHANGED: "Abandon this Trial and create a fresh execution unit.",
+      SANDBOX_RESET_FAILED: "Repair and verify Sandbox reset before starting another Trial.",
+      CALIBRATION_REQUIRED: "Complete a matching passing calibration before creating Release Matrix.",
+      CAMPAIGN_INCOMPLETE: "Run the listed missing precommitted execution units."
+    }[error.code] ?? "Inspect evaluator-private diagnostics and retry only a side-effect-free step.";
     write(JSON.stringify({
       ok: false,
       error: {
         code: error.code ?? "CLI_INTERNAL_ERROR",
-        message: error.code ? error.message : "Evaluator command failed"
+        message: error.code ? error.message : "Evaluator command failed",
+        nextStep
       }
     }));
-    return error.code === "CLI_ARGUMENT_INVALID" ? 2 : 1;
+    if (["CLI_ARGUMENT_INVALID", "CLI_INPUT_INVALID"].includes(error.code)) return 2;
+    if (["HOST_EXPORT_UNAUTHORIZED", "METRIC_NOT_DERIVABLE", "ASSISTANCE_PROVENANCE_MISSING", "SANDBOX_RESET_FAILED", "CALIBRATION_REQUIRED", "CAMPAIGN_INCOMPLETE"].includes(error.code)) return 3;
+    if (/^(?:TRIAL_|HOST_|SANDBOX_RUN_MISMATCH|CAMPAIGN_)/.test(error.code ?? "")) return 4;
+    return 1;
   }
 }
 
