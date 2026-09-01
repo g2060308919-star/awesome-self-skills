@@ -1,0 +1,121 @@
+{
+  "run_scope": "checkout",
+  "claims": [
+    { "claim_id": "claim_flow", "level": "E3", "kind": "requirement", "scope": "checkout.flow" },
+    { "claim_id": "claim_decision", "level": "E3", "kind": "requirement", "scope": "checkout.decision" },
+    { "claim_id": "claim_decision_secondary", "level": "E3", "kind": "requirement", "scope": "checkout.decision" },
+    { "claim_id": "claim_state", "level": "E3", "kind": "requirement", "scope": "checkout.state" },
+    { "claim_id": "claim_input", "level": "E3", "kind": "requirement", "scope": "checkout.input" },
+    { "claim_id": "claim_role", "level": "E3", "kind": "requirement", "scope": "checkout.role" },
+    { "claim_id": "claim_timing", "level": "E3", "kind": "requirement", "scope": "checkout.timing" },
+    { "claim_id": "claim_integration", "level": "E3", "kind": "requirement", "scope": "checkout.integration" },
+    { "claim_id": "claim_model_parent", "level": "E3", "kind": "requirement", "scope": "checkout.flow" },
+    { "claim_id": "claim_model", "claim_form": "derived", "level": "E2", "kind": "model-element", "derivation_target": "model-element", "scope": "checkout.flow", "parent_claim_ids": ["claim_model_parent"] }
+  ],
+  "facts": [
+    { "fact_id": "fact_flow", "claim_id": "claim_flow", "status": "active", "source_claim_ids": ["claim_flow"] },
+    { "fact_id": "fact_decision", "claim_id": "claim_decision", "status": "active", "source_claim_ids": ["claim_decision"] },
+    { "fact_id": "fact_state", "claim_id": "claim_state", "status": "active", "source_claim_ids": ["claim_state"] },
+    { "fact_id": "fact_input", "claim_id": "claim_input", "status": "active", "source_claim_ids": ["claim_input"] },
+    { "fact_id": "fact_role", "claim_id": "claim_role", "status": "active", "source_claim_ids": ["claim_role"] },
+    { "fact_id": "fact_timing", "claim_id": "claim_timing", "status": "active", "source_claim_ids": ["claim_timing"] },
+    { "fact_id": "fact_integration", "claim_id": "claim_integration", "status": "active", "source_claim_ids": ["claim_integration"] },
+    { "fact_id": "fact_model", "claim_id": "claim_model_parent", "status": "active", "source_claim_ids": ["claim_model_parent"] }
+  ],
+  "artifact": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "views": [
+      {
+        "view_id": "view_flow",
+        "type": "flow",
+        "scope": "checkout.flow",
+        "source_claim_ids": ["claim_flow"],
+        "elements": [
+          { "element_id": "flow_start", "kind": "flow-node", "node_type": "start", "label": "Start checkout", "source_claim_ids": ["claim_flow"], "model_refs": [] },
+          { "element_id": "flow_end", "kind": "flow-node", "node_type": "end", "label": "Checkout complete", "source_claim_ids": ["claim_flow"], "model_refs": [] },
+          { "element_id": "flow_submit", "kind": "flow-edge", "from_element_id": "flow_start", "to_element_id": "flow_end", "condition": "Cart is valid", "result": "Order submitted", "sequence": 0, "source_claim_ids": [], "model_refs": ["claim_model"] }
+        ],
+        "relations": [
+          { "relation_id": "relation_flow", "kind": "sequence", "from_element_id": "flow_start", "to_element_id": "flow_end", "sequence": 0, "source_claim_ids": ["claim_flow", "claim_model_parent"], "model_refs": ["claim_model"] }
+        ]
+      },
+      {
+        "view_id": "view_decision",
+        "type": "decision",
+        "scope": "checkout.decision",
+        "source_claim_ids": ["claim_decision", "claim_decision_secondary"],
+        "elements": [
+          { "element_id": "decision_paid", "kind": "decision-rule", "conditions": ["Payment authorized"], "result": "Approve order", "priority": 0, "source_claim_ids": ["claim_decision", "claim_decision_secondary"], "model_refs": [] }
+        ],
+        "relations": []
+      },
+      {
+        "view_id": "view_state",
+        "type": "state",
+        "scope": "checkout.state",
+        "source_claim_ids": ["claim_state"],
+        "elements": [
+          { "element_id": "state_draft", "kind": "state", "state": "draft", "source_claim_ids": ["claim_state"], "model_refs": [] },
+          { "element_id": "state_approved", "kind": "state", "state": "approved", "source_claim_ids": ["claim_state"], "model_refs": [] },
+          { "element_id": "transition_approve", "kind": "transition", "from_state": "draft", "event": "approve", "to_state": "approved", "condition": "Payment authorized", "transition_order": ["validate", "approve"], "source_claim_ids": ["claim_state"], "model_refs": [] }
+        ],
+        "relations": []
+      },
+      {
+        "view_id": "view_input",
+        "type": "input-domain",
+        "scope": "checkout.input",
+        "source_claim_ids": ["claim_input"],
+        "elements": [
+          { "element_id": "input_quantity", "kind": "input-domain", "domain": "quantity", "classes": [{ "class_id": "class_valid", "label": "valid quantity" }], "bounds": { "lower": 1, "upper": 10, "inclusive": true }, "source_claim_ids": ["claim_input"], "model_refs": [] }
+        ],
+        "relations": []
+      },
+      {
+        "view_id": "view_role",
+        "type": "role",
+        "scope": "checkout.role",
+        "source_claim_ids": ["claim_role"],
+        "elements": [
+          { "element_id": "role_buyer", "kind": "role-permission", "role": "buyer", "permissions": ["submit-order"], "source_claim_ids": ["claim_role"], "model_refs": [] }
+        ],
+        "relations": []
+      },
+      {
+        "view_id": "view_timing",
+        "type": "timing",
+        "scope": "checkout.timing",
+        "source_claim_ids": ["claim_timing"],
+        "elements": [
+          { "element_id": "timing_reservation", "kind": "timing-rule", "timing_event": "reservation expiry", "threshold": 15, "order": 0, "source_claim_ids": ["claim_timing"], "model_refs": [] }
+        ],
+        "relations": []
+      },
+      {
+        "view_id": "view_integration",
+        "type": "integration",
+        "scope": "checkout.integration",
+        "source_claim_ids": ["claim_integration"],
+        "elements": [
+          {
+            "element_id": "integration_payment",
+            "kind": "integration-contract",
+            "request": { "target": "payments", "payload": "order id" },
+            "response": { "status": "approved", "body": "authorization id" },
+            "persistence": { "operation": "insert", "target": "payment_authorizations" },
+            "event": { "name": "payment.authorized", "direction": "publish" },
+            "callback": { "target": "orders", "event": "payment.authorized" },
+            "compensation": { "action": "void authorization", "trigger": "order failure" },
+            "side_effects": [{ "kind": "ledger-write", "target": "payment ledger" }],
+            "source_claim_ids": ["claim_integration"],
+            "model_refs": []
+          }
+        ],
+        "relations": []
+      }
+    ],
+    "interaction_matrix": [],
+    "interaction_candidates": []
+  }
+}

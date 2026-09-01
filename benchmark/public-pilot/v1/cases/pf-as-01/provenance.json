@@ -1,0 +1,12 @@
+{
+  "repository": "marketcalls/openalgo",
+  "commit": "01910584c4c7e89583ebdaaf8a3ce3a006155e68",
+  "source_url": "https://raw.githubusercontent.com/marketcalls/openalgo/01910584c4c7e89583ebdaaf8a3ce3a006155e68/docs/scalping/PRD.md",
+  "source_sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+  "content_digest": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+  "license_url": "https://raw.githubusercontent.com/marketcalls/openalgo/01910584c4c7e89583ebdaaf8a3ce3a006155e68/License.md",
+  "license_sha256": "76a97c878c9c7a8321bb395c2b44d3fe2f8d81314d219b20138ed0e2dddd5182",
+  "reported_license": "AGPL-3.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

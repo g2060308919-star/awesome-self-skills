@@ -1,0 +1,12 @@
+{
+  "repository": "profullstack/coinpayportal",
+  "commit": "13f160c0897168931e407eccd6411e88946d0f23",
+  "source_url": "https://raw.githubusercontent.com/profullstack/coinpayportal/13f160c0897168931e407eccd6411e88946d0f23/PRD.md",
+  "source_sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+  "content_digest": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+  "license_url": "https://raw.githubusercontent.com/profullstack/coinpayportal/13f160c0897168931e407eccd6411e88946d0f23/LICENSE",
+  "license_sha256": "de1b680e8cf8ebf3641646e14f5c0730f726da2d9d6d211d498032c20d0d9e2c",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

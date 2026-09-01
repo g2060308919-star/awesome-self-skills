@@ -1,0 +1,12 @@
+{
+  "repository": "m18h/kanea",
+  "commit": "c5407e089e9d44098871cb00f883fcf5f7132fa2",
+  "source_url": "https://raw.githubusercontent.com/m18h/kanea/c5407e089e9d44098871cb00f883fcf5f7132fa2/PRD.md",
+  "source_sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+  "content_digest": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+  "license_url": "https://raw.githubusercontent.com/m18h/kanea/c5407e089e9d44098871cb00f883fcf5f7132fa2/LICENSE",
+  "license_sha256": "8787ce0a1184eaed0b190d84bb34a3f89d63bc298fea53805c5054cb326d6e79",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

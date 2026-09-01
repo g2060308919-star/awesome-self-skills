@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 0,
+  "views": [
+    {
+      "view_id": "view_orders",
+      "type": "integration",
+      "scope": "orders",
+      "source_claim_ids": ["claim_shared"],
+      "elements": [
+        {
+          "element_id": "integration_shared_order",
+          "kind": "integration-contract",
+          "request": { "target": "payments", "payload": "order id" },
+          "response": { "status": "accepted", "body": "payment id" },
+          "persistence": { "operation": "update", "target": "orders" },
+          "event": { "name": "order.payment-linked", "direction": "publish" },
+          "callback": { "target": "orders", "event": "payment.accepted" },
+          "compensation": { "action": "unlink payment", "trigger": "payment failure" },
+          "side_effects": [{ "kind": "order-write", "target": "orders" }],
+          "source_claim_ids": ["claim_shared"],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    },
+    { "view_id": "view_payments", "type": "integration", "scope": "payments", "source_claim_ids": ["claim_shared"], "elements": [], "relations": [] }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["orders", "payments"], "dimension": "shared-entity", "status": "candidate" },
+    { "module_ids": ["orders", "payments"], "dimension": "role", "status": "candidate" },
+    { "module_ids": ["orders", "payments"], "dimension": "client", "status": "candidate" },
+    { "module_ids": ["orders", "payments"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": [
+    { "candidate_id": "candidate_formal", "module_ids": ["orders", "payments"], "dimension": "shared-entity", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "formal_view_id": "view_orders" },
+    { "candidate_id": "candidate_blocked", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "blocker", "blocker_root_issue_id": "root_cross_role" },
+    { "candidate_id": "candidate_exploratory", "module_ids": ["orders", "payments"], "dimension": "client", "disposition": "exploratory", "exploratory_id": "exploratory_cross_client" }
+  ]
+}

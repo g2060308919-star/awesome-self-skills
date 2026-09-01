@@ -1,0 +1,12 @@
+{
+  "repository": "dinpd/AgentAction",
+  "commit": "84722312663cc46a7d928d0d883332f8d6d1d821",
+  "source_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/docs/agentaction-gateway-prd.md",
+  "source_sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+  "content_digest": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+  "license_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/LICENSE",
+  "license_sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T20:46:16Z"
+}

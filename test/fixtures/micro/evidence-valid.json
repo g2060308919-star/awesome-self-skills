@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 0,
+  "claims": [
+    {
+      "claim_id": "claim_formula",
+      "claim_form": "direct",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout.total",
+      "value": "subtotal + tax",
+      "source_locator_ids": ["locator_formula"],
+      "source_id": "source_prd"
+    },
+    {
+      "claim_id": "claim_total",
+      "claim_form": "derived",
+      "level": "E2",
+      "kind": "expected-value",
+      "scope": "checkout.total",
+      "value": "12.50",
+      "source_locator_ids": ["locator_formula"],
+      "derivation_kind": "formula",
+      "derivation_target": "expected-value",
+      "parent_claim_ids": ["claim_formula"],
+      "parameters": {
+        "unit": "USD",
+        "precision": 2,
+        "rounding": "half-up"
+      },
+      "rule_input": {
+        "formula": "subtotal + tax",
+        "inputs": [
+          { "name": "subtotal", "value": 10 },
+          { "name": "tax", "value": 2.5 }
+        ],
+        "unit": "USD",
+        "precision": 2,
+        "rounding": "half-up"
+      }
+    }
+  ],
+  "fact_ledger": [
+    {
+      "fact_id": "fact_formula",
+      "claim_id": "claim_formula",
+      "status": "active",
+      "source_claim_ids": ["claim_formula"]
+    },
+    {
+      "fact_id": "fact_total",
+      "claim_id": "claim_total",
+      "status": "active",
+      "source_claim_ids": ["claim_formula", "claim_total"]
+    }
+  ]
+}

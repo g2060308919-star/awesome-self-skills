@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 0,
+  "claims": [
+    {
+      "claim_id": "claim_root",
+      "claim_form": "direct",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "value": "approved",
+      "source_locator_ids": ["locator_rule"],
+      "source_id": "source_prd"
+    }
+  ],
+  "fact_ledger": []
+}

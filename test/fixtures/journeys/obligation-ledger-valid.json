@@ -1,0 +1,136 @@
+{
+  "source_revision": 4,
+  "run_scope": "checkout",
+  "claims": [
+    {
+      "claim_id": "claim_rule",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": ["claim_rule_parent"]
+    },
+    {
+      "claim_id": "claim_rule_parent",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    },
+    {
+      "claim_id": "claim_blocked",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    },
+    {
+      "claim_id": "claim_not_applicable",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    },
+    {
+      "claim_id": "claim_exclusion",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    }
+  ],
+  "fact_ledger": [
+    {
+      "fact_id": "fact_rule",
+      "claim_id": "claim_rule",
+      "status": "active",
+      "source_claim_ids": ["claim_rule"]
+    },
+    {
+      "fact_id": "fact_blocked",
+      "claim_id": "claim_blocked",
+      "status": "ambiguous",
+      "source_claim_ids": ["claim_blocked"]
+    },
+    {
+      "fact_id": "fact_not_applicable",
+      "claim_id": "claim_not_applicable",
+      "status": "active",
+      "source_claim_ids": ["claim_not_applicable"]
+    }
+  ],
+  "behavior_views": {
+    "schema_version": "1.0.0",
+    "source_revision": 4,
+    "views": [
+      {
+        "view_id": "view_decision",
+        "type": "decision",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_rule"],
+        "elements": [
+          {
+            "element_id": "rule_checkout",
+            "kind": "decision-rule",
+            "conditions": ["cart is ready"],
+            "result": "checkout is allowed",
+            "priority": 0,
+            "source_claim_ids": ["claim_rule"],
+            "model_refs": []
+          }
+        ],
+        "relations": []
+      }
+    ],
+    "interaction_matrix": [
+      { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+    ],
+    "interaction_candidates": []
+  },
+  "contexts_by_view_id": {
+    "view_decision": {
+      "riskByElementId": { "rule_checkout": "high" },
+      "requiredOracleRefsByElementId": { "rule_checkout": ["claim_rule"] },
+      "requiredCapabilitiesByElementId": { "rule_checkout": ["checkout-observer"] }
+    }
+  },
+  "fact_routes": [
+    {
+      "fact_id": "fact_blocked",
+      "route_type": "blocked",
+      "blocker_root_issue_id": "root_checkout_rule"
+    },
+    {
+      "fact_id": "fact_not_applicable",
+      "route_type": "not_applicable",
+      "not_applicable_claim_id": "claim_exclusion"
+    }
+  ],
+  "not_applicable_reviews": [
+    {
+      "fact_id": "fact_not_applicable",
+      "claim_id": "claim_exclusion",
+      "support_review": "supported"
+    }
+  ],
+  "custom_obligations": [
+    {
+      "semantic_key": "custom-checkout-observer",
+      "obligation": {
+        "obligation_id": "obligation_287414283b7c588d",
+        "kind": "decision",
+        "risk": "medium",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_rule"],
+        "view_element_refs": ["view_decision#rule_checkout"],
+        "required_oracle_refs": ["claim_rule"],
+        "required_capabilities": ["custom-observer"]
+      }
+    }
+  ]
+}

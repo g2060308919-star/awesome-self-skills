@@ -1,0 +1,12 @@
+{
+  "repository": "sakibtamim/Jasper",
+  "commit": "73d7e8f6b54c4fedd04a26f98ba9711cf74bef54",
+  "source_url": "https://raw.githubusercontent.com/sakibtamim/Jasper/73d7e8f6b54c4fedd04a26f98ba9711cf74bef54/docs/hosted-jasper/prd.md",
+  "source_sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+  "content_digest": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+  "license_url": "https://raw.githubusercontent.com/sakibtamim/Jasper/73d7e8f6b54c4fedd04a26f98ba9711cf74bef54/LICENSE",
+  "license_sha256": "6c07710a2f51e0b496d3f528e7731ce9f925d90359e8ebced5de97e074551f4d",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

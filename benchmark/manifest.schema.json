@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "generate-test-cases-benchmark-manifest.schema.json",
+  "type": "object",
+  "required": ["schema_version", "benchmark_version", "manifest_id", "evidence_class", "systems", "repeats_per_system", "expected_provenance", "strata", "cases"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "benchmark_version": { "type": "string", "minLength": 1 },
+    "manifest_id": { "type": "string", "minLength": 1 },
+    "evidence_class": { "enum": ["synthetic-pilot", "external-expert-corpus"] },
+    "systems": { "const": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"] },
+    "repeats_per_system": { "const": 3 },
+    "expected_provenance": {
+      "type": "object",
+      "required": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"],
+      "properties": {
+        "long-prompt": {
+          "type": "object",
+          "required": ["skill_version", "compiler_version", "schema_version", "model_id", "prompt_or_reference_id", "baseline_version", "benchmark_version"],
+          "properties": {
+            "skill_version": { "type": "string", "minLength": 1 }, "compiler_version": { "type": "string", "minLength": 1 },
+            "schema_version": { "type": "string", "minLength": 1 }, "model_id": { "type": "string", "minLength": 1 },
+            "prompt_or_reference_id": { "type": "string", "minLength": 1 }, "baseline_version": { "type": "string", "minLength": 1 },
+            "benchmark_version": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "test-case-designer": {
+          "type": "object",
+          "required": ["skill_version", "compiler_version", "schema_version", "model_id", "prompt_or_reference_id", "baseline_version", "benchmark_version"],
+          "properties": {
+            "skill_version": { "type": "string", "minLength": 1 }, "compiler_version": { "type": "string", "minLength": 1 },
+            "schema_version": { "type": "string", "minLength": 1 }, "model_id": { "type": "string", "minLength": 1 },
+            "prompt_or_reference_id": { "type": "string", "minLength": 1 }, "baseline_version": { "type": "string", "minLength": 1 },
+            "benchmark_version": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "technique-router": {
+          "type": "object",
+          "required": ["skill_version", "compiler_version", "schema_version", "model_id", "prompt_or_reference_id", "baseline_version", "benchmark_version"],
+          "properties": {
+            "skill_version": { "type": "string", "minLength": 1 }, "compiler_version": { "type": "string", "minLength": 1 },
+            "schema_version": { "type": "string", "minLength": 1 }, "model_id": { "type": "string", "minLength": 1 },
+            "prompt_or_reference_id": { "type": "string", "minLength": 1 }, "baseline_version": { "type": "string", "minLength": 1 },
+            "benchmark_version": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "generate-test-cases": {
+          "type": "object",
+          "required": ["skill_version", "compiler_version", "schema_version", "model_id", "prompt_or_reference_id", "baseline_version", "benchmark_version"],
+          "properties": {
+            "skill_version": { "type": "string", "minLength": 1 }, "compiler_version": { "type": "string", "minLength": 1 },
+            "schema_version": { "type": "string", "minLength": 1 }, "model_id": { "type": "string", "minLength": 1 },
+            "prompt_or_reference_id": { "type": "string", "minLength": 1 }, "baseline_version": { "type": "string", "minLength": 1 },
+            "benchmark_version": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "strata": {
+      "type": "array", "minItems": 6, "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["stratum", "minimum_prds", "minimum_critical_obligations", "minimum_clarification_prds", "minimum_historical_defects"],
+        "properties": {
+          "stratum": { "enum": ["transaction/order/payment", "identity/role/permission", "workflow/approval/state", "form/configuration/input validation", "asynchronous integration/event", "time-window/quota/entitlement"] },
+          "minimum_prds": { "const": 5 }, "minimum_critical_obligations": { "const": 3 },
+          "minimum_clarification_prds": { "const": 2 }, "minimum_historical_defects": { "const": 5 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case_id", "domain", "stratum", "risk", "high_risk", "case_directory", "capture_directory"],
+        "properties": {
+          "case_id": { "type": "string", "minLength": 1 }, "domain": { "type": "string", "minLength": 1 },
+          "stratum": { "enum": ["transaction/order/payment", "identity/role/permission", "workflow/approval/state", "form/configuration/input validation", "asynchronous integration/event", "time-window/quota/entitlement"] },
+          "risk": { "enum": ["critical", "high", "medium", "low"] }, "high_risk": { "type": "boolean" },
+          "case_directory": { "type": "string", "pattern": "^cases/" }, "capture_directory": { "type": "string", "pattern": "^captured/" },
+          "label_lineage_anchors": {
+            "type": "object",
+            "required": ["expert_obligations", "supported_assertions", "accepted_cases"],
+            "properties": {
+              "expert_obligations": { "type": "array", "uniqueItems": true, "items": { "type": "object", "required": ["label_version", "digest"], "properties": { "label_version": { "type": "string", "minLength": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } },
+              "supported_assertions": { "type": "array", "uniqueItems": true, "items": { "type": "object", "required": ["label_version", "digest"], "properties": { "label_version": { "type": "string", "minLength": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } },
+              "accepted_cases": { "type": "array", "uniqueItems": true, "items": { "type": "object", "required": ["label_version", "digest"], "properties": { "label_version": { "type": "string", "minLength": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,189 @@
+{
+  "source_pack": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "run_scope": "checkout",
+    "sources": [
+      {
+        "source_id": "source_prd",
+        "kind": "prd",
+        "version": "1",
+        "status": "effective",
+        "authority": "owner",
+        "content": "A ready cart can be submitted and accepted.",
+        "content_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "scope": "checkout"
+      }
+    ],
+    "locators": [
+      {
+        "locator_id": "locator_checkout",
+        "source_id": "source_prd",
+        "type": "text-range",
+        "text_range": { "start": 0, "end": 43 },
+        "content_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "extraction_integrity": "verified"
+      }
+    ],
+    "source_policy": {
+      "rules": [
+        {
+          "rule_id": "policy_prd",
+          "source_ids": ["source_prd"],
+          "scope": "checkout",
+          "authority": "owner",
+          "status": "effective"
+        }
+      ]
+    },
+    "decision_records": [],
+    "clarification_events": []
+  },
+  "evidence_claims": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "claims": [
+      {
+        "claim_id": "claim_checkout",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout",
+        "value": "checkout accepted",
+        "source_locator_ids": ["locator_checkout"],
+        "source_id": "source_prd"
+      }
+    ],
+    "fact_ledger": [
+      {
+        "fact_id": "fact_checkout",
+        "claim_id": "claim_checkout",
+        "status": "active",
+        "source_claim_ids": ["claim_checkout"]
+      }
+    ]
+  },
+  "behavior_views": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "views": [
+      {
+        "view_id": "view_checkout",
+        "type": "decision",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_checkout"],
+        "elements": [
+          {
+            "element_id": "rule_checkout",
+            "kind": "decision-rule",
+            "conditions": ["cart is ready"],
+            "result": "checkout accepted",
+            "priority": 0,
+            "source_claim_ids": ["claim_checkout"],
+            "model_refs": []
+          }
+        ],
+        "relations": []
+      }
+    ],
+    "interaction_matrix": [
+      { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+    ],
+    "interaction_candidates": []
+  },
+  "case_drafts": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "cases": [
+      {
+        "case_id": "case_checkout",
+        "title": "Verify checkout acceptance",
+        "scope": "checkout",
+        "risk": "high",
+        "role": { "value": "tester", "evidence_ref": "claim_checkout", "support_review": "supported" },
+        "fact_ids": ["fact_checkout"],
+        "obligation_ids": ["obligation_8cc31c1b2773c94c"],
+        "source_claim_ids": ["claim_checkout"],
+        "preconditions": [
+          {
+            "condition": "cart is ready",
+            "reachable_from": "revision start",
+            "source_claim_ids": ["claim_checkout"],
+            "evidence_ref": "claim_checkout",
+            "support_review": "supported"
+          }
+        ],
+        "data": [
+          {
+            "name": "scenario input",
+            "value": "ready-cart",
+            "provenance": { "type": "evidence", "ref": "claim_checkout" },
+            "support_review": "supported"
+          }
+        ],
+        "steps": [
+          {
+            "step_id": "step_checkout",
+            "action": "Submit checkout",
+            "action_evidence_ref": "claim_checkout",
+            "support_review": "supported",
+            "expectations": [
+              {
+                "expectation_id": "expectation_checkout",
+                "business_assertion": "checkout accepted",
+                "preceding_action_id": "step_checkout",
+                "observer": "tester",
+                "observation_surface": "UI",
+                "observation_target": "result",
+                "oracle": { "type": "state", "expected_state": "checkout accepted", "comparison": "equals" },
+                "evidence_ref": "claim_checkout",
+                "support_review": "supported"
+              }
+            ]
+          }
+        ],
+        "testability_profile": {
+          "capabilities": [
+            { "capability": "run-control", "status": "provided", "provenance_ref": "claim_checkout" }
+          ],
+          "observers": [
+            { "observer": "tester", "observation_target": "result", "status": "verified", "provenance_ref": "claim_checkout" }
+          ],
+          "controls": [
+            { "control": "submit-checkout", "status": "provided", "provenance_ref": "claim_checkout" }
+          ]
+        },
+        "post_state": { "state": "checkout accepted", "evidence_ref": "claim_checkout", "support_review": "supported" },
+        "cleanup": {
+          "required": false,
+          "no_cleanup_reason": "The scenario is isolated.",
+          "no_cleanup_evidence_ref": "claim_checkout",
+          "support_review": "supported"
+        },
+        "evidence_refs": ["claim_checkout"],
+        "execution_signature": {
+          "role": "tester",
+          "precondition_state": "[{\"condition\":\"cart is ready\",\"reachable_from\":\"revision start\"}]",
+          "data_partition": "[{\"name\":\"scenario input\",\"value\":\"ready-cart\"}]",
+          "action_path": ["Submit checkout"],
+          "oracle_refs": ["expectation_checkout"],
+          "test_point_ids": ["obligation_8cc31c1b2773c94c"]
+        }
+      }
+    ],
+    "obligation_dispositions": [
+      {
+        "obligation_id": "obligation_8cc31c1b2773c94c",
+        "status": "case_candidate",
+        "case_ids": ["case_checkout"]
+      }
+    ],
+    "exploratory_candidates": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 6,
+  "views": [
+    {
+      "view_id": "view_session_timing",
+      "type": "timing",
+      "scope": "session.expiry",
+      "source_claim_ids": [
+        "claim_expiry_before", "claim_expiry_equal", "claim_expiry_after",
+        "claim_timeout_signal", "claim_retry_signal"
+      ],
+      "elements": [
+        {
+          "element_id": "timing_expiry",
+          "kind": "timing-rule",
+          "timing_event": "session access",
+          "threshold": 30,
+          "order": 0,
+          "source_claim_ids": [
+            "claim_expiry_before", "claim_expiry_equal", "claim_expiry_after",
+            "claim_timeout_signal", "claim_retry_signal"
+          ],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["session"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["session"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["session"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["session"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["session"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["session"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["session"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}

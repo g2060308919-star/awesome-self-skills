@@ -1,0 +1,466 @@
+{
+  "schema_version": "1.0.0",
+  "report_id": "machine-expert-a-v3",
+  "reviewer_id": "machine-test-expert-a",
+  "reviewer_class": "machine-agent",
+  "review_scope": "intake-only",
+  "external_expert_evidence": false,
+  "formal_admit_count": 0,
+  "release_eligible": false,
+  "release_status": "insufficient_evidence",
+  "input_catalog_sha256": "cfa0ca2dbc2f985951f6ea20e9ac6e7570172a6c76f6157485ab484c9b66bfa6",
+  "input_intake_report_sha256": "bf21470b33ce6aec2c3643de070d7de5aa720160f6261a13c6c810f8089dac08",
+  "reviewed_at": "2026-08-31T21:03:54Z",
+  "cases": [
+    {
+      "review_id": "machine-expert-a-v3:PF-TR-01",
+      "case_id": "PF-TR-01",
+      "source_id": "source-pf-tr-01",
+      "task_id": "task-pf-tr-01",
+      "repository": "clintecker/press",
+      "stratum": "transaction/order/payment",
+      "input_source_sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+      "input_task_sha256": "d7397de75d6eba2cca31a3779e0e1bf8f60ecdb1c4777ad613dac2d1fdac1a11",
+      "decision": "admit",
+      "reasons": [
+        "The official Direct Ordering plan is maintained as the durable PRD/TRD/release plan and normatively specifies payment capture, order-state transitions, fulfillment, idempotent retries, failures, and refunds within the task scope.",
+        "The exact source and repository MIT license are same-commit, digest-bound, content-unique, and usable without hidden labels. This is machine intake only, not formal external-expert ADMIT evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TR-02",
+      "case_id": "PF-TR-02",
+      "source_id": "source-pf-tr-02",
+      "task_id": "task-pf-tr-02",
+      "repository": "profullstack/coinpayportal",
+      "stratum": "transaction/order/payment",
+      "input_source_sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+      "input_task_sha256": "58438f619573522601b78f829c1ce5051ccec108f0e3d714bcaba9d31d920109",
+      "decision": "admit",
+      "reasons": [
+        "CoinPayPortal's first-party PRD defines checkout and merchant-plugin payment flows, provider state mappings, webhook verification, idempotency, retry, refunds, partial refunds, and acceptance criteria sufficient for observable boundary and failure tests.",
+        "The task is confined to those requirements; immutable provenance and the applicable MIT root license close the source-use evidence. This machine decision does not satisfy formal review or release gates."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TR-03",
+      "case_id": "PF-TR-03",
+      "source_id": "source-pf-tr-03",
+      "task_id": "task-pf-tr-03",
+      "repository": "unbrowse-ai/unbrowse",
+      "stratum": "transaction/order/payment",
+      "input_source_sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+      "input_task_sha256": "890d5fbf68a97f486ed54702ae91fa00225925ed4c2119a4f26f9c55cc297ad9",
+      "decision": "admit",
+      "reasons": [
+        "Unbrowse's owner-controlled acceptance specification provides concrete Given/When/Then behavior for paid-route admission, Stripe and crypto subscription checkout, x402 retries and ceilings, missing-wallet handling, confirmation, and settlement.",
+        "The task uses only that payment subset of the broader specification, while fixed MIT-licensed bytes and unique digest establish provenance. This is intake-only machine evidence, not a formal ADMIT."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TR-04",
+      "case_id": "PF-TR-04",
+      "source_id": "source-pf-tr-04",
+      "task_id": "task-pf-tr-04",
+      "repository": "chuhemiao/agentic-transaction-firewall",
+      "stratum": "transaction/order/payment",
+      "input_source_sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+      "input_task_sha256": "66a8ec95cab2a0646aacf17f4db2d18c67f7e06bc0750f7db53163ab54fde70a",
+      "decision": "admit",
+      "reasons": [
+        "The Agentic Transaction Firewall PRD governs a real project and supplies detailed payment-intent semantics, authorization and risk policy, decision precedence, fail-closed outcomes, execution constraints, replay, and durable state.",
+        "The retained PRD and Apache-2.0 license are bound to the same immutable revision and the task fits transaction/payment risk directly. This remains a machine intake decision."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TR-05",
+      "case_id": "PF-TR-05",
+      "source_id": "source-pf-tr-05",
+      "task_id": "task-pf-tr-05",
+      "repository": "cwvedvik/tripletex-mcp",
+      "stratum": "transaction/order/payment",
+      "input_source_sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+      "input_task_sha256": "970225b9d6661f73acee0e3968f89b5189fcfb76b1bc6685642b3fada29dba96",
+      "decision": "admit",
+      "reasons": [
+        "The implementation-ready Tripletex MCP PRD specifies order and invoice DTO boundaries, order-to-invoice progression, payment-term rules, validation failures, acceptance checks, and a documented field-mapping defect.",
+        "The first-party source, task, provenance, and same-commit MIT license are consistently bound and content-distinct. No formal expert or release claim is made."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-ID-01",
+      "case_id": "PF-ID-01",
+      "source_id": "source-pf-id-01",
+      "task_id": "task-pf-id-01",
+      "repository": "sakibtamim/Jasper",
+      "stratum": "identity/role/permission",
+      "input_source_sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+      "input_task_sha256": "6e2d14b431a40c649b4e714243ddc433fef800c8f52cbc863dda7171409a0b4b",
+      "decision": "admit",
+      "reasons": [
+        "Jasper's accepted specification identifies itself as the live product source of truth and gives hosted OIDC, MFA, customer/staff roles, tenant isolation, permission boundaries, and authentication failure behavior.",
+        "The task is a direct identity/role subset of immutable MIT-licensed source bytes. This is an intake-only machine assessment, not external-expert evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-ID-02",
+      "case_id": "PF-ID-02",
+      "source_id": "source-pf-id-02",
+      "task_id": "task-pf-id-02",
+      "repository": "christag/moss",
+      "stratum": "identity/role/permission",
+      "input_source_sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+      "input_task_sha256": "32408e3b865de34872daeed3fbf56b10cdb27f3f3a9b54edf510740d942d84ca",
+      "decision": "admit",
+      "reasons": [
+        "MOSS's first-party planning PRD defines system and custom roles, permission verbs, user/group assignments, global/location/object scopes, and object-level grant/deny overrides; the task is narrowly limited to this access-control material.",
+        "Although granular RBAC is staged beyond the initial simple roles, it is explicit governing planned behavior rather than inferred implementation. Fixed provenance and the AGPL-3.0-reported root license support machine intake only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-ID-03",
+      "case_id": "PF-ID-03",
+      "source_id": "source-pf-id-03",
+      "task_id": "task-pf-id-03",
+      "repository": "aiperceivable/apcore-mcp",
+      "stratum": "identity/role/permission",
+      "input_source_sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+      "input_task_sha256": "54d838c1fb2798a986826120fba8cce88733199a9dcc7c1e5f2c4019089b11c3",
+      "decision": "admit",
+      "reasons": [
+        "The APCORE-MCP PRD provides concrete JWT validation, claim mapping, ACL roles, authorization checks, and unauthorized/error responses that expose positive, boundary, and denial semantics.",
+        "The task, exact source digest, same-commit Apache-2.0 license, and provenance all agree. This decision is not a formal external-human ADMIT."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-ID-04",
+      "case_id": "PF-ID-04",
+      "source_id": "source-pf-id-04",
+      "task_id": "task-pf-id-04",
+      "repository": "stone16/context-engine",
+      "stratum": "identity/role/permission",
+      "input_source_sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+      "input_task_sha256": "36304b61b1458a748b2d4d7283f8a847e08f68836a64c05d7de9f061fc6632bd",
+      "decision": "admit",
+      "reasons": [
+        "ContextEngine's implementation PRD specifies tenant and organization ownership, isolation, sharing permissions, access checks, and deletion authorization with observable allow and deny behavior.",
+        "The first-party source and Apache-2.0 license have immutable, matching digests and the task is identity/permission dominant. This is machine intake only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-ID-05",
+      "case_id": "PF-ID-05",
+      "source_id": "source-pf-id-05",
+      "task_id": "task-pf-id-05",
+      "repository": "proishan11/open-agent-policy",
+      "stratum": "identity/role/permission",
+      "input_source_sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+      "input_task_sha256": "6aa61970077c2da65b77263d87e6ef9acff18406796433e8a7d92a1379594e8f",
+      "decision": "admit",
+      "reasons": [
+        "Open Agent Policy's governing PRD defines agent identities, sessions, grants, delegation, PDP/PEP enforcement, expiry and deny-by-default behavior with explicit security and workflow requirements.",
+        "The source and MIT license are same-commit fixed, content-unique, and directly bound to the task. The result does not count as formal expert evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-WF-01",
+      "case_id": "PF-WF-01",
+      "source_id": "source-pf-wf-01",
+      "task_id": "task-pf-wf-01",
+      "repository": "mohammadmaso/kherad",
+      "stratum": "workflow/approval/state",
+      "input_source_sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+      "input_task_sha256": "fd430f2e28a1358cee3554dd68ff8ccabd25d12304e9860062caa3e6850a924f",
+      "decision": "admit",
+      "reasons": [
+        "Kherad's first-party PRD and technical specification normatively define submission, continuing edits, review comments, rejection, approval, conflict handling, and squash-merge transitions with role ownership.",
+        "The workflow task uses those explicit states and the Apache-2.0-licensed source is immutable and digest-bound. This is intake-only machine evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-WF-02",
+      "case_id": "PF-WF-02",
+      "source_id": "source-pf-wf-02",
+      "task_id": "task-pf-wf-02",
+      "repository": "aa2246740/pi-company",
+      "stratum": "workflow/approval/state",
+      "input_source_sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+      "input_task_sha256": "4315e05f41d18fbc1b14cb3dfae25dcb0458d0d402e8240e82f53b941ff14c72",
+      "decision": "admit",
+      "reasons": [
+        "Pi Company's implementation-ready PRD defines event-sourced project state and separated testing, review, acceptance, approval, and merge gates, including human approval before role or authority expansion.",
+        "The task matches these observable gates; fixed source and Apache-2.0 license establish provenance. This is not a formal external-expert ADMIT."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-WF-03",
+      "case_id": "PF-WF-03",
+      "source_id": "source-pf-wf-03",
+      "task_id": "task-pf-wf-03",
+      "repository": "beettlle/pi-spine",
+      "stratum": "workflow/approval/state",
+      "input_source_sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+      "input_task_sha256": "e81ebca1d8ee4b66527e4f070904b7cbb471496b684b1607b03108a22f8f3f98",
+      "decision": "admit",
+      "reasons": [
+        "Pi Spine's PRD supplies an orchestration journal, guarded run and batch state machines, explicit human integration gates, interruption recovery, failure handling, and truthful terminal outcomes.",
+        "The first-party source and MIT license are immutably bound and the task is confined to those workflow semantics. This machine assessment cannot release the benchmark."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-WF-04",
+      "case_id": "PF-WF-04",
+      "source_id": "source-pf-wf-04",
+      "task_id": "task-pf-wf-04",
+      "repository": "dinpd/AgentAction",
+      "stratum": "workflow/approval/state",
+      "input_source_sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+      "input_task_sha256": "619614e2b9d7c006ca7685ce9e8c7681cb872c76e7ff191e941065f54c3dd27f",
+      "decision": "admit",
+      "reasons": [
+        "AgentAction's design-partner Gateway PRD is an owner-controlled requirements artifact for a real project and defines observe, allow, deny, and challenge decisions, approval and single-use grant binding, atomic exact-action replay, context-drift refusal, and evidence closure.",
+        "The task selects those workflow/state requirements; source, task, provenance, and the repository Apache-2.0 license are fixed at commit 84722312663cc46a7d928d0d883332f8d6d1d821. This is machine intake only, not formal ADMIT."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-WF-05",
+      "case_id": "PF-WF-05",
+      "source_id": "source-pf-wf-05",
+      "task_id": "task-pf-wf-05",
+      "repository": "deghosal-2026/ai-incident-commander",
+      "stratum": "workflow/approval/state",
+      "input_source_sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+      "input_task_sha256": "6db36dd5df52733b0faf760b5c96c04622ed9362529ccb650f4f7bc1755c7d00",
+      "decision": "admit",
+      "reasons": [
+        "The AI Incident Commander PRD defines a real incident-response product with explicit incident states, human approval before external communication or remediation, guarded transitions, recovery, and failure behavior.",
+        "Its simulation capability is a product surface rather than a benchmark fixture; immutable source and MIT licensing support the task. This is not external-expert evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-FM-01",
+      "case_id": "PF-FM-01",
+      "source_id": "source-pf-fm-01",
+      "task_id": "task-pf-fm-01",
+      "repository": "m18h/kanea",
+      "stratum": "form/configuration/input validation",
+      "input_source_sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+      "input_task_sha256": "02be20dd4eeea79202562ef9560c620c728788865219114066dbc0aff144dc2c",
+      "decision": "admit",
+      "reasons": [
+        "Kanea's adopted PRD contains a detailed service configuration grammar, normalization and schema rules, invalid-architecture refusals, diagnostics, and exact operator-visible error behavior sufficient for input boundary tests.",
+        "The task is limited to those validation semantics and the source plus Apache-2.0 license are immutable and content-distinct. This is machine intake only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-FM-02",
+      "case_id": "PF-FM-02",
+      "source_id": "source-pf-fm-02",
+      "task_id": "task-pf-fm-02",
+      "repository": "devaxl/VoiceType-AI",
+      "stratum": "form/configuration/input validation",
+      "input_source_sha256": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+      "input_task_sha256": "4ef5112f78411c084f3f18d5f657edc634404ce3ff90b5bbea63f34b8773546b",
+      "decision": "admit",
+      "reasons": [
+        "VoiceType-AI's finalized build PRD explicitly covers shortcut collision and rebinding, versioned configuration migrations, provider settings, invalid values, and malformed-provider-response fallback.",
+        "The narrowed task avoids unrelated transcription claims and is fixed with the same-commit MIT license. The machine decision supplies no formal ADMIT or release evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-FM-03",
+      "case_id": "PF-FM-03",
+      "source_id": "source-pf-fm-03",
+      "task_id": "task-pf-fm-03",
+      "repository": "System-Error-Worldwide/the-loop",
+      "stratum": "form/configuration/input validation",
+      "input_source_sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+      "input_task_sha256": "ad8f2eaaa5b94a429e2eea50f9fd32924e4106acfa4e69db295c9af26978b873",
+      "decision": "admit",
+      "reasons": [
+        "THE LOOP's product PRD specifies setup and doctor checks, capability-based routing, precedence and name-collision reporting, distinct missing/permission/unverified states, and fail-safe fallback behavior.",
+        "Those requirements directly support configuration/input tests, and the first-party source and MIT license are immutable. This is intake-only machine evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-FM-04",
+      "case_id": "PF-FM-04",
+      "source_id": "source-pf-fm-04",
+      "task_id": "task-pf-fm-04",
+      "repository": "deghosal-2026/agent-tooltrust",
+      "stratum": "form/configuration/input validation",
+      "input_source_sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+      "input_task_sha256": "d8aff933b4b56c1860b8598f6d58b1e9cf7c1cc64b8fd407accc77e27df93c4f",
+      "decision": "admit",
+      "reasons": [
+        "Agent ToolTrust's approved PRD specifies declarative JSON/YAML policy, parsing and validation, unknown or missing key handling, line/column diagnostics, posture configuration, and fail-closed degraded behavior.",
+        "The task selects this validation subset and the retained source plus MIT license are fixed and consistently bound. This decision is not formal external-expert evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-FM-05",
+      "case_id": "PF-FM-05",
+      "source_id": "source-pf-fm-05",
+      "task_id": "task-pf-fm-05",
+      "repository": "arthursantos67/cineprime-api",
+      "stratum": "form/configuration/input validation",
+      "input_source_sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+      "input_task_sha256": "741de9a4da9354feda430f6fc08d390410d882fcbb18872d6ffca028216c61ca",
+      "decision": "admit",
+      "reasons": [
+        "CinePrime API's first-party PRD/SRS provides form and request field constraints, required and bounded values, standardized field-level validation errors, and acceptance behavior suitable for positive and malformed-input cases.",
+        "The exact source, task, provenance, and same-commit MIT license agree and the source digest is unique. This is machine intake only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-AS-01",
+      "case_id": "PF-AS-01",
+      "source_id": "source-pf-as-01",
+      "task_id": "task-pf-as-01",
+      "repository": "marketcalls/openalgo",
+      "stratum": "asynchronous integration/event",
+      "input_source_sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+      "input_task_sha256": "4a1ae1ef8659e250ea8d6d4f5501a23e1aff4603728e5ff35ce2eeea78293496",
+      "decision": "admit",
+      "reasons": [
+        "OpenAlgo's implemented scalping PRD defines event-driven price, book, risk and order behavior across Socket.IO, ZeroMQ and WebSocket integrations, including reconnect safety, event failure handling, and test expectations.",
+        "The task is asynchronous/event dominant and the fixed source plus AGPL-3.0-reported license are consistently bound. This is not formal expert or release evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-AS-02",
+      "case_id": "PF-AS-02",
+      "source_id": "source-pf-as-02",
+      "task_id": "task-pf-as-02",
+      "repository": "sandraschi/ocr-mcp",
+      "stratum": "asynchronous integration/event",
+      "input_source_sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+      "input_task_sha256": "ff803d7a0fcc2951cf4f6c43c0e12fd1a9be0ea64678622721d7cc00e85346d3",
+      "decision": "admit",
+      "reasons": [
+        "OCR-MCP's active PRD defines preview-poll and button event watcher modes, automatic scan/OCR triggering, watcher start/stop and live counts, configurable intervals, and the multi-page OCR-to-chapter-to-EPUB pipeline.",
+        "The narrowed task is limited to those observable asynchronous lifecycle and pipeline outcomes, with same-commit MIT provenance. This is a machine intake decision only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-AS-03",
+      "case_id": "PF-AS-03",
+      "source_id": "source-pf-as-03",
+      "task_id": "task-pf-as-03",
+      "repository": "sandraschi/mujoco-mcp",
+      "stratum": "asynchronous integration/event",
+      "input_source_sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+      "input_task_sha256": "333a1391f72f0254b0c53607e980cb125d5693628579426f83df55879b124a44",
+      "decision": "admit",
+      "reasons": [
+        "MuJoCo-MCP's active PRD specifies isolated background subprocesses, start/stop/status/list operations, completed job visibility, and guarded IDLE through RUNNING, STOPPED, and CRASHED states.",
+        "The task directly matches these asynchronous job semantics and the immutable MIT-licensed source is content-distinct. No formal ADMIT claim is created."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-AS-04",
+      "case_id": "PF-AS-04",
+      "source_id": "source-pf-as-04",
+      "task_id": "task-pf-as-04",
+      "repository": "cloudflare/agents",
+      "stratum": "asynchronous integration/event",
+      "input_source_sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+      "input_task_sha256": "b087039cd553edadbc09ccb4da90d5959296d17583294a85e6b0583ca9086eab",
+      "decision": "admit",
+      "reasons": [
+        "Cloudflare Agents' official queue documentation is an owner-controlled functional specification that defines persistent SQLite-backed FIFO callbacks, callback validation, automatic processing, context preservation, sequential execution, bounded exponential-backoff retry, success/exhaustion dequeue, and missing-callback behavior.",
+        "The task matches those observable queue semantics; source and Cloudflare-copyrighted MIT license are fixed at commit 73d2ed457ba02035d2b1d3efc785c012254ac216 with matching digests. This is machine intake only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-AS-05",
+      "case_id": "PF-AS-05",
+      "source_id": "source-pf-as-05",
+      "task_id": "task-pf-as-05",
+      "repository": "mikigraf/Runmill",
+      "stratum": "asynchronous integration/event",
+      "input_source_sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+      "input_task_sha256": "e6bc81c6f85228b5bfead5b3c97260a1f5d67062631530795256ec26615847ff",
+      "decision": "admit",
+      "reasons": [
+        "Runmill's explicit Production Delivery Runtime PRD is a proposed implementation contract for a real project and defines immediate idempotent run-ID submission, append-only gap-aware events, durable checkpoints, restart adoption, lost-response reconciliation, cancellation, and terminal retry/attention dispositions.",
+        "The task is a strict subset of those asynchronous recovery requirements; immutable source and the Mikolaj Graf MIT license are same-commit and digest-bound. This is not formal external-expert ADMIT evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TM-01",
+      "case_id": "PF-TM-01",
+      "source_id": "source-pf-tm-01",
+      "task_id": "task-pf-tm-01",
+      "repository": "mangopudding/mcp-server-iru-api",
+      "stratum": "time-window/quota/entitlement",
+      "input_source_sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+      "input_task_sha256": "ff1c30f21c12bf424fba0d033845ad1b87f7a63e93e020dca7aefdf05269615c",
+      "decision": "admit",
+      "reasons": [
+        "The Iru/Kandji MCP PRD defines exact entity cache TTLs, rate-limit errors with exponential-backoff recovery, latency targets, and observable cache and response metadata.",
+        "The narrowed task uses only those time and retry controls, and immutable first-party source plus MIT license close the provenance evidence. This is machine intake only."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TM-02",
+      "case_id": "PF-TM-02",
+      "source_id": "source-pf-tm-02",
+      "task_id": "task-pf-tm-02",
+      "repository": "juniper-tc02e/ayin",
+      "stratum": "time-window/quota/entitlement",
+      "input_source_sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+      "input_task_sha256": "b65c3b00552535128da6e87363a87e18cf14df3785012ad93e0cb7cb7872a27f",
+      "decision": "admit",
+      "reasons": [
+        "Ayin's PRD and SaaS plan identifies itself as the product source of truth and defines plan entitlements, per-tier scan and subject limits, cooldowns, scheduled rescans, retention timers, enforcement, and refusal states.",
+        "These requirements directly support time/quota/entitlement tests; fixed source and the AGPL-3.0-reported root license are consistently bound. This is not formal ADMIT."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TM-03",
+      "case_id": "PF-TM-03",
+      "source_id": "source-pf-tm-03",
+      "task_id": "task-pf-tm-03",
+      "repository": "yat-hk/yat",
+      "stratum": "time-window/quota/entitlement",
+      "input_source_sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+      "input_task_sha256": "b2acfe62970b324b68b3b8cd8cc71f9a35538a42803297f0ea3a962391ca554f",
+      "decision": "admit",
+      "reasons": [
+        "YAT's implementation-aligned PRD specifies quiet-hour sleep windows, commute-window cadence, per-page refresh intervals, auto-rotation options, setup timeout, staleness behavior, and schedule-driven warning takeover.",
+        "The task is confined to these time-window rules and the immutable GPL-3.0-reported source package is content-distinct. This is intake-only machine evidence."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TM-04",
+      "case_id": "PF-TM-04",
+      "source_id": "source-pf-tm-04",
+      "task_id": "task-pf-tm-04",
+      "repository": "marketcalls/openrag",
+      "stratum": "time-window/quota/entitlement",
+      "input_source_sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+      "input_task_sha256": "48e3d00e0d9eeb7aa1773d92d252c2bc5ddfd900ae7c2d4e4ea0a8f9e7108c51",
+      "decision": "admit",
+      "reasons": [
+        "OpenRAG's product PRD defines monthly organization and user token allocations, configurable reset day, weighted model debits, pre/post-usage enforcement, warnings, exhaustion blocks, top-ups, usage ledgers, and reconciliation.",
+        "Those exact quota semantics match the task and the first-party source plus AGPL-3.0-reported license are fixed at one commit. This machine decision cannot satisfy release gates."
+      ]
+    },
+    {
+      "review_id": "machine-expert-a-v3:PF-TM-05",
+      "case_id": "PF-TM-05",
+      "source_id": "source-pf-tm-05",
+      "task_id": "task-pf-tm-05",
+      "repository": "girish-kor/AutoTube",
+      "stratum": "time-window/quota/entitlement",
+      "input_source_sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+      "input_task_sha256": "6d9b937a19191deb5b0e301eed40e3279eadb632513c0529d0f87c67d42526f5",
+      "decision": "admit",
+      "reasons": [
+        "AutoTube's PRD fixes publishing cadence and target daily volume, requires quota tracking and pre-flight checks, and defines graceful queuing rather than failure on free-tier exhaustion while other videos remain independent.",
+        "The narrowed task avoids unrelated generation claims and is supported by immutable source, provenance, and the same-commit MIT license. This is machine intake only."
+      ]
+    }
+  ]
+}

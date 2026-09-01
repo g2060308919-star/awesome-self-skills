@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 0,
+  "views": [],
+  "interaction_matrix": [
+    { "module_ids": ["accounts", "orders"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "orders"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "orders"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "orders"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "orders"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "orders"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "orders"], "dimension": "side-effect", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["accounts", "payments"], "dimension": "side-effect", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["orders", "payments"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}

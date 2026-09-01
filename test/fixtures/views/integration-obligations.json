@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 6,
+  "views": [
+    {
+      "view_id": "view_payment_integration",
+      "type": "integration",
+      "scope": "checkout.payment.integration",
+      "source_claim_ids": [
+        "claim_integration_request",
+        "claim_integration_response",
+        "claim_integration_persistence",
+        "claim_integration_event",
+        "claim_integration_callback",
+        "claim_integration_compensation",
+        "claim_integration_ledger",
+        "claim_integration_notification",
+        "claim_balance_invariant",
+        "claim_contract_compatibility",
+        "claim_concurrency_signal",
+        "claim_idempotency_signal",
+        "claim_security_signal"
+      ],
+      "elements": [
+        {
+          "element_id": "integration_payment",
+          "kind": "integration-contract",
+          "request": { "target": "POST /payments", "payload": "order id and amount" },
+          "response": { "status": "201", "body": "payment id and accepted state" },
+          "persistence": { "operation": "insert", "target": "payments" },
+          "event": { "name": "payment.accepted", "direction": "publish" },
+          "callback": { "target": "order service", "event": "payment confirmed" },
+          "compensation": { "action": "void authorization", "trigger": "order update fails" },
+          "side_effects": [
+            { "kind": "ledger", "target": "merchant balance" },
+            { "kind": "notification", "target": "buyer receipt" }
+          ],
+          "source_claim_ids": [
+            "claim_integration_request", "claim_integration_response", "claim_integration_persistence",
+            "claim_integration_event", "claim_integration_callback", "claim_integration_compensation",
+            "claim_integration_ledger", "claim_integration_notification", "claim_balance_invariant",
+            "claim_contract_compatibility", "claim_concurrency_signal", "claim_idempotency_signal",
+            "claim_security_signal"
+          ],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["payments"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["payments"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["payments"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["payments"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["payments"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["payments"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["payments"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}

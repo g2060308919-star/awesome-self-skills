@@ -1,0 +1,12 @@
+{
+  "repository": "clintecker/press",
+  "commit": "5848b6990d6632c0d543a861af590036e9dc8533",
+  "source_url": "https://raw.githubusercontent.com/clintecker/press/5848b6990d6632c0d543a861af590036e9dc8533/docs/DIRECT-ORDERING-PLAN.md",
+  "source_sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+  "content_digest": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+  "license_url": "https://raw.githubusercontent.com/clintecker/press/5848b6990d6632c0d543a861af590036e9dc8533/LICENSE",
+  "license_sha256": "707445a9840fb3e9321d712a456d7d833f41baf777719bd9877676bfddd9f38c",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

@@ -1,0 +1,12 @@
+{
+  "repository": "aiperceivable/apcore-mcp",
+  "commit": "7ef64c6b7d9b5b57399b82aa6f10c629207120e4",
+  "source_url": "https://raw.githubusercontent.com/aiperceivable/apcore-mcp/7ef64c6b7d9b5b57399b82aa6f10c629207120e4/docs/prd-apcore-mcp.md",
+  "source_sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+  "content_digest": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+  "license_url": "https://raw.githubusercontent.com/aiperceivable/apcore-mcp/7ef64c6b7d9b5b57399b82aa6f10c629207120e4/LICENSE",
+  "license_sha256": "d33d844565d01a24cad007e6991cf468421b6f7b9737d19b84840cf4e02eeb1a",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

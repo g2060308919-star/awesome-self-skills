@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-TR-04",
+  "scope": "Agent payment intent authorization, transaction policy decisions, and constrained execution",
+  "stratum": "transaction/order/payment",
+  "source_paths": [
+    "cases/pf-tr-04/source/PRD.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

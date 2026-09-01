@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 4,
+  "views": [
+    {
+      "view_id": "view_checkout_flow",
+      "type": "flow",
+      "scope": "checkout.payment",
+      "source_claim_ids": [
+        "claim_authorize",
+        "claim_cart",
+        "claim_declined_exception",
+        "claim_paid_terminal",
+        "claim_payment_exhausted",
+        "claim_payment_success",
+        "claim_retry_action",
+        "claim_retry_max",
+        "claim_retry_repeat",
+        "claim_retryable",
+        "claim_start_authorize"
+      ],
+      "elements": [
+        {
+          "element_id": "node_cart",
+          "kind": "flow-node",
+          "node_type": "start",
+          "label": "cart ready",
+          "source_claim_ids": ["claim_cart"],
+          "model_refs": []
+        },
+        {
+          "element_id": "node_authorize",
+          "kind": "flow-node",
+          "node_type": "action",
+          "label": "authorize payment",
+          "source_claim_ids": ["claim_authorize"],
+          "model_refs": []
+        },
+        {
+          "element_id": "node_retry",
+          "kind": "flow-node",
+          "node_type": "action",
+          "label": "retry authorization",
+          "source_claim_ids": ["claim_retry_action"],
+          "model_refs": []
+        },
+        {
+          "element_id": "node_paid",
+          "kind": "flow-node",
+          "node_type": "end",
+          "label": "order paid",
+          "source_claim_ids": ["claim_paid_terminal"],
+          "model_refs": []
+        },
+        {
+          "element_id": "node_declined",
+          "kind": "flow-node",
+          "node_type": "exception",
+          "label": "payment declined",
+          "source_claim_ids": ["claim_declined_exception"],
+          "model_refs": []
+        },
+        {
+          "element_id": "edge_start_authorize",
+          "kind": "flow-edge",
+          "from_element_id": "node_cart",
+          "to_element_id": "node_authorize",
+          "condition": "payment submitted",
+          "result": "authorization requested",
+          "sequence": 0,
+          "source_claim_ids": ["claim_start_authorize"],
+          "model_refs": []
+        },
+        {
+          "element_id": "edge_authorize_retry",
+          "kind": "flow-edge",
+          "from_element_id": "node_authorize",
+          "to_element_id": "node_retry",
+          "condition": "retryable decline",
+          "result": "retry scheduled",
+          "sequence": 1,
+          "source_claim_ids": ["claim_retryable"],
+          "model_refs": []
+        },
+        {
+          "element_id": "edge_retry_self",
+          "kind": "flow-edge",
+          "from_element_id": "node_retry",
+          "to_element_id": "node_retry",
+          "condition": "another attempt remains",
+          "result": "authorization retried",
+          "sequence": 2,
+          "source_claim_ids": ["claim_retry_repeat"],
+          "model_refs": ["model_retry_reachable"]
+        },
+        {
+          "element_id": "edge_retry_paid",
+          "kind": "flow-edge",
+          "from_element_id": "node_retry",
+          "to_element_id": "node_paid",
+          "condition": "authorization succeeds",
+          "result": "order becomes paid",
+          "sequence": 3,
+          "source_claim_ids": ["claim_payment_success"],
+          "model_refs": []
+        },
+        {
+          "element_id": "edge_retry_declined",
+          "kind": "flow-edge",
+          "from_element_id": "node_retry",
+          "to_element_id": "node_declined",
+          "condition": "attempts exhausted",
+          "result": "payment becomes declined",
+          "sequence": 4,
+          "source_claim_ids": ["claim_payment_exhausted"],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 0,
+  "run_scope": "checkout.payment",
+  "sources": [
+    {
+      "source_id": "source_payment_old",
+      "kind": "formal-rule",
+      "version": "1",
+      "status": "superseded",
+      "authority": "payments-owner",
+      "content": "Payments settle in one day.",
+      "content_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "scope": "checkout.payment"
+    },
+    {
+      "source_id": "source_payment_new",
+      "kind": "formal-rule",
+      "version": "2",
+      "status": "effective",
+      "authority": "payments-owner",
+      "content": "Payments settle in two days.",
+      "content_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "scope": "checkout.payment"
+    }
+  ],
+  "locators": [],
+  "source_policy": {
+    "rules": [
+      {
+        "rule_id": "rule_payment_old",
+        "source_ids": ["source_payment_old"],
+        "scope": "checkout.payment",
+        "authority": "payments-owner",
+        "status": "superseded"
+      },
+      {
+        "rule_id": "rule_payment_new",
+        "source_ids": ["source_payment_new"],
+        "supersedes": ["rule_payment_old"],
+        "scope": "checkout.payment",
+        "authority": "payments-owner",
+        "status": "effective"
+      }
+    ]
+  },
+  "decision_records": [],
+  "clarification_events": []
+}

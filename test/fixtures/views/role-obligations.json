@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 6,
+  "views": [
+    {
+      "view_id": "view_order_roles",
+      "type": "role",
+      "scope": "orders.permissions",
+      "source_claim_ids": ["claim_cashier_create", "claim_cashier_refund_deny", "claim_auditor_view"],
+      "elements": [
+        {
+          "element_id": "role_cashier",
+          "kind": "role-permission",
+          "role": "cashier",
+          "permissions": ["allow:create", "deny:refund"],
+          "source_claim_ids": ["claim_cashier_create", "claim_cashier_refund_deny"],
+          "model_refs": []
+        },
+        {
+          "element_id": "role_auditor",
+          "kind": "role-permission",
+          "role": "auditor",
+          "permissions": ["allow:view"],
+          "source_claim_ids": ["claim_auditor_view"],
+          "model_refs": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["orders"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["orders"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "interaction_candidates": []
+}

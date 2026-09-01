@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evidence-claims.schema.json",
+  "type": "object",
+  "required": ["schema_version", "source_revision", "claims", "fact_ledger"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "source_revision": { "type": "integer", "minimum": 0 },
+    "claims": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["claim_id", "claim_form", "level", "kind", "scope", "value", "source_locator_ids", "source_id"],
+            "properties": {
+              "claim_id": { "type": "string", "minLength": 1 },
+              "claim_form": { "const": "direct" },
+              "level": { "const": "E3" },
+              "kind": { "enum": ["requirement", "description", "example", "diagnostic"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "value": { "type": "string", "minLength": 1 },
+              "source_locator_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "source_id": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["claim_id", "claim_form", "level", "kind", "scope", "value", "source_locator_ids", "decision_id", "authority"],
+            "properties": {
+              "claim_id": { "type": "string", "minLength": 1 },
+              "claim_form": { "const": "decision-record" },
+              "level": { "enum": ["E1", "E3"] },
+              "kind": { "enum": ["requirement", "assumption"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "value": { "type": "string", "minLength": 1 },
+              "source_locator_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "decision_id": { "type": "string", "minLength": 1 },
+              "authority": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["claim_id", "claim_form", "level", "kind", "scope", "value", "source_locator_ids", "derivation_kind", "derivation_target", "parent_claim_ids", "parameters", "rule_input"],
+            "properties": {
+              "claim_id": { "type": "string", "minLength": 1 },
+              "claim_form": { "const": "derived" },
+              "level": { "const": "E2" },
+              "kind": { "enum": ["test-data", "expected-value", "model-element"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "value": { "type": "string", "minLength": 1 },
+              "source_locator_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "derivation_kind": { "enum": ["formula", "decision-table-instance", "boundary-representative", "enumeration-complement", "graph-reachability"] },
+              "derivation_target": { "enum": ["test-data", "expected-value", "model-element"] },
+              "parent_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "formula_id": { "type": "string", "minLength": 1 },
+                  "table_id": { "type": "string", "minLength": 1 },
+                  "domain_id": { "type": "string", "minLength": 1 },
+                  "enumeration_id": { "type": "string", "minLength": 1 },
+                  "graph_id": { "type": "string", "minLength": 1 },
+                  "unit": { "type": "string", "minLength": 1 },
+                  "precision": { "type": "integer", "minimum": 0 },
+                  "rounding": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+              },
+              "rule_input": {
+                "type": "object",
+                "properties": {
+                  "formula": { "type": "string", "minLength": 1 },
+                  "inputs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "value"],
+                      "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "value": { "type": ["number", "string"] },
+                        "unit": { "type": "string", "minLength": 1 }
+                      },
+                      "additionalProperties": false
+                    },
+                    "uniqueItems": true
+                  },
+                  "unit": { "type": "string", "minLength": 1 },
+                  "precision": { "type": "integer", "minimum": 0 },
+                  "rounding": { "type": "string", "minLength": 1 },
+                  "conditions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                  "outcome": { "type": "string", "minLength": 1 },
+                  "lower": { "type": "number" },
+                  "upper": { "type": "number" },
+                  "inclusive": { "type": "boolean" },
+                  "enumerated_values": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                  "closed_world": { "type": "boolean" },
+                  "from": { "type": "string", "minLength": 1 },
+                  "to": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "fact_ledger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact_id", "claim_id", "status", "source_claim_ids"],
+        "properties": {
+          "fact_id": { "type": "string", "minLength": 1 },
+          "claim_id": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["active", "conflicted", "ambiguous", "diagnostic"] },
+          "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
