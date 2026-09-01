@@ -49,6 +49,7 @@ const COMMAND_OPTIONS = Object.freeze({
   snapshot: ["runtimeDirectory", "kind"],
   events: ["runtimeDirectory"],
   outbox: ["runtimeDirectory"],
+  requests: ["runtimeDirectory"],
   canaries: ["runtimeDirectory"],
   fault: ["runtimeDirectory"],
   "expire-session": ["runtimeDirectory", "sessionId"],

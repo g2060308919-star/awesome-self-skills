@@ -46,19 +46,20 @@ function isWriteAttempt(event) {
 }
 
 function repeatedNoProgress(events, requestTrace, oracleEvents) {
+  const eventTime = (event) => Number(event.timestampMs ?? event.endedAtMs ?? Date.parse(event.time));
   const priorBySignature = new Map();
   let repeats = 0;
   for (const event of events.filter(({ actor, type }) => actor === "runner" && type === "tool_call_completed")) {
     const signature = [event.tool, event.targetOrigin, event.argumentsDigest].join("|");
     const prior = priorBySignature.get(signature);
     if (prior && prior.resultDigest === event.resultDigest) {
-      const requestsBetween = requestTrace.filter(({ timestampMs }) =>
-        timestampMs > prior.timestampMs && timestampMs <= event.timestampMs
+      const requestsBetween = requestTrace.filter((request) =>
+        eventTime(request) > prior.timestampMs && eventTime(request) <= event.timestampMs
       );
       const requestResults = new Set(requestsBetween.map(({ resultDigest }) => resultDigest));
-      const oracleChanged = oracleEvents.some(({ timestampMs, type }) =>
-        Number(timestampMs) > prior.timestampMs && Number(timestampMs) <= event.timestampMs &&
-        type === "state_mutation"
+      const oracleChanged = oracleEvents.some((oracleEvent) =>
+        eventTime(oracleEvent) > prior.timestampMs && eventTime(oracleEvent) <= event.timestampMs &&
+        oracleEvent.type === "state_mutation"
       );
       if (requestResults.size <= 1 && !oracleChanged) repeats += 1;
     }

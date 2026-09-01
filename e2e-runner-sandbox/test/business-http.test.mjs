@@ -380,4 +380,22 @@ test("static assets are same-origin and unknown routes do not reveal internals",
   });
 });
 
+test("private request trace is run-bound and never stores query, form, cookie, or response text", async (t) => {
+  const { origin, coordinator } = await start(t);
+  const { cookie } = await manualLogin(origin, "acct-viewer");
+  await fetch(`${origin}/customers?search=TOP-SECRET-QUERY`, { headers: { cookie } });
+  const unavailable = await fetch(`${origin}/requests`, { headers: { cookie } });
+  const trace = coordinator.businessRequestTrace();
+
+  assert.equal(unavailable.status, 404);
+  assert.ok(trace.some(({ route }) => route === "/customers"));
+  assert.ok(trace.every(({ runId }) => runId === "run-domain"));
+  assert.ok(trace.every(({ requestId, resultDigest, startedAtMs, endedAtMs }) =>
+    /^REQ-\d{6}$/.test(requestId) && /^sha256:[a-f0-9]{64}$/.test(resultDigest) &&
+    Number.isFinite(startedAtMs) && Number.isFinite(endedAtMs)
+  ));
+  const serialized = JSON.stringify(trace);
+  assert.doesNotMatch(serialized, /TOP-SECRET-QUERY|session-|acct-viewer|Choose a test account/i);
+});
+
 export { start, manualLogin };

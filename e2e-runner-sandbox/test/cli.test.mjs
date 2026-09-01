@@ -67,6 +67,17 @@ test("CLI parses command options into typed evaluator arguments", async (t) => {
   assert.equal(JSON.parse(lines[0]).result.account.role, "Operator");
 });
 
+test("CLI reads the private request trace through the authenticated control command", async (t) => {
+  const runtime = await cliHarness(t);
+  const lines = [];
+  const exitCode = await runEvaluatorCli([
+    "requests", "--runtime", runtime.runtimeDirectory
+  ], { write: (line) => lines.push(line) });
+
+  assert.equal(exitCode, 0, lines.join("\n"));
+  assert.deepEqual(JSON.parse(lines[0]).result, []);
+});
+
 test("CLI rejects missing runtime and unknown options without contacting control", async () => {
   const lines = [];
 

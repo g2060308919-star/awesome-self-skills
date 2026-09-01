@@ -27,6 +27,8 @@ export function createRunCoordinator(options = {}) {
   let state = null;
   let metadata = null;
   let preSnapshot = null;
+  let businessRequests = [];
+  let businessRequestSequence = 0;
   let abortController = new AbortController();
   let commitQueue = Promise.resolve();
 
@@ -92,6 +94,8 @@ export function createRunCoordinator(options = {}) {
       epoch = nextEpoch;
       revision = 0;
       preSnapshot = candidateSnapshot;
+      businessRequests = [];
+      businessRequestSequence = 0;
       lifecycle = "active";
       acceptingBusinessRequests = true;
       return publicRun();
@@ -101,6 +105,8 @@ export function createRunCoordinator(options = {}) {
       runId = null;
       revision = 0;
       preSnapshot = null;
+      businessRequests = [];
+      businessRequestSequence = 0;
       lifecycle = "failed-reset";
       acceptingBusinessRequests = false;
       throw new SandboxError(
@@ -147,6 +153,44 @@ export function createRunCoordinator(options = {}) {
     oracleRegistry() {
       if (lifecycle !== "active" || !metadata) throw unavailable(lifecycle);
       return { canaries: structuredClone(metadata.canaries) };
+    },
+
+    beginBusinessRequest() {
+      if (lifecycle !== "active" || !runId) return null;
+      businessRequestSequence += 1;
+      return Object.freeze({ runId, epoch, requestSequence: businessRequestSequence });
+    },
+
+    completeBusinessRequest(ticket, summary) {
+      if (!ticket || lifecycle !== "active" || ticket.runId !== runId || ticket.epoch !== epoch) {
+        return false;
+      }
+      if (!Number.isInteger(summary.status) || typeof summary.method !== "string" ||
+        typeof summary.route !== "string" || !/^sha256:[a-f0-9]{64}$/.test(summary.resultDigest) ||
+        !Number.isFinite(summary.startedAtMs) || !Number.isFinite(summary.endedAtMs) ||
+        summary.endedAtMs < summary.startedAtMs) {
+        throw new SandboxError("BUSINESS_REQUEST_TRACE_INVALID", "Business request summary is invalid");
+      }
+      businessRequests.push({
+        requestId: `REQ-${String(ticket.requestSequence).padStart(6, "0")}`,
+        requestSequence: ticket.requestSequence,
+        runId: ticket.runId,
+        method: summary.method,
+        route: summary.route,
+        status: summary.status,
+        startedAtMs: summary.startedAtMs,
+        endedAtMs: summary.endedAtMs,
+        timestampMs: summary.endedAtMs,
+        resultDigest: summary.resultDigest
+      });
+      return true;
+    },
+
+    businessRequestTrace() {
+      if (lifecycle !== "active") throw unavailable(lifecycle);
+      return structuredClone(businessRequests).sort(
+        (left, right) => left.requestSequence - right.requestSequence
+      );
     },
 
     async transact(context, operation) {

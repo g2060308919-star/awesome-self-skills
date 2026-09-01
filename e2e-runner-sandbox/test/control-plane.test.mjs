@@ -61,6 +61,20 @@ test("control inspection returns normalized snapshots, events, outbox, and fault
   assert.equal(fault, null);
 });
 
+test("request trace is private to the control socket and resets with each run", async (t) => {
+  const { client, coordinator } = await startControl(t);
+  const ticket = coordinator.beginBusinessRequest();
+  coordinator.completeBusinessRequest(ticket, {
+    method: "GET", route: "/customers", status: 200,
+    startedAtMs: 1000, endedAtMs: 1010,
+    resultDigest: `sha256:${"a".repeat(64)}`
+  });
+
+  assert.equal((await client.request("requests", {})).length, 1);
+  await client.request("reset", { profileId: "B02" });
+  assert.deepEqual(await client.request("requests", {}), []);
+});
+
 test("run canaries are available only through the authenticated evaluator command", async (t) => {
   const { client } = await startControl(t);
   const registry = await client.request("canaries", {});

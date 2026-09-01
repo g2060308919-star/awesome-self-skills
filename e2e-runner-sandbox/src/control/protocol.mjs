@@ -12,6 +12,7 @@ export const CONTROL_COMMANDS = Object.freeze([
   "snapshot",
   "events",
   "outbox",
+  "requests",
   "canaries",
   "fault",
   "expire-session",
