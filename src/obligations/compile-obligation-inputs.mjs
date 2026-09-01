@@ -1,6 +1,6 @@
-import { canonicalStringify } from '../canonical.mjs';
+import { canonicalStringify, stableId } from '../canonical.mjs';
 import {
-  compareCodePoints, isObject, objectArray, sortedStrings
+  compareCodePoints, isObject, objectArray, qualifyViewElementRef, sortedStrings
 } from './registry.mjs';
 import { responsibilityKey } from './responsibility.mjs';
 
@@ -14,6 +14,13 @@ const CORE_INTEGRATION_SURFACES = [
 const TIMING_SPECIALS = new Set(['timeout', 'retry']);
 const INTEGRATION_SPECIALS = new Set([
   'invariant', 'contract-compatibility', 'concurrency', 'idempotency', 'security-abuse'
+]);
+const CUSTOM_KINDS = new Map([
+  ['flow-path', 'flow'], ['decision-outcome', 'decision'],
+  ['state-transition', 'state'], ['input-partition', 'input-domain'],
+  ['role-permission', 'role'], ['temporal-rule', 'timing'],
+  ['integration-contract', 'integration'],
+  ['cross-module-interaction', 'interaction']
 ]);
 
 /** @param {string} code @param {string} path @param {string} message @param {string} [category] */
@@ -215,12 +222,6 @@ function publicContext(view, submitted, contextIndex, diagnostics) {
 }
 
 /** @param {unknown} value */
-function legacyInputs(value) {
-  return isObject(value) && isObject(value.obligationCompilation)
-    ? value.obligationCompilation : null;
-}
-
-/** @param {unknown} value */
 function isDenseObjectArray(value) {
   if (!Array.isArray(value)) return false;
   for (let index = 0; index < value.length; index += 1) {
@@ -229,45 +230,123 @@ function isDenseObjectArray(value) {
   return true;
 }
 
+/** @param {Record<string, unknown>} value @param {string[]} expected */
+function hasExactKeys(value, expected) {
+  const actual = Object.keys(value).sort(compareCodePoints);
+  const sortedExpected = [...expected].sort(compareCodePoints);
+  return actual.length === sortedExpected.length
+    && actual.every((key, index) => key === sortedExpected[index]);
+}
+
+/** @param {Record<string, unknown>} route */
+function validTerminalRouteShape(route) {
+  if (route.disposition === 'blocked') return hasExactKeys(
+    route, ['fact_id', 'disposition', 'issue_intent']
+  ) && isObject(route.issue_intent) && hasExactKeys(route.issue_intent, [
+    'missing_type', 'scope', 'answerable', 'risk', 'reasons', 'evidence_refs'
+  ]);
+  if (route.disposition === 'not_applicable') return hasExactKeys(route, [
+    'fact_id', 'disposition', 'exclusion_claim_id', 'scope', 'support_review'
+  ]);
+  return false;
+}
+
+/** @param {Record<string, unknown>} responsibility */
+function validCustomResponsibilityShape(responsibility) {
+  if (!hasExactKeys(responsibility, [
+    'responsibility_type', 'semantic_key', 'owner', 'scope', 'risk',
+    'source_claim_ids', 'required_oracle_refs', 'required_capabilities'
+  ]) || !isObject(responsibility.owner)) return false;
+  if (responsibility.owner.kind === 'facts') return hasExactKeys(
+    responsibility.owner, ['kind', 'fact_ids']
+  );
+  if (responsibility.owner.kind === 'view-elements') return hasExactKeys(
+    responsibility.owner, ['kind', 'view_element_refs']
+  );
+  return false;
+}
+
+/**
+ * @param {Record<string, unknown>} route
+ * @returns {{route:Record<string, unknown>,review?:Record<string, unknown>}}
+ */
+function terminalRoute(route) {
+  const factId = String(route.fact_id ?? '');
+  if (route.disposition === 'not_applicable') {
+    const claimId = String(route.exclusion_claim_id ?? '');
+    return {
+      route: {
+        fact_id: factId, route_type: 'not_applicable', not_applicable_claim_id: claimId
+      },
+      review: { fact_id: factId, claim_id: claimId, support_review: route.support_review }
+    };
+  }
+  const intent = isObject(route.issue_intent) ? route.issue_intent : {};
+  return {
+    route: {
+      fact_id: factId,
+      route_type: 'blocked',
+      blocker_root_issue_id: stableId('root', {
+        missing_type: intent.missing_type,
+        subject: { kind: 'facts', fact_ids: [factId] },
+        scope: intent.scope
+      })
+    }
+  };
+}
+
+/** @param {Record<string, unknown>} responsibility */
+function customResponsibilitySeed(responsibility) {
+  const owner = isObject(responsibility.owner) ? responsibility.owner : {};
+  const viewElementRefs = owner.kind === 'view-elements'
+    ? objectArray(owner.view_element_refs).map((ref) => (
+      qualifyViewElementRef(String(ref.view_id ?? ''), String(ref.element_id ?? ''))
+    )).sort(compareCodePoints) : [];
+  const sourceClaimIds = sortedStrings(responsibility.source_claim_ids, true);
+  const semanticKey = canonicalStringify({
+    responsibility_type: responsibility.responsibility_type,
+    semantic_key: responsibility.semantic_key,
+    owner: owner.kind === 'facts'
+      ? { kind: 'facts', fact_ids: sortedStrings(owner.fact_ids, true) }
+      : { kind: 'view-elements', view_element_refs: objectArray(owner.view_element_refs)
+        .map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id }))
+        .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right))) }
+  });
+  const kind = CUSTOM_KINDS.get(String(responsibility.responsibility_type ?? '')) ?? '';
+  const identity = {
+    kind, scope: responsibility.scope, view_element_refs: viewElementRefs,
+    ...(viewElementRefs.length === 0 ? { source_claim_ids: sourceClaimIds } : {}),
+    semantic_key: semanticKey
+  };
+  return {
+    semantic_key: semanticKey,
+    obligation: {
+      obligation_id: stableId('obligation', identity), kind,
+      risk: responsibility.risk, scope: responsibility.scope,
+      source_claim_ids: sourceClaimIds, view_element_refs: viewElementRefs,
+      required_oracle_refs: sortedStrings(responsibility.required_oracle_refs, true),
+      required_capabilities: sortedStrings(responsibility.required_capabilities, true)
+    }
+  };
+}
+
 /**
  * Compile the sole behavior-views seam into private strategy inputs. The three
- * later-slice arrays remain required and empty in production for G1-A.
+ * terminal/custom inputs are normalized just far enough for the existing
+ * obligation ledger. Combination semantics remain explicitly deferred.
  *
  * @param {unknown} evidenceGraph
  * @param {unknown} behaviorViews
  * @returns {ObligationInputsResult}
  */
 export function compileObligationInputs(evidenceGraph, behaviorViews) {
-  const graph = isObject(evidenceGraph) ? evidenceGraph : {};
+  void evidenceGraph;
   const artifact = isObject(behaviorViews) ? behaviorViews : {};
   const inputs = isObject(artifact.obligation_inputs) ? artifact.obligation_inputs : {};
-  const legacy = legacyInputs(graph);
   /** @type {Diagnostic[]} */
   const diagnostics = [];
   /** @type {Map<string, Record<string, unknown>>} */
   const contextsByViewId = new Map();
-  if (legacy) {
-    const expected = [
-      'contextsByViewId', 'customObligations', 'factRoutes',
-      'notApplicableReviews', 'sourceRevision'
-    ];
-    const actual = Object.keys(legacy).sort(compareCodePoints);
-    if (actual.length !== expected.length
-      || actual.some((key, index) => key !== expected[index])) diagnostics.push(diagnostic(
-      'OBLIGATION_COMPILATION_INPUT_NOT_CLOSED', '/obligationCompilation',
-      'legacy obligation compilation input has unknown or missing fields', 'schema'
-    ));
-    if (!(legacy.contextsByViewId instanceof Map)
-      || !isDenseObjectArray(legacy.customObligations)
-      || !isDenseObjectArray(legacy.factRoutes)
-      || !isDenseObjectArray(legacy.notApplicableReviews)
-      || !Number.isInteger(legacy.sourceRevision)
-      || Number(legacy.sourceRevision) < 0) diagnostics.push(diagnostic(
-      'OBLIGATION_COMPILATION_INPUT_TYPE_INVALID', '/obligationCompilation',
-      'legacy contexts must be a Map and route/responsibility inputs must be dense object arrays',
-      'schema'
-    ));
-  }
   const viewsById = new Map(objectArray(artifact.views).map((view) => [String(view.view_id), view]));
   for (const view of viewsById.values()) {
     if (view.type !== 'integration') continue;
@@ -305,9 +384,7 @@ export function compileObligationInputs(evidenceGraph, behaviorViews) {
   }
   for (const [viewId, view] of viewsById) {
     if (!TARGET_VIEW_TYPES.has(String(view.type))) {
-      const legacyContext = legacy?.contextsByViewId instanceof Map
-        ? legacy.contextsByViewId.get(viewId) : undefined;
-      contextsByViewId.set(viewId, isObject(legacyContext) ? legacyContext : derivedContext(view));
+      contextsByViewId.set(viewId, derivedContext(view));
       continue;
     }
     const entry = contextsById.get(viewId);
@@ -315,39 +392,55 @@ export function compileObligationInputs(evidenceGraph, behaviorViews) {
       view, entry.context, entry.index, diagnostics
     ));
     else {
-      const legacyContext = legacy?.contextsByViewId instanceof Map
-        ? legacy.contextsByViewId.get(viewId) : undefined;
-      if (isObject(legacyContext)) contextsByViewId.set(viewId, legacyContext);
-      else diagnostics.push(diagnostic(
+      diagnostics.push(diagnostic(
         'OBLIGATION_VIEW_CONTEXT_MISSING', '/obligation_inputs/view_contexts',
         `responsibility view "${viewId}" requires exactly one view context`
       ));
     }
   }
-  if (legacy?.contextsByViewId instanceof Map) {
-    for (const [viewId, context] of legacy.contextsByViewId) {
-      if (!contextsByViewId.has(viewId)) contextsByViewId.set(viewId, context);
-    }
-  }
   for (const field of ['terminal_fact_routes', 'custom_responsibilities', 'combination_requests']) {
-    if (objectArray(inputs[field]).length > 0 && !legacy) diagnostics.push(diagnostic(
-      'OBLIGATION_INPUT_SEMANTICS_DEFERRED', `/obligation_inputs/${field}`,
-      `${field} semantics are reserved for a later remediation slice`
+    if (!isDenseObjectArray(inputs[field])) diagnostics.push(diagnostic(
+      'OBLIGATION_RESERVED_INPUT_INVALID', `/obligation_inputs/${field}`,
+      `${field} must be a dense array of closed objects`, 'schema'
     ));
   }
+  const terminal = isDenseObjectArray(inputs.terminal_fact_routes)
+    ? /** @type {Record<string, unknown>[]} */ (inputs.terminal_fact_routes).flatMap((route, index) => {
+      if (validTerminalRouteShape(route)) return [terminalRoute(route)];
+      diagnostics.push(diagnostic(
+        'OBLIGATION_TERMINAL_ROUTE_INVALID', `/obligation_inputs/terminal_fact_routes/${index}`,
+        'terminal fact routes must use one closed blocked or not_applicable record', 'schema'
+      ));
+      return [];
+    }) : [];
+  const custom = isDenseObjectArray(inputs.custom_responsibilities)
+    ? /** @type {Record<string, unknown>[]} */ (inputs.custom_responsibilities)
+      .flatMap((responsibility, index) => {
+        if (validCustomResponsibilityShape(responsibility)) {
+          return [customResponsibilitySeed(responsibility)];
+        }
+        diagnostics.push(diagnostic(
+          'OBLIGATION_CUSTOM_RESPONSIBILITY_INVALID',
+          `/obligation_inputs/custom_responsibilities/${index}`,
+          'custom responsibilities must use the closed public semantic responsibility shape',
+          'schema'
+        ));
+        return [];
+      }) : [];
+  const combinations = isDenseObjectArray(inputs.combination_requests)
+    ? /** @type {Record<string, unknown>[]} */ (inputs.combination_requests) : [];
+  if (combinations.length > 0) diagnostics.push(diagnostic(
+    'OBLIGATION_INPUT_SEMANTICS_DEFERRED', '/obligation_inputs/combination_requests',
+    'combination_requests semantics are reserved for a later remediation slice'
+  ));
   return {
     contextsByViewId,
-    terminalFactRoutes: legacy && isDenseObjectArray(legacy.factRoutes)
-      ? /** @type {Record<string, unknown>[]} */ (legacy.factRoutes) : [],
-    notApplicableReviews: legacy && isDenseObjectArray(legacy.notApplicableReviews)
-      ? /** @type {Record<string, unknown>[]} */ (legacy.notApplicableReviews) : [],
-    customResponsibilitySeeds: legacy && isDenseObjectArray(legacy.customObligations)
-      ? /** @type {Record<string, unknown>[]} */ (legacy.customObligations) : [],
-    combinationRequests: [],
-    sourceRevision: legacy && typeof legacy.sourceRevision === 'number'
-      && Number.isInteger(legacy.sourceRevision) ? legacy.sourceRevision
-      : typeof artifact.source_revision === 'number' && Number.isInteger(artifact.source_revision)
-        ? artifact.source_revision : -1,
+    terminalFactRoutes: terminal.map((entry) => entry.route),
+    notApplicableReviews: terminal.flatMap((entry) => entry.review ? [entry.review] : []),
+    customResponsibilitySeeds: custom,
+    combinationRequests: combinations,
+    sourceRevision: typeof artifact.source_revision === 'number'
+      && Number.isInteger(artifact.source_revision) ? artifact.source_revision : -1,
     diagnostics
   };
 }

@@ -90,48 +90,48 @@
       { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
       { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
     ],
-    "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
-    "interaction_candidates": []
-  },
-  "contexts_by_view_id": {
-    "view_decision": {
-      "riskByElementId": { "rule_checkout": "high" },
-      "requiredOracleRefsByElementId": { "rule_checkout": ["claim_rule"] },
-      "requiredCapabilitiesByElementId": { "rule_checkout": ["checkout-observer"] }
-    }
-  },
-  "fact_routes": [
-    {
-      "fact_id": "fact_blocked",
-      "route_type": "blocked",
-      "blocker_root_issue_id": "root_checkout_rule"
+    "obligation_inputs": {
+      "view_contexts": [],
+      "terminal_fact_routes": [
+        {
+          "fact_id": "fact_blocked",
+          "disposition": "blocked",
+          "issue_intent": {
+            "missing_type": "requirement",
+            "scope": "checkout",
+            "answerable": true,
+            "risk": "high",
+            "reasons": ["Required behavior is unresolved."],
+            "evidence_refs": []
+          }
+        },
+        {
+          "fact_id": "fact_not_applicable",
+          "disposition": "not_applicable",
+          "exclusion_claim_id": "claim_exclusion",
+          "scope": "checkout",
+          "support_review": "supported"
+        }
+      ],
+      "custom_responsibilities": [
+        {
+          "responsibility_type": "decision-outcome",
+          "semantic_key": "custom-checkout-observer",
+          "owner": {
+            "kind": "view-elements",
+            "view_element_refs": [
+              { "view_id": "view_decision", "element_id": "rule_checkout" }
+            ]
+          },
+          "scope": "checkout",
+          "risk": "medium",
+          "source_claim_ids": ["claim_rule"],
+          "required_oracle_refs": ["claim_rule"],
+          "required_capabilities": ["custom-observer"]
+        }
+      ],
+      "combination_requests": []
     },
-    {
-      "fact_id": "fact_not_applicable",
-      "route_type": "not_applicable",
-      "not_applicable_claim_id": "claim_exclusion"
-    }
-  ],
-  "not_applicable_reviews": [
-    {
-      "fact_id": "fact_not_applicable",
-      "claim_id": "claim_exclusion",
-      "support_review": "supported"
-    }
-  ],
-  "custom_obligations": [
-    {
-      "semantic_key": "custom-checkout-observer",
-      "obligation": {
-        "obligation_id": "obligation_287414283b7c588d",
-        "kind": "decision",
-        "risk": "medium",
-        "scope": "checkout",
-        "source_claim_ids": ["claim_rule"],
-        "view_element_refs": ["view_decision#rule_checkout"],
-        "required_oracle_refs": ["claim_rule"],
-        "required_capabilities": ["custom-observer"]
-      }
-    }
-  ]
+    "interaction_candidates": []
+  }
 }

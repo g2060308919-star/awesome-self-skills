@@ -18,7 +18,7 @@ Do not generate generic negative behavior merely because a technique suggests it
 
 ## Supply obligation inputs with the views
 
-Every `behavior_views` artifact must contain the closed `obligation_inputs` object with these four arrays: `view_contexts`, `terminal_fact_routes`, `custom_responsibilities`, and `combination_requests`. Keep the last three arrays empty until their dedicated workflow semantics are available. `view_contexts` may be empty only when the artifact has no `input-domain`, `role`, `timing`, or `integration` view.
+Every `behavior_views` artifact must contain the closed `obligation_inputs` object with these four arrays: `view_contexts`, `terminal_fact_routes`, `custom_responsibilities`, and `combination_requests`. Read the Behavior Views schema before writing a nonempty terminal route or custom responsibility; submit only its public semantic fields and never an obligation or root ID. Keep `combination_requests` empty until its dedicated workflow semantics are available. `view_contexts` may be empty only when the artifact has no `input-domain`, `role`, `timing`, or `integration` view.
 
 Provide exactly one context for each of those four view types. A context contains only `view_id` and `bindings`. Every binding contains only `selector`, `risk`, `source_claim_ids`, `required_oracle_refs`, and `required_capabilities`. Bind every required responsibility exactly once:
 

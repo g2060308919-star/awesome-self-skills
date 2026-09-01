@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { digest } from '../../src/canonical.mjs';
+import { digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
+import { compileObligationInputs } from '../../src/obligations/compile-obligation-inputs.mjs';
 import {
   buildJourney, runInstalledRevision
 } from '../helpers/run-journey.mjs';
@@ -21,17 +22,17 @@ function emptyObligationInputs() {
   };
 }
 
-/** @param {Record<string, unknown>} selector @param {string[]} sourceClaimIds */
-function binding(selector, sourceClaimIds) {
+/** @param {Record<string, unknown>} selector @param {string[]} sourceClaimIds @param {string} [risk] */
+function binding(selector, sourceClaimIds, risk = 'high') {
   return {
-    selector, risk: 'high', source_claim_ids: sourceClaimIds,
+    selector, risk, source_claim_ids: sourceClaimIds,
     required_oracle_refs: [], required_capabilities: []
   };
 }
 
 function fourViewRevision() {
   const claimIds = [
-    'claim_input', 'claim_role', 'claim_timing', 'claim_timeout',
+    'claim_input', 'claim_role', 'claim_role_aux', 'claim_timing', 'claim_timeout',
     'claim_integration', 'claim_invariant', 'claim_idempotency'
   ];
   return {
@@ -82,10 +83,10 @@ function fourViewRevision() {
         },
         {
           view_id: 'view_role', type: 'role', scope: 'checkout',
-          source_claim_ids: ['claim_role'], relations: [], elements: [{
+          source_claim_ids: ['claim_role', 'claim_role_aux'], relations: [], elements: [{
             element_id: 'role_operator', kind: 'role-permission', role: 'operator',
             permissions: ['allow-submit', 'deny-refund'],
-            source_claim_ids: ['claim_role'], model_refs: []
+            source_claim_ids: ['claim_role', 'claim_role_aux'], model_refs: []
           }]
         },
         {
@@ -136,8 +137,8 @@ function fourViewRevision() {
           },
           {
             view_id: 'view_role', bindings: [
-              binding({ kind: 'permission', element_id: 'role_operator', permission: 'allow-submit' }, ['claim_role']),
-              binding({ kind: 'permission', element_id: 'role_operator', permission: 'deny-refund' }, ['claim_role'])
+              binding({ kind: 'permission', element_id: 'role_operator', permission: 'allow-submit' }, ['claim_role', 'claim_role_aux'], 'critical'),
+              binding({ kind: 'permission', element_id: 'role_operator', permission: 'deny-refund' }, ['claim_role_aux'], 'low')
             ]
           },
           {
@@ -205,9 +206,24 @@ test('installed obligation input compiles exact input role and timing integratio
   assert.equal(artifact.obligations.every((/** @type {any} */ item) => (
     item.required_oracle_refs.length === 0 && item.required_capabilities.length === 0
   )), true);
+  const roleById = new Map(artifact.obligations.filter((/** @type {any} */ item) => (
+    item.kind === 'role'
+  )).map((/** @type {any} */ item) => [item.obligation_id, item]));
+  const allowId = stableId('obligation', {
+    kind: 'role', responsibility: 'permission', scope: 'checkout',
+    role: 'operator', permission: 'allow-submit'
+  });
+  const denyId = stableId('obligation', {
+    kind: 'role', responsibility: 'permission', scope: 'checkout',
+    role: 'operator', permission: 'deny-refund'
+  });
+  assert.equal(roleById.get(allowId)?.risk, 'critical');
+  assert.deepEqual(roleById.get(allowId)?.source_claim_ids, ['claim_role', 'claim_role_aux']);
+  assert.equal(roleById.get(denyId)?.risk, 'low');
+  assert.deepEqual(roleById.get(denyId)?.source_claim_ids, ['claim_role_aux']);
 });
 
-test('installed obligation input rejects missing duplicate unknown and flow selectors at behavior_views', async () => {
+test('installed obligation input rejects missing duplicate unknown out-of-scope and compiler-derived contexts at behavior_views', async () => {
   const mutations = [
     {
       code: 'OBLIGATION_BINDING_MISSING',
@@ -228,15 +244,23 @@ test('installed obligation input rejects missing duplicate unknown and flow sele
       }
     },
     {
+      code: 'OBLIGATION_SELECTOR_UNKNOWN',
+      apply(/** @type {any} */ artifact) {
+        artifact.obligation_inputs.view_contexts[2].bindings[0].selector = {
+          kind: 'permission', element_id: 'timing_payment', permission: 'allow-submit'
+        };
+      }
+    },
+    ...['flow', 'decision', 'state'].map((type) => ({
       code: 'OBLIGATION_VIEW_CONTEXT_TYPE_FORBIDDEN',
       apply(/** @type {any} */ artifact) {
         artifact.views.push({
-          view_id: 'view_flow', type: 'flow', scope: 'checkout',
+          view_id: `view_${type}`, type, scope: 'checkout',
           source_claim_ids: [], elements: [], relations: []
         });
-        artifact.obligation_inputs.view_contexts.push({ view_id: 'view_flow', bindings: [] });
+        artifact.obligation_inputs.view_contexts.push({ view_id: `view_${type}`, bindings: [] });
       }
-    },
+    })),
     {
       code: 'OBLIGATION_SIDE_EFFECT_DUPLICATE',
       apply(/** @type {any} */ artifact) {
@@ -282,6 +306,44 @@ test('obligation input binding claim and side-effect reorder preserves IDs count
     right.obligations.map((/** @type {any} */ item) => item.obligation_id)
   );
   assert.equal(digest(left), digest(right));
+});
+
+test('installed obligation input rejects malformed nonempty reserved arrays instead of erasing them', async () => {
+  for (const field of ['terminal_fact_routes', 'custom_responsibilities', 'combination_requests']) {
+    for (const malformed of [null, 42, 'not-an-object']) {
+      const revision = fourViewRevision();
+      /** @type {any} */ (revision.behavior_views.obligation_inputs)[field] = [malformed];
+      const run = await runInstalledRevision(revision, {
+        stageNames: ['source_pack', 'evidence_claims', 'behavior_views']
+      });
+      try {
+        assert.equal(run.reply.status, 'need_revision', `${field}: ${String(malformed)}`);
+        assert.equal(run.reply.stage, 'behavior_views', `${field}: ${String(malformed)}`);
+        assert.equal(run.reply.diagnostics.some((/** @type {any} */ item) => (
+          item.category === 'schema' && item.path.startsWith(`/obligation_inputs/${field}/0`)
+        )), true, JSON.stringify(run.reply));
+      } finally {
+        await rm(run.runDirectory, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
+test('obligation input compiler ignores the removed hidden fifth input', () => {
+  const artifact = {
+    schema_version: '1.0.0', source_revision: 7, views: [], interaction_matrix: [],
+    interaction_candidates: [], obligation_inputs: emptyObligationInputs()
+  };
+  const clean = compileObligationInputs({}, artifact);
+  const injected = compileObligationInputs({
+    obligationCompilation: {
+      sourceRevision: 99, contextsByViewId: new Map([['forged', {}]]),
+      factRoutes: [{ fact_id: 'forged', route_type: 'blocked' }],
+      notApplicableReviews: [{ fact_id: 'forged' }], customObligations: [{ forged: true }]
+    }
+  }, artifact);
+  assert.deepEqual(injected, clean);
+  assert.equal(injected.sourceRevision, 7);
 });
 
 test('obligation input pure core accepts only four Agent artifacts and matches installed digest', async () => {
