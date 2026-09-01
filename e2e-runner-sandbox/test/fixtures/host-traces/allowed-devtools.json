@@ -1,0 +1,4 @@
+[
+  { "sequence": 1, "actor": "runner", "tool": "navigate_page", "environmentClassification": "non-production", "scopeConfirmed": true },
+  { "sequence": 2, "actor": "runner", "tool": "take_snapshot", "environmentClassification": "non-production", "scopeConfirmed": true }
+]

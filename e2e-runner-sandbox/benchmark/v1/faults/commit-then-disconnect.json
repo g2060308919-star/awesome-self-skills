@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "id": "commit-then-disconnect",
+  "logicalOperation": "customer.create",
+  "phase": "after-commit-before-response",
+  "effect": "commit-then-disconnect",
+  "occurrence": 1
+}

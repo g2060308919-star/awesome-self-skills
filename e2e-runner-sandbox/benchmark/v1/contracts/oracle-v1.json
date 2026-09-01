@@ -1,0 +1,29 @@
+{
+  "name": "hidden-oracle",
+  "version": "1",
+  "eventTypes": [
+    "operation_attempt",
+    "validation_rejection",
+    "authorization_denial",
+    "state_mutation",
+    "external_action",
+    "notification_enqueued",
+    "session_event"
+  ],
+  "attributionClasses": [
+    "none",
+    "expected-business-rejection",
+    "product-failure",
+    "case-issue",
+    "environment-safety",
+    "access-or-navigation-uncertainty",
+    "target-clarification",
+    "authentication-interruption",
+    "external-evidence-gap",
+    "transient-read-recovered",
+    "ambiguous-write-recovered",
+    "cleanup-failure"
+  ],
+  "assertionStates": ["verified-pass", "verified-fail", "unverified", "not-run"],
+  "caseVerdicts": ["Passed", "Failed", "Inconclusive", "Not Run"]
+}

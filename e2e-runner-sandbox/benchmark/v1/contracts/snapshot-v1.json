@@ -1,0 +1,8 @@
+{
+  "name": "canonical-snapshot",
+  "version": "1",
+  "timestampFormat": "UTC ISO-8601",
+  "arrayOrder": "stable id for entity arrays",
+  "digest": "SHA-256",
+  "volatileKeys": ["lastAccessAt", "responseNonce"]
+}

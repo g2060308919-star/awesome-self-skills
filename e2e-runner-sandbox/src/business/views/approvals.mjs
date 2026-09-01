@@ -1,0 +1,9 @@
+import { escapeHtml } from "./shell.mjs";
+
+export function renderApprovals(approvals, account) {
+  const rows = approvals.map((approval) => `<tr><td>${escapeHtml(approval.id)}</td><td>${escapeHtml(approval.targetType)} ${escapeHtml(approval.targetId)}</td><td>${escapeHtml(approval.requestedAction)}</td><td>${escapeHtml(approval.status)}</td><td>${account.role === "Approver" && approval.status === "Pending" ? `<form class="inline-actions" method="post" action="/approvals/${encodeURIComponent(approval.id)}/decision"><button name="decision" value="Approved" type="submit">Approve</button><button class="danger-button" name="decision" value="Rejected" type="submit">Reject</button></form>` : "—"}</td></tr>`).join("");
+  const submit = account.role === "Operator" || account.role === "Administrator"
+    ? `<section class="content-card"><div class="section-heading"><div><p class="eyebrow">Request a decision</p><h2>Submit approval</h2></div></div><form class="filter-bar" method="post" action="/approvals"><div><label for="approval-target">Project ID</label><input id="approval-target" name="targetId" required></div><div><label for="approval-action">Requested action</label><select id="approval-action" name="action"><option value="activate">Activate</option><option value="deactivate">Deactivate</option></select></div><button class="primary-button" type="submit">Submit approval</button></form></section>`
+    : "";
+  return `${submit}<section class="content-card"><div class="section-heading"><div><p class="eyebrow">Decision queue</p><h2>Approval requests</h2></div></div><div class="table-scroll" tabindex="0"><table><caption>${approvals.length} approval requests</caption><thead><tr><th scope="col">Request</th><th scope="col">Target</th><th scope="col">Action</th><th scope="col">Status</th><th scope="col">Decision</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No approval requests</td></tr>'}</tbody></table></div></section>`;
+}

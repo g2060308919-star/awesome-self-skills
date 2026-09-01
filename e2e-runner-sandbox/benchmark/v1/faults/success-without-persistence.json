@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "id": "success-without-persistence",
+  "logicalOperation": "customer.update",
+  "phase": "before-commit",
+  "effect": "success-without-persistence",
+  "occurrence": 1
+}

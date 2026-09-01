@@ -1,0 +1,4 @@
+[
+  { "sequence": 1, "actor": "evaluator", "provenance": "manual-evaluator", "tool": "click", "semanticAction": "manual-login", "environmentClassification": "non-production", "scopeConfirmed": true },
+  { "sequence": 2, "actor": "runner", "tool": "take_snapshot", "environmentClassification": "non-production", "scopeConfirmed": true }
+]

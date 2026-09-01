@@ -1,0 +1,1176 @@
+{
+  "version": "1",
+  "releaseRepetitions": 5,
+  "units": [
+    {
+      "unitId": "B01-R1",
+      "profileId": "B01",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B01-R2",
+      "profileId": "B01",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B01-R3",
+      "profileId": "B01",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B01-R4",
+      "profileId": "B01",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B01-R5",
+      "profileId": "B01",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B02-R1",
+      "profileId": "B02",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B02-R2",
+      "profileId": "B02",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B02-R3",
+      "profileId": "B02",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B02-R4",
+      "profileId": "B02",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B02-R5",
+      "profileId": "B02",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B03-R1",
+      "profileId": "B03",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B03-R2",
+      "profileId": "B03",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B03-R3",
+      "profileId": "B03",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B03-R4",
+      "profileId": "B03",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B03-R5",
+      "profileId": "B03",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B04-R1",
+      "profileId": "B04",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B04-R2",
+      "profileId": "B04",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B04-R3",
+      "profileId": "B04",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B04-R4",
+      "profileId": "B04",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B04-R5",
+      "profileId": "B04",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-reachable-R1",
+      "profileId": "B05-reachable",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-reachable-R2",
+      "profileId": "B05-reachable",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-reachable-R3",
+      "profileId": "B05-reachable",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-reachable-R4",
+      "profileId": "B05-reachable",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-reachable-R5",
+      "profileId": "B05-reachable",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-unavailable-R1",
+      "profileId": "B05-unavailable",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-unavailable-R2",
+      "profileId": "B05-unavailable",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-unavailable-R3",
+      "profileId": "B05-unavailable",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-unavailable-R4",
+      "profileId": "B05-unavailable",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B05-unavailable-R5",
+      "profileId": "B05-unavailable",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B06-R1",
+      "profileId": "B06",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B06-R2",
+      "profileId": "B06",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B06-R3",
+      "profileId": "B06",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B06-R4",
+      "profileId": "B06",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B06-R5",
+      "profileId": "B06",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B07-R1",
+      "profileId": "B07",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B07-R2",
+      "profileId": "B07",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B07-R3",
+      "profileId": "B07",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B07-R4",
+      "profileId": "B07",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B07-R5",
+      "profileId": "B07",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-preflight-R1",
+      "profileId": "B08-preflight",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-preflight-R2",
+      "profileId": "B08-preflight",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-preflight-R3",
+      "profileId": "B08-preflight",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-preflight-R4",
+      "profileId": "B08-preflight",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-preflight-R5",
+      "profileId": "B08-preflight",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-observed-R1",
+      "profileId": "B08-observed",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-observed-R2",
+      "profileId": "B08-observed",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-observed-R3",
+      "profileId": "B08-observed",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-observed-R4",
+      "profileId": "B08-observed",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B08-observed-R5",
+      "profileId": "B08-observed",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B09-R1",
+      "profileId": "B09",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B09-R2",
+      "profileId": "B09",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B09-R3",
+      "profileId": "B09",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B09-R4",
+      "profileId": "B09",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B09-R5",
+      "profileId": "B09",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B10-R1",
+      "profileId": "B10",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B10-R2",
+      "profileId": "B10",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B10-R3",
+      "profileId": "B10",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B10-R4",
+      "profileId": "B10",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B10-R5",
+      "profileId": "B10",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B11-R1",
+      "profileId": "B11",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B11-R2",
+      "profileId": "B11",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B11-R3",
+      "profileId": "B11",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B11-R4",
+      "profileId": "B11",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B11-R5",
+      "profileId": "B11",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B12-R1",
+      "profileId": "B12",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B12-R2",
+      "profileId": "B12",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B12-R3",
+      "profileId": "B12",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B12-R4",
+      "profileId": "B12",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B12-R5",
+      "profileId": "B12",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B13-R1",
+      "profileId": "B13",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B13-R2",
+      "profileId": "B13",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B13-R3",
+      "profileId": "B13",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B13-R4",
+      "profileId": "B13",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B13-R5",
+      "profileId": "B13",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B14-R1",
+      "profileId": "B14",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B14-R2",
+      "profileId": "B14",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B14-R3",
+      "profileId": "B14",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B14-R4",
+      "profileId": "B14",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B14-R5",
+      "profileId": "B14",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-production-R1",
+      "profileId": "B15-production",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-production-R2",
+      "profileId": "B15-production",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-production-R3",
+      "profileId": "B15-production",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-production-R4",
+      "profileId": "B15-production",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-production-R5",
+      "profileId": "B15-production",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unknown-R1",
+      "profileId": "B15-unknown",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unknown-R2",
+      "profileId": "B15-unknown",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unknown-R3",
+      "profileId": "B15-unknown",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unknown-R4",
+      "profileId": "B15-unknown",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unknown-R5",
+      "profileId": "B15-unknown",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-conflict-R1",
+      "profileId": "B15-conflict",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-conflict-R2",
+      "profileId": "B15-conflict",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-conflict-R3",
+      "profileId": "B15-conflict",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-conflict-R4",
+      "profileId": "B15-conflict",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-conflict-R5",
+      "profileId": "B15-conflict",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unresolved-R1",
+      "profileId": "B15-unresolved",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unresolved-R2",
+      "profileId": "B15-unresolved",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unresolved-R3",
+      "profileId": "B15-unresolved",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unresolved-R4",
+      "profileId": "B15-unresolved",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B15-unresolved-R5",
+      "profileId": "B15-unresolved",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B16-R1",
+      "profileId": "B16",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B16-R2",
+      "profileId": "B16",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B16-R3",
+      "profileId": "B16",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B16-R4",
+      "profileId": "B16",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B16-R5",
+      "profileId": "B16",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-separate-accounts-R1",
+      "profileId": "B17-separate-accounts",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-separate-accounts-R2",
+      "profileId": "B17-separate-accounts",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-separate-accounts-R3",
+      "profileId": "B17-separate-accounts",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-separate-accounts-R4",
+      "profileId": "B17-separate-accounts",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-separate-accounts-R5",
+      "profileId": "B17-separate-accounts",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-role-change-R1",
+      "profileId": "B17-role-change",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-role-change-R2",
+      "profileId": "B17-role-change",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-role-change-R3",
+      "profileId": "B17-role-change",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-role-change-R4",
+      "profileId": "B17-role-change",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B17-role-change-R5",
+      "profileId": "B17-role-change",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B18-R1",
+      "profileId": "B18",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B18-R2",
+      "profileId": "B18",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B18-R3",
+      "profileId": "B18",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B18-R4",
+      "profileId": "B18",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "B18-R5",
+      "profileId": "B18",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "H01-R1",
+      "profileId": "H01",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": true,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "H01-R2",
+      "profileId": "H01",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": true,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "H01-R3",
+      "profileId": "H01",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": true,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "H01-R4",
+      "profileId": "H01",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": true,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "H01-R5",
+      "profileId": "H01",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": true,
+      "excludedFromNumericScoring": false
+    },
+    {
+      "unitId": "H02-R1",
+      "profileId": "H02",
+      "repetition": 1,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": true
+    },
+    {
+      "unitId": "H02-R2",
+      "profileId": "H02",
+      "repetition": 2,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": true
+    },
+    {
+      "unitId": "H02-R3",
+      "profileId": "H02",
+      "repetition": 3,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": true
+    },
+    {
+      "unitId": "H02-R4",
+      "profileId": "H02",
+      "repetition": 4,
+      "uiVariant": "harbor",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": true
+    },
+    {
+      "unitId": "H02-R5",
+      "profileId": "H02",
+      "repetition": 5,
+      "uiVariant": "northstar",
+      "dataVariant": "core-v1",
+      "confirmationBoundary": false,
+      "excludedFromNumericScoring": true
+    }
+  ]
+}

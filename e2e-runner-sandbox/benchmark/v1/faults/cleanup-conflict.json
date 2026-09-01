@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "id": "cleanup-conflict",
+  "logicalOperation": "customer.delete",
+  "phase": "before-commit",
+  "effect": "cleanup-conflict",
+  "occurrence": 1
+}

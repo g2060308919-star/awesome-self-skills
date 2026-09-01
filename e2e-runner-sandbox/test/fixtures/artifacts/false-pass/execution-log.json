@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "execution-log-v1",
+  "profileId": "B09",
+  "planId": "B09-PLAN",
+  "environment": {
+    "classification": "non-production",
+    "scopeConfirmed": true
+  },
+  "cases": [
+    {
+      "caseId": "B09-C1",
+      "verdict": "Passed",
+      "attribution": "none",
+      "assertions": [
+        {
+          "assertionId": "B09-A1",
+          "state": "verified-pass",
+          "expected": "Europe/London",
+          "actual": "Europe/London",
+          "evidence": ["evidence/B09-A1.txt"]
+        }
+      ],
+      "cleanup": { "outcome": "clean", "residualRecords": [] }
+    }
+  ]
+}

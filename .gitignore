@@ -13,6 +13,9 @@ coverage/
 
 # Runtime caches and temporary files
 .cache/
+.sandbox-runtime/
+trial-results/
+.cache/tesseract/
 .tmp/
 tmp/
 *.log

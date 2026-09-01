@@ -1,0 +1,19 @@
+{
+  "id": "northstar",
+  "version": "1",
+  "navigationOrder": [
+    "dashboard",
+    "customers",
+    "projects",
+    "approvals",
+    "audit"
+  ],
+  "customerColumns": [
+    "name",
+    "status",
+    "owner",
+    "plan",
+    "timezone",
+    "tags"
+  ]
+}

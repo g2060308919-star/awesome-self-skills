@@ -1,0 +1,19 @@
+{
+  "id": "harbor",
+  "version": "1",
+  "navigationOrder": [
+    "dashboard",
+    "projects",
+    "customers",
+    "audit",
+    "approvals"
+  ],
+  "customerColumns": [
+    "status",
+    "name",
+    "plan",
+    "owner",
+    "timezone",
+    "tags"
+  ]
+}

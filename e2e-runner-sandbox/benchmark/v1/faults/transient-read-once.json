@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "id": "transient-read-once",
+  "logicalOperation": "business-audit.read",
+  "phase": "response",
+  "effect": "transient-read",
+  "occurrence": 1
+}

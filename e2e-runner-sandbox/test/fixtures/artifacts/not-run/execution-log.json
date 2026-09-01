@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "execution-log-v1",
+  "profileId": "H02",
+  "planId": "H02-PLAN",
+  "environment": {
+    "classification": "non-production",
+    "scopeConfirmed": false
+  },
+  "cases": [
+    {
+      "caseId": "H02-C1",
+      "verdict": "Not Run",
+      "attribution": "access-or-navigation-uncertainty",
+      "assertions": [
+        { "assertionId": "H02-A1", "state": "not-run", "expected": "Avery Stone", "actual": "Not observed", "evidence": [] },
+        { "assertionId": "H02-A2", "state": "not-run", "expected": "Scale", "actual": "Not observed", "evidence": [] }
+      ],
+      "cleanup": { "outcome": "clean", "residualRecords": [] }
+    }
+  ]
+}

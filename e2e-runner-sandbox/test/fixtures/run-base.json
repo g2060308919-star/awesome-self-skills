@@ -1,0 +1,16 @@
+{
+  "tenant": { "id": "TENANT-BENCH", "name": "Northstar Test Works" },
+  "accounts": [
+    { "id": "acct-viewer", "displayName": "Vera Viewer", "roles": ["Viewer"] }
+  ],
+  "customers": [
+    { "id": "CUS-1001", "name": "Acme Synthetic", "status": "Active" }
+  ],
+  "projects": [],
+  "approvals": [],
+  "sessions": [],
+  "businessAudit": [],
+  "oracleEvents": [],
+  "outbox": [],
+  "delayedJobs": []
+}

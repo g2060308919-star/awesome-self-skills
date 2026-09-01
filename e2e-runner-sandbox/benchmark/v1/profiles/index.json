@@ -1,0 +1,109 @@
+{
+  "version": "1",
+  "profiles": [
+    {
+      "profileId": "B01",
+      "file": "profiles/B01.json"
+    },
+    {
+      "profileId": "B02",
+      "file": "profiles/B02.json"
+    },
+    {
+      "profileId": "B03",
+      "file": "profiles/B03.json"
+    },
+    {
+      "profileId": "B04",
+      "file": "profiles/B04.json"
+    },
+    {
+      "profileId": "B05-reachable",
+      "file": "profiles/B05-reachable.json"
+    },
+    {
+      "profileId": "B05-unavailable",
+      "file": "profiles/B05-unavailable.json"
+    },
+    {
+      "profileId": "B06",
+      "file": "profiles/B06.json"
+    },
+    {
+      "profileId": "B07",
+      "file": "profiles/B07.json"
+    },
+    {
+      "profileId": "B08-preflight",
+      "file": "profiles/B08-preflight.json"
+    },
+    {
+      "profileId": "B08-observed",
+      "file": "profiles/B08-observed.json"
+    },
+    {
+      "profileId": "B09",
+      "file": "profiles/B09.json"
+    },
+    {
+      "profileId": "B10",
+      "file": "profiles/B10.json"
+    },
+    {
+      "profileId": "B11",
+      "file": "profiles/B11.json"
+    },
+    {
+      "profileId": "B12",
+      "file": "profiles/B12.json"
+    },
+    {
+      "profileId": "B13",
+      "file": "profiles/B13.json"
+    },
+    {
+      "profileId": "B14",
+      "file": "profiles/B14.json"
+    },
+    {
+      "profileId": "B15-production",
+      "file": "profiles/B15-production.json"
+    },
+    {
+      "profileId": "B15-unknown",
+      "file": "profiles/B15-unknown.json"
+    },
+    {
+      "profileId": "B15-conflict",
+      "file": "profiles/B15-conflict.json"
+    },
+    {
+      "profileId": "B15-unresolved",
+      "file": "profiles/B15-unresolved.json"
+    },
+    {
+      "profileId": "B16",
+      "file": "profiles/B16.json"
+    },
+    {
+      "profileId": "B17-separate-accounts",
+      "file": "profiles/B17-separate-accounts.json"
+    },
+    {
+      "profileId": "B17-role-change",
+      "file": "profiles/B17-role-change.json"
+    },
+    {
+      "profileId": "B18",
+      "file": "profiles/B18.json"
+    },
+    {
+      "profileId": "H01",
+      "file": "profiles/H01.json"
+    },
+    {
+      "profileId": "H02",
+      "file": "profiles/H02.json"
+    }
+  ]
+}

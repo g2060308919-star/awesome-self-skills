@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "execution-log-v1",
+  "profileId": "B01",
+  "planId": "B01-PLAN",
+  "environment": {
+    "classification": "non-production",
+    "scopeConfirmed": true
+  },
+  "cases": [
+    {
+      "caseId": "B01-C1",
+      "verdict": "Passed",
+      "attribution": "none",
+      "assertions": [
+        {
+          "assertionId": "B01-A1",
+          "state": "verified-pass",
+          "expected": "Avery Stone",
+          "actual": "Avery Stone",
+          "evidence": ["evidence/B01-A1.txt"]
+        },
+        {
+          "assertionId": "B01-A2",
+          "state": "verified-pass",
+          "expected": "Scale",
+          "actual": "Scale",
+          "evidence": ["evidence/B01-A2.txt"]
+        }
+      ],
+      "cleanup": { "outcome": "clean", "residualRecords": [] }
+    }
+  ]
+}
