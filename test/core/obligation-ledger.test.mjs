@@ -8,9 +8,7 @@ import {
 } from '../../src/obligations/compile-obligations.mjs';
 import { canonicalStringify, stableId } from '../../src/canonical.mjs';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
-import {
-  createObligationRegistry, qualifyViewElementRef
-} from '../../src/obligations/registry.mjs';
+import { createObligationRegistry } from '../../src/obligations/registry.mjs';
 import { responsibilityKey } from '../../src/obligations/responsibility.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 
@@ -127,25 +125,17 @@ function customInput(semanticKey, obligation) {
 /** @param {any} responsibility */
 function customId(responsibility) {
   const owner = responsibility.owner;
-  const viewElementRefs = owner.kind === 'view-elements'
-    ? owner.view_element_refs.map((/** @type {any} */ ref) => (
-      qualifyViewElementRef(ref.view_id, ref.element_id)
-    )).sort()
-    : [];
   const semanticKey = canonicalStringify({
+    responsibility_type: responsibility.responsibility_type,
     owner: owner.kind === 'facts'
       ? { fact_ids: [...owner.fact_ids].sort(), kind: 'facts' }
       : { kind: 'view-elements', view_element_refs: [...owner.view_element_refs]
         .sort((/** @type {any} */ left, /** @type {any} */ right) => JSON.stringify(left).localeCompare(JSON.stringify(right))) },
-    responsibility_type: responsibility.responsibility_type,
-    semantic_key: responsibility.semantic_key
+    scope: responsibility.scope
   });
   const kind = [...RESPONSIBILITY_TYPE].find(([, type]) => type === responsibility.responsibility_type)?.[0];
   return stableId('obligation', {
-    kind, scope: responsibility.scope, view_element_refs: viewElementRefs,
-    ...(viewElementRefs.length === 0
-      ? { source_claim_ids: [...responsibility.source_claim_ids].sort() } : {}),
-    semantic_key: semanticKey
+    kind, scope: responsibility.scope, semantic_key: semanticKey
   });
 }
 
@@ -806,6 +796,7 @@ test('obligation ledger rejects custom system collisions and conflicting semanti
     result: 'other result', priority: 1, source_claim_ids: ['claim_other_owner'], model_refs: []
   });
   const ownerConflict = graphFrom(ownerFixture);
+  publicInputs(ownerConflict).custom_responsibilities = [];
   const firstOwner = customInput('shared-owner-key', {
     kind: 'decision', risk: 'low', scope: 'checkout', source_claim_ids: ['claim_rule'],
     view_element_refs: ['view_decision#rule_checkout'], required_oracle_refs: ['claim_rule'], required_capabilities: []
@@ -845,10 +836,11 @@ test('obligation ledger rejects custom system collisions and conflicting semanti
     });
   publicInputs(sourceOwner).custom_responsibilities.push(firstSourceOwner, secondSourceOwner);
   const sourceOwnerResult = /** @type {any} */ (compileObligations(sourceOwner, fixture.behavior_views));
-  assert.notEqual(customId(firstSourceOwner), customId(secondSourceOwner));
-  assert.equal(sourceOwnerResult.obligations.some(
+  assert.equal(customId(firstSourceOwner), customId(secondSourceOwner));
+  const mergedSourceOwner = sourceOwnerResult.obligations.find(
     (/** @type {any} */ item) => item.obligation_id === customId(secondSourceOwner)
-  ), true);
+  );
+  assert.deepEqual(mergedSourceOwner?.source_claim_ids, ['claim_blocked', 'claim_exclusion']);
 });
 
 test('obligation ledger rejects custom evidence poison, invalid Oracles, and unrelated owner ancestry', async () => {
@@ -890,7 +882,7 @@ test('obligation ledger rejects custom evidence poison, invalid Oracles, and unr
   assert.equal(scopeError.diagnostics.some((item) => item.code === 'CUSTOM_OBLIGATION_CLAIM_SCOPE_MISMATCH'), true);
 });
 
-test('obligation ledger binds custom stable IDs to semantic keys and qualified owners', async () => {
+test('obligation ledger binds custom stable IDs to responsibility types and qualified owners', async () => {
   const fixture = await ledgerFixture();
 
   const duplicateSemantic = graphFrom(fixture);
@@ -910,13 +902,13 @@ test('obligation ledger binds custom stable IDs to semantic keys and qualified o
   });
   publicInputs(distinct).custom_responsibilities.push(secondResponsibility);
   const distinctResult = /** @type {any} */ (compileObligations(distinct, fixture.behavior_views));
-  assert.notEqual(
+  assert.equal(
     customId(publicInputs(distinct).custom_responsibilities[0]),
     customId(secondResponsibility)
   );
-  assert.equal(distinctResult.obligations.some(
+  assert.deepEqual(distinctResult.obligations.find(
     (/** @type {any} */ item) => item.obligation_id === customId(secondResponsibility)
-  ), true);
+  )?.required_capabilities, ['audit-observer', 'custom-observer']);
 
   const ownerFixture = structuredClone(fixture);
   ownerFixture.claims.push({
@@ -951,7 +943,7 @@ test('obligation ledger binds custom stable IDs to semantic keys and qualified o
     kind: 'interaction', risk: 'low', scope: 'checkout', source_claim_ids: ['claim_exclusion'],
     view_element_refs: [], required_oracle_refs: [], required_capabilities: []
   });
-  assert.notEqual(customId(sourceOwnedA), customId(sourceOwnedB));
+  assert.equal(customId(sourceOwnedA), customId(sourceOwnedB));
   const sourceGraphA = graphFrom(fixture);
   publicInputs(sourceGraphA).custom_responsibilities = [sourceOwnedA];
   const sourceGraphB = graphFrom(fixture);
@@ -960,6 +952,21 @@ test('obligation ledger binds custom stable IDs to semantic keys and qualified o
     .obligations.some((/** @type {any} */ item) => item.obligation_id === customId(sourceOwnedA)), true);
   assert.equal(/** @type {any} */ (compileObligations(sourceGraphB, fixture.behavior_views))
     .obligations.some((/** @type {any} */ item) => item.obligation_id === customId(sourceOwnedB)), true);
+});
+
+test('custom audit labels cannot isolate one real responsibility into multiple obligations', async () => {
+  const fixture = await ledgerFixture();
+  const graph = graphFrom(fixture);
+  const duplicate = structuredClone(publicInputs(graph).custom_responsibilities[0]);
+  duplicate.semantic_key = 'a-different-audit-label';
+  publicInputs(graph).custom_responsibilities.push(duplicate);
+
+  const result = /** @type {any} */ (compileObligations(graph, fixture.behavior_views));
+  const custom = result.obligations.filter((/** @type {any} */ item) => (
+    item.kind === 'decision' && item.required_capabilities.includes('custom-observer')
+  ));
+  assert.equal(custom.length, 1);
+  assert.equal(new Set(custom.map((/** @type {any} */ item) => item.obligation_id)).size, 1);
 });
 
 test('obligation ledger consumes every audited interaction disposition into one frozen route', async () => {
@@ -1242,7 +1249,21 @@ test('obligation ledger canonicalizes terminal-route diagnostics before duplicat
 
   const firstError = compilationError(() => compileObligations(first, fixture.behavior_views));
   const secondError = compilationError(() => compileObligations(second, fixture.behavior_views));
-  assert.deepEqual(secondError.diagnostics, firstError.diagnostics);
+  assert.deepEqual(
+    secondError.diagnostics.map(({ path, ...diagnostic }) => diagnostic),
+    firstError.diagnostics.map(({ path, ...diagnostic }) => diagnostic)
+  );
+  const cases = /** @type {Array<[any, ObligationCompilationError]>} */ (
+    [[first, firstError], [second, secondError]]
+  );
+  for (const [graph, error] of cases) {
+    const routes = publicInputs(graph).terminal_fact_routes;
+    const unknownIndex = routes.findIndex((/** @type {any} */ route) => route.fact_id === 'fact_unknown');
+    assert.equal(error.diagnostics.find((item) => item.code === 'FACT_ROUTE_UNKNOWN')?.path,
+      `/obligation_inputs/terminal_fact_routes/${unknownIndex}/fact_id`);
+    assert.equal(error.diagnostics.find((item) => item.code === 'FACT_ROUTE_MULTIPLE')?.path
+      .startsWith('/obligation_inputs/terminal_fact_routes/'), true);
+  }
 });
 
 test('obligation ledger indexes fact reconciliation instead of rescanning every obligation per fact', async () => {
@@ -1327,17 +1348,34 @@ test('obligation ledger reuses shared custom roots and joins facts from direct-s
       });
       sourceClaimId = claimId;
     }
-    publicInputs(graph).custom_responsibilities = Array.from({ length: size }, (_, index) => (
-      customInput(`shared-root-responsibility-${index}`, {
-        kind: 'decision', risk: 'low', scope: 'checkout', source_claim_ids: [sourceClaimId],
-        view_element_refs: ['view_decision#rule_checkout'], required_oracle_refs: [],
-        required_capabilities: []
+    graph.factLedger.push(...Array.from({ length: size }, (_, index) => ({
+      fact_id: `fact_shared_root_owner_${index}`, claim_id: sourceClaimId,
+      status: 'diagnostic', source_claim_ids: [sourceClaimId]
+    })));
+    const joinedResponsibility = customInput('shared-root-route-join', {
+      kind: 'interaction', risk: 'low', scope: 'checkout', source_claim_ids: ['claim_rule'],
+      view_element_refs: ['view_decision#rule_checkout'], required_oracle_refs: [],
+      required_capabilities: []
+    });
+    publicInputs(graph).custom_responsibilities = [
+      joinedResponsibility,
+      ...Array.from({ length: size }, (_, index) => {
+        const responsibility = customInput(`shared-root-responsibility-${index}`, {
+          kind: 'decision', risk: 'low', scope: 'checkout', source_claim_ids: [sourceClaimId],
+          view_element_refs: [], required_oracle_refs: [],
+          required_capabilities: []
+        });
+        responsibility.owner = {
+          kind: 'facts', fact_ids: [`fact_shared_root_owner_${index}`]
+        };
+        return responsibility;
       })
-    ));
+    ];
     return countTaggedMapReads('claim_shared_root_scale_', () => {
       const compiled = /** @type {any} */ (compileObligations(graph, fixture.behavior_views));
       const route = compiled.fact_routes.find((/** @type {any} */ item) => item.fact_id === 'fact_rule');
-      assert.ok(route.obligation_ids.length >= size);
+      assert.equal(route.obligation_ids.includes(customId(joinedResponsibility)), true);
+      assert.ok(compiled.obligations.length >= size);
     });
   };
 

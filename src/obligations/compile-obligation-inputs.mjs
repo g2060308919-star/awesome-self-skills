@@ -5,7 +5,7 @@ import {
 import { responsibilityKey } from './responsibility.mjs';
 
 /** @typedef {{category:string,code:string,path:string,message:string}} Diagnostic */
-/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,terminalFactRoutes:Record<string,unknown>[],notApplicableReviews:Record<string,unknown>[],customResponsibilitySeeds:Record<string,unknown>[],combinationRequests:Record<string,unknown>[],sourceRevision:number,diagnostics:Diagnostic[]}} ObligationInputsResult */
+/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,terminalFactRoutes:Record<string,unknown>[],terminalFactRoutePaths:Map<Record<string,unknown>,string>,notApplicableReviews:Record<string,unknown>[],notApplicableReviewPaths:Map<Record<string,unknown>,string>,customResponsibilitySeeds:Record<string,unknown>[],customResponsibilityPaths:Map<Record<string,unknown>,string>,combinationRequests:Record<string,unknown>[],sourceRevision:number,diagnostics:Diagnostic[]}} ObligationInputsResult */
 
 const TARGET_VIEW_TYPES = new Set(['input-domain', 'role', 'timing', 'integration']);
 const CORE_INTEGRATION_SURFACES = [
@@ -305,19 +305,15 @@ function customResponsibilitySeed(responsibility) {
   const sourceClaimIds = sortedStrings(responsibility.source_claim_ids, true);
   const semanticKey = canonicalStringify({
     responsibility_type: responsibility.responsibility_type,
-    semantic_key: responsibility.semantic_key,
     owner: owner.kind === 'facts'
       ? { kind: 'facts', fact_ids: sortedStrings(owner.fact_ids, true) }
       : { kind: 'view-elements', view_element_refs: objectArray(owner.view_element_refs)
         .map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id }))
-        .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right))) }
+        .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right))) },
+    scope: responsibility.scope
   });
   const kind = CUSTOM_KINDS.get(String(responsibility.responsibility_type ?? '')) ?? '';
-  const identity = {
-    kind, scope: responsibility.scope, view_element_refs: viewElementRefs,
-    ...(viewElementRefs.length === 0 ? { source_claim_ids: sourceClaimIds } : {}),
-    semantic_key: semanticKey
-  };
+  const identity = { kind, scope: responsibility.scope, semantic_key: semanticKey };
   return {
     semantic_key: semanticKey,
     obligation: {
@@ -406,7 +402,9 @@ export function compileObligationInputs(evidenceGraph, behaviorViews) {
   }
   const terminal = isDenseObjectArray(inputs.terminal_fact_routes)
     ? /** @type {Record<string, unknown>[]} */ (inputs.terminal_fact_routes).flatMap((route, index) => {
-      if (validTerminalRouteShape(route)) return [terminalRoute(route)];
+      if (validTerminalRouteShape(route)) return [{
+        ...terminalRoute(route), path: `/obligation_inputs/terminal_fact_routes/${index}`
+      }];
       diagnostics.push(diagnostic(
         'OBLIGATION_TERMINAL_ROUTE_INVALID', `/obligation_inputs/terminal_fact_routes/${index}`,
         'terminal fact routes must use one closed blocked or not_applicable record', 'schema'
@@ -417,7 +415,10 @@ export function compileObligationInputs(evidenceGraph, behaviorViews) {
     ? /** @type {Record<string, unknown>[]} */ (inputs.custom_responsibilities)
       .flatMap((responsibility, index) => {
         if (validCustomResponsibilityShape(responsibility)) {
-          return [customResponsibilitySeed(responsibility)];
+          return [{
+            seed: customResponsibilitySeed(responsibility),
+            path: `/obligation_inputs/custom_responsibilities/${index}`
+          }];
         }
         diagnostics.push(diagnostic(
           'OBLIGATION_CUSTOM_RESPONSIBILITY_INVALID',
@@ -433,11 +434,25 @@ export function compileObligationInputs(evidenceGraph, behaviorViews) {
     'OBLIGATION_INPUT_SEMANTICS_DEFERRED', '/obligation_inputs/combination_requests',
     'combination_requests semantics are reserved for a later remediation slice'
   ));
+  const terminalFactRoutes = terminal.map((entry) => entry.route);
+  const notApplicableReviews = terminal.flatMap((entry) => entry.review ? [entry.review] : []);
+  const customResponsibilitySeeds = custom.map((entry) => entry.seed);
+  /** @type {Map<Record<string, unknown>, string>} */
+  const customResponsibilityPaths = new Map();
+  for (const entry of custom) {
+    customResponsibilityPaths.set(entry.seed, entry.path);
+    customResponsibilityPaths.set(entry.seed.obligation, entry.path);
+  }
   return {
     contextsByViewId,
-    terminalFactRoutes: terminal.map((entry) => entry.route),
-    notApplicableReviews: terminal.flatMap((entry) => entry.review ? [entry.review] : []),
-    customResponsibilitySeeds: custom,
+    terminalFactRoutes,
+    terminalFactRoutePaths: new Map(terminal.map((entry) => [entry.route, entry.path])),
+    notApplicableReviews,
+    notApplicableReviewPaths: new Map(terminal.flatMap((entry) => (
+      entry.review ? [[entry.review, entry.path]] : []
+    ))),
+    customResponsibilitySeeds,
+    customResponsibilityPaths,
     combinationRequests: combinations,
     sourceRevision: typeof artifact.source_revision === 'number'
       && Number.isInteger(artifact.source_revision) ? artifact.source_revision : -1,

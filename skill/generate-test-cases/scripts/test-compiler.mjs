@@ -9740,17 +9740,11 @@ function customResponsibilitySeed(responsibility) {
   const sourceClaimIds = sortedStrings(responsibility.source_claim_ids, true);
   const semanticKey = canonicalStringify({
     responsibility_type: responsibility.responsibility_type,
-    semantic_key: responsibility.semantic_key,
-    owner: owner.kind === "facts" ? { kind: "facts", fact_ids: sortedStrings(owner.fact_ids, true) } : { kind: "view-elements", view_element_refs: objectArray7(owner.view_element_refs).map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id })).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right))) }
+    owner: owner.kind === "facts" ? { kind: "facts", fact_ids: sortedStrings(owner.fact_ids, true) } : { kind: "view-elements", view_element_refs: objectArray7(owner.view_element_refs).map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id })).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right))) },
+    scope: responsibility.scope
   });
   const kind = CUSTOM_KINDS.get(String(responsibility.responsibility_type ?? "")) ?? "";
-  const identity = {
-    kind,
-    scope: responsibility.scope,
-    view_element_refs: viewElementRefs,
-    ...viewElementRefs.length === 0 ? { source_claim_ids: sourceClaimIds } : {},
-    semantic_key: semanticKey
-  };
+  const identity = { kind, scope: responsibility.scope, semantic_key: semanticKey };
   return {
     semantic_key: semanticKey,
     obligation: {
@@ -9841,7 +9835,10 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
   const terminal = isDenseObjectArray(inputs.terminal_fact_routes) ? (
     /** @type {Record<string, unknown>[]} */
     inputs.terminal_fact_routes.flatMap((route, index) => {
-      if (validTerminalRouteShape(route)) return [terminalRoute(route)];
+      if (validTerminalRouteShape(route)) return [{
+        ...terminalRoute(route),
+        path: `/obligation_inputs/terminal_fact_routes/${index}`
+      }];
       diagnostics.push(diagnostic10(
         "OBLIGATION_TERMINAL_ROUTE_INVALID",
         `/obligation_inputs/terminal_fact_routes/${index}`,
@@ -9855,7 +9852,10 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
     /** @type {Record<string, unknown>[]} */
     inputs.custom_responsibilities.flatMap((responsibility, index) => {
       if (validCustomResponsibilityShape(responsibility)) {
-        return [customResponsibilitySeed(responsibility)];
+        return [{
+          seed: customResponsibilitySeed(responsibility),
+          path: `/obligation_inputs/custom_responsibilities/${index}`
+        }];
       }
       diagnostics.push(diagnostic10(
         "OBLIGATION_CUSTOM_RESPONSIBILITY_INVALID",
@@ -9875,11 +9875,22 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
     "/obligation_inputs/combination_requests",
     "combination_requests semantics are reserved for a later remediation slice"
   ));
+  const terminalFactRoutes2 = terminal.map((entry) => entry.route);
+  const notApplicableReviews = terminal.flatMap((entry) => entry.review ? [entry.review] : []);
+  const customResponsibilitySeeds = custom.map((entry) => entry.seed);
+  const customResponsibilityPaths = /* @__PURE__ */ new Map();
+  for (const entry of custom) {
+    customResponsibilityPaths.set(entry.seed, entry.path);
+    customResponsibilityPaths.set(entry.seed.obligation, entry.path);
+  }
   return {
     contextsByViewId,
-    terminalFactRoutes: terminal.map((entry) => entry.route),
-    notApplicableReviews: terminal.flatMap((entry) => entry.review ? [entry.review] : []),
-    customResponsibilitySeeds: custom,
+    terminalFactRoutes: terminalFactRoutes2,
+    terminalFactRoutePaths: new Map(terminal.map((entry) => [entry.route, entry.path])),
+    notApplicableReviews,
+    notApplicableReviewPaths: new Map(terminal.flatMap((entry) => entry.review ? [[entry.review, entry.path]] : [])),
+    customResponsibilitySeeds,
+    customResponsibilityPaths,
     combinationRequests: combinations,
     sourceRevision: typeof artifact.source_revision === "number" && Number.isInteger(artifact.source_revision) ? artifact.source_revision : -1,
     diagnostics
@@ -10613,7 +10624,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
   }
   const seeds = [];
   inputs.customObligations.forEach((entry, index) => {
-    const wrapperPath = `/obligationCompilation/customObligations/${index}`;
+    const wrapperPath = inputs.customResponsibilityPaths.get(entry) ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (!hasExactKeys2(entry, ["obligation", "semantic_key"]) || !isNonblankUnpadded(entry.semantic_key) || !isObject7(entry.obligation)) {
       diagnostics.push(diagnostic11(
         "schema",
@@ -10626,7 +10637,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     const seed = entry.obligation;
     seeds.push(seed);
     const obligationId = typeof seed.obligation_id === "string" ? seed.obligation_id : String(index);
-    const path4 = `/obligationCompilation/customObligations/${obligationId}`;
+    const path4 = inputs.customResponsibilityPaths.get(seed) ?? wrapperPath;
     const keys = Object.keys(seed).sort(compareCodePoints7);
     if (keys.length !== OBLIGATION_FIELDS.length || keys.some((key, keyIndex) => key !== OBLIGATION_FIELDS[keyIndex])) {
       diagnostics.push(diagnostic11(
@@ -10645,10 +10656,6 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     const identity = {
       kind: seed.kind,
       scope: seed.scope,
-      view_element_refs: [...stringArray5(seed.view_element_refs)].sort(compareCodePoints7),
-      ...stringArray5(seed.view_element_refs).length === 0 ? {
-        source_claim_ids: [...stringArray5(seed.source_claim_ids)].sort(compareCodePoints7)
-      } : {},
       semantic_key: entry.semantic_key
     };
     const expectedId = stableId("obligation", identity);
@@ -10777,14 +10784,11 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         `custom obligation owner "${owner.ref}" has no directionally related source evidence`
       ));
     }
-    const viewElementRefs = [...stringArray5(seed.view_element_refs)].sort(compareCodePoints7);
     ownerBySeed.set(seed, canonicalStringify({
       kind: seed.kind,
       risk: seed.risk,
       scope: seed.scope,
-      semantic_key: entry.semantic_key,
-      view_element_refs: viewElementRefs,
-      ...viewElementRefs.length === 0 ? { source_claim_ids: [...sourceIds].sort(compareCodePoints7) } : {}
+      semantic_key: entry.semantic_key
     }));
   });
   return { ownerBySeed, seeds };
@@ -10855,14 +10859,14 @@ function mergeSystemObligations(seeds, diagnostics) {
   });
   return finishObligationMerge(byId);
 }
-function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnostics) {
+function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligations, diagnostics) {
   const byId = /* @__PURE__ */ new Map();
   const systemIds = new Set(systemObligations.map((obligation) => String(obligation.obligation_id)));
   const systemSignatures = new Set(systemObligations.map(obligationContentSignature));
   const collisionIds = /* @__PURE__ */ new Set();
   [...seeds].sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right))).forEach((seed, index) => {
     const obligationId = typeof seed.obligation_id === "string" ? seed.obligation_id : "";
-    const path4 = `/obligationCompilation/customObligations/${obligationId || index}`;
+    const path4 = publicPaths.get(seed) ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (systemIds.has(obligationId)) {
       if (!collisionIds.has(obligationId)) diagnostics.push(diagnostic11(
         "classification",
@@ -10973,7 +10977,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   const validReviews = /* @__PURE__ */ new Set();
   for (const review of [...inputs.notApplicableReviews].sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))) {
     const factId = typeof review.fact_id === "string" ? review.fact_id : "";
-    const path4 = `/obligationCompilation/notApplicableReviews/${factId || "invalid"}`;
+    const path4 = inputs.notApplicableReviewPaths.get(review) ?? "/obligation_inputs/terminal_fact_routes";
     const group = reviewsByFactId.get(factId) ?? [];
     group.push(review);
     reviewsByFactId.set(factId, group);
@@ -10997,7 +11001,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     if (reviews.length > 1) diagnostics.push(diagnostic11(
       "traceability",
       "NOT_APPLICABLE_REVIEW_MULTIPLE",
-      `/obligationCompilation/notApplicableReviews/${factId}`,
+      inputs.notApplicableReviewPaths.get(reviews[1]) ?? inputs.notApplicableReviewPaths.get(reviews[0]) ?? "/obligation_inputs/terminal_fact_routes",
       `formal fact "${factId}" has more than one NotApplicable review`
     ));
   }
@@ -11011,7 +11015,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   const routes = /* @__PURE__ */ new Map();
   const notApplicableFactIds = /* @__PURE__ */ new Set();
   for (const [factId, submittedRoutes] of [...routesByFactId].sort(([left], [right]) => compareCodePoints7(left, right))) {
-    const path4 = `/obligationCompilation/factRoutes/${factId || "invalid"}`;
+    const path4 = inputs.terminalFactRoutePaths.get(submittedRoutes[0]) ?? "/obligation_inputs/terminal_fact_routes";
     if (!factsById.has(factId)) {
       diagnostics.push(diagnostic11("reference", "FACT_ROUTE_UNKNOWN", `${path4}/fact_id`, `route references unknown formal fact "${factId}"`));
     }
@@ -11055,7 +11059,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     }
     const reviews = reviewsByFactId.get(factId) ?? [];
     if (reviews.length === 0) {
-      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISSING", `/obligationCompilation/notApplicableReviews/${factId}`, `formal fact "${factId}" has no supported NotApplicable review`));
+      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISSING", path4, `formal fact "${factId}" has no supported NotApplicable review`));
       continue;
     }
     if (reviews.length !== 1 || !validReviews.has(reviews[0])) continue;
@@ -11067,7 +11071,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
       continue;
     }
     if (review.claim_id !== exclusionId) {
-      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISMATCH", `/obligationCompilation/notApplicableReviews/${factId}/claim_id`, "NotApplicable review must name the route exclusion claim"));
+      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISMATCH", `${path4}/exclusion_claim_id`, "NotApplicable review must name the route exclusion claim"));
       continue;
     }
     if (exclusion.level !== "E3" && exclusion.level !== "E2") {
@@ -11098,7 +11102,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     if (factsById.has(factId) && !notApplicableFactIds.has(factId)) diagnostics.push(diagnostic11(
       "traceability",
       "NOT_APPLICABLE_REVIEW_ORPHAN",
-      `/obligationCompilation/notApplicableReviews/${factId}`,
+      inputs.notApplicableReviewPaths.get((reviewsByFactId.get(factId) ?? [])[0]) ?? "/obligation_inputs/terminal_fact_routes",
       `NotApplicable review for fact "${factId}" has no NotApplicable route`
     ));
   }
@@ -11219,8 +11223,11 @@ function compileObligations(evidenceGraph, behaviorViews) {
   const inputs = {
     contextsByViewId: compiledInputs.contextsByViewId,
     customObligations: compiledInputs.customResponsibilitySeeds,
+    customResponsibilityPaths: compiledInputs.customResponsibilityPaths,
     factRoutes: compiledInputs.terminalFactRoutes,
+    terminalFactRoutePaths: compiledInputs.terminalFactRoutePaths,
     notApplicableReviews: compiledInputs.notApplicableReviews,
+    notApplicableReviewPaths: compiledInputs.notApplicableReviewPaths,
     sourceRevision: compiledInputs.sourceRevision
   };
   const diagnostics = [...structuralDiagnostics, ...compiledInputs.diagnostics];
@@ -11255,6 +11262,7 @@ function compileObligations(evidenceGraph, behaviorViews) {
   const customObligations = mergeCustomObligations(
     customValidation.seeds,
     customValidation.ownerBySeed,
+    inputs.customResponsibilityPaths,
     systemObligations,
     diagnostics
   );

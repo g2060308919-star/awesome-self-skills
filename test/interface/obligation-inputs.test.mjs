@@ -206,9 +206,40 @@ test('installed obligation input compiles exact input role and timing integratio
   assert.equal(artifact.obligations.every((/** @type {any} */ item) => (
     item.required_oracle_refs.length === 0 && item.required_capabilities.length === 0
   )), true);
-  const roleById = new Map(artifact.obligations.filter((/** @type {any} */ item) => (
-    item.kind === 'role'
-  )).map((/** @type {any} */ item) => [item.obligation_id, item]));
+  const byId = new Map(artifact.obligations.map(
+    (/** @type {any} */ item) => [item.obligation_id, item]
+  ));
+  /** @param {string} obligationId @param {string} kind @param {string[]} claims @param {string} [risk] */
+  const assertSemanticObligation = (obligationId, kind, claims, risk = 'high') => {
+    const obligation = byId.get(obligationId);
+    assert.ok(obligation, `${kind} selector must map to ${obligationId}`);
+    assert.equal(obligation.kind, kind);
+    assert.equal(obligation.risk, risk);
+    assert.deepEqual(obligation.source_claim_ids, claims);
+  };
+
+  const inputExpectations = [
+    stableId('obligation', {
+      kind: 'input-domain', responsibility: 'equivalence-class', scope: 'checkout',
+      domain: 'amount', class: { class_id: 'class_valid', label: 'valid' }
+    }),
+    stableId('obligation', {
+      kind: 'input-domain', responsibility: 'equivalence-class', scope: 'checkout',
+      domain: 'amount', class: { class_id: 'class_invalid', label: 'invalid' }
+    }),
+    stableId('obligation', {
+      kind: 'input-domain', responsibility: 'boundary', scope: 'checkout',
+      domain: 'amount', boundary: 'lower', value: 1, inclusive: true
+    }),
+    stableId('obligation', {
+      kind: 'input-domain', responsibility: 'boundary', scope: 'checkout',
+      domain: 'amount', boundary: 'upper', value: 100, inclusive: true
+    })
+  ];
+  for (const obligationId of inputExpectations) {
+    assertSemanticObligation(obligationId, 'input-domain', ['claim_input']);
+  }
+
   const allowId = stableId('obligation', {
     kind: 'role', responsibility: 'permission', scope: 'checkout',
     role: 'operator', permission: 'allow-submit'
@@ -217,10 +248,94 @@ test('installed obligation input compiles exact input role and timing integratio
     kind: 'role', responsibility: 'permission', scope: 'checkout',
     role: 'operator', permission: 'deny-refund'
   });
-  assert.equal(roleById.get(allowId)?.risk, 'critical');
-  assert.deepEqual(roleById.get(allowId)?.source_claim_ids, ['claim_role', 'claim_role_aux']);
-  assert.equal(roleById.get(denyId)?.risk, 'low');
-  assert.deepEqual(roleById.get(denyId)?.source_claim_ids, ['claim_role_aux']);
+  assertSemanticObligation(allowId, 'role', ['claim_role', 'claim_role_aux'], 'critical');
+  assertSemanticObligation(denyId, 'role', ['claim_role_aux'], 'low');
+
+  for (const relation of ['before', 'equal', 'after']) {
+    assertSemanticObligation(stableId('obligation', {
+      kind: 'timing', responsibility: 'threshold', scope: 'checkout',
+      timing_element_id: 'timing_payment', order: 0, timing_event: 'payment',
+      threshold: 30, threshold_relation: relation
+    }), 'timing', ['claim_timing']);
+  }
+  assertSemanticObligation(stableId('obligation', {
+    kind: 'timing', responsibility: 'timeout', scope: 'checkout',
+    timing_element_id: 'timing_payment', order: 0, timing_event: 'payment',
+    threshold: 30, signal: 'claim_timeout'
+  }), 'timing', ['claim_timeout']);
+
+  const integrationSurfaces = /** @type {Array<[string, Record<string, string>]>} */ ([
+    ['request', { target: 'payments', payload: 'charge' }],
+    ['response', { status: 'accepted', body: 'payment' }],
+    ['persistence', { operation: 'write', target: 'orders' }],
+    ['event', { name: 'payment-settled', direction: 'publish' }],
+    ['callback', { target: 'checkout', event: 'settled' }],
+    ['compensation', { action: 'void', trigger: 'failure' }]
+  ]);
+  for (const [surface, contract] of integrationSurfaces) {
+    assertSemanticObligation(stableId('obligation', {
+      kind: 'integration', responsibility: surface, scope: 'checkout',
+      contract_element_id: 'integration_payment', [surface]: contract
+    }), 'integration', ['claim_integration']);
+  }
+  for (const sideEffect of [
+    { kind: 'audit', target: 'audit-log' },
+    { kind: 'notification', target: 'customer' }
+  ]) {
+    assertSemanticObligation(stableId('obligation', {
+      kind: 'integration', responsibility: 'side-effect', scope: 'checkout',
+      contract_element_id: 'integration_payment', side_effect: sideEffect
+    }), 'integration', ['claim_integration']);
+  }
+  assertSemanticObligation(stableId('obligation', {
+    kind: 'integration', responsibility: 'invariant', scope: 'checkout',
+    contract_element_id: 'integration_payment', invariant: 'claim_invariant'
+  }), 'integration', ['claim_invariant']);
+  assertSemanticObligation(stableId('obligation', {
+    kind: 'integration', responsibility: 'idempotency', scope: 'checkout',
+    contract_element_id: 'integration_payment', signal: 'claim_idempotency'
+  }), 'integration', ['claim_idempotency']);
+});
+
+test('installed terminal and custom diagnostics use only their owning public input paths', async () => {
+  const revision = fourViewRevision();
+  /** @type {any[]} */ (
+    revision.behavior_views.obligation_inputs.terminal_fact_routes
+  ).push({
+    fact_id: 'fact_unknown', disposition: 'blocked',
+    issue_intent: {
+      missing_type: 'requirement', scope: 'checkout', answerable: true, risk: 'high',
+      reasons: ['Unknown formal fact.'], evidence_refs: []
+    }
+  });
+  /** @type {any[]} */ (
+    revision.behavior_views.obligation_inputs.custom_responsibilities
+  ).push({
+    responsibility_type: 'cross-module-interaction', semantic_key: 'missing-claim-audit-label',
+    owner: { kind: 'facts', fact_ids: ['fact_input'] }, scope: 'checkout', risk: 'low',
+    source_claim_ids: ['claim_missing'], required_oracle_refs: [], required_capabilities: []
+  });
+  const run = await runInstalledRevision(revision, {
+    stageNames: ['source_pack', 'evidence_claims', 'behavior_views']
+  });
+  try {
+    assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+    const routeDiagnostic = run.reply.diagnostics.find(
+      (/** @type {any} */ item) => item.code === 'FACT_ROUTE_UNKNOWN'
+    );
+    const customDiagnostic = run.reply.diagnostics.find(
+      (/** @type {any} */ item) => item.code === 'CUSTOM_OBLIGATION_CLAIM_DANGLING'
+    );
+    assert.equal(routeDiagnostic?.path,
+      '/obligation_inputs/terminal_fact_routes/0/fact_id');
+    assert.equal(customDiagnostic?.path,
+      '/obligation_inputs/custom_responsibilities/0/source_claim_ids');
+    assert.equal(run.reply.diagnostics.some((/** @type {any} */ item) => (
+      item.path.startsWith('/obligationCompilation/')
+    )), false, JSON.stringify(run.reply));
+  } finally {
+    await rm(run.runDirectory, { recursive: true, force: true });
+  }
 });
 
 test('installed obligation input rejects missing duplicate unknown out-of-scope and compiler-derived contexts at behavior_views', async () => {

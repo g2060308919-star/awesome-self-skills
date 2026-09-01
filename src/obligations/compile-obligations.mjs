@@ -20,7 +20,7 @@ import { compile as compileTiming } from './timing.mjs';
 import { compileObligationInputs } from './compile-obligation-inputs.mjs';
 
 /** @typedef {{category: string, code: string, path: string, message: string}} Diagnostic */
-/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,customObligations:Record<string,unknown>[],factRoutes:Record<string,unknown>[],notApplicableReviews:Record<string,unknown>[],sourceRevision:number}} CompilationInputs */
+/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,customObligations:Record<string,unknown>[],customResponsibilityPaths:Map<Record<string,unknown>,string>,factRoutes:Record<string,unknown>[],terminalFactRoutePaths:Map<Record<string,unknown>,string>,notApplicableReviews:Record<string,unknown>[],notApplicableReviewPaths:Map<Record<string,unknown>,string>,sourceRevision:number}} CompilationInputs */
 
 export class ObligationCompilationError extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
@@ -791,7 +791,8 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
   /** @type {Record<string, unknown>[]} */
   const seeds = [];
   inputs.customObligations.forEach((entry, index) => {
-    const wrapperPath = `/obligationCompilation/customObligations/${index}`;
+    const wrapperPath = inputs.customResponsibilityPaths.get(entry)
+      ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (!hasExactKeys(entry, ['obligation', 'semantic_key']) || !isNonblankUnpadded(entry.semantic_key)
       || !isObject(entry.obligation)) {
       diagnostics.push(diagnostic(
@@ -803,7 +804,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     const seed = entry.obligation;
     seeds.push(seed);
     const obligationId = typeof seed.obligation_id === 'string' ? seed.obligation_id : String(index);
-    const path = `/obligationCompilation/customObligations/${obligationId}`;
+    const path = inputs.customResponsibilityPaths.get(seed) ?? wrapperPath;
     const keys = Object.keys(seed).sort(compareCodePoints);
     if (keys.length !== OBLIGATION_FIELDS.length || keys.some((key, keyIndex) => key !== OBLIGATION_FIELDS[keyIndex])) {
       diagnostics.push(diagnostic(
@@ -818,10 +819,6 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     const identity = {
       kind: seed.kind,
       scope: seed.scope,
-      view_element_refs: [...stringArray(seed.view_element_refs)].sort(compareCodePoints),
-      ...(stringArray(seed.view_element_refs).length === 0 ? {
-        source_claim_ids: [...stringArray(seed.source_claim_ids)].sort(compareCodePoints)
-      } : {}),
       semantic_key: entry.semantic_key
     };
     const expectedId = stableId('obligation', identity);
@@ -935,14 +932,11 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         `custom obligation owner "${owner.ref}" has no directionally related source evidence`
       ));
     }
-    const viewElementRefs = [...stringArray(seed.view_element_refs)].sort(compareCodePoints);
     ownerBySeed.set(seed, canonicalStringify({
       kind: seed.kind,
       risk: seed.risk,
       scope: seed.scope,
-      semantic_key: entry.semantic_key,
-      view_element_refs: viewElementRefs,
-      ...(viewElementRefs.length === 0 ? { source_claim_ids: [...sourceIds].sort(compareCodePoints) } : {})
+      semantic_key: entry.semantic_key
     }));
   });
   return { ownerBySeed, seeds };
@@ -1017,8 +1011,8 @@ function mergeSystemObligations(seeds, diagnostics) {
   return finishObligationMerge(byId);
 }
 
-/** @param {Record<string, unknown>[]} seeds @param {Map<Record<string, unknown>, string>} ownerBySeed @param {Record<string, unknown>[]} systemObligations @param {Diagnostic[]} diagnostics */
-function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnostics) {
+/** @param {Record<string, unknown>[]} seeds @param {Map<Record<string, unknown>, string>} ownerBySeed @param {Map<Record<string, unknown>, string>} publicPaths @param {Record<string, unknown>[]} systemObligations @param {Diagnostic[]} diagnostics */
+function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligations, diagnostics) {
   /** @type {Map<string, Record<string, unknown>>} */
   const byId = new Map();
   const systemIds = new Set(systemObligations.map((obligation) => String(obligation.obligation_id)));
@@ -1026,7 +1020,7 @@ function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnosti
   const collisionIds = new Set();
   [...seeds].sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right))).forEach((seed, index) => {
     const obligationId = typeof seed.obligation_id === 'string' ? seed.obligation_id : '';
-    const path = `/obligationCompilation/customObligations/${obligationId || index}`;
+    const path = publicPaths.get(seed) ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (systemIds.has(obligationId)) {
       if (!collisionIds.has(obligationId)) diagnostics.push(diagnostic(
         'classification', 'CUSTOM_OBLIGATION_SYSTEM_ID_COLLISION', `${path}/obligation_id`,
@@ -1127,7 +1121,8 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   const validReviews = new Set();
   for (const review of [...inputs.notApplicableReviews].sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right)))) {
     const factId = typeof review.fact_id === 'string' ? review.fact_id : '';
-    const path = `/obligationCompilation/notApplicableReviews/${factId || 'invalid'}`;
+    const path = inputs.notApplicableReviewPaths.get(review)
+      ?? '/obligation_inputs/terminal_fact_routes';
     const group = reviewsByFactId.get(factId) ?? [];
     group.push(review);
     reviewsByFactId.set(factId, group);
@@ -1149,7 +1144,10 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   }
   for (const [factId, reviews] of reviewsByFactId) {
     if (reviews.length > 1) diagnostics.push(diagnostic(
-      'traceability', 'NOT_APPLICABLE_REVIEW_MULTIPLE', `/obligationCompilation/notApplicableReviews/${factId}`,
+      'traceability', 'NOT_APPLICABLE_REVIEW_MULTIPLE',
+      inputs.notApplicableReviewPaths.get(reviews[1])
+        ?? inputs.notApplicableReviewPaths.get(reviews[0])
+        ?? '/obligation_inputs/terminal_fact_routes',
       `formal fact "${factId}" has more than one NotApplicable review`
     ));
   }
@@ -1166,7 +1164,8 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   const routes = new Map();
   const notApplicableFactIds = new Set();
   for (const [factId, submittedRoutes] of [...routesByFactId].sort(([left], [right]) => compareCodePoints(left, right))) {
-    const path = `/obligationCompilation/factRoutes/${factId || 'invalid'}`;
+    const path = inputs.terminalFactRoutePaths.get(submittedRoutes[0])
+      ?? '/obligation_inputs/terminal_fact_routes';
     if (!factsById.has(factId)) {
       diagnostics.push(diagnostic('reference', 'FACT_ROUTE_UNKNOWN', `${path}/fact_id`, `route references unknown formal fact "${factId}"`));
     }
@@ -1212,7 +1211,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     }
     const reviews = reviewsByFactId.get(factId) ?? [];
     if (reviews.length === 0) {
-      diagnostics.push(diagnostic('traceability', 'NOT_APPLICABLE_REVIEW_MISSING', `/obligationCompilation/notApplicableReviews/${factId}`, `formal fact "${factId}" has no supported NotApplicable review`));
+      diagnostics.push(diagnostic('traceability', 'NOT_APPLICABLE_REVIEW_MISSING', path, `formal fact "${factId}" has no supported NotApplicable review`));
       continue;
     }
     if (reviews.length !== 1 || !validReviews.has(reviews[0])) continue;
@@ -1224,7 +1223,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
       continue;
     }
     if (review.claim_id !== exclusionId) {
-      diagnostics.push(diagnostic('traceability', 'NOT_APPLICABLE_REVIEW_MISMATCH', `/obligationCompilation/notApplicableReviews/${factId}/claim_id`, 'NotApplicable review must name the route exclusion claim'));
+      diagnostics.push(diagnostic('traceability', 'NOT_APPLICABLE_REVIEW_MISMATCH', `${path}/exclusion_claim_id`, 'NotApplicable review must name the route exclusion claim'));
       continue;
     }
     if (exclusion.level !== 'E3' && exclusion.level !== 'E2') {
@@ -1249,7 +1248,9 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   }
   for (const factId of [...reviewsByFactId.keys()].sort(compareCodePoints)) {
     if (factsById.has(factId) && !notApplicableFactIds.has(factId)) diagnostics.push(diagnostic(
-      'traceability', 'NOT_APPLICABLE_REVIEW_ORPHAN', `/obligationCompilation/notApplicableReviews/${factId}`,
+      'traceability', 'NOT_APPLICABLE_REVIEW_ORPHAN',
+      inputs.notApplicableReviewPaths.get((reviewsByFactId.get(factId) ?? [])[0])
+        ?? '/obligation_inputs/terminal_fact_routes',
       `NotApplicable review for fact "${factId}" has no NotApplicable route`
     ));
   }
@@ -1402,8 +1403,11 @@ export function compileObligations(evidenceGraph, behaviorViews) {
   const inputs = {
     contextsByViewId: compiledInputs.contextsByViewId,
     customObligations: compiledInputs.customResponsibilitySeeds,
+    customResponsibilityPaths: compiledInputs.customResponsibilityPaths,
     factRoutes: compiledInputs.terminalFactRoutes,
+    terminalFactRoutePaths: compiledInputs.terminalFactRoutePaths,
     notApplicableReviews: compiledInputs.notApplicableReviews,
+    notApplicableReviewPaths: compiledInputs.notApplicableReviewPaths,
     sourceRevision: compiledInputs.sourceRevision
   };
   const diagnostics = [...structuralDiagnostics, ...compiledInputs.diagnostics];
@@ -1434,6 +1438,7 @@ export function compileObligations(evidenceGraph, behaviorViews) {
   const systemObligations = mergeSystemObligations(strategySeeds, diagnostics);
   const customObligations = mergeCustomObligations(
     customValidation.seeds, customValidation.ownerBySeed,
+    inputs.customResponsibilityPaths,
     systemObligations, diagnostics
   );
   const obligations = [...systemObligations, ...customObligations]
