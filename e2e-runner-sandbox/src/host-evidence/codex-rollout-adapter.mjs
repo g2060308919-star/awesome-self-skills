@@ -51,11 +51,39 @@ export async function detectCodexRollout(source) {
   const records = await readRecords(source);
   const sessionMeta = records.filter(({ record }) => record.type === "session_meta");
   const supported = sessionMeta.length >= 1 && records.every(({ record }) =>
-    record && typeof record === "object" && KNOWN_TOP_LEVEL_TYPES.has(record.type)
+    record && typeof record === "object" && typeof record.type === "string"
   );
   return {
     confidence: supported ? 1 : 0,
     formatVersion: supported ? CODEX_ADAPTER.formatVersion : null
+  };
+}
+
+function messageText(payload) {
+  if (typeof payload.message === "string") return payload.message;
+  if (typeof payload.text === "string") return payload.text;
+  if (!Array.isArray(payload.content)) return "";
+  return payload.content.map((part) => {
+    if (typeof part === "string") return part;
+    if (typeof part?.text === "string") return part.text;
+    if (typeof part?.input_text === "string") return part.input_text;
+    if (typeof part?.output_text === "string") return part.output_text;
+    return "";
+  }).filter(Boolean).join("\n");
+}
+
+function normalizeMessage(entry, sequence, sessionDigest, actor) {
+  const text = messageText(entry.record.payload ?? {});
+  return {
+    schemaVersion: HOST_EVENT_SCHEMA_VERSION,
+    sequence,
+    eventId: digest(`message:${entry.sourceSequence}`).slice(7, 31),
+    sessionDigest,
+    timestampMs: Date.parse(entry.record.timestamp),
+    actor,
+    type: "message_completed",
+    contentDigest: digest(text),
+    sourceEventDigest: digest(entry.line)
   };
 }
 
@@ -137,10 +165,31 @@ export async function normalizeCodexRollout(source) {
     if (!KNOWN_TOP_LEVEL_TYPES.has(entry.record.type)) {
       fail("HOST_EVENT_UNKNOWN", "Codex rollout contains an unknown top-level event");
     }
+    if (entry.record.type === "event_msg" && ["user_message", "agent_message"].includes(
+      entry.record.payload?.type
+    )) {
+      events.push(normalizeMessage(
+        entry,
+        events.length + 1,
+        expectedSessionDigest,
+        entry.record.payload.type === "user_message" ? "user" : "runner"
+      ));
+      continue;
+    }
     if (entry.record.type !== "response_item") continue;
     const payloadType = entry.record.payload?.type;
     if (!KNOWN_RESPONSE_ITEM_TYPES.has(payloadType)) {
       fail("HOST_EVENT_UNKNOWN", "Codex rollout contains an unknown response item");
+    }
+    if (payloadType === "message") {
+      const role = entry.record.payload.role;
+      events.push(normalizeMessage(
+        entry,
+        events.length + 1,
+        expectedSessionDigest,
+        role === "assistant" ? "runner" : role === "user" ? "user" : "evaluator"
+      ));
+      continue;
     }
     if (["function_call", "custom_tool_call"].includes(payloadType)) {
       const callId = entry.record.payload.call_id;

@@ -123,3 +123,35 @@ test("adapter rejects unsupported JSONL instead of treating it as Host evidence"
   const source = await readHostSourcePackage(created.packageDirectory);
   await assert.rejects(normalizeCodexRollout(source), { code: "HOST_EXPORT_UNSUPPORTED" });
 });
+
+test("adapter preserves user and Runner message provenance as digests without raw text", async (t) => {
+  const directory = await tempDirectory(t);
+  const sourcePath = join(directory, "messages.jsonl");
+  await writeFile(sourcePath, [
+    { timestamp: "2026-09-01T01:00:00.000Z", type: "session_meta", payload: { id: "session-messages", cli_version: "1", source: "codex_app" } },
+    { timestamp: "2026-09-01T01:00:01.000Z", type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Please log in manually" }] } },
+    { timestamp: "2026-09-01T01:00:02.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "done" }] } }
+  ].map((line) => JSON.stringify(line)).join("\n") + "\n", "utf8");
+  const created = await createPackage(t, { sourcePath });
+  const source = await readHostSourcePackage(created.packageDirectory);
+  const normalized = await normalizeCodexRollout(source);
+
+  assert.deepEqual(normalized.events.map(({ actor, type }) => [actor, type]), [
+    ["runner", "message_completed"], ["user", "message_completed"]
+  ]);
+  assert.ok(normalized.events.every(({ contentDigest }) => /^sha256:[a-f0-9]{64}$/.test(contentDigest)));
+  assert.equal(JSON.stringify(normalized).includes("Please log in manually"), false);
+});
+
+test("a recognized rollout with an unknown event fails with HOST_EVENT_UNKNOWN", async (t) => {
+  const directory = await tempDirectory(t);
+  const sourcePath = join(directory, "unknown-event.jsonl");
+  await writeFile(sourcePath, [
+    { timestamp: "2026-09-01T01:00:00.000Z", type: "session_meta", payload: { id: "session-unknown", cli_version: "1", source: "codex_app" } },
+    { timestamp: "2026-09-01T01:00:01.000Z", type: "future_private_event", payload: {} }
+  ].map((line) => JSON.stringify(line)).join("\n") + "\n", "utf8");
+  const created = await createPackage(t, { sourcePath });
+  const source = await readHostSourcePackage(created.packageDirectory);
+  assert.equal((await detectCodexRollout(source)).confidence, 1);
+  await assert.rejects(normalizeCodexRollout(source), { code: "HOST_EVENT_UNKNOWN" });
+});
