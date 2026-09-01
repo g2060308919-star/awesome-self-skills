@@ -21,7 +21,11 @@ export async function readForm(request) {
 
 export function assertSameOrigin(request, origin) {
   const supplied = request.headers.origin;
-  if (supplied !== origin) {
-    throw new SandboxError("ORIGIN_REJECTED", "Form origin does not match this workspace", {}, 403);
-  }
+  if (supplied === origin) return;
+  const expectedHost = new URL(origin).host;
+  const verifiedNullOrigin = supplied === "null" &&
+    request.headers["sec-fetch-site"] === "same-origin" &&
+    request.headers.host === expectedHost;
+  if (verifiedNullOrigin) return;
+  throw new SandboxError("ORIGIN_REJECTED", "Form origin does not match this workspace", {}, 403);
 }

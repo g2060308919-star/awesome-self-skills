@@ -65,7 +65,7 @@ test("workflow records assistance waits outside active elapsed time", async (t) 
 
 test("the trusted reference driver establishes healthy UI truth but is rejected as Runner provenance", async (t) => {
   const bundle = await loadBundle(benchmarkRoot, "v1");
-  const profile = bundle.profiles.find(({ profileId }) => profileId === "B01");
+  const profile = bundle.profiles.find(({ profileId }) => profileId === "B02");
   const coordinator = createRunCoordinator({ runIdFactory: () => "reference-run" });
   await coordinator.prepare(profile);
   const operations = createBusinessOperations({ coordinator });
@@ -74,7 +74,7 @@ test("the trusted reference driver establishes healthy UI truth but is rejected 
   t.after(() => business.close());
 
   const trace = await runReferenceCase({
-    origin: address.origin, accountId: "acct-operator", profileId: "B01", runId: "reference-run"
+    origin: address.origin, accountId: "acct-operator", profileId: "B02", runId: "reference-run"
   });
 
   assert.equal(trace.provenance, "trusted-reference");

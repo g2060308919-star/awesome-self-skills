@@ -31,6 +31,8 @@ async function validateEntry(root, path, expectedKind) {
 
 export async function scanPath(inputPath, registry, options = {}) {
   if (!isAbsolute(inputPath)) throw new SandboxError("CANARY_PATH_UNSAFE", "Canary scan path must be absolute");
+  const canaries = Array.isArray(registry) ? registry : registry?.canaries;
+  if (!Array.isArray(canaries)) throw new SandboxError("CANARY_INVALID", "Canary registry must contain a canaries array");
   const normalized = resolve(inputPath);
   const initial = await lstat(normalized);
   if (initial.isSymbolicLink()) throw new SandboxError("CANARY_PATH_UNSAFE", "Canary scan root cannot be a symbolic link");
@@ -48,7 +50,7 @@ export async function scanPath(inputPath, registry, options = {}) {
       throw new SandboxError("CANARY_SCAN_FAILED", "Canary scan byte budget exceeded");
     }
     const relativePath = relative(root, path) || path.split("/").at(-1);
-    matches.push(...scanValue(relativePath, registry, { location: `${relativePath}/@filename` }));
+    matches.push(...scanValue(relativePath, canaries, { location: `${relativePath}/@filename` }));
     const extension = extname(path).toLowerCase();
     if (TEXT_EXTENSIONS.has(extension)) {
       const text = await decodeUtf8(path);
@@ -59,9 +61,9 @@ export async function scanPath(inputPath, registry, options = {}) {
         } catch {
           throw new SandboxError("CANARY_SCAN_FAILED", "Canary JSON input is malformed");
         }
-        matches.push(...scanValue(value, registry, { location: relativePath }));
+        matches.push(...scanValue(value, canaries, { location: relativePath }));
       } else {
-        matches.push(...scanValue(text, registry, { location: relativePath }));
+        matches.push(...scanValue(text, canaries, { location: relativePath }));
       }
       return;
     }
@@ -69,7 +71,7 @@ export async function scanPath(inputPath, registry, options = {}) {
       if (!options.ocr) throw new SandboxError("CANARY_SCAN_FAILED", "Image evidence requires configured offline OCR");
       const recognized = await options.ocr.recognize(path);
       ocrMetadata = recognized.metadata;
-      matches.push(...scanValue(recognized.text, registry, { location: `${relativePath}/@ocr` }));
+      matches.push(...scanValue(recognized.text, canaries, { location: `${relativePath}/@ocr` }));
       return;
     }
     throw new SandboxError("CANARY_SCAN_FAILED", `Unsupported canary scan format: ${extension || "none"}`);

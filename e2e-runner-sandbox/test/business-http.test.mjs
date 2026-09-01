@@ -60,6 +60,33 @@ test("manual login issues a host-only HttpOnly SameSite Strict session cookie", 
   assert.doesNotMatch(cookie, /acct-operator/);
 });
 
+test("Chrome null-Origin navigation is accepted only with same-origin Fetch Metadata and matching Host", async (t) => {
+  const { origin } = await start(t);
+  const sameOrigin = await fetch(`${origin}/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "null",
+      "sec-fetch-site": "same-origin"
+    },
+    body: new URLSearchParams({ accountId: "acct-viewer" })
+  });
+  const crossSite = await fetch(`${origin}/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "null",
+      "sec-fetch-site": "cross-site"
+    },
+    body: new URLSearchParams({ accountId: "acct-viewer" })
+  });
+
+  assert.equal(sameOrigin.status, 303);
+  assert.equal(crossSite.status, 403);
+});
+
 test("authenticated dashboard has a conventional accessible B2B shell", async (t) => {
   const { origin } = await start(t);
   const { cookie } = await manualLogin(origin, "acct-operator");
@@ -75,6 +102,9 @@ test("authenticated dashboard has a conventional accessible B2B shell", async (t
   assert.match(html, /<dialog[^>]+id="quick-create-dialog"/);
   assert.match(html, /Signed in as[\s\S]*Owen Operator/);
   assert.match(html, /Current role[\s\S]*Operator/);
+  assert.match(html, /<span>Active customers<\/span><strong>1<\/strong>/);
+  assert.match(html, /<span>Open approvals<\/span><strong>0<\/strong>/);
+  assert.match(html, /<span>Projects processing<\/span><strong>0<\/strong>/);
   assert.doesNotMatch(html, /oracleEvents|allowedMutations|fault-/);
 });
 
@@ -104,9 +134,14 @@ test("customer list supports semantic search filters and deterministic paginatio
   assert.match(search, /href="\/customers\/CUS-1007"/);
 });
 
-test("native customer form returns visible field-linked validation without mutation", async (t) => {
+test("customer form delegates validation to the server and returns every field error without mutation", async (t) => {
   const { origin, coordinator } = await start(t);
   const { cookie } = await manualLogin(origin, "acct-operator");
+
+  const form = await (await fetch(`${origin}/customers/new`, {
+    headers: { cookie }
+  })).text();
+  assert.match(form, /<form class="record-form" method="post" action="\/customers" novalidate>/);
 
   const response = await fetch(`${origin}/customers`, {
     method: "POST",
@@ -151,6 +186,32 @@ test("Viewer cannot see mutation controls while Operator can", async (t) => {
   assert.match(viewerHtml, /You have read-only access/);
   assert.doesNotMatch(viewerHtml, /Activate project/);
   assert.match(operatorHtml, /Activate project/);
+
+  const viewerCustomers = await (await fetch(`${origin}/customers`, {
+    headers: { cookie: viewer.cookie }
+  })).text();
+  const operatorCustomers = await (await fetch(`${origin}/customers`, {
+    headers: { cookie: operator.cookie }
+  })).text();
+  assert.doesNotMatch(viewerCustomers, />Create customer<\/a>/);
+  assert.match(operatorCustomers, />Create customer<\/a>/);
+});
+
+test("baseline audit entries render complete visible provenance", async (t) => {
+  const base = profile();
+  const { origin } = await start(t, { fixture: {
+    ...base.fixture,
+    businessAudit: [{
+      id: "AUD-BASE-1", summary: "Atlas Renewal project created",
+      createdAt: "2026-08-31T00:00:00.000Z"
+    }]
+  } });
+  const { cookie } = await manualLogin(origin, "acct-viewer");
+  const html = await (await fetch(`${origin}/audit`, { headers: { cookie } })).text();
+
+  assert.match(html, /Atlas Renewal project created/);
+  assert.match(html, /2026-08-31T00:00:00\.000Z/);
+  assert.match(html, /System/);
 });
 
 test("customer edit submits only changed fields and delete exposes cleanup outcome", async (t) => {
@@ -273,10 +334,13 @@ test("static assets are same-origin and unknown routes do not reveal internals",
 
   const script = await fetch(`${origin}/assets/app.mjs`);
   const style = await fetch(`${origin}/assets/styles.css`);
+  const icon = await fetch(`${origin}/favicon.ico`);
   const missing = await fetch(`${origin}/control/oracle/faults`);
 
   assert.match(script.headers.get("content-type"), /javascript/);
   assert.match(style.headers.get("content-type"), /text\/css/);
+  assert.equal(icon.status, 200);
+  assert.match(icon.headers.get("content-type"), /image\/svg\+xml/);
   assert.equal(missing.status, 404);
   assert.deepEqual(await missing.json(), {
     error: { code: "NOT_FOUND", message: "Page not found" }

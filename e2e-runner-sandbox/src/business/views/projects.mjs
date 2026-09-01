@@ -8,6 +8,9 @@ export function renderProjectList(projects) {
 export function renderProjectDetail(project, canEdit, feedback = null) {
   const nextStatus = project.status === "Active" ? "Inactive" : "Active";
   const action = nextStatus === "Active" ? "Activate project" : "Deactivate project";
+  const statusAction = project.status === "Processing"
+    ? '<p class="permission-note" role="status">Status change in progress. Refresh to observe completion.</p>'
+    : `<form method="post" action="/projects/${encodeURIComponent(project.id)}/status"><input type="hidden" name="status" value="${nextStatus}"><button class="primary-button" type="submit">${action}</button></form>`;
   const exportAction = feedback?.exportSummary
     ? `<details class="more-actions"><summary>More actions</summary><a class="secondary-button" href="/projects/${encodeURIComponent(project.id)}/export">Export summary</a></details>`
     : "";
@@ -19,7 +22,7 @@ export function renderProjectDetail(project, canEdit, feedback = null) {
     <div class="section-heading"><div><p class="eyebrow">${escapeHtml(project.id)}</p><h2>${escapeHtml(project.name)}</h2></div><span class="status-pill">${escapeHtml(project.status)}</span></div>
     <dl class="detail-grid"><div><dt>Customer</dt><dd>${escapeHtml(project.customerId)}</dd></div><div><dt>Description</dt><dd>${escapeHtml(project.description)}</dd></div><div><dt>Status</dt><dd>${escapeHtml(project.status)}</dd></div></dl>
     ${diagnostic}
-    ${canEdit ? `<div class="project-actions"><form method="post" action="/projects/${encodeURIComponent(project.id)}/status"><input type="hidden" name="status" value="${nextStatus}"><button class="primary-button" type="submit">${action}</button></form>${exportAction}</div><form class="record-form project-description-form" method="post" action="/projects/${encodeURIComponent(project.id)}/description"><div class="field"><label for="project-description">Project description</label><textarea id="project-description" name="description" rows="3" required>${escapeHtml(project.description)}</textarea></div><div class="form-actions"><button class="secondary-button" type="submit">Save description</button></div></form>` : `<p class="permission-note">You have read-only access. Project status controls are unavailable for this role.</p>${exportAction}`}
+    ${canEdit ? `<div class="project-actions">${statusAction}${exportAction}</div><form class="record-form project-description-form" method="post" action="/projects/${encodeURIComponent(project.id)}/description"><div class="field"><label for="project-description">Project description</label><textarea id="project-description" name="description" rows="3" required>${escapeHtml(project.description)}</textarea></div><div class="form-actions"><button class="secondary-button" type="submit">Save description</button></div></form>` : `<p class="permission-note">You have read-only access. Project status controls are unavailable for this role.</p>${exportAction}`}
   </section>`;
 }
 

@@ -14,7 +14,9 @@ function page({ title, body, bodyClass = "" }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
+  <meta name="description" content="Local non-production B2B evaluation workspace">
   <title>${escapeHtml(title)} · Meridian Operations</title>
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/styles.css">
   <script type="module" src="/assets/app.mjs"></script>
 </head>
@@ -55,6 +57,7 @@ export function renderWorkspace({
   notice = null,
   noticeKind = "status"
 }) {
+  const canCreate = account.role === "Operator" || account.role === "Administrator";
   const order = NAVIGATION[variant] ?? NAVIGATION.northstar;
   const operationalLinks = order.slice(0, 3).map((key) => navLink(key, activeSection)).join("");
   const auditLink = navLink("audit", activeSection);
@@ -66,7 +69,7 @@ export function renderWorkspace({
     title,
     bodyClass: `workspace variant-${variant}`,
     body: `<header class="topbar">
-      <a class="brand" href="/dashboard" aria-label="Meridian Operations dashboard">
+      <a class="brand" href="/dashboard">
         <span class="brand-mark" aria-hidden="true">M</span>
         <span><strong>Meridian</strong><small>Evaluation workspace</small></span>
       </a>
@@ -97,17 +100,17 @@ export function renderWorkspace({
       <main id="main-content" tabindex="-1">
         <div class="page-heading">
           <div><p class="eyebrow">Business workspace</p><h1>${escapeHtml(title)}</h1></div>
-          <button class="primary-button" type="button" data-open-dialog="quick-create-dialog">Quick create</button>
+          ${canCreate ? '<button class="primary-button" type="button" data-open-dialog="quick-create-dialog">Quick create</button>' : ""}
         </div>
         ${noticeMarkup}
         ${content}
       </main>
     </div>
-    <dialog id="quick-create-dialog" aria-labelledby="quick-create-title">
+    ${canCreate ? `<dialog id="quick-create-dialog" aria-labelledby="quick-create-title">
       <div class="dialog-heading"><h2 id="quick-create-title">Quick create</h2><button type="button" class="icon-button" data-close-dialog aria-label="Close quick create dialog">×</button></div>
       <p>Choose the business record you need to add.</p>
       <div class="dialog-actions"><a class="primary-button" href="/customers/new">Create customer</a><a class="secondary-button" href="/approvals">Submit approval</a></div>
-    </dialog>`
+    </dialog>` : ""}`
   });
 }
 

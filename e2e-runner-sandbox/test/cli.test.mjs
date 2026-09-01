@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url";
 import { runEvaluatorCli } from "../bin/evaluator.mjs";
 import { createRuntimeFiles } from "../src/control/runtime-files.mjs";
 import { createControlServer } from "../src/control/server.mjs";
+import { loadBundle } from "../src/bundle/load-bundle.mjs";
+import { createBusinessOperations } from "../src/domain/operations.mjs";
+import { createRunCoordinator } from "../src/domain/run-coordinator.mjs";
 import { profile, setup } from "./helpers/domain-harness.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -95,4 +98,43 @@ test("CLI materializes and archives an exact run-scoped Runner input", async (t)
   const input = JSON.parse(await readFile(outputPath, "utf8"));
   assert.equal(input.cases[0].data.customerName, "Bench-cli-materialized-run");
   assert.equal(JSON.parse(lines[0]).result.outputPath, outputPath);
+});
+
+test("CLI evaluates the documented trial directory through private control truth", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "evaluator-trial-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const trialDirectory = join(directory, "trial");
+  await mkdir(trialDirectory, { recursive: true });
+  await cp(join(packageRoot, "test", "fixtures", "artifacts", "good"), join(trialDirectory, "artifacts"), { recursive: true });
+  await cp(join(packageRoot, "test", "fixtures", "host-traces", "allowed-devtools.json"), join(trialDirectory, "host-trace.json"));
+
+  const bundle = await loadBundle(join(packageRoot, "benchmark"), "v1");
+  const profile = bundle.profiles.find(({ profileId }) => profileId === "B01");
+  await writeFile(join(trialDirectory, "assistance.json"), `${JSON.stringify(profile.assistance.events.map((event) => ({ ...event, elapsedMs: 1000 })), null, 2)}\n`);
+  await writeFile(join(trialDirectory, "metrics.json"), `${JSON.stringify({
+    activeElapsedMs: 1000, browserReads: 2, businessRequests: 4,
+    writes: 0, repeatedNoProgressActions: 0
+  }, null, 2)}\n`);
+
+  const coordinator = createRunCoordinator({ runIdFactory: () => "cli-evaluation-run" });
+  await coordinator.prepare(profile);
+  const operations = createBusinessOperations({ coordinator });
+  const runtime = await createRuntimeFiles({ businessUrl: "http://127.0.0.1:49003" });
+  t.after(() => rm(runtime.runtimeDirectory, { recursive: true, force: true }));
+  const server = createControlServer({
+    coordinator, operations, socketPath: runtime.socketPath, token: runtime.token,
+    profileResolver: async () => profile
+  });
+  await server.listen();
+  t.after(() => server.close());
+  const lines = [];
+
+  const exitCode = await runEvaluatorCli([
+    "evaluate", "--trial", trialDirectory, "--runtime", runtime.runtimeDirectory
+  ], { write: (line) => lines.push(line) });
+
+  assert.equal(exitCode, 0, lines.join("\n"));
+  const evaluation = JSON.parse(await readFile(join(trialDirectory, "evaluation.json"), "utf8"));
+  assert.equal(evaluation.releaseDecision, "pass");
+  assert.equal(evaluation.score, 100);
 });

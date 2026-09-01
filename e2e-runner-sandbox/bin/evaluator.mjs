@@ -38,7 +38,8 @@ const OPTION_NAMES = Object.freeze({
   "--fault": "fault",
   "--host-trace": "hostTrace",
   "--assistance": "assistance",
-  "--metrics": "metrics"
+  "--metrics": "metrics",
+  "--trial": "trialDirectory"
 });
 
 const COMMAND_OPTIONS = Object.freeze({
@@ -54,19 +55,16 @@ const COMMAND_OPTIONS = Object.freeze({
   "set-role": ["runtimeDirectory", "accountId", "role"],
   "external-action": ["runtimeDirectory", "approvalId", "decision", "actor"],
   "run-jobs": ["runtimeDirectory", "actor"],
+  evaluate: ["runtimeDirectory", "trialDirectory"],
   stop: ["runtimeDirectory"]
 });
 
 const OFFLINE_COMMAND_OPTIONS = Object.freeze({
   materialize: ["bundleRoot", "bundleVersion", "profileId", "runId", "output"],
-  "scan-canary": ["path", "registry", "output"],
-  evaluate: [
-    "bundleRoot", "bundleVersion", "profileId", "artifacts", "snapshot",
-    "events", "outbox", "fault", "hostTrace", "assistance", "metrics", "registry", "output"
-  ]
+  "scan-canary": ["path", "registry", "output"]
 });
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
   const [command, ...rest] = argv;
   const commandOptions = COMMAND_OPTIONS[command] ?? OFFLINE_COMMAND_OPTIONS[command];
   if (!commandOptions) {
@@ -130,27 +128,42 @@ async function runOfflineCommand(parsed) {
     const result = await withOfflineOcr((ocr) => scanPath(resolve(args.path), registry, { ocr }));
     return { outputPath: await writeJson(args.output, result), result };
   }
-  const bundle = await loadBundle(resolve(args.bundleRoot), args.bundleVersion);
-  const profile = bundle.profiles.find(({ profileId }) => profileId === args.profileId);
-  if (!profile) throw new SandboxError("EVALUATION_PROFILE_UNKNOWN", "Evaluation profile was not found", {}, 404);
-  const registry = await readJson(args.registry, "registry");
-  const artifacts = await readArtifacts(resolve(args.artifacts));
+  throw new SandboxError("CLI_ARGUMENT_INVALID", "Unknown offline evaluator command");
+}
+
+async function runTrialEvaluation(parsed, client) {
+  const trialDirectory = resolve(parsed.args.trialDirectory);
+  const bundle = await loadBundle(resolve(packageRoot, "benchmark"), "v1");
+  const status = await client.request("status", {});
+  const profile = bundle.profiles.find(({ profileId }) => profileId === status.profileId);
+  if (!profile) throw new SandboxError("EVALUATION_PROFILE_UNKNOWN", "Active profile is not present in bundle v1", {}, 404);
+  const artifacts = await readArtifacts(resolve(trialDirectory, "artifacts"));
+  const [snapshot, events, outbox, fault, registry, hostTrace, assistanceLog, metrics] = await Promise.all([
+    client.request("snapshot", { kind: "diff" }),
+    client.request("events", {}),
+    client.request("outbox", {}),
+    client.request("fault", {}),
+    client.request("canaries", {}),
+    readJson(resolve(trialDirectory, "host-trace.json"), "host trace"),
+    readJson(resolve(trialDirectory, "assistance.json"), "assistance"),
+    readJson(resolve(trialDirectory, "metrics.json"), "metrics")
+  ]);
   const canaryScan = await withOfflineOcr((ocr) => scanPath(artifacts.root, registry, { ocr }));
   const result = evaluateTrial({
     oracle: profile.oracle,
     artifacts,
     hostTraceClassifier: bundle.hostTraceClassifier,
     scoring: bundle.scoring,
-    snapshot: await readJson(args.snapshot, "snapshot"),
-    events: await readJson(args.events, "events"),
-    outbox: await readJson(args.outbox, "outbox"),
-    fault: await readJson(args.fault, "fault"),
-    hostTrace: await readJson(args.hostTrace, "host trace"),
-    assistanceLog: await readJson(args.assistance, "assistance"),
-    metrics: await readJson(args.metrics, "metrics"),
+    snapshot,
+    events,
+    outbox,
+    fault,
+    hostTrace,
+    assistanceLog,
+    metrics,
     canaryScan
   });
-  return { outputPath: await writeJson(args.output, result), result };
+  return { outputPath: await writeJson(resolve(trialDirectory, "evaluation.json"), result), result };
 }
 
 export async function runEvaluatorCli(argv, options = {}) {
@@ -167,6 +180,11 @@ export async function runEvaluatorCli(argv, options = {}) {
       socketPath: runtime.socketPath,
       token: runtime.token
     });
+    if (parsed.command === "evaluate") {
+      const result = await runTrialEvaluation(parsed, client);
+      write(JSON.stringify({ ok: true, command: parsed.command, result }));
+      return 0;
+    }
     const result = await client.request(parsed.command, parsed.args);
     write(JSON.stringify({ ok: true, command: parsed.command, result }));
     return 0;

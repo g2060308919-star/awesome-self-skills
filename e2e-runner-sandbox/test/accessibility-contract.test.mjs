@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { renderWorkspace } from "../src/business/views/shell.mjs";
+import { renderProjectDetail } from "../src/business/views/projects.mjs";
 
 const account = {
   id: "acct-operator",
@@ -40,6 +41,9 @@ test("both UI variants retain critical accessible names with different navigatio
     assert.equal(countUnlabelledControls(html), 0);
     assert.match(html, /<a[^>]+href="#main-content"/);
     assert.match(html, /<main[^>]+id="main-content"/);
+    assert.match(html, /<meta name="description" content="Local non-production B2B evaluation workspace">/);
+    assert.match(html, /<a class="brand" href="\/dashboard">/);
+    assert.doesNotMatch(html, /aria-label="Meridian Operations dashboard"/);
   }
   const northstarNav = northstar.match(/<nav aria-label="Primary">([\s\S]*?)<\/nav>/)[1];
   const harborNav = harbor.match(/<nav aria-label="Primary">([\s\S]*?)<\/nav>/)[1];
@@ -59,4 +63,18 @@ test("rendered user content is HTML-escaped", () => {
   assert.doesNotMatch(html, /<script>unsafe/);
   assert.match(html, /&lt;script&gt;unsafe\(\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<img src=x/);
+});
+
+test("a processing project cannot submit the status transition again", () => {
+  const html = renderProjectDetail({
+    id: "PRJ-1001",
+    name: "Atlas Renewal",
+    customerId: "CUS-1001",
+    description: "Annual synthetic renewal",
+    status: "Processing"
+  }, true);
+
+  assert.match(html, /Status change in progress/);
+  assert.doesNotMatch(html, /action="\/projects\/PRJ-1001\/status"/);
+  assert.doesNotMatch(html, />Activate project</);
 });

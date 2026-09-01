@@ -82,7 +82,8 @@ function changedCustomerFields(current, submitted) {
 export function createBusinessRouter({ coordinator, operations, loginRateLimit }) {
   const assets = new Map([
     ["/assets/app.mjs", [new URL("../../public/app.mjs", import.meta.url), "text/javascript; charset=utf-8"]],
-    ["/assets/styles.css", [new URL("../../public/styles.css", import.meta.url), "text/css; charset=utf-8"]]
+    ["/assets/styles.css", [new URL("../../public/styles.css", import.meta.url), "text/css; charset=utf-8"]],
+    ["/favicon.ico", [new URL("../../public/favicon.svg", import.meta.url), "image/svg+xml"]]
   ]);
 
   async function identity(request) {
@@ -167,7 +168,7 @@ export function createBusinessRouter({ coordinator, operations, loginRateLimit }
     const context = { sessionId: current.sessionId };
 
     if (request.method === "GET" && url.pathname === "/dashboard") {
-      workspace(response, current, "Dashboard", "dashboard", renderDashboardContent());
+      workspace(response, current, "Dashboard", "dashboard", renderDashboardContent(coordinator.read()));
       return;
     }
 
@@ -180,7 +181,9 @@ export function createBusinessRouter({ coordinator, operations, loginRateLimit }
         pageSize: 5
       };
       const result = await operations.listCustomers(context, query);
-      workspace(response, current, "Customers", "customers", renderCustomerList(result, query, coordinator.status().uiVariant));
+      workspace(response, current, "Customers", "customers", renderCustomerList(
+        result, query, coordinator.status().uiVariant, canMutate(current.account)
+      ));
       return;
     }
 

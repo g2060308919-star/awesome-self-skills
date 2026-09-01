@@ -17,7 +17,7 @@ function customerRows(customers, variant) {
   }).join("");
 }
 
-export function renderCustomerList(result, query, variant) {
+export function renderCustomerList(result, query, variant, canCreate = false) {
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
   const columns = variant === "harbor"
     ? ["Customer", "Plan", "Owner", "Status", "Timezone", "Tags"]
@@ -30,7 +30,7 @@ export function renderCustomerList(result, query, variant) {
   const previous = Math.max(1, result.page - 1);
   const next = Math.min(pageCount, result.page + 1);
   return `<section class="content-card">
-    <div class="section-heading"><div><p class="eyebrow">Directory</p><h2>Customer records</h2></div><a class="primary-button" href="/customers/new">Create customer</a></div>
+    <div class="section-heading"><div><p class="eyebrow">Directory</p><h2>Customer records</h2></div>${canCreate ? '<a class="primary-button" href="/customers/new">Create customer</a>' : ""}</div>
     <form class="filter-bar" method="get" action="/customers">
       <div><label for="customer-search">Search customers</label><input id="customer-search" name="search" type="search" value="${escapeHtml(query.search ?? "")}" placeholder="Name, ID, or email"></div>
       <div><label for="customer-status">Filter by status</label><select id="customer-status" name="status">${["", "Active", "Inactive"].map((value) => option(value, query.status)).join("")}</select></div>
@@ -54,7 +54,7 @@ export function renderCustomerForm({ customer = {}, errors = {}, mode = "create"
   return `<section class="content-card narrow-card">
     <div class="section-heading"><div><p class="eyebrow">${mode === "edit" ? "Customer settings" : "New record"}</p><h2>${mode === "edit" ? `Edit ${escapeHtml(customer.name)}` : "Customer details"}</h2></div></div>
     ${Object.keys(errors).length > 0 ? '<p class="notice notice-alert" role="alert">Review the highlighted fields and submit again.</p>' : ""}
-    <form class="record-form" method="post" action="${action}">
+    <form class="record-form" method="post" action="${action}" novalidate>
       ${formField("name", "Customer name", customer.name, errors)}
       ${formField("email", "Email", customer.email, errors, "email")}
       ${formField("owner", "Owner", customer.owner, errors)}
