@@ -25,6 +25,6 @@ The trusted reference driver is evaluator-only. Its trace is tagged `trusted-ref
 
 ## Artifact boundary
 
-Artifact readers require a real absolute root, reject symbolic links and path escape, enforce size/type limits, validate UTF-8 and JSON, and resolve every evidence reference. Evaluation is read-only. Offline OCR uses pinned local engine and language-model bytes whose versions and digests are recorded.
+Artifact readers require a real absolute root, reject symbolic links and path escape, enforce per-file and aggregate byte limits plus evidence entry/nesting limits, validate UTF-8 and JSON, and resolve every evidence reference. Evaluation is read-only. Offline OCR uses pinned local engine and language-model bytes whose versions and digests are recorded.
 
 See [operator-runbook.md](operator-runbook.md) for the reveal policy, manual-login boundary, cleanup handling, and authenticated shutdown procedure.

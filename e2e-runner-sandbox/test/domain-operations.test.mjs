@@ -143,6 +143,20 @@ test("out-of-whitelist protected mutation is rejected and audited", async () => 
   );
 });
 
+test("a business actor cannot submit the fault-only Processing project status", async () => {
+  const { coordinator, operations } = await setup();
+  const operator = await login(operations, "acct-operator");
+
+  const result = await operations.changeProjectStatus(operator, "PRJ-1001", "Processing");
+
+  assert.equal(result.code, "VALIDATION_REJECTED");
+  assert.equal(coordinator.read().projects[0].status, "Inactive");
+  assert.deepEqual(
+    coordinator.read().oracleEvents.filter(({ logicalOperation }) => logicalOperation === "project.status.update").map(({ type }) => type),
+    ["operation_attempt", "validation_rejection"]
+  );
+});
+
 test("role changes take effect on the next authorization check without changing account", async () => {
   const { coordinator, operations } = await setup();
   const viewer = await login(operations, "acct-viewer");

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import test from "node:test";
 
 import { createBusinessServer } from "../src/business/server.mjs";
@@ -28,6 +29,30 @@ async function manualLogin(origin, accountId) {
     body: new URLSearchParams({ accountId })
   });
   return { response, cookie: response.headers.get("set-cookie")?.split(";", 1)[0] };
+}
+
+async function forgedHostLogin(origin) {
+  const target = new URL(origin);
+  const body = new URLSearchParams({ accountId: "acct-viewer" }).toString();
+  return new Promise((resolve, reject) => {
+    const request = http.request({
+      hostname: target.hostname,
+      port: target.port,
+      path: "/login",
+      method: "POST",
+      headers: {
+        host: "evil.invalid",
+        origin: "http://evil.invalid",
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": Buffer.byteLength(body)
+      }
+    }, (response) => {
+      response.resume();
+      response.once("end", () => resolve(response));
+    });
+    request.once("error", reject);
+    request.end(body);
+  });
 }
 
 test("unauthenticated business pages expose only manual non-secret account selection", async (t) => {
@@ -85,6 +110,14 @@ test("Chrome null-Origin navigation is accepted only with same-origin Fetch Meta
 
   assert.equal(sameOrigin.status, 303);
   assert.equal(crossSite.status, 403);
+});
+
+test("a forged Host header cannot redefine the trusted form origin", async (t) => {
+  const { origin } = await start(t);
+
+  const response = await forgedHostLogin(origin);
+
+  assert.equal(response.statusCode, 403);
 });
 
 test("authenticated dashboard has a conventional accessible B2B shell", async (t) => {

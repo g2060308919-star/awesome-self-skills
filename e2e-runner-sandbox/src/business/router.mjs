@@ -106,7 +106,7 @@ export function createBusinessRouter({ coordinator, operations, loginRateLimit }
   }
 
   return async function route(request, response) {
-    const origin = `http://${request.headers.host}`;
+    const origin = `http://127.0.0.1:${request.socket.localPort}`;
     const url = new URL(request.url, origin);
 
     if (request.method === "GET" && assets.has(url.pathname)) {

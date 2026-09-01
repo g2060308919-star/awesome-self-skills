@@ -117,6 +117,21 @@ test("artifact reader rejects broken evidence references and symbolic links", as
   });
 });
 
+test("artifact reader rejects excessively deep evidence trees", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "sandbox-artifacts-depth-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "report.md"), "# Report\n");
+  await writeFile(join(root, "execution-log.json"), '{"cases":[]}\n');
+  let directory = join(root, "evidence");
+  for (let depth = 0; depth < 24; depth += 1) directory = join(directory, `level-${depth}`);
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, "fact.txt"), "bounded evidence\n");
+
+  await assert.rejects(readArtifacts(root), {
+    code: "ARTIFACT_INVALID"
+  });
+});
+
 test("canonical diffs address entity-array changes by stable identifier", () => {
   const before = createSnapshot({ projects: [{ id: "PRJ-1001", status: "Inactive", tags: ["a", "b"] }] });
   const after = createSnapshot({ projects: [{ id: "PRJ-1001", status: "Active", tags: ["a", "b"] }] });

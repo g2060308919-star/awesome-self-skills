@@ -5,6 +5,9 @@ import { sha256File } from "../bundle/digests.mjs";
 import { SandboxError } from "../shared/errors.mjs";
 
 const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
+const MAX_ARTIFACT_TOTAL_BYTES = 50 * 1024 * 1024;
+const MAX_EVIDENCE_ENTRIES = 1000;
+const MAX_EVIDENCE_DEPTH = 20;
 const TEXT_EXTENSIONS = new Set([".txt", ".md", ".json"]);
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg"]);
 
@@ -47,18 +50,29 @@ async function safePath(root, relativePath, expectedKind) {
   return { path, metadata };
 }
 
-async function readEvidence(root, directory, output) {
+async function readEvidence(root, directory, output, limits, depth = 0) {
+  if (depth > MAX_EVIDENCE_DEPTH) {
+    throw new SandboxError("ARTIFACT_INVALID", "Evidence directory exceeds the nesting limit");
+  }
   const entries = [];
   for await (const entry of await opendir(directory)) entries.push(entry);
   entries.sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
     if (entry.name === ".gitkeep") continue;
+    limits.entries += 1;
+    if (limits.entries > MAX_EVIDENCE_ENTRIES) {
+      throw new SandboxError("ARTIFACT_INVALID", "Evidence directory exceeds the entry limit");
+    }
     const path = join(directory, entry.name);
     const relativePath = relative(root, path);
     const checked = await safePath(root, relativePath, entry.isDirectory() ? "directory" : "file");
     if (entry.isDirectory()) {
-      await readEvidence(root, checked.path, output);
+      await readEvidence(root, checked.path, output, limits, depth + 1);
       continue;
+    }
+    limits.totalBytes += checked.metadata.size;
+    if (limits.totalBytes > MAX_ARTIFACT_TOTAL_BYTES) {
+      throw new SandboxError("ARTIFACT_INVALID", "Artifacts exceed the aggregate size limit");
     }
     const fileExtension = extension(entry.name);
     if (!TEXT_EXTENSIONS.has(fileExtension) && !IMAGE_EXTENSIONS.has(fileExtension)) {
@@ -105,8 +119,10 @@ export async function readArtifacts(rootPath) {
     throw new SandboxError("ARTIFACT_PATH_UNSAFE", "Artifact root must be a real directory");
   }
   const root = await realpath(normalizedRoot);
-  const reportPath = (await safePath(root, "report.md", "file")).path;
-  const logPath = (await safePath(root, "execution-log.json", "file")).path;
+  const reportFile = await safePath(root, "report.md", "file");
+  const logFile = await safePath(root, "execution-log.json", "file");
+  const reportPath = reportFile.path;
+  const logPath = logFile.path;
   const evidencePath = (await safePath(root, "evidence", "directory")).path;
   const report = await readUtf8(reportPath, "report.md");
   let executionLog;
@@ -119,7 +135,10 @@ export async function readArtifacts(rootPath) {
     throw new SandboxError("ARTIFACT_INVALID", "execution-log.json cases are required");
   }
   const evidence = [];
-  await readEvidence(root, evidencePath, evidence);
+  await readEvidence(root, evidencePath, evidence, {
+    entries: 0,
+    totalBytes: reportFile.metadata.size + logFile.metadata.size
+  });
   const paths = new Set(evidence.map(({ relativePath }) => relativePath));
   for (const reference of evidenceReferences(executionLog)) {
     if (typeof reference !== "string" || !reference.startsWith("evidence/") || !paths.has(reference)) {

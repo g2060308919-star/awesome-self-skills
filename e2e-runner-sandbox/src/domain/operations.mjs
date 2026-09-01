@@ -455,7 +455,7 @@ export function createBusinessOperations(options) {
       ({ draft, tools, account, operationContext, faultAt }) => {
         const project = draft.projects.find(({ id }) => id === projectId);
         if (!project) return publicFailure("PROJECT_NOT_FOUND", "Project was not found", 404);
-        if (!new Set(["Active", "Inactive", "Processing"]).has(status)) {
+        if (!new Set(["Active", "Inactive"]).has(status)) {
           emitEvent(draft, tools, {
             ...operationContext,
             type: "validation_rejection",
