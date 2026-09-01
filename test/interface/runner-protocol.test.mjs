@@ -155,7 +155,7 @@ test('installed runner rejects an empty responsibility view without accepting or
         assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
         assert.equal(reply.stage, 'behavior_views');
         assert.equal(reply.diagnostics.some((/** @type {any} */ item) =>
-          item.code === 'OBLIGATION_CONTEXT_NOT_CLOSED'), true, JSON.stringify(reply));
+          item.code === 'OBLIGATION_VIEW_CONTEXT_MISSING'), true, JSON.stringify(reply));
       }
     }
     await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/behavior-views.json')));

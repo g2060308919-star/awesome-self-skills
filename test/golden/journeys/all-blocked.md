@@ -13,7 +13,7 @@ _None._
 
 ## Blocked Formal Test Points
 
-### <code>obligation\_f8b79d92d7277692</code>
+### <code>obligation\_c1ec33588c660235</code>
 
 - Root issue: <code>root\_2a6eac46f2c8c418</code>
 - Risk: <code>high</code>
@@ -42,7 +42,7 @@ Covered: 0/1 declared
 
 | Test Point | Disposition |
 | --- | --- |
-| <code>obligation\_f8b79d92d7277692</code> | <code>blocked</code> |
+| <code>obligation\_c1ec33588c660235</code> | <code>blocked</code> |
 
 ### Grounded Executable Ledger
 

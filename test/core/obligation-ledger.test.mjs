@@ -233,7 +233,7 @@ function compilationError(action) {
   try {
     action();
   } catch (error) {
-    assert.equal(error instanceof ObligationCompilationError, true);
+    assert.equal(error instanceof ObligationCompilationError, true, String(error));
     return /** @type {ObligationCompilationError} */ (error);
   }
   assert.fail('expected obligation compilation to require revision');
@@ -282,7 +282,7 @@ test('obligation ledger compiles an empty formal scope into the frozen artifact 
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['empty'], dimension, status: 'checked-no-signal'
     })),
-    interaction_candidates: []
+    obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
   };
 
   assert.deepEqual(compileObligations(evidenceGraph, behaviorViews), {
@@ -986,7 +986,7 @@ test('obligation ledger orchestrates the closed seven-strategy registry and reje
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['all-types'], dimension, status: 'checked-no-signal'
     })),
-    interaction_candidates: []
+    obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
   };
   const evidenceGraph = {
     claimsById: new Map(),
@@ -1384,7 +1384,7 @@ test('obligation ledger memoizes one NotApplicable exclusion closure across many
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['checkout'], dimension, status: 'checked-no-signal'
     })),
-    interaction_candidates: []
+    obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
   };
   const graph = {
     claimsById, factLedger: facts, runScope: 'checkout',
@@ -1434,7 +1434,7 @@ test('obligation ledger answers distinct independent NotApplicable exclusions wi
       interaction_matrix: interactionDimensions.map((dimension) => ({
         module_ids: ['checkout'], dimension, status: 'checked-no-signal'
       })),
-      interaction_candidates: []
+      obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
     };
     const graph = {
       claimsById, factLedger: facts, runScope: 'checkout',
@@ -1489,7 +1489,7 @@ test('obligation ledger keeps related NotApplicable rejection deterministic unde
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['checkout'], dimension, status: 'checked-no-signal'
     })),
-    interaction_candidates: []
+    obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
   };
   const exclusionByFactId = new Map([
     ['fact_na_related_a', 'claim_na_related_child_a'],

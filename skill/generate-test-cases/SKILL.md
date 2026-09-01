@@ -10,7 +10,7 @@ Produce evidence-grounded manual functional test Cases through the bundled deter
 ## Load policy only when needed
 
 - Read `references/evidence-policy.md` when collecting sources, resolving authority, creating locators, or writing `source_pack` and `evidence_claims`.
-- Read `references/behavior-views.md` when routing accepted facts into `behavior_views` and checking formal Test Point coverage.
+- Read `references/behavior-views.md` when routing accepted facts, supplying `obligation_inputs`, and checking formal Test Point coverage; read it before writing `behavior_views`.
 - Read `references/clarification-policy.md` when handling `need_user_answers`, interpreting answers, delivering now, or reopening suppressed root issues.
 - Read `references/case-writing-policy.md` when constructing `case_drafts`, Oracles, Testability profiles, support reviews, or user-facing Case wording.
 

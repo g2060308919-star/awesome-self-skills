@@ -17,8 +17,10 @@ import {
 } from './registry.mjs';
 import { compile as compileState } from './state.mjs';
 import { compile as compileTiming } from './timing.mjs';
+import { compileObligationInputs } from './compile-obligation-inputs.mjs';
 
 /** @typedef {{category: string, code: string, path: string, message: string}} Diagnostic */
+/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,customObligations:Record<string,unknown>[],factRoutes:Record<string,unknown>[],notApplicableReviews:Record<string,unknown>[],sourceRevision:number}} CompilationInputs */
 
 export class ObligationCompilationError extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
@@ -226,38 +228,6 @@ function assertNoDiagnostics(diagnostics) {
   if (diagnostics.length > 0) throw new ObligationCompilationError(sortDiagnostics(diagnostics));
 }
 
-/** @param {Record<string, unknown>} graph */
-function compilationInputs(graph) {
-  const input = isObject(graph.obligationCompilation) ? graph.obligationCompilation : null;
-  if (!input) throw new ObligationCompilationError([
-    diagnostic('schema', 'OBLIGATION_COMPILATION_INPUT_REQUIRED', '/obligationCompilation', 'explicit obligation compilation input is required')
-  ]);
-  const expected = [
-    'contextsByViewId', 'customObligations', 'factRoutes', 'notApplicableReviews', 'sourceRevision'
-  ];
-  const actual = Object.keys(input).sort(compareCodePoints);
-  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
-    throw new ObligationCompilationError([
-      diagnostic('schema', 'OBLIGATION_COMPILATION_INPUT_NOT_CLOSED', '/obligationCompilation', 'obligation compilation input has unknown or missing fields')
-    ]);
-  }
-  if (!(input.contextsByViewId instanceof Map)
-    || !isDenseObjectArray(input.customObligations) || !isDenseObjectArray(input.factRoutes)
-    || !isDenseObjectArray(input.notApplicableReviews)
-    || !Number.isInteger(input.sourceRevision) || /** @type {number} */ (input.sourceRevision) < 0) {
-    throw new ObligationCompilationError([
-      diagnostic('schema', 'OBLIGATION_COMPILATION_INPUT_TYPE_INVALID', '/obligationCompilation', 'contextsByViewId must be a Map and route/obligation inputs must be arrays')
-    ]);
-  }
-  return {
-    contextsByViewId: /** @type {Map<unknown, unknown>} */ (input.contextsByViewId),
-    customObligations: input.customObligations,
-    factRoutes: input.factRoutes,
-    notApplicableReviews: input.notApplicableReviews,
-    sourceRevision: /** @type {number} */ (input.sourceRevision)
-  };
-}
-
 const FACT_FIELDS = ['claim_id', 'fact_id', 'source_claim_ids', 'status'];
 const FACT_STATUSES = new Set(['active', 'conflicted', 'ambiguous', 'diagnostic']);
 const CLAIM_KINDS_BY_LEVEL = new Map([
@@ -270,7 +240,7 @@ const CLAIM_KINDS_BY_LEVEL = new Map([
  * Validate Task 3's accepted in-memory graph without coercing an invalid graph
  * into an empty formal denominator.
  * @param {Record<string, unknown>} graph
- * @param {ReturnType<typeof compilationInputs>} inputs
+ * @param {CompilationInputs} inputs
  * @param {Record<string, unknown>} artifact
  * @param {Diagnostic[]} diagnostics
  */
@@ -788,7 +758,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
   return valid;
 }
 
-/** @param {ReturnType<typeof compilationInputs>} inputs @param {Map<string, Record<string, unknown>>} viewsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
+/** @param {CompilationInputs} inputs @param {Map<string, Record<string, unknown>>} viewsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
 function validateCustomObligations(inputs, viewsById, claimsById, relations, diagnostics) {
   const submittedObligations = inputs.customObligations.flatMap((entry) => (
     isObject(entry.obligation) ? [entry.obligation] : []
@@ -1094,7 +1064,7 @@ function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnosti
   return finishObligationMerge(byId);
 }
 
-/** @param {Map<string, Record<string, unknown>>} claimsById @param {Map<string, Record<string, unknown>>} viewsById @param {ReturnType<typeof compilationInputs>} inputs @param {Diagnostic[]} diagnostics */
+/** @param {Map<string, Record<string, unknown>>} claimsById @param {Map<string, Record<string, unknown>>} viewsById @param {CompilationInputs} inputs @param {Diagnostic[]} diagnostics */
 function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
   const registry = defaultRegistry();
   /** @type {Record<string, unknown>[]} */
@@ -1149,7 +1119,7 @@ function formalFacts(facts, claimsById) {
   });
 }
 
-/** @param {ReturnType<typeof compilationInputs>} inputs @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
+/** @param {CompilationInputs} inputs @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
 function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostics) {
   /** @type {Map<string, Record<string, unknown>[]>} */
   const reviewsByFactId = new Map();
@@ -1428,8 +1398,15 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     .../** @type {Diagnostic[]} */ (validateAgainstSchema(artifact, behaviorViewsSchema)),
     .../** @type {Diagnostic[]} */ (validateUniqueStableIds(artifact))
   ];
-  const inputs = compilationInputs(graph);
-  const diagnostics = [...structuralDiagnostics];
+  const compiledInputs = compileObligationInputs(graph, artifact);
+  const inputs = {
+    contextsByViewId: compiledInputs.contextsByViewId,
+    customObligations: compiledInputs.customResponsibilitySeeds,
+    factRoutes: compiledInputs.terminalFactRoutes,
+    notApplicableReviews: compiledInputs.notApplicableReviews,
+    sourceRevision: compiledInputs.sourceRevision
+  };
+  const diagnostics = [...structuralDiagnostics, ...compiledInputs.diagnostics];
   const evidence = validateEvidenceInputs(graph, inputs, artifact, diagnostics);
   const task4Evidence = {
     claimsById: evidence.claimsById,

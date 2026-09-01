@@ -268,7 +268,7 @@ test('behavior view validation excludes disjoint views before fact routing and f
       schema_version: '1.0.0', source_revision: 0,
       views: [simpleFlowView('view_shipping', 'shipping', 'claim_global')],
       interaction_matrix: [],
-      interaction_candidates: [{
+      obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{
         candidate_id: 'candidate_shipping', module_ids: ['shipping'], dimension: 'shared-entity',
         disposition: 'formal-view', source_claim_ids: ['claim_global'], formal_view_id: 'view_shipping'
       }]
@@ -313,7 +313,7 @@ test('behavior view scope gate accepts broad, narrow, and universal overlap and 
         simpleFlowView('view_shipping', 'shipping', 'claim_global'),
         simpleFlowView('view_warehouse', 'warehouse', 'claim_global')
       ],
-      interaction_matrix: [], interaction_candidates: []
+      interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
     }
   };
   assert.deepEqual(validateAgainstSchema(input.artifact, behaviorViewsSchema), []);

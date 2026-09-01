@@ -321,48 +321,6 @@ function sourceRevisionIntegrity(prior, next) {
   return null;
 }
 
-/** @param {Record<string, unknown>} behaviorViews */
-function inferredCompilation(behaviorViews) {
-  /** @type {Record<string, unknown>} */
-  const contexts = {};
-  const views = arrayIsArray(behaviorViews.views) ? behaviorViews.views : [];
-  for (let viewIndex = 0; viewIndex < views.length; viewIndex += 1) {
-    const view = views[viewIndex];
-    if (!view || typeof view !== 'object' || typeof view.view_id !== 'string') continue;
-    if (['input-domain', 'role', 'timing', 'integration'].includes(String(view.type))) {
-      // The public Behavior Views artifact contains only element-wide support.
-      // It cannot prove responsibility-specific evidence, Oracles, risk, or
-      // capabilities. An empty closed binding set therefore makes every
-      // required responsibility fail closed in the strategy validator instead
-      // of broadcasting element evidence and manufacturing coverage.
-      contexts[view.view_id] = { responsibilityBindings: [] };
-      continue;
-    }
-    /** @type {Record<string,string>} */
-    const riskByElementId = {};
-    /** @type {Record<string,string[]>} */
-    const requiredOracleRefsByElementId = {};
-    /** @type {Record<string,string[]>} */
-    const requiredCapabilitiesByElementId = {};
-    const elements = arrayIsArray(view.elements) ? view.elements : [];
-    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
-      const element = elements[elementIndex];
-      if (!element || typeof element !== 'object' || typeof element.element_id !== 'string') continue;
-      riskByElementId[element.element_id] = 'medium';
-      requiredOracleRefsByElementId[element.element_id] = arrayIsArray(element.source_claim_ids)
-        ? [...element.source_claim_ids] : [];
-      requiredCapabilitiesByElementId[element.element_id] = [];
-    }
-    contexts[view.view_id] = {
-      riskByElementId, requiredOracleRefsByElementId, requiredCapabilitiesByElementId
-    };
-  }
-  return {
-    contexts_by_view_id: contexts, custom_obligations: [], fact_routes: [],
-    not_applicable_reviews: []
-  };
-}
-
 /** @param {Record<string, unknown>} evidenceClaims @param {Map<string,Record<string,unknown>>} claimsById */
 function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
   /** @type {Map<string,Array<{entry:Record<string,unknown>,valid:boolean}>>} */
@@ -444,21 +402,6 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
     });
 }
 
-/** @param {Record<string, unknown>} behaviorViews */
-function publicResponsibilityContextDiagnostics(behaviorViews) {
-  const responsibilityTypes = new Set(['input-domain', 'role', 'timing', 'integration']);
-  return (arrayIsArray(behaviorViews.views) ? behaviorViews.views : [])
-    .filter((view) => view && typeof view === 'object'
-      && typeof view.view_id === 'string' && responsibilityTypes.has(String(view.type)))
-    .sort((left, right) => String(left.view_id) < String(right.view_id) ? -1
-      : String(left.view_id) > String(right.view_id) ? 1 : 0)
-    .map((view) => ({
-      category: 'classification', code: 'OBLIGATION_CONTEXT_NOT_CLOSED',
-      path: `/views/${encodeURIComponent(String(view.view_id))}`,
-      message: `view "${String(view.view_id)}" requires responsibility-specific evidence, Oracle, risk, and capability bindings that the frozen public artifact does not provide`
-    }));
-}
-
 /** @param {Record<string, unknown>} sourcePack @param {Record<string, unknown>} evidenceClaims @param {Record<string, unknown>} behaviorViews @param {number} sourceRevision */
 function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevision) {
   const policy = resolveSourcePolicy(sourcePack);
@@ -467,25 +410,15 @@ function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevi
   if (evidence.diagnostics.length > 0) return { diagnostics: evidence.diagnostics, artifact: null };
   const evidenceDiagnostics = adapterEvidenceDiagnostics(evidenceClaims, evidence.claimsById);
   if (evidenceDiagnostics.length > 0) return { diagnostics: evidenceDiagnostics, artifact: null };
-  const responsibilityDiagnostics = publicResponsibilityContextDiagnostics(behaviorViews);
-  if (responsibilityDiagnostics.length > 0) return {
-    diagnostics: responsibilityDiagnostics, artifact: null
-  };
-  const compilation = inferredCompilation(behaviorViews);
   const graph = {
     claimsById: evidence.claimsById,
     factLedger: structuredClone(arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []),
     conflicts: structuredClone(arrayIsArray(policy.conflicts) ? policy.conflicts : []),
-    runScope: String(sourcePack.run_scope),
-    obligationCompilation: {
-      sourceRevision,
-      contextsByViewId: new Map(Object.entries(compilation.contexts_by_view_id)),
-      factRoutes: [], notApplicableReviews: [], customObligations: []
-    }
+    runScope: String(sourcePack.run_scope)
   };
-  try { return { diagnostics: [], artifact: compileObligations(graph, behaviorViews), compilation }; } catch (error) {
+  try { return { diagnostics: [], artifact: compileObligations(graph, behaviorViews) }; } catch (error) {
     if (error instanceof ObligationCompilationError) return {
-      diagnostics: error.diagnostics, artifact: null, compilation
+      diagnostics: error.diagnostics, artifact: null
     };
     throw error;
   }
@@ -642,8 +575,6 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     let behaviorViews = null;
     /** @type {Record<string, unknown>|null} */
     let caseDrafts = null;
-    /** @type {Record<string, unknown>|null} */
-    let compilation = null;
     let missingEarlierStage = false;
     for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) {
       const typedStage = /** @type {'evidence_claims'|'behavior_views'|'case_drafts'} */ (stage);
@@ -679,7 +610,6 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         if (derived.diagnostics.length > 0 || !derived.artifact) return fatalReply(
           'RUN_INTEGRITY_ERROR', 'Accepted behavior_views failed deterministic semantic validation.'
         );
-        compilation = /** @type {Record<string, unknown>} */ (derived.compilation);
       } else caseDrafts = record;
     }
     if (caseDrafts) {
@@ -687,20 +617,22 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         clarificationInput(runDirectory, sourceRevision, sourcePack)
       );
       const replay = /** @type {any} */ (evaluateRevision({
-        schema_version: '1.0.0', source_revision: sourceRevision,
-        compiler_version: registry.compilerVersion,
-        lineage: {
-          source_digest: digest(sourcePack), case_draft_digest: digest(caseDrafts)
-        },
         source_pack: sourcePack,
         evidence_claims: evidenceClaims,
         behavior_views: behaviorViews,
-        obligation_compilation: compilation,
-        case_drafts: caseDrafts,
-        clarification,
+        case_drafts: caseDrafts
+      }, {
+        systemLineage: {
+          compiler_version: registry.compilerVersion,
+          lineage: {
+            source_digest: digest(sourcePack), case_draft_digest: digest(caseDrafts)
+          },
+          expert_recall_limits: ['Expert recall is benchmark-only.']
+        },
+        clarificationState: clarification,
+        interactionPolicy: 'pause_for_clarification',
         limits: ['Compilation is limited to the accepted immutable revision.'],
-        expert_recall_limits: ['Expert recall is benchmark-only.']
-      }, { interactionPolicy: 'pause_for_clarification' }));
+      }));
       if (replay.status === 'need_revision') return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Accepted complete revision failed deterministic semantic replay.'
       );
@@ -989,27 +921,26 @@ async function advanceStrictExclusive(runDirectory) {
         'RUN_INTEGRITY_ERROR', 'Accepted case_drafts failed deterministic integrity validation.'
       );
     }
-    const compilation = derived.compilation ?? inferredCompilation(
-      /** @type {Record<string, unknown>} */ (accepted.behavior_views)
-    );
     const clarification = await guardedAwait(() =>
       clarificationInput(runDirectory, sourceRevision, sourcePack)
     );
     const result = /** @type {any} */ (evaluateRevision({
-      schema_version: '1.0.0', source_revision: sourceRevision,
-      compiler_version: registry.compilerVersion,
-      lineage: {
-        source_digest: digest(sourcePack), case_draft_digest: digest(caseArtifact.value)
-      },
       source_pack: sourcePack,
       evidence_claims: accepted.evidence_claims,
       behavior_views: accepted.behavior_views,
-      obligation_compilation: compilation,
-      case_drafts: caseArtifact.value,
-      clarification,
+      case_drafts: caseArtifact.value
+    }, {
+      systemLineage: {
+        compiler_version: registry.compilerVersion,
+        lineage: {
+          source_digest: digest(sourcePack), case_draft_digest: digest(caseArtifact.value)
+        },
+        expert_recall_limits: ['Expert recall is benchmark-only.']
+      },
+      clarificationState: clarification,
+      interactionPolicy: 'pause_for_clarification',
       limits: ['Compilation is limited to the accepted immutable revision.'],
-      expert_recall_limits: ['Expert recall is benchmark-only.']
-    }, { interactionPolicy: 'pause_for_clarification' }));
+    }));
     if (result.status === 'need_revision') {
       if (!caseFromStaging) return fatalReply(
         'RUN_INTEGRITY_ERROR',

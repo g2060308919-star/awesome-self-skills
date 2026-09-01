@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "behavior-views.schema.json", "type": "object",
-  "required": ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates"],
+  "required": ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
   "properties": {
     "schema_version": { "const": "1.0.0" }, "source_revision": { "type": "integer", "minimum": 0 },
     "views": { "type": "array", "items": { "type": "object", "required": ["view_id", "type", "scope", "source_claim_ids", "elements", "relations"], "properties": { "view_id": { "type": "string", "minLength": 1 }, "type": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration"] }, "scope": { "type": "string", "minLength": 1 }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
@@ -17,6 +17,28 @@
       ] } },
       "relations": { "type": "array", "items": { "type": "object", "required": ["relation_id", "kind", "from_element_id", "to_element_id", "sequence", "source_claim_ids", "model_refs"], "properties": { "relation_id": { "type": "string", "minLength": 1 }, "kind": { "enum": ["sequence", "dependency", "transition", "contains"] }, "from_element_id": { "type": "string", "minLength": 1 }, "to_element_id": { "type": "string", "minLength": 1 }, "sequence": { "type": "integer", "minimum": 0 }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "model_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true } }, "additionalProperties": false } }
     }, "additionalProperties": false } },
+    "obligation_inputs": { "type": "object", "required": ["view_contexts", "terminal_fact_routes", "custom_responsibilities", "combination_requests"], "properties": {
+      "view_contexts": { "type": "array", "items": { "type": "object", "required": ["view_id", "bindings"], "properties": {
+        "view_id": { "type": "string", "minLength": 1 },
+        "bindings": { "type": "array", "items": { "type": "object", "required": ["selector", "risk", "source_claim_ids", "required_oracle_refs", "required_capabilities"], "properties": {
+          "selector": { "oneOf": [
+            { "type": "object", "required": ["kind", "element_id", "class_id"], "properties": { "kind": { "const": "equivalence-class" }, "element_id": { "type": "string", "minLength": 1 }, "class_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+            { "type": "object", "required": ["kind", "element_id", "boundary"], "properties": { "kind": { "const": "boundary" }, "element_id": { "type": "string", "minLength": 1 }, "boundary": { "enum": ["lower", "upper"] } }, "additionalProperties": false },
+            { "type": "object", "required": ["kind", "element_id", "permission"], "properties": { "kind": { "const": "permission" }, "element_id": { "type": "string", "minLength": 1 }, "permission": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+            { "type": "object", "required": ["kind", "element_id"], "properties": { "kind": { "enum": ["before", "equal", "after", "request", "response", "persistence", "event", "callback", "compensation"] }, "element_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+            { "type": "object", "required": ["kind", "element_id", "signal_claim_id"], "properties": { "kind": { "enum": ["timeout", "retry", "invariant", "contract-compatibility", "concurrency", "idempotency", "security-abuse"] }, "element_id": { "type": "string", "minLength": 1 }, "signal_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+            { "type": "object", "required": ["kind", "element_id", "side_effect_kind", "target"], "properties": { "kind": { "const": "side-effect" }, "element_id": { "type": "string", "minLength": 1 }, "side_effect_kind": { "type": "string", "minLength": 1 }, "target": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+          ] },
+          "risk": { "enum": ["critical", "high", "medium", "low"] },
+          "source_claim_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+          "required_oracle_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "required_capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+        }, "additionalProperties": false } }
+      }, "additionalProperties": false } },
+      "terminal_fact_routes": { "type": "array" },
+      "custom_responsibilities": { "type": "array" },
+      "combination_requests": { "type": "array" }
+    }, "additionalProperties": false },
     "interaction_matrix": { "type": "array", "items": { "type": "object", "required": ["module_ids", "dimension", "status"], "properties": { "module_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }, "dimension": { "enum": ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, "status": { "enum": ["checked-no-signal", "candidate"] } }, "additionalProperties": false } },
     "interaction_candidates": { "type": "array", "items": { "oneOf": [
       { "type": "object", "required": ["candidate_id", "module_ids", "dimension", "disposition", "source_claim_ids", "formal_view_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "module_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }, "dimension": { "enum": ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, "disposition": { "const": "formal-view" }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "formal_view_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },

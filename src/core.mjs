@@ -20,12 +20,13 @@ import { validateBehaviorViews } from './views/validate-views.mjs';
 /** @typedef {{category:string,code:string,path:string,message:string,related_id?:string}} Diagnostic */
 
 const INPUT_KEYS = Object.freeze([
-  'schema_version', 'source_revision', 'compiler_version', 'lineage',
-  'source_pack', 'evidence_claims', 'behavior_views', 'obligation_compilation',
-  'case_drafts', 'clarification', 'limits', 'expert_recall_limits'
+  'source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'
 ]);
-const COMPILATION_KEYS = Object.freeze([
-  'contexts_by_view_id', 'custom_obligations', 'fact_routes', 'not_applicable_reviews'
+const OPTIONS_KEYS = Object.freeze([
+  'systemLineage', 'clarificationState', 'interactionPolicy', 'limits'
+]);
+const SYSTEM_LINEAGE_KEYS = Object.freeze([
+  'compiler_version', 'lineage', 'expert_recall_limits'
 ]);
 const CLARIFICATION_KEYS = Object.freeze(['append_batch', 'prior_state']);
 const DIAGNOSTIC_LIMIT = 256;
@@ -760,41 +761,67 @@ function normalizeInput(submitted) {
     'schema', 'CORE_INPUT_INVALID', '/', 'pure-core input must be a closed plain record'
   )] };
   requireClosed(input, INPUT_KEYS, '', diagnostics);
-  const sourceRevision = typeof input.source_revision === 'number'
-    ? input.source_revision : 0 / 0;
-  if (input.schema_version !== '1.0.0') pushArray(diagnostics, diagnostic(
-    'schema', 'CORE_SCHEMA_VERSION_INVALID', '/schema_version', 'pure core requires schema version 1.0.0'
-  ));
+  const sourcePack = isRecord(input.source_pack) ? input.source_pack : null;
+  const sourceRevision = sourcePack && typeof sourcePack.source_revision === 'number'
+    ? sourcePack.source_revision : 0 / 0;
   if (!numberIsSafeInteger(sourceRevision) || sourceRevision < 0) pushArray(diagnostics, diagnostic(
-    'schema', 'CORE_SOURCE_REVISION_INVALID', '/source_revision', 'source revision must be a nonnegative safe integer'
+    'schema', 'CORE_SOURCE_REVISION_INVALID', '/source_pack/source_revision',
+    'source revision must be a nonnegative safe integer'
   ));
-  if (typeof input.compiler_version !== 'string' || input.compiler_version.trim().length === 0
-    || input.compiler_version !== input.compiler_version.trim()) pushArray(diagnostics, diagnostic(
-    'schema', 'CORE_COMPILER_VERSION_INVALID', '/compiler_version', 'compiler version must be nonblank and unpadded'
-  ));
-  if (!isRecord(input.lineage)) pushArray(diagnostics, diagnostic(
-    'schema', 'CORE_LINEAGE_INVALID', '/lineage', 'lineage must be an own-data record'
-  ));
-  const compilation = isRecord(input.obligation_compilation) ? input.obligation_compilation : null;
-  if (!compilation) pushArray(diagnostics, diagnostic(
-    'schema', 'CORE_OBLIGATION_COMPILATION_INVALID', '/obligation_compilation', 'obligation compilation input must be a closed record'
+  return { input, diagnostics };
+}
+
+/** @param {unknown} submitted */
+function normalizeOptions(submitted) {
+  /** @type {Diagnostic[]} */
+  const diagnostics = [];
+  const captured = snapshotOwnData(submitted, '/options');
+  appendArray(diagnostics, captured.diagnostics);
+  const options = captured.snapshot;
+  if (!isRecord(options)) return { options: null, diagnostics: [diagnostic(
+    'schema', 'CORE_OPTIONS_INVALID', '/options', 'pure-core options must be a closed own-data record'
+  )] };
+  requireClosed(options, OPTIONS_KEYS, '/options', diagnostics);
+  const systemLineage = isRecord(options.systemLineage) ? options.systemLineage : null;
+  if (!systemLineage) pushArray(diagnostics, diagnostic(
+    'schema', 'CORE_SYSTEM_LINEAGE_INVALID', '/options/systemLineage',
+    'system lineage must be a closed own-data record'
   ));
   else {
-    requireClosed(compilation, COMPILATION_KEYS, '/obligation_compilation', diagnostics);
-    if (!isRecord(compilation.contexts_by_view_id)
-      || !NATIVE_ARRAY_IS_ARRAY(compilation.custom_obligations)
-      || !NATIVE_ARRAY_IS_ARRAY(compilation.fact_routes)
-      || !NATIVE_ARRAY_IS_ARRAY(compilation.not_applicable_reviews)) pushArray(diagnostics, diagnostic(
-      'schema', 'CORE_OBLIGATION_COMPILATION_INVALID', '/obligation_compilation',
-      'obligation compilation contexts must be a record and remaining fields arrays'
+    requireClosed(systemLineage, SYSTEM_LINEAGE_KEYS, '/options/systemLineage', diagnostics);
+    if (typeof systemLineage.compiler_version !== 'string'
+      || systemLineage.compiler_version.trim().length === 0
+      || systemLineage.compiler_version !== systemLineage.compiler_version.trim()) {
+      pushArray(diagnostics, diagnostic(
+        'schema', 'CORE_COMPILER_VERSION_INVALID', '/options/systemLineage/compiler_version',
+        'compiler version must be nonblank and unpadded'
+      ));
+    }
+    if (!isRecord(systemLineage.lineage)) pushArray(diagnostics, diagnostic(
+      'schema', 'CORE_LINEAGE_INVALID', '/options/systemLineage/lineage',
+      'lineage must be an own-data record'
+    ));
+    if (!NATIVE_ARRAY_IS_ARRAY(systemLineage.expert_recall_limits)) pushArray(diagnostics, diagnostic(
+      'schema', 'CORE_LIMITS_INVALID', '/options/systemLineage/expert_recall_limits',
+      'expert recall limits must be an array'
     ));
   }
-  const clarification = isRecord(input.clarification) ? input.clarification : null;
+  const clarification = isRecord(options.clarificationState) ? options.clarificationState : null;
   if (!clarification) pushArray(diagnostics, diagnostic(
-    'schema', 'CORE_CLARIFICATION_INVALID', '/clarification', 'clarification input must be a closed record'
+    'schema', 'CORE_CLARIFICATION_INVALID', '/options/clarificationState',
+    'clarification state must be a closed record'
   ));
-  else requireClosed(clarification, CLARIFICATION_KEYS, '/clarification', diagnostics);
-  return { input, diagnostics };
+  else requireClosed(clarification, CLARIFICATION_KEYS, '/options/clarificationState', diagnostics);
+  if (!NATIVE_ARRAY_IS_ARRAY(options.limits)) pushArray(diagnostics, diagnostic(
+    'schema', 'CORE_LIMITS_INVALID', '/options/limits', 'limits must be an array'
+  ));
+  const submittedPolicy = options.interactionPolicy;
+  const interactionPolicy = typeof submittedPolicy === 'string' ? submittedPolicy : '';
+  if (!setHas(POLICIES, interactionPolicy)) pushArray(diagnostics, diagnostic(
+    'classification', 'INTERACTION_POLICY_INVALID', '/options/interactionPolicy',
+    'pure core accepts only the two frozen internal interaction policies'
+  ));
+  return { options, diagnostics };
 }
 
 /** @param {Record<string, unknown>} input */
@@ -833,20 +860,11 @@ function validateArtifactSchemas(input) {
 function evidenceContext(input, claimsById, conflicts) {
   const sourcePack = /** @type {Record<string, unknown>} */ (input.source_pack);
   const evidenceClaims = /** @type {Record<string, unknown>} */ (input.evidence_claims);
-  const compilation = /** @type {Record<string, unknown>} */ (input.obligation_compilation);
-  const contexts = /** @type {Record<string, unknown>} */ (compilation.contexts_by_view_id);
   return {
     claimsById,
     factLedger: NATIVE_STRUCTURED_CLONE(records(evidenceClaims.fact_ledger)),
     conflicts: NATIVE_STRUCTURED_CLONE(conflicts),
-    runScope: String(sourcePack.run_scope),
-    obligationCompilation: {
-      sourceRevision: toNumber(input.source_revision),
-      contextsByViewId: makeMap(NATIVE_OBJECT_ENTRIES(NATIVE_STRUCTURED_CLONE(contexts))),
-      factRoutes: NATIVE_STRUCTURED_CLONE(records(compilation.fact_routes)),
-      notApplicableReviews: NATIVE_STRUCTURED_CLONE(records(compilation.not_applicable_reviews)),
-      customObligations: NATIVE_STRUCTURED_CLONE(records(compilation.custom_obligations))
-    }
+    runScope: String(sourcePack.run_scope)
   };
 }
 
@@ -1675,7 +1693,7 @@ function semanticSnapshot(classification, obligations, claimsById) {
  * This export is an internal test seam; `advanceStrict(runDirectory)` remains
  * the sole external Module Interface.
  * @param {unknown} submittedInput
- * @param {{interactionPolicy:'pause_for_clarification'|'record_only'}} options
+ * @param {unknown} options
  */
 function evaluateRevisionCaptured(submittedInput, options) {
   const intrinsicDiagnostic = intrinsicIntegrityDiagnostic();
@@ -1684,36 +1702,34 @@ function evaluateRevisionCaptured(submittedInput, options) {
     diagnostics: [intrinsicDiagnostic]
   };
   const normalized = normalizeInput(submittedInput);
-  const capturedOptions = snapshotOwnData(options, '/options');
-  appendArray(normalized.diagnostics, capturedOptions.diagnostics);
+  const normalizedOptions = normalizeOptions(options);
+  appendArray(normalized.diagnostics, normalizedOptions.diagnostics);
   const postSnapshotIntrinsicDiagnostic = intrinsicIntegrityDiagnostic();
   if (postSnapshotIntrinsicDiagnostic) return {
     status: 'need_revision', stage: 'schema', source_revision: 0,
     diagnostics: [postSnapshotIntrinsicDiagnostic]
   };
-  const trustedOptions = capturedOptions.snapshot;
+  const trustedOptions = normalizedOptions.options;
   const initialRevision = isRecord(normalized.input)
-    && numberIsSafeInteger(normalized.input.source_revision)
-    ? toNumber(normalized.input.source_revision) : 0;
-  let interactionPolicy = '';
-  if (!isRecord(trustedOptions)) pushArray(normalized.diagnostics, diagnostic(
-    'classification', 'INTERACTION_POLICY_INVALID', '/interaction_policy',
-    'pure core options must be a closed own-data record'
-  ));
-  else {
-    requireClosed(trustedOptions, ['interactionPolicy'], '/options', normalized.diagnostics);
-    const submittedPolicy = trustedOptions.interactionPolicy;
-    interactionPolicy = typeof submittedPolicy === 'string' ? submittedPolicy : '';
-    if (!setHas(POLICIES, interactionPolicy)) pushArray(normalized.diagnostics, diagnostic(
-      'classification', 'INTERACTION_POLICY_INVALID', '/interaction_policy',
-      'pure core accepts only the two frozen internal interaction policies'
-    ));
-  }
-  if (normalized.diagnostics.length > 0 || !normalized.input) return revisionRequired(
+    && isRecord(normalized.input.source_pack)
+    && numberIsSafeInteger(normalized.input.source_pack.source_revision)
+    ? toNumber(normalized.input.source_pack.source_revision) : 0;
+  if (normalized.diagnostics.length > 0 || !normalized.input || !trustedOptions) return revisionRequired(
     'schema', initialRevision, normalized.diagnostics
   );
-  const input = normalized.input;
-  const sourceRevision = /** @type {number} */ (input.source_revision);
+  const systemLineage = /** @type {Record<string, unknown>} */ (trustedOptions.systemLineage);
+  const sourceRevision = initialRevision;
+  const input = /** @type {Record<string, unknown>} */ ({
+    ...normalized.input,
+    schema_version: /** @type {Record<string, unknown>} */ (normalized.input.source_pack).schema_version,
+    source_revision: sourceRevision,
+    compiler_version: systemLineage.compiler_version,
+    lineage: systemLineage.lineage,
+    clarification: trustedOptions.clarificationState,
+    limits: trustedOptions.limits,
+    expert_recall_limits: systemLineage.expert_recall_limits
+  });
+  const interactionPolicy = String(trustedOptions.interactionPolicy);
   try {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired('schema', sourceRevision, schemaDiagnostics);
@@ -1738,7 +1754,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
       obligations = compileObligations(graph, input.behavior_views);
     } catch (error) {
       if (error instanceof ObligationCompilationError) return revisionRequired(
-        error.stage, sourceRevision, diagnosticArray(error.diagnostics)
+        'behavior_views', sourceRevision, diagnosticArray(error.diagnostics)
       );
       throw error;
     }
@@ -1847,7 +1863,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
  * Contain every public-boundary failure, including mutable-global attacks that
  * occur before the trusted snapshot can establish a source revision.
  * @param {unknown} submittedInput
- * @param {{interactionPolicy:'pause_for_clarification'|'record_only'}} options
+ * @param {unknown} options
  */
 export function evaluateRevision(submittedInput, options) {
   try {

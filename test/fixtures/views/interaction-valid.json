@@ -35,6 +35,7 @@
     { "module_ids": ["orders", "payments"], "dimension": "concurrency", "status": "checked-no-signal" },
     { "module_ids": ["orders", "payments"], "dimension": "side-effect", "status": "checked-no-signal" }
   ],
+  "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
   "interaction_candidates": [
     { "candidate_id": "candidate_formal", "module_ids": ["orders", "payments"], "dimension": "shared-entity", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "formal_view_id": "view_orders" },
     { "candidate_id": "candidate_blocked", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "blocker", "blocker_root_issue_id": "root_cross_role" },

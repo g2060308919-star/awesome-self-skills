@@ -51,13 +51,15 @@ export function compile(view, context) {
     for (const sideEffect of objectArray(element.side_effects)) {
       descriptors.push({
         key: responsibilityKey('integration', elementId, {
-          responsibility: 'side-effect', side_effect: sideEffect
+          responsibility: 'side-effect',
+          side_effect: { kind: sideEffect.kind, target: sideEffect.target }
         }),
         element,
         required: true,
         identity: {
           kind: 'integration', responsibility: 'side-effect', scope: view.scope,
-          contract_element_id: elementId, side_effect: sideEffect
+          contract_element_id: elementId,
+          side_effect: { kind: sideEffect.kind, target: sideEffect.target }
         }
       });
     }

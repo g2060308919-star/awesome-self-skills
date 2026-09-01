@@ -192,7 +192,7 @@ test('schema rejects unknown nested compiler-controlled properties', () => {
 
 test('schema rejects ill-typed nested interaction items', () => {
   const artifact = {
-    schema_version: '1.0.0', source_revision: 0, views: [], interaction_candidates: [],
+    schema_version: '1.0.0', source_revision: 0, views: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [],
     interaction_matrix: [{ module_ids: 'orders', dimension: 'role', status: 'checked-no-signal' }]
   };
 
@@ -270,12 +270,12 @@ test('all seven behavior views allow evidence-only, model-only, and pending supp
   ];
 
   for (const [type, element] of fixtures) {
-    const artifact = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: `view_${type}`, type, scope: 'checkout', source_claim_ids: [], elements: [element], relations: [] }], interaction_matrix: [], interaction_candidates: [] };
+    const artifact = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: `view_${type}`, type, scope: 'checkout', source_claim_ids: [], elements: [element], relations: [] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
     assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), [], type);
   }
 
   const relation = { relation_id: 'relation_model', kind: 'sequence', from_element_id: 'node_model', to_element_id: 'node_model', sequence: 0 };
-  const modelOnly = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ ...relation, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], interaction_candidates: [] };
+  const modelOnly = { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ ...relation, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
   assert.deepEqual(validateAgainstSchema(modelOnly, behaviorViewsSchema), []);
 
   const bothEmpty = structuredClone(modelOnly);
@@ -295,7 +295,7 @@ test('schema validates structured behavior forms and rejects their unknown prope
       relations: [{ relation_id: 'relation_a', kind: 'sequence', from_element_id: 'node_open', to_element_id: 'edge_save', sequence: 1, source_claim_ids: ['claim_a'], model_refs: ['node_open', 'edge_save'] }]
     }],
     interaction_matrix: [{ module_ids: ['checkout'], dimension: 'role', status: 'checked-no-signal' }],
-    interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], formal_view_id: 'view_checkout' }]
+    obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], formal_view_id: 'view_checkout' }]
   };
   assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), []);
   /** @type {any} */ (artifact.views[0].elements[0]).unknown = true;
@@ -368,7 +368,7 @@ test('schema detects duplicate nested definition IDs but excludes reference arra
     views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [
       { element_id: 'element_same', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: ['claim_a'], model_refs: [] },
       { element_id: 'element_same', kind: 'flow-node', node_type: 'action', label: 'Open again', source_claim_ids: ['claim_a'], model_refs: [] }
-    ], relations: [] }], interaction_matrix: [], interaction_candidates: []
+    ], relations: [] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
   };
   assert.deepEqual(validateUniqueStableIds(artifact), [{
     category: 'schema', code: 'DUPLICATE_STABLE_ID', path: '/views/0/elements/1/element_id', message: 'duplicate stable ID "element_same"'
@@ -378,7 +378,7 @@ test('schema detects duplicate nested definition IDs but excludes reference arra
 test('schema detects nested rule, candidate, and exploratory duplicate definition IDs', () => {
   const artifact = {
     source_policy: { rules: [{ rule_id: 'rule_same' }, { rule_id: 'rule_same' }] },
-    interaction_candidates: [{ candidate_id: 'candidate_same' }, { candidate_id: 'candidate_same' }],
+    obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{ candidate_id: 'candidate_same' }, { candidate_id: 'candidate_same' }],
     exploratory_candidates: [{ exploratory_id: 'explore_same' }, { exploratory_id: 'explore_same' }]
   };
   assert.deepEqual(validateUniqueStableIds(artifact).map((item) => item.path), [
@@ -408,7 +408,7 @@ test('all eight schemas accept hand-derived representative nested fixtures', asy
   const fixtures = {
     'source-pack.schema.json': { schema_version: '1.0.0', source_revision: 0, run_scope: 'checkout', sources: [{ source_id: 'source_a', kind: 'prd', version: '1', status: 'effective', authority: 'owner', content: 'Rule', content_digest: 'a'.repeat(64) }], locators: [{ locator_id: 'locator_a', source_id: 'source_a', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: 'a'.repeat(64), extraction_integrity: 'verified' }], source_policy: { rules: [{ rule_id: 'policy_a', source_ids: ['source_a'], scope: 'checkout', authority: 'owner', status: 'effective' }] }, decision_records: [{ decision_id: 'decision_a', question_id: 'question_a', root_issue_ids: ['root_a'], affected_obligation_ids: ['obligation_a'], clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-01', question: 'Question?', answer: 'Answer.', disposition: 'temporary', authority_scope: 'task', effective_scope: 'checkout', evidence_ref: 'locator_a', evidence_level: 'E1' }], clarification_events: [{ event_id: 'event_a', clarification_event_seq: 2, type: 'request_delivery', actor: 'owner', event_at: '2026-08-01', root_issue_ids: ['root_a'] }] },
     'evidence-claims.schema.json': { schema_version: '1.0.0', source_revision: 0, claims: [{ claim_id: 'claim_a', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'Save', source_locator_ids: ['locator_a'], source_id: 'source_a' }], fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_a', status: 'active', source_claim_ids: ['claim_a'] }] },
-    'behavior-views.schema.json': { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [{ element_id: 'element_a', kind: 'flow-node', node_type: 'action', label: 'Save', source_claim_ids: ['claim_a'], model_refs: [] }], relations: [] }], interaction_matrix: [{ module_ids: ['checkout'], dimension: 'role', status: 'checked-no-signal' }], interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], formal_view_id: 'view_a' }] },
+    'behavior-views.schema.json': { schema_version: '1.0.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [{ element_id: 'element_a', kind: 'flow-node', node_type: 'action', label: 'Save', source_claim_ids: ['claim_a'], model_refs: [] }], relations: [] }], interaction_matrix: [{ module_ids: ['checkout'], dimension: 'role', status: 'checked-no-signal' }], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], formal_view_id: 'view_a' }] },
     'test-obligations.schema.json': { schema_version: '1.0.0', source_revision: 0, obligations: [{ obligation_id: 'obligation_a', kind: 'flow', risk: 'medium', scope: 'checkout', source_claim_ids: ['claim_a'], view_element_refs: ['element_a'], required_oracle_refs: ['oracle_a'], required_capabilities: ['browser'] }], fact_routes: [{ fact_id: 'fact_a', route_type: 'obligations', obligation_ids: ['obligation_a'] }], interaction_routes: [{ candidate_id: 'candidate_a', route_type: 'formal-view', formal_view_id: 'view_a' }] },
     'case-drafts.schema.json': { schema_version: '1.0.0', source_revision: 0, cases: [completeCase()], obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }], exploratory_candidates: [{ exploratory_id: 'exploratory_a', title: 'Explore retry', scope: 'checkout', risk: 'low', source_claim_ids: ['claim_a'] }] },
     'test-bundle.schema.json': completeBundle(),

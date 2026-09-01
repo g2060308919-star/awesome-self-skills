@@ -29,9 +29,8 @@ function compareCodePoints(left, right) {
 
 /**
  * Task 11 pure input is a closed complete revision:
- * `{schema_version,source_revision,compiler_version,lineage,source_pack,
- * evidence_claims,behavior_views,obligation_compilation,case_drafts,
- * clarification,limits,expert_recall_limits}`. The core alone derives every
+ * `{source_pack,evidence_claims,behavior_views,case_drafts}` plus private
+ * system options. The core alone derives every
  * Task 7–10 result; fixtures never submit a classification or final bundle.
  * @param {string} name
  */
@@ -43,6 +42,10 @@ async function journeyFixture(name) {
 
 /** @param {any} rule */
 function obligationId(rule) {
+  if (rule.viewType === 'role') return stableId('obligation', {
+    kind: 'role', responsibility: 'permission', scope: rule.scope,
+    role: 'tester', permission: `execute-${rule.key}`
+  });
   return stableId('obligation', {
     kind: 'decision', responsibility: 'rule', scope: rule.scope,
     rule: { conditions: [...rule.conditions].sort(), result: rule.result, priority: rule.priority }
@@ -91,6 +94,21 @@ function evidenceClaim(rule) {
 
 /** @param {any} rule */
 function behaviorView(rule) {
+  if (rule.viewType === 'role') return {
+    view_id: rule.viewId,
+    type: 'role',
+    scope: rule.scope,
+    source_claim_ids: [rule.claimId],
+    elements: [{
+      element_id: rule.elementId,
+      kind: 'role-permission',
+      role: 'tester',
+      permissions: [`execute-${rule.key}`],
+      source_claim_ids: [rule.claimId],
+      model_refs: []
+    }],
+    relations: []
+  };
   return {
     view_id: rule.viewId,
     type: 'decision',
@@ -106,6 +124,25 @@ function behaviorView(rule) {
       model_refs: []
     }],
     relations: []
+  };
+}
+
+/** @param {any[]} rules */
+function obligationInputs(rules) {
+  return {
+    view_contexts: rules.filter((rule) => rule.viewType === 'role').map((rule) => ({
+      view_id: rule.viewId,
+      bindings: [{
+        selector: {
+          kind: 'permission', element_id: rule.elementId, permission: `execute-${rule.key}`
+        },
+        risk: rule.risk,
+        source_claim_ids: [rule.claimId],
+        required_oracle_refs: rule.hasOracle === false ? [] : [rule.claimId],
+        required_capabilities: ['run-control']
+      }]
+    })),
+    terminal_fact_routes: [], custom_responsibilities: [], combination_requests: []
   };
 }
 
@@ -215,11 +252,6 @@ function revisionFromRules(rules, options = {}) {
   }, ...(options.extraPolicyRules ?? [])];
   const views = rules.map(behaviorView);
   const interaction = options.interaction ?? interactionArtifacts(['checkout']);
-  const contexts = Object.fromEntries(rules.map((rule) => [rule.viewId, {
-    riskByElementId: { [rule.elementId]: rule.risk },
-    requiredOracleRefsByElementId: { [rule.elementId]: rule.hasOracle === false ? [] : [rule.claimId] },
-    requiredCapabilitiesByElementId: { [rule.elementId]: rule.mode === 'blocker' || rule.mode === 'not_applicable' ? [] : ['run-control'] }
-  }]));
   const claims = [...rules.map(evidenceClaim), ...(options.extraClaims ?? [])];
   const facts = rules.map((rule) => ({
     fact_id: rule.factId, claim_id: rule.claimId, status: 'active', source_claim_ids: [rule.claimId]
@@ -250,10 +282,8 @@ function revisionFromRules(rules, options = {}) {
     },
     behavior_views: {
       schema_version: '1.0.0', source_revision: sourceRevision, views,
-      interaction_matrix: interaction.matrix, interaction_candidates: interaction.candidates
-    },
-    obligation_compilation: {
-      contexts_by_view_id: contexts, fact_routes: [], not_applicable_reviews: [], custom_obligations: []
+      interaction_matrix: interaction.matrix, interaction_candidates: interaction.candidates,
+      obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
       schema_version: '1.0.0', source_revision: sourceRevision, cases,
@@ -286,10 +316,16 @@ function buildRevision(scenario) {
   ]);
   if (scenario === 'partial-blocked') return revisionFromRules([
     rule('checkout'),
-    rule('refund', { hasOracle: false, mode: 'blocker', risk: 'critical', result: 'refund failure handled' })
+    rule('refund', {
+      viewType: 'role', hasOracle: false, mode: 'blocker', risk: 'critical',
+      result: 'refund failure handled'
+    })
   ]);
   if (scenario === 'all-blocked') return revisionFromRules([
-    rule('refund', { hasOracle: false, mode: 'blocker', risk: 'high', result: 'refund failure handled' })
+    rule('refund', {
+      viewType: 'role', hasOracle: false, mode: 'blocker', risk: 'high',
+      result: 'refund failure handled'
+    })
   ]);
   if (scenario === 'all-not-applicable') {
     const exclusion = {
@@ -345,7 +381,21 @@ function buildRevision(scenario) {
 
 /** @param {any} input @param {'pause_for_clarification'|'record_only'} interactionPolicy @returns {any} */
 function runRevision(input, interactionPolicy) {
-  return evaluateRevision(input, { interactionPolicy });
+  return evaluateRevision({
+    source_pack: input.source_pack,
+    evidence_claims: input.evidence_claims,
+    behavior_views: input.behavior_views,
+    case_drafts: input.case_drafts
+  }, {
+    systemLineage: {
+      compiler_version: input.compiler_version,
+      lineage: input.lineage,
+      expert_recall_limits: input.expert_recall_limits
+    },
+    clarificationState: input.clarification,
+    interactionPolicy,
+    limits: input.limits
+  });
 }
 
 function conflictRevision() {
@@ -355,7 +405,8 @@ function conflictRevision() {
   });
   const payment = rule('payment', {
     level: 'E1', sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
-    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical'
+    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical',
+    viewType: 'role'
   });
   const decision = {
     decision_id: 'decision_payment', question_id: 'question_payment', root_issue_ids: ['root_unrelated'],
@@ -449,7 +500,7 @@ for (const fixtureName of [
   });
 }
 
-test('core journey one missing Oracle pauses strict while preserving its unaffected Grounded Case', async () => {
+test('core journey one missing capability pauses strict while preserving its unaffected Grounded Case', async () => {
   const fixture = await journeyFixture('partial-blocked');
   const input = buildRevision(fixture.scenario);
   const strict = runRevision(input, 'pause_for_clarification');
@@ -497,7 +548,8 @@ test('core journey diagnostics fail closed in canonical stable order at the owni
 test('core journey preserves a surfaced source-conflict root through a legal final Decision revision', () => {
   const broadPayment = rule('payment', {
     level: 'E1', sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
-    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical'
+    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical',
+    viewType: 'role'
   });
   const narrowPayment = { ...broadPayment, scope: 'checkout.payment.card' };
   const firstInput = JSON.parse(JSON.stringify(conflictRevision())
@@ -528,7 +580,8 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
 
   const paymentObligationId = obligationId(rule('payment', {
     level: 'E1', sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
-    scope: 'checkout.payment.card', result: 'payment settles in two days', risk: 'critical'
+    scope: 'checkout.payment.card', result: 'payment settles in two days', risk: 'critical',
+    viewType: 'role'
   }));
   const finalDecision = {
     decision_id: 'decision_payment_conflict_final',
@@ -572,15 +625,17 @@ test('core boundary snapshots own data without executing submitted accessors or 
   const cases = [
     {
       name: 'own-symbol',
-      mutate(/** @type {any} */ input) { input[Symbol('extra')] = 'outside contract'; }
+      mutate(/** @type {any} */ input) { input.source_pack[Symbol('extra')] = 'outside contract'; }
     },
     {
       name: 'non-enumerable',
-      mutate(/** @type {any} */ input) { Object.defineProperty(input, 'hidden_extra', { value: true, enumerable: false }); }
+      mutate(/** @type {any} */ input) {
+        Object.defineProperty(input.source_pack, 'hidden_extra', { value: true, enumerable: false });
+      }
     },
     {
       name: 'custom-prototype',
-      mutate(/** @type {any} */ input) { Object.setPrototypeOf(input, { polluted: true }); }
+      mutate(/** @type {any} */ input) { Object.setPrototypeOf(input.source_pack, { polluted: true }); }
     }
   ];
   for (const item of cases) {
@@ -593,7 +648,7 @@ test('core boundary snapshots own data without executing submitted accessors or 
 
   const accessorInput = buildRevision('grounded');
   let accessorReads = 0;
-  Object.defineProperty(accessorInput, 'compiler_version', {
+  Object.defineProperty(accessorInput.source_pack, 'schema_version', {
     enumerable: true,
     get() { accessorReads += 1; return '0.1.0'; }
   });
@@ -825,9 +880,7 @@ test('core boundary never consults a replaced String iterator while sorting diag
 test('core rejects polluted constructors and dynamic String methods before a valid revision executes them', async () => {
   const fixture = await journeyFixture('grounded');
   const input = buildRevision(fixture.scenario);
-  assert.equal(evaluateRevision(input, {
-    interactionPolicy: 'pause_for_clarification'
-  }).status, 'finished');
+  assert.equal(runRevision(input, 'pause_for_clarification').status, 'finished');
 
   const constructorNames = ['Array', 'Set', 'Map', 'String'];
   const stringMethodNames = ['trim', 'includes', 'split'];
@@ -1113,14 +1166,12 @@ test('core rejects String Symbol.split pollution without resolving its getter', 
 
 test('core owns the schema diagnostic for a nonnumeric source revision', () => {
   const input = buildRevision('grounded');
-  input.source_revision = {};
-  const result = /** @type {any} */ (
-    evaluateRevision(input, { interactionPolicy: 'pause_for_clarification' })
-  );
+  input.source_pack.source_revision = {};
+  const result = /** @type {any} */ (runRevision(input, 'pause_for_clarification'));
   assert.equal(result.status, 'need_revision');
   assert.equal(result.stage, 'schema');
   assert.ok(result.diagnostics.some((/** @type {any} */ item) =>
-    item.code === 'CORE_SOURCE_REVISION_INVALID' && item.path === '/source_revision'));
+    item.code === 'CORE_SOURCE_REVISION_INVALID' && item.path === '/source_pack/source_revision'));
   assert.ok(!result.diagnostics.some((/** @type {any} */ item) =>
     item.code === 'CORE_EVALUATION_FAILED'));
 });

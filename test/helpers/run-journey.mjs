@@ -50,6 +50,10 @@ export async function loadJourneySpec(name) {
 
 /** @param {any} rule */
 function obligationId(rule) {
+  if (rule.viewType === 'role') return stableId('obligation', {
+    kind: 'role', responsibility: 'permission', scope: rule.scope,
+    role: 'tester', permission: `execute-${rule.key}`
+  });
   return stableId('obligation', {
     kind: 'decision', responsibility: 'rule', scope: rule.scope,
     rule: {
@@ -162,6 +166,21 @@ function evidenceClaim(rule) {
 
 /** @param {any} rule */
 function behaviorView(rule) {
+  if (rule.viewType === 'role') return {
+    view_id: rule.viewId,
+    type: 'role',
+    scope: rule.scope,
+    source_claim_ids: [rule.claimId],
+    elements: [{
+      element_id: rule.elementId,
+      kind: 'role-permission',
+      role: 'tester',
+      permissions: [`execute-${rule.key}`],
+      source_claim_ids: [rule.claimId],
+      model_refs: []
+    }],
+    relations: []
+  };
   return {
     view_id: rule.viewId,
     type: 'decision',
@@ -177,6 +196,25 @@ function behaviorView(rule) {
       model_refs: []
     }],
     relations: []
+  };
+}
+
+/** @param {any[]} rules */
+function obligationInputs(rules) {
+  return {
+    view_contexts: rules.filter((rule) => rule.viewType === 'role').map((rule) => ({
+      view_id: rule.viewId,
+      bindings: [{
+        selector: {
+          kind: 'permission', element_id: rule.elementId, permission: `execute-${rule.key}`
+        },
+        risk: rule.risk,
+        source_claim_ids: [rule.claimId],
+        required_oracle_refs: rule.hasOracle === false ? [] : [rule.claimId],
+        required_capabilities: rule.mode === 'not_applicable' ? [] : ['run-control']
+      }]
+    })),
+    terminal_fact_routes: [], custom_responsibilities: [], combination_requests: []
   };
 }
 
@@ -310,15 +348,6 @@ export function revisionFromRules(rules, options = {}) {
   }, ...(options.extraPolicyRules ?? [])];
   const modules = options.modules ?? [...new Set(rules.map((rule) => rule.scope))];
   const interaction = options.interaction ?? interactionArtifacts(modules);
-  const contexts = Object.fromEntries(rules.map((rule) => [rule.viewId, {
-    riskByElementId: { [rule.elementId]: rule.risk },
-    requiredOracleRefsByElementId: {
-      [rule.elementId]: rule.hasOracle === false ? [] : [rule.claimId]
-    },
-    requiredCapabilitiesByElementId: {
-      [rule.elementId]: rule.mode === 'not_applicable' ? [] : ['run-control']
-    }
-  }]));
   const claims = [...rules.map(evidenceClaim), ...(options.extraClaims ?? [])];
   const facts = rules.map((rule) => ({
     fact_id: rule.factId,
@@ -362,13 +391,8 @@ export function revisionFromRules(rules, options = {}) {
       schema_version: '1.0.0', source_revision: sourceRevision,
       views: rules.map(behaviorView),
       interaction_matrix: interaction.matrix,
-      interaction_candidates: interaction.candidates
-    },
-    obligation_compilation: {
-      contexts_by_view_id: contexts,
-      fact_routes: [],
-      not_applicable_reviews: [],
-      custom_obligations: []
+      interaction_candidates: interaction.candidates,
+      obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
       schema_version: '1.0.0', source_revision: sourceRevision,
@@ -409,7 +433,8 @@ function conflictRevision() {
   const payment = journeyRule('payment', {
     level: 'E1', decisionDisposition: 'temporary',
     sourceId: 'source_payment_new', locatorId: 'locator_payment_new',
-    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical'
+    scope: 'checkout.payment', result: 'payment settles in two days', risk: 'critical',
+    viewType: 'role'
   });
   const input = revisionFromRules([shipping, payment], {
     sourceRevision: 1,
@@ -493,14 +518,18 @@ export function buildJourney(name) {
     })]);
   }
   if (name === 'clarification-conditional' || name === 'clarification-grounded') {
-    return revisionFromRules([journeyRule('checkout', { scope: 'checkout', hasOracle: false })]);
+    return revisionFromRules([journeyRule('checkout', {
+      scope: 'checkout', hasOracle: false, viewType: 'role'
+    })]);
   }
   if (name === 'partial-blocked') return revisionFromRules([
     journeyRule('checkout', { scope: 'checkout' }),
-    journeyRule('refund', { scope: 'refund', capabilityStatus: 'unknown', risk: 'critical' })
+    journeyRule('refund', {
+      scope: 'refund', capabilityStatus: 'unknown', risk: 'critical', viewType: 'role'
+    })
   ], { modules: ['checkout', 'refund'] });
   if (name === 'all-blocked') return revisionFromRules([
-    journeyRule('refund', { scope: 'refund', capabilityStatus: 'unknown' })
+    journeyRule('refund', { scope: 'refund', capabilityStatus: 'unknown', viewType: 'role' })
   ]);
   if (name === 'all-not-applicable') return notApplicableRevision();
   if (name === 'risk-only-exploratory') return addExploratory(revisionFromRules([]));
@@ -524,7 +553,21 @@ export function buildJourney(name) {
 
 /** @param {any} input @param {'pause_for_clarification'|'record_only'} [interactionPolicy] @returns {any} */
 export function evaluateJourneyRevision(input, interactionPolicy = 'pause_for_clarification') {
-  return evaluateRevision(input, { interactionPolicy });
+  return evaluateRevision({
+    source_pack: input.source_pack,
+    evidence_claims: input.evidence_claims,
+    behavior_views: input.behavior_views,
+    case_drafts: input.case_drafts
+  }, {
+    systemLineage: {
+      compiler_version: input.compiler_version,
+      lineage: input.lineage,
+      expert_recall_limits: input.expert_recall_limits
+    },
+    clarificationState: input.clarification,
+    interactionPolicy,
+    limits: input.limits
+  });
 }
 
 /** @param {'clarification-conditional'|'clarification-grounded'} name */
@@ -542,6 +585,8 @@ export async function runClarificationJourney(name) {
   const root = pending.pending_root_issues[0];
   const resolved = revisionFromRules([journeyRule('checkout', {
     scope: 'checkout',
+    hasOracle: true,
+    viewType: 'role',
     level: specification.decision.evidence_level,
     decisionDisposition: specification.decision.disposition
   })]);

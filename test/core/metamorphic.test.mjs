@@ -100,15 +100,17 @@ test('metamorphic hard gates: E3→E1 only moves Grounded to Conditional', () =>
   assert.deepEqual(conditional.conditional[0].obligation_ids, originalCheckout.obligation_ids);
 });
 
-test('metamorphic hard gate: E1→E0 from a missing formal Oracle changes only the affected Case', () => {
+test('metamorphic obligation input: empty Oracle prebinding defers blocking until Case classification', () => {
   const e1Input = revisionFromRules([
-    journeyRule('checkout', { level: 'E1', decisionDisposition: 'temporary' }),
+    journeyRule('checkout', {
+      level: 'E1', decisionDisposition: 'temporary', viewType: 'role'
+    }),
     journeyRule('shipping', { scope: 'shipping' })
   ], { modules: ['checkout', 'shipping'] });
   assert.equal(e1Input.case_drafts.cases.length, 2, 'locality requires two independent Cases');
   assert.deepEqual(
-    e1Input.obligation_compilation.contexts_by_view_id.view_checkout
-      .requiredOracleRefsByElementId.rule_checkout,
+    e1Input.behavior_views.obligation_inputs.view_contexts[0]
+      .bindings[0].required_oracle_refs,
     ['claim_checkout'],
     'the E1 baseline must require its accepted E1 Oracle'
   );
@@ -133,7 +135,7 @@ test('metamorphic hard gate: E1→E0 from a missing formal Oracle changes only t
 
   const e0Input = revisionFromRules([
     journeyRule('checkout', {
-      level: 'E1', decisionDisposition: 'temporary', hasOracle: false
+      level: 'E1', decisionDisposition: 'temporary', hasOracle: false, viewType: 'role'
     }),
     journeyRule('shipping', { scope: 'shipping' })
   ], { modules: ['checkout', 'shipping'] });
@@ -142,8 +144,8 @@ test('metamorphic hard gate: E1→E0 from a missing formal Oracle changes only t
   );
   assert.ok(affectedDraft, 'the affected E1 Case must exist before removing its Oracle');
   assert.deepEqual(
-    e0Input.obligation_compilation.contexts_by_view_id.view_checkout
-      .requiredOracleRefsByElementId.rule_checkout,
+    e0Input.behavior_views.obligation_inputs.view_contexts[0]
+      .bindings[0].required_oracle_refs,
     [],
     'the E0-like result must come from no accepted formal Oracle dependency'
   );
@@ -163,8 +165,8 @@ test('metamorphic hard gate: E1→E0 from a missing formal Oracle changes only t
   );
   const e0 = finished(e0Input, 'record_only');
   assert.equal(e0.grounded.length, 1);
-  assert.equal(e0.conditional.length, 0, 'reversal permits missing-Oracle/E0-as-Conditional');
-  assert.equal(e0.blocked.length, 1);
+  assert.equal(e0.conditional.length, 0);
+  assert.equal(e0.blocked.length, 1, 'only Case classification may block the still-missing Oracle');
   assert.equal(e0.exploratory.length, 0);
   assert.equal(e0.blocked[0].obligation_id, affectedBaseline.obligation_ids[0]);
   assert.equal(e0.blocked[0].reason, 'FORMAL_ORACLE_MISSING');

@@ -37,5 +37,6 @@
     { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
     { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
   ],
+  "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
   "interaction_candidates": []
 }

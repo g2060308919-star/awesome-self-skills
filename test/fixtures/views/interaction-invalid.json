@@ -11,6 +11,7 @@
     { "module_ids": ["orders"], "dimension": "client", "status": "checked-no-signal" },
     { "module_ids": ["orders", "payments"], "dimension": "time", "status": "candidate" }
   ],
+  "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
   "interaction_candidates": [
     { "candidate_id": "candidate_wrong_view", "module_ids": ["orders", "payments"], "dimension": "time", "disposition": "formal-view", "source_claim_ids": ["claim_shared"], "formal_view_id": "view_flow" },
     { "candidate_id": "candidate_no_signal", "module_ids": ["orders", "payments"], "dimension": "role", "disposition": "exploratory", "exploratory_id": "exploratory_role" },

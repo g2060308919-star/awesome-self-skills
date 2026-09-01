@@ -182,7 +182,7 @@ test('real runner fails closed when an integration view omits responsibility-spe
     assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
     assert.equal(reply.stage, 'behavior_views');
     assert.equal(reply.diagnostics.some((/** @type {any} */ diagnostic) =>
-      diagnostic.code === 'OBLIGATION_CONTEXT_NOT_CLOSED'), true, JSON.stringify(reply));
+      diagnostic.code === 'OBLIGATION_VIEW_CONTEXT_MISSING'), true, JSON.stringify(reply));
     await assert.rejects(stat(path.join(runDirectory, 'accepted/r000/behavior-views.json')));
     await assert.rejects(stat(path.join(runDirectory, 'derived/r000/test-obligations.json')));
   } finally {

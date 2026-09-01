@@ -15,7 +15,7 @@ _None._
 - Risk: <code>high</code>
 - Role: tester (evidence: <code>claim\_checkout</code>)
 - Requirement facts: <code>fact\_checkout</code>
-- Formal Test Points: <code>obligation\_7ad4b46aba188b77</code>
+- Formal Test Points: <code>obligation\_a1d383c412180df9</code>
 - Evidence references: <code>claim\_checkout</code>
 - Temporary assumption: <code>claim\_checkout</code>; invalid when A final rule replaces this temporary decision.
 
@@ -64,7 +64,7 @@ Covered: 1/1 declared
 
 | Test Point | Disposition |
 | --- | --- |
-| <code>obligation\_7ad4b46aba188b77</code> | <code>conditional</code> |
+| <code>obligation\_a1d383c412180df9</code> | <code>conditional</code> |
 
 ### Grounded Executable Ledger
 

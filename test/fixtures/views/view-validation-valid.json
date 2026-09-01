@@ -116,6 +116,7 @@
       }
     ],
     "interaction_matrix": [],
+    "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
     "interaction_candidates": []
   }
 }

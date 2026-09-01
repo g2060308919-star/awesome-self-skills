@@ -11,7 +11,7 @@
 - Risk: <code>high</code>
 - Role: tester (evidence: <code>claim\_checkout</code>)
 - Requirement facts: <code>fact\_checkout</code>
-- Formal Test Points: <code>obligation\_7ad4b46aba188b77</code>
+- Formal Test Points: <code>obligation\_a1d383c412180df9</code>
 - Evidence references: <code>claim\_checkout</code>
 
 #### Preconditions
@@ -63,7 +63,7 @@ Covered: 1/1 declared
 
 | Test Point | Disposition |
 | --- | --- |
-| <code>obligation\_7ad4b46aba188b77</code> | <code>grounded</code> |
+| <code>obligation\_a1d383c412180df9</code> | <code>grounded</code> |
 
 ### Grounded Executable Ledger
 
@@ -71,7 +71,7 @@ Grounded: 1/1
 
 | Test Point | Case |
 | --- | --- |
-| <code>obligation\_7ad4b46aba188b77</code> | <code>case\_4d4e5fcef00e6a88</code> |
+| <code>obligation\_a1d383c412180df9</code> | <code>case\_4d4e5fcef00e6a88</code> |
 
 ### Expert Recall Ledger
 
