@@ -219,8 +219,8 @@ test('case-classification blockers retain only formal-related evidence across de
     });
     const draft = revision.case_drafts.cases[0];
     draft.testability_profile.capabilities[0].provenance_ref = 'claim_observer';
+    draft.cleanup.support_review = 'uncertain';
     draft.evidence_refs = ['claim_checkout', 'claim_observer'];
-    draft.execution_signature.action_path = ['Inspect an unrelated auxiliary observer'];
 
     const pendingReply = await submitCompleteRevision(runDirectory, revision);
     assert.equal(pendingReply.status, 'need_user_answers', JSON.stringify(pendingReply));

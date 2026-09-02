@@ -8,7 +8,7 @@
       "system_id": "generate-test-cases",
       "status": "frozen",
       "version": "0.1.0",
-      "repository_revision": "a4cb03b904593d533be2a7d343793204f23a5a21",
+      "repository_revision": "2c39d7cf887be5673cc5d3b0be1de4516ce8aea9",
       "artifacts": [
         {
           "artifact_id": "generate-test-cases-skill",
@@ -20,7 +20,7 @@
           "artifact_id": "generate-test-cases-compiler",
           "kind": "compiler",
           "repository_path": "skill/generate-test-cases/scripts/test-compiler.mjs",
-          "sha256": "b8409850b409a7c8c747fbd9f10cf43d0ff126a13704212919bbea0ced92e138"
+          "sha256": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
         },
         {
           "artifact_id": "generate-test-cases-schema-manifest",

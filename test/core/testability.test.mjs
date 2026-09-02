@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { classifyCaseDrafts } from '../../src/classify.mjs';
 import {
-  IDS, acceptedClaim, baseCase, baseClaims, baseObligation, classificationContext
+  IDS, acceptedClaim, baseCase, baseClaims, baseObligation, classificationContext,
+  refreshExecutionSignature
 } from '../helpers/classification-context.mjs';
 
 /** @param {ReturnType<typeof classificationContext>} context */
@@ -257,6 +258,7 @@ test('all required Case fields remain enforced at the classifier seam', () => {
   for (const mutate of mutations) {
     const context = classificationContext();
     mutate(context.caseDrafts.cases[0]);
+    refreshExecutionSignature(context.caseDrafts.cases[0]);
     assert.match(blockedReason(context), /CASE_GATE_INVALID|FORMAL_ORACLE_MISSING/u);
   }
   const noEvidenceSummary = classificationContext();
