@@ -131,6 +131,14 @@ test('skill static policies freeze clarification and source-review boundaries', 
     evidence,
     /unsupported[\s\S]*outside[\s\S]*two atomic E3 claims[\s\S]*different `claim_id`[\s\S]*same source locator/iu
   );
+  const exclusionPolicy = evidence.split('\n').find(
+    (/** @type {string} */ line) => line.startsWith('Split exclusion language')
+  );
+  assert.ok(exclusionPolicy);
+  assert.match(
+    exclusionPolicy,
+    /two atomic E3 claims[^\n]*formal capability fact[^\n]*scope-exclusion proof Claim[^\n]*`kind = description`[^\n]*Fact Ledger[^\n]*`diagnostic`[^\n]*must not[^\n]*formal Fact[^\n]*Behavior View[^\n]*decision rule[^\n]*custom responsibility[^\n]*obligation[^\n]*Only the unsupported capability Claim remains a normative fact/iu
+  );
   assert.match(
     evidence,
     /test-process[\s\S]*output-format[\s\S]*not product behavior[\s\S]*diagnostic[\s\S]*never[\s\S]*formal Fact or Behavior View/iu
@@ -142,6 +150,14 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(
     evidence,
     /source-defined forbidden tuple[\s\S]*E2 `expected-value`[\s\S]*`decision-table-instance`[\s\S]*selected-value claims[\s\S]*forbid rule/iu
+  );
+  const tWiseEvidencePolicy = evidence.split('\n').find(
+    (/** @type {string} */ line) => line.startsWith('Apply that rule before t-wise modeling')
+  );
+  assert.ok(tWiseEvidencePolicy);
+  assert.match(
+    tWiseEvidencePolicy,
+    /source-defined forbidden tuple[^\n]*rule says a combination supports \*only\* one value[^\n]*tuple produced by that expansion[^\n]*include the authoritative closed enumeration Claim itself in `parent_claim_ids`[^\n]*source locator[^\n]*`source_locator_ids`[^\n]*not sufficient ancestry/iu
   );
 
   const behavior = await text('references/behavior-views.md');
