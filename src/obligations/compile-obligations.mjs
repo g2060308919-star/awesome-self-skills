@@ -1580,7 +1580,7 @@ function compileCombinationObligations(
       valid = false;
     }
     const canonicalOwnerRoots = [...new Set(ownerRoots)].sort(compareCodePoints);
-    /** @param {string} claimId @param {string} claimPath @param {{strong?:boolean,oracle?:boolean,roots?:string[]}} [options] */
+    /** @param {string} claimId @param {string} claimPath @param {{strong?:boolean,oracle?:boolean,roots?:string[],skipRelation?:boolean}} [options] */
     const validateClaim = (claimId, claimPath, options = {}) => {
       const claim = claimsById.get(claimId);
       if (!claim) {
@@ -1610,7 +1610,7 @@ function compileCombinationObligations(
         return false;
       }
       const roots = options.roots ?? canonicalOwnerRoots;
-      if (!roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
+      if (!options.skipRelation && !roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
         diagnostics.push(diagnostic('traceability', 'TWISE_EVIDENCE_UNRELATED', claimPath, 'combination evidence must connect directionally to its semantic target'));
         valid = false;
         return false;
@@ -1657,15 +1657,41 @@ function compileCombinationObligations(
       const assignments = objectArray(constraint.assignments).map((assignment) => ({
         parameter: String(assignment.parameter_id ?? ''), value: String(assignment.value_id ?? '')
       }));
-      const assignedRoots = assignments.flatMap(({ parameter, value }) => (
-        valueClaimsByParameter.get(parameter)?.get(value) ?? []
+      const assignedRoots = assignments.map(({ parameter, value }) => (
+        valueClaimsByParameter.get(parameter)?.get(value) ?? ''
       ));
-      for (const [refIndex, claimId] of stringArray(constraint.evidence_refs).entries()) {
+      const evidenceRefs = stringArray(constraint.evidence_refs);
+      for (const [refIndex, claimId] of evidenceRefs.entries()) {
         forbidEvidenceRefs.add(claimId);
-        validateClaim(
+        const evidenceValid = validateClaim(
           claimId, `${path}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
-          { strong: true, roots: [...canonicalOwnerRoots, ...assignedRoots] }
+          { strong: true, skipRelation: true }
         );
+        const closesTuple = !canonicalOwnerRoots.includes(claimId)
+          && assignedRoots.every((targetId) => (
+            targetId.length > 0 && claimsDirectionallyRelated(relations, claimId, targetId)
+          ));
+        if (evidenceValid && !closesTuple) {
+          diagnostics.push(diagnostic(
+            'traceability', 'TWISE_EVIDENCE_UNRELATED',
+            `${path}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
+            'each forbid proof must close the full selected-value tuple and cannot reuse a generic owner root'
+          ));
+          valid = false;
+        }
+      }
+      for (const [assignmentIndex, targetId] of assignedRoots.entries()) {
+        if (!targetId || evidenceRefs.some((claimId) => (
+          canonicalOwnerRoots.includes(claimId)
+            || !claimsDirectionallyRelated(relations, claimId, targetId)
+        ))) {
+          diagnostics.push(diagnostic(
+            'traceability', 'TWISE_FORBID_TARGET_UNCLOSED',
+            `${path}/constraints/${constraintIndex}/assignments/${assignmentIndex}`,
+            'every forbidden assignment value requires supported target-matching evidence'
+          ));
+          valid = false;
+        }
       }
       selectorConstraints.push({ forbidden: assignments });
     }

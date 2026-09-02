@@ -72,6 +72,17 @@ function addExpectedClaim(revision, claimId, parentClaimId) {
   });
 }
 
+/** @param {any} revision @param {string} claimId @param {string[]} parentClaimIds */
+function addForbidTargetClaim(revision, claimId, parentClaimIds) {
+  addExpectedClaim(revision, claimId, parentClaimIds[0]);
+  const claim = revision.evidence_claims.claims.find(
+    (/** @type {any} */ item) => item.claim_id === claimId
+  );
+  claim.value = '1';
+  claim.parent_claim_ids = [...parentClaimIds];
+  claim.rule_input = { conditions: ['forbidden selected values'], outcome: '1' };
+}
+
 /** @param {any} revision @param {string} claimId */
 function addDiagnosticClaim(revision, claimId) {
   revision.evidence_claims.claims.push({
@@ -350,13 +361,98 @@ test('installed t-wise risk and forbid evidence fail closed unless strong, relat
     } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
   });
 
+  await t.test('a generic owner claim cannot exclude an assignment tuple', async () => {
+    const revision = combinationRevision({ constraints: [{
+      kind: 'forbid', assignments: [
+        { parameter_id: 'a', value_id: '1' }, { parameter_id: 'b', value_id: '1' }
+      ], evidence_refs: ['claim_checkout']
+    }] });
+    const { run } = await installedCompilation(revision);
+    try {
+      assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+      assert.equal(run.reply.stage, 'behavior_views');
+      assert.equal(run.reply.diagnostics.some(
+        (/** @type {any} */ item) => item.code === 'TWISE_FORBID_TARGET_UNCLOSED'
+      ), true, JSON.stringify(run.reply));
+    } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
+  });
+
+  await t.test('a multi-assignment forbid must close every selected-value target', async () => {
+    const revision = combinationRevision({ constraints: [{
+      kind: 'forbid', assignments: [
+        { parameter_id: 'a', value_id: '1' }, { parameter_id: 'b', value_id: '1' }
+      ], evidence_refs: ['claim_forbid_a_only']
+    }] });
+    addForbidTargetClaim(revision, 'claim_forbid_a_only', ['claim_a_1']);
+    const { run } = await installedCompilation(revision);
+    try {
+      assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+      assert.equal(run.reply.stage, 'behavior_views');
+      assert.equal(run.reply.diagnostics.some(
+        (/** @type {any} */ item) => item.code === 'TWISE_FORBID_TARGET_UNCLOSED'
+      ), true, JSON.stringify(run.reply));
+    } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
+  });
+
+  await t.test('separate selected-value claims cannot masquerade as one joint tuple proof', async () => {
+    const revision = combinationRevision({ constraints: [{
+      kind: 'forbid', assignments: [
+        { parameter_id: 'a', value_id: '1' }, { parameter_id: 'b', value_id: '1' }
+      ], evidence_refs: ['claim_a_1', 'claim_b_1']
+    }] });
+    const { run } = await installedCompilation(revision);
+    try {
+      assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+      assert.equal(run.reply.stage, 'behavior_views');
+      assert.equal(run.reply.diagnostics.some(
+        (/** @type {any} */ item) => item.code === 'TWISE_FORBID_TARGET_UNCLOSED'
+      ), true, JSON.stringify(run.reply));
+    } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
+  });
+
+  await t.test('a non-owner E3 joint requirement may prove the full forbidden tuple', async () => {
+    const revision = combinationRevision({ constraints: [{
+      kind: 'forbid', assignments: [
+        { parameter_id: 'a', value_id: '1' }, { parameter_id: 'b', value_id: '1' }
+      ], evidence_refs: ['claim_joint_forbid_e3']
+    }] });
+    revision.evidence_claims.claims.push({
+      claim_id: 'claim_joint_forbid_e3', claim_form: 'direct', level: 'E3', kind: 'requirement',
+      scope: 'checkout', value: '1', source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+    });
+    revision.evidence_claims.fact_ledger.push({
+      fact_id: 'fact_joint_forbid', claim_id: 'claim_joint_forbid_e3', status: 'active',
+      source_claim_ids: ['claim_joint_forbid_e3']
+    });
+    revision.behavior_views.views[0].source_claim_ids.push('claim_joint_forbid_e3');
+    revision.behavior_views.views[0].elements.push({
+      element_id: 'rule_joint_forbid', kind: 'decision-rule',
+      conditions: ['a=1 and b=1'], result: 'forbidden', priority: 1,
+      source_claim_ids: ['claim_joint_forbid_e3'], model_refs: []
+    });
+    for (const claimId of ['claim_a_1', 'claim_b_1']) revision.evidence_claims.claims.find(
+      (/** @type {any} */ claim) => claim.claim_id === claimId
+    ).parent_claim_ids.push('claim_joint_forbid_e3');
+    const { run, artifact } = await installedCompilation(revision);
+    try {
+      assert.equal(run.reply.status, 'need_artifact', JSON.stringify(run.reply));
+      const vectors = artifact.obligations.filter((/** @type {any} */ item) => item.combination_vector);
+      assert.equal(vectors.some((/** @type {any} */ item) => {
+        const values = Object.fromEntries(item.combination_vector.assignments.map(
+          (/** @type {any} */ assignment) => [assignment.parameter_id, assignment.value_id]
+        ));
+        return values.a === '1' && values.b === '1';
+      }), false);
+    } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
+  });
+
   await t.test('supported related forbid removes candidates but never enters selected Oracle prebindings', async () => {
     const revision = combinationRevision({ constraints: [{
       kind: 'forbid', assignments: [
         { parameter_id: 'a', value_id: '1' }, { parameter_id: 'b', value_id: '1' }
       ], evidence_refs: ['claim_forbid']
     }] });
-    addExpectedClaim(revision, 'claim_forbid', 'claim_checkout');
+    addForbidTargetClaim(revision, 'claim_forbid', ['claim_a_1', 'claim_b_1']);
     const { run, artifact } = await installedCompilation(revision);
     try {
       assert.equal(run.reply.status, 'need_artifact', JSON.stringify(run.reply));
@@ -887,6 +983,30 @@ test('selected vector cannot become executable when an assignment claim is absen
   }));
   assert.equal(result.grounded.length + result.conditional.length, 0);
   assert.equal(result.diagnostics.some((item) => item.code === 'TWISE_SELECTED_VALUE_SOURCE_MISSING'), true);
+});
+
+test('classifier rejects a derived vector whose element refs name a different owner view', () => {
+  const obligation = baseObligation({
+    kind: 'interaction',
+    combination_vector: {
+      policy_id: 'twise-candidate-cap-v1', strength: 2,
+      owner: {
+        view_id: 'view_other', fact_ids: [IDS.fact],
+        view_element_refs: [{ view_id: 'view_checkout', element_id: 'edge_submit' }]
+      },
+      assignments: [
+        { parameter_id: 'a', value_id: '0', evidence_claim_id: 'claim_fact' },
+        { parameter_id: 'b', value_id: '0', evidence_claim_id: 'claim_fact' }
+      ],
+      forbid_evidence_refs: []
+    }
+  });
+  const result = classifyCaseDrafts(classificationContext({ obligations: [obligation] }));
+
+  assert.equal(result.grounded.length + result.conditional.length, 0, JSON.stringify(result));
+  assert.equal(result.diagnostics.some(
+    (item) => item.code === 'TWISE_OWNER_VIEW_MISMATCH'
+  ), true, JSON.stringify(result));
 });
 
 test('classifier independently rejects invalid selected-value evidence', () => {

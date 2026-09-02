@@ -307,6 +307,13 @@ test('coverage independently replays selected-vector strength and owner fact rou
   assert.equal(diagnosticCodes(() => buildBundle(missingRoute)).includes(
     'TWISE_OWNER_FACT_ROUTE_MISSING'
   ), true);
+  const mismatchedOwnerView = vectorContext();
+  mismatchedOwnerView.obligations_artifact.obligations.find(
+    (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
+  ).combination_vector.owner.view_id = 'view_other';
+  assert.equal(diagnosticCodes(() => buildBundle(mismatchedOwnerView)).includes(
+    'TWISE_OWNER_VIEW_MISMATCH'
+  ), true);
 });
 
 test('every formal Test Point has exactly one disposition', () => {

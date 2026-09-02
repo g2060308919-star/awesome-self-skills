@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { classifyCaseDrafts, executionSignature } from '../../src/classify.mjs';
 import { stableId } from '../../src/canonical.mjs';
+import { buildBundle } from '../../src/coverage.mjs';
 import {
   IDS, acceptedClaim, baseCase, baseClaims, baseObligation, classificationContext,
   refreshExecutionSignature
@@ -14,6 +15,57 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const signatureBoundaries = JSON.parse(await readFile(
   path.join(repositoryRoot, 'test/fixtures/adversarial/case-signature-boundaries.json'), 'utf8'
 ));
+const coverageFixture = JSON.parse(await readFile(
+  path.join(repositoryRoot, 'test/fixtures/journeys/final-critical-gaps.json'), 'utf8'
+));
+
+/** @param {any[]} cases @param {any[]} [extraClaims] */
+function fixtureClassificationContext(cases, extraClaims = []) {
+  const obligations = structuredClone(coverageFixture.obligations_artifact);
+  obligations.obligations = obligations.obligations.filter(
+    (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
+  );
+  obligations.fact_routes = obligations.fact_routes.filter(
+    (/** @type {any} */ item) => item.fact_id === 'fact_grounded'
+  );
+  obligations.interaction_routes = [];
+  return {
+    sourceRevision: coverageFixture.source_revision,
+    evidence: {
+      claimsById: new Map([...coverageFixture.evidence_claims.claims, ...extraClaims].map(
+        (claim) => [String(claim.claim_id), structuredClone(claim)]
+      )),
+      factLedger: structuredClone(coverageFixture.evidence_claims.fact_ledger).filter(
+        (/** @type {any} */ fact) => fact.fact_id === 'fact_grounded'
+      ),
+      conflicts: []
+    },
+    obligations,
+    caseDrafts: {
+      schema_version: '1.0.0', source_revision: coverageFixture.source_revision,
+      cases,
+      obligation_dispositions: [{
+        obligation_id: 'obligation_grounded', status: 'case_candidate',
+        case_ids: cases.map((draft) => draft.case_id)
+      }],
+      exploratory_candidates: []
+    }
+  };
+}
+
+/** @param {any} draft @param {string} ref @param {boolean} keepExisting */
+function replaceDirectEvidence(draft, ref, keepExisting) {
+  if (!keepExisting) draft.evidence_refs = draft.evidence_refs.filter(
+    (/** @type {string} */ item) => item !== ref.replace('_alternate', '')
+  );
+  draft.evidence_refs = [...new Set([...draft.evidence_refs, ref])].sort();
+}
+
+/** @param {any[]} cases @param {any[]} extraClaims */
+function classifyFixtureCases(cases, extraClaims) {
+  for (const draft of cases) refreshExecutionSignature(draft);
+  return classifyCaseDrafts(fixtureClassificationContext(cases, extraClaims));
+}
 
 test('executionSignature contains only normalized frozen dimensions', () => {
   const first = baseCase();
@@ -203,6 +255,80 @@ test('exact signatures merge without losing fact, evidence, or obligation refere
   assert.equal(merged.evidence_refs.includes('claim_fact'), true);
   assert.equal(merged.evidence_refs.includes('claim_fact_secondary'), true);
   assert.deepEqual(context, before);
+});
+
+test('same-signature Cases never silently discard single-valued evidence or provenance', async (/** @type {any} */ t) => {
+  /** @type {Array<[string,string,boolean,(draft:any,claimId:string)=>void]>} */
+  const fields = [
+    ['role evidence', 'claim_role_alternate', false,
+      (draft, claimId) => { draft.role.evidence_ref = claimId; }],
+    ['precondition evidence', 'claim_grounded_alternate', true,
+      (draft, claimId) => { draft.preconditions[0].evidence_ref = claimId; }],
+    ['data provenance', 'claim_data_alternate', false,
+      (draft, claimId) => { draft.data[0].provenance.ref = claimId; }],
+    ['action evidence', 'claim_action_alternate', false,
+      (draft, claimId) => { draft.steps[0].action_evidence_ref = claimId; }],
+    ['capability provenance', 'claim_capability_alternate', true,
+      (draft, claimId) => { draft.testability_profile.capabilities[0].provenance_ref = claimId; }],
+    ['observer provenance', 'claim_capability_alternate', true,
+      (draft, claimId) => { draft.testability_profile.observers[0].provenance_ref = claimId; }],
+    ['control provenance', 'claim_capability_alternate', true,
+      (draft, claimId) => { draft.testability_profile.controls[0].provenance_ref = claimId; }],
+    ['post-state evidence', 'claim_oracle_grounded_alternate', true,
+      (draft, claimId) => { draft.post_state.evidence_ref = claimId; }],
+    ['cleanup evidence', 'claim_cleanup_alternate', false,
+      (draft, claimId) => { draft.cleanup.no_cleanup_evidence_ref = claimId; }]
+  ];
+  for (const [name, claimId, keepExisting, mutate] of fields) await t.test(name, () => {
+    const alternate = acceptedClaim(claimId, 'E3', { kind: 'description' });
+    const first = structuredClone(coverageFixture.classification.grounded[0]);
+    const second = structuredClone(first);
+    second.case_id = `case_${claimId}`;
+    mutate(second, claimId);
+    replaceDirectEvidence(second, claimId, keepExisting);
+
+    const forward = classifyFixtureCases([first, second], [alternate]);
+    assert.equal(forward.grounded.length, 0, JSON.stringify(forward));
+    assert.equal(forward.diagnostics.some(
+      (item) => item.code === 'DUPLICATE_SIGNATURE_SEMANTIC_CONFLICT'
+    ), true, JSON.stringify(forward));
+
+    const reverse = classifyFixtureCases([structuredClone(second), structuredClone(first)], [alternate]);
+    assert.deepEqual(reverse, forward);
+  });
+});
+
+test('same-signature set-valued provenance is merged losslessly and replayable', async (/** @type {any} */ t) => {
+  const alternate = acceptedClaim('claim_precondition_alternate', 'E3', { kind: 'description' });
+  const first = structuredClone(coverageFixture.classification.grounded[0]);
+  const second = structuredClone(first);
+  second.case_id = 'case_precondition_alternate';
+  second.preconditions[0].source_claim_ids.push(alternate.claim_id);
+  second.evidence_refs.push(alternate.claim_id);
+
+  const firstPass = classifyFixtureCases([first, second], [alternate]);
+  assert.equal(firstPass.grounded.length, 1, JSON.stringify(firstPass));
+  assert.deepEqual(firstPass.diagnostics, []);
+  const merged = /** @type {any} */ (structuredClone(firstPass.grounded[0]));
+
+  await t.test('preserves every nested source association', () => {
+    assert.deepEqual(merged.preconditions[0].source_claim_ids, [
+      'claim_grounded', alternate.claim_id
+    ].sort());
+  });
+
+  await t.test('reclassifies without weakening the exact evidence summary', () => {
+    const replay = classifyFixtureCases([structuredClone(merged)], [alternate]);
+    assert.equal(replay.grounded.length, 1, JSON.stringify(replay));
+    assert.deepEqual(replay.diagnostics, []);
+  });
+
+  await t.test('passes the independent coverage replay', () => {
+    const coverage = structuredClone(coverageFixture);
+    coverage.evidence_claims.claims.push(structuredClone(alternate));
+    coverage.classification.grounded = [structuredClone(merged)];
+    assert.doesNotThrow(() => buildBundle(coverage));
+  });
 });
 
 test('same-signature merge preserves complete Oracle ownership and remains valid on replay', () => {

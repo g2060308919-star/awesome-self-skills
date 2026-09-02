@@ -1255,16 +1255,16 @@ function comparableCase(draft) {
   const copy = structuredClone(draft);
   const ignored = new Set([
     'case_id', 'fact_ids', 'obligation_ids', 'source_claim_ids', 'evidence_refs',
-    'evidence_ref', 'oracle_evidence_refs', 'provenance_ref', 'action_evidence_ref',
-    'no_cleanup_evidence_ref', 'support_review', 'expectation_id',
+    'oracle_evidence_refs', 'support_review', 'expectation_id',
     'closes_obligation_id', 'step_id', 'preceding_action_id', 'execution_signature'
   ]);
-  /** @param {unknown} value @returns {unknown} */
-  const strip = (value) => {
-    if (Array.isArray(value)) return value.map(strip);
+  /** @param {unknown} value @param {(string|number)[]} path @returns {unknown} */
+  const strip = (value, path = []) => {
+    if (Array.isArray(value)) return value.map((item, index) => strip(item, [...path, index]));
     if (!isRecord(value)) return value;
-    return Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.has(key))
-      .map(([key, item]) => [key, strip(item)]));
+    return Object.fromEntries(Object.entries(value).filter(([key]) => (
+      !ignored.has(key) && !(key === 'evidence_ref' && path.includes('expectations'))
+    )).map(([key, item]) => [key, strip(item, [...path, key])]));
   };
   return canonicalStringify(strip(copy));
 }
@@ -1276,6 +1276,22 @@ function mergeExactCases(drafts) {
   for (const field of ['fact_ids', 'obligation_ids', 'source_claim_ids', 'evidence_refs']) {
     const values = new Set(sorted.flatMap((draft) => stringArray(draft[field]) ?? []));
     merged[field] = [...values].sort(compareCodePoints);
+  }
+  const mergedPreconditions = new Map((objectArray(merged.preconditions) ?? []).map((precondition) => [
+    canonicalStringify({ condition: precondition.condition, reachable_from: precondition.reachable_from }),
+    precondition
+  ]));
+  for (const draft of sorted) {
+    for (const precondition of objectArray(draft.preconditions) ?? []) {
+      const target = mergedPreconditions.get(canonicalStringify({
+        condition: precondition.condition, reachable_from: precondition.reachable_from
+      }));
+      if (!target) continue;
+      target.source_claim_ids = [...new Set([
+        ...(stringArray(target.source_claim_ids) ?? []),
+        ...(stringArray(precondition.source_claim_ids) ?? [])
+      ])].sort(compareCodePoints);
+    }
   }
   const mergedSteps = objectArray(merged.steps) ?? [];
   for (const [stepIndex, step] of mergedSteps.entries()) {
@@ -1342,8 +1358,8 @@ function ownershipExpectations(draft) {
   return expectations;
 }
 
-/** @param {Array<{draft: Record<string, unknown>, rank: number}>} executable @param {Map<string, Record<string, unknown>>} obligationsById @param {{allowedRefsByObligation: Map<string, Set<string>>,forbiddenRefsByObligation: Map<string, Set<string>>}} oracleReachability @param {Diagnostic[]} diagnostics */
-function deduplicateCases(executable, obligationsById, oracleReachability, diagnostics) {
+/** @param {Array<{draft: Record<string, unknown>, rank: number}>} executable @param {Map<string, Record<string, unknown>>} obligationsById @param {{allowedRefsByObligation: Map<string, Set<string>>,forbiddenRefsByObligation: Map<string, Set<string>>}} oracleReachability @param {(draft:Record<string,unknown>)=>{rank:number}} evaluateMerged @param {Diagnostic[]} diagnostics */
+function deduplicateCases(executable, obligationsById, oracleReachability, evaluateMerged, diagnostics) {
   /** @type {Map<string, Array<{draft: Record<string, unknown>, rank: number}>>} */
   const groups = new Map();
   for (const item of executable) {
@@ -1380,7 +1396,18 @@ function deduplicateCases(executable, obligationsById, oracleReachability, diagn
       oracleReachability, ownershipReasons, diagnostics
     );
     if (ownershipReasons.size > 0) continue;
-    (items[0].rank === 2 ? grounded : conditional).push(merged);
+    const diagnosticsBeforeEvaluation = diagnostics.length;
+    const mergedEvaluation = evaluateMerged(merged);
+    if (mergedEvaluation.rank === 0 || diagnostics.length > diagnosticsBeforeEvaluation) continue;
+    if (mergedEvaluation.rank !== items[0].rank) {
+      diagnostics.push(diagnostic(
+        'classification', 'DUPLICATE_SIGNATURE_LANE_CONFLICT',
+        `/execution_signatures/${pointerPart(stableId('execution', JSON.parse(signature)))}`,
+        'same execution signature cannot change lane after lossless association merging'
+      ));
+      continue;
+    }
+    (mergedEvaluation.rank === 2 ? grounded : conditional).push(merged);
   }
   grounded.sort((left, right) => compareCodePoints(String(left.case_id), String(right.case_id)));
   conditional.sort((left, right) => compareCodePoints(String(left.case_id), String(right.case_id)));
@@ -1564,7 +1591,13 @@ export function classifyCaseDrafts(submittedContext) {
         }
       }
       const viewRefs = new Set(stringArray(obligation.view_element_refs) ?? []);
+      const ownerViewId = String(owner.view_id ?? '');
       for (const ref of objectArray(owner.view_element_refs) ?? []) {
+        if (String(ref.view_id ?? '') !== ownerViewId) diagnostics.push(diagnostic(
+          'traceability', 'TWISE_OWNER_VIEW_MISMATCH',
+          `/obligations/${pointerPart(obligationId)}/combination_vector/owner/view_element_refs`,
+          'every selected-vector owner element must belong to the single named owner view'
+        ));
         const qualified = `${String(ref.view_id ?? '')}#${String(ref.element_id ?? '')}`;
         if (!viewRefs.has(qualified)) diagnostics.push(diagnostic(
           'traceability', 'TWISE_OWNER_ELEMENT_REF_MISSING',
@@ -1994,7 +2027,32 @@ export function classifyCaseDrafts(submittedContext) {
       if (valid) exploratoryOutput.push(structuredClone(candidate));
     }
     const deduplicated = deduplicateCases(
-      uniquelyExecutable, obligationsById, oracleReachability, diagnostics
+      uniquelyExecutable, obligationsById, oracleReachability,
+      (draft) => {
+        const replayDraft = structuredClone(draft);
+        const replaySignature = isRecord(replayDraft.execution_signature)
+          ? replayDraft.execution_signature : {};
+        replaySignature.oracle_refs = [...new Set(
+          (objectArray(replayDraft.steps) ?? []).flatMap((step) => (
+            objectArray(step.expectations) ?? []
+          )).flatMap((expectation) => (
+            isCanonicalString(expectation.expectation_id) ? [String(expectation.expectation_id)] : []
+          ))
+        )].sort(compareCodePoints);
+        replayDraft.execution_signature = replaySignature;
+        const linked = (stringArray(draft.obligation_ids, true) ?? []).flatMap((id) => {
+          const obligation = obligationsById.get(id);
+          return obligation ? [obligation] : [];
+        });
+        const routedFactIds = [...new Set(linked.flatMap((obligation) => [
+          ...(routedFactsByObligation.get(String(obligation.obligation_id)) ?? [])
+        ]))].sort(compareCodePoints);
+        return evaluateCase(
+          replayDraft, linked, routedFactIds, routesByFact, factsById,
+          evidence, evidenceCache, oracleReachability, conflicts, diagnostics
+        );
+      },
+      diagnostics
     );
     if (diagnostics.length > 0) return resultWithDiagnostics(diagnostics);
     return {

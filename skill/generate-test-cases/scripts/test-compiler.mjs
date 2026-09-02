@@ -4359,11 +4359,7 @@ function comparableCase(draft) {
     "obligation_ids",
     "source_claim_ids",
     "evidence_refs",
-    "evidence_ref",
     "oracle_evidence_refs",
-    "provenance_ref",
-    "action_evidence_ref",
-    "no_cleanup_evidence_ref",
     "support_review",
     "expectation_id",
     "closes_obligation_id",
@@ -4371,10 +4367,10 @@ function comparableCase(draft) {
     "preceding_action_id",
     "execution_signature"
   ]);
-  const strip = (value) => {
-    if (Array.isArray(value)) return value.map(strip);
+  const strip = (value, path4 = []) => {
+    if (Array.isArray(value)) return value.map((item, index) => strip(item, [...path4, index]));
     if (!isRecord2(value)) return value;
-    return Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.has(key)).map(([key, item]) => [key, strip(item)]));
+    return Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.has(key) && !(key === "evidence_ref" && path4.includes("expectations"))).map(([key, item]) => [key, strip(item, [...path4, key])]));
   };
   return canonicalStringify(strip(copy));
 }
@@ -4384,6 +4380,23 @@ function mergeExactCases(drafts) {
   for (const field of ["fact_ids", "obligation_ids", "source_claim_ids", "evidence_refs"]) {
     const values = new Set(sorted.flatMap((draft) => stringArray3(draft[field]) ?? []));
     merged[field] = [...values].sort(compareCodePoints3);
+  }
+  const mergedPreconditions = new Map((objectArray4(merged.preconditions) ?? []).map((precondition) => [
+    canonicalStringify({ condition: precondition.condition, reachable_from: precondition.reachable_from }),
+    precondition
+  ]));
+  for (const draft of sorted) {
+    for (const precondition of objectArray4(draft.preconditions) ?? []) {
+      const target = mergedPreconditions.get(canonicalStringify({
+        condition: precondition.condition,
+        reachable_from: precondition.reachable_from
+      }));
+      if (!target) continue;
+      target.source_claim_ids = [.../* @__PURE__ */ new Set([
+        ...stringArray3(target.source_claim_ids) ?? [],
+        ...stringArray3(precondition.source_claim_ids) ?? []
+      ])].sort(compareCodePoints3);
+    }
   }
   const mergedSteps = objectArray4(merged.steps) ?? [];
   for (const [stepIndex, step] of mergedSteps.entries()) {
@@ -4442,7 +4455,7 @@ function ownershipExpectations(draft) {
   }
   return expectations;
 }
-function deduplicateCases(executable, obligationsById, oracleReachability, diagnostics) {
+function deduplicateCases(executable, obligationsById, oracleReachability, evaluateMerged, diagnostics) {
   const groups = /* @__PURE__ */ new Map();
   for (const item of executable) {
     const signature = executionSignature(item.draft);
@@ -4482,7 +4495,19 @@ function deduplicateCases(executable, obligationsById, oracleReachability, diagn
       diagnostics
     );
     if (ownershipReasons.size > 0) continue;
-    (items[0].rank === 2 ? grounded : conditional).push(merged);
+    const diagnosticsBeforeEvaluation = diagnostics.length;
+    const mergedEvaluation = evaluateMerged(merged);
+    if (mergedEvaluation.rank === 0 || diagnostics.length > diagnosticsBeforeEvaluation) continue;
+    if (mergedEvaluation.rank !== items[0].rank) {
+      diagnostics.push(diagnostic5(
+        "classification",
+        "DUPLICATE_SIGNATURE_LANE_CONFLICT",
+        `/execution_signatures/${pointerPart2(stableId("execution", JSON.parse(signature)))}`,
+        "same execution signature cannot change lane after lossless association merging"
+      ));
+      continue;
+    }
+    (mergedEvaluation.rank === 2 ? grounded : conditional).push(merged);
   }
   grounded.sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
   conditional.sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
@@ -4704,7 +4729,14 @@ function classifyCaseDrafts(submittedContext) {
         }
       }
       const viewRefs = new Set(stringArray3(obligation.view_element_refs) ?? []);
+      const ownerViewId = String(owner.view_id ?? "");
       for (const ref of objectArray4(owner.view_element_refs) ?? []) {
+        if (String(ref.view_id ?? "") !== ownerViewId) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_OWNER_VIEW_MISMATCH",
+          `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/view_element_refs`,
+          "every selected-vector owner element must belong to the single named owner view"
+        ));
         const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
         if (!viewRefs.has(qualified)) diagnostics.push(diagnostic5(
           "traceability",
@@ -5201,6 +5233,33 @@ function classifyCaseDrafts(submittedContext) {
       uniquelyExecutable,
       obligationsById,
       oracleReachability,
+      (draft) => {
+        const replayDraft = structuredClone(draft);
+        const replaySignature = isRecord2(replayDraft.execution_signature) ? replayDraft.execution_signature : {};
+        replaySignature.oracle_refs = [...new Set(
+          (objectArray4(replayDraft.steps) ?? []).flatMap((step) => objectArray4(step.expectations) ?? []).flatMap((expectation) => isCanonicalString(expectation.expectation_id) ? [String(expectation.expectation_id)] : [])
+        )].sort(compareCodePoints3);
+        replayDraft.execution_signature = replaySignature;
+        const linked = (stringArray3(draft.obligation_ids, true) ?? []).flatMap((id) => {
+          const obligation = obligationsById.get(id);
+          return obligation ? [obligation] : [];
+        });
+        const routedFactIds = [...new Set(linked.flatMap((obligation) => [
+          ...routedFactsByObligation.get(String(obligation.obligation_id)) ?? []
+        ]))].sort(compareCodePoints3);
+        return evaluateCase(
+          replayDraft,
+          linked,
+          routedFactIds,
+          routesByFact,
+          factsById,
+          evidence,
+          evidenceCache,
+          oracleReachability,
+          conflicts,
+          diagnostics
+        );
+      },
       diagnostics
     );
     if (diagnostics.length > 0) return resultWithDiagnostics(diagnostics);
@@ -7509,7 +7568,14 @@ function buildBundleTrusted(context) {
       }
     }
     const viewRefs = new Set(strings(obligation.view_element_refs));
+    const ownerViewId = String(owner.view_id ?? "");
     for (const ref of records(owner.view_element_refs)) {
+      if (String(ref.view_id ?? "") !== ownerViewId) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_OWNER_VIEW_MISMATCH",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/owner/view_element_refs`,
+        "every selected-vector owner element must belong to the single named owner view"
+      ));
       const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
       if (!viewRefs.has(qualified)) pushArray2(diagnostics, diagnostic7(
         "traceability",
@@ -12298,7 +12364,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         return false;
       }
       const roots = options.roots ?? canonicalOwnerRoots;
-      if (!roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
+      if (!options.skipRelation && !roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
         diagnostics.push(diagnostic11("traceability", "TWISE_EVIDENCE_UNRELATED", claimPath, "combination evidence must connect directionally to its semantic target"));
         valid = false;
         return false;
@@ -12346,14 +12412,36 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         parameter: String(assignment.parameter_id ?? ""),
         value: String(assignment.value_id ?? "")
       }));
-      const assignedRoots = assignments.flatMap(({ parameter, value }) => valueClaimsByParameter.get(parameter)?.get(value) ?? []);
-      for (const [refIndex, claimId] of stringArray5(constraint.evidence_refs).entries()) {
+      const assignedRoots = assignments.map(({ parameter, value }) => valueClaimsByParameter.get(parameter)?.get(value) ?? "");
+      const evidenceRefs = stringArray5(constraint.evidence_refs);
+      for (const [refIndex, claimId] of evidenceRefs.entries()) {
         forbidEvidenceRefs.add(claimId);
-        validateClaim(
+        const evidenceValid = validateClaim(
           claimId,
           `${path4}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
-          { strong: true, roots: [...canonicalOwnerRoots, ...assignedRoots] }
+          { strong: true, skipRelation: true }
         );
+        const closesTuple = !canonicalOwnerRoots.includes(claimId) && assignedRoots.every((targetId) => targetId.length > 0 && claimsDirectionallyRelated(relations, claimId, targetId));
+        if (evidenceValid && !closesTuple) {
+          diagnostics.push(diagnostic11(
+            "traceability",
+            "TWISE_EVIDENCE_UNRELATED",
+            `${path4}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
+            "each forbid proof must close the full selected-value tuple and cannot reuse a generic owner root"
+          ));
+          valid = false;
+        }
+      }
+      for (const [assignmentIndex, targetId] of assignedRoots.entries()) {
+        if (!targetId || evidenceRefs.some((claimId) => canonicalOwnerRoots.includes(claimId) || !claimsDirectionallyRelated(relations, claimId, targetId))) {
+          diagnostics.push(diagnostic11(
+            "traceability",
+            "TWISE_FORBID_TARGET_UNCLOSED",
+            `${path4}/constraints/${constraintIndex}/assignments/${assignmentIndex}`,
+            "every forbidden assignment value requires supported target-matching evidence"
+          ));
+          valid = false;
+        }
       }
       selectorConstraints.push({ forbidden: assignments });
     }

@@ -1946,7 +1946,13 @@ function buildBundleTrusted(context) {
       }
     }
     const viewRefs = new Set(strings(obligation.view_element_refs));
+    const ownerViewId = String(owner.view_id ?? '');
     for (const ref of records(owner.view_element_refs)) {
+      if (String(ref.view_id ?? '') !== ownerViewId) pushArray(diagnostics, diagnostic(
+        'traceability', 'TWISE_OWNER_VIEW_MISMATCH',
+        `/obligations/${pointerPart(obligationId)}/combination_vector/owner/view_element_refs`,
+        'every selected-vector owner element must belong to the single named owner view'
+      ));
       const qualified = `${String(ref.view_id ?? '')}#${String(ref.element_id ?? '')}`;
       if (!viewRefs.has(qualified)) pushArray(diagnostics, diagnostic(
         'traceability', 'TWISE_OWNER_ELEMENT_REF_MISSING',
