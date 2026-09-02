@@ -1,4 +1,9 @@
+// src/entry.mjs
+import { realpathSync as realpathSync2 } from "node:fs";
+import { fileURLToPath as fileURLToPath2, pathToFileURL } from "node:url";
+
 // src/advance-strict.mjs
+import { realpathSync } from "node:fs";
 import path3 from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -69,7 +74,7 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/obligation_ids",
   "/case_ids",
   "/oracle_refs",
-  "/test_point_ids",
+  "/oracle_evidence_refs",
   "/asked_root_issue_ids",
   "/sources",
   "/locators",
@@ -109,11 +114,27 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/interaction_candidates",
   "/interaction_candidates/module_ids",
   "/interaction_candidates/source_claim_ids",
+  "/obligation_inputs/combination_requests",
+  "/obligation_inputs/combination_requests/owner/fact_ids",
+  "/obligation_inputs/combination_requests/owner/view_element_refs",
+  "/obligation_inputs/combination_requests/parameters",
+  "/obligation_inputs/combination_requests/parameters/values",
+  "/obligation_inputs/combination_requests/constraints",
+  "/obligation_inputs/combination_requests/constraints/assignments",
+  "/obligation_inputs/combination_requests/constraints/evidence_refs",
+  "/obligation_inputs/combination_requests/interaction_risk/evidence_refs",
+  "/obligation_inputs/combination_requests/vector_oracles",
+  "/obligation_inputs/combination_requests/vector_oracles/assignments",
+  "/obligation_inputs/combination_requests/vector_oracles/required_oracle_refs",
   "/obligations",
   "/obligations/source_claim_ids",
   "/obligations/view_element_refs",
   "/obligations/required_oracle_refs",
   "/obligations/required_capabilities",
+  "/obligations/combination_vector/owner/fact_ids",
+  "/obligations/combination_vector/owner/view_element_refs",
+  "/obligations/combination_vector/assignments",
+  "/obligations/combination_vector/forbid_evidence_refs",
   "/fact_routes",
   "/fact_routes/obligation_ids",
   "/interaction_routes",
@@ -126,22 +147,22 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/cases/preconditions/source_claim_ids",
   "/cases/data",
   "/cases/steps/expectations",
+  "/cases/steps/expectations/oracle_evidence_refs",
   "/cases/testability_profile/capabilities",
   "/cases/testability_profile/observers",
   "/cases/testability_profile/controls",
   "/cases/execution_signature/oracle_refs",
-  "/cases/execution_signature/test_point_ids",
   "/fact_ids",
   "/evidence_refs",
   "/preconditions",
   "/preconditions/source_claim_ids",
   "/data",
   "/steps/expectations",
+  "/steps/expectations/oracle_evidence_refs",
   "/testability_profile/capabilities",
   "/testability_profile/observers",
   "/testability_profile/controls",
   "/execution_signature/oracle_refs",
-  "/execution_signature/test_point_ids",
   "/obligation_dispositions",
   "/obligation_dispositions/case_ids",
   "/obligation_dispositions/evidence_refs",
@@ -156,11 +177,11 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/grounded/preconditions/source_claim_ids",
   "/grounded/data",
   "/grounded/steps/expectations",
+  "/grounded/steps/expectations/oracle_evidence_refs",
   "/grounded/testability_profile/capabilities",
   "/grounded/testability_profile/observers",
   "/grounded/testability_profile/controls",
   "/grounded/execution_signature/oracle_refs",
-  "/grounded/execution_signature/test_point_ids",
   "/conditional",
   "/conditional/fact_ids",
   "/conditional/obligation_ids",
@@ -170,11 +191,11 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/conditional/preconditions/source_claim_ids",
   "/conditional/data",
   "/conditional/steps/expectations",
+  "/conditional/steps/expectations/oracle_evidence_refs",
   "/conditional/testability_profile/capabilities",
   "/conditional/testability_profile/observers",
   "/conditional/testability_profile/controls",
   "/conditional/execution_signature/oracle_refs",
-  "/conditional/execution_signature/test_point_ids",
   "/blocked",
   "/exploratory",
   "/coverage/requirements/entries",
@@ -192,7 +213,7 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/blockers/affected_obligation_ids"
 ]);
 var ROOT_ISSUE_ASSOCIATIONS = /* @__PURE__ */ new Set(["case_ids", "case_id", "test_point_ids", "test_point_id", "obligation_ids", "obligation_id"]);
-var EXECUTION_SIGNATURE_ASSOCIATIONS = /* @__PURE__ */ new Set(["test_point_ids", "test_point_id", "obligation_ids", "obligation_id"]);
+var EXECUTION_SIGNATURE_ASSOCIATIONS = /* @__PURE__ */ new Set(["obligation_ids", "obligation_id"]);
 var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/sources", "source_id"],
   ["/locators", "locator_id"],
@@ -330,7 +351,7 @@ var behavior_views_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "behavior-views.schema.json",
   type: "object",
-  required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates"],
+  required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
   properties: {
     schema_version: { const: "1.0.0" },
     source_revision: { type: "integer", minimum: 0 },
@@ -352,11 +373,39 @@ var behavior_views_schema_default = {
       ] } },
       relations: { type: "array", items: { type: "object", required: ["relation_id", "kind", "from_element_id", "to_element_id", "sequence", "source_claim_ids", "model_refs"], properties: { relation_id: { type: "string", minLength: 1 }, kind: { enum: ["sequence", "dependency", "transition", "contains"] }, from_element_id: { type: "string", minLength: 1 }, to_element_id: { type: "string", minLength: 1 }, sequence: { type: "integer", minimum: 0 }, source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, model_refs: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false } }
     }, additionalProperties: false } },
+    obligation_inputs: { type: "object", required: ["view_contexts", "terminal_fact_routes", "custom_responsibilities", "combination_requests"], properties: {
+      view_contexts: { type: "array", items: { type: "object", required: ["view_id", "bindings"], properties: {
+        view_id: { type: "string", minLength: 1 },
+        bindings: { type: "array", items: { type: "object", required: ["selector", "risk", "source_claim_ids", "required_oracle_refs", "required_capabilities"], properties: {
+          selector: { oneOf: [
+            { type: "object", required: ["kind", "element_id", "class_id"], properties: { kind: { const: "equivalence-class" }, element_id: { type: "string", minLength: 1 }, class_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+            { type: "object", required: ["kind", "element_id", "boundary"], properties: { kind: { const: "boundary" }, element_id: { type: "string", minLength: 1 }, boundary: { enum: ["lower", "upper"] } }, additionalProperties: false },
+            { type: "object", required: ["kind", "element_id", "permission"], properties: { kind: { const: "permission" }, element_id: { type: "string", minLength: 1 }, permission: { type: "string", minLength: 1 } }, additionalProperties: false },
+            { type: "object", required: ["kind", "element_id"], properties: { kind: { enum: ["before", "equal", "after", "request", "response", "persistence", "event", "callback", "compensation"] }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+            { type: "object", required: ["kind", "element_id", "signal_claim_id"], properties: { kind: { enum: ["timeout", "retry", "invariant", "contract-compatibility", "concurrency", "idempotency", "security-abuse"] }, element_id: { type: "string", minLength: 1 }, signal_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+            { type: "object", required: ["kind", "element_id", "side_effect_kind", "target"], properties: { kind: { const: "side-effect" }, element_id: { type: "string", minLength: 1 }, side_effect_kind: { type: "string", minLength: 1 }, target: { type: "string", minLength: 1 } }, additionalProperties: false }
+          ] },
+          risk: { enum: ["critical", "high", "medium", "low"] },
+          source_claim_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true },
+          required_oracle_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true },
+          required_capabilities: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }
+        }, additionalProperties: false } }
+      }, additionalProperties: false } },
+      terminal_fact_routes: { type: "array", items: { oneOf: [
+        { type: "object", required: ["fact_id", "disposition", "issue_intent"], properties: { fact_id: { type: "string", minLength: 1 }, disposition: { const: "blocked" }, issue_intent: { type: "object", required: ["missing_type", "scope", "answerable", "risk", "reasons", "evidence_refs"], properties: { missing_type: { type: "string", minLength: 1, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" }, scope: { type: "string", minLength: 1 }, answerable: { type: "boolean" }, risk: { enum: ["critical", "high", "medium", "low"] }, reasons: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } }, additionalProperties: false },
+        { type: "object", required: ["fact_id", "disposition", "exclusion_claim_id", "scope", "support_review"], properties: { fact_id: { type: "string", minLength: 1 }, disposition: { const: "not_applicable" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false }
+      ] } },
+      custom_responsibilities: { type: "array", items: { type: "object", required: ["responsibility_type", "semantic_key", "owner", "scope", "risk", "source_claim_ids", "required_oracle_refs", "required_capabilities"], properties: { responsibility_type: { enum: ["flow-path", "decision-outcome", "state-transition", "input-partition", "role-permission", "temporal-rule", "integration-contract", "cross-module-interaction"] }, semantic_key: { type: "string", minLength: 1 }, owner: { oneOf: [
+        { type: "object", required: ["kind", "fact_ids"], properties: { kind: { const: "facts" }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false },
+        { type: "object", required: ["kind", "view_element_refs"], properties: { kind: { const: "view-elements" }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
+      ] }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, source_claim_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, required_oracle_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }, required_capabilities: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } },
+      combination_requests: { type: "array", items: { type: "object", required: ["owner", "scope", "strength", "parameters", "constraints", "interaction_risk", "vector_oracles"], properties: { owner: { type: "object", required: ["view_id", "fact_ids", "view_element_refs"], properties: { view_id: { type: "string", minLength: 1 }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, scope: { type: "string", minLength: 1 }, strength: { type: "integer", minimum: 2 }, parameters: { type: "array", items: { type: "object", required: ["parameter_id", "values"], properties: { parameter_id: { type: "string", minLength: 1 }, values: { type: "array", items: { type: "object", required: ["value_id", "evidence_claim_id"], properties: { value_id: { type: "string", minLength: 1 }, evidence_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, minItems: 3 }, constraints: { type: "array", items: { type: "object", required: ["kind", "assignments", "evidence_refs"], properties: { kind: { const: "forbid" }, assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false } }, interaction_risk: { type: "object", required: ["risk", "evidence_refs"], properties: { risk: { enum: ["critical", "high", "medium", "low"] }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, vector_oracles: { type: "array", items: { type: "object", required: ["assignments", "required_oracle_refs"], properties: { assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }, required_oracle_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } } }, additionalProperties: false } }
+    }, additionalProperties: false },
     interaction_matrix: { type: "array", items: { type: "object", required: ["module_ids", "dimension", "status"], properties: { module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, status: { enum: ["checked-no-signal", "candidate"] } }, additionalProperties: false } },
     interaction_candidates: { type: "array", items: { oneOf: [
-      { type: "object", required: ["candidate_id", "module_ids", "dimension", "disposition", "source_claim_ids", "formal_view_id"], properties: { candidate_id: { type: "string", minLength: 1 }, module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, disposition: { const: "formal-view" }, source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, formal_view_id: { type: "string", minLength: 1 } }, additionalProperties: false },
-      { type: "object", required: ["candidate_id", "module_ids", "dimension", "disposition", "blocker_root_issue_id"], properties: { candidate_id: { type: "string", minLength: 1 }, module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, disposition: { const: "blocker" }, blocker_root_issue_id: { type: "string", minLength: 1 } }, additionalProperties: false },
-      { type: "object", required: ["candidate_id", "module_ids", "dimension", "disposition", "exploratory_id"], properties: { candidate_id: { type: "string", minLength: 1 }, module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, disposition: { const: "exploratory" }, exploratory_id: { type: "string", minLength: 1 } }, additionalProperties: false }
+      { type: "object", required: ["candidate_id", "module_ids", "dimension", "disposition", "source_claim_ids", "semantic_subject_refs", "formal_view_id"], properties: { candidate_id: { type: "string", minLength: 1 }, module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, disposition: { const: "formal-view" }, source_claim_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, semantic_subject_refs: { type: "array", minItems: 1, uniqueItems: true, items: { oneOf: [{ type: "object", required: ["kind", "fact_id"], properties: { kind: { const: "fact" }, fact_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id"], properties: { kind: { const: "view-element" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "model_ref"], properties: { kind: { const: "model-element" }, model_ref: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id", "surface"], properties: { kind: { const: "integration-surface" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 }, surface: { enum: ["request", "response", "persistence", "event", "callback", "compensation"] } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id", "surface", "side_effect_kind", "target"], properties: { kind: { const: "integration-surface" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 }, surface: { const: "side-effect" }, side_effect_kind: { type: "string", minLength: 1 }, target: { type: "string", minLength: 1 } }, additionalProperties: false }] } }, formal_view_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+      { type: "object", required: ["candidate_id", "module_ids", "dimension", "disposition", "source_claim_ids", "semantic_subject_refs", "issue_intent"], properties: { candidate_id: { type: "string", minLength: 1 }, module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, disposition: { const: "blocker" }, source_claim_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, semantic_subject_refs: { type: "array", minItems: 1, uniqueItems: true, items: { oneOf: [{ type: "object", required: ["kind", "fact_id"], properties: { kind: { const: "fact" }, fact_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id"], properties: { kind: { const: "view-element" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "model_ref"], properties: { kind: { const: "model-element" }, model_ref: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id", "surface"], properties: { kind: { const: "integration-surface" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 }, surface: { enum: ["request", "response", "persistence", "event", "callback", "compensation"] } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id", "surface", "side_effect_kind", "target"], properties: { kind: { const: "integration-surface" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 }, surface: { const: "side-effect" }, side_effect_kind: { type: "string", minLength: 1 }, target: { type: "string", minLength: 1 } }, additionalProperties: false }] } }, issue_intent: { type: "object", required: ["missing_type", "scope", "answerable", "risk", "reasons", "evidence_refs"], properties: { missing_type: { type: "string", minLength: 1, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" }, scope: { type: "string", minLength: 1 }, answerable: { type: "boolean" }, risk: { enum: ["critical", "high", "medium", "low"] }, reasons: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } }, additionalProperties: false },
+      { type: "object", required: ["candidate_id", "module_ids", "dimension", "disposition", "source_claim_ids", "semantic_subject_refs", "exploratory_id"], properties: { candidate_id: { type: "string", minLength: 1 }, module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, disposition: { const: "exploratory" }, source_claim_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, semantic_subject_refs: { type: "array", minItems: 1, uniqueItems: true, items: { oneOf: [{ type: "object", required: ["kind", "fact_id"], properties: { kind: { const: "fact" }, fact_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id"], properties: { kind: { const: "view-element" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "model_ref"], properties: { kind: { const: "model-element" }, model_ref: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id", "surface"], properties: { kind: { const: "integration-surface" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 }, surface: { enum: ["request", "response", "persistence", "event", "callback", "compensation"] } }, additionalProperties: false }, { type: "object", required: ["kind", "view_id", "element_id", "surface", "side_effect_kind", "target"], properties: { kind: { const: "integration-surface" }, view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 }, surface: { const: "side-effect" }, side_effect_kind: { type: "string", minLength: 1 }, target: { type: "string", minLength: 1 } }, additionalProperties: false }] } }, exploratory_id: { type: "string", minLength: 1 } }, additionalProperties: false }
     ] } }
   },
   additionalProperties: false
@@ -395,22 +444,7 @@ var case_drafts_schema_default = {
             action: { type: "string", minLength: 1 },
             action_evidence_ref: { type: "string", minLength: 1 },
             support_review: { enum: ["supported", "contradicted", "uncertain"] },
-            expectations: { type: "array", minItems: 1, items: { type: "object", required: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"], properties: {
-              expectation_id: { type: "string", minLength: 1 },
-              business_assertion: { type: "string", minLength: 1 },
-              preceding_action_id: { type: "string", minLength: 1 },
-              observer: { type: "string", minLength: 1 },
-              observation_surface: { type: "string", minLength: 1 },
-              observation_target: { type: "string", minLength: 1 },
-              oracle: { oneOf: [
-                { type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-                { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-                { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-                { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }
-              ] },
-              evidence_ref: { type: "string", minLength: 1 },
-              support_review: { enum: ["supported", "contradicted", "uncertain"] }
-            }, additionalProperties: false } }
+            expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } }
           }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -424,14 +458,14 @@ var case_drafts_schema_default = {
           ] },
           evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           temporary_assumption: { type: "object", required: ["claim_id", "invalidation_condition"], properties: { claim_id: { type: "string", minLength: 1 }, invalidation_condition: { type: "string", minLength: 1 } }, additionalProperties: false },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, test_point_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false }
+          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
         },
         additionalProperties: false
       }
     },
     obligation_dispositions: { type: "array", items: { oneOf: [
       { type: "object", required: ["obligation_id", "status", "case_ids"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { const: "case_candidate" }, case_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false },
-      { type: "object", required: ["obligation_id", "status", "blocker_root_issue_id", "evidence_refs"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { const: "blocker" }, blocker_root_issue_id: { type: "string", minLength: 1 }, evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false },
+      { type: "object", required: ["status", "affected_obligation_ids", "issue_intent", "subject"], properties: { status: { const: "blocker" }, affected_obligation_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, issue_intent: { type: "object", required: ["missing_type", "scope", "answerable", "risk", "reasons", "evidence_refs"], properties: { missing_type: { type: "string", minLength: 1, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" }, scope: { type: "string", minLength: 1 }, answerable: { type: "boolean" }, risk: { enum: ["critical", "high", "medium", "low"] }, reasons: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false }, subject: { oneOf: [{ type: "object", required: ["kind", "fact_ids"], properties: { kind: { const: "facts" }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "view_element_refs"], properties: { kind: { const: "view-elements" }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "capabilities"], properties: { kind: { const: "capabilities" }, capabilities: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "claim_refs"], properties: { kind: { const: "evidence-conflict" }, claim_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } }, additionalProperties: false },
       { type: "object", required: ["obligation_id", "status", "exclusion_claim_id", "scope", "support_review"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { const: "not_applicable" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false }
     ] } },
     exploratory_candidates: { type: "array", items: { type: "object", required: ["exploratory_id", "title", "scope", "risk", "source_claim_ids"], properties: { exploratory_id: { type: "string", minLength: 1 }, title: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false } }
@@ -3177,7 +3211,13 @@ var KEYS = Object.freeze({
   evidence: ["claimsById", "factLedger", "conflicts"],
   obligationsArtifact: ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   caseDraftsArtifact: ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
-  obligation: ["obligation_id", "kind", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"],
+  obligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "combination_vector"],
+  combinationVector: ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+  combinationOwner: ["view_id", "fact_ids", "view_element_refs"],
+  combinationElementRef: ["view_id", "element_id"],
+  combinationAssignment: ["parameter_id", "value_id", "evidence_claim_id"],
+  gapObligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "gap_issue"],
+  gapIssue: ["root_issue_id", "root_issue_key", "missing_type", "semantic_refs", "scope", "answerable", "reasons", "evidence_refs"],
   fact: ["fact_id", "claim_id", "status", "source_claim_ids"],
   conflict: ["conflict_id", "root_issue_id", "scope", "rule_ids", "source_ids"],
   caseDraft: ["case_id", "title", "scope", "risk", "role", "fact_ids", "obligation_ids", "source_claim_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "temporary_assumption", "execution_signature"],
@@ -3186,7 +3226,7 @@ var KEYS = Object.freeze({
   data: ["name", "value", "provenance", "support_review"],
   provenance: ["type", "ref"],
   step: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"],
-  expectation: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"],
+  expectation: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "oracle_evidence_refs", "closes_obligation_id", "support_review"],
   oracle: ["type", "expected_value", "expected_state", "expected_event", "expected_side_effect", "comparison", "tolerance", "window"],
   profile: ["capabilities", "observers", "controls"],
   capability: ["capability", "status", "provenance_ref"],
@@ -3195,7 +3235,7 @@ var KEYS = Object.freeze({
   postState: ["state", "evidence_ref", "support_review"],
   cleanup: ["required", "steps", "evidence_ref", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"],
   temporaryAssumption: ["claim_id", "invalidation_condition"],
-  execution: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs", "test_point_ids"],
+  execution: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"],
   exploratory: ["exploratory_id", "title", "scope", "risk", "source_claim_ids"]
 });
 function compareCodePoints3(left, right) {
@@ -3513,6 +3553,24 @@ function normalizeSemanticString(value) {
   if (typeof value !== "string") return "";
   return value.normalize("NFC").trim().replace(/\s+/gu, " ");
 }
+function normalizedBlockerSubject(subject) {
+  if (subject.kind === "facts") return {
+    kind: "facts",
+    fact_ids: [...stringArray3(subject.fact_ids) ?? []].sort(compareCodePoints3)
+  };
+  if (subject.kind === "view-elements") return {
+    kind: "view-elements",
+    view_element_refs: [...objectArray4(subject.view_element_refs) ?? []].map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id })).sort((left, right) => compareCodePoints3(canonicalStringify(left), canonicalStringify(right)))
+  };
+  if (subject.kind === "capabilities") return {
+    kind: "capabilities",
+    capabilities: [...stringArray3(subject.capabilities) ?? []].sort(compareCodePoints3)
+  };
+  return {
+    kind: "evidence-conflict",
+    claim_refs: [...stringArray3(subject.claim_refs) ?? []].sort(compareCodePoints3)
+  };
+}
 function canonicalSetProjection(entries) {
   const byCanonicalValue = /* @__PURE__ */ new Map();
   for (const entry of entries) byCanonicalValue.set(canonicalStringify(entry), entry);
@@ -3530,6 +3588,27 @@ function deriveDataPartition(draft) {
     value: normalizeSemanticString(item.value)
   })));
 }
+function oracleSemanticId(step, expectation) {
+  const oracle = isRecord2(expectation.oracle) ? expectation.oracle : {};
+  const type = String(oracle.type ?? "");
+  const expectedField = ORACLE_FIELDS[
+    /** @type {keyof typeof ORACLE_FIELDS} */
+    type
+  ];
+  return stableId("oracle", {
+    action: normalizeSemanticString(step.action),
+    observer: normalizeSemanticString(expectation.observer),
+    observation_surface: normalizeSemanticString(expectation.observation_surface),
+    observation_target: normalizeSemanticString(expectation.observation_target),
+    oracle: {
+      type,
+      ...expectedField ? { [expectedField]: normalizeSemanticString(oracle[expectedField]) } : {},
+      comparison: normalizeSemanticString(oracle.comparison),
+      ...oracle.tolerance === void 0 ? {} : { tolerance: oracle.tolerance },
+      ...oracle.window === void 0 ? {} : { window: normalizeSemanticString(oracle.window) }
+    }
+  });
+}
 function executionSignature(caseDraft) {
   try {
     const trusted = snapshotControlled2(caseDraft);
@@ -3538,7 +3617,7 @@ function executionSignature(caseDraft) {
     const steps = objectArray4(draft.steps) ?? [];
     const actionPath = steps.map((step) => normalizeSemanticString(step.action));
     const oracleRefs = [...new Set(steps.flatMap(
-      (step) => (objectArray4(step.expectations) ?? []).map((expectation) => normalizeSemanticString(expectation.expectation_id))
+      (step) => (objectArray4(step.expectations) ?? []).map((expectation) => oracleSemanticId(step, expectation))
     ))].sort(compareCodePoints3);
     return canonicalStringify({
       role,
@@ -3602,8 +3681,28 @@ function validateClosedShape(context, diagnostics) {
     if (isRecord2(conflict)) checkCanonical(conflict.scope, `/evidence/conflicts/${index}/scope`, diagnostics);
   });
   obligations.obligations.forEach((obligation, index) => {
-    checkKeys2(obligation, KEYS.obligation, `/obligations/obligations/${index}`, diagnostics);
+    checkKeys2(obligation, obligation?.kind === "requirement-gap" ? KEYS.gapObligation : KEYS.obligation, `/obligations/obligations/${index}`, diagnostics);
     if (!isRecord2(obligation)) return;
+    if (obligation.kind === "requirement-gap" && isRecord2(obligation.gap_issue)) checkKeys2(
+      obligation.gap_issue,
+      KEYS.gapIssue,
+      `/obligations/obligations/${index}/gap_issue`,
+      diagnostics
+    );
+    if (isRecord2(obligation.combination_vector)) {
+      const vectorPath = `/obligations/obligations/${index}/combination_vector`;
+      checkKeys2(obligation.combination_vector, KEYS.combinationVector, vectorPath, diagnostics);
+      if (isRecord2(obligation.combination_vector.owner)) {
+        checkKeys2(obligation.combination_vector.owner, KEYS.combinationOwner, `${vectorPath}/owner`, diagnostics);
+        objectArray4(obligation.combination_vector.owner.view_element_refs)?.forEach((item, itemIndex) => {
+          checkKeys2(item, KEYS.combinationElementRef, `${vectorPath}/owner/view_element_refs/${itemIndex}`, diagnostics);
+        });
+      }
+      objectArray4(obligation.combination_vector.assignments)?.forEach((item, itemIndex) => {
+        checkKeys2(item, KEYS.combinationAssignment, `${vectorPath}/assignments/${itemIndex}`, diagnostics);
+        checkCanonical(item.evidence_claim_id, `${vectorPath}/assignments/${itemIndex}/evidence_claim_id`, diagnostics);
+      });
+    }
     for (const [field, value] of [["obligation_id", obligation.obligation_id], ["scope", obligation.scope]]) {
       checkCanonical(value, `/obligations/obligations/${index}/${field}`, diagnostics);
     }
@@ -3612,12 +3711,12 @@ function validateClosedShape(context, diagnostics) {
   });
   obligations.fact_routes.forEach((route, index) => {
     if (!isRecord2(route)) return;
-    const allowed = route.route_type === "obligations" ? ["fact_id", "route_type", "obligation_ids"] : route.route_type === "blocked" ? ["fact_id", "route_type", "blocker_root_issue_id"] : ["fact_id", "route_type", "not_applicable_claim_id"];
+    const allowed = route.route_type === "obligations" ? ["fact_id", "route_type", "obligation_ids"] : route.route_type === "blocked" ? ["fact_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"] : ["fact_id", "route_type", "not_applicable_claim_id"];
     checkKeys2(route, allowed, `/obligations/fact_routes/${index}`, diagnostics);
   });
   obligations.interaction_routes.forEach((route, index) => {
     if (!isRecord2(route)) return;
-    const allowed = route.route_type === "formal-view" ? ["candidate_id", "route_type", "formal_view_id"] : route.route_type === "blocked" ? ["candidate_id", "route_type", "blocker_root_issue_id"] : ["candidate_id", "route_type", "exploratory_id"];
+    const allowed = route.route_type === "formal-view" ? ["candidate_id", "route_type", "formal_view_id"] : route.route_type === "blocked" ? ["candidate_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"] : ["candidate_id", "route_type", "exploratory_id"];
     checkKeys2(route, allowed, `/obligations/interaction_routes/${index}`, diagnostics);
   });
   drafts.cases.forEach((draft, caseIndex) => {
@@ -3654,8 +3753,20 @@ function validateClosedShape(context, diagnostics) {
   });
   drafts.obligation_dispositions.forEach((disposition, index) => {
     if (!isRecord2(disposition)) return;
-    const allowed = disposition.status === "case_candidate" ? ["obligation_id", "status", "case_ids"] : disposition.status === "blocker" ? ["obligation_id", "status", "blocker_root_issue_id", "evidence_refs"] : disposition.status === "not_applicable" ? ["obligation_id", "status", "exclusion_claim_id", "scope", "support_review"] : ["obligation_id", "status", "case_ids", "blocker_root_issue_id", "evidence_refs", "exclusion_claim_id", "scope", "support_review"];
+    const allowed = disposition.status === "case_candidate" ? ["obligation_id", "status", "case_ids"] : disposition.status === "blocker" ? ["status", "affected_obligation_ids", "issue_intent", "subject"] : disposition.status === "not_applicable" ? ["obligation_id", "status", "exclusion_claim_id", "scope", "support_review"] : ["obligation_id", "status", "case_ids", "blocker_root_issue_id", "evidence_refs", "exclusion_claim_id", "scope", "support_review"];
     checkKeys2(disposition, allowed, `/caseDrafts/obligation_dispositions/${index}`, diagnostics);
+    if (disposition.status === "blocker") {
+      if (isRecord2(disposition.issue_intent)) checkKeys2(
+        disposition.issue_intent,
+        ["missing_type", "scope", "answerable", "risk", "reasons", "evidence_refs"],
+        `/caseDrafts/obligation_dispositions/${index}/issue_intent`,
+        diagnostics
+      );
+      if (isRecord2(disposition.subject)) {
+        const subjectAllowed = disposition.subject.kind === "facts" ? ["kind", "fact_ids"] : disposition.subject.kind === "view-elements" ? ["kind", "view_element_refs"] : disposition.subject.kind === "capabilities" ? ["kind", "capabilities"] : ["kind", "claim_refs"];
+        checkKeys2(disposition.subject, subjectAllowed, `/caseDrafts/obligation_dispositions/${index}/subject`, diagnostics);
+      }
+    }
   });
   drafts.exploratory_candidates.forEach((candidate, index) => checkKeys2(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics));
 }
@@ -3761,129 +3872,112 @@ function assessEvidenceRoots(roots, evidence, cache) {
   cache?.set(cacheKey, result);
   return result;
 }
-function buildOracleReachability(evidence, obligations) {
-  const oracleRefs = [...new Set(obligations.flatMap((obligation) => stringArray3(obligation.required_oracle_refs) ?? []))].sort(compareCodePoints3);
-  const oracleRefsByClaim = /* @__PURE__ */ new Map();
-  for (const oracleRef of oracleRefs) {
-    const assessment = evidence.get(oracleRef);
-    if (assessment && assessment.rank > 0 && assessment.reasons.length === 0) {
-      oracleRefsByClaim.set(oracleRef, /* @__PURE__ */ new Set([oracleRef]));
-    }
-  }
-  const indegree = /* @__PURE__ */ new Map();
-  for (const [claimId, assessment] of evidence) {
-    indegree.set(claimId, assessment.parents.reduce((count, parentId) => count + (evidence.has(parentId) ? 1 : 0), 0));
-  }
-  const queue = [...indegree].filter(([, count]) => count === 0).map(([claimId]) => claimId).sort(compareCodePoints3);
-  let cursor = 0;
-  while (cursor < queue.length) {
-    const claimId = queue[cursor++];
-    const reachableOracles = oracleRefsByClaim.get(claimId);
-    for (const childId of evidence.get(claimId)?.children ?? []) {
-      const child = evidence.get(childId);
-      if (reachableOracles && child && child.rank > 0 && child.reasons.length === 0) {
-        let childOracles = oracleRefsByClaim.get(childId);
-        if (!childOracles) {
-          childOracles = /* @__PURE__ */ new Set();
-          oracleRefsByClaim.set(childId, childOracles);
-        }
-        for (const oracleRef of reachableOracles) childOracles.add(oracleRef);
-      }
-      const remaining = (indegree.get(childId) ?? 0) - 1;
-      indegree.set(childId, remaining);
-      if (remaining === 0) queue.push(childId);
-    }
-  }
-  const oracleRefsByObligation = /* @__PURE__ */ new Map();
+function isTypedOracleClaim(claim) {
+  if (claim.level === "E3" && claim.kind === "requirement") return true;
+  if (claim.level === "E1" && claim.kind === "assumption") return true;
+  return claim.level === "E2" && claim.kind === "expected-value" && claim.derivation_target === "expected-value" && (claim.derivation_kind === "formula" || claim.derivation_kind === "decision-table-instance");
+}
+function buildOracleReachability(evidence, obligations, routedFactsByObligation, factsById) {
+  const allowedRefsByObligation = /* @__PURE__ */ new Map();
+  const forbiddenRefsByObligation = /* @__PURE__ */ new Map();
+  const descendantsByRootSignature = /* @__PURE__ */ new Map();
   for (const obligation of obligations) {
-    if (isCanonicalString(obligation.obligation_id)) oracleRefsByObligation.set(
-      String(obligation.obligation_id),
-      new Set(stringArray3(obligation.required_oracle_refs) ?? [])
-    );
+    const obligationId = String(obligation.obligation_id ?? "");
+    const factRoots = [...routedFactsByObligation.get(obligationId) ?? []].flatMap((factId) => {
+      const fact = factsById.get(factId);
+      return fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : [];
+    });
+    const roots = /* @__PURE__ */ new Set([
+      ...stringArray3(obligation.source_claim_ids) ?? [],
+      ...stringArray3(obligation.required_oracle_refs) ?? [],
+      ...factRoots
+    ]);
+    const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : {};
+    const forbidden = new Set(stringArray3(vector.forbid_evidence_refs) ?? []);
+    const rootSignature = canonicalStringify([...roots].sort(compareCodePoints3));
+    let descendants = descendantsByRootSignature.get(rootSignature);
+    if (!descendants) {
+      descendants = /* @__PURE__ */ new Set();
+      const pending = [...roots];
+      let cursor = 0;
+      while (cursor < pending.length) {
+        const current = pending[cursor++];
+        if (descendants.has(current)) continue;
+        descendants.add(current);
+        for (const childId of evidence.get(current)?.children ?? []) pending.push(childId);
+      }
+      descendantsByRootSignature.set(rootSignature, descendants);
+    }
+    const allowed = /* @__PURE__ */ new Set();
+    for (const [claimId, assessment] of evidence) {
+      const claim = assessment.claim;
+      if (assessment.rank === 0 || assessment.reasons.length > 0 || !isTypedOracleClaim(claim) || !scopeContains(String(claim.scope ?? ""), String(obligation.scope ?? ""))) continue;
+      if (roots.has(claimId) || claim.level === "E2" && descendants.has(claimId)) {
+        allowed.add(claimId);
+      }
+    }
+    for (const ref of forbidden) allowed.delete(ref);
+    allowedRefsByObligation.set(obligationId, allowed);
+    forbiddenRefsByObligation.set(obligationId, forbidden);
   }
-  return { oracleRefsByClaim, oracleRefsByObligation };
+  return { allowedRefsByObligation, forbiddenRefsByObligation };
 }
 function requireOracleOwnership(draft, obligations, expectations, reachability, reasons, diagnostics) {
-  if (expectations.length === 0) return;
-  const orderedExpectations = [...expectations].sort((left, right) => compareCodePoints3(left.expectationId, right.expectationId));
-  const orderedObligations = obligations.filter((obligation) => (stringArray3(obligation.required_oracle_refs) ?? []).length > 0).sort((left, right) => compareCodePoints3(String(left.obligation_id), String(right.obligation_id)));
-  const edges = [];
-  let missingEdge = false;
-  for (const obligation of orderedObligations) {
-    const obligationId = String(obligation.obligation_id);
-    const requiredOracles = reachability.oracleRefsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
-    const candidates = [];
-    for (const [expectationIndex, expectation] of orderedExpectations.entries()) {
-      const expectationOracles = reachability.oracleRefsByClaim.get(expectation.evidenceRef);
-      let coversAll = requiredOracles.size > 0 && Boolean(expectationOracles);
-      if (expectationOracles) {
-        for (const oracleRef of requiredOracles) {
-          if (!expectationOracles.has(oracleRef)) coversAll = false;
-        }
-      }
-      if (coversAll) candidates.push(expectationIndex);
+  const casePath = `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}`;
+  const obligationsById = new Map(obligations.map((obligation) => [String(obligation.obligation_id), obligation]));
+  const closedCounts = new Map([...obligationsById.keys()].map((obligationId) => [obligationId, 0]));
+  for (const expectation of expectations) {
+    const path4 = `${casePath}/expectations/${pointerPart2(expectation.expectationId)}`;
+    if (expectation.oracleEvidenceValid && !expectation.oracleEvidenceRefs.includes(expectation.evidenceRef)) {
+      diagnostics.push(diagnostic5("traceability", "ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED", path4, "evidence_ref must be included in oracle_evidence_refs"));
+      reasons.add("ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED");
     }
-    edges.push(candidates);
-    if (candidates.length === 0) {
-      missingEdge = true;
-      diagnostics.push(diagnostic5(
-        "traceability",
-        "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED",
-        `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/obligations/${pointerPart2(obligationId)}/required_oracle_refs`,
-        "one concrete expectation must cover every required Oracle for the formal obligation"
-      ));
+    if (expectation.kind === "obligation-oracle") {
+      const obligation = obligationsById.get(expectation.closesObligationId);
+      if (!obligation || obligation.caseable !== true || obligation.kind === "requirement-gap") {
+        diagnostics.push(diagnostic5("reference", "ORACLE_CLOSE_TARGET_INVALID", path4, "obligation-oracle must close one linked caseable obligation"));
+        reasons.add("ORACLE_CLOSE_TARGET_INVALID");
+        continue;
+      }
+      closedCounts.set(expectation.closesObligationId, (closedCounts.get(expectation.closesObligationId) ?? 0) + 1);
+      if (!expectation.oracleEvidenceValid) continue;
+      const allowed = reachability.allowedRefsByObligation.get(expectation.closesObligationId) ?? /* @__PURE__ */ new Set();
+      const forbidden = reachability.forbiddenRefsByObligation.get(expectation.closesObligationId) ?? /* @__PURE__ */ new Set();
+      const required = stringArray3(obligation.required_oracle_refs) ?? [];
+      if (required.some((ref) => !expectation.oracleEvidenceRefs.includes(ref))) {
+        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_PREBINDING_MISSING", path4, "the closing expectation must include every required Oracle prebinding"));
+        reasons.add("OBLIGATION_ORACLE_PREBINDING_MISSING");
+      }
+      if (expectation.oracleEvidenceRefs.some((ref) => forbidden.has(ref))) {
+        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN", path4, "forbid evidence cannot become a selected-vector Oracle"));
+        reasons.add("OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN");
+      } else if (expectation.oracleEvidenceRefs.some((ref) => !allowed.has(ref))) {
+        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_EVIDENCE_UNRELATED", path4, "Oracle evidence must belong to the obligation closure or legal E2 expected-value ancestry"));
+        reasons.add("OBLIGATION_ORACLE_EVIDENCE_UNRELATED");
+      }
+    } else if (expectation.kind === "auxiliary") {
+      if (!expectation.oracleEvidenceValid) continue;
+      const allowed = new Set([...obligationsById.keys()].flatMap((obligationId) => [
+        ...reachability.allowedRefsByObligation.get(obligationId) ?? []
+      ]));
+      if (expectation.closesObligationId || expectation.oracleEvidenceRefs.some((ref) => !allowed.has(ref))) {
+        diagnostics.push(diagnostic5("traceability", "AUXILIARY_ORACLE_EVIDENCE_UNRELATED", path4, "auxiliary expectations cannot close obligations and must use legal Case Oracle evidence"));
+        reasons.add("AUXILIARY_ORACLE_EVIDENCE_UNRELATED");
+      }
+    } else {
+      diagnostics.push(diagnostic5("classification", "EXPECTATION_KIND_INVALID", path4, "expectation kind must be obligation-oracle or auxiliary"));
+      reasons.add("EXPECTATION_KIND_INVALID");
     }
   }
-  if (missingEdge) {
-    reasons.add("OBLIGATION_ORACLE_EXPECTATION_UNMAPPED");
-    return;
-  }
-  const ownerByExpectation = new Array(orderedExpectations.length).fill(-1);
-  const expectationByObligation = new Array(orderedObligations.length).fill(-1);
-  for (let start = 0; start < orderedObligations.length; start += 1) {
-    const obligationQueue = [start];
-    const seenObligations = /* @__PURE__ */ new Set([start]);
-    const seenExpectations = /* @__PURE__ */ new Set();
-    const parentObligationByExpectation = /* @__PURE__ */ new Map();
-    let cursor = 0;
-    let freeExpectation = -1;
-    while (cursor < obligationQueue.length && freeExpectation < 0) {
-      const obligationIndex = obligationQueue[cursor++];
-      for (const expectationIndex2 of edges[obligationIndex]) {
-        if (seenExpectations.has(expectationIndex2)) continue;
-        seenExpectations.add(expectationIndex2);
-        parentObligationByExpectation.set(expectationIndex2, obligationIndex);
-        const owner = ownerByExpectation[expectationIndex2];
-        if (owner < 0) {
-          freeExpectation = expectationIndex2;
-          break;
-        }
-        if (!seenObligations.has(owner)) {
-          seenObligations.add(owner);
-          obligationQueue.push(owner);
-        }
-      }
-    }
-    if (freeExpectation < 0) {
+  for (const [obligationId, count] of closedCounts) {
+    if (count !== 1) {
       diagnostics.push(diagnostic5(
         "traceability",
-        "OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT",
-        `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/obligation_ids`,
-        "linked formal obligations require distinct concrete expectations with complete Oracle coverage"
+        count === 0 ? "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED" : "OBLIGATION_ORACLE_EXPECTATION_DUPLICATE",
+        `${casePath}/obligations/${pointerPart2(obligationId)}`,
+        count === 0 ? "every linked caseable obligation requires exactly one closing expectation" : "a linked obligation cannot be closed by multiple expectations"
       ));
-      reasons.add("OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT");
-      return;
-    }
-    let expectationIndex = freeExpectation;
-    while (expectationIndex >= 0) {
-      const obligationIndex = (
-        /** @type {number} */
-        parentObligationByExpectation.get(expectationIndex)
-      );
-      const previousExpectation = expectationByObligation[obligationIndex];
-      expectationByObligation[obligationIndex] = expectationIndex;
-      ownerByExpectation[expectationIndex] = obligationIndex;
-      expectationIndex = previousExpectation;
+      reasons.add(count === 0 ? "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED" : "OBLIGATION_ORACLE_EXPECTATION_DUPLICATE");
     }
   }
 }
@@ -3956,7 +4050,6 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   for (const obligation of obligations) {
     const sources = stringArray3(obligation.source_claim_ids, true) ?? [];
     const oracles = stringArray3(obligation.required_oracle_refs) ?? [];
-    if (oracles.length === 0) reasons.add("FORMAL_ORACLE_MISSING");
     for (const ref of [...sources, ...oracles]) {
       evidenceRoots.add(ref);
       formalEvidenceRoots.add(ref);
@@ -4017,20 +4110,29 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         expectation.expectation_id
       );
       if (expectation.preceding_action_id !== step.step_id) reasons.add("PRECEDING_ACTION_NOT_CONTAINING");
-      const expectationFieldsValid = isNonblank(expectation.business_assertion) && isCanonicalString(expectation.preceding_action_id) && isNonblank(expectation.observer) && isNonblank(expectation.observation_surface) && isNonblank(expectation.observation_target) && isCanonicalString(expectation.evidence_ref);
+      const oracleEvidenceRefs = stringArray3(expectation.oracle_evidence_refs, true);
+      const expectationFieldsValid = isNonblank(expectation.business_assertion) && isCanonicalString(expectation.preceding_action_id) && isNonblank(expectation.observer) && isNonblank(expectation.observation_surface) && isNonblank(expectation.observation_target) && isCanonicalString(expectation.evidence_ref) && oracleEvidenceRefs !== null && (expectation.kind === "auxiliary" || expectation.kind === "obligation-oracle" && isCanonicalString(expectation.closes_obligation_id));
       if (!expectationFieldsValid) reasons.add("EXPECTATION_GATE_INVALID");
       if (isCanonicalString(expectation.evidence_ref)) evidenceRoots.add(expectation.evidence_ref);
-      if (expectationFieldsValid && expectationLocatable) {
+      for (const ref of oracleEvidenceRefs ?? []) {
+        evidenceRoots.add(ref);
+        formalEvidenceRoots.add(ref);
+      }
+      const closureDeclarationValid = expectation.kind === "auxiliary" || expectation.kind === "obligation-oracle" && isCanonicalString(expectation.closes_obligation_id);
+      if (expectationLocatable && closureDeclarationValid) {
         expectationsForOwnership.push({
           expectationId: (
             /** @type {string} */
             expectation.expectation_id
           ),
-          evidenceRef: (
-            /** @type {string} */
-            expectation.evidence_ref
-          )
+          evidenceRef: isCanonicalString(expectation.evidence_ref) ? String(expectation.evidence_ref) : "",
+          kind: String(expectation.kind),
+          closesObligationId: String(expectation.closes_obligation_id ?? ""),
+          oracleEvidenceRefs: oracleEvidenceRefs ?? [],
+          oracleEvidenceValid: isCanonicalString(expectation.evidence_ref) && oracleEvidenceRefs !== null
         });
+      }
+      if (expectationFieldsValid && expectationLocatable) {
         requiredObservers.push({ observer: String(expectation.observer), target: String(expectation.observation_target) });
       }
       const oracle = isRecord2(expectation.oracle) ? expectation.oracle : null;
@@ -4057,7 +4159,9 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       )) reasons.add("PRECEDING_ACTION_UNKNOWN");
     }
   }
-  requireOracleOwnership(draft, obligations, expectationsForOwnership, oracleReachability, reasons, diagnostics);
+  if (steps.some((step) => (objectArray4(step.expectations)?.length ?? 0) > 0)) {
+    requireOracleOwnership(draft, obligations, expectationsForOwnership, oracleReachability, reasons, diagnostics);
+  }
   const profile = isRecord2(draft.testability_profile) ? draft.testability_profile : {};
   const capabilities = objectArray4(profile.capabilities) ?? [];
   const observers = objectArray4(profile.observers) ?? [];
@@ -4143,14 +4247,16 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const submittedRole = normalizeSemanticString(signature.role);
   const submittedActions = Array.isArray(signature.action_path) ? signature.action_path.map(normalizeSemanticString) : [];
   const submittedOracles = Array.isArray(signature.oracle_refs) ? [...new Set(signature.oracle_refs.map(normalizeSemanticString))].sort(compareCodePoints3) : [];
-  const submittedTestPoints = stringArray3(signature.test_point_ids, true);
-  const actualTestPoints = [...stringArray3(draft.obligation_ids, true) ?? []].sort(compareCodePoints3);
   const actualSignature = JSON.parse(executionSignature(draft));
-  if (signature.precondition_state !== actualSignature.precondition_state || signature.data_partition !== actualSignature.data_partition) {
-    reasons.add("EXECUTION_SIGNATURE_MISMATCH");
-  }
-  if (submittedRole !== actualSignature.role || canonicalStringify(submittedActions) !== canonicalStringify(actualSignature.action_path) || canonicalStringify(submittedOracles) !== canonicalStringify(actualSignature.oracle_refs) || signature.test_point_ids !== void 0 && (!submittedTestPoints || canonicalStringify([...submittedTestPoints].sort(compareCodePoints3)) !== canonicalStringify(actualTestPoints))) {
-    reasons.add("EXECUTION_SIGNATURE_MISMATCH");
+  const actualAgentOracleRefs = [...expectationIds].sort(compareCodePoints3);
+  const signatureMismatch = signature.precondition_state !== actualSignature.precondition_state || signature.data_partition !== actualSignature.data_partition || submittedRole !== actualSignature.role || canonicalStringify(submittedActions) !== canonicalStringify(actualSignature.action_path) || canonicalStringify(submittedOracles) !== canonicalStringify(actualAgentOracleRefs);
+  if (signatureMismatch) {
+    diagnostics.push(diagnostic5(
+      "traceability",
+      "CASE_EXECUTION_SIGNATURE_MISMATCH",
+      `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/execution_signature`,
+      "Agent execution_signature must exactly summarize role, preconditions, data, ordered actions, and expectation IDs"
+    ));
   }
   const evidenceResult = assessEvidenceRoots([...evidenceRoots], evidence, evidenceCache);
   const formalEvidenceResult = assessEvidenceRoots([...formalEvidenceRoots], evidence, evidenceCache);
@@ -4255,13 +4361,26 @@ function relatedEvidenceClosure(roots, evidence, ancestryCache, relationCache) {
 }
 function comparableCase(draft) {
   const copy = structuredClone(draft);
-  delete copy.case_id;
-  delete copy.fact_ids;
-  delete copy.obligation_ids;
-  delete copy.source_claim_ids;
-  delete copy.evidence_refs;
-  if (isRecord2(copy.execution_signature)) delete copy.execution_signature.test_point_ids;
-  return canonicalStringify(copy);
+  const ignored = /* @__PURE__ */ new Set([
+    "case_id",
+    "fact_ids",
+    "obligation_ids",
+    "source_claim_ids",
+    "evidence_refs",
+    "oracle_evidence_refs",
+    "support_review",
+    "expectation_id",
+    "closes_obligation_id",
+    "step_id",
+    "preceding_action_id",
+    "execution_signature"
+  ]);
+  const strip = (value, path4 = []) => {
+    if (Array.isArray(value)) return value.map((item, index) => strip(item, [...path4, index]));
+    if (!isRecord2(value)) return value;
+    return Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.has(key) && !(key === "evidence_ref" && path4.includes("expectations"))).map(([key, item]) => [key, strip(item, [...path4, key])]));
+  };
+  return canonicalStringify(strip(copy));
 }
 function mergeExactCases(drafts) {
   const sorted = [...drafts].sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
@@ -4270,10 +4389,58 @@ function mergeExactCases(drafts) {
     const values = new Set(sorted.flatMap((draft) => stringArray3(draft[field]) ?? []));
     merged[field] = [...values].sort(compareCodePoints3);
   }
+  const mergedPreconditions = new Map((objectArray4(merged.preconditions) ?? []).map((precondition) => [
+    canonicalStringify({ condition: precondition.condition, reachable_from: precondition.reachable_from }),
+    precondition
+  ]));
+  for (const draft of sorted) {
+    for (const precondition of objectArray4(draft.preconditions) ?? []) {
+      const target = mergedPreconditions.get(canonicalStringify({
+        condition: precondition.condition,
+        reachable_from: precondition.reachable_from
+      }));
+      if (!target) continue;
+      target.source_claim_ids = [.../* @__PURE__ */ new Set([
+        ...stringArray3(target.source_claim_ids) ?? [],
+        ...stringArray3(precondition.source_claim_ids) ?? []
+      ])].sort(compareCodePoints3);
+    }
+  }
+  const mergedSteps = objectArray4(merged.steps) ?? [];
+  for (const [stepIndex, step] of mergedSteps.entries()) {
+    const expectationsByClosure = /* @__PURE__ */ new Map();
+    for (const draft of sorted) {
+      const sourceStep = (objectArray4(draft.steps) ?? [])[stepIndex];
+      if (!sourceStep) continue;
+      for (const expectation of objectArray4(sourceStep.expectations) ?? []) {
+        const oracleId = oracleSemanticId(sourceStep, expectation);
+        const closureKey = canonicalStringify({
+          oracle_id: oracleId,
+          kind: expectation.kind,
+          ...expectation.kind === "obligation-oracle" ? { closes_obligation_id: expectation.closes_obligation_id } : {}
+        });
+        const existing = expectationsByClosure.get(closureKey);
+        if (!existing) expectationsByClosure.set(closureKey, structuredClone(expectation));
+        else {
+          existing.oracle_evidence_refs = [.../* @__PURE__ */ new Set([
+            ...stringArray3(existing.oracle_evidence_refs) ?? [],
+            ...stringArray3(expectation.oracle_evidence_refs) ?? []
+          ])].sort(compareCodePoints3);
+          const evidenceRefs = [existing.evidence_ref, expectation.evidence_ref].filter(isCanonicalString).sort(compareCodePoints3);
+          existing.evidence_ref = evidenceRefs[0] ?? "";
+        }
+      }
+    }
+    step.expectations = [...expectationsByClosure.entries()].sort(([left], [right]) => compareCodePoints3(left, right)).map(([closureKey, expectation]) => ({
+      ...expectation,
+      preceding_action_id: step.step_id,
+      expectation_id: stableId("expectation", JSON.parse(closureKey))
+    }));
+  }
   const signature = JSON.parse(executionSignature(merged));
   merged.case_id = stableId("case", signature);
   if (isRecord2(merged.execution_signature)) {
-    merged.execution_signature.test_point_ids = [...stringArray3(merged.obligation_ids, true) ?? []].sort(compareCodePoints3);
+    merged.execution_signature = signature;
   }
   return merged;
 }
@@ -4281,17 +4448,22 @@ function ownershipExpectations(draft) {
   const expectations = [];
   for (const step of objectArray4(draft.steps) ?? []) {
     for (const expectation of objectArray4(step.expectations) ?? []) {
-      if (isCanonicalString(expectation.expectation_id) && isCanonicalString(expectation.evidence_ref)) {
+      const oracleEvidenceRefs = stringArray3(expectation.oracle_evidence_refs, true);
+      if (isCanonicalString(expectation.expectation_id) && isCanonicalString(expectation.evidence_ref) && oracleEvidenceRefs) {
         expectations.push({
           expectationId: String(expectation.expectation_id),
-          evidenceRef: String(expectation.evidence_ref)
+          evidenceRef: String(expectation.evidence_ref),
+          kind: String(expectation.kind),
+          closesObligationId: String(expectation.closes_obligation_id ?? ""),
+          oracleEvidenceRefs,
+          oracleEvidenceValid: true
         });
       }
     }
   }
   return expectations;
 }
-function deduplicateCases(executable, obligationsById, oracleReachability, diagnostics) {
+function deduplicateCases(executable, obligationsById, oracleReachability, evaluateMerged, diagnostics) {
   const groups = /* @__PURE__ */ new Map();
   for (const item of executable) {
     const signature = executionSignature(item.draft);
@@ -4331,7 +4503,19 @@ function deduplicateCases(executable, obligationsById, oracleReachability, diagn
       diagnostics
     );
     if (ownershipReasons.size > 0) continue;
-    (items[0].rank === 2 ? grounded : conditional).push(merged);
+    const diagnosticsBeforeEvaluation = diagnostics.length;
+    const mergedEvaluation = evaluateMerged(merged);
+    if (mergedEvaluation.rank === 0 || diagnostics.length > diagnosticsBeforeEvaluation) continue;
+    if (mergedEvaluation.rank !== items[0].rank) {
+      diagnostics.push(diagnostic5(
+        "classification",
+        "DUPLICATE_SIGNATURE_LANE_CONFLICT",
+        `/execution_signatures/${pointerPart2(stableId("execution", JSON.parse(signature)))}`,
+        "same execution signature cannot change lane after lossless association merging"
+      ));
+      continue;
+    }
+    (mergedEvaluation.rank === 2 ? grounded : conditional).push(merged);
   }
   grounded.sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
   conditional.sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
@@ -4383,7 +4567,7 @@ function classifyCaseDrafts(submittedContext) {
       /** @type {Record<string, unknown>[]} */
       draftArtifact.cases
     );
-    const dispositions = (
+    const submittedDispositions = (
       /** @type {Record<string, unknown>[]} */
       draftArtifact.obligation_dispositions
     );
@@ -4399,7 +4583,6 @@ function classifyCaseDrafts(submittedContext) {
       /** @type {Record<string, unknown>[]} */
       obligationArtifact.interaction_routes
     );
-    const oracleReachability = buildOracleReachability(evidence, obligations);
     const factsById = /* @__PURE__ */ new Map();
     for (const fact of facts) {
       const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
@@ -4411,6 +4594,59 @@ function classifyCaseDrafts(submittedContext) {
       const id = typeof obligation.obligation_id === "string" ? obligation.obligation_id : "";
       if (obligationsById.has(id)) diagnostics.push(diagnostic5("traceability", "OBLIGATION_ID_DUPLICATE", `/obligations/${pointerPart2(id)}`, "formal obligation IDs must be unique"));
       else obligationsById.set(id, obligation);
+      if (obligation.kind === "requirement-gap") {
+        if (obligation.caseable !== false || !isRecord2(obligation.gap_issue)) diagnostics.push(diagnostic5(
+          "classification",
+          "REQUIREMENT_GAP_CONTRACT_INVALID",
+          `/obligations/${pointerPart2(id)}`,
+          "compiler-owned requirement gaps must be non-caseable and contain a gap issue"
+        ));
+        else {
+          const signature = {
+            missing_type: obligation.gap_issue.missing_type,
+            semantic_refs: stringArray3(obligation.gap_issue.semantic_refs) ?? [],
+            scope: obligation.gap_issue.scope
+          };
+          if (obligation.gap_issue.root_issue_key !== canonicalStringify(signature) || obligation.gap_issue.root_issue_id !== stableId("root", signature)) diagnostics.push(diagnostic5(
+            "traceability",
+            "REQUIREMENT_GAP_ROOT_INVALID",
+            `/obligations/${pointerPart2(id)}/gap_issue`,
+            "compiler-owned gap root key and ID must match its immutable semantic identity"
+          ));
+        }
+      } else if (obligation.caseable !== true) diagnostics.push(diagnostic5(
+        "classification",
+        "CASEABLE_OBLIGATION_CONTRACT_INVALID",
+        `/obligations/${pointerPart2(id)}/caseable`,
+        "normal compiler-owned obligations must be caseable"
+      ));
+      const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : null;
+      if (vector) {
+        const sourceClaims = new Set(stringArray3(obligation.source_claim_ids) ?? []);
+        for (const [assignmentIndex, assignment] of (objectArray4(vector.assignments) ?? []).entries()) {
+          const claimId = String(assignment.evidence_claim_id ?? "");
+          const assessment = evidence.get(claimId);
+          if (!sourceClaims.has(claimId)) diagnostics.push(diagnostic5(
+            "traceability",
+            "TWISE_SELECTED_VALUE_SOURCE_MISSING",
+            `/obligations/${pointerPart2(id)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+            "every selected-value evidence claim must be carried by the vector obligation sources"
+          ));
+          if (!assessment || assessment.rank === 0 || assessment.reasons.length > 0 || assessment.claim.kind === "diagnostic" || typeof assessment.claim.scope !== "string" || typeof obligation.scope !== "string" || !scopeContains(assessment.claim.scope, obligation.scope)) diagnostics.push(diagnostic5(
+            "traceability",
+            "TWISE_SELECTED_VALUE_EVIDENCE_INVALID",
+            `/obligations/${pointerPart2(id)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+            "selected-value evidence must be accepted, non-diagnostic, and cover the obligation scope"
+          ));
+        }
+        const forbidden = new Set(stringArray3(vector.forbid_evidence_refs) ?? []);
+        for (const ref of stringArray3(obligation.required_oracle_refs) ?? []) if (forbidden.has(ref)) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_ORACLE_FORBID_CONFLICT",
+          `/obligations/${pointerPart2(id)}/required_oracle_refs/${pointerPart2(ref)}`,
+          "forbid evidence cannot be an Oracle prebinding"
+        ));
+      }
     }
     const routedFactsByObligation = /* @__PURE__ */ new Map();
     const routesByFact = /* @__PURE__ */ new Map();
@@ -4425,6 +4661,28 @@ function classifyCaseDrafts(submittedContext) {
         `/obligations/fact_routes/${routeIndex}/fact_id`,
         "fact route references an unknown fact"
       ));
+      if (route.route_type === "blocked") {
+        const gapId = typeof route.gap_obligation_id === "string" ? route.gap_obligation_id : "";
+        const gap = obligationsById.get(gapId);
+        if (!gap || gap.kind !== "requirement-gap" || gap.caseable !== false) diagnostics.push(diagnostic5(
+          "reference",
+          "FACT_ROUTE_GAP_UNKNOWN",
+          `/obligations/fact_routes/${routeIndex}/gap_obligation_id`,
+          "blocked fact route must reference one compiler-owned requirement gap"
+        ));
+        else {
+          const routed = routedFactsByObligation.get(gapId) ?? /* @__PURE__ */ new Set();
+          routed.add(factId);
+          routedFactsByObligation.set(gapId, routed);
+          if (!isRecord2(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic5(
+            "traceability",
+            "FACT_ROUTE_GAP_ROOT_MISMATCH",
+            `/obligations/fact_routes/${routeIndex}`,
+            "blocked fact route root must equal its compiler-owned gap root"
+          ));
+        }
+        continue;
+      }
       if (route.route_type !== "obligations") continue;
       const routedObligations = stringArray3(route.obligation_ids, true);
       if (!routedObligations) diagnostics.push(diagnostic5(
@@ -4445,6 +4703,126 @@ function classifyCaseDrafts(submittedContext) {
         routedFactsByObligation.set(obligationId, routed);
       }
     }
+    for (const obligation of obligations) {
+      const obligationId = String(obligation.obligation_id ?? "");
+      const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : null;
+      if (!vector) continue;
+      const assignments = objectArray4(vector.assignments) ?? [];
+      const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ""));
+      const validStrength = Number.isSafeInteger(vector.strength) && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
+      if (vector.policy_id !== "twise-candidate-cap-v1" || !validStrength || new Set(parameterIds).size !== parameterIds.length || obligation.kind !== "interaction" || obligation.caseable !== true) diagnostics.push(diagnostic5(
+        "traceability",
+        "TWISE_VECTOR_CONTRACT_INVALID",
+        `/obligations/${pointerPart2(obligationId)}/combination_vector`,
+        "selected vectors must use the frozen policy, strength within unique assignments, and caseable interaction obligations"
+      ));
+      const sourceClaims = new Set(stringArray3(obligation.source_claim_ids) ?? []);
+      const owner = isRecord2(vector.owner) ? vector.owner : {};
+      const routedFacts = routedFactsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
+      for (const factId of stringArray3(owner.fact_ids) ?? []) {
+        if (!routedFacts.has(factId)) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_OWNER_FACT_ROUTE_MISSING",
+          `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/fact_ids/${pointerPart2(factId)}`,
+          "every selected-vector owner fact must route to the vector obligation"
+        ));
+        const fact = factsById.get(factId);
+        for (const ref of fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : []) {
+          if (!sourceClaims.has(ref)) diagnostics.push(diagnostic5(
+            "traceability",
+            "TWISE_OWNER_SOURCE_MISSING",
+            `/obligations/${pointerPart2(obligationId)}/source_claim_ids`,
+            "selected-vector sources must inherit every owner fact root"
+          ));
+        }
+      }
+      const viewRefs = new Set(stringArray3(obligation.view_element_refs) ?? []);
+      const ownerViewId = String(owner.view_id ?? "");
+      for (const ref of objectArray4(owner.view_element_refs) ?? []) {
+        if (String(ref.view_id ?? "") !== ownerViewId) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_OWNER_VIEW_MISMATCH",
+          `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/view_element_refs`,
+          "every selected-vector owner element must belong to the single named owner view"
+        ));
+        const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
+        if (!viewRefs.has(qualified)) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_OWNER_ELEMENT_REF_MISSING",
+          `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/view_element_refs`,
+          "selected-vector obligations must inherit every owner view element reference"
+        ));
+      }
+    }
+    const oracleReachability = buildOracleReachability(
+      evidence,
+      obligations,
+      routedFactsByObligation,
+      factsById
+    );
+    const dispositions = [];
+    const blockerAffectedBySubmittedIndex = /* @__PURE__ */ new Map();
+    for (const [index, submitted] of submittedDispositions.entries()) {
+      if (submitted.status !== "blocker") {
+        dispositions.push(submitted);
+        continue;
+      }
+      const affected = stringArray3(submitted.affected_obligation_ids, true);
+      if (!affected) {
+        diagnostics.push(diagnostic5(
+          "schema",
+          "BLOCKER_AFFECTED_OBLIGATIONS_INVALID",
+          `/obligation_dispositions/${index}/affected_obligation_ids`,
+          "grouped blocker requires a nonempty dense unique affected obligation list"
+        ));
+        continue;
+      }
+      const intent = isRecord2(submitted.issue_intent) ? submitted.issue_intent : {};
+      const subject = isRecord2(submitted.subject) ? submitted.subject : {};
+      const signature = {
+        missing_type: intent.missing_type,
+        semantic_refs: [canonicalStringify(normalizedBlockerSubject(subject))],
+        scope: intent.scope
+      };
+      const rootIssueId = stableId("root", signature);
+      blockerAffectedBySubmittedIndex.set(index, affected);
+      for (const obligationId of affected) dispositions.push({
+        obligation_id: obligationId,
+        status: "blocker",
+        blocker_root_issue_id: rootIssueId,
+        evidence_refs: intent.evidence_refs,
+        issue_intent: intent,
+        subject,
+        submitted_index: index
+      });
+    }
+    for (const obligation of obligations) {
+      if (obligation.kind !== "requirement-gap" || !isRecord2(obligation.gap_issue)) continue;
+      dispositions.push({
+        obligation_id: obligation.obligation_id,
+        status: "blocker",
+        blocker_root_issue_id: obligation.gap_issue.root_issue_id,
+        evidence_refs: stringArray3(obligation.gap_issue.evidence_refs) ?? [],
+        compiler_gap: true,
+        issue_intent: obligation.gap_issue
+      });
+    }
+    for (const [routeIndex, route] of interactionRoutes.entries()) {
+      if (route.route_type !== "blocked") continue;
+      const gap = obligationsById.get(String(route.gap_obligation_id ?? ""));
+      if (!gap || gap.kind !== "requirement-gap" || gap.caseable !== false) diagnostics.push(diagnostic5(
+        "reference",
+        "INTERACTION_ROUTE_GAP_UNKNOWN",
+        `/obligations/interaction_routes/${routeIndex}/gap_obligation_id`,
+        "blocked interaction route must reference one compiler-owned requirement gap"
+      ));
+      else if (!isRecord2(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic5(
+        "traceability",
+        "INTERACTION_ROUTE_GAP_ROOT_MISMATCH",
+        `/obligations/interaction_routes/${routeIndex}`,
+        "blocked interaction route root must equal its compiler-owned gap root"
+      ));
+    }
     const casesById = /* @__PURE__ */ new Map();
     for (const draft of drafts) {
       const id = typeof draft.case_id === "string" ? draft.case_id : "";
@@ -4452,6 +4830,7 @@ function classifyCaseDrafts(submittedContext) {
       else casesById.set(id, draft);
     }
     const dispositionByObligation = /* @__PURE__ */ new Map();
+    const validatedBlockerGroups = /* @__PURE__ */ new Set();
     for (const disposition of dispositions) {
       const obligationId = typeof disposition.obligation_id === "string" ? disposition.obligation_id : "";
       if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic5(
@@ -4473,20 +4852,76 @@ function classifyCaseDrafts(submittedContext) {
         `/obligation_dispositions/${pointerPart2(obligationId)}/status`,
         "formal obligation disposition status is outside the frozen lanes"
       ));
+      const obligation = obligationsById.get(obligationId);
+      if (obligation?.caseable === false && !disposition.compiler_gap) diagnostics.push(diagnostic5(
+        "classification",
+        "REQUIREMENT_GAP_AGENT_DISPOSITION_FORBIDDEN",
+        `/obligation_dispositions/${pointerPart2(obligationId)}`,
+        "Agent case drafts must not resubmit a compiler-owned requirement gap disposition"
+      ));
+      if (disposition.status === "blocker" && !disposition.compiler_gap && !validatedBlockerGroups.has(disposition.submitted_index)) {
+        validatedBlockerGroups.add(disposition.submitted_index);
+        const subject = isRecord2(disposition.subject) ? disposition.subject : {};
+        const intent = isRecord2(disposition.issue_intent) ? disposition.issue_intent : {};
+        const affected = blockerAffectedBySubmittedIndex.get(
+          /** @type {number} */
+          disposition.submitted_index
+        ) ?? [];
+        const linked = affected.flatMap((id) => obligationsById.has(id) ? [
+          /** @type {Record<string, unknown>} */
+          obligationsById.get(id)
+        ] : []);
+        if (linked.some((item) => item.caseable !== true)) diagnostics.push(diagnostic5(
+          "classification",
+          "BLOCKER_AFFECTED_OBLIGATION_NOT_CASEABLE",
+          `/obligation_dispositions/${disposition.submitted_index}/affected_obligation_ids`,
+          "case-draft blocker groups may affect only compiler-derived caseable obligations"
+        ));
+        if (linked.some((item) => !scopeContains(String(intent.scope ?? ""), String(item.scope ?? "")))) diagnostics.push(diagnostic5(
+          "classification",
+          "BLOCKER_SCOPE_MISMATCH",
+          `/obligation_dispositions/${disposition.submitted_index}/issue_intent/scope`,
+          "case-draft blocker scope must cover every affected obligation scope"
+        ));
+        let reachable = false;
+        if (subject.kind === "facts") {
+          const refs = stringArray3(subject.fact_ids, true) ?? [];
+          reachable = refs.length > 0 && refs.every((factId) => factsById.has(factId) && affected.some((id) => routedFactsByObligation.get(id)?.has(factId))) && affected.every((id) => refs.some((factId) => routedFactsByObligation.get(id)?.has(factId)));
+        } else if (subject.kind === "view-elements") {
+          const refs = objectArray4(subject.view_element_refs)?.map((ref) => `${String(ref.view_id)}#${String(ref.element_id)}`) ?? [];
+          reachable = refs.length > 0 && refs.every((ref) => linked.some((item) => (stringArray3(item.view_element_refs) ?? []).includes(ref))) && linked.every((item) => refs.some((ref) => (stringArray3(item.view_element_refs) ?? []).includes(ref)));
+        } else if (subject.kind === "capabilities") {
+          const capabilities = stringArray3(subject.capabilities, true) ?? [];
+          reachable = capabilities.length > 0 && capabilities.every((capability) => linked.some((item) => (stringArray3(item.required_capabilities) ?? []).includes(capability))) && linked.every((item) => capabilities.some((capability) => (stringArray3(item.required_capabilities) ?? []).includes(capability)));
+        } else if (subject.kind === "evidence-conflict") {
+          const refs = stringArray3(subject.claim_refs, true) ?? [];
+          const relatedByObligation = linked.map((item) => relatedEvidenceClosure([
+            ...stringArray3(item.source_claim_ids) ?? [],
+            ...stringArray3(item.required_oracle_refs) ?? []
+          ], evidence, evidenceCache, relatedEvidenceCache));
+          reachable = refs.length > 0 && refs.every((ref) => evidence.has(ref) && relatedByObligation.some((related) => related.has(ref))) && relatedByObligation.every((related) => refs.some((ref) => related.has(ref)));
+        }
+        if (!reachable) diagnostics.push(diagnostic5(
+          "traceability",
+          "BLOCKER_SUBJECT_UNREACHABLE",
+          `/obligation_dispositions/${disposition.submitted_index}/subject`,
+          "typed blocker subject must be reachable from every referenced owner/evidence/capability closure"
+        ));
+      }
       if (disposition.status === "case_candidate") {
         const caseIds = stringArray3(disposition.case_ids) ?? [];
         if (caseIds.length === 0) {
-          const obligation = obligationsById.get(obligationId);
+          const obligation2 = obligationsById.get(obligationId);
           const routedRoots = [...routedFactsByObligation.get(obligationId) ?? []].flatMap((factId) => {
             const fact = factsById.get(factId);
             return fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : [];
           });
-          const evidenceResult = obligation ? assessEvidenceRoots([
-            ...stringArray3(obligation.source_claim_ids) ?? [],
-            ...stringArray3(obligation.required_oracle_refs) ?? [],
+          const evidenceResult = obligation2 ? assessEvidenceRoots([
+            ...stringArray3(obligation2.source_claim_ids) ?? [],
+            ...stringArray3(obligation2.required_oracle_refs) ?? [],
             ...routedRoots
           ], evidence, evidenceCache) : null;
-          const fullyGroundable = obligation && (stringArray3(obligation.required_oracle_refs) ?? []).length > 0 && (stringArray3(obligation.required_capabilities) ?? []).length === 0 && evidenceResult?.rank === 2 && evidenceResult.reasons.size === 0;
+          const fullyGroundable = obligation2 && (stringArray3(obligation2.required_oracle_refs) ?? []).length > 0 && (stringArray3(obligation2.required_capabilities) ?? []).length === 0 && evidenceResult?.rank === 2 && evidenceResult.reasons.size === 0;
           diagnostics.push(diagnostic5(
             "classification",
             fullyGroundable ? "GROUNDABLE_OBLIGATION_CASE_MISSING" : "DISPOSITION_CASES_MISSING",
@@ -4536,6 +4971,20 @@ function classifyCaseDrafts(submittedContext) {
         obligation.obligation_id
       );
       if (disposition.status === "blocker") {
+        const explicitIntent = isRecord2(disposition.issue_intent) ? disposition.issue_intent : null;
+        if (disposition.compiler_gap && explicitIntent) {
+          addBlocked(
+            blocked,
+            obligation,
+            (stringArray3(explicitIntent.reasons, true) ?? []).length > 0 ? (
+              /** @type {string[]} */
+              stringArray3(explicitIntent.reasons, true)
+            ) : [String(explicitIntent.missing_type ?? "requirement-gap")],
+            stringArray3(explicitIntent.evidence_refs, true) ?? [],
+            isCanonicalString(disposition.blocker_root_issue_id) ? String(disposition.blocker_root_issue_id) : null
+          );
+          continue;
+        }
         const roots = [
           ...stringArray3(obligation.source_claim_ids) ?? [],
           ...stringArray3(obligation.required_oracle_refs) ?? [],
@@ -4546,7 +4995,7 @@ function classifyCaseDrafts(submittedContext) {
         ];
         const evidenceResult = assessEvidenceRoots(roots, evidence, evidenceCache);
         const relatedEvidence = relatedEvidenceClosure(roots, evidence, evidenceCache, relatedEvidenceCache);
-        const blockerEvidenceRefs = stringArray3(disposition.evidence_refs, true);
+        const blockerEvidenceRefs = stringArray3(disposition.evidence_refs, !explicitIntent);
         if (!blockerEvidenceRefs) {
           diagnostics.push(diagnostic5(
             "classification",
@@ -4588,7 +5037,7 @@ function classifyCaseDrafts(submittedContext) {
         if (!blockerRefsValid) continue;
         const oracles = stringArray3(obligation.required_oracle_refs) ?? [];
         const capabilities = stringArray3(obligation.required_capabilities) ?? [];
-        if (oracles.length > 0 && capabilities.length === 0 && evidenceResult.rank === 2 && evidenceResult.reasons.size === 0) {
+        if (explicitIntent?.missing_type === "oracle" && oracles.length > 0 && capabilities.length === 0 && evidenceResult.rank === 2 && evidenceResult.reasons.size === 0) {
           diagnostics.push(diagnostic5(
             "classification",
             "GROUNDABLE_OBLIGATION_CASE_MISSING",
@@ -4597,7 +5046,8 @@ function classifyCaseDrafts(submittedContext) {
           ));
           continue;
         }
-        const reasons = oracles.length === 0 ? ["FORMAL_ORACLE_MISSING"] : evidenceResult.reasons.size > 0 ? [...evidenceResult.reasons].sort(compareCodePoints3) : ["EXPLICIT_BLOCKER"];
+        const intentReasons = explicitIntent ? stringArray3(explicitIntent.reasons, true) ?? [] : [];
+        const reasons = intentReasons.length > 0 ? intentReasons : oracles.length === 0 ? ["FORMAL_ORACLE_MISSING"] : evidenceResult.reasons.size > 0 ? [...evidenceResult.reasons].sort(compareCodePoints3) : ["EXPLICIT_BLOCKER"];
         addBlocked(
           blocked,
           obligation,
@@ -4649,6 +5099,12 @@ function classifyCaseDrafts(submittedContext) {
           `/cases/${pointerPart2(String(draft.case_id))}/obligation_ids/${pointerPart2(obligationId)}`,
           "Case references an unknown formal obligation"
         ));
+        else if (obligationsById.get(obligationId)?.caseable === false) diagnostics.push(diagnostic5(
+          "classification",
+          "REQUIREMENT_GAP_CASE_FORBIDDEN",
+          `/cases/${pointerPart2(String(draft.case_id))}/obligation_ids/${pointerPart2(obligationId)}`,
+          "compiler-owned requirement gaps cannot be Case targets"
+        ));
         const disposition = dispositionByObligation.get(obligationId);
         if (disposition?.status !== "case_candidate" || !(stringArray3(disposition.case_ids) ?? []).includes(
           /** @type {string} */
@@ -4678,7 +5134,30 @@ function classifyCaseDrafts(submittedContext) {
         diagnostics
       );
       if (evaluation.rank === 0) {
-        for (const obligation of linked) addBlocked(blocked, obligation, evaluation.reasons, evaluation.evidenceRefs, null);
+        for (const obligation of linked) {
+          const obligationId = String(obligation.obligation_id);
+          const formalRoots2 = [
+            ...stringArray3(obligation.source_claim_ids) ?? [],
+            ...stringArray3(obligation.required_oracle_refs) ?? [],
+            ...[...routedFactsByObligation.get(obligationId) ?? []].flatMap((factId) => {
+              const fact = factsById.get(factId);
+              return fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : [];
+            })
+          ];
+          const relatedEvidence = relatedEvidenceClosure(
+            formalRoots2,
+            evidence,
+            evidenceCache,
+            relatedEvidenceCache
+          );
+          addBlocked(
+            blocked,
+            obligation,
+            evaluation.reasons,
+            evaluation.evidenceRefs.filter((ref) => relatedEvidence.has(ref)),
+            null
+          );
+        }
       } else executable.push({ draft: structuredClone(draft), rank: evaluation.rank });
     }
     const executableObligationIds = executable.map((item) => stringArray3(item.draft.obligation_ids, true) ?? []);
@@ -4785,6 +5264,33 @@ function classifyCaseDrafts(submittedContext) {
       uniquelyExecutable,
       obligationsById,
       oracleReachability,
+      (draft) => {
+        const replayDraft = structuredClone(draft);
+        const replaySignature = isRecord2(replayDraft.execution_signature) ? replayDraft.execution_signature : {};
+        replaySignature.oracle_refs = [...new Set(
+          (objectArray4(replayDraft.steps) ?? []).flatMap((step) => objectArray4(step.expectations) ?? []).flatMap((expectation) => isCanonicalString(expectation.expectation_id) ? [String(expectation.expectation_id)] : [])
+        )].sort(compareCodePoints3);
+        replayDraft.execution_signature = replaySignature;
+        const linked = (stringArray3(draft.obligation_ids, true) ?? []).flatMap((id) => {
+          const obligation = obligationsById.get(id);
+          return obligation ? [obligation] : [];
+        });
+        const routedFactIds = [...new Set(linked.flatMap((obligation) => [
+          ...routedFactsByObligation.get(String(obligation.obligation_id)) ?? []
+        ]))].sort(compareCodePoints3);
+        return evaluateCase(
+          replayDraft,
+          linked,
+          routedFactIds,
+          routesByFact,
+          factsById,
+          evidence,
+          evidenceCache,
+          oracleReachability,
+          conflicts,
+          diagnostics
+        );
+      },
       diagnostics
     );
     if (diagnostics.length > 0) return resultWithDiagnostics(diagnostics);
@@ -4834,22 +5340,7 @@ var test_bundle_schema_default = {
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
           ] }, support_review: { const: "supported" } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { type: "object", required: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"], properties: {
-            expectation_id: { type: "string", minLength: 1 },
-            business_assertion: { type: "string", minLength: 1 },
-            preceding_action_id: { type: "string", minLength: 1 },
-            observer: { type: "string", minLength: 1 },
-            observation_surface: { type: "string", minLength: 1 },
-            observation_target: { type: "string", minLength: 1 },
-            oracle: { oneOf: [
-              { type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }
-            ] },
-            evidence_ref: { type: "string", minLength: 1 },
-            support_review: { const: "supported" }
-          }, additionalProperties: false } } }, additionalProperties: false } },
+          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
             observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -4861,7 +5352,7 @@ var test_bundle_schema_default = {
             { type: "object", required: ["required", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"], properties: { required: { const: false }, no_cleanup_reason: { type: "string", minLength: 1 }, no_cleanup_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false }
           ] },
           evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, test_point_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false }
+          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
         },
         additionalProperties: false
       }
@@ -4885,22 +5376,7 @@ var test_bundle_schema_default = {
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
           ] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { type: "object", required: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"], properties: {
-            expectation_id: { type: "string", minLength: 1 },
-            business_assertion: { type: "string", minLength: 1 },
-            preceding_action_id: { type: "string", minLength: 1 },
-            observer: { type: "string", minLength: 1 },
-            observation_surface: { type: "string", minLength: 1 },
-            observation_target: { type: "string", minLength: 1 },
-            oracle: { oneOf: [
-              { type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }
-            ] },
-            evidence_ref: { type: "string", minLength: 1 },
-            support_review: { enum: ["supported", "contradicted", "uncertain"] }
-          }, additionalProperties: false } } }, additionalProperties: false } },
+          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
             observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -4913,7 +5389,7 @@ var test_bundle_schema_default = {
           ] },
           evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           temporary_assumption: { type: "object", required: ["claim_id", "invalidation_condition"], properties: { claim_id: { type: "string", minLength: 1 }, invalidation_condition: { type: "string", minLength: 1 } }, additionalProperties: false },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, test_point_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false }
+          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
         },
         additionalProperties: false
       }
@@ -4941,9 +5417,97 @@ var test_obligations_schema_default = {
   properties: {
     schema_version: { const: "1.0.0" },
     source_revision: { type: "integer", minimum: 0 },
-    obligations: { type: "array", items: { type: "object", required: ["obligation_id", "kind", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"], properties: { obligation_id: { type: "string", minLength: 1 }, kind: { enum: ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] }, risk: { enum: ["critical", "high", "medium", "low"] }, scope: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, view_element_refs: { type: "array", items: { type: "string" }, uniqueItems: true }, required_oracle_refs: { type: "array", items: { type: "string" }, uniqueItems: true }, required_capabilities: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false } },
-    fact_routes: { type: "array", items: { oneOf: [{ type: "object", required: ["fact_id", "route_type", "obligation_ids"], properties: { fact_id: { type: "string", minLength: 1 }, route_type: { const: "obligations" }, obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["fact_id", "route_type", "blocker_root_issue_id"], properties: { fact_id: { type: "string", minLength: 1 }, route_type: { const: "blocked" }, blocker_root_issue_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["fact_id", "route_type", "not_applicable_claim_id"], properties: { fact_id: { type: "string", minLength: 1 }, route_type: { const: "not_applicable" }, not_applicable_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }] } },
-    interaction_routes: { type: "array", items: { oneOf: [{ type: "object", required: ["candidate_id", "route_type", "formal_view_id"], properties: { candidate_id: { type: "string", minLength: 1 }, route_type: { const: "formal-view" }, formal_view_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["candidate_id", "route_type", "blocker_root_issue_id"], properties: { candidate_id: { type: "string", minLength: 1 }, route_type: { const: "blocked" }, blocker_root_issue_id: { type: "string", minLength: 1 } }, additionalProperties: false }, { type: "object", required: ["candidate_id", "route_type", "exploratory_id"], properties: { candidate_id: { type: "string", minLength: 1 }, route_type: { const: "exploratory" }, exploratory_id: { type: "string", minLength: 1 } }, additionalProperties: false }] } }
+    obligations: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"],
+            properties: {
+              obligation_id: { type: "string", minLength: 1 },
+              kind: { enum: ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] },
+              caseable: { const: true },
+              risk: { enum: ["critical", "high", "medium", "low"] },
+              scope: { type: "string", minLength: 1 },
+              source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
+              view_element_refs: { type: "array", items: { type: "string" }, uniqueItems: true },
+              required_oracle_refs: { type: "array", items: { type: "string" }, uniqueItems: true },
+              required_capabilities: { type: "array", items: { type: "string" }, uniqueItems: true },
+              combination_vector: {
+                type: "object",
+                required: ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+                properties: {
+                  policy_id: { const: "twise-candidate-cap-v1" },
+                  strength: { type: "integer", minimum: 2 },
+                  owner: {
+                    type: "object",
+                    required: ["view_id", "fact_ids", "view_element_refs"],
+                    properties: {
+                      view_id: { type: "string", minLength: 1 },
+                      fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true },
+                      view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }
+                    },
+                    additionalProperties: false
+                  },
+                  assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id", "evidence_claim_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 }, evidence_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 3, uniqueItems: true },
+                  forbid_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }
+                },
+                additionalProperties: false
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "gap_issue"],
+            properties: {
+              obligation_id: { type: "string", minLength: 1 },
+              kind: { const: "requirement-gap" },
+              caseable: { const: false },
+              risk: { enum: ["critical", "high", "medium", "low"] },
+              scope: { type: "string", minLength: 1 },
+              source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
+              view_element_refs: { type: "array", items: { type: "string" }, uniqueItems: true },
+              required_oracle_refs: { type: "array", items: { type: "string" }, uniqueItems: true },
+              required_capabilities: { type: "array", items: { type: "string" }, uniqueItems: true },
+              gap_issue: {
+                type: "object",
+                required: ["root_issue_id", "root_issue_key", "missing_type", "semantic_refs", "scope", "answerable", "reasons", "evidence_refs"],
+                properties: {
+                  root_issue_id: { type: "string", minLength: 1 },
+                  root_issue_key: { type: "string", minLength: 1 },
+                  missing_type: { type: "string", minLength: 1 },
+                  semantic_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true },
+                  scope: { type: "string", minLength: 1 },
+                  answerable: { type: "boolean" },
+                  reasons: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true },
+                  evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }
+                },
+                additionalProperties: false
+              }
+            },
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    fact_routes: {
+      type: "array",
+      items: { oneOf: [
+        { type: "object", required: ["fact_id", "route_type", "obligation_ids"], properties: { fact_id: { type: "string", minLength: 1 }, route_type: { const: "obligations" }, obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false },
+        { type: "object", required: ["fact_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"], properties: { fact_id: { type: "string", minLength: 1 }, route_type: { const: "blocked" }, blocker_root_issue_id: { type: "string", minLength: 1 }, gap_obligation_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+        { type: "object", required: ["fact_id", "route_type", "not_applicable_claim_id"], properties: { fact_id: { type: "string", minLength: 1 }, route_type: { const: "not_applicable" }, not_applicable_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }
+      ] }
+    },
+    interaction_routes: {
+      type: "array",
+      items: { oneOf: [
+        { type: "object", required: ["candidate_id", "route_type", "formal_view_id"], properties: { candidate_id: { type: "string", minLength: 1 }, route_type: { const: "formal-view" }, formal_view_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+        { type: "object", required: ["candidate_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"], properties: { candidate_id: { type: "string", minLength: 1 }, route_type: { const: "blocked" }, blocker_root_issue_id: { type: "string", minLength: 1 }, gap_obligation_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+        { type: "object", required: ["candidate_id", "route_type", "exploratory_id"], properties: { candidate_id: { type: "string", minLength: 1 }, route_type: { const: "exploratory" }, exploratory_id: { type: "string", minLength: 1 } }, additionalProperties: false }
+      ] }
+    }
   },
   additionalProperties: false
 };
@@ -5422,14 +5986,6 @@ function everyArray2(values, predicate) {
     Reflect.apply(NATIVE_ARRAY_EVERY2, values, [predicate])
   );
 }
-function fillArray(values, value) {
-  for (let index = 0; index < values.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY4, Object, [
-    values,
-    String(index),
-    { value, writable: true, enumerable: true, configurable: true }
-  ]);
-  return values;
-}
 function filterArray3(values, predicate) {
   return (
     /** @type {T[]} */
@@ -5830,6 +6386,27 @@ function canonicalSetProjection2(entries) {
   for (let index = 0; index < ordered.length; index += 1) pushArray2(projected, ordered[index][1]);
   return canonicalStringify(projected);
 }
+function oracleSemanticId2(step, expectation) {
+  const oracle = isRecord3(expectation.oracle) ? expectation.oracle : {};
+  const type = String(oracle.type ?? "");
+  const expectedField = ORACLE_FIELDS2[
+    /** @type {keyof typeof ORACLE_FIELDS} */
+    type
+  ];
+  return stableId("oracle", {
+    action: normalizeSemanticString2(step.action),
+    observer: normalizeSemanticString2(expectation.observer),
+    observation_surface: normalizeSemanticString2(expectation.observation_surface),
+    observation_target: normalizeSemanticString2(expectation.observation_target),
+    oracle: {
+      type,
+      ...expectedField ? { [expectedField]: normalizeSemanticString2(oracle[expectedField]) } : {},
+      comparison: normalizeSemanticString2(oracle.comparison),
+      ...oracle.tolerance === void 0 ? {} : { tolerance: oracle.tolerance },
+      ...oracle.window === void 0 ? {} : { window: normalizeSemanticString2(oracle.window) }
+    }
+  });
+}
 function derivedExecutionSignature(caseDraft) {
   const preconditions = records(caseDraft.preconditions);
   const preconditionProjection = [];
@@ -5850,7 +6427,7 @@ function derivedExecutionSignature(caseDraft) {
     pushArray2(actionPath, normalizeSemanticString2(steps[stepIndex].action));
     const expectations = records(steps[stepIndex].expectations);
     for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
-      oracleRefs.add(normalizeSemanticString2(expectations[expectationIndex].expectation_id));
+      oracleRefs.add(oracleSemanticId2(steps[stepIndex], expectations[expectationIndex]));
     }
   }
   return {
@@ -6109,234 +6686,6 @@ function evidenceRelationIndex(roots, graph) {
     }
   };
 }
-function fenwick(size) {
-  const tree = fillArray(new Array(size + 1), 0);
-  return {
-    /** @param {number} index @param {number} delta */
-    add(index, delta) {
-      for (let cursor = index + 1; cursor < tree.length; cursor += cursor & -cursor) tree[cursor] += delta;
-    },
-    /** @param {number} end */
-    sum(end) {
-      let total = 0;
-      for (let cursor = end; cursor > 0; cursor -= cursor & -cursor) total += tree[cursor];
-      return total;
-    },
-    /** @param {number} target */
-    lowerBound(target) {
-      let index = 0;
-      let step = 1;
-      while (step * 2 < tree.length) step *= 2;
-      for (; step > 0; step = Math.floor(step / 2)) {
-        const next = index + step;
-        if (next < tree.length && tree[next] < target) {
-          index = next;
-          target -= tree[next];
-        }
-      }
-      return index;
-    }
-  };
-}
-function matchForestOracleOwnership(requirements, expectations, graph) {
-  const anchors = [];
-  for (const requirement of requirements) {
-    if (requirement.required.length === 0) return false;
-    let anchor = requirement.required[0];
-    for (let index = 1; index < requirement.required.length; index += 1) {
-      const candidate = requirement.required[index];
-      if (isEvidenceAncestor(anchor, candidate, graph)) anchor = candidate;
-      else if (!isEvidenceAncestor(candidate, anchor, graph)) return null;
-    }
-    const start = graph.entryByClaim.get(anchor);
-    const end = graph.exitByClaim.get(anchor);
-    if (start === void 0 || end === void 0) return false;
-    pushArray2(anchors, { start, end });
-  }
-  sortArray2(anchors, (left, right) => right.start - left.start || left.end - right.end);
-  const positions = [];
-  for (const expectation of expectations) {
-    const position = graph.entryByClaim.get(expectation.evidenceRef);
-    if (position !== void 0) pushArray2(positions, position);
-  }
-  sortArray2(positions, (left, right) => left - right);
-  const capacity = fenwick(positions.length);
-  for (let index = 0; index < positions.length; index += 1) capacity.add(index, 1);
-  const localBoundary = (target, after) => {
-    let low = 0;
-    let high = positions.length;
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2);
-      if (positions[middle] < target || after && positions[middle] === target) low = middle + 1;
-      else high = middle;
-    }
-    return low;
-  };
-  for (const anchor of anchors) {
-    const start = localBoundary(anchor.start, false);
-    const end = localBoundary(anchor.end, true);
-    const before = capacity.sum(start);
-    if (capacity.sum(end) === before) return false;
-    const position = capacity.lowerBound(before + 1);
-    capacity.add(position, -1);
-  }
-  return true;
-}
-function matchGeneralOracleOwnership(requirements, expectations, graph) {
-  const matchedRequirementByExpectation = fillArray(new Array(expectations.length), -1);
-  const matchedExpectationByRequirement = fillArray(new Array(requirements.length), -1);
-  const expectationsByClaim = /* @__PURE__ */ new Map();
-  for (let index = 0; index < expectations.length; index += 1) {
-    const claimId = expectations[index].evidenceRef;
-    const atClaim = expectationsByClaim.get(claimId) ?? [];
-    pushArray2(atClaim, index);
-    expectationsByClaim.set(claimId, atClaim);
-  }
-  const anchorByRequirement = [];
-  const requiredRootsByRequirement = [];
-  const requiredSignatureByRequirement = [];
-  for (const requirement of requirements) {
-    if (requirement.required.length === 0 || someArray2(requirement.required, (root) => !graph.claimsById.has(root))) return false;
-    let anchor = requirement.required[0];
-    for (let index = 1; index < requirement.required.length; index += 1) {
-      const candidate = requirement.required[index];
-      if ((graph.topologicalIndexByClaim.get(candidate) ?? -1) > (graph.topologicalIndexByClaim.get(anchor) ?? -1)) anchor = candidate;
-    }
-    pushArray2(anchorByRequirement, anchor);
-    const roots = new Set(requirement.required);
-    pushArray2(requiredRootsByRequirement, roots);
-    pushArray2(requiredSignatureByRequirement, canonicalStringify(sortArray2([...roots], compareCodePoints4)));
-  }
-  const requirementOrder = sortArray2(mapArray3(requirements, (_, index) => index), (left, right) => (graph.topologicalIndexByClaim.get(anchorByRequirement[right]) ?? -1) - (graph.topologicalIndexByClaim.get(anchorByRequirement[left]) ?? -1) || left - right);
-  let lastCompatibilitySignature = "";
-  let lastCompatibilityRepresentative = "";
-  let lastCompatibilityResult = false;
-  const compatible = (requirementIndex, claimId) => {
-    const requiredRoots = requiredRootsByRequirement[requirementIndex];
-    if (requiredRoots.size === 1) return true;
-    let representative = claimId;
-    let climbBudget = graph.claimsById.size;
-    while (!requiredRoots.has(representative) && climbBudget > 0) {
-      climbBudget -= 1;
-      const parents = graph.parentsByClaim.get(representative) ?? [];
-      if (parents.length !== 1) break;
-      representative = parents[0];
-    }
-    const signature = requiredSignatureByRequirement[requirementIndex];
-    if (signature === lastCompatibilitySignature && representative === lastCompatibilityRepresentative) {
-      return lastCompatibilityResult;
-    }
-    const pending = [representative];
-    const visited = /* @__PURE__ */ new Set();
-    let found = 0;
-    while (pending.length > 0 && found < requiredRoots.size) {
-      const current = (
-        /** @type {string} */
-        Reflect.apply(NATIVE_ARRAY_POP2, pending, [])
-      );
-      if (visited.has(current)) continue;
-      visited.add(current);
-      if (requiredRoots.has(current)) found += 1;
-      const parents = graph.parentsByClaim.get(current) ?? [];
-      for (let index = parents.length - 1; index >= 0; index -= 1) pushArray2(pending, parents[index]);
-    }
-    lastCompatibilitySignature = signature;
-    lastCompatibilityRepresentative = representative;
-    lastCompatibilityResult = found === requiredRoots.size;
-    return lastCompatibilityResult;
-  };
-  for (const start of requirementOrder) {
-    const seenRequirements = /* @__PURE__ */ new Set([start]);
-    const seenExpectations = /* @__PURE__ */ new Set();
-    const parentRequirementByExpectation = fillArray(new Array(expectations.length), -1);
-    const queue = [start];
-    let cursor = 0;
-    let freeExpectation = -1;
-    while (cursor < queue.length && freeExpectation < 0) {
-      const requirementIndex = queue[cursor];
-      cursor += 1;
-      const pendingClaims = [anchorByRequirement[requirementIndex]];
-      const seenClaims = /* @__PURE__ */ new Set();
-      let claimCursor = 0;
-      while (claimCursor < pendingClaims.length && freeExpectation < 0) {
-        const claimId = pendingClaims[claimCursor];
-        claimCursor += 1;
-        if (seenClaims.has(claimId)) continue;
-        seenClaims.add(claimId);
-        const atClaim = expectationsByClaim.get(claimId) ?? [];
-        if (atClaim.length > 0 && compatible(requirementIndex, claimId)) {
-          for (let offset = 0; offset < atClaim.length; offset += 1) {
-            const expectationIndex2 = atClaim[offset];
-            if (seenExpectations.has(expectationIndex2)) continue;
-            seenExpectations.add(expectationIndex2);
-            parentRequirementByExpectation[expectationIndex2] = requirementIndex;
-            const matched = matchedRequirementByExpectation[expectationIndex2];
-            if (matched < 0) {
-              freeExpectation = expectationIndex2;
-              break;
-            }
-            if (!seenRequirements.has(matched)) {
-              seenRequirements.add(matched);
-              pushArray2(queue, matched);
-            }
-          }
-        }
-        const children = graph.childrenByClaim.get(claimId) ?? [];
-        for (let childIndex = 0; childIndex < children.length; childIndex += 1) pushArray2(pendingClaims, children[childIndex]);
-      }
-    }
-    if (freeExpectation < 0) return false;
-    let expectationIndex = freeExpectation;
-    while (expectationIndex >= 0) {
-      const requirementIndex = parentRequirementByExpectation[expectationIndex];
-      const previousExpectation = matchedExpectationByRequirement[requirementIndex];
-      matchedExpectationByRequirement[requirementIndex] = expectationIndex;
-      matchedRequirementByExpectation[expectationIndex] = requirementIndex;
-      expectationIndex = previousExpectation;
-    }
-  }
-  return true;
-}
-function hasCompleteOracleOwnership(requirements, expectations, graph) {
-  if (requirements.length > expectations.length) return false;
-  const byComponent = /* @__PURE__ */ new Map();
-  for (let requirementIndex = 0; requirementIndex < requirements.length; requirementIndex += 1) {
-    const roots = requirements[requirementIndex].required;
-    if (roots.length === 0) return false;
-    let requiredComponent;
-    for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
-      const componentId = graph.componentByClaim.get(roots[rootIndex]);
-      if (componentId === void 0) return false;
-      if (requiredComponent === void 0) requiredComponent = componentId;
-      else if (requiredComponent !== componentId) return false;
-    }
-    const component = byComponent.get(
-      /** @type {number} */
-      requiredComponent
-    ) ?? { requirements: [], expectations: [] };
-    pushArray2(component.requirements, requirements[requirementIndex]);
-    byComponent.set(
-      /** @type {number} */
-      requiredComponent,
-      component
-    );
-  }
-  for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
-    const componentId = graph.componentByClaim.get(expectations[expectationIndex].evidenceRef);
-    if (componentId === void 0) continue;
-    const component = byComponent.get(componentId);
-    if (component) pushArray2(component.expectations, expectations[expectationIndex]);
-  }
-  for (const [componentId, component] of byComponent) {
-    if (component.requirements.length > component.expectations.length) return false;
-    if (graph.componentForestById.get(componentId) === true) {
-      const forestResult = matchForestOracleOwnership(component.requirements, component.expectations, graph);
-      if (forestResult === false) return false;
-      if (forestResult === null && !matchGeneralOracleOwnership(component.requirements, component.expectations, graph)) return false;
-    } else if (!matchGeneralOracleOwnership(component.requirements, component.expectations, graph)) return false;
-  }
-  return true;
-}
 function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption = true) {
   const direct = /* @__PURE__ */ new Set();
   const add = (value) => {
@@ -6361,7 +6710,10 @@ function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption
   for (const datum of records(caseDraft.data)) if (isRecord3(datum.provenance)) add(datum.provenance.ref);
   for (const step of records(caseDraft.steps)) {
     add(step.action_evidence_ref);
-    for (const expectation of records(step.expectations)) add(expectation.evidence_ref);
+    for (const expectation of records(step.expectations)) {
+      add(expectation.evidence_ref);
+      for (const ref of strings(expectation.oracle_evidence_refs)) add(ref);
+    }
   }
   if (isRecord3(caseDraft.testability_profile)) {
     for (const capability of records(caseDraft.testability_profile.capabilities)) add(capability.provenance_ref);
@@ -6572,6 +6924,139 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path4, 
     }
   }
 }
+function isTypedOracleClaim2(claim) {
+  if (claim.level === "E3" && claim.kind === "requirement") return true;
+  if (claim.level === "E1" && claim.kind === "assumption") return true;
+  return claim.level === "E2" && claim.kind === "expected-value" && claim.derivation_target === "expected-value" && (claim.derivation_kind === "formula" || claim.derivation_kind === "decision-table-instance");
+}
+function validateExplicitOracleClosure(caseDraft, obligations, graph, factIdsByObligation, factsById, path4, diagnostics) {
+  const obligationsById = /* @__PURE__ */ new Map();
+  const counts = /* @__PURE__ */ new Map();
+  for (let index = 0; index < obligations.length; index += 1) {
+    const obligation = obligations[index];
+    const obligationId = String(obligation.obligation_id);
+    obligationsById.set(obligationId, obligation);
+    counts.set(obligationId, 0);
+  }
+  const closureByObligation = /* @__PURE__ */ new Map();
+  const forbiddenByObligation = /* @__PURE__ */ new Map();
+  const descendantsByRootSignature = /* @__PURE__ */ new Map();
+  const allows = (closure, claimId) => {
+    const claim = graph.claimsById.get(claimId);
+    if (!claim || !isTypedOracleClaim2(claim) || typeof claim.scope !== "string" || !scopeContains(claim.scope, closure.scope)) return false;
+    if (closure.roots.has(claimId)) return true;
+    if (claim.level !== "E2") return false;
+    const parents = graph.parentsByClaim.get(claimId) ?? [];
+    for (let index = 0; index < parents.length; index += 1) {
+      if (closure.roots.has(parents[index])) return true;
+    }
+    const signature = canonicalStringify(sortArray2([...closure.roots], compareCodePoints4));
+    let descendants = descendantsByRootSignature.get(signature);
+    if (!descendants) {
+      descendants = /* @__PURE__ */ new Set();
+      const pending = [...closure.roots];
+      let cursor = 0;
+      while (cursor < pending.length) {
+        const current = pending[cursor];
+        cursor += 1;
+        if (descendants.has(current)) continue;
+        descendants.add(current);
+        const children = graph.childrenByClaim.get(current) ?? [];
+        for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+          pushArray2(pending, children[childIndex]);
+        }
+      }
+      descendantsByRootSignature.set(signature, descendants);
+    }
+    return descendants.has(claimId);
+  };
+  for (const [obligationId, obligation] of obligationsById) {
+    const roots = /* @__PURE__ */ new Set([
+      ...strings(obligation.source_claim_ids),
+      ...strings(obligation.required_oracle_refs)
+    ]);
+    for (const factId of factIdsByObligation.get(obligationId) ?? []) {
+      const fact = factsById.get(factId);
+      if (!fact) continue;
+      roots.add(String(fact.claim_id ?? ""));
+      for (const ref of strings(fact.source_claim_ids)) roots.add(ref);
+    }
+    const vector = isRecord3(obligation.combination_vector) ? obligation.combination_vector : {};
+    const forbidden = new Set(strings(vector.forbid_evidence_refs));
+    closureByObligation.set(obligationId, { roots, scope: String(obligation.scope ?? "") });
+    forbiddenByObligation.set(obligationId, forbidden);
+  }
+  const expectations = caseExpectations(caseDraft);
+  for (let index = 0; index < expectations.length; index += 1) {
+    const expectation = expectations[index];
+    const expectationPath = `${path4}/steps/expectations/${index}`;
+    const oracleRefs = strings(expectation.oracle_evidence_refs);
+    const oracleRefSet = new Set(oracleRefs);
+    const evidenceRef = String(expectation.evidence_ref ?? "");
+    if (oracleRefs.length === 0 || oracleRefSet.size !== oracleRefs.length || !oracleRefSet.has(evidenceRef)) pushArray2(diagnostics, diagnostic7(
+      "traceability",
+      "CASE_ORACLE_EVIDENCE_INVALID",
+      `${expectationPath}/oracle_evidence_refs`,
+      "Oracle evidence must be nonempty and include evidence_ref exactly once"
+    ));
+    if (expectation.kind === "obligation-oracle") {
+      const obligationId = String(expectation.closes_obligation_id ?? "");
+      const obligation = obligationsById.get(obligationId);
+      if (!obligation || obligation.caseable !== true || obligation.kind === "requirement-gap") {
+        pushArray2(diagnostics, diagnostic7(
+          "reference",
+          "CASE_ORACLE_CLOSE_TARGET_INVALID",
+          `${expectationPath}/closes_obligation_id`,
+          "obligation-oracle must close one linked caseable Test Point"
+        ));
+        continue;
+      }
+      counts.set(obligationId, (counts.get(obligationId) ?? 0) + 1);
+      const required = strings(obligation.required_oracle_refs);
+      if (someArray2(required, (ref) => !oracleRefSet.has(ref))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_ORACLE_PREBINDING_MISSING",
+        expectationPath,
+        "closing expectation must include every required Oracle prebinding"
+      ));
+      const closure = closureByObligation.get(obligationId);
+      const forbidden = forbiddenByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
+      if (someArray2(oracleRefs, (ref) => forbidden.has(ref))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_ORACLE_EVIDENCE_FORBIDDEN",
+        expectationPath,
+        "forbid evidence cannot become a selected-vector Oracle"
+      ));
+      else if (!closure || someArray2(oracleRefs, (ref) => !allows(closure, ref))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_ORACLE_EVIDENCE_UNRELATED",
+        expectationPath,
+        "Oracle evidence is outside the closed Test Point ancestry"
+      ));
+    } else if (expectation.kind === "auxiliary") {
+      if (Object.hasOwn(expectation, "closes_obligation_id") || someArray2(oracleRefs, (ref) => !someArray2(
+        [...closureByObligation.values()],
+        (closure) => allows(closure, ref)
+      ))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_AUXILIARY_ORACLE_INVALID",
+        expectationPath,
+        "auxiliary expectations cannot close Test Points and must use legal Case Oracle evidence"
+      ));
+    } else pushArray2(diagnostics, diagnostic7(
+      "classification",
+      "CASE_EXPECTATION_KIND_INVALID",
+      `${expectationPath}/kind`,
+      "expectation kind must be obligation-oracle or auxiliary"
+    ));
+  }
+  for (const [obligationId, count] of counts) if (count !== 1) pushArray2(diagnostics, diagnostic7(
+    "traceability",
+    count === 0 ? "CASE_ORACLE_CLOSURE_MISSING" : "CASE_ORACLE_CLOSURE_DUPLICATE",
+    `${path4}/obligation_ids/${pointerPart3(obligationId)}`,
+    "every linked caseable Test Point must be closed by exactly one obligation-oracle expectation"
+  ));
+}
 function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact, factsById, factIdsByObligation, pointsById, evidenceGraph, diagnostics) {
   const caseId = typeof caseDraft.case_id === "string" ? caseDraft.case_id : "invalid";
   const path4 = `/${lane}/${pointerPart3(caseId)}`;
@@ -6703,37 +7188,23 @@ function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact
     "traceability",
     "CASE_EXECUTION_SIGNATURE_MISMATCH",
     `${path4}/execution_signature`,
-    "execution signature must be derived exactly from role, preconditions, data, ordered actions, and expectation identities"
+    "execution signature must be derived exactly from role, preconditions, data, ordered actions, and typed Oracle semantics"
   ));
-  const submittedOracleIds = strings(signature.oracle_refs);
-  if (expectations.length < obligationIds.length || expectationIds.length !== expectations.length || new Set(expectationIds).size !== expectationIds.length || !sameStrings(expectationIds, submittedOracleIds)) pushArray2(diagnostics, diagnostic7(
+  if (expectationIds.length !== expectations.length || new Set(expectationIds).size !== expectationIds.length) pushArray2(diagnostics, diagnostic7(
     "traceability",
     "CASE_ORACLE_TRACE_MISSING",
-    `${path4}/execution_signature/oracle_refs`,
-    "every covered Test Point requires a distinct independently locatable expectation Oracle"
-  ));
-  const requirementList = [];
-  for (const obligationId of obligationIds) {
-    const oracleRoots = sortArray2(strings(obligationsById.get(obligationId)?.required_oracle_refs), compareCodePoints4);
-    pushArray2(requirementList, { required: oracleRoots });
-  }
-  const expectationList = [];
-  for (const expectation of expectations) {
-    const evidenceRef = String(expectation.evidence_ref ?? "");
-    pushArray2(expectationList, { evidenceRef });
-  }
-  if (!hasCompleteOracleOwnership(requirementList, expectationList, evidenceGraph)) pushArray2(diagnostics, diagnostic7(
-    "traceability",
-    "CASE_ORACLE_OWNERSHIP_INCOMPLETE",
     `${path4}/steps`,
-    "every linked Test Point must own one distinct concrete expectation covering all required Oracles through accepted ancestry"
+    "every expectation must remain independently locatable"
   ));
-  if (Object.hasOwn(signature, "test_point_ids") && !sameStrings(strings(signature.test_point_ids), obligationIds)) pushArray2(diagnostics, diagnostic7(
-    "traceability",
-    "CASE_TEST_POINT_TRACE_MISMATCH",
-    `${path4}/execution_signature/test_point_ids`,
-    "Case signature Test Point associations must be exact"
-  ));
+  validateExplicitOracleClosure(
+    caseDraft,
+    linkedObligations,
+    evidenceGraph,
+    factIdsByObligation,
+    factsById,
+    path4,
+    diagnostics
+  );
 }
 function canonicalRootProjection(root) {
   const riskCounts = isRecord3(root.risk_counts) ? root.risk_counts : {};
@@ -7090,6 +7561,89 @@ function buildBundleTrusted(context) {
       factIds.add(String(route.fact_id ?? ""));
       factIdsByObligation.set(obligationId, factIds);
     }
+  }
+  for (const obligation of obligations) {
+    const obligationId = String(obligation.obligation_id ?? "");
+    const vector = isRecord3(obligation.combination_vector) ? obligation.combination_vector : null;
+    if (!vector) continue;
+    const assignments = records(vector.assignments);
+    const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ""));
+    const validStrength = Number.isSafeInteger(vector.strength) && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
+    if (vector.policy_id !== "twise-candidate-cap-v1" || !validStrength || new Set(parameterIds).size !== parameterIds.length || obligation.kind !== "interaction" || obligation.caseable !== true) pushArray2(
+      diagnostics,
+      diagnostic7(
+        "traceability",
+        "TWISE_VECTOR_CONTRACT_INVALID",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector`,
+        "selected vectors must use the frozen policy, strength within unique assignments, and caseable interaction obligations"
+      )
+    );
+    const sourceClaims = new Set(strings(obligation.source_claim_ids));
+    const owner = isRecord3(vector.owner) ? vector.owner : {};
+    const routedFacts = factIdsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
+    for (const factId of strings(owner.fact_ids)) {
+      if (!routedFacts.has(factId)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_OWNER_FACT_ROUTE_MISSING",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/owner/fact_ids/${pointerPart3(factId)}`,
+        "every selected-vector owner fact must route to the vector obligation"
+      ));
+      const fact = factsById.get(factId);
+      for (const ref of fact ? [String(fact.claim_id ?? ""), ...strings(fact.source_claim_ids)] : []) {
+        if (!sourceClaims.has(ref)) pushArray2(diagnostics, diagnostic7(
+          "traceability",
+          "TWISE_OWNER_SOURCE_MISSING",
+          `/obligations/${pointerPart3(obligationId)}/source_claim_ids`,
+          "selected-vector sources must inherit every owner fact root"
+        ));
+      }
+    }
+    const viewRefs = new Set(strings(obligation.view_element_refs));
+    const ownerViewId = String(owner.view_id ?? "");
+    for (const ref of records(owner.view_element_refs)) {
+      if (String(ref.view_id ?? "") !== ownerViewId) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_OWNER_VIEW_MISMATCH",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/owner/view_element_refs`,
+        "every selected-vector owner element must belong to the single named owner view"
+      ));
+      const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
+      if (!viewRefs.has(qualified)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_OWNER_ELEMENT_REF_MISSING",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/owner/view_element_refs`,
+        "selected-vector obligations must inherit every owner view element reference"
+      ));
+    }
+    for (const [assignmentIndex, assignment] of assignments.entries()) {
+      const claimId = String(assignment.evidence_claim_id ?? "");
+      const claim = claimsById.get(claimId);
+      if (!sourceClaims.has(claimId)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_SELECTED_VALUE_SOURCE_MISSING",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+        "every selected-value evidence claim must be carried by the vector obligation sources"
+      ));
+      if (!claim || claim.kind === "diagnostic" || typeof claim.scope !== "string" || typeof obligation.scope !== "string" || !scopeContains(claim.scope, obligation.scope)) pushArray2(
+        diagnostics,
+        diagnostic7(
+          "traceability",
+          "TWISE_SELECTED_VALUE_EVIDENCE_INVALID",
+          `/obligations/${pointerPart3(obligationId)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+          "selected-value evidence must be accepted, non-diagnostic, and cover the obligation scope"
+        )
+      );
+    }
+    const forbidden = new Set(strings(vector.forbid_evidence_refs));
+    for (const ref of strings(obligation.required_oracle_refs)) if (forbidden.has(ref)) pushArray2(
+      diagnostics,
+      diagnostic7(
+        "traceability",
+        "TWISE_ORACLE_FORBID_CONFLICT",
+        `/obligations/${pointerPart3(obligationId)}/required_oracle_refs/${pointerPart3(ref)}`,
+        "forbid evidence cannot be an Oracle prebinding"
+      )
+    );
   }
   const formalRootsByObligation = /* @__PURE__ */ new Map();
   for (const obligation of obligations) {
@@ -7621,7 +8175,9 @@ function buildBundleTrusted(context) {
         obligationIds,
         (_id, index) => dispositions[index] === "grounded" || dispositions[index] === "conditional"
       );
-      if (executableRouteIds.length > 0 && everyArray2(executableRouteIds, (id) => sharesCase(factId, id))) status = "covered";
+      const hasRoutedRequirementGap = someArray2(obligationIds, (id) => obligationsById.get(id)?.kind === "requirement-gap" && pointsById.get(id)?.classification === "blocked");
+      if (hasRoutedRequirementGap) status = "blocked";
+      else if (executableRouteIds.length > 0 && everyArray2(executableRouteIds, (id) => sharesCase(factId, id))) status = "covered";
       else if (everyArray2(dispositions, (item) => item === "not_applicable")) status = "not_applicable";
       else if (executableRouteIds.length > 0) pushArray2(diagnostics, diagnostic7(
         "traceability",
@@ -7725,7 +8281,6 @@ var VIEW_ELEMENT_KINDS = Object.freeze({
 });
 var DISPOSITION_FIELDS = Object.freeze([
   "formal_view_id",
-  "blocker_root_issue_id",
   "exploratory_id"
 ]);
 function isObject4(value) {
@@ -7774,27 +8329,20 @@ function cellPath(moduleIds, dimension) {
 }
 function candidateSemanticKey(candidate) {
   return JSON.stringify([
-    typeof candidate.candidate_id === "string" ? candidate.candidate_id : "",
     normalizedStrings(candidate.module_ids),
     typeof candidate.dimension === "string" ? candidate.dimension : "",
-    typeof candidate.disposition === "string" ? candidate.disposition : "",
-    DISPOSITION_FIELDS.map((field) => typeof candidate[field] === "string" ? candidate[field] : ""),
-    normalizedStrings(candidate.source_claim_ids)
+    normalizedSemanticRefs(candidate.semantic_subject_refs)
   ]);
+}
+function normalizedSemanticRefs(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Map(value.filter(isObject4).map((item) => [JSON.stringify(
+    Object.fromEntries(Object.entries(item).sort(([left], [right]) => compareCodePoints5(left, right)))
+  ), item])).keys()].sort(compareCodePoints5);
 }
 function candidatePath(candidate) {
   const candidateId = typeof candidate.candidate_id === "string" && candidate.candidate_id.length > 0 ? candidate.candidate_id : candidateSemanticKey(candidate);
   return `/interaction_candidates/${escapePointerSegment2(candidateId)}`;
-}
-function modeledSupport(view) {
-  const claimIds = /* @__PURE__ */ new Set();
-  let hasModelRefs = false;
-  for (const item of [...objectArray5(view.elements), ...objectArray5(view.relations)]) {
-    const modelRefs = normalizedStrings(item.model_refs);
-    if (modelRefs.length > 0) hasModelRefs = true;
-    for (const claimId of [...normalizedStrings(item.source_claim_ids), ...modelRefs]) claimIds.add(claimId);
-  }
-  return { claimIds, hasModelRefs };
 }
 function relationEndpointKind(viewType) {
   if (viewType === "flow") return "flow-node";
@@ -7876,14 +8424,6 @@ function auditInteractionMatrix(artifact) {
   const input = isObject4(artifact) ? artifact : {};
   const matrix = objectArray5(input.interaction_matrix);
   const submittedCandidates = objectArray5(input.interaction_candidates);
-  const views = objectArray5(input.views);
-  const viewsById = /* @__PURE__ */ new Map();
-  for (const view of views) {
-    if (typeof view.view_id !== "string") continue;
-    const matches = viewsById.get(view.view_id) ?? [];
-    matches.push(view);
-    viewsById.set(view.view_id, matches);
-  }
   const diagnostics = [];
   if (matrix.length === 0) diagnostics.push(diagnostic8(
     "coverage",
@@ -7966,6 +8506,11 @@ function auditInteractionMatrix(artifact) {
     const candidateId = typeof candidate.candidate_id === "string" ? candidate.candidate_id : "";
     candidateIdCounts.set(candidateId, (candidateIdCounts.get(candidateId) ?? 0) + 1);
   }
+  const candidateSemanticCounts = /* @__PURE__ */ new Map();
+  for (const candidate of submittedCandidates) {
+    const key = candidateSemanticKey(candidate);
+    candidateSemanticCounts.set(key, (candidateSemanticCounts.get(key) ?? 0) + 1);
+  }
   for (const [candidateId, count] of [...candidateIdCounts.entries()].sort(([left], [right]) => compareCodePoints5(left, right))) {
     if (candidateId.length === 0 || count < 2) continue;
     diagnostics.push(diagnostic8(
@@ -7975,74 +8520,201 @@ function auditInteractionMatrix(artifact) {
       "candidate_id must be nonblank and unique"
     ));
   }
-  const candidatesByCell = /* @__PURE__ */ new Map();
   const candidates = [];
-  const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints5(candidateSemanticKey(left), candidateSemanticKey(right)));
+  const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints5(
+    `${candidateSemanticKey(left)}\0${String(left.candidate_id ?? "")}`,
+    `${candidateSemanticKey(right)}\0${String(right.candidate_id ?? "")}`
+  ));
   for (const candidate of orderedCandidates) {
     const path4 = candidatePath(candidate);
     const candidateId = typeof candidate.candidate_id === "string" ? candidate.candidate_id : "";
     const modulesForCandidate = normalizedStrings(candidate.module_ids);
     const rawModuleCount = Array.isArray(candidate.module_ids) ? candidate.module_ids.length : 0;
     const dimension = typeof candidate.dimension === "string" ? candidate.dimension : "";
-    const disposition = typeof candidate.disposition === "string" ? candidate.disposition : "";
     let valid = true;
     if (candidateId.length === 0) {
       diagnostics.push(diagnostic8("schema", "INTERACTION_CANDIDATE_ID_INVALID", `${path4}/candidate_id`, "candidate_id must be nonblank and unique"));
       valid = false;
     } else if ((candidateIdCounts.get(candidateId) ?? 0) > 1) valid = false;
+    if ((candidateSemanticCounts.get(candidateSemanticKey(candidate)) ?? 0) > 1) {
+      diagnostics.push(diagnostic8(
+        "traceability",
+        "INTERACTION_CANDIDATE_SUBJECT_DUPLICATE",
+        path4,
+        "module_ids, dimension, and semantic_subject_refs must identify one interaction candidate"
+      ));
+      valid = false;
+    }
     if (modulesForCandidate.length !== rawModuleCount || modulesForCandidate.length === 0 || !DIMENSION_SET.has(dimension)) {
       diagnostics.push(diagnostic8("reference", "INTERACTION_CANDIDATE_CELL_INVALID", path4, "candidate must name one valid audit cell"));
       valid = false;
     }
-    const destinationFields = DISPOSITION_FIELDS.filter((field) => typeof candidate[field] === "string" && /** @type {string} */
-    candidate[field].trim().length > 0);
-    const expectedField = disposition === "formal-view" ? "formal_view_id" : disposition === "blocker" ? "blocker_root_issue_id" : disposition === "exploratory" ? "exploratory_id" : null;
-    if (destinationFields.length !== 1 || expectedField === null || destinationFields[0] !== expectedField) {
-      diagnostics.push(diagnostic8("classification", "CANDIDATE_DISPOSITION_NOT_EXACT", path4, "candidate must have exactly one destination matching its disposition"));
+    const sourceClaimIds = normalizedStrings(candidate.source_claim_ids);
+    const semanticSubjectRefs = normalizedSemanticRefs(candidate.semantic_subject_refs);
+    if (sourceClaimIds.length === 0) {
+      diagnostics.push(diagnostic8("classification", "INTERACTION_CANDIDATE_EVIDENCE_REQUIRED", `${path4}/source_claim_ids`, "every interaction candidate requires nonempty provenance evidence"));
+      valid = false;
+    }
+    if (semanticSubjectRefs.length === 0 || semanticSubjectRefs.length !== (Array.isArray(candidate.semantic_subject_refs) ? candidate.semantic_subject_refs.length : 0)) {
+      diagnostics.push(diagnostic8("classification", "INTERACTION_CANDIDATE_SUBJECT_REQUIRED", `${path4}/semantic_subject_refs`, "every interaction candidate requires nonempty unique semantic subject references"));
+      valid = false;
+    }
+    if (valid) {
+      const normalized = { ...candidate, module_ids: modulesForCandidate };
+      normalized.source_claim_ids = sourceClaimIds;
+      normalized.semantic_subject_refs = objectArray5(candidate.semantic_subject_refs).sort((left, right) => compareCodePoints5(JSON.stringify(left), JSON.stringify(right)));
+      candidates.push(normalized);
+    }
+  }
+  candidates.sort((left, right) => compareCodePoints5(
+    /** @type {string} */
+    left.candidate_id,
+    /** @type {string} */
+    right.candidate_id
+  ));
+  return { candidates, diagnostics: sortDiagnostics(diagnostics) };
+}
+function isFormalInteractionEvidence(claim) {
+  return claim.level === "E3" && claim.kind === "requirement" || claim.level === "E1" && claim.kind === "assumption" || claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
+}
+function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeledClaims, claimsById) {
+  const input = isObject4(artifact) ? artifact : {};
+  const submittedViews = objectArray5(input.views);
+  const cells = objectArray5(input.interaction_matrix).map((record2) => ({
+    modules: normalizedStrings(record2.module_ids),
+    dimension: typeof record2.dimension === "string" ? record2.dimension : "",
+    status: typeof record2.status === "string" ? record2.status : ""
+  }));
+  const cellsByKey = /* @__PURE__ */ new Map();
+  for (const cell of cells) {
+    const key = cellKey(cell.modules, cell.dimension);
+    const matches = cellsByKey.get(key) ?? [];
+    matches.push(cell);
+    cellsByKey.set(key, matches);
+  }
+  const acceptedByCell = /* @__PURE__ */ new Map();
+  const acceptedCandidates = [];
+  const diagnostics = [];
+  for (const candidate of candidates) {
+    const path4 = candidatePath(candidate);
+    const candidateId = String(candidate.candidate_id ?? "");
+    const modules = normalizedStrings(candidate.module_ids);
+    const dimension = typeof candidate.dimension === "string" ? candidate.dimension : "";
+    const disposition = typeof candidate.disposition === "string" ? candidate.disposition : "";
+    let valid = true;
+    const destinationFields = DISPOSITION_FIELDS.filter((field) => typeof candidate[field] === "string" && String(candidate[field]).trim().length > 0);
+    const expectedField = disposition === "formal-view" ? "formal_view_id" : disposition === "exploratory" ? "exploratory_id" : null;
+    const dispositionExact = disposition === "blocker" ? destinationFields.length === 0 && isObject4(candidate.issue_intent) : destinationFields.length === 1 && expectedField !== null && destinationFields[0] === expectedField;
+    if (!dispositionExact) {
+      diagnostics.push(diagnostic8(
+        "classification",
+        "CANDIDATE_DISPOSITION_NOT_EXACT",
+        path4,
+        "candidate must have exactly one destination matching its disposition"
+      ));
       valid = false;
     }
     if (disposition === "formal-view") {
-      const sourceClaimIds = normalizedStrings(candidate.source_claim_ids);
-      if (sourceClaimIds.length === 0) {
-        diagnostics.push(diagnostic8("classification", "FORMAL_CANDIDATE_EVIDENCE_REQUIRED", `${path4}/source_claim_ids`, "a formal interaction candidate requires source evidence"));
-        valid = false;
-      }
       const viewId = typeof candidate.formal_view_id === "string" ? candidate.formal_view_id : "";
-      const matchingViews = viewsById.get(viewId) ?? [];
-      if (matchingViews.length === 0) {
-        diagnostics.push(diagnostic8("reference", "FORMAL_INTERACTION_VIEW_DANGLING", `${path4}/formal_view_id`, `formal interaction view "${viewId}" does not exist`));
+      const matchingSubmittedViews = submittedViews.filter((view) => view.view_id === viewId);
+      const formalView = viewsById.get(viewId);
+      if (matchingSubmittedViews.length === 0) {
+        diagnostics.push(diagnostic8(
+          "reference",
+          "FORMAL_INTERACTION_VIEW_DANGLING",
+          `${path4}/formal_view_id`,
+          `formal interaction view "${viewId}" does not exist`
+        ));
         valid = false;
-      } else if (matchingViews.length !== 1) {
-        diagnostics.push(diagnostic8("reference", "FORMAL_INTERACTION_VIEW_AMBIGUOUS", `${path4}/formal_view_id`, `formal interaction view "${viewId}" is not uniquely defined`));
+      } else if (matchingSubmittedViews.length !== 1) {
+        diagnostics.push(diagnostic8(
+          "reference",
+          "FORMAL_INTERACTION_VIEW_AMBIGUOUS",
+          `${path4}/formal_view_id`,
+          `formal interaction view "${viewId}" is not uniquely defined`
+        ));
         valid = false;
       } else {
-        const view = matchingViews[0];
-        const identityDiagnostics = formalViewIdentityDiagnostics(view);
-        if (typeof view.type !== "string" || !FORMAL_VIEW_TYPES.has(view.type)) {
-          diagnostics.push(diagnostic8("classification", "FORMAL_INTERACTION_VIEW_TYPE_INVALID", `${path4}/formal_view_id`, "a formal interaction candidate must route to one of the seven formal behavior views"));
+        const submittedView = matchingSubmittedViews[0];
+        if (typeof submittedView.type !== "string" || !FORMAL_VIEW_TYPES.has(submittedView.type)) {
+          diagnostics.push(diagnostic8(
+            "classification",
+            "FORMAL_INTERACTION_VIEW_TYPE_INVALID",
+            `${path4}/formal_view_id`,
+            "a formal interaction candidate must route to one of the seven formal behavior views"
+          ));
           valid = false;
-        } else if (objectArray5(view.elements).length + objectArray5(view.relations).length === 0) {
-          diagnostics.push(diagnostic8("traceability", "FORMAL_INTERACTION_VIEW_EMPTY", `${path4}/formal_view_id`, "a formal interaction candidate must route to a nonempty behavior view"));
+        } else if (objectArray5(submittedView.elements).length + objectArray5(submittedView.relations).length === 0) {
+          diagnostics.push(diagnostic8(
+            "traceability",
+            "FORMAL_INTERACTION_VIEW_EMPTY",
+            `${path4}/formal_view_id`,
+            "a formal interaction candidate must route to a nonempty behavior view"
+          ));
           valid = false;
-        } else if (identityDiagnostics.length > 0) {
-          diagnostics.push(...identityDiagnostics);
-          valid = false;
-        } else if (!formalViewStructureValid(view)) {
-          diagnostics.push(diagnostic8("traceability", "FORMAL_INTERACTION_VIEW_INVALID", `${path4}/formal_view_id`, "the formal interaction target is not a valid behavior-view graph"));
+        } else if (formalViewIdentityDiagnostics(submittedView).length > 0 || !formalViewStructureValid(submittedView) || !formalView) {
+          diagnostics.push(diagnostic8(
+            "traceability",
+            "FORMAL_INTERACTION_VIEW_INVALID",
+            `${path4}/formal_view_id`,
+            `formal interaction view "${viewId}" did not pass behavior-view validation`
+          ));
           valid = false;
         } else {
-          const support = modeledSupport(view);
-          if (!support.hasModelRefs && sourceClaimIds.some((claimId) => !support.claimIds.has(claimId))) {
-            diagnostics.push(diagnostic8("traceability", "FORMAL_INTERACTION_VIEW_SUPPORT_MISMATCH", `${path4}/formal_view_id`, "the formal interaction view does not model every candidate source claim"));
-            valid = false;
+          const modeledClaims = viewModeledClaims.get(viewId) ?? /* @__PURE__ */ new Set();
+          const targetScope = typeof formalView.scope === "string" ? formalView.scope : "";
+          for (const claimId of normalizedStrings(candidate.source_claim_ids)) {
+            const claim = claimsById.get(claimId);
+            const claimPath = `${path4}/source_claim_ids/${escapePointerSegment2(claimId)}`;
+            if (!claim) {
+              diagnostics.push(diagnostic8(
+                "reference",
+                "SOURCE_CLAIM_DANGLING",
+                claimPath,
+                `source claim "${claimId}" is not in the accepted evidence graph`
+              ));
+              valid = false;
+            } else if (!isFormalInteractionEvidence(claim)) {
+              diagnostics.push(diagnostic8(
+                "classification",
+                "FORMAL_CANDIDATE_EVIDENCE_INVALID",
+                claimPath,
+                `source claim "${claimId}" cannot support a formal interaction`
+              ));
+              valid = false;
+            } else {
+              if (targetScope.length > 0 && (typeof claim.scope !== "string" || !scopeContains(claim.scope, targetScope))) {
+                diagnostics.push(diagnostic8(
+                  "classification",
+                  "FORMAL_CANDIDATE_SCOPE_MISMATCH",
+                  claimPath,
+                  `source claim "${claimId}" does not cover formal view scope "${targetScope}"`
+                ));
+                valid = false;
+              }
+              if (!modeledClaims.has(claimId)) {
+                diagnostics.push(diagnostic8(
+                  "traceability",
+                  "FORMAL_CANDIDATE_CLAIM_UNMODELED",
+                  claimPath,
+                  `formal view "${viewId}" does not model source claim "${claimId}"`
+                ));
+                valid = false;
+              }
+            }
           }
         }
       }
     }
-    const key = cellKey(modulesForCandidate, dimension);
+    const key = cellKey(modules, dimension);
     const matchingCells = cellsByKey.get(key) ?? [];
     if (matchingCells.length === 0) {
-      diagnostics.push(diagnostic8("traceability", "INTERACTION_CANDIDATE_WITHOUT_CELL", path4, `candidate ${candidateId} does not match an audited cell`));
+      diagnostics.push(diagnostic8(
+        "traceability",
+        "INTERACTION_CANDIDATE_WITHOUT_CELL",
+        path4,
+        `candidate ${candidateId} does not match an audited cell`
+      ));
       valid = false;
     } else {
       if (matchingCells.every((cell) => cell.status === "checked-no-signal")) {
@@ -8055,45 +8727,37 @@ function auditInteractionMatrix(artifact) {
         valid = false;
       }
       if (matchingCells.length !== 1) {
-        diagnostics.push(diagnostic8("traceability", "INTERACTION_CANDIDATE_CELL_AMBIGUOUS", path4, `candidate ${candidateId} does not match exactly one audited cell`));
+        diagnostics.push(diagnostic8(
+          "traceability",
+          "INTERACTION_CANDIDATE_CELL_AMBIGUOUS",
+          path4,
+          `candidate ${candidateId} does not match exactly one audited cell`
+        ));
         valid = false;
       }
     }
-    if (valid) {
-      const normalized = { ...candidate, module_ids: modulesForCandidate };
-      if (Array.isArray(candidate.source_claim_ids)) normalized.source_claim_ids = normalizedStrings(candidate.source_claim_ids);
-      candidates.push(normalized);
-      const matches = candidatesByCell.get(key) ?? [];
-      matches.push(normalized);
-      candidatesByCell.set(key, matches);
-    }
+    if (!valid) continue;
+    acceptedCandidates.push(candidate);
+    const matches = acceptedByCell.get(key) ?? [];
+    matches.push(candidate);
+    acceptedByCell.set(key, matches);
   }
   for (const [key, matchingCells] of cellsByKey) {
     const candidateCells = matchingCells.filter((cell) => cell.status === "candidate");
-    if (candidateCells.length === 0) continue;
-    const dispositions = candidatesByCell.get(key) ?? [];
+    if (candidateCells.length === 0 || (acceptedByCell.get(key) ?? []).length > 0) continue;
     const sample = candidateCells[0];
-    const path4 = cellPath(sample.modules, sample.dimension);
-    if (dispositions.length === 0) diagnostics.push(diagnostic8(
+    diagnostics.push(diagnostic8(
       "traceability",
       "INTERACTION_CANDIDATE_MISSING",
-      path4,
+      cellPath(sample.modules, sample.dimension),
       `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has no valid disposition`
     ));
-    else if (dispositions.length > 1) diagnostics.push(diagnostic8(
-      "traceability",
-      "INTERACTION_CANDIDATE_MULTIPLE",
-      path4,
-      `candidate cell ${moduleLabel(sample.modules)} / ${sample.dimension} has more than one valid disposition`
-    ));
   }
-  candidates.sort((left, right) => compareCodePoints5(
-    /** @type {string} */
-    left.candidate_id,
-    /** @type {string} */
-    right.candidate_id
+  acceptedCandidates.sort((left, right) => compareCodePoints5(
+    String(left.candidate_id),
+    String(right.candidate_id)
   ));
-  return { candidates, diagnostics: sortDiagnostics(diagnostics) };
+  return { candidates: acceptedCandidates, diagnostics: sortDiagnostics(diagnostics) };
 }
 
 // src/views/validate-views.mjs
@@ -8386,71 +9050,6 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       viewModeledClaims.set(viewId, modeledClaims);
     }
   });
-  objectArray6(input.interaction_candidates).forEach((candidate, candidateIndex) => {
-    if (candidate.disposition !== "formal-view") return;
-    const candidateId = typeof candidate.candidate_id === "string" && candidate.candidate_id.length > 0 ? escapePointerSegment3(candidate.candidate_id) : String(candidateIndex);
-    const candidatePath2 = `/interaction_candidates/${candidateId}`;
-    const sourceIds = stringArray4(candidate.source_claim_ids);
-    if (sourceIds.length === 0) diagnostics.push(diagnostic9(
-      "classification",
-      "FORMAL_CANDIDATE_EVIDENCE_REQUIRED",
-      `${candidatePath2}/source_claim_ids`,
-      "a formal interaction candidate requires accepted source evidence"
-    ));
-    const formalViewId = typeof candidate.formal_view_id === "string" ? candidate.formal_view_id : "";
-    const submittedView = views.find((view) => view.view_id === formalViewId);
-    const formalView = validViews.get(formalViewId);
-    if (!submittedView) diagnostics.push(diagnostic9(
-      "reference",
-      "FORMAL_INTERACTION_VIEW_DANGLING",
-      `${candidatePath2}/formal_view_id`,
-      `formal interaction view "${formalViewId}" does not exist`
-    ));
-    else if (!formalView) diagnostics.push(diagnostic9(
-      "traceability",
-      "FORMAL_INTERACTION_VIEW_INVALID",
-      `${candidatePath2}/formal_view_id`,
-      `formal interaction view "${formalViewId}" did not pass behavior-view validation`
-    ));
-    else if (objectArray6(formalView.elements).length + objectArray6(formalView.relations).length === 0) diagnostics.push(diagnostic9(
-      "traceability",
-      "FORMAL_INTERACTION_VIEW_EMPTY",
-      `${candidatePath2}/formal_view_id`,
-      "a formal interaction candidate must route to a nonempty behavior view"
-    ));
-    const modeledClaims = viewModeledClaims.get(formalViewId) ?? /* @__PURE__ */ new Set();
-    const targetScope = formalView && typeof formalView.scope === "string" ? formalView.scope : "";
-    sourceIds.forEach((claimId, claimIndex) => {
-      const claim = claimsById.get(claimId);
-      const claimPath = `${candidatePath2}/source_claim_ids/${escapePointerSegment3(claimId || String(claimIndex))}`;
-      if (!claim) diagnostics.push(diagnostic9(
-        "reference",
-        "SOURCE_CLAIM_DANGLING",
-        claimPath,
-        `source claim "${claimId}" is not in the accepted evidence graph`
-      ));
-      else if (!isBehaviorSourceClaim(claim) && !isE2ModelElement(claim)) diagnostics.push(diagnostic9(
-        "classification",
-        "FORMAL_CANDIDATE_EVIDENCE_INVALID",
-        claimPath,
-        `source claim "${claimId}" cannot support a formal interaction`
-      ));
-      else {
-        if (targetScope.length > 0 && (typeof claim.scope !== "string" || !scopeContains(claim.scope, targetScope))) diagnostics.push(diagnostic9(
-          "classification",
-          "FORMAL_CANDIDATE_SCOPE_MISMATCH",
-          claimPath,
-          `source claim "${claimId}" does not cover formal view scope "${targetScope}"`
-        ));
-        if (formalView && !modeledClaims.has(claimId)) diagnostics.push(diagnostic9(
-          "traceability",
-          "FORMAL_CANDIDATE_CLAIM_UNMODELED",
-          claimPath,
-          `formal view "${formalViewId}" does not model source claim "${claimId}"`
-        ));
-      }
-    });
-  });
   const factRoutes = [];
   for (const fact of facts) {
     const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
@@ -8458,17 +9057,7 @@ function validateBehaviorViews(evidenceGraph, artifact) {
     if (!primaryClaim || primaryClaim.kind !== "requirement" && primaryClaim.kind !== "assumption" || fact.status === "diagnostic") continue;
     const factClaimIds = [.../* @__PURE__ */ new Set([...typeof fact.claim_id === "string" ? [fact.claim_id] : [], ...stringArray4(fact.source_claim_ids)])];
     const viewIds = [...new Set(factClaimIds.flatMap((claimId) => [...claimViews.get(claimId) ?? []]))].sort(compareCodePoints6);
-    if (viewIds.length === 0) {
-      const claimScope = typeof primaryClaim.scope === "string" ? primaryClaim.scope : "";
-      const overlapsRun = runScope === null || claimScope.length === 0 || scopesOverlap(runScope, claimScope);
-      diagnostics.push(diagnostic9(
-        "traceability",
-        overlapsRun ? "NORMATIVE_FACT_UNMODELED" : "OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED",
-        `/facts/${factId}`,
-        overlapsRun ? `in-scope normative fact "${factId}" is not modeled by a valid behavior view` : `out-of-scope normative fact "${factId}" is not modeled; Blocked/NotApplicable routing is owned by the Test Obligations stage`
-      ));
-      continue;
-    }
+    if (viewIds.length === 0) continue;
     factRoutes.push({ fact_id: factId, route_type: "views", view_ids: viewIds });
   }
   const sortedViews = new Map([...validViews].sort(([left], [right]) => compareCodePoints6(left, right)));
@@ -8478,7 +9067,14 @@ function validateBehaviorViews(evidenceGraph, artifact) {
     /** @type {string} */
     right.fact_id
   ));
-  return { viewsById: sortedViews, factRoutes, diagnostics: sortDiagnostics2(diagnostics) };
+  return {
+    viewsById: sortedViews,
+    viewModeledClaims: new Map([...viewModeledClaims].sort(
+      ([left], [right]) => compareCodePoints6(left, right)
+    )),
+    factRoutes,
+    diagnostics: sortDiagnostics2(diagnostics)
+  };
 }
 
 // src/obligations/registry.mjs
@@ -9235,7 +9831,7 @@ function compile4(view, context) {
       descriptors.push({
         key: responsibilityKey("integration", elementId, {
           responsibility: "side-effect",
-          side_effect: sideEffect
+          side_effect: { kind: sideEffect.kind, target: sideEffect.target }
         }),
         element,
         required: true,
@@ -9244,7 +9840,7 @@ function compile4(view, context) {
           responsibility: "side-effect",
           scope: view.scope,
           contract_element_id: elementId,
-          side_effect: sideEffect
+          side_effect: { kind: sideEffect.kind, target: sideEffect.target }
         }
       });
     }
@@ -9408,7 +10004,835 @@ function compile7(view, context) {
   return compileResponsibilitySeeds(view, context, descriptors, "timing");
 }
 
+// src/obligations/compile-obligation-inputs.mjs
+var TARGET_VIEW_TYPES = /* @__PURE__ */ new Set(["input-domain", "role", "timing", "integration"]);
+var CORE_INTEGRATION_SURFACES = [
+  "request",
+  "response",
+  "persistence",
+  "event",
+  "callback",
+  "compensation"
+];
+var TIMING_SPECIALS = /* @__PURE__ */ new Set(["timeout", "retry"]);
+var INTEGRATION_SPECIALS = /* @__PURE__ */ new Set([
+  "invariant",
+  "contract-compatibility",
+  "concurrency",
+  "idempotency",
+  "security-abuse"
+]);
+var CUSTOM_KINDS = /* @__PURE__ */ new Map([
+  ["flow-path", "flow"],
+  ["decision-outcome", "decision"],
+  ["state-transition", "state"],
+  ["input-partition", "input-domain"],
+  ["role-permission", "role"],
+  ["temporal-rule", "timing"],
+  ["integration-contract", "integration"],
+  ["cross-module-interaction", "interaction"]
+]);
+function diagnostic10(code2, path4, message, category = "classification") {
+  return { category, code: code2, path: path4, message };
+}
+function pointerPart4(value) {
+  return value.replaceAll("~", "~0").replaceAll("/", "~1");
+}
+function derivedContext(view) {
+  const riskByElementId = {};
+  const requiredOracleRefsByElementId = {};
+  const requiredCapabilitiesByElementId = {};
+  for (const element of objectArray7(view.elements)) {
+    if (typeof element.element_id !== "string") continue;
+    riskByElementId[element.element_id] = "medium";
+    requiredOracleRefsByElementId[element.element_id] = sortedStrings(element.source_claim_ids, true);
+    requiredCapabilitiesByElementId[element.element_id] = [];
+  }
+  return { riskByElementId, requiredOracleRefsByElementId, requiredCapabilitiesByElementId };
+}
+function requiredSelectors(view) {
+  const selectors = [];
+  for (const element of objectArray7(view.elements)) {
+    const elementId = String(element.element_id ?? "");
+    if (view.type === "input-domain" && element.kind === "input-domain") {
+      for (const inputClass of objectArray7(element.classes)) selectors.push({
+        kind: "equivalence-class",
+        element_id: elementId,
+        class_id: inputClass.class_id
+      });
+      if (isObject6(element.bounds)) for (const boundary of ["lower", "upper"]) selectors.push({
+        kind: "boundary",
+        element_id: elementId,
+        boundary
+      });
+    } else if (view.type === "role" && element.kind === "role-permission") {
+      for (const permission of sortedStrings(element.permissions)) selectors.push({
+        kind: "permission",
+        element_id: elementId,
+        permission
+      });
+    } else if (view.type === "timing" && element.kind === "timing-rule") {
+      for (const kind of ["before", "equal", "after"]) selectors.push({ kind, element_id: elementId });
+    } else if (view.type === "integration" && element.kind === "integration-contract") {
+      for (const kind of CORE_INTEGRATION_SURFACES) selectors.push({ kind, element_id: elementId });
+      for (const sideEffect of objectArray7(element.side_effects)) selectors.push({
+        kind: "side-effect",
+        element_id: elementId,
+        side_effect_kind: sideEffect.kind,
+        target: sideEffect.target
+      });
+    }
+  }
+  return selectors;
+}
+function selectorResponsibilityKey(selector) {
+  const kind = String(selector.kind ?? "");
+  const elementId = String(selector.element_id ?? "");
+  if (kind === "equivalence-class") return responsibilityKey("input-domain", elementId, {
+    responsibility: "equivalence-class",
+    class_id: selector.class_id
+  });
+  if (kind === "boundary") return responsibilityKey("input-domain", elementId, {
+    responsibility: "boundary",
+    boundary: selector.boundary
+  });
+  if (kind === "permission") return responsibilityKey("role", elementId, {
+    responsibility: "permission",
+    permission: selector.permission
+  });
+  if (kind === "before" || kind === "equal" || kind === "after") {
+    return responsibilityKey("timing", elementId, {
+      responsibility: "threshold",
+      threshold_relation: kind
+    });
+  }
+  if (TIMING_SPECIALS.has(kind)) return responsibilityKey("timing", elementId, {
+    responsibility: kind,
+    signal: selector.signal_claim_id
+  });
+  if (CORE_INTEGRATION_SURFACES.includes(kind)) return responsibilityKey("integration", elementId, {
+    responsibility: "surface",
+    surface: kind
+  });
+  if (kind === "side-effect") return responsibilityKey("integration", elementId, {
+    responsibility: "side-effect",
+    side_effect: { kind: selector.side_effect_kind, target: selector.target }
+  });
+  if (kind === "invariant") return responsibilityKey("integration", elementId, {
+    responsibility: "invariant",
+    invariant: selector.signal_claim_id
+  });
+  if (INTEGRATION_SPECIALS.has(kind)) return responsibilityKey("integration", elementId, {
+    responsibility: kind,
+    signal: selector.signal_claim_id
+  });
+  return "";
+}
+function publicContext(view, submitted, contextIndex, diagnostics) {
+  const viewId = String(view.view_id);
+  const path4 = `/obligation_inputs/view_contexts/${contextIndex}`;
+  const required = new Map(requiredSelectors(view).map((selector) => [
+    canonicalStringify(selector),
+    selector
+  ]));
+  const seen = /* @__PURE__ */ new Set();
+  const responsibilityBindings = [];
+  const timingSpecialResponsibilitiesByElementId = {};
+  const integrationInvariantsByElementId = {};
+  const integrationSpecialResponsibilitiesByElementId = {};
+  for (const [bindingIndex2, binding] of objectArray7(submitted.bindings).entries()) {
+    const bindingPath = `${path4}/bindings/${bindingIndex2}`;
+    const selector = isObject6(binding.selector) ? binding.selector : {};
+    const selectorSignature = canonicalStringify(selector);
+    if (seen.has(selectorSignature)) {
+      diagnostics.push(diagnostic10(
+        "OBLIGATION_BINDING_DUPLICATE",
+        `${bindingPath}/selector`,
+        `view "${viewId}" has more than one binding for the same selector`
+      ));
+      continue;
+    }
+    seen.add(selectorSignature);
+    const element = objectArray7(view.elements).find((item) => item.element_id === selector.element_id);
+    const kind = String(selector.kind ?? "");
+    let allowedOptional = false;
+    if (element && view.type === "timing" && element.kind === "timing-rule" && TIMING_SPECIALS.has(kind)) allowedOptional = true;
+    if (element && view.type === "integration" && element.kind === "integration-contract" && INTEGRATION_SPECIALS.has(kind)) allowedOptional = true;
+    if (!required.has(selectorSignature) && !allowedOptional) {
+      diagnostics.push(diagnostic10(
+        "OBLIGATION_SELECTOR_UNKNOWN",
+        `${bindingPath}/selector`,
+        `selector does not identify a responsibility in view "${viewId}"`,
+        "reference"
+      ));
+      continue;
+    }
+    if (allowedOptional) {
+      const signalClaimId = String(selector.signal_claim_id ?? "");
+      const sourceClaimIds = sortedStrings(binding.source_claim_ids, true);
+      if (!signalClaimId || !sourceClaimIds.includes(signalClaimId)) {
+        diagnostics.push(diagnostic10(
+          "OBLIGATION_SIGNAL_CLAIM_REQUIRED",
+          `${bindingPath}/selector/signal_claim_id`,
+          "signal responsibilities must include their accepted signal claim in source_claim_ids",
+          "traceability"
+        ));
+        continue;
+      }
+      const elementId = String(selector.element_id);
+      if (view.type === "timing") {
+        const entries = timingSpecialResponsibilitiesByElementId[elementId] ?? [];
+        entries.push({ type: kind, signal: signalClaimId });
+        timingSpecialResponsibilitiesByElementId[elementId] = entries;
+      } else if (kind === "invariant") {
+        const entries = integrationInvariantsByElementId[elementId] ?? [];
+        entries.push({ invariant: signalClaimId });
+        integrationInvariantsByElementId[elementId] = entries;
+      } else {
+        const entries = integrationSpecialResponsibilitiesByElementId[elementId] ?? [];
+        entries.push({ type: kind, signal: signalClaimId });
+        integrationSpecialResponsibilitiesByElementId[elementId] = entries;
+      }
+    }
+    responsibilityBindings.push({
+      responsibility_key: selectorResponsibilityKey(selector),
+      risk: binding.risk,
+      source_claim_ids: sortedStrings(binding.source_claim_ids, true),
+      required_oracle_refs: sortedStrings(binding.required_oracle_refs, true),
+      required_capabilities: sortedStrings(binding.required_capabilities, true)
+    });
+  }
+  for (const [signature, selector] of required) {
+    if (!seen.has(signature)) diagnostics.push(diagnostic10(
+      "OBLIGATION_BINDING_MISSING",
+      `${path4}/bindings`,
+      `view "${viewId}" is missing the required ${String(selector.kind)} binding`
+    ));
+  }
+  responsibilityBindings.sort((left, right) => compareCodePoints7(
+    String(left.responsibility_key),
+    String(right.responsibility_key)
+  ));
+  return {
+    responsibilityBindings,
+    ...view.type === "timing" ? { timingSpecialResponsibilitiesByElementId } : {},
+    ...view.type === "integration" ? {
+      integrationInvariantsByElementId,
+      integrationSpecialResponsibilitiesByElementId
+    } : {}
+  };
+}
+function isDenseObjectArray(value) {
+  if (!Array.isArray(value)) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index) || !isObject6(value[index])) return false;
+  }
+  return true;
+}
+function hasExactKeys(value, expected) {
+  const actual = Object.keys(value).sort(compareCodePoints7);
+  const sortedExpected = [...expected].sort(compareCodePoints7);
+  return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
+}
+function validTerminalRouteShape(route) {
+  if (route.disposition === "blocked") return hasExactKeys(
+    route,
+    ["fact_id", "disposition", "issue_intent"]
+  ) && isObject6(route.issue_intent) && hasExactKeys(route.issue_intent, [
+    "missing_type",
+    "scope",
+    "answerable",
+    "risk",
+    "reasons",
+    "evidence_refs"
+  ]);
+  if (route.disposition === "not_applicable") return hasExactKeys(route, [
+    "fact_id",
+    "disposition",
+    "exclusion_claim_id",
+    "scope",
+    "support_review"
+  ]);
+  return false;
+}
+function validCustomResponsibilityShape(responsibility) {
+  if (!hasExactKeys(responsibility, [
+    "responsibility_type",
+    "semantic_key",
+    "owner",
+    "scope",
+    "risk",
+    "source_claim_ids",
+    "required_oracle_refs",
+    "required_capabilities"
+  ]) || !isObject6(responsibility.owner)) return false;
+  if (responsibility.owner.kind === "facts") return hasExactKeys(
+    responsibility.owner,
+    ["kind", "fact_ids"]
+  );
+  if (responsibility.owner.kind === "view-elements") return hasExactKeys(
+    responsibility.owner,
+    ["kind", "view_element_refs"]
+  );
+  return false;
+}
+function terminalRoute(route) {
+  const factId = String(route.fact_id ?? "");
+  if (route.disposition === "not_applicable") {
+    const claimId = String(route.exclusion_claim_id ?? "");
+    return {
+      route: {
+        fact_id: factId,
+        route_type: "not_applicable",
+        not_applicable_claim_id: claimId
+      },
+      review: { fact_id: factId, claim_id: claimId, support_review: route.support_review }
+    };
+  }
+  const intent = isObject6(route.issue_intent) ? route.issue_intent : {};
+  return {
+    route: {
+      fact_id: factId,
+      route_type: "blocked",
+      issue_intent: structuredClone(intent)
+    }
+  };
+}
+function customResponsibilitySeed(responsibility) {
+  const owner = isObject6(responsibility.owner) ? responsibility.owner : {};
+  const normalizedOwner = owner.kind === "facts" ? { kind: "facts", fact_ids: sortedStrings(owner.fact_ids, true) } : { kind: "view-elements", view_element_refs: objectArray7(owner.view_element_refs).map((ref) => ({ view_id: ref.view_id, element_id: ref.element_id })).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right))) };
+  const viewElementRefs = owner.kind === "view-elements" ? objectArray7(owner.view_element_refs).map((ref) => qualifyViewElementRef(String(ref.view_id ?? ""), String(ref.element_id ?? ""))).sort(compareCodePoints7) : [];
+  const sourceClaimIds = sortedStrings(responsibility.source_claim_ids, true);
+  const responsibilityKey2 = canonicalStringify({
+    responsibility_type: responsibility.responsibility_type,
+    owner: normalizedOwner,
+    scope: responsibility.scope
+  });
+  const kind = CUSTOM_KINDS.get(String(responsibility.responsibility_type ?? "")) ?? "";
+  const identity = { kind, responsibility_key: responsibilityKey2 };
+  return {
+    semantic_key: responsibility.semantic_key,
+    responsibility_key: responsibilityKey2,
+    owner: normalizedOwner,
+    obligation: {
+      obligation_id: stableId("obligation", identity),
+      kind,
+      risk: responsibility.risk,
+      scope: responsibility.scope,
+      source_claim_ids: sourceClaimIds,
+      view_element_refs: viewElementRefs,
+      required_oracle_refs: sortedStrings(responsibility.required_oracle_refs, true),
+      required_capabilities: sortedStrings(responsibility.required_capabilities, true)
+    }
+  };
+}
+function compileObligationInputs(evidenceGraph, behaviorViews) {
+  void evidenceGraph;
+  const artifact = isObject6(behaviorViews) ? behaviorViews : {};
+  const inputs = isObject6(artifact.obligation_inputs) ? artifact.obligation_inputs : {};
+  const diagnostics = [];
+  const contextsByViewId = /* @__PURE__ */ new Map();
+  const viewsById = new Map(objectArray7(artifact.views).map((view) => [String(view.view_id), view]));
+  for (const view of viewsById.values()) {
+    if (view.type !== "integration") continue;
+    for (const element of objectArray7(view.elements)) {
+      if (element.kind !== "integration-contract") continue;
+      const seenSideEffects = /* @__PURE__ */ new Set();
+      for (const [index, sideEffect] of objectArray7(element.side_effects).entries()) {
+        const signature = canonicalStringify({ kind: sideEffect.kind, target: sideEffect.target });
+        if (seenSideEffects.has(signature)) diagnostics.push(diagnostic10(
+          "OBLIGATION_SIDE_EFFECT_DUPLICATE",
+          `/views/${pointerPart4(String(view.view_id))}/elements/${pointerPart4(String(element.element_id))}/side_effects/${index}`,
+          "integration side effects must be unique by (kind, target)"
+        ));
+        seenSideEffects.add(signature);
+      }
+    }
+  }
+  const contextsById = /* @__PURE__ */ new Map();
+  for (const [index, context] of objectArray7(inputs.view_contexts).entries()) {
+    const viewId = String(context.view_id ?? "");
+    if (contextsById.has(viewId)) diagnostics.push(diagnostic10(
+      "OBLIGATION_VIEW_CONTEXT_DUPLICATE",
+      `/obligation_inputs/view_contexts/${index}/view_id`,
+      `view "${viewId}" has more than one obligation context`
+    ));
+    else contextsById.set(viewId, { context, index });
+    const view = viewsById.get(viewId);
+    if (!view) diagnostics.push(diagnostic10(
+      "OBLIGATION_VIEW_CONTEXT_UNKNOWN",
+      `/obligation_inputs/view_contexts/${index}/view_id`,
+      `obligation context references unknown view "${viewId}"`,
+      "reference"
+    ));
+    else if (!TARGET_VIEW_TYPES.has(String(view.type))) diagnostics.push(diagnostic10(
+      "OBLIGATION_VIEW_CONTEXT_TYPE_FORBIDDEN",
+      `/obligation_inputs/view_contexts/${index}/view_id`,
+      "flow, decision, and state contexts are compiler-derived and cannot be submitted"
+    ));
+  }
+  for (const [viewId, view] of viewsById) {
+    if (!TARGET_VIEW_TYPES.has(String(view.type))) {
+      contextsByViewId.set(viewId, derivedContext(view));
+      continue;
+    }
+    const entry = contextsById.get(viewId);
+    if (entry) contextsByViewId.set(viewId, publicContext(
+      view,
+      entry.context,
+      entry.index,
+      diagnostics
+    ));
+    else {
+      diagnostics.push(diagnostic10(
+        "OBLIGATION_VIEW_CONTEXT_MISSING",
+        "/obligation_inputs/view_contexts",
+        `responsibility view "${viewId}" requires exactly one view context`
+      ));
+    }
+  }
+  for (const field of ["terminal_fact_routes", "custom_responsibilities", "combination_requests"]) {
+    if (!isDenseObjectArray(inputs[field])) diagnostics.push(diagnostic10(
+      "OBLIGATION_RESERVED_INPUT_INVALID",
+      `/obligation_inputs/${field}`,
+      `${field} must be a dense array of closed objects`,
+      "schema"
+    ));
+  }
+  const terminal = isDenseObjectArray(inputs.terminal_fact_routes) ? (
+    /** @type {Record<string, unknown>[]} */
+    inputs.terminal_fact_routes.flatMap((route, index) => {
+      if (validTerminalRouteShape(route)) return [{
+        ...terminalRoute(route),
+        path: `/obligation_inputs/terminal_fact_routes/${index}`
+      }];
+      diagnostics.push(diagnostic10(
+        "OBLIGATION_TERMINAL_ROUTE_INVALID",
+        `/obligation_inputs/terminal_fact_routes/${index}`,
+        "terminal fact routes must use one closed blocked or not_applicable record",
+        "schema"
+      ));
+      return [];
+    })
+  ) : [];
+  const custom = isDenseObjectArray(inputs.custom_responsibilities) ? (
+    /** @type {Record<string, unknown>[]} */
+    inputs.custom_responsibilities.flatMap((responsibility, index) => {
+      if (validCustomResponsibilityShape(responsibility)) {
+        return [{
+          seed: customResponsibilitySeed(responsibility),
+          path: `/obligation_inputs/custom_responsibilities/${index}`
+        }];
+      }
+      diagnostics.push(diagnostic10(
+        "OBLIGATION_CUSTOM_RESPONSIBILITY_INVALID",
+        `/obligation_inputs/custom_responsibilities/${index}`,
+        "custom responsibilities must use the closed public semantic responsibility shape",
+        "schema"
+      ));
+      return [];
+    })
+  ) : [];
+  const combinations = isDenseObjectArray(inputs.combination_requests) ? (
+    /** @type {Record<string, unknown>[]} */
+    inputs.combination_requests.map((request) => structuredClone(request)).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))
+  ) : [];
+  const terminalFactRoutes2 = terminal.map((entry) => entry.route);
+  const notApplicableReviews = terminal.flatMap((entry) => entry.review ? [entry.review] : []);
+  const customResponsibilitySeeds = custom.map((entry) => entry.seed);
+  const customResponsibilityPaths = /* @__PURE__ */ new Map();
+  for (const entry of custom) {
+    customResponsibilityPaths.set(entry.seed, entry.path);
+    customResponsibilityPaths.set(entry.seed.obligation, entry.path);
+  }
+  return {
+    contextsByViewId,
+    terminalFactRoutes: terminalFactRoutes2,
+    terminalFactRoutePaths: new Map(terminal.map((entry) => [entry.route, entry.path])),
+    notApplicableReviews,
+    notApplicableReviewPaths: new Map(terminal.flatMap((entry) => entry.review ? [[entry.review, entry.path]] : [])),
+    customResponsibilitySeeds,
+    customResponsibilityPaths,
+    combinationRequests: combinations,
+    sourceRevision: typeof artifact.source_revision === "number" && Number.isInteger(artifact.source_revision) ? artifact.source_revision : -1,
+    diagnostics
+  };
+}
+
+// src/obligations/combinatorial.mjs
+var RISK_LEVELS3 = /* @__PURE__ */ new Set(["critical", "high", "medium", "low"]);
+var PARAMETER_KEYS = ["domains", "interaction_risk", "oracle_mappings"];
+var DOMAIN_KEYS = ["name", "values"];
+var CONSTRAINT_KEYS = ["forbidden"];
+var ASSIGNMENT_KEYS = ["parameter", "value"];
+var ORACLE_MAPPING_KEYS = ["assignments", "required_oracle_refs"];
+function assertExactKeys2(object, expected, label) {
+  const actual = Object.keys(object).sort(compareCodePoints7);
+  const wanted = [...expected].sort(compareCodePoints7);
+  if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
+    throw new TypeError(`${label} must have only ${wanted.join(", ")}`);
+  }
+}
+function isJsonScalar(value) {
+  return value === null || typeof value === "boolean" || typeof value === "string" || typeof value === "number" && Number.isFinite(value);
+}
+function scalarKey(value) {
+  if (value === null) return "null:null";
+  return `${typeof value}:${JSON.stringify(value)}`;
+}
+function compareScalars(left, right) {
+  return compareCodePoints7(scalarKey(left), scalarKey(right));
+}
+function requireScalar(value, label) {
+  if (!isJsonScalar(value)) throw new TypeError(`${label} must be a finite JSON scalar`);
+  return value;
+}
+function requireNonblankString(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new TypeError(`${label} must be a nonblank string`);
+  }
+  return value;
+}
+function requireDenseArray(value, label, minimumLength = 0) {
+  if (!Array.isArray(value) || value.length < minimumLength) {
+    throw new TypeError(`${label} must be a dense array${minimumLength > 0 ? ` of length at least ${minimumLength}` : ""}`);
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) throw new TypeError(`${label} must be a dense array`);
+  }
+  return value;
+}
+function validateParameters(parameters) {
+  if (!isObject6(parameters)) throw new TypeError("parameters must be an object");
+  assertExactKeys2(parameters, PARAMETER_KEYS, "parameters");
+  if (typeof parameters.interaction_risk !== "string" || !RISK_LEVELS3.has(parameters.interaction_risk)) {
+    throw new TypeError("parameters.interaction_risk must be explicit");
+  }
+  const rawDomains = requireDenseArray(parameters.domains, "parameters.domains", 3);
+  const domains = [];
+  const names = /* @__PURE__ */ new Set();
+  for (let index = 0; index < rawDomains.length; index += 1) {
+    const rawDomain = rawDomains[index];
+    if (!isObject6(rawDomain)) throw new TypeError(`domain ${index} must be an object`);
+    assertExactKeys2(rawDomain, DOMAIN_KEYS, `domain ${index}`);
+    const name = requireNonblankString(rawDomain.name, `domain ${index} name`);
+    if (names.has(name)) throw new TypeError(`duplicate domain name "${name}"`);
+    names.add(name);
+    const rawValues = requireDenseArray(rawDomain.values, `domain "${name}" values`, 1);
+    const values = [];
+    for (let valueIndex = 0; valueIndex < rawValues.length; valueIndex += 1) {
+      values.push(requireScalar(rawValues[valueIndex], `domain "${name}" value ${valueIndex}`));
+    }
+    const valueKeys = /* @__PURE__ */ new Set();
+    for (const value of values) {
+      const key = scalarKey(value);
+      if (valueKeys.has(key)) throw new TypeError(`domain "${name}" has duplicate values`);
+      valueKeys.add(key);
+    }
+    domains.push({ name, values: [...values].sort(compareScalars) });
+  }
+  domains.sort((left, right) => compareCodePoints7(left.name, right.name));
+  const oracleMappings = requireDenseArray(parameters.oracle_mappings, "parameters.oracle_mappings");
+  return { domains, oracleMappings };
+}
+function validateAssignments(raw, valuesByDomain, label) {
+  const rawAssignments = requireDenseArray(raw, `${label} assignments`, 1);
+  const assignments = [];
+  const assigned = /* @__PURE__ */ new Set();
+  for (let index = 0; index < rawAssignments.length; index += 1) {
+    const rawAssignment = rawAssignments[index];
+    if (!isObject6(rawAssignment)) throw new TypeError(`${label} assignment ${index} must be an object`);
+    assertExactKeys2(rawAssignment, ASSIGNMENT_KEYS, `${label} assignment ${index}`);
+    const parameter = requireNonblankString(
+      rawAssignment.parameter,
+      `${label} assignment ${index} parameter`
+    );
+    if (assigned.has(parameter)) throw new TypeError(`${label} repeats parameter "${parameter}"`);
+    assigned.add(parameter);
+    const domainValues = valuesByDomain.get(parameter);
+    if (!domainValues) throw new TypeError(`${label} names unknown parameter "${parameter}"`);
+    const value = requireScalar(rawAssignment.value, `${label} assignment ${index} value`);
+    if (!domainValues.has(scalarKey(value))) {
+      throw new TypeError(`${label} value is outside domain "${parameter}"`);
+    }
+    assignments.push({ parameter, value });
+  }
+  return assignments.sort((left, right) => compareCodePoints7(left.parameter, right.parameter));
+}
+function assignmentKey(assignments) {
+  return JSON.stringify(assignments.map(({ parameter, value }) => [parameter, scalarKey(value)]));
+}
+function validateConstraints(constraints, valuesByDomain) {
+  const rawConstraints = requireDenseArray(constraints, "constraints");
+  const normalized = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let index = 0; index < rawConstraints.length; index += 1) {
+    const rawConstraint = rawConstraints[index];
+    if (!isObject6(rawConstraint)) throw new TypeError(`constraint ${index} must be an object`);
+    assertExactKeys2(rawConstraint, CONSTRAINT_KEYS, `constraint ${index}`);
+    const forbidden = validateAssignments(rawConstraint.forbidden, valuesByDomain, `constraint ${index}`);
+    const key = assignmentKey(forbidden);
+    if (seen.has(key)) throw new TypeError("duplicate forbidden constraint");
+    seen.add(key);
+    normalized.push({ forbidden });
+  }
+  return normalized.sort((left, right) => compareCodePoints7(
+    assignmentKey(left.forbidden),
+    assignmentKey(right.forbidden)
+  ));
+}
+function vectorKey(values, domainNames) {
+  return JSON.stringify(domainNames.map((name) => [name, scalarKey(values[name])]));
+}
+function violatesConstraint(assigned, constraints) {
+  return constraints.some(({ forbidden }) => forbidden.every(({ parameter, value }) => assigned.has(parameter) && scalarKey(
+    /** @type {JsonScalar} */
+    assigned.get(parameter)
+  ) === scalarKey(value)));
+}
+function preprocessSearch(domains, constraints) {
+  const forbiddenValues = /* @__PURE__ */ new Map();
+  const multiConstraints = [];
+  for (const constraint of constraints) {
+    if (constraint.forbidden.length !== 1) {
+      multiConstraints.push(constraint);
+      continue;
+    }
+    const assignment = constraint.forbidden[0];
+    const values = forbiddenValues.get(assignment.parameter) ?? /* @__PURE__ */ new Set();
+    values.add(scalarKey(assignment.value));
+    forbiddenValues.set(assignment.parameter, values);
+  }
+  const filteredDomains = domains.map((domain) => ({
+    name: domain.name,
+    values: domain.values.filter((value) => !forbiddenValues.get(domain.name)?.has(scalarKey(value)))
+  }));
+  if (filteredDomains.some((domain) => domain.values.length === 0)) return null;
+  const constraintParticipation = new Map(filteredDomains.map(({ name }) => [name, 0]));
+  for (const { forbidden } of multiConstraints) {
+    for (const { parameter } of forbidden) {
+      constraintParticipation.set(parameter, (constraintParticipation.get(parameter) ?? 0) + 1);
+    }
+  }
+  return {
+    canonicalDomains: filteredDomains,
+    searchDomains: [...filteredDomains].sort((left, right) => left.values.length - right.values.length || (constraintParticipation.get(right.name) ?? 0) - (constraintParticipation.get(left.name) ?? 0) || compareCodePoints7(left.name, right.name)),
+    constraints: multiConstraints
+  };
+}
+function enumerateValidCandidates(canonicalDomains, searchDomains, constraints, maxCandidates) {
+  const candidates = [];
+  const assigned = /* @__PURE__ */ new Map();
+  const valueIndexes = new Array(searchDomains.length).fill(0);
+  let depth = 0;
+  while (depth >= 0) {
+    if (depth === searchDomains.length) {
+      const vector = Object.fromEntries(canonicalDomains.map(({ name }) => [name, assigned.get(name)]));
+      candidates.push(vector);
+      if (candidates.length > maxCandidates) return null;
+      depth -= 1;
+      if (depth >= 0) {
+        assigned.delete(searchDomains[depth].name);
+        valueIndexes[depth] += 1;
+      }
+      continue;
+    }
+    const domain = searchDomains[depth];
+    if (valueIndexes[depth] >= domain.values.length) {
+      valueIndexes[depth] = 0;
+      assigned.delete(domain.name);
+      depth -= 1;
+      if (depth >= 0) {
+        assigned.delete(searchDomains[depth].name);
+        valueIndexes[depth] += 1;
+      }
+      continue;
+    }
+    assigned.set(domain.name, domain.values[valueIndexes[depth]]);
+    if (violatesConstraint(assigned, constraints)) {
+      assigned.delete(domain.name);
+      valueIndexes[depth] += 1;
+      continue;
+    }
+    depth += 1;
+    if (depth < searchDomains.length) valueIndexes[depth] = 0;
+  }
+  const domainNames = canonicalDomains.map(({ name }) => name);
+  return candidates.sort((left, right) => compareCodePoints7(
+    vectorKey(left, domainNames),
+    vectorKey(right, domainNames)
+  ));
+}
+function chooseBigInt(n, k) {
+  if (k < 0 || k > n) return 0n;
+  const take = Math.min(k, n - k);
+  let result = 1n;
+  for (let index = 1; index <= take; index += 1) {
+    result = result * BigInt(n - take + index) / BigInt(index);
+  }
+  return result;
+}
+function uncoveredTupleCount(candidate, candidates, selectedIndexes, domainNames, strength) {
+  if (selectedIndexes.length === 0) return chooseBigInt(domainNames.length, strength);
+  const allSelected = (1n << BigInt(selectedIndexes.length)) - 1n;
+  const multiplicityByMask = /* @__PURE__ */ new Map();
+  for (const domainName of domainNames) {
+    let matchingSelected = 0n;
+    for (let position = 0; position < selectedIndexes.length; position += 1) {
+      const selectedIndex = selectedIndexes[position];
+      if (scalarKey(candidate[domainName]) === scalarKey(candidates[selectedIndex][domainName])) {
+        matchingSelected |= 1n << BigInt(position);
+      }
+    }
+    multiplicityByMask.set(matchingSelected, (multiplicityByMask.get(matchingSelected) ?? 0) + 1);
+  }
+  const commonMultiplicity = multiplicityByMask.get(allSelected) ?? 0;
+  multiplicityByMask.delete(allSelected);
+  let countsBySize = Array.from({ length: strength + 1 }, () => /* @__PURE__ */ new Map());
+  countsBySize[0].set(allSelected, 1n);
+  let visitedDomains = 0;
+  for (const [matchingSelected, multiplicity] of multiplicityByMask) {
+    const nextCounts = Array.from({ length: strength + 1 }, () => /* @__PURE__ */ new Map());
+    const maximumPriorSize = Math.min(strength, visitedDomains);
+    for (let priorSize = 0; priorSize <= maximumPriorSize; priorSize += 1) {
+      for (const [priorMask, count] of countsBySize[priorSize]) {
+        const maximumTake = Math.min(multiplicity, strength - priorSize);
+        for (let take = 0; take <= maximumTake; take += 1) {
+          const nextMask = take === 0 ? priorMask : priorMask & matchingSelected;
+          const weighted = count * chooseBigInt(multiplicity, take);
+          const size = priorSize + take;
+          nextCounts[size].set(nextMask, (nextCounts[size].get(nextMask) ?? 0n) + weighted);
+        }
+      }
+    }
+    visitedDomains += multiplicity;
+    countsBySize = nextCounts;
+  }
+  let uncovered = 0n;
+  for (let size = 0; size <= strength; size += 1) {
+    const nonCommonCount = countsBySize[size].get(0n) ?? 0n;
+    uncovered += nonCommonCount * chooseBigInt(commonMultiplicity, strength - size);
+  }
+  return uncovered;
+}
+function validateOracleMappings(rawMappings, valuesByDomain, domainNames, constraints) {
+  const result = /* @__PURE__ */ new Map();
+  for (let index = 0; index < rawMappings.length; index += 1) {
+    const rawMapping = rawMappings[index];
+    if (!isObject6(rawMapping)) throw new TypeError(`Oracle mapping ${index} must be an object`);
+    assertExactKeys2(rawMapping, ORACLE_MAPPING_KEYS, `Oracle mapping ${index}`);
+    const assignments = validateAssignments(
+      rawMapping.assignments,
+      valuesByDomain,
+      `Oracle mapping ${index}`
+    );
+    if (assignments.length !== domainNames.length || assignments.some(({ parameter }, assignmentIndex) => parameter !== domainNames[assignmentIndex])) {
+      throw new TypeError(`Oracle mapping ${index} must name every parameter exactly once`);
+    }
+    const rawRefs = requireDenseArray(
+      rawMapping.required_oracle_refs,
+      `Oracle mapping ${index} required_oracle_refs`
+    );
+    const refs = [];
+    for (let refIndex = 0; refIndex < rawRefs.length; refIndex += 1) {
+      refs.push(requireNonblankString(rawRefs[refIndex], `Oracle mapping ${index} ref ${refIndex}`));
+    }
+    if (new Set(refs).size !== refs.length) throw new TypeError(`Oracle mapping ${index} repeats an Oracle ref`);
+    const assigned = new Map(assignments.map(({ parameter, value }) => [parameter, value]));
+    if (violatesConstraint(assigned, constraints)) {
+      throw new TypeError(`Oracle mapping ${index} targets a forbidden vector`);
+    }
+    const values = Object.fromEntries(assignments.map(({ parameter, value }) => [parameter, value]));
+    const key = vectorKey(values, domainNames);
+    if (result.has(key)) throw new TypeError("duplicate Oracle vector mapping");
+    result.set(key, [...refs].sort(compareCodePoints7));
+  }
+  return result;
+}
+function selectTWiseVectors(parameters, strength, constraints, maxCandidates) {
+  const { domains, oracleMappings } = validateParameters(parameters);
+  if (!Number.isInteger(strength) || Number(strength) < 2 || Number(strength) > domains.length) {
+    throw new TypeError("strength must be an integer from 2 through the domain count");
+  }
+  if (!Number.isSafeInteger(maxCandidates) || Number(maxCandidates) <= 0) {
+    throw new TypeError("maxCandidates must be a positive safe integer");
+  }
+  const valuesByDomain = new Map(domains.map((domain) => [
+    domain.name,
+    new Map(domain.values.map((value) => [scalarKey(value), value]))
+  ]));
+  const normalizedConstraints = validateConstraints(constraints, valuesByDomain);
+  const domainNames = domains.map(({ name }) => name);
+  const oracleRefsByVector = validateOracleMappings(
+    oracleMappings,
+    valuesByDomain,
+    domainNames,
+    normalizedConstraints
+  );
+  const search = preprocessSearch(domains, normalizedConstraints);
+  if (search === null) return {
+    status: "blocked",
+    reason: "no_valid_candidates",
+    max_candidates: Number(maxCandidates)
+  };
+  const candidates = enumerateValidCandidates(
+    search.canonicalDomains,
+    search.searchDomains,
+    search.constraints,
+    Number(maxCandidates)
+  );
+  if (candidates === null) return {
+    status: "blocked",
+    reason: "max_candidates_exceeded",
+    max_candidates: Number(maxCandidates)
+  };
+  if (candidates.length === 0) return {
+    status: "blocked",
+    reason: "no_valid_candidates",
+    max_candidates: Number(maxCandidates)
+  };
+  const remaining = new Set(candidates.map((_, index) => index));
+  const selectedIndexes = [];
+  while (remaining.size > 0) {
+    let bestIndex = -1;
+    let bestCount = -1n;
+    let bestSignature = "";
+    for (const index of remaining) {
+      const count = uncoveredTupleCount(
+        candidates[index],
+        candidates,
+        selectedIndexes,
+        domainNames,
+        Number(strength)
+      );
+      const signature = vectorKey(candidates[index], domainNames);
+      if (count > bestCount || count === bestCount && (bestIndex < 0 || compareCodePoints7(signature, bestSignature) < 0)) {
+        bestIndex = index;
+        bestCount = count;
+        bestSignature = signature;
+      }
+    }
+    if (bestIndex < 0 || bestCount <= 0n) break;
+    selectedIndexes.push(bestIndex);
+    remaining.delete(bestIndex);
+  }
+  return {
+    status: "selected",
+    vectors: selectedIndexes.map((index) => {
+      const values = { ...candidates[index] };
+      return {
+        values,
+        required_oracle_refs: [...oracleRefsByVector.get(vectorKey(values, domainNames)) ?? []]
+      };
+    })
+  };
+}
+
 // src/obligations/compile-obligations.mjs
+var TWISE_POLICY = Object.freeze({
+  policy_id: "twise-candidate-cap-v1",
+  max_candidates: 4096
+});
 var ObligationCompilationError = class extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
   constructor(diagnostics) {
@@ -9425,7 +10849,7 @@ function isObject7(value) {
 function objectArray8(value) {
   return Array.isArray(value) ? value.filter(isObject7) : [];
 }
-function isDenseObjectArray(value) {
+function isDenseObjectArray2(value) {
   if (!Array.isArray(value)) return false;
   for (let index = 0; index < value.length; index += 1) {
     if (!Object.hasOwn(value, index) || !isObject7(value[index])) return false;
@@ -9447,14 +10871,14 @@ function isDenseUniqueStringArray(value, nonempty = false) {
   }
   return true;
 }
-function hasExactKeys(value, expected) {
+function hasExactKeys2(value, expected) {
   const actual = Object.keys(value).sort(compareCodePoints7);
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function diagnostic10(category, code2, path4, message) {
+function diagnostic11(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
-function pointerPart4(value) {
+function pointerPart5(value) {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
 }
 function sparseBehaviorDiagnostics(artifact) {
@@ -9480,7 +10904,7 @@ function sparseBehaviorDiagnostics(artifact) {
           if (index !== firstMissing) break;
           firstMissing += 1;
         }
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "schema",
           "BEHAVIOR_ARRAY_SPARSE",
           `${path4}/${firstMissing}`,
@@ -9493,7 +10917,7 @@ function sparseBehaviorDiagnostics(artifact) {
       continue;
     }
     for (const [key, child] of Object.entries(value)) {
-      pending.push({ value: child, path: `${path4}/${pointerPart4(key)}` });
+      pending.push({ value: child, path: `${path4}/${pointerPart5(key)}` });
     }
   }
   return diagnostics;
@@ -9520,7 +10944,7 @@ function behaviorStringDiagnostics(artifact) {
       pending.pop()
     );
     if (typeof value === "string") {
-      if (canonical && !isNonblankUnpadded(value)) diagnostics.push(diagnostic10(
+      if (canonical && !isNonblankUnpadded(value)) diagnostics.push(diagnostic11(
         "schema",
         "BEHAVIOR_STRING_INVALID",
         path4,
@@ -9533,7 +10957,7 @@ function behaviorStringDiagnostics(artifact) {
     for (const [key, child] of Object.entries(value)) {
       pending.push({
         value: child,
-        path: `${path4}/${pointerPart4(key)}`,
+        path: `${path4}/${pointerPart5(key)}`,
         canonical: Array.isArray(value) ? canonical : isCanonicalBehaviorField(key)
       });
     }
@@ -9544,16 +10968,16 @@ function interactionStringDiagnostics(artifact) {
   const diagnostics = [];
   for (const [index, candidate] of objectArray8(artifact.interaction_candidates).entries()) {
     const candidateId = typeof candidate.candidate_id === "string" ? candidate.candidate_id : String(index);
-    const path4 = `/interaction_candidates/${pointerPart4(candidateId)}`;
-    let valid = isNonblankUnpadded(candidate.candidate_id) && isDenseUniqueStringArray(candidate.module_ids, true);
+    const path4 = `/interaction_candidates/${pointerPart5(candidateId)}`;
+    let valid = isNonblankUnpadded(candidate.candidate_id) && isDenseUniqueStringArray(candidate.module_ids, true) && isDenseUniqueStringArray(candidate.source_claim_ids, true) && isDenseObjectArray2(candidate.semantic_subject_refs) && candidate.semantic_subject_refs.length > 0;
     if (candidate.disposition === "formal-view") {
-      valid = valid && isNonblankUnpadded(candidate.formal_view_id) && isDenseUniqueStringArray(candidate.source_claim_ids, true);
+      valid = valid && isNonblankUnpadded(candidate.formal_view_id);
     } else if (candidate.disposition === "blocker") {
-      valid = valid && isNonblankUnpadded(candidate.blocker_root_issue_id);
+      valid = valid && isObject7(candidate.issue_intent);
     } else if (candidate.disposition === "exploratory") {
       valid = valid && isNonblankUnpadded(candidate.exploratory_id);
     }
-    if (!valid) diagnostics.push(diagnostic10(
+    if (!valid) diagnostics.push(diagnostic11(
       "schema",
       "INTERACTION_ROUTE_STRING_INVALID",
       path4,
@@ -9573,44 +10997,6 @@ function defaultRegistry() {
 function assertNoDiagnostics(diagnostics) {
   if (diagnostics.length > 0) throw new ObligationCompilationError(sortDiagnostics3(diagnostics));
 }
-function compilationInputs(graph) {
-  const input = isObject7(graph.obligationCompilation) ? graph.obligationCompilation : null;
-  if (!input) throw new ObligationCompilationError([
-    diagnostic10("schema", "OBLIGATION_COMPILATION_INPUT_REQUIRED", "/obligationCompilation", "explicit obligation compilation input is required")
-  ]);
-  const expected = [
-    "contextsByViewId",
-    "customObligations",
-    "factRoutes",
-    "notApplicableReviews",
-    "sourceRevision"
-  ];
-  const actual = Object.keys(input).sort(compareCodePoints7);
-  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
-    throw new ObligationCompilationError([
-      diagnostic10("schema", "OBLIGATION_COMPILATION_INPUT_NOT_CLOSED", "/obligationCompilation", "obligation compilation input has unknown or missing fields")
-    ]);
-  }
-  if (!(input.contextsByViewId instanceof Map) || !isDenseObjectArray(input.customObligations) || !isDenseObjectArray(input.factRoutes) || !isDenseObjectArray(input.notApplicableReviews) || !Number.isInteger(input.sourceRevision) || /** @type {number} */
-  input.sourceRevision < 0) {
-    throw new ObligationCompilationError([
-      diagnostic10("schema", "OBLIGATION_COMPILATION_INPUT_TYPE_INVALID", "/obligationCompilation", "contextsByViewId must be a Map and route/obligation inputs must be arrays")
-    ]);
-  }
-  return {
-    contextsByViewId: (
-      /** @type {Map<unknown, unknown>} */
-      input.contextsByViewId
-    ),
-    customObligations: input.customObligations,
-    factRoutes: input.factRoutes,
-    notApplicableReviews: input.notApplicableReviews,
-    sourceRevision: (
-      /** @type {number} */
-      input.sourceRevision
-    )
-  };
-}
 var FACT_FIELDS = ["claim_id", "fact_id", "source_claim_ids", "status"];
 var FACT_STATUSES = /* @__PURE__ */ new Set(["active", "conflicted", "ambiguous", "diagnostic"]);
 var CLAIM_KINDS_BY_LEVEL = /* @__PURE__ */ new Map([
@@ -9618,8 +11004,11 @@ var CLAIM_KINDS_BY_LEVEL = /* @__PURE__ */ new Map([
   ["E2", /* @__PURE__ */ new Set(["test-data", "expected-value", "model-element"])],
   ["E3", /* @__PURE__ */ new Set(["requirement", "description", "example", "diagnostic"])]
 ]);
-function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
-  if (!Object.hasOwn(graph, "runScope") || !isNonblankUnpadded(graph.runScope)) diagnostics.push(diagnostic10(
+function isE2ModelElement2(claim) {
+  return claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
+}
+function validateEvidenceInputs(graph, diagnostics) {
+  if (!Object.hasOwn(graph, "runScope") || !isNonblankUnpadded(graph.runScope)) diagnostics.push(diagnostic11(
     "schema",
     "EVIDENCE_RUN_SCOPE_INVALID",
     "/runScope",
@@ -9627,7 +11016,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
   ));
   const claimsById = /* @__PURE__ */ new Map();
   if (!(graph.claimsById instanceof Map)) {
-    diagnostics.push(diagnostic10(
+    diagnostics.push(diagnostic11(
       "schema",
       "EVIDENCE_CLAIMS_MAP_REQUIRED",
       "/claimsById",
@@ -9637,11 +11026,11 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
     for (const [key, claim] of graph.claimsById) {
       const path4 = `/claimsById/${String(key)}`;
       if (!isNonblankUnpadded(key) || !isObject7(claim)) {
-        diagnostics.push(diagnostic10("schema", "EVIDENCE_CLAIM_ENTRY_INVALID", path4, "accepted claim entries require a nonblank unpadded Map key and object value"));
+        diagnostics.push(diagnostic11("schema", "EVIDENCE_CLAIM_ENTRY_INVALID", path4, "accepted claim entries require a nonblank unpadded Map key and object value"));
         continue;
       }
       if (!isPlainRecord(claim)) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "schema",
           "EVIDENCE_CLAIM_PROTOTYPE_INVALID",
           path4,
@@ -9653,7 +11042,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
       try {
         descriptors = Object.getOwnPropertyDescriptors(claim);
       } catch {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "schema",
           "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
           path4,
@@ -9663,7 +11052,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
       }
       const requiredDataFields = ["claim_id", "level", "kind", "scope"];
       if (requiredDataFields.some((field) => !descriptors[field] || !Object.hasOwn(descriptors[field], "value"))) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "schema",
           "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
           path4,
@@ -9676,11 +11065,11 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
       const kind = descriptors.kind.value;
       const scope = descriptors.scope.value;
       if (claimId !== key || !isNonblankUnpadded(claimId)) {
-        diagnostics.push(diagnostic10("reference", "EVIDENCE_CLAIM_KEY_MISMATCH", `${path4}/claim_id`, "claim Map key must exactly match its own claim_id"));
+        diagnostics.push(diagnostic11("reference", "EVIDENCE_CLAIM_KEY_MISMATCH", `${path4}/claim_id`, "claim Map key must exactly match its own claim_id"));
         continue;
       }
       if (!isNonblankUnpadded(level) || !isNonblankUnpadded(kind) || !isNonblankUnpadded(scope) || !CLAIM_KINDS_BY_LEVEL.get(level)?.has(kind)) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "schema",
           "EVIDENCE_CLAIM_FIELDS_INVALID",
           path4,
@@ -9694,7 +11083,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
       if (level === "E2") {
         const e2Fields = ["derivation_kind", "derivation_target"];
         if (e2Fields.some((field) => !descriptors[field] || !Object.hasOwn(descriptors[field], "value"))) {
-          diagnostics.push(diagnostic10(
+          diagnostics.push(diagnostic11(
             "schema",
             "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
             path4,
@@ -9703,7 +11092,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
           continue;
         }
         if (!descriptors.parent_claim_ids) {
-          diagnostics.push(diagnostic10(
+          diagnostics.push(diagnostic11(
             "schema",
             "EVIDENCE_CLAIM_PARENTS_INVALID",
             `${path4}/parent_claim_ids`,
@@ -9712,7 +11101,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
           continue;
         }
         if (!Object.hasOwn(descriptors.parent_claim_ids, "value")) {
-          diagnostics.push(diagnostic10(
+          diagnostics.push(diagnostic11(
             "schema",
             "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
             path4,
@@ -9724,7 +11113,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
         derivationTarget = descriptors.derivation_target.value;
         const submittedParentClaimIds = descriptors.parent_claim_ids.value;
         if (!isDenseUniqueStringArray(submittedParentClaimIds, true)) {
-          diagnostics.push(diagnostic10(
+          diagnostics.push(diagnostic11(
             "schema",
             "EVIDENCE_CLAIM_PARENTS_INVALID",
             `${path4}/parent_claim_ids`,
@@ -9738,7 +11127,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
           derivationKind
         ] : void 0;
         if (typeof derivationTarget !== "string" || !allowedTargets?.includes(derivationTarget) || kind !== derivationTarget) {
-          diagnostics.push(diagnostic10(
+          diagnostics.push(diagnostic11(
             "schema",
             "EVIDENCE_CLAIM_DERIVATION_INVALID",
             path4,
@@ -9762,7 +11151,7 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
   }
   for (const [claimId, claim] of claimsById) {
     for (const parentId of stringArray5(claim.parent_claim_ids)) {
-      if (!claimsById.has(parentId)) diagnostics.push(diagnostic10(
+      if (!claimsById.has(parentId)) diagnostics.push(diagnostic11(
         "reference",
         "EVIDENCE_CLAIM_PARENT_DANGLING",
         `/claimsById/${claimId}/parent_claim_ids/${parentId}`,
@@ -9771,53 +11160,47 @@ function validateEvidenceInputs(graph, inputs, artifact, diagnostics) {
     }
   }
   const cycle = firstClaimCycle(claimsById);
-  if (cycle) diagnostics.push(diagnostic10(
+  if (cycle) diagnostics.push(diagnostic11(
     "reference",
     "EVIDENCE_CLAIM_CYCLE",
-    `/claimsById/${pointerPart4(cycle.claimId)}/parent_claim_ids/${pointerPart4(cycle.parentId)}`,
+    `/claimsById/${pointerPart5(cycle.claimId)}/parent_claim_ids/${pointerPart5(cycle.parentId)}`,
     `accepted claim ancestry contains a cycle through "${cycle.claimId}" and "${cycle.parentId}"`
   ));
   const facts = [];
-  if (!isDenseObjectArray(graph.factLedger)) {
-    diagnostics.push(diagnostic10("schema", "EVIDENCE_FACT_LEDGER_INVALID", "/factLedger", "factLedger must be a dense object array"));
+  if (!isDenseObjectArray2(graph.factLedger)) {
+    diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_LEDGER_INVALID", "/factLedger", "factLedger must be a dense object array"));
   } else {
     const factIds = /* @__PURE__ */ new Set();
     for (const fact of graph.factLedger) {
       const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
       const path4 = `/factLedger/${factId || facts.length}`;
       let valid = true;
-      if (!hasExactKeys(fact, FACT_FIELDS)) {
-        diagnostics.push(diagnostic10("schema", "EVIDENCE_FACT_NOT_CLOSED", path4, "fact entries must contain exactly fact_id, claim_id, status, and source_claim_ids"));
+      if (!hasExactKeys2(fact, FACT_FIELDS)) {
+        diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_NOT_CLOSED", path4, "fact entries must contain exactly fact_id, claim_id, status, and source_claim_ids"));
         valid = false;
       }
       if (!isNonblankUnpadded(factId) || !isNonblankUnpadded(fact.claim_id) || !FACT_STATUSES.has(String(fact.status)) || !isDenseUniqueStringArray(fact.source_claim_ids, true)) {
-        diagnostics.push(diagnostic10("schema", "EVIDENCE_FACT_FIELDS_INVALID", path4, "fact IDs, status, and source refs must satisfy the closed fact contract"));
+        diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_FIELDS_INVALID", path4, "fact IDs, status, and source refs must satisfy the closed fact contract"));
         valid = false;
       }
       if (factIds.has(factId)) {
-        diagnostics.push(diagnostic10("schema", "EVIDENCE_FACT_ID_DUPLICATE", `/factLedger/${factId}/fact_id`, `fact_id "${factId}" must be unique`));
+        diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_ID_DUPLICATE", `/factLedger/${factId}/fact_id`, `fact_id "${factId}" must be unique`));
         valid = false;
       }
       factIds.add(factId);
       if (isNonblankUnpadded(fact.claim_id) && !claimsById.has(fact.claim_id)) {
-        diagnostics.push(diagnostic10("reference", "EVIDENCE_FACT_CLAIM_DANGLING", `${path4}/claim_id`, `fact references missing accepted claim "${fact.claim_id}"`));
+        diagnostics.push(diagnostic11("reference", "EVIDENCE_FACT_CLAIM_DANGLING", `${path4}/claim_id`, `fact references missing accepted claim "${fact.claim_id}"`));
         valid = false;
       }
       for (const claimId of stringArray5(fact.source_claim_ids)) {
         if (!claimsById.has(claimId)) {
-          diagnostics.push(diagnostic10("reference", "EVIDENCE_FACT_SOURCE_DANGLING", `${path4}/source_claim_ids/${claimId}`, `fact references missing accepted source claim "${claimId}"`));
+          diagnostics.push(diagnostic11("reference", "EVIDENCE_FACT_SOURCE_DANGLING", `${path4}/source_claim_ids/${claimId}`, `fact references missing accepted source claim "${claimId}"`));
           valid = false;
         }
       }
       if (valid) facts.push(fact);
     }
   }
-  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic10(
-    "reference",
-    "OBLIGATION_SOURCE_REVISION_MISMATCH",
-    "/obligationCompilation/sourceRevision",
-    `compilation source revision ${inputs.sourceRevision} does not match behavior revision ${String(artifact.source_revision)}`
-  ));
   const relations = claimRelations(claimsById);
   return { claimsById, facts, relations };
 }
@@ -10046,10 +11429,10 @@ function ownEntries(value) {
   return Object.entries(value);
 }
 function validateViewContext(viewId, view, context, diagnostics) {
-  const path4 = `/obligationCompilation/contextsByViewId/${pointerPart4(viewId)}`;
+  const path4 = `/obligationCompilation/contextsByViewId/${pointerPart5(viewId)}`;
   let valid = true;
   if (!isPlainRecord(context)) {
-    diagnostics.push(diagnostic10(
+    diagnostics.push(diagnostic11(
       "schema",
       "OBLIGATION_CONTEXT_PROTOTYPE_FORBIDDEN",
       path4,
@@ -10063,7 +11446,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
     const entries = ownEntries(context[field]);
     const fieldPath = `${path4}/${field}`;
     if (entries === null) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "schema",
         "OBLIGATION_CONTEXT_MAP_PROTOTYPE_FORBIDDEN",
         fieldPath,
@@ -10074,21 +11457,21 @@ function validateViewContext(viewId, view, context, diagnostics) {
     }
     for (const [rawKey, entry] of entries) {
       if (!isNonblankUnpadded(rawKey) || !elementIds.has(String(rawKey))) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "reference",
           "OBLIGATION_CONTEXT_ELEMENT_UNKNOWN",
-          `${fieldPath}/${pointerPart4(String(rawKey))}`,
+          `${fieldPath}/${pointerPart5(String(rawKey))}`,
           `${field} references an invalid or unknown element "${String(rawKey)}"`
         ));
         valid = false;
         continue;
       }
       if (field === "riskByElementId" && !isNonblankUnpadded(entry)) {
-        diagnostics.push(diagnostic10("schema", "OBLIGATION_CONTEXT_STRINGS_INVALID", fieldPath, "context risk values must be nonblank and unpadded"));
+        diagnostics.push(diagnostic11("schema", "OBLIGATION_CONTEXT_STRINGS_INVALID", fieldPath, "context risk values must be nonblank and unpadded"));
         valid = false;
       }
       if ((field === "requiredOracleRefsByElementId" || field === "requiredCapabilitiesByElementId") && !isDenseUniqueStringArray(entry)) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "schema",
           "OBLIGATION_CONTEXT_STRINGS_INVALID",
           fieldPath,
@@ -10098,8 +11481,8 @@ function validateViewContext(viewId, view, context, diagnostics) {
       }
       if (field === "loopMaximumsByElementId") {
         const definition = isPlainRecord(entry) ? entry : null;
-        if (!definition || !hasExactKeys(definition, ["maximum", "source_claim_ids"]) || !Number.isInteger(definition.maximum) || Number(definition.maximum) <= 1 || !isDenseUniqueStringArray(definition.source_claim_ids, true)) {
-          diagnostics.push(diagnostic10(
+        if (!definition || !hasExactKeys2(definition, ["maximum", "source_claim_ids"]) || !Number.isInteger(definition.maximum) || Number(definition.maximum) <= 1 || !isDenseUniqueStringArray(definition.source_claim_ids, true)) {
+          diagnostics.push(diagnostic11(
             "schema",
             "OBLIGATION_CONTEXT_LOOP_INVALID",
             fieldPath,
@@ -10109,8 +11492,8 @@ function validateViewContext(viewId, view, context, diagnostics) {
         }
       }
       if (field === "timingSpecialResponsibilitiesByElementId" || field === "integrationSpecialResponsibilitiesByElementId") {
-        if (!isDenseObjectArray(entry) || entry.some((item) => !hasExactKeys(item, ["signal", "type"]) || !isNonblankUnpadded(item.signal) || !isNonblankUnpadded(item.type))) {
-          diagnostics.push(diagnostic10(
+        if (!isDenseObjectArray2(entry) || entry.some((item) => !hasExactKeys2(item, ["signal", "type"]) || !isNonblankUnpadded(item.signal) || !isNonblankUnpadded(item.type))) {
+          diagnostics.push(diagnostic11(
             "schema",
             "OBLIGATION_CONTEXT_SPECIAL_INVALID",
             fieldPath,
@@ -10120,8 +11503,8 @@ function validateViewContext(viewId, view, context, diagnostics) {
         }
       }
       if (field === "integrationInvariantsByElementId") {
-        if (!isDenseObjectArray(entry) || entry.some((item) => !hasExactKeys(item, ["invariant"]) || !isNonblankUnpadded(item.invariant))) {
-          diagnostics.push(diagnostic10(
+        if (!isDenseObjectArray2(entry) || entry.some((item) => !hasExactKeys2(item, ["invariant"]) || !isNonblankUnpadded(item.invariant))) {
+          diagnostics.push(diagnostic11(
             "schema",
             "OBLIGATION_CONTEXT_INVARIANT_INVALID",
             fieldPath,
@@ -10132,8 +11515,8 @@ function validateViewContext(viewId, view, context, diagnostics) {
       }
     }
   }
-  if (Object.hasOwn(context, "responsibilityBindings") && !isDenseObjectArray(context.responsibilityBindings)) {
-    diagnostics.push(diagnostic10(
+  if (Object.hasOwn(context, "responsibilityBindings") && !isDenseObjectArray2(context.responsibilityBindings)) {
+    diagnostics.push(diagnostic11(
       "schema",
       "OBLIGATION_CONTEXT_BINDINGS_INVALID",
       `${path4}/responsibilityBindings`,
@@ -10143,8 +11526,8 @@ function validateViewContext(viewId, view, context, diagnostics) {
   }
   return valid;
 }
-function validateCustomObligations(inputs, viewsById, claimsById, relations, diagnostics) {
-  const submittedObligations = inputs.customObligations.flatMap((entry) => isObject7(entry.obligation) ? [entry.obligation] : []);
+function validateCustomObligations(inputs, viewsById, factsById, claimsById, relations, diagnostics) {
+  const submittedObligations = inputs.customObligations.flatMap((entry) => isObject7(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []);
   diagnostics.push(.../** @type {Diagnostic[]} */
   validateAgainstSchema({
     schema_version: "1.0.0",
@@ -10154,16 +11537,25 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     interaction_routes: []
   }, test_obligations_schema_default));
   const ownerBySeed = /* @__PURE__ */ new Map();
+  const ownerFactIdsBySeed = /* @__PURE__ */ new Map();
   const ownerElementsByRef = /* @__PURE__ */ new Map();
+  const factIdsByClaimId = /* @__PURE__ */ new Map();
+  for (const [factId, fact] of factsById) {
+    for (const claimId of /* @__PURE__ */ new Set([String(fact.claim_id), ...stringArray5(fact.source_claim_ids)])) {
+      const factIds = factIdsByClaimId.get(claimId) ?? /* @__PURE__ */ new Set();
+      factIds.add(factId);
+      factIdsByClaimId.set(claimId, factIds);
+    }
+  }
   for (const [viewId, view] of viewsById) {
     for (const element of objectArray8(view.elements)) {
       const elementId = typeof element.element_id === "string" ? element.element_id : "";
       const ref = qualifyViewElementRef(viewId, elementId);
       if (ownerElementsByRef.has(ref)) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "reference",
           "CUSTOM_OBLIGATION_VIEW_ELEMENT_COLLISION",
-          `/views/${pointerPart4(viewId)}/elements/${pointerPart4(elementId)}`,
+          `/views/${pointerPart5(viewId)}/elements/${pointerPart5(elementId)}`,
           `qualified view element reference "${ref}" is not unique`
         ));
         continue;
@@ -10173,9 +11565,9 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
   }
   const seeds = [];
   inputs.customObligations.forEach((entry, index) => {
-    const wrapperPath = `/obligationCompilation/customObligations/${index}`;
-    if (!hasExactKeys(entry, ["obligation", "semantic_key"]) || !isNonblankUnpadded(entry.semantic_key) || !isObject7(entry.obligation)) {
-      diagnostics.push(diagnostic10(
+    const wrapperPath = inputs.customResponsibilityPaths.get(entry) ?? `/obligation_inputs/custom_responsibilities/${index}`;
+    if (!hasExactKeys2(entry, ["obligation", "owner", "responsibility_key", "semantic_key"]) || !isNonblankUnpadded(entry.semantic_key) || !isNonblankUnpadded(entry.responsibility_key) || !isObject7(entry.owner) || !isObject7(entry.obligation)) {
+      diagnostics.push(diagnostic11(
         "schema",
         "CUSTOM_OBLIGATION_WRAPPER_INVALID",
         wrapperPath,
@@ -10186,17 +11578,17 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     const seed = entry.obligation;
     seeds.push(seed);
     const obligationId = typeof seed.obligation_id === "string" ? seed.obligation_id : String(index);
-    const path4 = `/obligationCompilation/customObligations/${obligationId}`;
+    const path4 = inputs.customResponsibilityPaths.get(seed) ?? wrapperPath;
     const keys = Object.keys(seed).sort(compareCodePoints7);
     if (keys.length !== OBLIGATION_FIELDS.length || keys.some((key, keyIndex) => key !== OBLIGATION_FIELDS[keyIndex])) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "schema",
         "CUSTOM_OBLIGATION_INPUT_NOT_CLOSED",
         path4,
         "custom obligation must contain exactly the frozen eight obligation fields"
       ));
     }
-    if (!/^obligation_[0-9a-f]{16}$/.test(obligationId)) diagnostics.push(diagnostic10(
+    if (!/^obligation_[0-9a-f]{16}$/.test(obligationId)) diagnostics.push(diagnostic11(
       "schema",
       "CUSTOM_OBLIGATION_ID_INVALID",
       `${path4}/obligation_id`,
@@ -10204,22 +11596,17 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     ));
     const identity = {
       kind: seed.kind,
-      scope: seed.scope,
-      view_element_refs: [...stringArray5(seed.view_element_refs)].sort(compareCodePoints7),
-      ...stringArray5(seed.view_element_refs).length === 0 ? {
-        source_claim_ids: [...stringArray5(seed.source_claim_ids)].sort(compareCodePoints7)
-      } : {},
-      semantic_key: entry.semantic_key
+      responsibility_key: entry.responsibility_key
     };
     const expectedId = stableId("obligation", identity);
-    if (obligationId !== expectedId) diagnostics.push(diagnostic10(
+    if (obligationId !== expectedId) diagnostics.push(diagnostic11(
       "classification",
       "CUSTOM_OBLIGATION_ID_MISMATCH",
       `${path4}/obligation_id`,
       `custom obligation_id must equal the stable ID of its semantic key and owner; expected "${expectedId}"`
     ));
     if (!isNonblankUnpadded(seed.scope) || !isDenseUniqueStringArray(seed.source_claim_ids, true) || !isDenseUniqueStringArray(seed.view_element_refs) || !isDenseUniqueStringArray(seed.required_oracle_refs) || !isDenseUniqueStringArray(seed.required_capabilities)) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "schema",
         "CUSTOM_OBLIGATION_STRINGS_INVALID",
         path4,
@@ -10235,7 +11622,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     ]) {
       const claim = claimsById.get(claimId);
       if (!claim) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "reference",
           "CUSTOM_OBLIGATION_CLAIM_DANGLING",
           `${path4}/${field}`,
@@ -10243,7 +11630,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         ));
         continue;
       }
-      if (!isNonblankUnpadded(claim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(claim.scope), String(seed.scope))) diagnostics.push(diagnostic10(
+      if (!isNonblankUnpadded(claim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(claim.scope), String(seed.scope))) diagnostics.push(diagnostic11(
         "classification",
         "CUSTOM_OBLIGATION_CLAIM_SCOPE_MISMATCH",
         `${path4}/${field}`,
@@ -10251,13 +11638,13 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
       if (field === "source_claim_ids") {
         const acceptedSource = isOracleEvidence(claim) || claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
-        if (!acceptedSource) diagnostics.push(diagnostic10(
+        if (!acceptedSource) diagnostics.push(diagnostic11(
           "classification",
           "CUSTOM_OBLIGATION_SOURCE_INVALID",
           `${path4}/source_claim_ids`,
           `claim "${claimId}" is not accepted formal obligation evidence`
         ));
-      } else if (!isOracleEvidence(claim)) diagnostics.push(diagnostic10(
+      } else if (!isOracleEvidence(claim)) diagnostics.push(diagnostic11(
         "classification",
         "CUSTOM_OBLIGATION_ORACLE_INVALID",
         `${path4}/required_oracle_refs`,
@@ -10265,7 +11652,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
     }
     for (const oracleId of oracleIds) {
-      if (!sourceSet.has(oracleId)) diagnostics.push(diagnostic10(
+      if (!sourceSet.has(oracleId)) diagnostics.push(diagnostic11(
         "traceability",
         "CUSTOM_OBLIGATION_ORACLE_NOT_SOURCED",
         `${path4}/required_oracle_refs`,
@@ -10273,13 +11660,38 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
     }
     const owners = [];
+    const ownerFactIds = /* @__PURE__ */ new Set();
+    if (entry.owner.kind === "facts") {
+      for (const factId of stringArray5(entry.owner.fact_ids)) {
+        const fact = factsById.get(factId);
+        if (!fact) {
+          diagnostics.push(diagnostic11(
+            "reference",
+            "CUSTOM_RESPONSIBILITY_FACT_OWNER_DANGLING",
+            `${path4}/owner/fact_ids/${pointerPart5(factId)}`,
+            `custom responsibility references unknown formal fact "${factId}"`
+          ));
+          continue;
+        }
+        const primaryClaim = claimsById.get(String(fact.claim_id));
+        if (!primaryClaim || !isNonblankUnpadded(primaryClaim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(primaryClaim.scope), String(seed.scope))) diagnostics.push(diagnostic11(
+          "classification",
+          "CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH",
+          `${path4}/scope`,
+          `fact owner "${factId}" does not contain custom obligation scope "${String(seed.scope)}"`
+        ));
+        const roots = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
+        owners.push({ ref: factId, roots });
+        ownerFactIds.add(factId);
+      }
+    }
     for (const viewElementRef of stringArray5(seed.view_element_refs)) {
       const parsedRef = parseQualifiedViewElementRef(viewElementRef);
       const viewId = parsedRef?.viewId ?? "";
       const elementId = parsedRef?.elementId ?? "";
       const ownerElement = ownerElementsByRef.get(viewElementRef);
       if (!isNonblankUnpadded(viewId) || !isNonblankUnpadded(elementId) || !ownerElement) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "reference",
           "CUSTOM_OBLIGATION_VIEW_ELEMENT_DANGLING",
           `${path4}/view_element_refs`,
@@ -10288,14 +11700,14 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         continue;
       }
       const { view, roots } = ownerElement;
-      if (!isNonblankUnpadded(view.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(view.scope), String(seed.scope))) diagnostics.push(diagnostic10(
+      if (!isNonblankUnpadded(view.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(view.scope), String(seed.scope))) diagnostics.push(diagnostic11(
         "classification",
         "CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH",
         `${path4}/scope`,
         `view element owner "${viewElementRef}" does not contain custom obligation scope "${String(seed.scope)}"`
       ));
       if (roots.length === 0 || roots.some((claimId) => !claimsById.has(claimId))) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic11(
           "traceability",
           "CUSTOM_OBLIGATION_OWNER_EVIDENCE_INVALID",
           `${path4}/view_element_refs`,
@@ -10304,9 +11716,23 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
         continue;
       }
       owners.push({ ref: viewElementRef, roots });
-    }
-    if (stringArray5(seed.view_element_refs).length === 0 && sourceIds.length > 0 && sourceIds.every((claimId) => claimsById.has(claimId))) {
-      owners.push({ ref: "", roots: sourceIds });
+      const relatedClaims = directionallyRelatedClaims(relations, roots);
+      const modeledFacts = [...new Set([...relatedClaims].flatMap(
+        (claimId) => [...factIdsByClaimId.get(claimId) ?? []]
+      ))].sort(compareCodePoints7);
+      if (modeledFacts.length === 0) diagnostics.push(diagnostic11(
+        "traceability",
+        "CUSTOM_RESPONSIBILITY_VIEW_OWNER_UNRESOLVED",
+        `${path4}/owner/view_element_refs`,
+        `view element owner "${viewElementRef}" does not resolve to a modeled formal fact`
+      ));
+      else if (modeledFacts.length > 1) diagnostics.push(diagnostic11(
+        "traceability",
+        "CUSTOM_RESPONSIBILITY_VIEW_OWNER_AMBIGUOUS",
+        `${path4}/owner/view_element_refs`,
+        `view element owner "${viewElementRef}" resolves ambiguously to multiple formal facts`
+      ));
+      for (const factId of modeledFacts) ownerFactIds.add(factId);
     }
     const relatedToAnyOwner = directionallyRelatedClaims(
       relations,
@@ -10314,7 +11740,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
     );
     const relatedToAnySource = directionallyRelatedClaims(relations, sourceIds);
     for (const claimId of sourceIds) {
-      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic10(
+      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic11(
         "traceability",
         "CUSTOM_OBLIGATION_SOURCE_UNRELATED",
         `${path4}/source_claim_ids`,
@@ -10322,7 +11748,7 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
     }
     for (const claimId of oracleIds) {
-      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic10(
+      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic11(
         "traceability",
         "CUSTOM_OBLIGATION_ORACLE_UNRELATED",
         `${path4}/required_oracle_refs`,
@@ -10330,24 +11756,19 @@ function validateCustomObligations(inputs, viewsById, claimsById, relations, dia
       ));
     }
     for (const owner of owners) {
-      if (!owner.roots.some((claimId) => relatedToAnySource.has(claimId))) diagnostics.push(diagnostic10(
+      if (!owner.roots.some((claimId) => relatedToAnySource.has(claimId))) diagnostics.push(diagnostic11(
         "traceability",
         "CUSTOM_OBLIGATION_OWNER_UNSUPPORTED",
         `${path4}/view_element_refs`,
         `custom obligation owner "${owner.ref}" has no directionally related source evidence`
       ));
     }
-    const viewElementRefs = [...stringArray5(seed.view_element_refs)].sort(compareCodePoints7);
     ownerBySeed.set(seed, canonicalStringify({
-      kind: seed.kind,
-      risk: seed.risk,
-      scope: seed.scope,
-      semantic_key: entry.semantic_key,
-      view_element_refs: viewElementRefs,
-      ...viewElementRefs.length === 0 ? { source_claim_ids: [...sourceIds].sort(compareCodePoints7) } : {}
+      responsibility_key: entry.responsibility_key
     }));
+    ownerFactIdsBySeed.set(seed, [...ownerFactIds].sort(compareCodePoints7));
   });
-  return { ownerBySeed, seeds };
+  return { ownerBySeed, ownerFactIdsBySeed, seeds };
 }
 function addObligationSets(accumulator, seed) {
   for (const field of OBLIGATION_SET_FIELDS) {
@@ -10362,6 +11783,7 @@ function finishObligationMerge(byId) {
   return [...byId.values()].map((entry) => ({
     obligation_id: entry.obligation_id,
     kind: entry.kind,
+    caseable: true,
     risk: entry.risk,
     scope: entry.scope,
     ...Object.fromEntries(OBLIGATION_SET_FIELDS.map((field) => [
@@ -10403,7 +11825,7 @@ function mergeSystemObligations(seeds, diagnostics) {
       return;
     }
     if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "classification",
         "OBLIGATION_SIGNATURE_CONFLICT",
         path4,
@@ -10415,16 +11837,16 @@ function mergeSystemObligations(seeds, diagnostics) {
   });
   return finishObligationMerge(byId);
 }
-function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnostics) {
+function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligations, diagnostics) {
   const byId = /* @__PURE__ */ new Map();
   const systemIds = new Set(systemObligations.map((obligation) => String(obligation.obligation_id)));
   const systemSignatures = new Set(systemObligations.map(obligationContentSignature));
   const collisionIds = /* @__PURE__ */ new Set();
   [...seeds].sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right))).forEach((seed, index) => {
     const obligationId = typeof seed.obligation_id === "string" ? seed.obligation_id : "";
-    const path4 = `/obligationCompilation/customObligations/${obligationId || index}`;
+    const path4 = publicPaths.get(seed) ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (systemIds.has(obligationId)) {
-      if (!collisionIds.has(obligationId)) diagnostics.push(diagnostic10(
+      if (!collisionIds.has(obligationId)) diagnostics.push(diagnostic11(
         "classification",
         "CUSTOM_OBLIGATION_SYSTEM_ID_COLLISION",
         `${path4}/obligation_id`,
@@ -10434,7 +11856,7 @@ function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnosti
       return;
     }
     if (systemSignatures.has(obligationContentSignature(seed))) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "classification",
         "CUSTOM_OBLIGATION_SYSTEM_SEMANTIC_COLLISION",
         path4,
@@ -10448,14 +11870,20 @@ function mergeCustomObligations(seeds, ownerBySeed, systemObligations, diagnosti
       byId.set(obligationId, obligationAccumulator(seed, owner));
       return;
     }
+    diagnostics.push(diagnostic11(
+      "traceability",
+      "CUSTOM_RESPONSIBILITY_DUPLICATE",
+      path4,
+      "custom responsibilities with the same type, owner, scope, and responsibility semantics must not be duplicated"
+    ));
     if (existing.owner !== owner) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "classification",
         "CUSTOM_OBLIGATION_OWNER_CONFLICT",
         path4,
         `duplicate custom obligation ID "${obligationId}" has conflicting semantic owners`
       ));
-      if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) diagnostics.push(diagnostic10(
+      if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) diagnostics.push(diagnostic11(
         "classification",
         "OBLIGATION_SIGNATURE_CONFLICT",
         path4,
@@ -10473,11 +11901,11 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
   for (const [viewId, view] of viewsById) {
     const submittedContext = inputs.contextsByViewId.get(viewId);
     if (!isObject7(submittedContext)) {
-      diagnostics.push(diagnostic10("classification", "OBLIGATION_CONTEXT_MISSING", `/obligationCompilation/contextsByViewId/${viewId}`, `view "${viewId}" has no isolated compilation context`));
+      diagnostics.push(diagnostic11("classification", "OBLIGATION_CONTEXT_MISSING", `/obligationCompilation/contextsByViewId/${viewId}`, `view "${viewId}" has no isolated compilation context`));
       continue;
     }
     if (Object.hasOwn(submittedContext, "claimsById") || Object.hasOwn(submittedContext, "evidenceGraph")) {
-      diagnostics.push(diagnostic10("classification", "OBLIGATION_CONTEXT_EVIDENCE_OVERRIDE", `/obligationCompilation/contextsByViewId/${viewId}`, "view context cannot replace the accepted evidence graph"));
+      diagnostics.push(diagnostic11("classification", "OBLIGATION_CONTEXT_EVIDENCE_OVERRIDE", `/obligationCompilation/contextsByViewId/${viewId}`, "view context cannot replace the accepted evidence graph"));
       continue;
     }
     const allowedFields = CONTEXT_FIELDS_BY_VIEW_TYPE[
@@ -10486,7 +11914,7 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
     ];
     const submittedFields = Object.keys(submittedContext).sort(compareCodePoints7);
     if (!allowedFields || submittedFields.some((field) => !allowedFields.includes(field))) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "schema",
         "OBLIGATION_CONTEXT_NOT_CLOSED",
         `/obligationCompilation/contextsByViewId/${viewId}`,
@@ -10498,7 +11926,7 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
     try {
       seeds.push(...registry.compile(view, { ...submittedContext, claimsById }));
     } catch (error) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic11(
         "classification",
         "OBLIGATION_STRATEGY_REJECTED",
         `/views/${viewId}`,
@@ -10507,16 +11935,16 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
     }
   }
   for (const key of inputs.contextsByViewId.keys()) {
-    if (!isNonblankUnpadded(key)) diagnostics.push(diagnostic10(
+    if (!isNonblankUnpadded(key)) diagnostics.push(diagnostic11(
       "schema",
       "OBLIGATION_CONTEXT_VIEW_KEY_INVALID",
-      `/obligationCompilation/contextsByViewId/${pointerPart4(String(key))}`,
+      `/obligationCompilation/contextsByViewId/${pointerPart5(String(key))}`,
       "compilation context view keys must be nonblank and unpadded"
     ));
-    else if (!viewsById.has(key)) diagnostics.push(diagnostic10(
+    else if (!viewsById.has(key)) diagnostics.push(diagnostic11(
       "reference",
       "OBLIGATION_CONTEXT_VIEW_UNKNOWN",
-      `/obligationCompilation/contextsByViewId/${pointerPart4(key)}`,
+      `/obligationCompilation/contextsByViewId/${pointerPart5(key)}`,
       `compilation context references unknown view "${key}"`
     ));
   }
@@ -10533,13 +11961,13 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   const validReviews = /* @__PURE__ */ new Set();
   for (const review of [...inputs.notApplicableReviews].sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))) {
     const factId = typeof review.fact_id === "string" ? review.fact_id : "";
-    const path4 = `/obligationCompilation/notApplicableReviews/${factId || "invalid"}`;
+    const path4 = inputs.notApplicableReviewPaths.get(review) ?? "/obligation_inputs/terminal_fact_routes";
     const group = reviewsByFactId.get(factId) ?? [];
     group.push(review);
     reviewsByFactId.set(factId, group);
     let valid = true;
-    if (!hasExactKeys(review, ["claim_id", "fact_id", "support_review"]) || !isNonblankUnpadded(factId) || !isNonblankUnpadded(review.claim_id) || review.support_review !== "supported") {
-      diagnostics.push(diagnostic10(
+    if (!hasExactKeys2(review, ["claim_id", "fact_id", "support_review"]) || !isNonblankUnpadded(factId) || !isNonblankUnpadded(review.claim_id) || review.support_review !== "supported") {
+      diagnostics.push(diagnostic11(
         "classification",
         "NOT_APPLICABLE_REVIEW_INVALID",
         path4,
@@ -10548,16 +11976,16 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
       valid = false;
     }
     if (!factsById.has(factId)) {
-      diagnostics.push(diagnostic10("reference", "NOT_APPLICABLE_REVIEW_UNKNOWN", `${path4}/fact_id`, `NotApplicable review references unknown formal fact "${factId}"`));
+      diagnostics.push(diagnostic11("reference", "NOT_APPLICABLE_REVIEW_UNKNOWN", `${path4}/fact_id`, `NotApplicable review references unknown formal fact "${factId}"`));
       valid = false;
     }
     if (valid) validReviews.add(review);
   }
   for (const [factId, reviews] of reviewsByFactId) {
-    if (reviews.length > 1) diagnostics.push(diagnostic10(
+    if (reviews.length > 1) diagnostics.push(diagnostic11(
       "traceability",
       "NOT_APPLICABLE_REVIEW_MULTIPLE",
-      `/obligationCompilation/notApplicableReviews/${factId}`,
+      inputs.notApplicableReviewPaths.get(reviews[1]) ?? inputs.notApplicableReviewPaths.get(reviews[0]) ?? "/obligation_inputs/terminal_fact_routes",
       `formal fact "${factId}" has more than one NotApplicable review`
     ));
   }
@@ -10571,67 +11999,173 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   const routes = /* @__PURE__ */ new Map();
   const notApplicableFactIds = /* @__PURE__ */ new Set();
   for (const [factId, submittedRoutes] of [...routesByFactId].sort(([left], [right]) => compareCodePoints7(left, right))) {
-    const path4 = `/obligationCompilation/factRoutes/${factId || "invalid"}`;
+    const path4 = inputs.terminalFactRoutePaths.get(submittedRoutes[0]) ?? "/obligation_inputs/terminal_fact_routes";
     if (!factsById.has(factId)) {
-      diagnostics.push(diagnostic10("reference", "FACT_ROUTE_UNKNOWN", `${path4}/fact_id`, `route references unknown formal fact "${factId}"`));
+      diagnostics.push(diagnostic11("reference", "FACT_ROUTE_UNKNOWN", `${path4}/fact_id`, `route references unknown formal fact "${factId}"`));
     }
     if (submittedRoutes.length > 1) {
-      diagnostics.push(diagnostic10("traceability", "FACT_ROUTE_MULTIPLE", path4, `formal fact "${factId}" has more than one explicit route`));
+      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MULTIPLE", path4, `formal fact "${factId}" has more than one explicit route`));
     }
     const normalizedByRoute = /* @__PURE__ */ new Map();
     for (const route2 of submittedRoutes) {
       const routeType = route2.route_type;
       if (routeType === "exploratory") {
-        diagnostics.push(diagnostic10("classification", "FORMAL_FACT_EXPLORATORY_FORBIDDEN", path4, "a formal fact cannot route directly to Exploratory"));
+        diagnostics.push(diagnostic11("classification", "FORMAL_FACT_EXPLORATORY_FORBIDDEN", path4, "a formal fact cannot route directly to Exploratory"));
         continue;
       }
       if (routeType === "blocked") {
-        if (!hasExactKeys(route2, ["blocker_root_issue_id", "fact_id", "route_type"]) || !isNonblankUnpadded(route2.blocker_root_issue_id)) {
-          diagnostics.push(diagnostic10("classification", "FACT_BLOCKED_ROUTE_INVALID", path4, "Blocked route must contain one nonblank unpadded blocker_root_issue_id"));
+        if (!hasExactKeys2(route2, ["fact_id", "issue_intent", "route_type"]) || !isObject7(route2.issue_intent)) {
+          diagnostics.push(diagnostic11("classification", "FACT_BLOCKED_ROUTE_INVALID", path4, "Blocked route must contain one closed typed issue_intent"));
           continue;
         }
-        normalizedByRoute.set(route2, { fact_id: factId, route_type: "blocked", blocker_root_issue_id: route2.blocker_root_issue_id });
+        const intent = route2.issue_intent;
+        if (!hasExactKeys2(intent, ["answerable", "evidence_refs", "missing_type", "reasons", "risk", "scope"]) || !isNonblankUnpadded(intent.missing_type) || !isNonblankUnpadded(intent.scope) || typeof intent.answerable !== "boolean" || !["critical", "high", "medium", "low"].includes(String(intent.risk)) || !isDenseUniqueStringArray(intent.reasons) || !isDenseUniqueStringArray(intent.evidence_refs)) {
+          diagnostics.push(diagnostic11("classification", "FACT_BLOCKED_INTENT_INVALID", `${path4}/issue_intent`, "Blocked fact intent must satisfy the closed typed issue contract"));
+          continue;
+        }
+        const fact2 = factsById.get(factId);
+        const primaryClaim2 = fact2 ? claimsById.get(String(fact2.claim_id)) : void 0;
+        let valid = Boolean(fact2 && primaryClaim2);
+        if (primaryClaim2 && (!isNonblankUnpadded(primaryClaim2.scope) || !scopeContains(String(intent.scope), String(primaryClaim2.scope)))) {
+          diagnostics.push(diagnostic11(
+            "classification",
+            "TERMINAL_ISSUE_SCOPE_MISMATCH",
+            `${path4}/issue_intent/scope`,
+            `terminal issue scope "${String(intent.scope)}" must cover formal fact scope "${String(primaryClaim2.scope)}"`
+          ));
+          valid = false;
+        }
+        const factRoots = fact2 ? [String(fact2.claim_id), ...stringArray5(fact2.source_claim_ids)] : [];
+        for (const evidenceId of stringArray5(intent.evidence_refs)) {
+          const evidenceClaim = claimsById.get(evidenceId);
+          const evidencePath = `${path4}/issue_intent/evidence_refs/${pointerPart5(evidenceId)}`;
+          if (!evidenceClaim) {
+            diagnostics.push(diagnostic11(
+              "reference",
+              "TERMINAL_ISSUE_EVIDENCE_DANGLING",
+              evidencePath,
+              `terminal issue intent references unknown accepted evidence "${evidenceId}"`
+            ));
+            valid = false;
+            continue;
+          }
+          if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) {
+            diagnostics.push(diagnostic11(
+              "classification",
+              "TERMINAL_ISSUE_EVIDENCE_SCOPE_MISMATCH",
+              evidencePath,
+              "terminal issue evidence scope must cover the issue scope"
+            ));
+            valid = false;
+          }
+          if (!factRoots.some((root) => claimsDirectionallyRelated(
+            relations,
+            evidenceId,
+            root
+          ))) {
+            diagnostics.push(diagnostic11(
+              "traceability",
+              "TERMINAL_ISSUE_EVIDENCE_UNRELATED",
+              evidencePath,
+              "every terminal issue evidence claim must connect directionally to its fact subject"
+            ));
+            valid = false;
+          }
+        }
+        if (!valid) continue;
+        const subject = { kind: "facts", fact_ids: [factId] };
+        const semanticRefs2 = [canonicalStringify(subject)];
+        const signature = {
+          missing_type: intent.missing_type,
+          semantic_refs: semanticRefs2,
+          scope: intent.scope
+        };
+        const rootIssueKey = canonicalStringify(signature);
+        const rootIssueId = stableId("root", signature);
+        const gapObligationId = stableId("obligation", {
+          kind: "requirement-gap",
+          owner: { kind: "fact", fact_id: factId },
+          missing_type: intent.missing_type,
+          scope: intent.scope
+        });
+        const sourceClaimIds = fact2 ? [.../* @__PURE__ */ new Set([
+          String(fact2.claim_id),
+          ...stringArray5(fact2.source_claim_ids)
+        ])].sort(compareCodePoints7) : [];
+        normalizedByRoute.set(route2, {
+          route: {
+            fact_id: factId,
+            route_type: "blocked",
+            blocker_root_issue_id: rootIssueId,
+            gap_obligation_id: gapObligationId
+          },
+          gap: {
+            obligation_id: gapObligationId,
+            kind: "requirement-gap",
+            caseable: false,
+            risk: intent.risk,
+            scope: intent.scope,
+            source_claim_ids: sourceClaimIds,
+            view_element_refs: [],
+            required_oracle_refs: [],
+            required_capabilities: [],
+            gap_issue: {
+              root_issue_id: rootIssueId,
+              root_issue_key: rootIssueKey,
+              missing_type: intent.missing_type,
+              semantic_refs: semanticRefs2,
+              scope: intent.scope,
+              answerable: intent.answerable,
+              reasons: [...stringArray5(intent.reasons)].sort(compareCodePoints7),
+              evidence_refs: [...stringArray5(intent.evidence_refs)].sort(compareCodePoints7)
+            }
+          }
+        });
         continue;
       }
       if (routeType === "not_applicable") {
         notApplicableFactIds.add(factId);
         const claimId = typeof route2.not_applicable_claim_id === "string" ? route2.not_applicable_claim_id : "";
-        if (!hasExactKeys(route2, ["fact_id", "not_applicable_claim_id", "route_type"]) || !isNonblankUnpadded(claimId)) {
-          diagnostics.push(diagnostic10("classification", "FACT_NOT_APPLICABLE_ROUTE_INVALID", path4, "NotApplicable route must contain one nonblank unpadded exclusion claim ID"));
+        if (!hasExactKeys2(route2, ["fact_id", "not_applicable_claim_id", "route_type"]) || !isNonblankUnpadded(claimId)) {
+          diagnostics.push(diagnostic11("classification", "FACT_NOT_APPLICABLE_ROUTE_INVALID", path4, "NotApplicable route must contain one nonblank unpadded exclusion claim ID"));
           continue;
         }
-        normalizedByRoute.set(route2, { fact_id: factId, route_type: "not_applicable", not_applicable_claim_id: claimId });
+        normalizedByRoute.set(route2, { route: { fact_id: factId, route_type: "not_applicable", not_applicable_claim_id: claimId } });
         continue;
       }
-      diagnostics.push(diagnostic10("classification", "FACT_ROUTE_TYPE_INVALID", `${path4}/route_type`, "explicit fact route must be Blocked or NotApplicable"));
+      diagnostics.push(diagnostic11("classification", "FACT_ROUTE_TYPE_INVALID", `${path4}/route_type`, "explicit fact route must be Blocked or NotApplicable"));
     }
     if (submittedRoutes.length !== 1 || !factsById.has(factId)) continue;
     const route = submittedRoutes[0];
     const normalized = normalizedByRoute.get(route);
     if (!normalized) continue;
-    if (normalized.route_type === "blocked") {
+    if (isObject7(normalized.gap)) {
       routes.set(factId, normalized);
       continue;
     }
     const reviews = reviewsByFactId.get(factId) ?? [];
     if (reviews.length === 0) {
-      diagnostics.push(diagnostic10("traceability", "NOT_APPLICABLE_REVIEW_MISSING", `/obligationCompilation/notApplicableReviews/${factId}`, `formal fact "${factId}" has no supported NotApplicable review`));
+      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISSING", path4, `formal fact "${factId}" has no supported NotApplicable review`));
       continue;
     }
     if (reviews.length !== 1 || !validReviews.has(reviews[0])) continue;
     const review = reviews[0];
-    const exclusionId = String(normalized.not_applicable_claim_id);
+    const normalizedRoute = (
+      /** @type {Record<string, unknown>} */
+      normalized.route
+    );
+    const exclusionId = String(normalizedRoute.not_applicable_claim_id);
     const exclusion = claimsById.get(exclusionId);
     if (!exclusion) {
-      diagnostics.push(diagnostic10("reference", "NOT_APPLICABLE_CLAIM_DANGLING", `${path4}/not_applicable_claim_id`, `NotApplicable route references unknown claim "${exclusionId}"`));
+      diagnostics.push(diagnostic11("reference", "NOT_APPLICABLE_CLAIM_DANGLING", `${path4}/not_applicable_claim_id`, `NotApplicable route references unknown claim "${exclusionId}"`));
       continue;
     }
     if (review.claim_id !== exclusionId) {
-      diagnostics.push(diagnostic10("traceability", "NOT_APPLICABLE_REVIEW_MISMATCH", `/obligationCompilation/notApplicableReviews/${factId}/claim_id`, "NotApplicable review must name the route exclusion claim"));
+      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISMATCH", `${path4}/exclusion_claim_id`, "NotApplicable review must name the route exclusion claim"));
       continue;
     }
     if (exclusion.level !== "E3" && exclusion.level !== "E2") {
-      diagnostics.push(diagnostic10("classification", "NOT_APPLICABLE_CLAIM_LEVEL_INVALID", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion requires accepted E3 or E2 evidence"));
+      diagnostics.push(diagnostic11("classification", "NOT_APPLICABLE_CLAIM_LEVEL_INVALID", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion requires accepted E3 or E2 evidence"));
       continue;
     }
     const fact = (
@@ -10644,30 +12178,25 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
       exclusionId,
       claimId
     ))) {
-      diagnostics.push(diagnostic10("classification", "NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion must be independent from the fact claim and its sources"));
+      diagnostics.push(diagnostic11("classification", "NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion must be independent from the fact claim and its sources"));
       continue;
     }
     const primaryClaim = claimsById.get(String(fact.claim_id));
     if (!primaryClaim || !isNonblankUnpadded(exclusion.scope) || !isNonblankUnpadded(primaryClaim.scope) || !scopeContains(String(exclusion.scope), String(primaryClaim.scope))) {
-      diagnostics.push(diagnostic10("classification", "NOT_APPLICABLE_SCOPE_MISMATCH", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion scope must cover the primary fact scope"));
+      diagnostics.push(diagnostic11("classification", "NOT_APPLICABLE_SCOPE_MISMATCH", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion scope must cover the primary fact scope"));
       continue;
     }
     routes.set(factId, normalized);
   }
   for (const factId of [...reviewsByFactId.keys()].sort(compareCodePoints7)) {
-    if (factsById.has(factId) && !notApplicableFactIds.has(factId)) diagnostics.push(diagnostic10(
+    if (factsById.has(factId) && !notApplicableFactIds.has(factId)) diagnostics.push(diagnostic11(
       "traceability",
       "NOT_APPLICABLE_REVIEW_ORPHAN",
-      `/obligationCompilation/notApplicableReviews/${factId}`,
+      inputs.notApplicableReviewPaths.get((reviewsByFactId.get(factId) ?? [])[0]) ?? "/obligation_inputs/terminal_fact_routes",
       `NotApplicable review for fact "${factId}" has no NotApplicable route`
     ));
   }
   return routes;
-}
-function isResolvedTask4FactDiagnostic(item, terminalFactIds) {
-  if (item.code !== "NORMATIVE_FACT_UNMODELED" && item.code !== "OUT_OF_SCOPE_NORMATIVE_FACT_UNMODELED") return false;
-  const prefix = "/facts/";
-  return item.path.startsWith(prefix) && terminalFactIds.has(item.path.slice(prefix.length));
 }
 function indexObligationsByViewAndDirectClaim(obligations) {
   const index = /* @__PURE__ */ new Map();
@@ -10695,7 +12224,421 @@ function indexObligationsByViewAndDirectClaim(obligations) {
   }
   return index;
 }
-function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, relations, diagnostics) {
+function indexCustomObligationsByOwnerFact(seeds, ownerFactIdsBySeed) {
+  const index = /* @__PURE__ */ new Map();
+  for (const seed of seeds) {
+    const obligationId = String(seed.obligation_id ?? "");
+    for (const factId of ownerFactIdsBySeed.get(seed) ?? []) {
+      const obligationIds = index.get(factId) ?? /* @__PURE__ */ new Set();
+      obligationIds.add(obligationId);
+      index.set(factId, obligationIds);
+    }
+  }
+  return index;
+}
+function isSupportedCombinationEvidence(claim) {
+  return claim.kind !== "diagnostic" && (claim.level === "E3" || claim.level === "E2");
+}
+function compileCombinationObligations(inputs, viewsById, factsById, claimsById, viewRoutes, relations, diagnostics) {
+  const obligations = [];
+  const obligationIdsByFactId = /* @__PURE__ */ new Map();
+  const modeledViewsByFactId = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === "string" ? [[route.fact_id, new Set(stringArray5(route.view_ids))]] : []));
+  for (const [requestIndex, request] of inputs.combinationRequests.entries()) {
+    const path4 = `/obligation_inputs/combination_requests/${requestIndex}`;
+    const owner = isObject7(request.owner) ? request.owner : {};
+    const viewId = String(owner.view_id ?? "");
+    const view = viewsById.get(viewId);
+    const factIds = [...new Set(stringArray5(owner.fact_ids))].sort(compareCodePoints7);
+    const publicElementRefs = objectArray8(owner.view_element_refs);
+    const qualifiedElementRefs = publicElementRefs.map((ref) => qualifyViewElementRef(String(ref.view_id ?? ""), String(ref.element_id ?? ""))).sort(compareCodePoints7);
+    let valid = true;
+    if (!view) {
+      diagnostics.push(diagnostic11(
+        "reference",
+        "TWISE_OWNER_VIEW_UNKNOWN",
+        `${path4}/owner/view_id`,
+        `combination owner references unknown view "${viewId}"`
+      ));
+      valid = false;
+    }
+    const elementsById = new Map(objectArray8(view?.elements).map((element) => [String(element.element_id), element]));
+    const ownerRoots = [];
+    const selectedElements = [];
+    for (const [refIndex, ref] of publicElementRefs.entries()) {
+      if (ref.view_id !== viewId || !elementsById.has(String(ref.element_id ?? ""))) {
+        diagnostics.push(diagnostic11(
+          "reference",
+          "TWISE_OWNER_ELEMENT_UNKNOWN",
+          `${path4}/owner/view_element_refs/${refIndex}`,
+          "combination owner elements must exist in the single named owner view"
+        ));
+        valid = false;
+        continue;
+      }
+      const roots = elementEvidenceRefs(
+        /** @type {Record<string, unknown>} */
+        elementsById.get(String(ref.element_id))
+      );
+      selectedElements.push({
+        index: refIndex,
+        ref: qualifyViewElementRef(String(ref.view_id), String(ref.element_id)),
+        roots
+      });
+      ownerRoots.push(...roots);
+    }
+    const ownerFacts = [];
+    const scope = String(request.scope ?? "");
+    for (const [factIndex, factId] of factIds.entries()) {
+      const fact = factsById.get(factId);
+      if (!fact) {
+        diagnostics.push(diagnostic11(
+          "reference",
+          "TWISE_OWNER_FACT_UNKNOWN",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          `combination owner references unknown formal fact "${factId}"`
+        ));
+        valid = false;
+        continue;
+      }
+      const modeledViews = modeledViewsByFactId.get(factId);
+      if (!modeledViews?.has(viewId)) {
+        diagnostics.push(diagnostic11(
+          "traceability",
+          "TWISE_OWNER_FACT_NOT_MODELED",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          `combination owner fact "${factId}" is not modeled by view "${viewId}"`
+        ));
+        valid = false;
+      }
+      const factRoots = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
+      ownerFacts.push({ factId, roots: factRoots });
+      ownerRoots.push(...factRoots);
+      const primaryClaim = claimsById.get(String(fact.claim_id));
+      if (!primaryClaim || !scopeContains(String(primaryClaim.scope ?? ""), scope)) {
+        diagnostics.push(diagnostic11(
+          "classification",
+          "TWISE_OWNER_SCOPE_MISMATCH",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          `combination owner fact "${factId}" must contain request scope "${scope}"`
+        ));
+        valid = false;
+      }
+      if (!qualifiedElementRefs.some((ref) => {
+        const parsed = parseQualifiedViewElementRef(ref);
+        const element = parsed ? elementsById.get(parsed.elementId) : void 0;
+        return elementEvidenceRefs(element ?? {}).some((root) => factRoots.some(
+          (factRoot) => claimsDirectionallyRelated(relations, root, factRoot)
+        ));
+      })) {
+        diagnostics.push(diagnostic11(
+          "traceability",
+          "TWISE_OWNER_FACT_AMBIGUOUS",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          "every owner fact must connect directionally to a selected owner element"
+        ));
+        valid = false;
+      }
+    }
+    for (const element of selectedElements) {
+      if (!ownerFacts.some(({ roots }) => element.roots.some((elementRoot) => roots.some(
+        (factRoot) => claimsDirectionallyRelated(relations, elementRoot, factRoot)
+      )))) {
+        diagnostics.push(diagnostic11(
+          "traceability",
+          "TWISE_OWNER_ELEMENT_NOT_MODELED",
+          `${path4}/owner/view_element_refs/${element.index}`,
+          `combination owner element "${element.ref}" does not resolve to a declared owner fact`
+        ));
+        valid = false;
+      }
+    }
+    if (!view || !scopeContains(String(view.scope ?? ""), scope)) {
+      diagnostics.push(diagnostic11(
+        "classification",
+        "TWISE_OWNER_SCOPE_MISMATCH",
+        `${path4}/scope`,
+        "combination owner view must contain the request scope"
+      ));
+      valid = false;
+    }
+    const canonicalOwnerRoots = [...new Set(ownerRoots)].sort(compareCodePoints7);
+    const validateClaim = (claimId, claimPath, options = {}) => {
+      const claim = claimsById.get(claimId);
+      if (!claim) {
+        diagnostics.push(diagnostic11("reference", "TWISE_EVIDENCE_DANGLING", claimPath, `unknown accepted evidence "${claimId}"`));
+        valid = false;
+        return false;
+      }
+      if (options.oracle && (!isSupportedCombinationEvidence(claim) || !isOracleEvidence(claim))) {
+        diagnostics.push(diagnostic11(
+          "classification",
+          "TWISE_ORACLE_EVIDENCE_INVALID",
+          claimPath,
+          "vector Oracle prebindings require typed, supported E3 or E2 Oracle evidence"
+        ));
+        valid = false;
+        return false;
+      }
+      if (claim.kind === "diagnostic" || options.strong && !isSupportedCombinationEvidence(claim)) {
+        diagnostics.push(diagnostic11(
+          "classification",
+          "TWISE_EVIDENCE_LEVEL_INVALID",
+          claimPath,
+          options.strong ? "constraint, risk, and Oracle evidence requires non-diagnostic E3 or E2" : "selected values cannot use diagnostic evidence"
+        ));
+        valid = false;
+        return false;
+      }
+      if (!scopeContains(String(claim.scope ?? ""), scope)) {
+        diagnostics.push(diagnostic11("classification", "TWISE_EVIDENCE_SCOPE_MISMATCH", claimPath, "combination evidence must cover the request scope"));
+        valid = false;
+        return false;
+      }
+      const roots = options.roots ?? canonicalOwnerRoots;
+      if (!options.skipRelation && !roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
+        diagnostics.push(diagnostic11("traceability", "TWISE_EVIDENCE_UNRELATED", claimPath, "combination evidence must connect directionally to its semantic target"));
+        valid = false;
+        return false;
+      }
+      return true;
+    };
+    const parameters = objectArray8(request.parameters);
+    const parameterIds = /* @__PURE__ */ new Set();
+    const valueClaimsByParameter = /* @__PURE__ */ new Map();
+    const selectorDomains = [];
+    for (const [parameterIndex, parameter] of parameters.entries()) {
+      const parameterId = String(parameter.parameter_id ?? "");
+      if (parameterIds.has(parameterId)) {
+        diagnostics.push(diagnostic11("classification", "TWISE_PARAMETER_DUPLICATE", `${path4}/parameters/${parameterIndex}/parameter_id`, `duplicate parameter "${parameterId}"`));
+        valid = false;
+      }
+      parameterIds.add(parameterId);
+      const claimsByValue = /* @__PURE__ */ new Map();
+      const values = [];
+      for (const [valueIndex, value] of objectArray8(parameter.values).entries()) {
+        const valueId = String(value.value_id ?? "");
+        const claimId = String(value.evidence_claim_id ?? "");
+        if (claimsByValue.has(valueId)) {
+          diagnostics.push(diagnostic11("classification", "TWISE_VALUE_DUPLICATE", `${path4}/parameters/${parameterIndex}/values/${valueIndex}/value_id`, `duplicate value "${valueId}"`));
+          valid = false;
+        }
+        validateClaim(claimId, `${path4}/parameters/${parameterIndex}/values/${valueIndex}/evidence_claim_id`);
+        claimsByValue.set(valueId, claimId);
+        values.push(valueId);
+      }
+      valueClaimsByParameter.set(parameterId, claimsByValue);
+      selectorDomains.push({ name: parameterId, values });
+    }
+    const risk = isObject7(request.interaction_risk) ? request.interaction_risk : {};
+    const riskRefs = [...new Set(stringArray5(risk.evidence_refs))].sort(compareCodePoints7);
+    for (const [index, claimId] of riskRefs.entries()) validateClaim(
+      claimId,
+      `${path4}/interaction_risk/evidence_refs/${index}`,
+      { strong: true }
+    );
+    const selectorConstraints = [];
+    const forbidEvidenceRefs = /* @__PURE__ */ new Set();
+    for (const [constraintIndex, constraint] of objectArray8(request.constraints).entries()) {
+      const assignments = objectArray8(constraint.assignments).map((assignment) => ({
+        parameter: String(assignment.parameter_id ?? ""),
+        value: String(assignment.value_id ?? "")
+      }));
+      const assignedRoots = assignments.map(({ parameter, value }) => valueClaimsByParameter.get(parameter)?.get(value) ?? "");
+      const evidenceRefs = stringArray5(constraint.evidence_refs);
+      const forbidProofClosesTarget = (claimId, targetId) => {
+        if (!targetId || claimId === targetId) return false;
+        const claim = claimsById.get(claimId);
+        if (claim?.level === "E2") {
+          return reachesClaim(relations.parentsById, claimId, targetId);
+        }
+        if (claim?.level === "E3") {
+          return !canonicalOwnerRoots.includes(claimId) && reachesClaim(relations.parentsById, targetId, claimId);
+        }
+        return false;
+      };
+      for (const [refIndex, claimId] of evidenceRefs.entries()) {
+        forbidEvidenceRefs.add(claimId);
+        const evidenceValid = validateClaim(
+          claimId,
+          `${path4}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
+          { strong: true, skipRelation: true }
+        );
+        const closesTuple = assignedRoots.every(
+          (targetId) => forbidProofClosesTarget(claimId, targetId)
+        );
+        if (evidenceValid && !closesTuple) {
+          diagnostics.push(diagnostic11(
+            "traceability",
+            "TWISE_EVIDENCE_UNRELATED",
+            `${path4}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
+            "each forbid proof must close the full selected-value tuple in the evidence-level direction"
+          ));
+          valid = false;
+        }
+      }
+      for (const [assignmentIndex, targetId] of assignedRoots.entries()) {
+        if (!targetId || evidenceRefs.some((claimId) => !forbidProofClosesTarget(claimId, targetId))) {
+          diagnostics.push(diagnostic11(
+            "traceability",
+            "TWISE_FORBID_TARGET_UNCLOSED",
+            `${path4}/constraints/${constraintIndex}/assignments/${assignmentIndex}`,
+            "every forbidden assignment value requires supported target-matching evidence"
+          ));
+          valid = false;
+        }
+      }
+      selectorConstraints.push({ forbidden: assignments });
+    }
+    const selectorOracleMappings = [];
+    for (const [mappingIndex, mapping] of objectArray8(request.vector_oracles).entries()) {
+      const assignments = objectArray8(mapping.assignments).map((assignment) => ({
+        parameter: String(assignment.parameter_id ?? ""),
+        value: String(assignment.value_id ?? "")
+      }));
+      for (const [refIndex, claimId] of stringArray5(mapping.required_oracle_refs).entries()) {
+        validateClaim(
+          claimId,
+          `${path4}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
+          { strong: true, oracle: true }
+        );
+        if (forbidEvidenceRefs.has(claimId)) {
+          diagnostics.push(diagnostic11(
+            "classification",
+            "TWISE_ORACLE_FORBID_CONFLICT",
+            `${path4}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
+            "forbid evidence cannot become a selected-vector Oracle prebinding"
+          ));
+          valid = false;
+        }
+      }
+      selectorOracleMappings.push({ assignments, required_oracle_refs: stringArray5(mapping.required_oracle_refs) });
+    }
+    if (!valid) continue;
+    let selection;
+    try {
+      selection = selectTWiseVectors({
+        domains: selectorDomains,
+        interaction_risk: risk.risk,
+        oracle_mappings: selectorOracleMappings
+      }, request.strength, selectorConstraints, TWISE_POLICY.max_candidates);
+    } catch (error) {
+      diagnostics.push(diagnostic11(
+        "classification",
+        "TWISE_REQUEST_INVALID",
+        path4,
+        error instanceof Error ? error.message : "combination request is invalid"
+      ));
+      continue;
+    }
+    const ownerIdentity = {
+      view_id: viewId,
+      fact_ids: factIds,
+      view_element_refs: publicElementRefs.map((ref) => ({
+        view_id: String(ref.view_id),
+        element_id: String(ref.element_id)
+      })).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))
+    };
+    if (selection.status === "blocked") {
+      if (selection.reason !== "max_candidates_exceeded") {
+        diagnostics.push(diagnostic11("classification", "TWISE_NO_VALID_CANDIDATES", path4, "combination constraints leave no valid candidate"));
+        continue;
+      }
+      const semanticRefs2 = [canonicalStringify({
+        kind: "combination-owner",
+        owner: ownerIdentity,
+        policy_id: TWISE_POLICY.policy_id
+      })];
+      const rootSignature = { missing_type: "resource_limit", semantic_refs: semanticRefs2, scope };
+      const rootIssueId = stableId("root", rootSignature);
+      const obligationId = stableId("obligation", {
+        kind: "requirement-gap",
+        owner: ownerIdentity,
+        missing_type: "resource_limit",
+        scope,
+        policy_id: TWISE_POLICY.policy_id
+      });
+      obligations.push({
+        obligation_id: obligationId,
+        kind: "requirement-gap",
+        caseable: false,
+        risk: risk.risk,
+        scope,
+        source_claim_ids: [.../* @__PURE__ */ new Set([...canonicalOwnerRoots, ...riskRefs])].sort(compareCodePoints7),
+        view_element_refs: qualifiedElementRefs,
+        required_oracle_refs: [],
+        required_capabilities: [],
+        gap_issue: {
+          root_issue_id: rootIssueId,
+          root_issue_key: canonicalStringify(rootSignature),
+          missing_type: "resource_limit",
+          semantic_refs: semanticRefs2,
+          scope,
+          answerable: false,
+          reasons: [`${TWISE_POLICY.policy_id}:${TWISE_POLICY.max_candidates}`],
+          evidence_refs: riskRefs
+        }
+      });
+      for (const factId of factIds) {
+        const ids = obligationIdsByFactId.get(factId) ?? /* @__PURE__ */ new Set();
+        ids.add(obligationId);
+        obligationIdsByFactId.set(factId, ids);
+      }
+      continue;
+    }
+    for (const vector of selection.vectors) {
+      const semanticAssignments = Object.entries(vector.values).map(([parameterId, valueId]) => ({
+        parameter_id: parameterId,
+        value_id: String(valueId)
+      })).sort((left, right) => compareCodePoints7(left.parameter_id, right.parameter_id));
+      const assignments = semanticAssignments.map(({ parameter_id: parameterId, value_id: valueId }) => ({
+        parameter_id: parameterId,
+        value_id: valueId,
+        evidence_claim_id: valueClaimsByParameter.get(parameterId)?.get(valueId) ?? ""
+      }));
+      const valueClaimIds = assignments.map(({ evidence_claim_id: evidenceClaimId }) => evidenceClaimId);
+      const identity = {
+        kind: "interaction",
+        responsibility: "t-wise-vector",
+        policy_id: TWISE_POLICY.policy_id,
+        owner: ownerIdentity,
+        scope,
+        strength: request.strength,
+        assignments: semanticAssignments
+      };
+      const obligationId = stableId("obligation", identity);
+      obligations.push({
+        obligation_id: obligationId,
+        kind: "interaction",
+        caseable: true,
+        risk: risk.risk,
+        scope,
+        source_claim_ids: [.../* @__PURE__ */ new Set([...canonicalOwnerRoots, ...valueClaimIds, ...riskRefs])].sort(compareCodePoints7),
+        view_element_refs: [...qualifiedElementRefs],
+        required_oracle_refs: [...vector.required_oracle_refs].sort(compareCodePoints7),
+        required_capabilities: [],
+        combination_vector: {
+          policy_id: TWISE_POLICY.policy_id,
+          strength: request.strength,
+          owner: {
+            view_id: ownerIdentity.view_id,
+            fact_ids: [...ownerIdentity.fact_ids],
+            view_element_refs: ownerIdentity.view_element_refs.map((ref) => ({ ...ref }))
+          },
+          assignments,
+          forbid_evidence_refs: [...forbidEvidenceRefs].sort(compareCodePoints7)
+        }
+      });
+      for (const factId of factIds) {
+        const ids = obligationIdsByFactId.get(factId) ?? /* @__PURE__ */ new Set();
+        ids.add(obligationId);
+        obligationIdsByFactId.set(factId, ids);
+      }
+    }
+  }
+  obligations.sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
+  return { obligations, obligationIdsByFactId };
+}
+function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, customObligationIdsByFactId, combinationObligationIdsByFactId, relations, diagnostics) {
   const viewsByFact = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === "string" ? [[route.fact_id, new Set(stringArray5(route.view_ids))]] : []));
   const obligationIndex = indexObligationsByViewAndDirectClaim(obligations);
   const routes = [];
@@ -10703,16 +12646,19 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
     const factId = String(fact.fact_id);
     const terminal = terminalRoutes.get(factId);
     const viewIds = viewsByFact.get(factId);
-    if (terminal && viewIds) {
-      diagnostics.push(diagnostic10("traceability", "FACT_ROUTE_MULTIPLE", `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
+    const customObligationIds = customObligationIdsByFactId.get(factId);
+    const combinationObligationIds = combinationObligationIdsByFactId.get(factId);
+    if (terminal && (viewIds || customObligationIds || combinationObligationIds)) {
+      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MULTIPLE", `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
       continue;
     }
     if (terminal) {
-      routes.push({ ...terminal });
+      routes.push({ .../** @type {Record<string, unknown>} */
+      terminal.route });
       continue;
     }
-    if (!viewIds) {
-      diagnostics.push(diagnostic10("traceability", "FACT_ROUTE_MISSING", `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
+    if (!viewIds && !customObligationIds && !combinationObligationIds) {
+      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MISSING", `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
       continue;
     }
     const claimIds = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
@@ -10721,8 +12667,9 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
       claimIds,
       relations.descendantsByRootSet
     );
-    const obligationIds = /* @__PURE__ */ new Set();
-    for (const viewId of viewIds) {
+    const obligationIds = new Set(customObligationIds ?? []);
+    for (const obligationId of combinationObligationIds ?? []) obligationIds.add(obligationId);
+    for (const viewId of viewIds ?? []) {
       const claims = obligationIndex.get(viewId);
       if (!claims) continue;
       for (const claimId of descendantClaimIds) {
@@ -10730,35 +12677,244 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, rel
       }
     }
     if (obligationIds.size === 0) {
-      diagnostics.push(diagnostic10("traceability", "FACT_ROUTE_OBLIGATION_MISSING", `/fact_routes/${factId}`, `modeled fact "${factId}" produced no formal obligation`));
+      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_OBLIGATION_MISSING", `/fact_routes/${factId}`, `modeled fact "${factId}" produced no formal obligation`));
       continue;
     }
     routes.push({ fact_id: factId, route_type: "obligations", obligation_ids: [...obligationIds].sort(compareCodePoints7) });
   }
   return routes.sort((left, right) => compareCodePoints7(String(left.fact_id), String(right.fact_id)));
 }
+function validateInteractionSubjects(candidates, factsById, viewsById, claimsById, relations, diagnostics) {
+  const ownerByViewElement = /* @__PURE__ */ new Map();
+  for (const [viewId, view] of viewsById) {
+    for (const element of objectArray8(view.elements)) ownerByViewElement.set(
+      qualifyViewElementRef(viewId, String(element.element_id ?? "")),
+      { view, element }
+    );
+  }
+  for (const candidate of candidates) {
+    const candidateId = String(candidate.candidate_id ?? "");
+    const path4 = `/interaction_candidates/${pointerPart5(candidateId)}`;
+    const sourceIds = stringArray5(candidate.source_claim_ids);
+    const subjectRoots = /* @__PURE__ */ new Set();
+    const subjectRootGroups = [];
+    const subjectScopes = [];
+    for (const [index, ref] of objectArray8(candidate.semantic_subject_refs).entries()) {
+      const refPath = `${path4}/semantic_subject_refs/${index}`;
+      let roots = [];
+      let ownerScope = "";
+      if (ref.kind === "fact") {
+        const fact = factsById.get(String(ref.fact_id ?? ""));
+        if (!fact) diagnostics.push(diagnostic11("reference", "INTERACTION_SUBJECT_FACT_DANGLING", refPath, "interaction semantic fact reference is unknown"));
+        else {
+          roots = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
+          ownerScope = String(claimsById.get(String(fact.claim_id))?.scope ?? "");
+        }
+      } else if (ref.kind === "view-element" || ref.kind === "integration-surface") {
+        const owner = ownerByViewElement.get(qualifyViewElementRef(String(ref.view_id ?? ""), String(ref.element_id ?? "")));
+        if (!owner) diagnostics.push(diagnostic11("reference", "INTERACTION_SUBJECT_VIEW_ELEMENT_DANGLING", refPath, "interaction semantic view element reference is unknown"));
+        else {
+          roots = elementEvidenceRefs(owner.element);
+          ownerScope = String(owner.view.scope ?? "");
+          if (ref.kind === "integration-surface") {
+            if (owner.view.type !== "integration" || owner.element.kind !== "integration-contract") diagnostics.push(diagnostic11(
+              "classification",
+              "INTERACTION_SUBJECT_SURFACE_OWNER_INVALID",
+              refPath,
+              "integration-surface references must own an integration-contract element"
+            ));
+            else if (ref.surface === "side-effect") {
+              const matches = objectArray8(owner.element.side_effects).filter((item) => item.kind === ref.side_effect_kind && item.target === ref.target);
+              if (matches.length !== 1) diagnostics.push(diagnostic11(
+                "reference",
+                "INTERACTION_SUBJECT_SIDE_EFFECT_NOT_UNIQUE",
+                refPath,
+                "integration side-effect subject must resolve uniquely by (side_effect_kind, target)"
+              ));
+            } else if (!["request", "response", "persistence", "event", "callback", "compensation"].includes(String(ref.surface))) diagnostics.push(diagnostic11(
+              "classification",
+              "INTERACTION_SUBJECT_SURFACE_INVALID",
+              refPath,
+              "integration surface is outside the closed surface set"
+            ));
+          }
+        }
+      } else if (ref.kind === "model-element") {
+        const claim = claimsById.get(String(ref.model_ref ?? ""));
+        if (!claim) diagnostics.push(diagnostic11("reference", "INTERACTION_SUBJECT_MODEL_DANGLING", refPath, "interaction model reference is unknown"));
+        else if (!isE2ModelElement2(claim)) diagnostics.push(diagnostic11("classification", "INTERACTION_SUBJECT_MODEL_INVALID", refPath, "interaction model reference must be an accepted E2 model element"));
+        else {
+          roots = [String(ref.model_ref)];
+          ownerScope = String(claim.scope ?? "");
+        }
+      }
+      if (ownerScope && !stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, ownerScope) || scopeContains(ownerScope, moduleId))) diagnostics.push(diagnostic11(
+        "classification",
+        "INTERACTION_SUBJECT_MODULE_MISMATCH",
+        refPath,
+        "interaction semantic subject scope must overlap a candidate module"
+      ));
+      if (ownerScope) subjectScopes.push({ path: refPath, scope: ownerScope });
+      for (const root of roots) subjectRoots.add(root);
+      if (roots.length > 0) subjectRootGroups.push({ path: refPath, roots });
+    }
+    for (const claimId of sourceIds) {
+      const claim = claimsById.get(claimId);
+      const claimPath = `${path4}/source_claim_ids/${pointerPart5(claimId)}`;
+      if (!claim) {
+        diagnostics.push(diagnostic11(
+          "reference",
+          "INTERACTION_SOURCE_CLAIM_DANGLING",
+          claimPath,
+          `interaction candidate references unknown accepted claim "${claimId}"`
+        ));
+        continue;
+      }
+      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, String(claim.scope)) || scopeContains(String(claim.scope), moduleId))) diagnostics.push(diagnostic11(
+        "classification",
+        "INTERACTION_SOURCE_SCOPE_MISMATCH",
+        claimPath,
+        "interaction provenance scope must overlap a candidate module"
+      ));
+      if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, claimId, root))) diagnostics.push(diagnostic11(
+        "traceability",
+        "INTERACTION_SOURCE_EVIDENCE_UNRELATED",
+        claimPath,
+        "every interaction provenance claim must connect directionally to its semantic subject"
+      ));
+    }
+    for (const group of subjectRootGroups) if (!group.roots.some((root) => sourceIds.some((claimId) => claimsById.has(claimId) && claimsDirectionallyRelated(relations, claimId, root)))) diagnostics.push(diagnostic11(
+      "traceability",
+      "INTERACTION_SUBJECT_EVIDENCE_UNRELATED",
+      group.path,
+      "every interaction semantic subject must connect directionally to provenance evidence"
+    ));
+    const intent = isObject7(candidate.issue_intent) ? candidate.issue_intent : null;
+    if (candidate.disposition === "blocker" && intent) {
+      const issueScope = String(intent.scope ?? "");
+      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, issueScope) || scopeContains(issueScope, moduleId))) diagnostics.push(diagnostic11(
+        "classification",
+        "INTERACTION_ISSUE_SCOPE_MISMATCH",
+        `${path4}/issue_intent/scope`,
+        "interaction issue scope must overlap a candidate module"
+      ));
+      for (const subject of subjectScopes) if (!scopeContains(issueScope, subject.scope)) diagnostics.push(diagnostic11(
+        "classification",
+        "INTERACTION_ISSUE_SCOPE_MISMATCH",
+        subject.path,
+        `interaction issue scope "${issueScope}" must cover semantic subject scope "${subject.scope}"`
+      ));
+      for (const evidenceId of stringArray5(intent.evidence_refs)) {
+        const evidenceClaim = claimsById.get(evidenceId);
+        const evidencePath = `${path4}/issue_intent/evidence_refs/${pointerPart5(evidenceId)}`;
+        if (!evidenceClaim) {
+          diagnostics.push(diagnostic11(
+            "reference",
+            "INTERACTION_ISSUE_EVIDENCE_DANGLING",
+            evidencePath,
+            "interaction issue intent references unknown accepted evidence"
+          ));
+          continue;
+        }
+        if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) diagnostics.push(diagnostic11(
+          "classification",
+          "INTERACTION_ISSUE_EVIDENCE_SCOPE_MISMATCH",
+          evidencePath,
+          "interaction issue evidence scope must cover the issue scope"
+        ));
+        if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, evidenceId, root))) diagnostics.push(diagnostic11(
+          "traceability",
+          "INTERACTION_ISSUE_EVIDENCE_UNRELATED",
+          evidencePath,
+          "every interaction issue evidence claim must connect directionally to its semantic subject"
+        ));
+      }
+    }
+  }
+}
 function reconcileInteractionRoutes(candidates) {
-  return candidates.map((candidate) => candidate.disposition === "formal-view" ? { candidate_id: candidate.candidate_id, route_type: "formal-view", formal_view_id: candidate.formal_view_id } : candidate.disposition === "blocker" ? { candidate_id: candidate.candidate_id, route_type: "blocked", blocker_root_issue_id: candidate.blocker_root_issue_id } : { candidate_id: candidate.candidate_id, route_type: "exploratory", exploratory_id: candidate.exploratory_id }).sort((left, right) => compareCodePoints7(String(left.candidate_id), String(right.candidate_id)));
+  const routes = [];
+  const gaps = [];
+  for (const candidate of candidates) {
+    if (candidate.disposition === "formal-view") {
+      routes.push({ candidate_id: candidate.candidate_id, route_type: "formal-view", formal_view_id: candidate.formal_view_id });
+      continue;
+    }
+    if (candidate.disposition === "exploratory") {
+      routes.push({ candidate_id: candidate.candidate_id, route_type: "exploratory", exploratory_id: candidate.exploratory_id });
+      continue;
+    }
+    const intent = (
+      /** @type {Record<string, unknown>} */
+      candidate.issue_intent
+    );
+    const subject = {
+      kind: "interactions",
+      module_ids: [...stringArray5(candidate.module_ids)].sort(compareCodePoints7),
+      dimension: candidate.dimension,
+      semantic_subject_refs: [...objectArray8(candidate.semantic_subject_refs)].sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))
+    };
+    const semanticRefs2 = [canonicalStringify(subject)];
+    const signature = { missing_type: intent.missing_type, semantic_refs: semanticRefs2, scope: intent.scope };
+    const rootIssueKey = canonicalStringify(signature);
+    const rootIssueId = stableId("root", signature);
+    const gapObligationId = stableId("obligation", {
+      kind: "requirement-gap",
+      owner: { kind: "interaction", subject },
+      missing_type: intent.missing_type,
+      scope: intent.scope
+    });
+    routes.push({
+      candidate_id: candidate.candidate_id,
+      route_type: "blocked",
+      blocker_root_issue_id: rootIssueId,
+      gap_obligation_id: gapObligationId
+    });
+    gaps.push({
+      obligation_id: gapObligationId,
+      kind: "requirement-gap",
+      caseable: false,
+      risk: intent.risk,
+      scope: intent.scope,
+      source_claim_ids: [...stringArray5(candidate.source_claim_ids)].sort(compareCodePoints7),
+      view_element_refs: [...new Set(objectArray8(candidate.semantic_subject_refs).flatMap((ref) => ref.kind === "view-element" || ref.kind === "integration-surface" ? [qualifyViewElementRef(String(ref.view_id), String(ref.element_id))] : []))].sort(compareCodePoints7),
+      required_oracle_refs: [],
+      required_capabilities: [],
+      gap_issue: {
+        root_issue_id: rootIssueId,
+        root_issue_key: rootIssueKey,
+        missing_type: intent.missing_type,
+        semantic_refs: semanticRefs2,
+        scope: intent.scope,
+        answerable: intent.answerable,
+        reasons: [...stringArray5(intent.reasons)].sort(compareCodePoints7),
+        evidence_refs: [...stringArray5(intent.evidence_refs)].sort(compareCodePoints7)
+      }
+    });
+  }
+  routes.sort((left, right) => compareCodePoints7(String(left.candidate_id), String(right.candidate_id)));
+  gaps.sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
+  return { routes, gaps };
 }
 function validateRouteIdentity(expected, routes, expectedField, routeField, label, diagnostics) {
   const expectedIds = new Set(expected.flatMap((item) => isNonblankUnpadded(item[expectedField]) ? [String(item[expectedField])] : []));
   const counts = /* @__PURE__ */ new Map();
   for (const route of routes) {
     const routeId = isNonblankUnpadded(route[routeField]) ? String(route[routeField]) : "";
-    if (!expectedIds.has(routeId)) diagnostics.push(diagnostic10(
+    if (!expectedIds.has(routeId)) diagnostics.push(diagnostic11(
       "reference",
       `${label}_ROUTE_IDENTITY_UNKNOWN`,
-      `/${routeField}/${pointerPart4(routeId || "invalid")}`,
+      `/${routeField}/${pointerPart5(routeId || "invalid")}`,
       `${label} route references an identity outside the formal denominator`
     ));
     counts.set(routeId, (counts.get(routeId) ?? 0) + 1);
   }
   for (const expectedId of [...expectedIds].sort(compareCodePoints7)) {
     const count = counts.get(expectedId) ?? 0;
-    if (count !== 1) diagnostics.push(diagnostic10(
+    if (count !== 1) diagnostics.push(diagnostic11(
       "traceability",
       `${label}_ROUTE_IDENTITY_NOT_EXACT`,
-      `/${routeField}/${pointerPart4(expectedId)}`,
+      `/${routeField}/${pointerPart5(expectedId)}`,
       `${label} identity "${expectedId}" must have exactly one explicit route; found ${count}`
     ));
   }
@@ -10775,9 +12931,8 @@ function compileObligations(evidenceGraph, behaviorViews) {
     .../** @type {Diagnostic[]} */
     validateUniqueStableIds(artifact)
   ];
-  const inputs = compilationInputs(graph);
   const diagnostics = [...structuralDiagnostics];
-  const evidence = validateEvidenceInputs(graph, inputs, artifact, diagnostics);
+  const evidence = validateEvidenceInputs(graph, diagnostics);
   const task4Evidence = {
     claimsById: evidence.claimsById,
     factLedger: evidence.facts,
@@ -10785,50 +12940,115 @@ function compileObligations(evidenceGraph, behaviorViews) {
   };
   const viewValidation = validateBehaviorViews(task4Evidence, artifact);
   const interactionAudit = auditInteractionMatrix(artifact);
+  diagnostics.push(
+    .../** @type {Diagnostic[]} */
+    viewValidation.diagnostics,
+    .../** @type {Diagnostic[]} */
+    interactionAudit.diagnostics
+  );
+  const compiledInputs = compileObligationInputs(graph, artifact);
+  const inputs = {
+    contextsByViewId: compiledInputs.contextsByViewId,
+    customObligations: compiledInputs.customResponsibilitySeeds,
+    customResponsibilityPaths: compiledInputs.customResponsibilityPaths,
+    combinationRequests: compiledInputs.combinationRequests,
+    factRoutes: compiledInputs.terminalFactRoutes,
+    terminalFactRoutePaths: compiledInputs.terminalFactRoutePaths,
+    notApplicableReviews: compiledInputs.notApplicableReviews,
+    notApplicableReviewPaths: compiledInputs.notApplicableReviewPaths,
+    sourceRevision: compiledInputs.sourceRevision
+  };
+  diagnostics.push(...compiledInputs.diagnostics);
+  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic11(
+    "reference",
+    "OBLIGATION_SOURCE_REVISION_MISMATCH",
+    "/obligationCompilation/sourceRevision",
+    `compilation source revision ${inputs.sourceRevision} does not match behavior revision ${String(artifact.source_revision)}`
+  ));
   const facts = formalFacts(evidence.facts, evidence.claimsById);
   const factsById = new Map(facts.flatMap((fact) => typeof fact.fact_id === "string" ? [[fact.fact_id, fact]] : []));
   const claimsById = evidence.claimsById;
   const terminalRoutes = terminalFactRoutes(inputs, factsById, claimsById, evidence.relations, diagnostics);
-  diagnostics.push(
-    .../** @type {Diagnostic[]} */
-    viewValidation.diagnostics.filter((item) => !isResolvedTask4FactDiagnostic(item, new Set(terminalRoutes.keys()))),
-    .../** @type {Diagnostic[]} */
-    interactionAudit.diagnostics
-  );
-  const customValidation = validateCustomObligations(
-    inputs,
+  validateInteractionSubjects(
+    /** @type {Record<string, unknown>[]} */
+    interactionAudit.candidates,
+    factsById,
     viewValidation.viewsById,
     claimsById,
     evidence.relations,
     diagnostics
   );
-  assertNoDiagnostics(diagnostics);
   const strategySeeds = compileViewObligations(claimsById, viewValidation.viewsById, inputs, diagnostics);
   const systemObligations = mergeSystemObligations(strategySeeds, diagnostics);
+  const customValidation = validateCustomObligations(
+    inputs,
+    viewValidation.viewsById,
+    factsById,
+    claimsById,
+    evidence.relations,
+    diagnostics
+  );
   const customObligations = mergeCustomObligations(
     customValidation.seeds,
     customValidation.ownerBySeed,
+    inputs.customResponsibilityPaths,
     systemObligations,
     diagnostics
   );
-  const obligations = [...systemObligations, ...customObligations].sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
+  const interactionReconciliation = reconcileInteractionMatrix(
+    artifact,
+    /** @type {Record<string, unknown>[]} */
+    interactionAudit.candidates,
+    viewValidation.viewsById,
+    viewValidation.viewModeledClaims,
+    claimsById
+  );
+  diagnostics.push(.../** @type {Diagnostic[]} */
+  interactionReconciliation.diagnostics);
+  assertNoDiagnostics(diagnostics);
+  const interactionCompilation = reconcileInteractionRoutes(
+    /** @type {Record<string, unknown>[]} */
+    interactionReconciliation.candidates
+  );
+  const combinationCompilation = compileCombinationObligations(
+    inputs,
+    viewValidation.viewsById,
+    factsById,
+    claimsById,
+    /** @type {Record<string, unknown>[]} */
+    viewValidation.factRoutes,
+    evidence.relations,
+    diagnostics
+  );
+  assertNoDiagnostics(diagnostics);
+  const gapObligations = [...terminalRoutes.values()].flatMap((entry) => isObject7(entry.gap) ? [entry.gap] : []).concat(interactionCompilation.gaps);
+  const obligations = [
+    ...systemObligations,
+    ...customObligations,
+    ...combinationCompilation.obligations,
+    ...gapObligations
+  ].sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
+  const customObligationIdsByFactId = indexCustomObligationsByOwnerFact(
+    customValidation.seeds,
+    customValidation.ownerFactIdsBySeed
+  );
   const factRoutes = reconcileFactRoutes(
     facts,
     obligations,
     /** @type {Record<string, unknown>[]} */
     viewValidation.factRoutes,
     terminalRoutes,
+    customObligationIdsByFactId,
+    combinationCompilation.obligationIdsByFactId,
     evidence.relations,
     diagnostics
   );
-  const interactionRoutes = reconcileInteractionRoutes(
-    /** @type {Record<string, unknown>[]} */
-    interactionAudit.candidates
-  );
+  const interactionRoutes = interactionCompilation.routes;
+  assertNoDiagnostics(diagnostics);
   validateRouteIdentity(facts, factRoutes, "fact_id", "fact_id", "FACT", diagnostics);
   validateRouteIdentity(
     /** @type {Record<string, unknown>[]} */
-    interactionAudit.candidates,
+    interactionReconciliation.candidates,
     interactionRoutes,
     "candidate_id",
     "candidate_id",
@@ -10890,7 +13110,7 @@ function appendArray(target, source) {
 function joinArray4(values, separator) {
   return Reflect.apply(NATIVE_ARRAY_JOIN4, values, [separator]);
 }
-function pointerPart5(value) {
+function pointerPart6(value) {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
 }
 function compareCodePoints8(left, right) {
@@ -11006,7 +13226,7 @@ function snapshotBundle(root) {
           append(diagnostics, {
             category: "schema",
             code: "ARRAY_NAMED_PROPERTY_INVALID",
-            path: `${path4}/${pointerPart5(key)}`,
+            path: `${path4}/${pointerPart6(key)}`,
             message: "render input arrays cannot contain named properties"
           });
         } else append(numeric, numericKey);
@@ -11090,12 +13310,12 @@ function snapshotBundle(root) {
         append(diagnostics, {
           category: "schema",
           code: "ACCESSOR_NOT_ALLOWED",
-          path: `${path4}/${pointerPart5(key)}`,
+          path: `${path4}/${pointerPart6(key)}`,
           message: "render input must use own data properties"
         });
       } else append(pending, {
         source: descriptor.value,
-        path: `${path4}/${pointerPart5(key)}`,
+        path: `${path4}/${pointerPart6(key)}`,
         assign(value) {
           NATIVE_DEFINE_PROPERTY5(target, key, { value, enumerable: true, writable: true, configurable: true });
         }
@@ -11353,24 +13573,21 @@ function renderMarkdown(bundle) {
 
 // src/core.mjs
 var INPUT_KEYS = Object.freeze([
-  "schema_version",
-  "source_revision",
-  "compiler_version",
-  "lineage",
   "source_pack",
   "evidence_claims",
   "behavior_views",
-  "obligation_compilation",
-  "case_drafts",
-  "clarification",
-  "limits",
-  "expert_recall_limits"
+  "case_drafts"
 ]);
-var COMPILATION_KEYS = Object.freeze([
-  "contexts_by_view_id",
-  "custom_obligations",
-  "fact_routes",
-  "not_applicable_reviews"
+var OPTIONS_KEYS = Object.freeze([
+  "systemLineage",
+  "clarificationState",
+  "interactionPolicy",
+  "limits"
+]);
+var SYSTEM_LINEAGE_KEYS = Object.freeze([
+  "compiler_version",
+  "lineage",
+  "expert_recall_limits"
 ]);
 var CLARIFICATION_KEYS2 = Object.freeze(["append_batch", "prior_state"]);
 var DIAGNOSTIC_LIMIT4 = 256;
@@ -11440,7 +13657,6 @@ var NATIVE_WEAK_MAP = WeakMap;
 var NATIVE_WEAK_MAP_GET = WeakMap.prototype.get;
 var NATIVE_WEAK_MAP_SET = WeakMap.prototype.set;
 var NATIVE_OBJECT_CREATE = Object.create;
-var NATIVE_OBJECT_ENTRIES = Object.entries;
 var NATIVE_OBJECT_KEYS = Object.keys;
 var NATIVE_REFLECT_APPLY2 = Reflect.apply;
 var NATIVE_REFLECT_OWN_KEYS5 = Reflect.ownKeys;
@@ -11731,7 +13947,7 @@ function intrinsicIntegrityDiagnostic() {
     if (globalArrayDescriptor && NATIVE_HAS_OWN3(globalArrayDescriptor, "value") && globalArrayDescriptor.value === NATIVE_ARRAY && globalSetDescriptor && NATIVE_HAS_OWN3(globalSetDescriptor, "value") && globalSetDescriptor.value === NATIVE_SET && globalMapDescriptor && NATIVE_HAS_OWN3(globalMapDescriptor, "value") && globalMapDescriptor.value === NATIVE_MAP && globalStringDescriptor && NATIVE_HAS_OWN3(globalStringDescriptor, "value") && globalStringDescriptor.value === NATIVE_STRING && globalNumberDescriptor && NATIVE_HAS_OWN3(globalNumberDescriptor, "value") && globalNumberDescriptor.value === NATIVE_NUMBER && globalObjectDescriptor && NATIVE_HAS_OWN3(globalObjectDescriptor, "value") && globalObjectDescriptor.value === NATIVE_OBJECT && globalSymbolDescriptor && NATIVE_HAS_OWN3(globalSymbolDescriptor, "value") && globalSymbolDescriptor.value === NATIVE_SYMBOL && iteratorDescriptor && NATIVE_HAS_OWN3(iteratorDescriptor, "value") && iteratorDescriptor.value === NATIVE_ARRAY_ITERATOR && sortDescriptor && NATIVE_HAS_OWN3(sortDescriptor, "value") && sortDescriptor.value === NATIVE_ARRAY_SORT5 && joinDescriptor && NATIVE_HAS_OWN3(joinDescriptor, "value") && joinDescriptor.value === NATIVE_ARRAY_JOIN5 && zeroDescriptor === void 0 && arrayConstructorDescriptor && NATIVE_HAS_OWN3(arrayConstructorDescriptor, "value") && arrayConstructorDescriptor.value === NATIVE_ARRAY && arraySpeciesDescriptor && NATIVE_HAS_OWN3(arraySpeciesDescriptor, "get") && arraySpeciesDescriptor.get === NATIVE_ARRAY_SPECIES_GET && setIteratorDescriptor && NATIVE_HAS_OWN3(setIteratorDescriptor, "value") && setIteratorDescriptor.value === NATIVE_SET_ITERATOR && setAddDescriptor && NATIVE_HAS_OWN3(setAddDescriptor, "value") && setAddDescriptor.value === NATIVE_SET_ADD && setHasDescriptor && NATIVE_HAS_OWN3(setHasDescriptor, "value") && setHasDescriptor.value === NATIVE_SET_HAS && setDeleteDescriptor && NATIVE_HAS_OWN3(setDeleteDescriptor, "value") && setDeleteDescriptor.value === NATIVE_SET_DELETE && setForEachDescriptor && NATIVE_HAS_OWN3(setForEachDescriptor, "value") && setForEachDescriptor.value === NATIVE_SET_FOR_EACH && mapIteratorDescriptor && NATIVE_HAS_OWN3(mapIteratorDescriptor, "value") && mapIteratorDescriptor.value === NATIVE_MAP_ITERATOR && mapGetDescriptor && NATIVE_HAS_OWN3(mapGetDescriptor, "value") && mapGetDescriptor.value === NATIVE_MAP_GET && mapSetDescriptor && NATIVE_HAS_OWN3(mapSetDescriptor, "value") && mapSetDescriptor.value === NATIVE_MAP_SET2 && mapHasDescriptor && NATIVE_HAS_OWN3(mapHasDescriptor, "value") && mapHasDescriptor.value === NATIVE_MAP_HAS && mapDeleteDescriptor && NATIVE_HAS_OWN3(mapDeleteDescriptor, "value") && mapDeleteDescriptor.value === NATIVE_MAP_DELETE && mapForEachDescriptor && NATIVE_HAS_OWN3(mapForEachDescriptor, "value") && mapForEachDescriptor.value === NATIVE_MAP_FOR_EACH && mapSizeDescriptor && NATIVE_HAS_OWN3(mapSizeDescriptor, "get") && mapSizeDescriptor.get === NATIVE_MAP_SIZE_GET && regexpTestDescriptor && NATIVE_HAS_OWN3(regexpTestDescriptor, "value") && regexpTestDescriptor.value === NATIVE_REGEXP_TEST && regexpExecDescriptor && NATIVE_HAS_OWN3(regexpExecDescriptor, "value") && regexpExecDescriptor.value === NATIVE_REGEXP_EXEC && stringIteratorDescriptor && NATIVE_HAS_OWN3(stringIteratorDescriptor, "value") && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR && stringTrimDescriptor && NATIVE_HAS_OWN3(stringTrimDescriptor, "value") && stringTrimDescriptor.value === NATIVE_STRING_TRIM && stringIncludesDescriptor && NATIVE_HAS_OWN3(stringIncludesDescriptor, "value") && stringIncludesDescriptor.value === NATIVE_STRING_INCLUDES && stringSplitDescriptor && NATIVE_HAS_OWN3(stringSplitDescriptor, "value") && stringSplitDescriptor.value === NATIVE_STRING_SPLIT && stringSymbolSplitDescriptor === void 0) return null;
   } catch {
   }
-  return diagnostic11(
+  return diagnostic12(
     "schema",
     "CORE_INTRINSIC_INVALID",
     "/intrinsics",
@@ -11763,7 +13979,7 @@ function compareCodePoints9(left, right) {
   }
   return leftIndex < left.length ? 1 : rightIndex < right.length ? -1 : 0;
 }
-function diagnostic11(category, code2, path4, message) {
+function diagnostic12(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function diagnosticArray(value) {
@@ -11788,7 +14004,7 @@ function finalizeDiagnostics4(diagnostics) {
   const ordered = sortArray3(mapValuesArray(unique), (left, right) => compareCodePoints9(left.category, right.category) || compareCodePoints9(left.code, right.code) || compareCodePoints9(left.path, right.path) || compareCodePoints9(left.related_id ?? "", right.related_id ?? "") || compareCodePoints9(left.message, right.message));
   if (!overflow) return ordered;
   const retained = sliceArray3(ordered, 0, DIAGNOSTIC_LIMIT4 - 1);
-  pushArray3(retained, diagnostic11(
+  pushArray3(retained, diagnostic12(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
     "/",
@@ -11810,7 +14026,7 @@ function requireClosed2(value, expected, path4, diagnostics) {
   const actualKeys = NATIVE_OBJECT_KEYS(value);
   for (let index = 0; index < actualKeys.length; index += 1) {
     const key = actualKeys[index];
-    if (!setHas(allowed, key)) pushArray3(diagnostics, diagnostic11(
+    if (!setHas(allowed, key)) pushArray3(diagnostics, diagnostic12(
       "schema",
       "CORE_PROPERTY_UNKNOWN",
       `${path4}/${key}`,
@@ -11819,7 +14035,7 @@ function requireClosed2(value, expected, path4, diagnostics) {
   }
   for (let index = 0; index < expected.length; index += 1) {
     const key = expected[index];
-    if (!NATIVE_HAS_OWN3(value, key)) pushArray3(diagnostics, diagnostic11(
+    if (!NATIVE_HAS_OWN3(value, key)) pushArray3(diagnostics, diagnostic12(
       "schema",
       "CORE_PROPERTY_MISSING",
       `${path4}/${key}`,
@@ -11839,7 +14055,7 @@ function records2(value) {
     filterArray4(value, isRecord4)
   ) : [];
 }
-function pointerPart6(value) {
+function pointerPart7(value) {
   let output = "";
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index];
@@ -11867,7 +14083,7 @@ function snapshotOwnData(submitted, rootPath) {
       continue;
     }
     if (!source || typeof source !== "object") {
-      pushArray3(diagnostics, diagnostic11(
+      pushArray3(diagnostics, diagnostic12(
         "schema",
         "CORE_VALUE_INVALID",
         frame.path || "/",
@@ -11891,7 +14107,7 @@ function snapshotOwnData(submitted, rootPath) {
       keys = NATIVE_REFLECT_OWN_KEYS5(descriptors);
       array2 = NATIVE_ARRAY_IS_ARRAY5(source);
     } catch {
-      pushArray3(diagnostics, diagnostic11(
+      pushArray3(diagnostics, diagnostic12(
         "schema",
         "CORE_INPUT_UNREADABLE",
         frame.path || "/",
@@ -11901,7 +14117,7 @@ function snapshotOwnData(submitted, rootPath) {
       continue;
     }
     if (array2 ? prototype !== NATIVE_ARRAY_PROTOTYPE : prototype !== NATIVE_OBJECT_PROTOTYPE && prototype !== null) {
-      pushArray3(diagnostics, diagnostic11(
+      pushArray3(diagnostics, diagnostic12(
         "schema",
         "CORE_PROTOTYPE_INVALID",
         frame.path || "/",
@@ -11913,7 +14129,7 @@ function snapshotOwnData(submitted, rootPath) {
     const stringKeys = [];
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index];
-      if (typeof key === "symbol") pushArray3(diagnostics, diagnostic11(
+      if (typeof key === "symbol") pushArray3(diagnostics, diagnostic12(
         "schema",
         "CORE_SYMBOL_PROPERTY_INVALID",
         frame.path || "/",
@@ -11934,10 +14150,10 @@ function snapshotOwnData(submitted, rootPath) {
           pushArray3(numericKeys, key);
         } else {
           malformed = true;
-          pushArray3(diagnostics, diagnostic11(
+          pushArray3(diagnostics, diagnostic12(
             "schema",
             "CORE_ARRAY_PROPERTY_INVALID",
-            `${frame.path}/${pointerPart6(key)}`,
+            `${frame.path}/${pointerPart7(key)}`,
             "controlled arrays cannot define named properties"
           ));
         }
@@ -11958,7 +14174,7 @@ function snapshotOwnData(submitted, rootPath) {
       }
       if (firstHole >= 0) {
         malformed = true;
-        pushArray3(diagnostics, diagnostic11(
+        pushArray3(diagnostics, diagnostic12(
           "schema",
           "CORE_ARRAY_HOLE",
           `${frame.path}/${firstHole}`,
@@ -11976,7 +14192,7 @@ function snapshotOwnData(submitted, rootPath) {
         const key = numericKeys[index];
         const descriptor = descriptors[key];
         if (!descriptor || !NATIVE_HAS_OWN3(descriptor, "value") || descriptor.enumerable !== true) {
-          pushArray3(diagnostics, diagnostic11(
+          pushArray3(diagnostics, diagnostic12(
             "schema",
             "CORE_DATA_PROPERTY_INVALID",
             `${frame.path}/${key}`,
@@ -12006,17 +14222,17 @@ function snapshotOwnData(submitted, rootPath) {
       const key = stringKeys[keyIndex];
       const descriptor = descriptors[key];
       if (!descriptor || !NATIVE_HAS_OWN3(descriptor, "value") || descriptor.enumerable !== true) {
-        pushArray3(diagnostics, diagnostic11(
+        pushArray3(diagnostics, diagnostic12(
           "schema",
           "CORE_DATA_PROPERTY_INVALID",
-          `${frame.path}/${pointerPart6(key)}`,
+          `${frame.path}/${pointerPart7(key)}`,
           "pure-core input containers require enumerable own data properties"
         ));
         continue;
       }
       pushArray3(pending, {
         source: descriptor.value,
-        path: `${frame.path}/${pointerPart6(key)}`,
+        path: `${frame.path}/${pointerPart7(key)}`,
         assign(value) {
           NATIVE_DEFINE_PROPERTY6(target, key, {
             value,
@@ -12035,85 +14251,115 @@ function normalizeInput(submitted) {
   const captured = snapshotOwnData(submitted, "");
   appendArray2(diagnostics, captured.diagnostics);
   const input = captured.snapshot;
-  if (!isRecord4(input)) return { input: null, diagnostics: [diagnostic11(
+  if (!isRecord4(input)) return { input: null, diagnostics: [diagnostic12(
     "schema",
     "CORE_INPUT_INVALID",
     "/",
     "pure-core input must be a closed plain record"
   )] };
   requireClosed2(input, INPUT_KEYS, "", diagnostics);
-  const sourceRevision = typeof input.source_revision === "number" ? input.source_revision : 0 / 0;
-  if (input.schema_version !== "1.0.0") pushArray3(diagnostics, diagnostic11(
-    "schema",
-    "CORE_SCHEMA_VERSION_INVALID",
-    "/schema_version",
-    "pure core requires schema version 1.0.0"
-  ));
-  if (!numberIsSafeInteger(sourceRevision) || sourceRevision < 0) pushArray3(diagnostics, diagnostic11(
+  const sourcePack = isRecord4(input.source_pack) ? input.source_pack : null;
+  const sourceRevision = sourcePack && typeof sourcePack.source_revision === "number" ? sourcePack.source_revision : 0 / 0;
+  if (!numberIsSafeInteger(sourceRevision) || sourceRevision < 0) pushArray3(diagnostics, diagnostic12(
     "schema",
     "CORE_SOURCE_REVISION_INVALID",
-    "/source_revision",
+    "/source_pack/source_revision",
     "source revision must be a nonnegative safe integer"
   ));
-  if (typeof input.compiler_version !== "string" || input.compiler_version.trim().length === 0 || input.compiler_version !== input.compiler_version.trim()) pushArray3(diagnostics, diagnostic11(
+  return { input, diagnostics };
+}
+function normalizeOptions(submitted) {
+  const diagnostics = [];
+  const captured = snapshotOwnData(submitted, "/options");
+  appendArray2(diagnostics, captured.diagnostics);
+  const options = captured.snapshot;
+  if (!isRecord4(options)) return { options: null, diagnostics: [diagnostic12(
     "schema",
-    "CORE_COMPILER_VERSION_INVALID",
-    "/compiler_version",
-    "compiler version must be nonblank and unpadded"
-  ));
-  if (!isRecord4(input.lineage)) pushArray3(diagnostics, diagnostic11(
+    "CORE_OPTIONS_INVALID",
+    "/options",
+    "pure-core options must be a closed own-data record"
+  )] };
+  requireClosed2(options, OPTIONS_KEYS, "/options", diagnostics);
+  const systemLineage = isRecord4(options.systemLineage) ? options.systemLineage : null;
+  if (!systemLineage) pushArray3(diagnostics, diagnostic12(
     "schema",
-    "CORE_LINEAGE_INVALID",
-    "/lineage",
-    "lineage must be an own-data record"
-  ));
-  const compilation = isRecord4(input.obligation_compilation) ? input.obligation_compilation : null;
-  if (!compilation) pushArray3(diagnostics, diagnostic11(
-    "schema",
-    "CORE_OBLIGATION_COMPILATION_INVALID",
-    "/obligation_compilation",
-    "obligation compilation input must be a closed record"
+    "CORE_SYSTEM_LINEAGE_INVALID",
+    "/options/systemLineage",
+    "system lineage must be a closed own-data record"
   ));
   else {
-    requireClosed2(compilation, COMPILATION_KEYS, "/obligation_compilation", diagnostics);
-    if (!isRecord4(compilation.contexts_by_view_id) || !NATIVE_ARRAY_IS_ARRAY5(compilation.custom_obligations) || !NATIVE_ARRAY_IS_ARRAY5(compilation.fact_routes) || !NATIVE_ARRAY_IS_ARRAY5(compilation.not_applicable_reviews)) pushArray3(diagnostics, diagnostic11(
+    requireClosed2(systemLineage, SYSTEM_LINEAGE_KEYS, "/options/systemLineage", diagnostics);
+    if (typeof systemLineage.compiler_version !== "string" || systemLineage.compiler_version.trim().length === 0 || systemLineage.compiler_version !== systemLineage.compiler_version.trim()) {
+      pushArray3(diagnostics, diagnostic12(
+        "schema",
+        "CORE_COMPILER_VERSION_INVALID",
+        "/options/systemLineage/compiler_version",
+        "compiler version must be nonblank and unpadded"
+      ));
+    }
+    if (!isRecord4(systemLineage.lineage)) pushArray3(diagnostics, diagnostic12(
       "schema",
-      "CORE_OBLIGATION_COMPILATION_INVALID",
-      "/obligation_compilation",
-      "obligation compilation contexts must be a record and remaining fields arrays"
+      "CORE_LINEAGE_INVALID",
+      "/options/systemLineage/lineage",
+      "lineage must be an own-data record"
+    ));
+    if (!NATIVE_ARRAY_IS_ARRAY5(systemLineage.expert_recall_limits)) pushArray3(diagnostics, diagnostic12(
+      "schema",
+      "CORE_LIMITS_INVALID",
+      "/options/systemLineage/expert_recall_limits",
+      "expert recall limits must be an array"
     ));
   }
-  const clarification = isRecord4(input.clarification) ? input.clarification : null;
-  if (!clarification) pushArray3(diagnostics, diagnostic11(
+  const clarification = isRecord4(options.clarificationState) ? options.clarificationState : null;
+  if (!clarification) pushArray3(diagnostics, diagnostic12(
     "schema",
     "CORE_CLARIFICATION_INVALID",
-    "/clarification",
-    "clarification input must be a closed record"
+    "/options/clarificationState",
+    "clarification state must be a closed record"
   ));
-  else requireClosed2(clarification, CLARIFICATION_KEYS2, "/clarification", diagnostics);
-  return { input, diagnostics };
+  else requireClosed2(clarification, CLARIFICATION_KEYS2, "/options/clarificationState", diagnostics);
+  if (!NATIVE_ARRAY_IS_ARRAY5(options.limits)) pushArray3(diagnostics, diagnostic12(
+    "schema",
+    "CORE_LIMITS_INVALID",
+    "/options/limits",
+    "limits must be an array"
+  ));
+  const submittedPolicy = options.interactionPolicy;
+  const interactionPolicy = typeof submittedPolicy === "string" ? submittedPolicy : "";
+  if (!setHas(POLICIES2, interactionPolicy)) pushArray3(diagnostics, diagnostic12(
+    "classification",
+    "INTERACTION_POLICY_INVALID",
+    "/options/interactionPolicy",
+    "pure core accepts only the two frozen internal interaction policies"
+  ));
+  return { options, diagnostics };
 }
 function validateArtifactSchemas(input) {
   const diagnostics = [];
   const artifactsAndSchemas = [
-    [input.source_pack, source_pack_schema_default],
-    [input.evidence_claims, evidence_claims_schema_default],
-    [input.behavior_views, behavior_views_schema_default],
-    [input.case_drafts, case_drafts_schema_default]
+    ["source_pack", input.source_pack, source_pack_schema_default],
+    ["evidence_claims", input.evidence_claims, evidence_claims_schema_default],
+    ["behavior_views", input.behavior_views, behavior_views_schema_default],
+    ["case_drafts", input.case_drafts, case_drafts_schema_default]
   ];
   for (let index = 0; index < artifactsAndSchemas.length; index += 1) {
-    const artifact = artifactsAndSchemas[index][0];
-    const schema = artifactsAndSchemas[index][1];
-    appendArray2(
-      diagnostics,
-      /** @type {Diagnostic[]} */
-      validateAgainstSchema(artifact, schema)
-    );
-    appendArray2(
-      diagnostics,
-      /** @type {Diagnostic[]} */
-      validateUniqueStableIds(artifact)
-    );
+    const name = String(artifactsAndSchemas[index][0]);
+    const artifact = artifactsAndSchemas[index][1];
+    const schema = artifactsAndSchemas[index][2];
+    const artifactDiagnostics2 = [
+      ...validateAgainstSchema(artifact, schema),
+      ...validateUniqueStableIds(artifact)
+    ];
+    for (let diagnosticIndex = 0; diagnosticIndex < artifactDiagnostics2.length; diagnosticIndex += 1) {
+      const item = (
+        /** @type {Diagnostic} */
+        artifactDiagnostics2[diagnosticIndex]
+      );
+      pushArray3(diagnostics, {
+        ...item,
+        path: item.path === "/" ? `/${name}` : `/${name}${item.path}`
+      });
+    }
   }
   const revision = toNumber(input.source_revision);
   const namedArtifacts = [
@@ -12125,7 +14371,7 @@ function validateArtifactSchemas(input) {
   for (let index = 0; index < namedArtifacts.length; index += 1) {
     const name = namedArtifacts[index][0];
     const artifact = namedArtifacts[index][1];
-    if (!isRecord4(artifact) || artifact.source_revision !== revision) pushArray3(diagnostics, diagnostic11(
+    if (!isRecord4(artifact) || artifact.source_revision !== revision) pushArray3(diagnostics, diagnostic12(
       "traceability",
       "CORE_SOURCE_REVISION_MISMATCH",
       `/${name}/source_revision`,
@@ -12143,26 +14389,11 @@ function evidenceContext(input, claimsById, conflicts) {
     /** @type {Record<string, unknown>} */
     input.evidence_claims
   );
-  const compilation = (
-    /** @type {Record<string, unknown>} */
-    input.obligation_compilation
-  );
-  const contexts = (
-    /** @type {Record<string, unknown>} */
-    compilation.contexts_by_view_id
-  );
   return {
     claimsById,
     factLedger: NATIVE_STRUCTURED_CLONE(records2(evidenceClaims.fact_ledger)),
     conflicts: NATIVE_STRUCTURED_CLONE(conflicts),
-    runScope: String(sourcePack.run_scope),
-    obligationCompilation: {
-      sourceRevision: toNumber(input.source_revision),
-      contextsByViewId: makeMap(NATIVE_OBJECT_ENTRIES(NATIVE_STRUCTURED_CLONE(contexts))),
-      factRoutes: NATIVE_STRUCTURED_CLONE(records2(compilation.fact_routes)),
-      notApplicableReviews: NATIVE_STRUCTURED_CLONE(records2(compilation.not_applicable_reviews)),
-      customObligations: NATIVE_STRUCTURED_CLONE(records2(compilation.custom_obligations))
-    }
+    runScope: String(sourcePack.run_scope)
   };
 }
 function scopesIntersect3(left, right) {
@@ -12456,10 +14687,10 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
       selectionCache
     );
     pushArray3(selections, selection);
-    if (selection.count > 1) pushArray3(ambiguityDiagnostics, diagnostic11(
+    if (selection.count > 1) pushArray3(ambiguityDiagnostics, diagnostic12(
       "classification",
       "CORE_SOURCE_CONFLICT_AMBIGUOUS",
-      `/cases/${pointerPart6(String(caseDraft.case_id ?? "unknown"))}/evidence_refs`,
+      `/cases/${pointerPart7(String(caseDraft.case_id ?? "unknown"))}/evidence_refs`,
       "one executable Case cannot select more than one canonical source conflict"
     ));
     if (selection.identity === null) continue;
@@ -12473,10 +14704,10 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
   }
   forEachMap(conflictIdsByObligation, (identities, obligationId) => {
     if (setValuesArray(identities).length <= 1) return;
-    pushArray3(ambiguityDiagnostics, diagnostic11(
+    pushArray3(ambiguityDiagnostics, diagnostic12(
       "classification",
       "CORE_SOURCE_CONFLICT_AMBIGUOUS",
-      `/obligations/${pointerPart6(obligationId)}`,
+      `/obligations/${pointerPart7(obligationId)}`,
       "one formal obligation cannot select different canonical source conflicts"
     ));
   });
@@ -12569,11 +14800,76 @@ function semanticRefs(obligation, reason) {
   if (reason.includes("CONFLICT")) setAdd(refs, "unresolved-source-policy");
   return sortArray3(setValuesArray(refs), compareCodePoints9);
 }
-function bindBlockedRootIdentity(classification, obligations) {
+function blockerInputsByObligation(caseDrafts) {
+  const byObligation = makeMap();
+  const dispositions = records2(caseDrafts.obligation_dispositions);
+  for (let index = 0; index < dispositions.length; index += 1) {
+    const disposition = dispositions[index];
+    if (disposition.status !== "blocker" || !isRecord4(disposition.issue_intent) || !isRecord4(disposition.subject)) continue;
+    const ids = strings2(disposition.affected_obligation_ids);
+    for (let idIndex = 0; idIndex < ids.length; idIndex += 1) mapSet(byObligation, ids[idIndex], {
+      intent: disposition.issue_intent,
+      subject: disposition.subject
+    });
+  }
+  return byObligation;
+}
+function normalizedBlockerSubject2(subject) {
+  if (subject.kind === "facts") return {
+    kind: "facts",
+    fact_ids: sortArray3(strings2(subject.fact_ids), compareCodePoints9)
+  };
+  if (subject.kind === "view-elements") return {
+    kind: "view-elements",
+    view_element_refs: sortArray3(mapArray4(records2(subject.view_element_refs), (ref) => ({
+      view_id: String(ref.view_id),
+      element_id: String(ref.element_id)
+    })), (left, right) => compareCodePoints9(canonicalStringify(left), canonicalStringify(right)))
+  };
+  if (subject.kind === "capabilities") return {
+    kind: "capabilities",
+    capabilities: sortArray3(strings2(subject.capabilities), compareCodePoints9)
+  };
+  return {
+    kind: "evidence-conflict",
+    claim_refs: sortArray3(strings2(subject.claim_refs), compareCodePoints9)
+  };
+}
+function compilerIssueDescriptor(obligation, submitted) {
+  if (obligation.kind === "requirement-gap" && isRecord4(obligation.gap_issue)) {
+    return {
+      missing_type: String(obligation.gap_issue.missing_type),
+      semantic_refs: strings2(obligation.gap_issue.semantic_refs),
+      scope: String(obligation.gap_issue.scope),
+      answerable: obligation.gap_issue.answerable === true,
+      reasons: strings2(obligation.gap_issue.reasons),
+      evidence_refs: strings2(obligation.gap_issue.evidence_refs)
+    };
+  }
+  if (submitted && isRecord4(submitted.intent) && isRecord4(submitted.subject)) return {
+    missing_type: String(submitted.intent.missing_type),
+    semantic_refs: [canonicalStringify(normalizedBlockerSubject2(submitted.subject))],
+    scope: String(submitted.intent.scope),
+    answerable: submitted.intent.answerable === true,
+    reasons: strings2(submitted.intent.reasons),
+    evidence_refs: strings2(submitted.intent.evidence_refs)
+  };
+  return null;
+}
+function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
+  const submittedByObligation = blockerInputsByObligation(caseDrafts);
   const blocked = mapArray4(records2(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
-    const signature = {
+    const compilerIssue = compilerIssueDescriptor(
+      obligation,
+      mapGet(submittedByObligation, String(item.obligation_id))
+    );
+    const signature = compilerIssue ? {
+      missing_type: compilerIssue.missing_type,
+      semantic_refs: compilerIssue.semantic_refs,
+      scope: compilerIssue.scope
+    } : {
       missing_type: missingType(String(item.reason)),
       semantic_refs: semanticRefs(obligation, String(item.reason)),
       scope: String(obligation.scope ?? "")
@@ -12582,23 +14878,28 @@ function bindBlockedRootIdentity(classification, obligations) {
   });
   return { ...classification, blocked };
 }
-function blockedDescriptors(classification, obligations) {
+function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
+  const submittedByObligation = blockerInputsByObligation(caseDrafts);
   return sortArray3(mapArray4(records2(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const reason = String(item.reason);
-    const type = missingType(reason);
-    const scope = String(obligation.scope ?? "unknown");
+    const compilerIssue = compilerIssueDescriptor(
+      obligation,
+      mapGet(submittedByObligation, String(item.obligation_id))
+    );
+    const type = compilerIssue?.missing_type ?? missingType(reason);
+    const scope = compilerIssue?.scope ?? String(obligation.scope ?? "unknown");
     const technical = reason.includes("UNAVAILABLE") || reason.includes("UNKNOWN") || reason.includes("MISSING_CAPABILITY") || reason.includes("MISSING_OBSERVER") || reason.includes("MISSING_CONTROL");
     return {
       obligation_id: String(item.obligation_id),
       missing_type: type,
-      semantic_refs: semanticRefs(obligation, reason),
+      semantic_refs: compilerIssue?.semantic_refs ?? semanticRefs(obligation, reason),
       scope,
       risk: String(item.risk),
       reason,
-      evidence_refs: sortArray3(strings2(item.evidence_refs), compareCodePoints9),
-      answerable: !technical,
+      evidence_refs: sortArray3(compilerIssue?.evidence_refs ?? strings2(item.evidence_refs), compareCodePoints9),
+      answerable: compilerIssue?.answerable ?? !technical,
       question: `Clarification required for ${type} in ${scope}.`
     };
   }), (left, right) => compareCodePoints9(left.obligation_id, right.obligation_id));
@@ -12671,8 +14972,8 @@ function bridgeMatchesRoot(root, bridgeEntry) {
   const reasons = makeSet(strings2(root.reasons));
   return setHas(reasons, "UNRESOLVED_CONFLICT");
 }
-function translateClarificationAppend(clarificationInput2, sourceConflictBridge) {
-  const output = NATIVE_STRUCTURED_CLONE(clarificationInput2);
+function translateClarificationAppend(clarificationInput, sourceConflictBridge) {
+  const output = NATIVE_STRUCTURED_CLONE(clarificationInput);
   if (!isRecord4(output.prior_state) || !isRecord4(output.append_batch)) return output;
   const priorById = makeMap(mapArray4(records2(output.prior_state.root_snapshot_ledger), (item) => [
     String(item.root_issue_id),
@@ -12901,8 +15202,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
     diagnostics: [intrinsicDiagnostic]
   };
   const normalized = normalizeInput(submittedInput);
-  const capturedOptions = snapshotOwnData(options, "/options");
-  appendArray2(normalized.diagnostics, capturedOptions.diagnostics);
+  const normalizedOptions = normalizeOptions(options);
+  appendArray2(normalized.diagnostics, normalizedOptions.diagnostics);
   const postSnapshotIntrinsicDiagnostic = intrinsicIntegrityDiagnostic();
   if (postSnapshotIntrinsicDiagnostic) return {
     status: "need_revision",
@@ -12910,36 +15211,35 @@ function evaluateRevisionCaptured(submittedInput, options) {
     source_revision: 0,
     diagnostics: [postSnapshotIntrinsicDiagnostic]
   };
-  const trustedOptions = capturedOptions.snapshot;
-  const initialRevision = isRecord4(normalized.input) && numberIsSafeInteger(normalized.input.source_revision) ? toNumber(normalized.input.source_revision) : 0;
-  let interactionPolicy = "";
-  if (!isRecord4(trustedOptions)) pushArray3(normalized.diagnostics, diagnostic11(
-    "classification",
-    "INTERACTION_POLICY_INVALID",
-    "/interaction_policy",
-    "pure core options must be a closed own-data record"
-  ));
-  else {
-    requireClosed2(trustedOptions, ["interactionPolicy"], "/options", normalized.diagnostics);
-    const submittedPolicy = trustedOptions.interactionPolicy;
-    interactionPolicy = typeof submittedPolicy === "string" ? submittedPolicy : "";
-    if (!setHas(POLICIES2, interactionPolicy)) pushArray3(normalized.diagnostics, diagnostic11(
-      "classification",
-      "INTERACTION_POLICY_INVALID",
-      "/interaction_policy",
-      "pure core accepts only the two frozen internal interaction policies"
-    ));
-  }
-  if (normalized.diagnostics.length > 0 || !normalized.input) return revisionRequired(
+  const trustedOptions = normalizedOptions.options;
+  const initialRevision = isRecord4(normalized.input) && isRecord4(normalized.input.source_pack) && numberIsSafeInteger(normalized.input.source_pack.source_revision) ? toNumber(normalized.input.source_pack.source_revision) : 0;
+  if (normalized.diagnostics.length > 0 || !normalized.input || !trustedOptions) return revisionRequired(
     "schema",
     initialRevision,
     normalized.diagnostics
   );
-  const input = normalized.input;
-  const sourceRevision = (
-    /** @type {number} */
-    input.source_revision
+  const systemLineage = (
+    /** @type {Record<string, unknown>} */
+    trustedOptions.systemLineage
   );
+  const sourceRevision = initialRevision;
+  const input = (
+    /** @type {Record<string, unknown>} */
+    {
+      ...normalized.input,
+      schema_version: (
+        /** @type {Record<string, unknown>} */
+        normalized.input.source_pack.schema_version
+      ),
+      source_revision: sourceRevision,
+      compiler_version: systemLineage.compiler_version,
+      lineage: systemLineage.lineage,
+      clarification: trustedOptions.clarificationState,
+      limits: trustedOptions.limits,
+      expert_recall_limits: systemLineage.expert_recall_limits
+    }
+  );
+  const interactionPolicy = String(trustedOptions.interactionPolicy);
   try {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired("schema", sourceRevision, schemaDiagnostics);
@@ -12950,17 +15250,12 @@ function evaluateRevisionCaptured(submittedInput, options) {
     const evidenceDiagnostics = diagnosticArray(evidence.diagnostics);
     if (evidenceDiagnostics.length > 0) return revisionRequired("evidence_claims", sourceRevision, evidenceDiagnostics);
     const graph = evidenceContext(input, evidence.claimsById, records2(sourcePolicy.conflicts));
-    const viewValidation = validateBehaviorViews(graph, input.behavior_views);
-    const interactionAudit = auditInteractionMatrix(input.behavior_views);
-    const viewDiagnostics = diagnosticArray(viewValidation.diagnostics);
-    appendArray2(viewDiagnostics, diagnosticArray(interactionAudit.diagnostics));
-    if (viewDiagnostics.length > 0) return revisionRequired("behavior_views", sourceRevision, viewDiagnostics);
     let obligations;
     try {
       obligations = compileObligations(graph, input.behavior_views);
     } catch (error) {
       if (error instanceof ObligationCompilationError) return revisionRequired(
-        error.stage,
+        "behavior_views",
         sourceRevision,
         diagnosticArray(error.diagnostics)
       );
@@ -13019,18 +15314,23 @@ function evaluateRevisionCaptured(submittedInput, options) {
       records2(obligations.obligations),
       graph.claimsById
     );
-    const clarificationInput2 = (
+    const clarificationInput = (
       /** @type {Record<string, unknown>} */
       input.clarification
     );
     const translatedClarification = translateClarificationAppend(
-      clarificationInput2,
+      clarificationInput,
       sourceConflictBridge
     );
     const clarification = evaluateClarification(
       {
         source_revision: sourceRevision,
-        blocked_obligations: blockedDescriptors(classification, records2(obligations.obligations)),
+        blocked_obligations: blockedDescriptors(
+          classification,
+          records2(obligations.obligations),
+          /** @type {Record<string, unknown>} */
+          input.case_drafts
+        ),
         prior_state: translatedClarification.prior_state,
         append_batch: translatedClarification.append_batch,
         semantic_snapshot: semantics
@@ -13059,7 +15359,9 @@ function evaluateRevisionCaptured(submittedInput, options) {
     try {
       const bundleClassification = bindBlockedRootIdentity(
         classification,
-        records2(obligations.obligations)
+        records2(obligations.obligations),
+        /** @type {Record<string, unknown>} */
+        input.case_drafts
       );
       bundle = buildBundle({
         schema_version: "1.0.0",
@@ -13103,7 +15405,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
       diagnostics: []
     };
   } catch {
-    return revisionRequired("core", sourceRevision, [diagnostic11(
+    return revisionRequired("core", sourceRevision, [diagnostic12(
       "classification",
       "CORE_EVALUATION_FAILED",
       "/",
@@ -15196,21 +17498,84 @@ async function loadSchemaRegistry(schemaDirectory2, embeddedManifestDigest2, emb
   return { compilerVersion: manifest.compiler_version, schemaVersion: manifest.schema_version, schemas };
 }
 
-// src/advance-strict.mjs
-var moduleDirectory = path3.dirname(fileURLToPath(import.meta.url));
-var schemaDirectory = path3.resolve(
-  moduleDirectory,
-  true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
-);
-var embeddedManifestDigest = true ? "75c7363283064eb598d474e7329d4da01dcb5b7d429cdea44ec4b6d9b2190891" : void 0;
-var embeddedSchemaVersion = true ? "1.0.0" : void 0;
-var embeddedCompilerVersion = true ? "0.1.0" : void 0;
-var STAGE_SCHEMA = Object.freeze({
+// src/reply-routing.mjs
+var AGENT_STAGE_SCHEMA = Object.freeze({
   source_pack: "source-pack.schema.json",
   evidence_claims: "evidence-claims.schema.json",
   behavior_views: "behavior-views.schema.json",
   case_drafts: "case-drafts.schema.json"
 });
+var INTERNAL_STAGE_OWNER = Object.freeze({
+  source_policy: "source_pack",
+  evidence_claims: "evidence_claims",
+  behavior_views: "behavior_views",
+  test_obligations: "behavior_views",
+  classification: "case_drafts",
+  case_drafts: "case_drafts",
+  coverage: "case_drafts",
+  verification: "case_drafts",
+  render_markdown: "case_drafts",
+  clarification: "source_pack"
+});
+var POINTER_OWNER = Object.freeze({
+  source_pack: "source_pack",
+  evidence_claims: "evidence_claims",
+  behavior_views: "behavior_views",
+  case_drafts: "case_drafts"
+});
+var PROTOCOL_VIOLATION = Object.freeze({
+  kind: "fatal",
+  code: "RUNNER_PROTOCOL_VIOLATION"
+});
+function diagnosticOwner(pointer) {
+  if (!pointer.startsWith("/")) return null;
+  const separator = pointer.indexOf("/", 1);
+  const root = separator === -1 ? pointer.slice(1) : pointer.slice(1, separator);
+  return POINTER_OWNER[root] ?? null;
+}
+function mapInternalRevision(result) {
+  if (!result || typeof result !== "object") return PROTOCOL_VIOLATION;
+  const record2 = (
+    /** @type {Record<string, unknown>} */
+    result
+  );
+  if (record2.status !== "need_revision" || typeof record2.stage !== "string" || !Array.isArray(record2.diagnostics) || record2.diagnostics.length === 0) {
+    return PROTOCOL_VIOLATION;
+  }
+  let stage;
+  if (record2.stage === "schema") {
+    let owner = null;
+    for (const item of record2.diagnostics) {
+      if (!item || typeof item !== "object") return PROTOCOL_VIOLATION;
+      const path4 = (
+        /** @type {Record<string, unknown>} */
+        item.path
+      );
+      if (typeof path4 !== "string") return PROTOCOL_VIOLATION;
+      const candidate = diagnosticOwner(path4);
+      if (!candidate || owner && owner !== candidate) return PROTOCOL_VIOLATION;
+      owner = candidate;
+    }
+    stage = owner;
+  } else stage = INTERNAL_STAGE_OWNER[record2.stage];
+  if (!stage) return PROTOCOL_VIOLATION;
+  return {
+    kind: "need_revision",
+    stage,
+    schema_ref: AGENT_STAGE_SCHEMA[stage]
+  };
+}
+
+// src/advance-strict.mjs
+var moduleDirectory = path3.dirname(realpathSync(fileURLToPath(import.meta.url)));
+var schemaDirectory = path3.resolve(
+  moduleDirectory,
+  true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
+);
+var embeddedManifestDigest = true ? "f0a544b75e70fe4166d915cf0ff76bf26efc9ec88b4e7358fa3767b0a3087519" : void 0;
+var embeddedSchemaVersion = true ? "1.0.0" : void 0;
+var embeddedCompilerVersion = true ? "0.1.0" : void 0;
+var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
 var NATIVE_MAP_GET2 = Map.prototype.get;
@@ -15471,40 +17836,6 @@ function sourceRevisionIntegrity(prior, next) {
   }
   return null;
 }
-function inferredCompilation(behaviorViews) {
-  const contexts = {};
-  const views = arrayIsArray(behaviorViews.views) ? behaviorViews.views : [];
-  for (let viewIndex = 0; viewIndex < views.length; viewIndex += 1) {
-    const view = views[viewIndex];
-    if (!view || typeof view !== "object" || typeof view.view_id !== "string") continue;
-    if (["input-domain", "role", "timing", "integration"].includes(String(view.type))) {
-      contexts[view.view_id] = { responsibilityBindings: [] };
-      continue;
-    }
-    const riskByElementId = {};
-    const requiredOracleRefsByElementId = {};
-    const requiredCapabilitiesByElementId = {};
-    const elements = arrayIsArray(view.elements) ? view.elements : [];
-    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
-      const element = elements[elementIndex];
-      if (!element || typeof element !== "object" || typeof element.element_id !== "string") continue;
-      riskByElementId[element.element_id] = "medium";
-      requiredOracleRefsByElementId[element.element_id] = arrayIsArray(element.source_claim_ids) ? [...element.source_claim_ids] : [];
-      requiredCapabilitiesByElementId[element.element_id] = [];
-    }
-    contexts[view.view_id] = {
-      riskByElementId,
-      requiredOracleRefsByElementId,
-      requiredCapabilitiesByElementId
-    };
-  }
-  return {
-    contexts_by_view_id: contexts,
-    custom_obligations: [],
-    fact_routes: [],
-    not_applicable_reviews: []
-  };
-}
 function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
   const ownersByClaimId = /* @__PURE__ */ new Map();
   function addOwner(claimId, entry, valid) {
@@ -15554,18 +17885,18 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
   return [...claimsById.entries()].filter(([, claim]) => claim.kind === "requirement" || claim.kind === "assumption").sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).flatMap(([claimId]) => {
     const indexedOwners = ownersByClaimId.get(claimId) ?? [];
     const owners = [];
-    let diagnosticOwner = false;
+    let diagnosticOwner2 = false;
     for (const owner of indexedOwners) {
-      if (owner.entry.status === "diagnostic") diagnosticOwner = true;
+      if (owner.entry.status === "diagnostic") diagnosticOwner2 = true;
       else owners.push(owner);
     }
-    if (owners.length === 0 && !diagnosticOwner) return [{
+    if (owners.length === 0 && !diagnosticOwner2) return [{
       category: "traceability",
       code: "NORMATIVE_CLAIM_UNLEDGERED",
       path: `/claims/${encodeURIComponent(claimId)}`,
       message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
     }];
-    if (owners.length !== 1 || diagnosticOwner || !owners[0].valid) return [{
+    if (owners.length !== 1 || diagnosticOwner2 || !owners[0].valid) return [{
       category: "traceability",
       code: "NORMATIVE_CLAIM_LEDGER_INVALID",
       path: `/claims/${encodeURIComponent(claimId)}`,
@@ -15574,15 +17905,6 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
     return [];
   });
 }
-function publicResponsibilityContextDiagnostics(behaviorViews) {
-  const responsibilityTypes = /* @__PURE__ */ new Set(["input-domain", "role", "timing", "integration"]);
-  return (arrayIsArray(behaviorViews.views) ? behaviorViews.views : []).filter((view) => view && typeof view === "object" && typeof view.view_id === "string" && responsibilityTypes.has(String(view.type))).sort((left, right) => String(left.view_id) < String(right.view_id) ? -1 : String(left.view_id) > String(right.view_id) ? 1 : 0).map((view) => ({
-    category: "classification",
-    code: "OBLIGATION_CONTEXT_NOT_CLOSED",
-    path: `/views/${encodeURIComponent(String(view.view_id))}`,
-    message: `view "${String(view.view_id)}" requires responsibility-specific evidence, Oracle, risk, and capability bindings that the frozen public artifact does not provide`
-  }));
-}
 function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevision) {
   const policy = resolveSourcePolicy(sourcePack);
   if (policy.diagnostics.length > 0) return { diagnostics: policy.diagnostics, artifact: null };
@@ -15590,32 +17912,18 @@ function deriveObligations(sourcePack, evidenceClaims, behaviorViews, sourceRevi
   if (evidence.diagnostics.length > 0) return { diagnostics: evidence.diagnostics, artifact: null };
   const evidenceDiagnostics = adapterEvidenceDiagnostics(evidenceClaims, evidence.claimsById);
   if (evidenceDiagnostics.length > 0) return { diagnostics: evidenceDiagnostics, artifact: null };
-  const responsibilityDiagnostics = publicResponsibilityContextDiagnostics(behaviorViews);
-  if (responsibilityDiagnostics.length > 0) return {
-    diagnostics: responsibilityDiagnostics,
-    artifact: null
-  };
-  const compilation = inferredCompilation(behaviorViews);
   const graph = {
     claimsById: evidence.claimsById,
     factLedger: structuredClone(arrayIsArray(evidenceClaims.fact_ledger) ? evidenceClaims.fact_ledger : []),
     conflicts: structuredClone(arrayIsArray(policy.conflicts) ? policy.conflicts : []),
-    runScope: String(sourcePack.run_scope),
-    obligationCompilation: {
-      sourceRevision,
-      contextsByViewId: new Map(Object.entries(compilation.contexts_by_view_id)),
-      factRoutes: [],
-      notApplicableReviews: [],
-      customObligations: []
-    }
+    runScope: String(sourcePack.run_scope)
   };
   try {
-    return { diagnostics: [], artifact: compileObligations(graph, behaviorViews), compilation };
+    return { diagnostics: [], artifact: compileObligations(graph, behaviorViews) };
   } catch (error) {
     if (error instanceof ObligationCompilationError) return {
       diagnostics: error.diagnostics,
-      artifact: null,
-      compilation
+      artifact: null
     };
     throw error;
   }
@@ -15641,40 +17949,6 @@ function appendBatch(previous, current) {
   return {
     decision_records: structuredClone(decisions.slice(previousDecisions.length)),
     clarification_events: structuredClone(events.slice(previousEvents.length))
-  };
-}
-async function clarificationInput(runDirectory, sourceRevision, sourcePack) {
-  const sameRevision = await guardedAwait(readJsonIfPresent(
-    runDirectory,
-    clarificationStatePath(runDirectory, sourceRevision)
-  ));
-  if (sameRevision) return {
-    prior_state: sameRevision.value,
-    append_batch: { decision_records: [], clarification_events: [] }
-  };
-  if (sourceRevision === 0) return {
-    prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
-    append_batch: { decision_records: [], clarification_events: [] }
-  };
-  const previousSource = await guardedAwait(readJsonIfPresent(runDirectory, acceptedPath(
-    runDirectory,
-    sourceRevision - 1,
-    "source_pack"
-  )));
-  const previousState = await guardedAwait(readJsonIfPresent(runDirectory, clarificationStatePath(
-    runDirectory,
-    sourceRevision - 1
-  )));
-  return {
-    prior_state: previousState?.value ?? initialClarificationState(sourceRevision - 1, previousSource ? maximumEventSequence(
-      /** @type {Record<string, unknown>} */
-      previousSource.value
-    ) : 0),
-    append_batch: previousSource ? appendBatch(
-      /** @type {Record<string, unknown>} */
-      previousSource.value,
-      sourcePack
-    ) : { decision_records: [], clarification_events: [] }
   };
 }
 function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2) {
@@ -15713,14 +17987,87 @@ async function acceptedDigests(runDirectory, sourceRevision) {
   if (obligations) values.test_obligations = obligations.digest;
   return values;
 }
-function externalStage(stage) {
-  if (stage === "source_policy") return "source_pack";
-  if (stage === "evidence_claims") return "evidence_claims";
-  if (stage === "behavior_views" || stage === "test_obligations") return "behavior_views";
-  return "case_drafts";
+function evaluateAdapterRevision(artifacts, clarification, registry) {
+  const sourcePack = artifacts.source_pack;
+  const caseDrafts = artifacts.case_drafts;
+  return (
+    /** @type {any} */
+    evaluateRevision(artifacts, {
+      systemLineage: {
+        compiler_version: registry.compilerVersion,
+        lineage: {
+          source_digest: digest(sourcePack),
+          case_draft_digest: digest(caseDrafts)
+        },
+        expert_recall_limits: ["Expert recall is benchmark-only."]
+      },
+      clarificationState: clarification,
+      interactionPolicy: "pause_for_clarification",
+      limits: ["Compilation is limited to the accepted immutable revision."]
+    })
+  );
+}
+function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prior) {
+  if (sourceRevision === 0) return null;
+  if (!prior) return fatalReply(
+    "RUN_INTEGRITY_ERROR",
+    "The prior accepted source revision is unavailable."
+  );
+  const appended = appendBatch(prior.source_pack, sourcePack);
+  if (!prior.complete) {
+    const diagnostics = [];
+    if (appended.decision_records.length > 0) diagnostics.push({
+      category: "classification",
+      code: "PRIOR_REVISION_INCOMPLETE",
+      path: "/decision_records",
+      message: "A Decision append requires a complete prior clarification lifecycle."
+    });
+    if (appended.clarification_events.length > 0) diagnostics.push({
+      category: "classification",
+      code: "PRIOR_REVISION_INCOMPLETE",
+      path: "/clarification_events",
+      message: "A clarification event append requires a complete prior clarification lifecycle."
+    });
+    if (diagnostics.length === 0) diagnostics.push({
+      category: "classification",
+      code: "PRIOR_REVISION_INCOMPLETE",
+      path: "/source_revision",
+      message: "A higher source revision requires a complete prior accepted revision."
+    });
+    return { kind: "need_revision", diagnostics };
+  }
+  const priorArtifacts = {};
+  for (const stage of ["evidence_claims", "behavior_views", "case_drafts"]) priorArtifacts[stage] = {
+    .../** @type {Record<string, unknown>} */
+    prior.artifacts[stage],
+    source_revision: sourceRevision
+  };
+  const clarification = { prior_state: prior.state, append_batch: appended };
+  const caseDrafts = priorArtifacts.case_drafts;
+  const result = evaluateAdapterRevision({
+    source_pack: sourcePack,
+    evidence_claims: priorArtifacts.evidence_claims,
+    behavior_views: priorArtifacts.behavior_views,
+    case_drafts: caseDrafts
+  }, clarification, registry);
+  if (result.status === "finished" || result.status === "need_user_answers") return null;
+  if (result.status !== "need_revision") return fatalReply(
+    "RUNNER_PROTOCOL_VIOLATION",
+    "Pure revision evaluation returned an unrecognized clarification result."
+  );
+  const route = mapInternalRevision(result);
+  if (route.kind === "fatal") return fatalReply(
+    route.code,
+    "Pure revision diagnostics have no unique Agent-writable artifact owner."
+  );
+  if (route.stage !== "source_pack") return fatalReply(
+    "RUN_INTEGRITY_ERROR",
+    "Prior accepted artifacts cannot be reused to validate this source revision."
+  );
+  return { kind: "need_revision", diagnostics: result.diagnostics };
 }
 async function acceptedRunIntegrity(runDirectory, revisions, registry) {
-  if (revisions.length === 0) return null;
+  if (revisions.length === 0) return { kind: "accepted_context", active: null };
   for (let index = 0; index < revisions.length; index += 1) {
     if (revisions[index] !== index) return fatalReply(
       "RUN_INTEGRITY_ERROR",
@@ -15728,8 +18075,15 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     );
   }
   let previousSource = null;
+  let previousState = null;
+  let previousComplete = true;
+  let active = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
     const sourceRevision = revisions[revisionIndex];
+    if (sourceRevision > 0 && !previousComplete) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "A higher accepted source revision cannot follow an incomplete prior revision."
+    );
     const sourceArtifact = await guardedAwait(readJson(
       runDirectory,
       acceptedPath(runDirectory, sourceRevision, "source_pack")
@@ -15765,7 +18119,6 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     let evidenceClaims = null;
     let behaviorViews = null;
     let caseDrafts = null;
-    let compilation = null;
     let missingEarlierStage = false;
     for (const stage of ["evidence_claims", "behavior_views", "case_drafts"]) {
       const typedStage = (
@@ -15818,42 +18171,70 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
           "RUN_INTEGRITY_ERROR",
           "Accepted behavior_views failed deterministic semantic validation."
         );
-        compilation = /** @type {Record<string, unknown>} */
-        derived.compilation;
       } else caseDrafts = record2;
     }
+    const clarificationInput = sourceRevision === 0 ? {
+      prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
+      append_batch: { decision_records: [], clarification_events: [] }
+    } : {
+      prior_state: previousState,
+      append_batch: appendBatch(
+        /** @type {Record<string, unknown>} */
+        previousSource,
+        sourcePack
+      )
+    };
     if (caseDrafts) {
-      const clarification = await guardedAwait(
-        clarificationInput(runDirectory, sourceRevision, sourcePack)
-      );
-      const replay = (
-        /** @type {any} */
-        evaluateRevision({
-          schema_version: "1.0.0",
-          source_revision: sourceRevision,
-          compiler_version: registry.compilerVersion,
-          lineage: {
-            source_digest: digest(sourcePack),
-            case_draft_digest: digest(caseDrafts)
-          },
-          source_pack: sourcePack,
-          evidence_claims: evidenceClaims,
-          behavior_views: behaviorViews,
-          obligation_compilation: compilation,
-          case_drafts: caseDrafts,
-          clarification,
-          limits: ["Compilation is limited to the accepted immutable revision."],
-          expert_recall_limits: ["Expert recall is benchmark-only."]
-        }, { interactionPolicy: "pause_for_clarification" })
-      );
-      if (replay.status === "need_revision") return fatalReply(
+      const artifacts = {
+        source_pack: sourcePack,
+        evidence_claims: (
+          /** @type {Record<string, unknown>} */
+          evidenceClaims
+        ),
+        behavior_views: (
+          /** @type {Record<string, unknown>} */
+          behaviorViews
+        ),
+        case_drafts: caseDrafts
+      };
+      const replay = evaluateAdapterRevision(artifacts, clarificationInput, registry);
+      if (replay.status !== "finished" && replay.status !== "need_user_answers" || !replay.clarification_state || typeof replay.clarification_state !== "object") return fatalReply(
         "RUN_INTEGRITY_ERROR",
         "Accepted complete revision failed deterministic semantic replay."
       );
+      const state = (
+        /** @type {Record<string, unknown>} */
+        replay.clarification_state
+      );
+      const statePath = clarificationStatePath(runDirectory, sourceRevision);
+      const storedState = await guardedAwait(readJsonIfPresent(runDirectory, statePath));
+      if (storedState && canonicalStringify(storedState.value) !== canonicalStringify(state)) return fatalReply(
+        "RUN_INTEGRITY_ERROR",
+        "Stored clarification state does not match deterministic accepted-artifact replay."
+      );
+      if (!storedState) await guardedAwait(atomicWriteJson(runDirectory, statePath, state));
+      previousState = state;
+      previousComplete = true;
+      active = {
+        complete: true,
+        source_pack: sourcePack,
+        artifacts,
+        state,
+        clarification_input: clarificationInput,
+        result: replay
+      };
+    } else {
+      previousState = null;
+      previousComplete = false;
+      active = {
+        complete: false,
+        source_pack: sourcePack,
+        clarification_input: clarificationInput
+      };
     }
     previousSource = sourcePack;
   }
-  return null;
+  return { kind: "accepted_context", active };
 }
 async function advanceStrictExclusive(runDirectory) {
   if (!runStoreIntrinsicsIntact()) return fatalReply(
@@ -15885,10 +18266,14 @@ async function advanceStrictExclusive(runDirectory) {
         await guardedAwait2(() => recoverStagingClaims(runDirectory));
         await guardedAwait2(() => cleanupTemporaryFiles(runDirectory));
         let revisions = await guardedAwait2(() => acceptedSourceRevisions(runDirectory));
-        const acceptedIntegrity = await guardedAwait2(
+        const acceptedAudit = await guardedAwait2(
           () => acceptedRunIntegrity(runDirectory, revisions, registry)
         );
-        if (acceptedIntegrity) return acceptedIntegrity;
+        if ("status" in acceptedAudit) return acceptedAudit;
+        const acceptedContext = (
+          /** @type {any} */
+          acceptedAudit
+        );
         let sourceCandidate = await guardedAwait2(() => stagedArtifact(
           runDirectory,
           "source_pack",
@@ -15990,6 +18375,20 @@ async function advanceStrictExclusive(runDirectory) {
             sourceCandidate.value,
             sourcePolicy.diagnostics
           );
+          const appendValidation = candidateRecord ? validateSourceRevisionAppend(
+            candidateRevision,
+            candidateRecord,
+            registry,
+            acceptedContext.active
+          ) : null;
+          if (appendValidation && "status" in appendValidation && appendValidation.status === "fatal") return appendValidation;
+          if (appendValidation && "kind" in appendValidation && appendValidation.kind === "need_revision") return revisionReply(
+            runDirectory,
+            "source_pack",
+            candidateRevision,
+            sourceCandidate.value,
+            appendValidation.diagnostics
+          );
           await guardedAwait2(() => promoteArtifact(
             runDirectory,
             candidateRevision,
@@ -15997,6 +18396,30 @@ async function advanceStrictExclusive(runDirectory) {
             sourceCandidate.value,
             sourceCandidate
           ));
+          acceptedContext.active = {
+            complete: false,
+            source_pack: (
+              /** @type {Record<string, unknown>} */
+              sourceCandidate.value
+            ),
+            clarification_input: candidateRevision === 0 ? {
+              prior_state: initialClarificationState(
+                0,
+                maximumEventSequence(
+                  /** @type {Record<string, unknown>} */
+                  sourceCandidate.value
+                )
+              ),
+              append_batch: { decision_records: [], clarification_events: [] }
+            } : {
+              prior_state: acceptedContext.active.state,
+              append_batch: appendBatch(
+                acceptedContext.active.source_pack,
+                /** @type {Record<string, unknown>} */
+                sourceCandidate.value
+              )
+            }
+          };
           const sourceDigests = await guardedAwait2(() => acceptedDigests(runDirectory, candidateRevision));
           await guardedAwait2(() => writeCheckpoint(runDirectory, checkpoint(
             candidateRevision,
@@ -16234,47 +18657,58 @@ async function advanceStrictExclusive(runDirectory) {
             "Accepted case_drafts failed deterministic integrity validation."
           );
         }
-        const compilation = derived.compilation ?? inferredCompilation(
-          /** @type {Record<string, unknown>} */
-          accepted.behavior_views
-        );
-        const clarification = await guardedAwait2(
-          () => clarificationInput(runDirectory, sourceRevision, sourcePack)
-        );
-        const result = (
-          /** @type {any} */
-          evaluateRevision({
-            schema_version: "1.0.0",
-            source_revision: sourceRevision,
-            compiler_version: registry.compilerVersion,
-            lineage: {
-              source_digest: digest(sourcePack),
-              case_draft_digest: digest(caseArtifact.value)
-            },
-            source_pack: sourcePack,
-            evidence_claims: accepted.evidence_claims,
-            behavior_views: accepted.behavior_views,
-            obligation_compilation: compilation,
-            case_drafts: caseArtifact.value,
-            clarification,
-            limits: ["Compilation is limited to the accepted immutable revision."],
-            expert_recall_limits: ["Expert recall is benchmark-only."]
-          }, { interactionPolicy: "pause_for_clarification" })
+        const activeContext = acceptedContext.active;
+        if (!activeContext || activeContext.source_pack.source_revision !== sourceRevision) {
+          return fatalReply(
+            "RUN_INTEGRITY_ERROR",
+            "Accepted lifecycle context does not match the active revision."
+          );
+        }
+        const evaluationArtifacts = {
+          source_pack: sourcePack,
+          evidence_claims: (
+            /** @type {Record<string, unknown>} */
+            accepted.evidence_claims
+          ),
+          behavior_views: (
+            /** @type {Record<string, unknown>} */
+            accepted.behavior_views
+          ),
+          case_drafts: (
+            /** @type {Record<string, unknown>} */
+            caseArtifact.value
+          )
+        };
+        const result = !caseFromStaging && activeContext.complete ? activeContext.result : evaluateAdapterRevision(
+          evaluationArtifacts,
+          activeContext.clarification_input,
+          registry
         );
         if (result.status === "need_revision") {
           if (!caseFromStaging) return fatalReply(
             "RUN_INTEGRITY_ERROR",
             "Accepted complete revision no longer passes deterministic evaluation."
           );
+          const route = mapInternalRevision(result);
+          if (route.kind === "fatal") return fatalReply(
+            route.code,
+            "Pure revision diagnostics have no unique Agent-writable artifact owner."
+          );
           const stage = (
             /** @type {keyof typeof STAGE_SCHEMA} */
-            externalStage(result.stage)
+            route.stage
           );
+          const replyArtifacts = {
+            source_pack: sourcePack,
+            evidence_claims: accepted.evidence_claims,
+            behavior_views: accepted.behavior_views,
+            case_drafts: caseArtifact.value
+          };
           return revisionReply(
             runDirectory,
             stage,
             sourceRevision,
-            caseArtifact.value,
+            replyArtifacts[stage],
             result.diagnostics
           );
         }
@@ -16399,11 +18833,21 @@ function advanceStrict(runDirectory) {
 }
 
 // src/entry.mjs
+function fatalReply2(code2, message) {
+  return {
+    status: "fatal",
+    diagnostics: [{ category: "reference", code: code2, message }]
+  };
+}
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
     const compilerVersion = true ? "0.1.0" : "0.1.0";
-    const reply = nodeMajor >= 20 ? compilerVersion.length > 0 ? await advanceStrict(process.argv[2] ?? "") : {
+    const userArguments = process.argv.slice(2);
+    const reply = userArguments.length !== 1 ? fatalReply2(
+      "RUNNER_ARGUMENTS_INVALID",
+      "The private runner accepts exactly one absolute run directory argument."
+    ) : nodeMajor >= 20 ? compilerVersion.length > 0 ? await advanceStrict(userArguments[0]) : {
       status: "fatal",
       diagnostics: [{
         category: "reference",
@@ -16427,4 +18871,13 @@ async function main() {
 `);
   }
 }
-await main();
+var directExecution = false;
+try {
+  directExecution = typeof process.argv[1] === "string" && pathToFileURL(realpathSync2(process.argv[1])).href === pathToFileURL(realpathSync2(fileURLToPath2(import.meta.url))).href;
+} catch {
+  directExecution = false;
+}
+if (directExecution) await main();
+export {
+  advanceStrict
+};

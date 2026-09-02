@@ -1,4 +1,4 @@
 interface:
   display_name: "高精度测试用例生成"
-  short_description: "从 PRD 生成高准确、高覆盖且可追溯的人工功能测试用例"
-  default_prompt: "使用 $generate-test-cases 根据这份 PRD 生成有依据、可执行的测试用例。"
+  short_description: "从 PRD、需求文档或模块说明生成可追溯的人工功能测试用例"
+  default_prompt: "使用 $generate-test-cases 根据 PRD/module description/module-description、需求文档、模块说明、功能变更、规则变更、验收标准、交互说明、接口契约或粘贴需求，生成人工功能测试用例、测试点和测试场景；不用于 Playwright/浏览器 E2E、API automation/API 自动化/接口自动化、单元测试代码生成或仅代码审查/code-review-only。"

@@ -2,6 +2,12 @@
 
 Clarify only after the complete A–G analysis. Merge current fresh answerable root issues into one risk-ordered set; do not ask per Case or impose a fixed total round count.
 
+Read `references/clarification-policy.md` before writing any higher Source Pack revision. On context recovery, resume the same canonical absolute run directory, re-invoke the runner first, and never guess the stage from chat history or files. Clarification, delivery, reopen, and unresolved-business-fact supplements append to that same run.
+
+If the original PRD, any supplementary source, or the material task scope changes, return `NEW_RUN_REQUIRED` and preserve the old run. Create or select a sibling private run only for that actual user source or scope change. A path spelling containing `..` that resolves to the frozen directory is the same run, not a sibling.
+
+Only an answerable, open/fresh, and unsuppressed compiler root is eligible for a question. Non-answerable compiler-owned gaps remain Blocked with their recovery guidance and never become questions. Copy terminal-fact, interaction, and case-blocker root IDs exactly from the runner reply into a Decision or `reopen_root_issues` event. Never recompute, infer, or mint those IDs from wording, evidence, risk, or affected Test Points.
+
 ## Present one convergent set
 
 For each returned root issue show the missing rule or capability, scope, affected critical/high/medium/low counts, and a short answer form. Ask every current fresh root in the returned reply. Technical or environmental blockers that a user answer cannot resolve remain Blocked without becoming business questions.
@@ -24,6 +30,8 @@ Offer these answer natures:
 Create Decision Records from business answers. Preserve question and root IDs, affected obligation IDs, confirmer, time, answer, disposition, authority/effective scope, evidence reference and level. Decision Records are append-only and apply only to their declared scope.
 
 Use one monotonically increasing clarification event sequence across decisions and controls. Apply one user response as one append group and create exactly one new Source Pack revision.
+
+Keep the candidate revision in staging until the compiler validates the complete append against the prior clarification lifecycle. A rejected Decision, delivery, or reopen event must remain correctable at the same staged revision and must not create an accepted revision or advance the checkpoint.
 
 ## Deliver now without fabricating answers
 

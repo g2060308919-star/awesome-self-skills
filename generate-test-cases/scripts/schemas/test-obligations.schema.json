@@ -1,9 +1,102 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "test-obligations.schema.json", "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test-obligations.schema.json",
+  "type": "object",
   "required": ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
-  "properties": { "schema_version": { "const": "1.0.0" }, "source_revision": { "type": "integer", "minimum": 0 },
-    "obligations": { "type": "array", "items": { "type": "object", "required": ["obligation_id", "kind", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"], "properties": { "obligation_id": { "type": "string", "minLength": 1 }, "kind": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] }, "risk": { "enum": ["critical", "high", "medium", "low"] }, "scope": { "type": "string", "minLength": 1 }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }, "view_element_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "required_oracle_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true } }, "additionalProperties": false } },
-    "fact_routes": { "type": "array", "items": { "oneOf": [ { "type": "object", "required": ["fact_id", "route_type", "obligation_ids"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "obligations" }, "obligation_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false }, { "type": "object", "required": ["fact_id", "route_type", "blocker_root_issue_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "blocked" }, "blocker_root_issue_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, { "type": "object", "required": ["fact_id", "route_type", "not_applicable_claim_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "not_applicable" }, "not_applicable_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false } ] } },
-    "interaction_routes": { "type": "array", "items": { "oneOf": [ { "type": "object", "required": ["candidate_id", "route_type", "formal_view_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "formal-view" }, "formal_view_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, { "type": "object", "required": ["candidate_id", "route_type", "blocker_root_issue_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "blocked" }, "blocker_root_issue_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, { "type": "object", "required": ["candidate_id", "route_type", "exploratory_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "exploratory" }, "exploratory_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false } ] } }
-  }, "additionalProperties": false
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "source_revision": { "type": "integer", "minimum": 0 },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"],
+            "properties": {
+              "obligation_id": { "type": "string", "minLength": 1 },
+              "kind": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] },
+              "caseable": { "const": true },
+              "risk": { "enum": ["critical", "high", "medium", "low"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "view_element_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_oracle_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "combination_vector": {
+                "type": "object",
+                "required": ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+                "properties": {
+                  "policy_id": { "const": "twise-candidate-cap-v1" },
+                  "strength": { "type": "integer", "minimum": 2 },
+                  "owner": {
+                    "type": "object",
+                    "required": ["view_id", "fact_ids", "view_element_refs"],
+                    "properties": {
+                      "view_id": { "type": "string", "minLength": 1 },
+                      "fact_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+                      "view_element_refs": { "type": "array", "items": { "type": "object", "required": ["view_id", "element_id"], "properties": { "view_id": { "type": "string", "minLength": 1 }, "element_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 1, "uniqueItems": true }
+                    },
+                    "additionalProperties": false
+                  },
+                  "assignments": { "type": "array", "items": { "type": "object", "required": ["parameter_id", "value_id", "evidence_claim_id"], "properties": { "parameter_id": { "type": "string", "minLength": 1 }, "value_id": { "type": "string", "minLength": 1 }, "evidence_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 3, "uniqueItems": true },
+                  "forbid_evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "gap_issue"],
+            "properties": {
+              "obligation_id": { "type": "string", "minLength": 1 },
+              "kind": { "const": "requirement-gap" },
+              "caseable": { "const": false },
+              "risk": { "enum": ["critical", "high", "medium", "low"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "view_element_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_oracle_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "gap_issue": {
+                "type": "object",
+                "required": ["root_issue_id", "root_issue_key", "missing_type", "semantic_refs", "scope", "answerable", "reasons", "evidence_refs"],
+                "properties": {
+                  "root_issue_id": { "type": "string", "minLength": 1 },
+                  "root_issue_key": { "type": "string", "minLength": 1 },
+                  "missing_type": { "type": "string", "minLength": 1 },
+                  "semantic_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+                  "scope": { "type": "string", "minLength": 1 },
+                  "answerable": { "type": "boolean" },
+                  "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                  "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "fact_routes": {
+      "type": "array",
+      "items": { "oneOf": [
+        { "type": "object", "required": ["fact_id", "route_type", "obligation_ids"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "obligations" }, "obligation_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false },
+        { "type": "object", "required": ["fact_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "blocked" }, "blocker_root_issue_id": { "type": "string", "minLength": 1 }, "gap_obligation_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["fact_id", "route_type", "not_applicable_claim_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "not_applicable" }, "not_applicable_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+      ] }
+    },
+    "interaction_routes": {
+      "type": "array",
+      "items": { "oneOf": [
+        { "type": "object", "required": ["candidate_id", "route_type", "formal_view_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "formal-view" }, "formal_view_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["candidate_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "blocked" }, "blocker_root_issue_id": { "type": "string", "minLength": 1 }, "gap_obligation_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["candidate_id", "route_type", "exploratory_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "exploratory" }, "exploratory_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+      ] }
+    }
+  },
+  "additionalProperties": false
 }
