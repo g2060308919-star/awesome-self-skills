@@ -377,6 +377,39 @@ test('installed t-wise risk and forbid evidence fail closed unless strong, relat
     } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
   });
 
+  await t.test('an E2 generic owner descendant cannot masquerade as joint tuple proof', async () => {
+    const revision = combinationRevision({ constraints: [{
+      kind: 'forbid', assignments: [
+        { parameter_id: 'a', value_id: '1' }, { parameter_id: 'b', value_id: '1' }
+      ], evidence_refs: ['claim_generic_owner_child']
+    }] });
+    const genericClaim = {
+      claim_id: 'claim_generic_owner_child', claim_form: 'derived', level: 'E2',
+      kind: 'model-element', scope: 'checkout', value: 'checkout accepted',
+      source_locator_ids: ['locator_checkout'], derivation_kind: 'decision-table-instance',
+      derivation_target: 'model-element', parent_claim_ids: ['claim_checkout'],
+      parameters: { table_id: 'generic-checkout-model' },
+      rule_input: { conditions: ['checkout'], outcome: 'checkout accepted' }
+    };
+    const firstValueIndex = revision.evidence_claims.claims.findIndex(
+      (/** @type {any} */ claim) => /^claim_[abc]_[01]$/.test(String(claim.claim_id))
+    );
+    revision.evidence_claims.claims.splice(firstValueIndex, 0, genericClaim);
+    for (const claim of revision.evidence_claims.claims) {
+      if (/^claim_[abc]_[01]$/.test(String(claim.claim_id))) {
+        claim.parent_claim_ids = ['claim_generic_owner_child'];
+      }
+    }
+    const { run } = await installedCompilation(revision);
+    try {
+      assert.equal(run.reply.status, 'need_revision', JSON.stringify(run.reply));
+      assert.equal(run.reply.stage, 'behavior_views', JSON.stringify(run.reply));
+      assert.equal(run.reply.diagnostics.some(
+        (/** @type {any} */ item) => item.code === 'TWISE_FORBID_TARGET_UNCLOSED'
+      ), true, JSON.stringify(run.reply));
+    } finally { await rm(run.runDirectory, { recursive: true, force: true }); }
+  });
+
   await t.test('a multi-assignment forbid must close every selected-value target', async () => {
     const revision = combinationRevision({ constraints: [{
       kind: 'forbid', assignments: [

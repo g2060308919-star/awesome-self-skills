@@ -1661,29 +1661,40 @@ function compileCombinationObligations(
         valueClaimsByParameter.get(parameter)?.get(value) ?? ''
       ));
       const evidenceRefs = stringArray(constraint.evidence_refs);
+      /** @param {string} claimId @param {string} targetId */
+      const forbidProofClosesTarget = (claimId, targetId) => {
+        if (!targetId || claimId === targetId) return false;
+        const claim = claimsById.get(claimId);
+        if (claim?.level === 'E2') {
+          return reachesClaim(relations.parentsById, claimId, targetId);
+        }
+        if (claim?.level === 'E3') {
+          return !canonicalOwnerRoots.includes(claimId)
+            && reachesClaim(relations.parentsById, targetId, claimId);
+        }
+        return false;
+      };
       for (const [refIndex, claimId] of evidenceRefs.entries()) {
         forbidEvidenceRefs.add(claimId);
         const evidenceValid = validateClaim(
           claimId, `${path}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
           { strong: true, skipRelation: true }
         );
-        const closesTuple = !canonicalOwnerRoots.includes(claimId)
-          && assignedRoots.every((targetId) => (
-            targetId.length > 0 && claimsDirectionallyRelated(relations, claimId, targetId)
-          ));
+        const closesTuple = assignedRoots.every(
+          (targetId) => forbidProofClosesTarget(claimId, targetId)
+        );
         if (evidenceValid && !closesTuple) {
           diagnostics.push(diagnostic(
             'traceability', 'TWISE_EVIDENCE_UNRELATED',
             `${path}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
-            'each forbid proof must close the full selected-value tuple and cannot reuse a generic owner root'
+            'each forbid proof must close the full selected-value tuple in the evidence-level direction'
           ));
           valid = false;
         }
       }
       for (const [assignmentIndex, targetId] of assignedRoots.entries()) {
         if (!targetId || evidenceRefs.some((claimId) => (
-          canonicalOwnerRoots.includes(claimId)
-            || !claimsDirectionallyRelated(relations, claimId, targetId)
+          !forbidProofClosesTarget(claimId, targetId)
         ))) {
           diagnostics.push(diagnostic(
             'traceability', 'TWISE_FORBID_TARGET_UNCLOSED',
