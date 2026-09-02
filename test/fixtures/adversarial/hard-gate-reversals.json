@@ -11,5 +11,6 @@
   { "gate": "E2-cycle", "expected": "E2_CYCLE" },
   { "gate": "revision-in-stable-ID", "expected": "same-id" },
   { "gate": "old-checkpoint-winning", "expected": "highest-valid-accepted-revision" },
-  { "gate": "record_only-lowering-gates", "expected": "need_user_answers" }
+  { "gate": "record_only-lowering-gates", "expected": "blocked" },
+  { "gate": "record_only-public-selector", "expected": "RUNNER_ARGUMENTS_INVALID" }
 ]

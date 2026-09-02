@@ -4,7 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { canonicalStringify } from '../../src/canonical.mjs';
 import {
-  JOURNEY_NAMES, evaluateJourney, loadJourneySpec
+  JOURNEY_NAMES, evaluateJourney, loadHardGateExpectations, loadJourneySpec
 } from '../helpers/run-journey.mjs';
 
 // Production defect caught: delivery lanes or formal coverage can drift while
@@ -13,6 +13,7 @@ import {
 // missing Blocked point, or unreviewed output breaks hand-owned byte goldens.
 
 const goldenRoot = path.resolve('test/golden/journeys');
+const hardGateExpectations = await loadHardGateExpectations();
 
 test('canonical bundles: ten reviewed JSON and Markdown goldens remain exact', async () => {
   assert.equal(JOURNEY_NAMES.length, 10);
@@ -27,6 +28,10 @@ test('canonical bundles: ten reviewed JSON and Markdown goldens remain exact', a
 });
 
 test('canonical bundle hard gates: Exploratory is outside the formal denominator', async () => {
+  assert.equal(
+    hardGateExpectations.get('Exploratory-in-denominator'),
+    'formal-coverage-unchanged'
+  );
   const baseline = (await evaluateJourney('risk-only-exploratory')).bundle;
   assert.equal(baseline.exploratory.length, 1);
   assert.equal(baseline.coverage.formal.total, 0, 'reversal counts Exploratory in denominator');
@@ -34,6 +39,7 @@ test('canonical bundle hard gates: Exploratory is outside the formal denominator
 });
 
 test('canonical bundle hard gates: NotApplicable is accounted but never covered', async () => {
+  assert.equal(hardGateExpectations.get('NotApplicable-in-numerator'), 'not-covered');
   const bundle = (await evaluateJourney('all-not-applicable')).bundle;
   assert.equal(bundle.coverage.not_applicable.length, 1);
   assert.equal(bundle.coverage.formal.total, 1);
@@ -43,6 +49,7 @@ test('canonical bundle hard gates: NotApplicable is accounted but never covered'
 });
 
 test('canonical bundle hard gates: Blocked retains the formal Test Point and recovery', async () => {
+  assert.equal(hardGateExpectations.get('missing-Blocked-Test-Point'), 'blocked-retained');
   const spec = await loadJourneySpec('all-blocked');
   const result = await evaluateJourney(spec.scenario, spec.interaction_policy);
   const bundle = result.bundle;

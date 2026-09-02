@@ -33,6 +33,14 @@ const stageFiles = Object.freeze({
   case_drafts: 'case-drafts.json'
 });
 const stages = Object.freeze(Object.keys(stageFiles));
+const hardGateKeys = Object.freeze([
+  'E1-as-Grounded', 'E0-as-Conditional', 'unsupported-support-review',
+  'approved-assumption-as-Grounded', 'Exploratory-in-denominator',
+  'NotApplicable-in-numerator', 'missing-Blocked-Test-Point',
+  'skipped-interaction-cell', 'invalid-E2-target', 'E2-cycle',
+  'revision-in-stable-ID', 'old-checkpoint-winning',
+  'record_only-lowering-gates', 'record_only-public-selector'
+]);
 const dimensions = Object.freeze([
   'shared-entity', 'role', 'client', 'interface-event',
   'time', 'concurrency', 'side-effect'
@@ -46,6 +54,25 @@ export async function loadJourneySpec(name) {
   return JSON.parse(await readFile(path.join(
     repositoryRoot, `test/fixtures/journeys/${name}.json`
   ), 'utf8'));
+}
+
+/** @returns {Promise<Map<string,string>>} */
+export async function loadHardGateExpectations() {
+  const rows = JSON.parse(await readFile(path.join(
+    repositoryRoot, 'test/fixtures/adversarial/hard-gate-reversals.json'
+  ), 'utf8'));
+  if (!Array.isArray(rows) || rows.some((row) => (
+    !row || typeof row.gate !== 'string' || typeof row.expected !== 'string'
+  ))) throw new TypeError('adversarial hard-gate fixture must be a gate/expected array');
+  const expectations = new Map(rows.map((row) => [row.gate, row.expected]));
+  if (expectations.size !== rows.length) throw new TypeError(
+    'adversarial hard-gate fixture cannot repeat a gate'
+  );
+  if (canonicalStringify([...expectations.keys()].sort())
+    !== canonicalStringify([...hardGateKeys].sort())) throw new TypeError(
+    'adversarial hard-gate fixture must contain exactly the 14 behavior-tested reversals'
+  );
+  return expectations;
 }
 
 /** @param {any} rule */

@@ -4,13 +4,16 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   JOURNEY_NAMES, buildJourney, evaluateJourney, loadJourneySpec,
-  runClarificationJourney, runInstalledJourney, runInstalledRevision, setSourceRevision
+  loadHardGateExpectations, runClarificationJourney, runInstalledJourney,
+  runInstalledRevision, setSourceRevision
 } from '../helpers/run-journey.mjs';
 
 // Production defect caught: the public installed-shape runner can diverge from
 // the pure core, recover stale state, or expose record_only as a gate bypass.
 // Rule reversal caught: any non-strict public path, stale-checkpoint winner, or
 // public interaction-policy bypass makes these real runner journeys fail.
+
+const hardGateExpectations = await loadHardGateExpectations();
 
 test('full journey: ten frozen scenarios cross every lane and clarification outcome', async () => {
   assert.equal(JOURNEY_NAMES.length, 10);
@@ -63,6 +66,10 @@ test('full journey: installed-shape runner accepts the complete all-E3 artifact 
 });
 
 test('full journey hard gate: record_only is rejected as an extra public runner argument', async () => {
+  assert.equal(
+    hardGateExpectations.get('record_only-public-selector'),
+    'RUNNER_ARGUMENTS_INVALID'
+  );
   const unresolved = setSourceRevision(buildJourney('local-source-conflict'), 0);
   const run = await runInstalledRevision(unresolved, {
     extraArgs: ['record_only']
@@ -78,6 +85,10 @@ test('full journey hard gate: record_only is rejected as an extra public runner 
 });
 
 test('full journey hard gate: an old checkpoint never masks a newer accepted revision', async () => {
+  assert.equal(
+    hardGateExpectations.get('old-checkpoint-winning'),
+    'highest-valid-accepted-revision'
+  );
   const revision = buildJourney('clarification-grounded');
   const run = await runInstalledRevision(revision);
   try {

@@ -1,1 +1,1 @@
-{"name":"obligations before checkpoint","state":"derived_then_staged_case","expected_status":"finished"}
+{"name":"obligations before checkpoint","state":"obligations_before_checkpoint","expected_status":"finished"}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile
 } from 'node:fs/promises';
@@ -9,6 +10,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { advanceStrict } from '../../src/advance-strict.mjs';
+import { digest } from '../../src/canonical.mjs';
 import { acquireRunLock, STAGE_FILES } from '../../src/run-store.mjs';
 import { buildJourney, setSourceRevision } from '../helpers/run-journey.mjs';
 
@@ -21,9 +23,47 @@ const recoveryRoot = path.join(repositoryRoot, 'test/fixtures/recovery');
 const crashFixtureNames = [
   'staging-before-promotion', 'accepted-before-checkpoint', 'obligations-before-checkpoint',
   'case-drafts-before-bundle', 'bundle-before-finished-checkpoint',
+  'json-bundle-before-markdown',
   'finished-checkpoint-before-current', 'truncated-checkpoint', 'old-current-pointer',
-  'r000-finished-r001-source', 'r001-partially-accepted', 'r000-finished-r001-reopen'
+  'r000-finished-r001-source', 'r001-partially-accepted', 'r000-finished-r001-reopen',
+  'finished-checkpoint-bundle-missing', 'finished-checkpoint-bundle-digest-mismatch'
 ];
+
+/** @type {Readonly<Record<string,string>>} */
+const expectedCrashStateByFixture = Object.freeze({
+  'staging-before-promotion': 'staging_source',
+  'accepted-before-checkpoint': 'accepted_before_checkpoint',
+  'obligations-before-checkpoint': 'obligations_before_checkpoint',
+  'case-drafts-before-bundle': 'case_drafts_before_bundle',
+  'bundle-before-finished-checkpoint': 'bundle_and_markdown_without_finished_checkpoint',
+  'json-bundle-before-markdown': 'json_bundle_without_markdown',
+  'finished-checkpoint-before-current': 'finished_without_current',
+  'truncated-checkpoint': 'truncated_checkpoint',
+  'old-current-pointer': 'old_current',
+  'r000-finished-r001-source': 'new_source_only',
+  'r001-partially-accepted': 'new_partial',
+  'r000-finished-r001-reopen': 'new_reopen_source',
+  'finished-checkpoint-bundle-missing': 'finished_checkpoint_bundle_missing',
+  'finished-checkpoint-bundle-digest-mismatch': 'finished_checkpoint_bundle_digest_mismatch'
+});
+
+const finishedRunLayout = Object.freeze([
+  'accepted', 'accepted/r000',
+  'accepted/r000/source-pack.json', 'accepted/r000/evidence-claims.json',
+  'accepted/r000/behavior-views.json', 'accepted/r000/case-drafts.json',
+  'checkpoint.json',
+  'derived', 'derived/r000', 'derived/r000/test-obligations.json',
+  'derived/r000/clarification-state.json',
+  'output', 'output/r000', 'output/r000/test-bundle.json',
+  'output/r000/test-cases.md', 'output/current.json',
+  'staging'
+]);
+
+/** @param {string[]} removed */
+function finishedLayoutWithout(...removed) {
+  const omitted = new Set(removed);
+  return finishedRunLayout.filter((entry) => !omitted.has(entry));
+}
 
 /** @param {string} name @returns {Promise<any>} */
 async function jsonFixture(name) {
@@ -103,11 +143,78 @@ async function removeIfPresent(target) {
   await rm(target, { force: true });
 }
 
+/** @param {string} value */
+function byteDigest(value) {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+/** @param {string} runDirectory */
+async function finishedSnapshot(runDirectory) {
+  const bundlePath = path.join(runDirectory, 'output/r000/test-bundle.json');
+  const markdownPath = path.join(runDirectory, 'output/r000/test-cases.md');
+  const checkpointPath = path.join(runDirectory, 'checkpoint.json');
+  const currentPath = path.join(runDirectory, 'output/current.json');
+  const [bundleText, markdownText, checkpointText, currentText] = await Promise.all([
+    readFile(bundlePath, 'utf8'), readFile(markdownPath, 'utf8'),
+    readFile(checkpointPath, 'utf8'), readFile(currentPath, 'utf8')
+  ]);
+  return {
+    bundlePath, markdownPath, checkpointPath, currentPath,
+    bundleText, markdownText, checkpointText, currentText,
+    bundleDigest: digest(JSON.parse(bundleText)),
+    markdownDigest: byteDigest(markdownText)
+  };
+}
+
+/** @param {string} runDirectory @param {readonly string[]} expected */
+async function assertExactRunLayout(runDirectory, expected) {
+  const actual = (await readdir(runDirectory, { recursive: true })).sort();
+  assert.deepEqual(actual, [...expected].sort());
+}
+
+/** @param {any} revision */
+async function uninterruptedSnapshot(revision) {
+  const runDirectory = await temporaryRun();
+  try {
+    const reply = /** @type {any} */ (await finish(runDirectory, revision));
+    assert.equal(reply.status, 'finished', JSON.stringify(reply));
+    return await finishedSnapshot(runDirectory);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+}
+
+/** @param {string} runDirectory @param {ReturnType<typeof finishedSnapshot> extends Promise<infer T> ? T : never} baseline @param {any} recovered */
+async function assertRecoveredFinishedState(runDirectory, baseline, recovered) {
+  const actual = await finishedSnapshot(runDirectory);
+  assert.equal(actual.bundleText, baseline.bundleText, 'recovery changed canonical JSON bytes');
+  assert.equal(actual.markdownText, baseline.markdownText, 'recovery changed canonical Markdown bytes');
+  assert.equal(actual.bundleDigest, baseline.bundleDigest);
+  assert.equal(actual.markdownDigest, baseline.markdownDigest);
+  const checkpoint = JSON.parse(actual.checkpointText);
+  const current = JSON.parse(actual.currentText);
+  assert.equal(checkpoint.stage, 'finished');
+  assert.equal(checkpoint.source_revision, 0);
+  assert.equal(checkpoint.accepted_artifact_digests.test_bundle, baseline.bundleDigest);
+  assert.equal(current.source_revision, 0);
+  assert.equal(current.bundle_digest, baseline.bundleDigest);
+  assert.equal(current.bundle_path, actual.bundlePath);
+  assert.equal(current.markdown_path, actual.markdownPath);
+  assert.equal(recovered.bundle_digest, baseline.bundleDigest);
+}
+
 test('all declared Task12 crash fixtures exist and cover at least ten independent recovery boundaries', async () => {
   assert.ok(crashFixtureNames.length >= 10);
   const fixtures = await Promise.all(crashFixtureNames.map(jsonFixture));
-  assert.equal(new Set(fixtures.map((item) => item.state)).size, crashFixtureNames.length - 1);
-  assert.ok(fixtures.some((item) => item.state === 'new_reopen_source'));
+  assert.deepEqual(
+    fixtures.map((item, index) => [crashFixtureNames[index], item.state]),
+    crashFixtureNames.map((name) => [name, expectedCrashStateByFixture[name]])
+  );
+  assert.equal(
+    new Set(fixtures.map((item) => item.state)).size,
+    crashFixtureNames.length,
+    'each declared crash boundary requires one observable, unique filesystem state'
+  );
 });
 
 test('an accepted artifact that no longer passes its deterministic gate is a run integrity error', async () => {
@@ -1349,11 +1456,14 @@ for (const fixtureName of crashFixtureNames) {
     const runDirectory = await temporaryRun();
     try {
       let baselineDigest = '';
+      let baselineOutput = null;
       let expectedSourceRevision = 1;
+      let recovered = null;
       const revision = descriptor.state.startsWith('new_')
         ? buildJourney('clarification-grounded') : await revisionFixture();
       if (descriptor.state === 'staging_source') {
         await stage(runDirectory, 'source_pack', revision.source_pack);
+        await assertExactRunLayout(runDirectory, ['staging', 'staging/source-pack.json']);
       } else if (descriptor.state.startsWith('new_')) {
         const pending = /** @type {any} */ (await submitCompleteRevision(runDirectory, revision));
         assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
@@ -1385,24 +1495,195 @@ for (const fixtureName of crashFixtureNames) {
             assert.equal(evidenceReply.stage, 'behavior_views', JSON.stringify(evidenceReply));
           }
         }
+      } else if (descriptor.state === 'accepted_before_checkpoint') {
+        baselineOutput = await uninterruptedSnapshot(revision);
+        baselineDigest = baselineOutput.bundleDigest;
+
+        await stage(runDirectory, 'source_pack', revision.source_pack);
+        const promoted = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(promoted.status, 'need_artifact', JSON.stringify(promoted));
+        assert.equal(promoted.stage, 'evidence_claims');
+        const sourceCheckpoint = JSON.parse(await readFile(
+          path.join(runDirectory, 'checkpoint.json'), 'utf8'
+        ));
+        assert.equal(sourceCheckpoint.stage, 'source_pack');
+        assert.deepEqual(Object.keys(sourceCheckpoint.accepted_artifact_digests), [
+          'source_pack'
+        ]);
+        await removeIfPresent(path.join(runDirectory, 'checkpoint.json'));
+        await assertExactRunLayout(runDirectory, [
+          'accepted', 'accepted/r000', 'accepted/r000/source-pack.json', 'staging'
+        ]);
+        assert.deepEqual(await readdir(path.join(runDirectory, 'staging')), []);
+
+        const firstRecovery = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(firstRecovery.status, 'need_artifact', JSON.stringify(firstRecovery));
+        assert.equal(firstRecovery.stage, 'evidence_claims');
+        assert.deepEqual(firstRecovery.scope, { source_revision: 0 });
+
+        await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+        const evidenceReply = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(evidenceReply.status, 'need_artifact', JSON.stringify(evidenceReply));
+        assert.equal(evidenceReply.stage, 'behavior_views');
+        await stage(runDirectory, 'behavior_views', revision.behavior_views);
+        const viewsReply = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(viewsReply.status, 'need_artifact', JSON.stringify(viewsReply));
+        assert.equal(viewsReply.stage, 'case_drafts');
+        await stage(runDirectory, 'case_drafts', revision.case_drafts);
+        recovered = /** @type {any} */ (await advanceStrict(runDirectory));
+      } else if (descriptor.state === 'obligations_before_checkpoint') {
+        baselineOutput = await uninterruptedSnapshot(revision);
+        baselineDigest = baselineOutput.bundleDigest;
+
+        await stage(runDirectory, 'source_pack', revision.source_pack);
+        const sourceReply = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(sourceReply.stage, 'evidence_claims', JSON.stringify(sourceReply));
+        await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+        const evidenceReply = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(evidenceReply.stage, 'behavior_views', JSON.stringify(evidenceReply));
+        const evidenceCheckpoint = await readFile(
+          path.join(runDirectory, 'checkpoint.json'), 'utf8'
+        );
+        assert.equal(JSON.parse(evidenceCheckpoint).stage, 'evidence_claims');
+
+        await stage(runDirectory, 'behavior_views', revision.behavior_views);
+        const viewsReply = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(viewsReply.status, 'need_artifact', JSON.stringify(viewsReply));
+        assert.equal(viewsReply.stage, 'case_drafts');
+        await writeFile(path.join(runDirectory, 'checkpoint.json'), evidenceCheckpoint, 'utf8');
+        await assertExactRunLayout(runDirectory, [
+          'accepted', 'accepted/r000',
+          'accepted/r000/source-pack.json',
+          'accepted/r000/evidence-claims.json',
+          'accepted/r000/behavior-views.json',
+          'checkpoint.json', 'derived', 'derived/r000',
+          'derived/r000/test-obligations.json', 'staging'
+        ]);
+        assert.deepEqual(await readdir(path.join(runDirectory, 'staging')), []);
+        assert.equal(JSON.parse(await readFile(
+          path.join(runDirectory, 'checkpoint.json'), 'utf8'
+        )).stage, 'evidence_claims');
+
+        const firstRecovery = /** @type {any} */ (await advanceStrict(runDirectory));
+        assert.equal(firstRecovery.status, 'need_artifact', JSON.stringify(firstRecovery));
+        assert.equal(firstRecovery.stage, 'case_drafts');
+        assert.deepEqual(firstRecovery.scope, { source_revision: 0 });
+        await stage(runDirectory, 'case_drafts', revision.case_drafts);
+        recovered = /** @type {any} */ (await advanceStrict(runDirectory));
       } else {
         const baseline = await finish(runDirectory, revision);
         baselineDigest = baseline.bundle_digest;
-        if (descriptor.state === 'accepted_complete' || descriptor.state === 'bundle_without_finished_checkpoint'
-          || descriptor.state === 'derived_then_staged_case') {
+        baselineOutput = await finishedSnapshot(runDirectory);
+        if (descriptor.state === 'case_drafts_before_bundle') {
+          const priorCheckpoint = JSON.parse(baselineOutput.checkpointText);
+          delete priorCheckpoint.accepted_artifact_digests.case_drafts;
+          delete priorCheckpoint.accepted_artifact_digests.test_bundle;
+          priorCheckpoint.stage = 'behavior_views';
+          priorCheckpoint.input_digest = digest({
+            source_revision: 0,
+            accepted_artifact_digests: priorCheckpoint.accepted_artifact_digests
+          });
+          await writeFile(
+            path.join(runDirectory, 'checkpoint.json'), `${JSON.stringify(priorCheckpoint)}\n`, 'utf8'
+          );
+          await removeIfPresent(path.join(runDirectory, 'derived/r000/clarification-state.json'));
+          await rm(path.join(runDirectory, 'output'), { recursive: true, force: true });
+          await assertExactRunLayout(runDirectory, [
+            'accepted', 'accepted/r000',
+            'accepted/r000/source-pack.json',
+            'accepted/r000/evidence-claims.json',
+            'accepted/r000/behavior-views.json',
+            'accepted/r000/case-drafts.json',
+            'checkpoint.json', 'derived', 'derived/r000',
+            'derived/r000/test-obligations.json', 'staging'
+          ]);
+          assert.deepEqual(await readdir(path.join(runDirectory, 'staging')), []);
+          assert.equal(JSON.parse(await readFile(
+            path.join(runDirectory, 'checkpoint.json'), 'utf8'
+          )).stage, 'behavior_views');
+        } else if (descriptor.state === 'bundle_and_markdown_without_finished_checkpoint') {
           await removeIfPresent(path.join(runDirectory, 'checkpoint.json'));
           await removeIfPresent(path.join(runDirectory, 'output/current.json'));
-        }
-        if (descriptor.state === 'accepted_complete') {
-          await rm(path.join(runDirectory, 'output/r000'), { recursive: true, force: true });
-        } else if (descriptor.state === 'derived_then_staged_case') {
-          await removeIfPresent(path.join(runDirectory, 'accepted/r000/case-drafts.json'));
-          await rm(path.join(runDirectory, 'output/r000'), { recursive: true, force: true });
-          await stage(runDirectory, 'case_drafts', revision.case_drafts);
+          await assertExactRunLayout(runDirectory, finishedLayoutWithout(
+            'checkpoint.json', 'output/current.json'
+          ));
+          assert.deepEqual(
+            (await readdir(path.join(runDirectory, 'output/r000'))).sort(),
+            ['test-bundle.json', 'test-cases.md']
+          );
+          assert.equal(
+            await readFile(path.join(runDirectory, 'output/r000/test-bundle.json'), 'utf8'),
+            baselineOutput.bundleText
+          );
+          assert.equal(
+            await readFile(path.join(runDirectory, 'output/r000/test-cases.md'), 'utf8'),
+            baselineOutput.markdownText
+          );
+          await assert.rejects(stat(path.join(runDirectory, 'checkpoint.json')));
+          await assert.rejects(stat(path.join(runDirectory, 'output/current.json')));
+        } else if (descriptor.state === 'json_bundle_without_markdown') {
+          await removeIfPresent(path.join(runDirectory, 'output/r000/test-cases.md'));
+          await removeIfPresent(path.join(runDirectory, 'checkpoint.json'));
+          await removeIfPresent(path.join(runDirectory, 'output/current.json'));
+          await assertExactRunLayout(runDirectory, finishedLayoutWithout(
+            'checkpoint.json', 'output/current.json', 'output/r000/test-cases.md'
+          ));
+          assert.deepEqual(await readdir(path.join(runDirectory, 'output/r000')), [
+            'test-bundle.json'
+          ]);
+          assert.equal(
+            await readFile(path.join(runDirectory, 'output/r000/test-bundle.json'), 'utf8'),
+            baselineOutput.bundleText
+          );
+          await assert.rejects(stat(path.join(runDirectory, 'output/r000/test-cases.md')));
+          await assert.rejects(stat(path.join(runDirectory, 'checkpoint.json')));
+          await assert.rejects(stat(path.join(runDirectory, 'output/current.json')));
+        } else if (descriptor.state === 'finished_checkpoint_bundle_missing') {
+          await removeIfPresent(path.join(runDirectory, 'output/r000/test-bundle.json'));
+          await assertExactRunLayout(runDirectory, finishedLayoutWithout(
+            'output/r000/test-bundle.json'
+          ));
+          assert.equal(JSON.parse(await readFile(
+            path.join(runDirectory, 'checkpoint.json'), 'utf8'
+          )).stage, 'finished');
+          await stat(path.join(runDirectory, 'output/r000/test-cases.md'));
+          await stat(path.join(runDirectory, 'output/current.json'));
+          await assert.rejects(stat(path.join(runDirectory, 'output/r000/test-bundle.json')));
+        } else if (descriptor.state === 'finished_checkpoint_bundle_digest_mismatch') {
+          await writeFile(
+            path.join(runDirectory, 'output/r000/test-bundle.json'),
+            '{"tampered":true}\n', 'utf8'
+          );
+          await assertExactRunLayout(runDirectory, finishedRunLayout);
+          assert.notEqual(digest(JSON.parse(await readFile(
+            path.join(runDirectory, 'output/r000/test-bundle.json'), 'utf8'
+          ))), baselineOutput.bundleDigest);
+          assert.equal(JSON.parse(await readFile(
+            path.join(runDirectory, 'checkpoint.json'), 'utf8'
+          )).accepted_artifact_digests.test_bundle, baselineOutput.bundleDigest);
+          assert.equal(JSON.parse(await readFile(
+            path.join(runDirectory, 'output/current.json'), 'utf8'
+          )).bundle_digest, baselineOutput.bundleDigest);
         } else if (descriptor.state === 'finished_without_current') {
           await removeIfPresent(path.join(runDirectory, 'output/current.json'));
+          await assertExactRunLayout(runDirectory, finishedLayoutWithout(
+            'output/current.json'
+          ));
+          assert.equal(JSON.parse(await readFile(
+            path.join(runDirectory, 'checkpoint.json'), 'utf8'
+          )).stage, 'finished');
+          assert.deepEqual(
+            (await readdir(path.join(runDirectory, 'output/r000'))).sort(),
+            ['test-bundle.json', 'test-cases.md']
+          );
+          await assert.rejects(stat(path.join(runDirectory, 'output/current.json')));
         } else if (descriptor.state === 'truncated_checkpoint') {
           await writeFile(path.join(runDirectory, 'checkpoint.json'), '{"source_revision":', 'utf8');
+          await assertExactRunLayout(runDirectory, finishedRunLayout);
+          assert.equal(await readFile(path.join(runDirectory, 'checkpoint.json'), 'utf8'), '{"source_revision":');
+          await stat(path.join(runDirectory, 'output/r000/test-bundle.json'));
+          await stat(path.join(runDirectory, 'output/r000/test-cases.md'));
+          await stat(path.join(runDirectory, 'output/current.json'));
         } else if (descriptor.state === 'old_current') {
           await writeFile(path.join(runDirectory, 'output/current.json'), `${JSON.stringify({
             source_revision: 999,
@@ -1410,17 +1691,24 @@ for (const fixtureName of crashFixtureNames) {
             bundle_digest: 'f'.repeat(64),
             markdown_path: path.join(runDirectory, 'output/r999/test-cases.md')
           })}\n`, 'utf8');
+          await assertExactRunLayout(runDirectory, finishedRunLayout);
+          assert.equal(JSON.parse(await readFile(
+            path.join(runDirectory, 'output/current.json'), 'utf8'
+          )).source_revision, 999);
+          await stat(path.join(runDirectory, 'output/r000/test-bundle.json'));
+          await stat(path.join(runDirectory, 'output/r000/test-cases.md'));
         }
       }
 
-      const recovered = /** @type {any} */ (await advanceStrict(runDirectory));
+      if (!recovered) recovered = /** @type {any} */ (await advanceStrict(runDirectory));
       assert.equal(recovered.status, descriptor.expected_status, JSON.stringify(recovered));
       if (recovered.status === 'finished') {
         assert.equal(recovered.bundle_digest, baselineDigest);
         assert.equal(recovered.source_revision, 0);
-        const current = JSON.parse(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'));
-        assert.equal(current.bundle_digest, baselineDigest);
-        assert.equal(current.source_revision, 0);
+        if (!baselineOutput) throw new Error(
+          'finished recovery requires an uninterrupted baseline snapshot'
+        );
+        await assertRecoveredFinishedState(runDirectory, baselineOutput, recovered);
       } else if (descriptor.state.startsWith('new_')) {
         assert.equal(recovered.scope.source_revision, expectedSourceRevision);
         assert.notEqual(recovered.status, 'finished', 'old finished output must not mask a newer accepted revision');
