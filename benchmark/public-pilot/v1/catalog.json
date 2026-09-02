@@ -1935,6 +1935,6 @@
   "comparators": {
     "registry_id": "public-pilot-comparators-v1",
     "path": "comparators.json",
-    "sha256": "c982659cdcf32d8af9e4d03033fab3632d7c31ac9a31c83301e1527ccfaa5f6a"
+    "sha256": "49de889024b4507901be57a85b907ab34adaebbef10a07bdb30549ebfdd2c383"
   }
 }
