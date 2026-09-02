@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest } from './canonical.mjs';
@@ -15,10 +16,11 @@ import {
   runStoreIntrinsicsIntact, stagingPath, STAGE_FILES, writeCheckpoint, writeFinalOutput
 } from './run-store.mjs';
 import { loadSchemaRegistry } from './schema-registry.mjs';
+import { AGENT_STAGE_SCHEMA, mapInternalRevision } from './reply-routing.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
 
-const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+const moduleDirectory = path.dirname(realpathSync(fileURLToPath(import.meta.url)));
 const schemaDirectory = path.resolve(
   moduleDirectory,
   typeof __SCHEMA_DIRECTORY__ === 'string'
@@ -35,12 +37,7 @@ const embeddedCompilerVersion = typeof __COMPILER_VERSION__ === 'string'
   ? __COMPILER_VERSION__
   : undefined;
 
-const STAGE_SCHEMA = Object.freeze({
-  source_pack: 'source-pack.schema.json',
-  evidence_claims: 'evidence-claims.schema.json',
-  behavior_views: 'behavior-views.schema.json',
-  case_drafts: 'case-drafts.schema.json'
-});
+const STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 
 const NATIVE_ARRAY = Array;
 const NATIVE_MAP = Map;
@@ -447,36 +444,6 @@ function appendBatch(previous, current) {
   };
 }
 
-/** @param {string} runDirectory @param {number} sourceRevision @param {Record<string, unknown>} sourcePack */
-async function clarificationInput(runDirectory, sourceRevision, sourcePack) {
-  const sameRevision = await guardedAwait(readJsonIfPresent(
-    runDirectory, clarificationStatePath(runDirectory, sourceRevision)
-  ));
-  if (sameRevision) return {
-    prior_state: sameRevision.value,
-    append_batch: { decision_records: [], clarification_events: [] }
-  };
-  if (sourceRevision === 0) return {
-    prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
-    append_batch: { decision_records: [], clarification_events: [] }
-  };
-  const previousSource = await guardedAwait(readJsonIfPresent(runDirectory, acceptedPath(
-    runDirectory, sourceRevision - 1, 'source_pack'
-  )));
-  const previousState = await guardedAwait(readJsonIfPresent(runDirectory, clarificationStatePath(
-    runDirectory, sourceRevision - 1
-  )));
-  return {
-    prior_state: previousState?.value
-      ?? initialClarificationState(sourceRevision - 1, previousSource
-        ? maximumEventSequence(/** @type {Record<string, unknown>} */ (previousSource.value)) : 0),
-    append_batch: previousSource
-      ? appendBatch(
-        /** @type {Record<string, unknown>} */ (previousSource.value), sourcePack
-      ) : { decision_records: [], clarification_events: [] }
-  };
-}
-
 /** @param {number} sourceRevision @param {string} stage @param {Record<string, unknown>} sourcePack @param {Record<string, unknown>|null} state @param {Record<string,string>} acceptedDigests */
 function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests) {
   return {
@@ -516,12 +483,87 @@ async function acceptedDigests(runDirectory, sourceRevision) {
   return values;
 }
 
-/** @param {string} stage */
-function externalStage(stage) {
-  if (stage === 'source_policy') return 'source_pack';
-  if (stage === 'evidence_claims') return 'evidence_claims';
-  if (stage === 'behavior_views' || stage === 'test_obligations') return 'behavior_views';
-  return 'case_drafts';
+/** @param {Record<string, Record<string, unknown>>} artifacts @param {Record<string, unknown>} clarification @param {any} registry */
+function evaluateAdapterRevision(artifacts, clarification, registry) {
+  const sourcePack = artifacts.source_pack;
+  const caseDrafts = artifacts.case_drafts;
+  return /** @type {any} */ (evaluateRevision(artifacts, {
+    systemLineage: {
+      compiler_version: registry.compilerVersion,
+      lineage: {
+        source_digest: digest(sourcePack), case_draft_digest: digest(caseDrafts)
+      },
+      expert_recall_limits: ['Expert recall is benchmark-only.']
+    },
+    clarificationState: clarification,
+    interactionPolicy: 'pause_for_clarification',
+    limits: ['Compilation is limited to the accepted immutable revision.']
+  }));
+}
+
+/**
+ * Validate a clarification/source revision against the prior accepted semantic
+ * state before the candidate can become immutable. Missing derived state is
+ * rebuilt from accepted artifacts; incomplete prior revisions cannot authorize
+ * a clarification append.
+ * @param {number} sourceRevision
+ * @param {Record<string, unknown>} sourcePack
+ * @param {any} registry
+ * @param {any} prior
+ */
+function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prior) {
+  if (sourceRevision === 0) return null;
+  if (!prior) return fatalReply(
+    'RUN_INTEGRITY_ERROR', 'The prior accepted source revision is unavailable.'
+  );
+  const appended = appendBatch(prior.source_pack, sourcePack);
+  if (!prior.complete) {
+    const diagnostics = [];
+    if (appended.decision_records.length > 0) diagnostics.push({
+      category: 'classification', code: 'PRIOR_REVISION_INCOMPLETE',
+      path: '/decision_records',
+      message: 'A Decision append requires a complete prior clarification lifecycle.'
+    });
+    if (appended.clarification_events.length > 0) diagnostics.push({
+      category: 'classification', code: 'PRIOR_REVISION_INCOMPLETE',
+      path: '/clarification_events',
+      message: 'A clarification event append requires a complete prior clarification lifecycle.'
+    });
+    if (diagnostics.length === 0) diagnostics.push({
+      category: 'classification', code: 'PRIOR_REVISION_INCOMPLETE',
+      path: '/source_revision',
+      message: 'A higher source revision requires a complete prior accepted revision.'
+    });
+    return { kind: 'need_revision', diagnostics };
+  }
+  /** @type {Record<string, Record<string, unknown>>} */
+  const priorArtifacts = {};
+  for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) priorArtifacts[stage] = {
+    .../** @type {Record<string, unknown>} */ (prior.artifacts[stage]),
+    source_revision: sourceRevision
+  };
+  const clarification = { prior_state: prior.state, append_batch: appended };
+  const caseDrafts = priorArtifacts.case_drafts;
+  const result = evaluateAdapterRevision({
+    source_pack: sourcePack,
+    evidence_claims: priorArtifacts.evidence_claims,
+    behavior_views: priorArtifacts.behavior_views,
+    case_drafts: caseDrafts
+  }, clarification, registry);
+  if (result.status === 'finished' || result.status === 'need_user_answers') return null;
+  if (result.status !== 'need_revision') return fatalReply(
+    'RUNNER_PROTOCOL_VIOLATION',
+    'Pure revision evaluation returned an unrecognized clarification result.'
+  );
+  const route = mapInternalRevision(result);
+  if (route.kind === 'fatal') return fatalReply(
+    route.code, 'Pure revision diagnostics have no unique Agent-writable artifact owner.'
+  );
+  if (route.stage !== 'source_pack') return fatalReply(
+    'RUN_INTEGRITY_ERROR',
+    'Prior accepted artifacts cannot be reused to validate this source revision.'
+  );
+  return { kind: 'need_revision', diagnostics: result.diagnostics };
 }
 
 /**
@@ -533,15 +575,22 @@ function externalStage(stage) {
  * @param {any} registry
  */
 async function acceptedRunIntegrity(runDirectory, revisions, registry) {
-  if (revisions.length === 0) return null;
+  if (revisions.length === 0) return { kind: 'accepted_context', active: null };
   for (let index = 0; index < revisions.length; index += 1) {
     if (revisions[index] !== index) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted source revisions must start at r000 and remain consecutive.'
     );
   }
   let previousSource = null;
+  let previousState = null;
+  let previousComplete = true;
+  let active = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
     const sourceRevision = revisions[revisionIndex];
+    if (sourceRevision > 0 && !previousComplete) return fatalReply(
+      'RUN_INTEGRITY_ERROR',
+      'A higher accepted source revision cannot follow an incomplete prior revision.'
+    );
     const sourceArtifact = await guardedAwait(readJson(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
     ));
@@ -612,34 +661,56 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         );
       } else caseDrafts = record;
     }
+    const clarificationInput = sourceRevision === 0 ? {
+      prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
+      append_batch: { decision_records: [], clarification_events: [] }
+    } : {
+      prior_state: previousState,
+      append_batch: appendBatch(
+        /** @type {Record<string, unknown>} */ (previousSource), sourcePack
+      )
+    };
     if (caseDrafts) {
-      const clarification = await guardedAwait(
-        clarificationInput(runDirectory, sourceRevision, sourcePack)
-      );
-      const replay = /** @type {any} */ (evaluateRevision({
+      /** @type {Record<string, Record<string, unknown>>} */
+      const artifacts = {
         source_pack: sourcePack,
-        evidence_claims: evidenceClaims,
-        behavior_views: behaviorViews,
+        evidence_claims: /** @type {Record<string, unknown>} */ (evidenceClaims),
+        behavior_views: /** @type {Record<string, unknown>} */ (behaviorViews),
         case_drafts: caseDrafts
-      }, {
-        systemLineage: {
-          compiler_version: registry.compilerVersion,
-          lineage: {
-            source_digest: digest(sourcePack), case_draft_digest: digest(caseDrafts)
-          },
-          expert_recall_limits: ['Expert recall is benchmark-only.']
-        },
-        clarificationState: clarification,
-        interactionPolicy: 'pause_for_clarification',
-        limits: ['Compilation is limited to the accepted immutable revision.'],
-      }));
-      if (replay.status === 'need_revision') return fatalReply(
-        'RUN_INTEGRITY_ERROR', 'Accepted complete revision failed deterministic semantic replay.'
+      };
+      const replay = evaluateAdapterRevision(artifacts, clarificationInput, registry);
+      if ((replay.status !== 'finished' && replay.status !== 'need_user_answers')
+        || !replay.clarification_state
+        || typeof replay.clarification_state !== 'object') return fatalReply(
+        'RUN_INTEGRITY_ERROR',
+        'Accepted complete revision failed deterministic semantic replay.'
       );
+      const state = /** @type {Record<string, unknown>} */ (replay.clarification_state);
+      const statePath = clarificationStatePath(runDirectory, sourceRevision);
+      const storedState = await guardedAwait(readJsonIfPresent(runDirectory, statePath));
+      if (storedState
+        && canonicalStringify(storedState.value) !== canonicalStringify(state)) return fatalReply(
+        'RUN_INTEGRITY_ERROR',
+        'Stored clarification state does not match deterministic accepted-artifact replay.'
+      );
+      if (!storedState) await guardedAwait(atomicWriteJson(runDirectory, statePath, state));
+      previousState = state;
+      previousComplete = true;
+      active = {
+        complete: true, source_pack: sourcePack, artifacts, state,
+        clarification_input: clarificationInput, result: replay
+      };
+    } else {
+      previousState = null;
+      previousComplete = false;
+      active = {
+        complete: false, source_pack: sourcePack,
+        clarification_input: clarificationInput
+      };
     }
     previousSource = sourcePack;
   }
-  return null;
+  return { kind: 'accepted_context', active };
 }
 
 /**
@@ -676,10 +747,11 @@ async function advanceStrictExclusive(runDirectory) {
       await guardedAwait(() => recoverStagingClaims(runDirectory));
       await guardedAwait(() => cleanupTemporaryFiles(runDirectory));
       let revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
-    const acceptedIntegrity = await guardedAwait(() =>
+    const acceptedAudit = await guardedAwait(() =>
       acceptedRunIntegrity(runDirectory, revisions, registry)
     );
-    if (acceptedIntegrity) return acceptedIntegrity;
+    if ('status' in acceptedAudit) return acceptedAudit;
+    const acceptedContext = /** @type {any} */ (acceptedAudit);
     let sourceCandidate = await guardedAwait(() => stagedArtifact(
       runDirectory, 'source_pack', revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1
     ));
@@ -755,9 +827,38 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
         sourcePolicy.diagnostics
       );
+      const appendValidation = candidateRecord
+        ? validateSourceRevisionAppend(
+            candidateRevision, candidateRecord, registry, acceptedContext.active
+          ) : null;
+      if (appendValidation && 'status' in appendValidation
+        && appendValidation.status === 'fatal') return appendValidation;
+      if (appendValidation && 'kind' in appendValidation
+        && appendValidation.kind === 'need_revision') return revisionReply(
+        runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
+        appendValidation.diagnostics
+      );
       await guardedAwait(() => promoteArtifact(
         runDirectory, candidateRevision, 'source_pack', sourceCandidate.value, sourceCandidate
       ));
+      acceptedContext.active = {
+        complete: false,
+        source_pack: /** @type {Record<string, unknown>} */ (sourceCandidate.value),
+        clarification_input: candidateRevision === 0 ? {
+          prior_state: initialClarificationState(
+            0, maximumEventSequence(
+              /** @type {Record<string, unknown>} */ (sourceCandidate.value)
+            )
+          ),
+          append_batch: { decision_records: [], clarification_events: [] }
+        } : {
+          prior_state: acceptedContext.active.state,
+          append_batch: appendBatch(
+            acceptedContext.active.source_pack,
+            /** @type {Record<string, unknown>} */ (sourceCandidate.value)
+          )
+        }
+      };
       const sourceDigests = await guardedAwait(() => acceptedDigests(runDirectory, candidateRevision));
       await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
         candidateRevision, 'source_pack',
@@ -921,34 +1022,42 @@ async function advanceStrictExclusive(runDirectory) {
         'RUN_INTEGRITY_ERROR', 'Accepted case_drafts failed deterministic integrity validation.'
       );
     }
-    const clarification = await guardedAwait(() =>
-      clarificationInput(runDirectory, sourceRevision, sourcePack)
-    );
-    const result = /** @type {any} */ (evaluateRevision({
+    const activeContext = acceptedContext.active;
+    if (!activeContext || activeContext.source_pack.source_revision !== sourceRevision) {
+      return fatalReply(
+        'RUN_INTEGRITY_ERROR', 'Accepted lifecycle context does not match the active revision.'
+      );
+    }
+    /** @type {Record<string, Record<string, unknown>>} */
+    const evaluationArtifacts = {
       source_pack: sourcePack,
-      evidence_claims: accepted.evidence_claims,
-      behavior_views: accepted.behavior_views,
-      case_drafts: caseArtifact.value
-    }, {
-      systemLineage: {
-        compiler_version: registry.compilerVersion,
-        lineage: {
-          source_digest: digest(sourcePack), case_draft_digest: digest(caseArtifact.value)
-        },
-        expert_recall_limits: ['Expert recall is benchmark-only.']
-      },
-      clarificationState: clarification,
-      interactionPolicy: 'pause_for_clarification',
-      limits: ['Compilation is limited to the accepted immutable revision.'],
-    }));
+      evidence_claims: /** @type {Record<string, unknown>} */ (accepted.evidence_claims),
+      behavior_views: /** @type {Record<string, unknown>} */ (accepted.behavior_views),
+      case_drafts: /** @type {Record<string, unknown>} */ (caseArtifact.value)
+    };
+    const result = !caseFromStaging && activeContext.complete
+      ? activeContext.result
+      : evaluateAdapterRevision(
+          evaluationArtifacts, activeContext.clarification_input, registry
+        );
     if (result.status === 'need_revision') {
       if (!caseFromStaging) return fatalReply(
         'RUN_INTEGRITY_ERROR',
         'Accepted complete revision no longer passes deterministic evaluation.'
       );
-      const stage = /** @type {keyof typeof STAGE_SCHEMA} */ (externalStage(result.stage));
+      const route = mapInternalRevision(result);
+      if (route.kind === 'fatal') return fatalReply(
+        route.code, 'Pure revision diagnostics have no unique Agent-writable artifact owner.'
+      );
+      const stage = /** @type {keyof typeof STAGE_SCHEMA} */ (route.stage);
+      const replyArtifacts = {
+        source_pack: sourcePack,
+        evidence_claims: accepted.evidence_claims,
+        behavior_views: accepted.behavior_views,
+        case_drafts: caseArtifact.value
+      };
       return revisionReply(
-        runDirectory, stage, sourceRevision, caseArtifact.value, result.diagnostics
+        runDirectory, stage, sourceRevision, replyArtifacts[stage], result.diagnostics
       );
     }
     if (caseFromStaging) await guardedAwait(() => promoteArtifact(

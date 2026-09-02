@@ -2,6 +2,8 @@
 
 Build only views signaled by accepted facts, then run the fixed interaction audit. Every element, relation, condition, and result must trace to an accepted claim or an allowed E2 model element.
 
+Before writing, confirm the runner requested the schema-validated `behavior_views` stage with `behavior-views.schema.json`. Reject any other stage/schema pairing instead of treating a compiler-derived artifact as Agent-writable.
+
 ## Select views from requirement signals
 
 | Signal | View | Formal responsibilities |

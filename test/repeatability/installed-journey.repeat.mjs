@@ -3,8 +3,8 @@ import test from 'node:test';
 import { runInstalledAcceptedRepetitions } from '../helpers/run-journey.mjs';
 
 // Production defect caught: the packaged runner can emit non-deterministic
-// bundle, Markdown, or accepted-input bytes across fresh complete executions.
-// Rule reversal caught: sharing input inodes, skipping a public runner stage,
+// bundle, Markdown, or accepted-input bytes across fresh CLI executions.
+// Rule reversal caught: sharing input inodes, skipping a public CLI runner stage,
 // mutating input bytes, or changing either output digest makes this phase fail.
 
 test('full journey: 100 fresh installed-shape runs are byte-identical', { timeout: 480_000 }, async () => {

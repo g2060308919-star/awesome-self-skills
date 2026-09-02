@@ -10,6 +10,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { advanceStrict } from '../../src/advance-strict.mjs';
 import { acquireRunLock, STAGE_FILES } from '../../src/run-store.mjs';
+import { buildJourney, setSourceRevision } from '../helpers/run-journey.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
@@ -60,21 +61,39 @@ async function finish(runDirectory, revision) {
   return /** @type {Promise<any>} */ (advanceStrict(runDirectory));
 }
 
-/** @param {any} revision @param {string} [kind] @returns {any} */
-function revisionOneSource(revision, kind = 'decision') {
-  const next = structuredClone(revision.source_pack);
+/** @param {string} runDirectory @param {any} revision */
+async function submitCompleteRevision(runDirectory, revision) {
+  /** @type {any} */
+  let reply;
+  for (const stageName of ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']) {
+    await stage(
+      runDirectory, /** @type {keyof typeof STAGE_FILES} */ (stageName), revision[stageName]
+    );
+    reply = await advanceStrict(runDirectory);
+    if (reply.status === 'need_revision' || reply.status === 'fatal') break;
+  }
+  return reply;
+}
+
+/** @param {any} sourcePack @param {any} pendingReply */
+function deliverySourceRevision(sourcePack, pendingReply) {
+  const next = structuredClone(sourcePack);
   next.source_revision = 1;
-  if (kind === 'reopen') next.clarification_events.push({
-    event_id: 'event_reopen', clarification_event_seq: 1, type: 'reopen_root_issues',
-    actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_historical']
+  next.clarification_events.push({
+    event_id: 'event_delivery', clarification_event_seq: 1, type: 'request_delivery',
+    actor: 'owner', event_at: '2026-08-30',
+    root_issue_ids: pendingReply.blockers.map((/** @type {any} */ item) => item.root_issue_id)
   });
-  else next.decision_records.push({
-    decision_id: 'decision_followup', question_id: 'question_followup',
-    root_issue_ids: ['root_followup'], affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
-    clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-30',
-    question: 'Keep the accepted behavior?', answer: 'unknown', disposition: 'unknown',
-    authority_scope: 'checkout', effective_scope: 'checkout', evidence_ref: 'locator_checkout',
-    evidence_level: 'E1'
+  return next;
+}
+
+/** @param {any} sourcePack @param {string[]} rootIssueIds */
+function reopenSourceRevision(sourcePack, rootIssueIds) {
+  const next = structuredClone(sourcePack);
+  next.source_revision = 2;
+  next.clarification_events.push({
+    event_id: 'event_reopen', clarification_event_seq: 2, type: 'reopen_root_issues',
+    actor: 'owner', event_at: '2026-08-31', root_issue_ids: [...rootIssueIds]
   });
   return next;
 }
@@ -224,7 +243,8 @@ test('a newer partial revision cannot hide invalid accepted semantics in an olde
       path.join(runDirectory, 'accepted/r000/case-drafts.json'),
       `${JSON.stringify(invalidCase)}\n`, 'utf8'
     );
-    const nextSource = revisionOneSource(revision);
+    const nextSource = structuredClone(revision.source_pack);
+    nextSource.source_revision = 1;
     await mkdir(path.join(runDirectory, 'accepted/r001'), { recursive: true });
     await writeFile(
       path.join(runDirectory, 'accepted/r001/source-pack.json'),
@@ -1300,11 +1320,11 @@ test('a canonical ready record cannot turn an unrelated reused PID into a live o
 
 test('accepted artifact resolves its stale promotion claim before a newer canonical staging file', async () => {
   const runDirectory = await temporaryRun();
-  const revision = await revisionFixture();
+  const revision = buildJourney('clarification-grounded');
   try {
-    await stage(runDirectory, 'source_pack', revision.source_pack);
-    assert.equal((/** @type {any} */ (await advanceStrict(runDirectory))).stage, 'evidence_claims');
-    const nextSource = revisionOneSource(revision);
+    const pending = /** @type {any} */ (await submitCompleteRevision(runDirectory, revision));
+    assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
+    const nextSource = deliverySourceRevision(revision.source_pack, pending);
     await writeFile(
       path.join(runDirectory, 'staging/.source-pack.json.claim-424242-1'),
       `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
@@ -1326,12 +1346,45 @@ test('accepted artifact resolves its stale promotion claim before a newer canoni
 for (const fixtureName of crashFixtureNames) {
   test(`recovery fixture ${fixtureName} selects accepted state deterministically`, async () => {
     const descriptor = await jsonFixture(fixtureName);
-    const revision = await revisionFixture();
     const runDirectory = await temporaryRun();
     try {
       let baselineDigest = '';
+      let expectedSourceRevision = 1;
+      const revision = descriptor.state.startsWith('new_')
+        ? buildJourney('clarification-grounded') : await revisionFixture();
       if (descriptor.state === 'staging_source') {
         await stage(runDirectory, 'source_pack', revision.source_pack);
+      } else if (descriptor.state.startsWith('new_')) {
+        const pending = /** @type {any} */ (await submitCompleteRevision(runDirectory, revision));
+        assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
+        const rootIssueIds = pending.blockers.map(
+          (/** @type {any} */ item) => item.root_issue_id
+        );
+        const nextSource = deliverySourceRevision(revision.source_pack, pending);
+        if (descriptor.state === 'new_reopen_source') {
+          const deliveryRevision = setSourceRevision(structuredClone(revision), 1);
+          deliveryRevision.source_pack = nextSource;
+          const delivered = /** @type {any} */ (
+            await submitCompleteRevision(runDirectory, deliveryRevision)
+          );
+          assert.equal(delivered.status, 'finished', JSON.stringify(delivered));
+          baselineDigest = delivered.bundle_digest;
+          expectedSourceRevision = 2;
+          await stage(
+            runDirectory, 'source_pack', reopenSourceRevision(nextSource, rootIssueIds)
+          );
+        } else {
+          await stage(runDirectory, 'source_pack', nextSource);
+          if (descriptor.state === 'new_partial') {
+            const sourceReply = /** @type {any} */ (await advanceStrict(runDirectory));
+            assert.equal(sourceReply.stage, 'evidence_claims', JSON.stringify(sourceReply));
+            const nextEvidence = structuredClone(revision.evidence_claims);
+            nextEvidence.source_revision = 1;
+            await stage(runDirectory, 'evidence_claims', nextEvidence);
+            const evidenceReply = /** @type {any} */ (await advanceStrict(runDirectory));
+            assert.equal(evidenceReply.stage, 'behavior_views', JSON.stringify(evidenceReply));
+          }
+        }
       } else {
         const baseline = await finish(runDirectory, revision);
         baselineDigest = baseline.bundle_digest;
@@ -1357,22 +1410,6 @@ for (const fixtureName of crashFixtureNames) {
             bundle_digest: 'f'.repeat(64),
             markdown_path: path.join(runDirectory, 'output/r999/test-cases.md')
           })}\n`, 'utf8');
-        } else if (descriptor.state.startsWith('new_')) {
-          const nextSource = revisionOneSource(
-            revision, descriptor.state === 'new_reopen_source' ? 'reopen' : 'decision'
-          );
-          await stage(
-            runDirectory, 'source_pack', nextSource
-          );
-          if (descriptor.state === 'new_partial') {
-            const sourceReply = /** @type {any} */ (await advanceStrict(runDirectory));
-            assert.equal(sourceReply.stage, 'evidence_claims');
-            const nextEvidence = structuredClone(revision.evidence_claims);
-            nextEvidence.source_revision = 1;
-            await stage(runDirectory, 'evidence_claims', nextEvidence);
-            const evidenceReply = /** @type {any} */ (await advanceStrict(runDirectory));
-            assert.equal(evidenceReply.stage, 'behavior_views');
-          }
         }
       }
 
@@ -1385,7 +1422,7 @@ for (const fixtureName of crashFixtureNames) {
         assert.equal(current.bundle_digest, baselineDigest);
         assert.equal(current.source_revision, 0);
       } else if (descriptor.state.startsWith('new_')) {
-        assert.equal(recovered.scope.source_revision, 1);
+        assert.equal(recovered.scope.source_revision, expectedSourceRevision);
         assert.notEqual(recovered.status, 'finished', 'old finished output must not mask a newer accepted revision');
       }
       const entries = await readdir(runDirectory);

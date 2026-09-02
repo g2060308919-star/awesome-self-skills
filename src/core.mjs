@@ -827,16 +827,25 @@ function validateArtifactSchemas(input) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
   const artifactsAndSchemas = [
-    [input.source_pack, sourcePackSchema],
-    [input.evidence_claims, evidenceClaimsSchema],
-    [input.behavior_views, behaviorViewsSchema],
-    [input.case_drafts, caseDraftsSchema]
+    ['source_pack', input.source_pack, sourcePackSchema],
+    ['evidence_claims', input.evidence_claims, evidenceClaimsSchema],
+    ['behavior_views', input.behavior_views, behaviorViewsSchema],
+    ['case_drafts', input.case_drafts, caseDraftsSchema]
   ];
   for (let index = 0; index < artifactsAndSchemas.length; index += 1) {
-    const artifact = artifactsAndSchemas[index][0];
-    const schema = artifactsAndSchemas[index][1];
-    appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateAgainstSchema(artifact, schema)));
-    appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateUniqueStableIds(artifact)));
+    const name = String(artifactsAndSchemas[index][0]);
+    const artifact = artifactsAndSchemas[index][1];
+    const schema = artifactsAndSchemas[index][2];
+    const artifactDiagnostics = [
+      ...validateAgainstSchema(artifact, schema), ...validateUniqueStableIds(artifact)
+    ];
+    for (let diagnosticIndex = 0; diagnosticIndex < artifactDiagnostics.length; diagnosticIndex += 1) {
+      const item = /** @type {Diagnostic} */ (artifactDiagnostics[diagnosticIndex]);
+      pushArray(diagnostics, {
+        ...item,
+        path: item.path === '/' ? `/${name}` : `/${name}${item.path}`
+      });
+    }
   }
   const revision = toNumber(input.source_revision);
   const namedArtifacts = [

@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { advanceStrict } from '../../src/advance-strict.mjs';
+import { stableId } from '../../src/canonical.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -57,6 +58,55 @@ async function acceptInitialSource(runDirectory, sourcePack) {
   assert.equal(reply.stage, 'evidence_claims');
 }
 
+/** @param {string} runDirectory @param {any} revision */
+async function submitCompleteRevision(runDirectory, revision) {
+  /** @type {any} */
+  let reply;
+  for (const stageName of ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']) {
+    const typedStage = /** @type {keyof typeof STAGE_FILES} */ (stageName);
+    await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
+    await writeFile(
+      path.join(runDirectory, 'staging', STAGE_FILES[typedStage]),
+      `${JSON.stringify(revision[typedStage])}\n`, 'utf8'
+    );
+    reply = await advanceStrict(runDirectory);
+  }
+  return reply;
+}
+
+/** @param {any} revision */
+function makeAnswerableConflict(revision) {
+  revision.source_pack.sources.push({
+    source_id: 'source_old', kind: 'formal-rule', version: '0', status: 'effective',
+    authority: 'owner', content: 'checkout rejected',
+    content_digest: 'b'.repeat(64), scope: 'checkout'
+  });
+  revision.source_pack.source_policy.rules.push({
+    rule_id: 'policy_old', source_ids: ['source_old'], scope: 'checkout',
+    authority: 'owner', status: 'effective'
+  });
+  revision.source_pack.decision_records = [{
+    decision_id: 'decision_checkout', question_id: 'question_temporary',
+    root_issue_ids: ['root_temporary'],
+    affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
+    clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-29',
+    question: 'Temporary checkout?', answer: 'checkout accepted', disposition: 'temporary',
+    authority_scope: 'checkout', effective_scope: 'checkout',
+    evidence_ref: 'locator_checkout', evidence_level: 'E1'
+  }];
+  const claim = revision.evidence_claims.claims[0];
+  delete claim.source_id;
+  Object.assign(claim, {
+    claim_form: 'decision-record', level: 'E1', kind: 'assumption',
+    decision_id: 'decision_checkout', authority: 'checkout'
+  });
+  revision.case_drafts.cases[0].temporary_assumption = {
+    claim_id: 'claim_checkout',
+    invalidation_condition: 'A final rule replaces this temporary decision.'
+  };
+  return revision;
+}
+
 /** @param {any} reply */
 function integrityCodes(reply) {
   return reply.diagnostics.map((/** @type {any} */ item) => item.code);
@@ -64,12 +114,27 @@ function integrityCodes(reply) {
 
 test('one append-only Decision batch creates exactly the next accepted source revision', async () => {
   const runDirectory = await temporaryRun();
-  const fixture = await revisionFixture();
+  const fixture = makeAnswerableConflict(await revisionFixture());
   try {
-    await acceptInitialSource(runDirectory, fixture.source_pack);
+    const pending = /** @type {any} */ (await submitCompleteRevision(runDirectory, fixture));
+    assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
+    const rootIssueIds = pending.blockers.map(
+      (/** @type {any} */ item) => item.root_issue_id
+    );
+    const affectedObligationIds = [...new Set(pending.blockers.flatMap(
+      (/** @type {any} */ item) => item.affected_obligation_ids
+    ))].sort();
     const next = structuredClone(fixture.source_pack);
     next.source_revision = 1;
-    next.decision_records.push(decision());
+    next.decision_records.push({
+      decision_id: 'decision_final_checkout',
+      question_id: stableId('question', { root_issue_ids: rootIssueIds }),
+      root_issue_ids: rootIssueIds, affected_obligation_ids: affectedObligationIds,
+      clarification_event_seq: 2, confirmer: 'owner', confirmed_at: '2026-08-30',
+      question: pending.blockers[0].question, answer: 'checkout accepted',
+      disposition: 'final', authority_scope: 'checkout', effective_scope: 'checkout',
+      evidence_ref: 'locator_checkout', evidence_level: 'E3'
+    });
     await stageSource(runDirectory, next);
     const reply = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));

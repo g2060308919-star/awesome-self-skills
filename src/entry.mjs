@@ -1,12 +1,31 @@
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { advanceStrict } from './advance-strict.mjs';
+
+export { advanceStrict };
+
+/** @param {string} code @param {string} message */
+function fatalReply(code, message) {
+  return {
+    status: 'fatal',
+    diagnostics: [{ category: 'reference', code, message }]
+  };
+}
 
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
     const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.1.0';
-    const reply = nodeMajor >= 20
+    const userArguments = process.argv.slice(2);
+    const reply = userArguments.length !== 1
+      ? fatalReply(
+          'RUNNER_ARGUMENTS_INVALID',
+          'The private runner accepts exactly one absolute run directory argument.'
+        )
+      : nodeMajor >= 20
       ? compilerVersion.length > 0
-        ? await advanceStrict(process.argv[2] ?? '')
+        ? await advanceStrict(userArguments[0])
         : {
             status: 'fatal',
             diagnostics: [{
@@ -31,4 +50,12 @@ async function main() {
   }
 }
 
-await main();
+let directExecution = false;
+try {
+  directExecution = typeof process.argv[1] === 'string'
+    && pathToFileURL(realpathSync(process.argv[1])).href
+      === pathToFileURL(realpathSync(fileURLToPath(import.meta.url))).href;
+} catch {
+  directExecution = false;
+}
+if (directExecution) await main();

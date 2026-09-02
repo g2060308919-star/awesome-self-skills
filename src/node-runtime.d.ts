@@ -22,7 +22,12 @@ declare module 'node:fs/promises' {
   export const readdir: any;
   export const rm: any;
   export const stat: any;
+  export const symlink: any;
   export const writeFile: any;
+}
+
+declare module 'node:fs' {
+  export const realpathSync: any;
 }
 
 declare module 'node:crypto' {
@@ -54,4 +59,5 @@ declare module 'node:worker_threads' {
 
 declare module 'node:url' {
   export const fileURLToPath: any;
+  export const pathToFileURL: any;
 }

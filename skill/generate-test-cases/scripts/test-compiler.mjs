@@ -1,4 +1,9 @@
+// src/entry.mjs
+import { realpathSync as realpathSync2 } from "node:fs";
+import { fileURLToPath as fileURLToPath2, pathToFileURL } from "node:url";
+
 // src/advance-strict.mjs
+import { realpathSync } from "node:fs";
 import path3 from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14302,24 +14307,29 @@ function normalizeOptions(submitted) {
 function validateArtifactSchemas(input) {
   const diagnostics = [];
   const artifactsAndSchemas = [
-    [input.source_pack, source_pack_schema_default],
-    [input.evidence_claims, evidence_claims_schema_default],
-    [input.behavior_views, behavior_views_schema_default],
-    [input.case_drafts, case_drafts_schema_default]
+    ["source_pack", input.source_pack, source_pack_schema_default],
+    ["evidence_claims", input.evidence_claims, evidence_claims_schema_default],
+    ["behavior_views", input.behavior_views, behavior_views_schema_default],
+    ["case_drafts", input.case_drafts, case_drafts_schema_default]
   ];
   for (let index = 0; index < artifactsAndSchemas.length; index += 1) {
-    const artifact = artifactsAndSchemas[index][0];
-    const schema = artifactsAndSchemas[index][1];
-    appendArray2(
-      diagnostics,
-      /** @type {Diagnostic[]} */
-      validateAgainstSchema(artifact, schema)
-    );
-    appendArray2(
-      diagnostics,
-      /** @type {Diagnostic[]} */
-      validateUniqueStableIds(artifact)
-    );
+    const name = String(artifactsAndSchemas[index][0]);
+    const artifact = artifactsAndSchemas[index][1];
+    const schema = artifactsAndSchemas[index][2];
+    const artifactDiagnostics2 = [
+      ...validateAgainstSchema(artifact, schema),
+      ...validateUniqueStableIds(artifact)
+    ];
+    for (let diagnosticIndex = 0; diagnosticIndex < artifactDiagnostics2.length; diagnosticIndex += 1) {
+      const item = (
+        /** @type {Diagnostic} */
+        artifactDiagnostics2[diagnosticIndex]
+      );
+      pushArray3(diagnostics, {
+        ...item,
+        path: item.path === "/" ? `/${name}` : `/${name}${item.path}`
+      });
+    }
   }
   const revision = toNumber(input.source_revision);
   const namedArtifacts = [
@@ -14932,8 +14942,8 @@ function bridgeMatchesRoot(root, bridgeEntry) {
   const reasons = makeSet(strings2(root.reasons));
   return setHas(reasons, "UNRESOLVED_CONFLICT");
 }
-function translateClarificationAppend(clarificationInput2, sourceConflictBridge) {
-  const output = NATIVE_STRUCTURED_CLONE(clarificationInput2);
+function translateClarificationAppend(clarificationInput, sourceConflictBridge) {
+  const output = NATIVE_STRUCTURED_CLONE(clarificationInput);
   if (!isRecord4(output.prior_state) || !isRecord4(output.append_batch)) return output;
   const priorById = makeMap(mapArray4(records2(output.prior_state.root_snapshot_ledger), (item) => [
     String(item.root_issue_id),
@@ -15274,12 +15284,12 @@ function evaluateRevisionCaptured(submittedInput, options) {
       records2(obligations.obligations),
       graph.claimsById
     );
-    const clarificationInput2 = (
+    const clarificationInput = (
       /** @type {Record<string, unknown>} */
       input.clarification
     );
     const translatedClarification = translateClarificationAppend(
-      clarificationInput2,
+      clarificationInput,
       sourceConflictBridge
     );
     const clarification = evaluateClarification(
@@ -17458,21 +17468,84 @@ async function loadSchemaRegistry(schemaDirectory2, embeddedManifestDigest2, emb
   return { compilerVersion: manifest.compiler_version, schemaVersion: manifest.schema_version, schemas };
 }
 
-// src/advance-strict.mjs
-var moduleDirectory = path3.dirname(fileURLToPath(import.meta.url));
-var schemaDirectory = path3.resolve(
-  moduleDirectory,
-  true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
-);
-var embeddedManifestDigest = true ? "227a411349f5ac664f44cd39b5daabd7e182a85e463e2aadb6825f50a161974d" : void 0;
-var embeddedSchemaVersion = true ? "1.0.0" : void 0;
-var embeddedCompilerVersion = true ? "0.1.0" : void 0;
-var STAGE_SCHEMA = Object.freeze({
+// src/reply-routing.mjs
+var AGENT_STAGE_SCHEMA = Object.freeze({
   source_pack: "source-pack.schema.json",
   evidence_claims: "evidence-claims.schema.json",
   behavior_views: "behavior-views.schema.json",
   case_drafts: "case-drafts.schema.json"
 });
+var INTERNAL_STAGE_OWNER = Object.freeze({
+  source_policy: "source_pack",
+  evidence_claims: "evidence_claims",
+  behavior_views: "behavior_views",
+  test_obligations: "behavior_views",
+  classification: "case_drafts",
+  case_drafts: "case_drafts",
+  coverage: "case_drafts",
+  verification: "case_drafts",
+  render_markdown: "case_drafts",
+  clarification: "source_pack"
+});
+var POINTER_OWNER = Object.freeze({
+  source_pack: "source_pack",
+  evidence_claims: "evidence_claims",
+  behavior_views: "behavior_views",
+  case_drafts: "case_drafts"
+});
+var PROTOCOL_VIOLATION = Object.freeze({
+  kind: "fatal",
+  code: "RUNNER_PROTOCOL_VIOLATION"
+});
+function diagnosticOwner(pointer) {
+  if (!pointer.startsWith("/")) return null;
+  const separator = pointer.indexOf("/", 1);
+  const root = separator === -1 ? pointer.slice(1) : pointer.slice(1, separator);
+  return POINTER_OWNER[root] ?? null;
+}
+function mapInternalRevision(result) {
+  if (!result || typeof result !== "object") return PROTOCOL_VIOLATION;
+  const record2 = (
+    /** @type {Record<string, unknown>} */
+    result
+  );
+  if (record2.status !== "need_revision" || typeof record2.stage !== "string" || !Array.isArray(record2.diagnostics) || record2.diagnostics.length === 0) {
+    return PROTOCOL_VIOLATION;
+  }
+  let stage;
+  if (record2.stage === "schema") {
+    let owner = null;
+    for (const item of record2.diagnostics) {
+      if (!item || typeof item !== "object") return PROTOCOL_VIOLATION;
+      const path4 = (
+        /** @type {Record<string, unknown>} */
+        item.path
+      );
+      if (typeof path4 !== "string") return PROTOCOL_VIOLATION;
+      const candidate = diagnosticOwner(path4);
+      if (!candidate || owner && owner !== candidate) return PROTOCOL_VIOLATION;
+      owner = candidate;
+    }
+    stage = owner;
+  } else stage = INTERNAL_STAGE_OWNER[record2.stage];
+  if (!stage) return PROTOCOL_VIOLATION;
+  return {
+    kind: "need_revision",
+    stage,
+    schema_ref: AGENT_STAGE_SCHEMA[stage]
+  };
+}
+
+// src/advance-strict.mjs
+var moduleDirectory = path3.dirname(realpathSync(fileURLToPath(import.meta.url)));
+var schemaDirectory = path3.resolve(
+  moduleDirectory,
+  true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
+);
+var embeddedManifestDigest = true ? "f0a544b75e70fe4166d915cf0ff76bf26efc9ec88b4e7358fa3767b0a3087519" : void 0;
+var embeddedSchemaVersion = true ? "1.0.0" : void 0;
+var embeddedCompilerVersion = true ? "0.1.0" : void 0;
+var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
 var NATIVE_MAP_GET2 = Map.prototype.get;
@@ -17782,18 +17855,18 @@ function adapterEvidenceDiagnostics(evidenceClaims, claimsById) {
   return [...claimsById.entries()].filter(([, claim]) => claim.kind === "requirement" || claim.kind === "assumption").sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).flatMap(([claimId]) => {
     const indexedOwners = ownersByClaimId.get(claimId) ?? [];
     const owners = [];
-    let diagnosticOwner = false;
+    let diagnosticOwner2 = false;
     for (const owner of indexedOwners) {
-      if (owner.entry.status === "diagnostic") diagnosticOwner = true;
+      if (owner.entry.status === "diagnostic") diagnosticOwner2 = true;
       else owners.push(owner);
     }
-    if (owners.length === 0 && !diagnosticOwner) return [{
+    if (owners.length === 0 && !diagnosticOwner2) return [{
       category: "traceability",
       code: "NORMATIVE_CLAIM_UNLEDGERED",
       path: `/claims/${encodeURIComponent(claimId)}`,
       message: `accepted normative claim "${claimId}" requires its own Fact Ledger entry`
     }];
-    if (owners.length !== 1 || diagnosticOwner || !owners[0].valid) return [{
+    if (owners.length !== 1 || diagnosticOwner2 || !owners[0].valid) return [{
       category: "traceability",
       code: "NORMATIVE_CLAIM_LEDGER_INVALID",
       path: `/claims/${encodeURIComponent(claimId)}`,
@@ -17848,40 +17921,6 @@ function appendBatch(previous, current) {
     clarification_events: structuredClone(events.slice(previousEvents.length))
   };
 }
-async function clarificationInput(runDirectory, sourceRevision, sourcePack) {
-  const sameRevision = await guardedAwait(readJsonIfPresent(
-    runDirectory,
-    clarificationStatePath(runDirectory, sourceRevision)
-  ));
-  if (sameRevision) return {
-    prior_state: sameRevision.value,
-    append_batch: { decision_records: [], clarification_events: [] }
-  };
-  if (sourceRevision === 0) return {
-    prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
-    append_batch: { decision_records: [], clarification_events: [] }
-  };
-  const previousSource = await guardedAwait(readJsonIfPresent(runDirectory, acceptedPath(
-    runDirectory,
-    sourceRevision - 1,
-    "source_pack"
-  )));
-  const previousState = await guardedAwait(readJsonIfPresent(runDirectory, clarificationStatePath(
-    runDirectory,
-    sourceRevision - 1
-  )));
-  return {
-    prior_state: previousState?.value ?? initialClarificationState(sourceRevision - 1, previousSource ? maximumEventSequence(
-      /** @type {Record<string, unknown>} */
-      previousSource.value
-    ) : 0),
-    append_batch: previousSource ? appendBatch(
-      /** @type {Record<string, unknown>} */
-      previousSource.value,
-      sourcePack
-    ) : { decision_records: [], clarification_events: [] }
-  };
-}
 function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2) {
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests2 }),
@@ -17918,14 +17957,87 @@ async function acceptedDigests(runDirectory, sourceRevision) {
   if (obligations) values.test_obligations = obligations.digest;
   return values;
 }
-function externalStage(stage) {
-  if (stage === "source_policy") return "source_pack";
-  if (stage === "evidence_claims") return "evidence_claims";
-  if (stage === "behavior_views" || stage === "test_obligations") return "behavior_views";
-  return "case_drafts";
+function evaluateAdapterRevision(artifacts, clarification, registry) {
+  const sourcePack = artifacts.source_pack;
+  const caseDrafts = artifacts.case_drafts;
+  return (
+    /** @type {any} */
+    evaluateRevision(artifacts, {
+      systemLineage: {
+        compiler_version: registry.compilerVersion,
+        lineage: {
+          source_digest: digest(sourcePack),
+          case_draft_digest: digest(caseDrafts)
+        },
+        expert_recall_limits: ["Expert recall is benchmark-only."]
+      },
+      clarificationState: clarification,
+      interactionPolicy: "pause_for_clarification",
+      limits: ["Compilation is limited to the accepted immutable revision."]
+    })
+  );
+}
+function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prior) {
+  if (sourceRevision === 0) return null;
+  if (!prior) return fatalReply(
+    "RUN_INTEGRITY_ERROR",
+    "The prior accepted source revision is unavailable."
+  );
+  const appended = appendBatch(prior.source_pack, sourcePack);
+  if (!prior.complete) {
+    const diagnostics = [];
+    if (appended.decision_records.length > 0) diagnostics.push({
+      category: "classification",
+      code: "PRIOR_REVISION_INCOMPLETE",
+      path: "/decision_records",
+      message: "A Decision append requires a complete prior clarification lifecycle."
+    });
+    if (appended.clarification_events.length > 0) diagnostics.push({
+      category: "classification",
+      code: "PRIOR_REVISION_INCOMPLETE",
+      path: "/clarification_events",
+      message: "A clarification event append requires a complete prior clarification lifecycle."
+    });
+    if (diagnostics.length === 0) diagnostics.push({
+      category: "classification",
+      code: "PRIOR_REVISION_INCOMPLETE",
+      path: "/source_revision",
+      message: "A higher source revision requires a complete prior accepted revision."
+    });
+    return { kind: "need_revision", diagnostics };
+  }
+  const priorArtifacts = {};
+  for (const stage of ["evidence_claims", "behavior_views", "case_drafts"]) priorArtifacts[stage] = {
+    .../** @type {Record<string, unknown>} */
+    prior.artifacts[stage],
+    source_revision: sourceRevision
+  };
+  const clarification = { prior_state: prior.state, append_batch: appended };
+  const caseDrafts = priorArtifacts.case_drafts;
+  const result = evaluateAdapterRevision({
+    source_pack: sourcePack,
+    evidence_claims: priorArtifacts.evidence_claims,
+    behavior_views: priorArtifacts.behavior_views,
+    case_drafts: caseDrafts
+  }, clarification, registry);
+  if (result.status === "finished" || result.status === "need_user_answers") return null;
+  if (result.status !== "need_revision") return fatalReply(
+    "RUNNER_PROTOCOL_VIOLATION",
+    "Pure revision evaluation returned an unrecognized clarification result."
+  );
+  const route = mapInternalRevision(result);
+  if (route.kind === "fatal") return fatalReply(
+    route.code,
+    "Pure revision diagnostics have no unique Agent-writable artifact owner."
+  );
+  if (route.stage !== "source_pack") return fatalReply(
+    "RUN_INTEGRITY_ERROR",
+    "Prior accepted artifacts cannot be reused to validate this source revision."
+  );
+  return { kind: "need_revision", diagnostics: result.diagnostics };
 }
 async function acceptedRunIntegrity(runDirectory, revisions, registry) {
-  if (revisions.length === 0) return null;
+  if (revisions.length === 0) return { kind: "accepted_context", active: null };
   for (let index = 0; index < revisions.length; index += 1) {
     if (revisions[index] !== index) return fatalReply(
       "RUN_INTEGRITY_ERROR",
@@ -17933,8 +18045,15 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     );
   }
   let previousSource = null;
+  let previousState = null;
+  let previousComplete = true;
+  let active = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
     const sourceRevision = revisions[revisionIndex];
+    if (sourceRevision > 0 && !previousComplete) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "A higher accepted source revision cannot follow an incomplete prior revision."
+    );
     const sourceArtifact = await guardedAwait(readJson(
       runDirectory,
       acceptedPath(runDirectory, sourceRevision, "source_pack")
@@ -18024,39 +18143,68 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         );
       } else caseDrafts = record2;
     }
+    const clarificationInput = sourceRevision === 0 ? {
+      prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
+      append_batch: { decision_records: [], clarification_events: [] }
+    } : {
+      prior_state: previousState,
+      append_batch: appendBatch(
+        /** @type {Record<string, unknown>} */
+        previousSource,
+        sourcePack
+      )
+    };
     if (caseDrafts) {
-      const clarification = await guardedAwait(
-        clarificationInput(runDirectory, sourceRevision, sourcePack)
-      );
-      const replay = (
-        /** @type {any} */
-        evaluateRevision({
-          source_pack: sourcePack,
-          evidence_claims: evidenceClaims,
-          behavior_views: behaviorViews,
-          case_drafts: caseDrafts
-        }, {
-          systemLineage: {
-            compiler_version: registry.compilerVersion,
-            lineage: {
-              source_digest: digest(sourcePack),
-              case_draft_digest: digest(caseDrafts)
-            },
-            expert_recall_limits: ["Expert recall is benchmark-only."]
-          },
-          clarificationState: clarification,
-          interactionPolicy: "pause_for_clarification",
-          limits: ["Compilation is limited to the accepted immutable revision."]
-        })
-      );
-      if (replay.status === "need_revision") return fatalReply(
+      const artifacts = {
+        source_pack: sourcePack,
+        evidence_claims: (
+          /** @type {Record<string, unknown>} */
+          evidenceClaims
+        ),
+        behavior_views: (
+          /** @type {Record<string, unknown>} */
+          behaviorViews
+        ),
+        case_drafts: caseDrafts
+      };
+      const replay = evaluateAdapterRevision(artifacts, clarificationInput, registry);
+      if (replay.status !== "finished" && replay.status !== "need_user_answers" || !replay.clarification_state || typeof replay.clarification_state !== "object") return fatalReply(
         "RUN_INTEGRITY_ERROR",
         "Accepted complete revision failed deterministic semantic replay."
       );
+      const state = (
+        /** @type {Record<string, unknown>} */
+        replay.clarification_state
+      );
+      const statePath = clarificationStatePath(runDirectory, sourceRevision);
+      const storedState = await guardedAwait(readJsonIfPresent(runDirectory, statePath));
+      if (storedState && canonicalStringify(storedState.value) !== canonicalStringify(state)) return fatalReply(
+        "RUN_INTEGRITY_ERROR",
+        "Stored clarification state does not match deterministic accepted-artifact replay."
+      );
+      if (!storedState) await guardedAwait(atomicWriteJson(runDirectory, statePath, state));
+      previousState = state;
+      previousComplete = true;
+      active = {
+        complete: true,
+        source_pack: sourcePack,
+        artifacts,
+        state,
+        clarification_input: clarificationInput,
+        result: replay
+      };
+    } else {
+      previousState = null;
+      previousComplete = false;
+      active = {
+        complete: false,
+        source_pack: sourcePack,
+        clarification_input: clarificationInput
+      };
     }
     previousSource = sourcePack;
   }
-  return null;
+  return { kind: "accepted_context", active };
 }
 async function advanceStrictExclusive(runDirectory) {
   if (!runStoreIntrinsicsIntact()) return fatalReply(
@@ -18088,10 +18236,14 @@ async function advanceStrictExclusive(runDirectory) {
         await guardedAwait2(() => recoverStagingClaims(runDirectory));
         await guardedAwait2(() => cleanupTemporaryFiles(runDirectory));
         let revisions = await guardedAwait2(() => acceptedSourceRevisions(runDirectory));
-        const acceptedIntegrity = await guardedAwait2(
+        const acceptedAudit = await guardedAwait2(
           () => acceptedRunIntegrity(runDirectory, revisions, registry)
         );
-        if (acceptedIntegrity) return acceptedIntegrity;
+        if ("status" in acceptedAudit) return acceptedAudit;
+        const acceptedContext = (
+          /** @type {any} */
+          acceptedAudit
+        );
         let sourceCandidate = await guardedAwait2(() => stagedArtifact(
           runDirectory,
           "source_pack",
@@ -18193,6 +18345,20 @@ async function advanceStrictExclusive(runDirectory) {
             sourceCandidate.value,
             sourcePolicy.diagnostics
           );
+          const appendValidation = candidateRecord ? validateSourceRevisionAppend(
+            candidateRevision,
+            candidateRecord,
+            registry,
+            acceptedContext.active
+          ) : null;
+          if (appendValidation && "status" in appendValidation && appendValidation.status === "fatal") return appendValidation;
+          if (appendValidation && "kind" in appendValidation && appendValidation.kind === "need_revision") return revisionReply(
+            runDirectory,
+            "source_pack",
+            candidateRevision,
+            sourceCandidate.value,
+            appendValidation.diagnostics
+          );
           await guardedAwait2(() => promoteArtifact(
             runDirectory,
             candidateRevision,
@@ -18200,6 +18366,30 @@ async function advanceStrictExclusive(runDirectory) {
             sourceCandidate.value,
             sourceCandidate
           ));
+          acceptedContext.active = {
+            complete: false,
+            source_pack: (
+              /** @type {Record<string, unknown>} */
+              sourceCandidate.value
+            ),
+            clarification_input: candidateRevision === 0 ? {
+              prior_state: initialClarificationState(
+                0,
+                maximumEventSequence(
+                  /** @type {Record<string, unknown>} */
+                  sourceCandidate.value
+                )
+              ),
+              append_batch: { decision_records: [], clarification_events: [] }
+            } : {
+              prior_state: acceptedContext.active.state,
+              append_batch: appendBatch(
+                acceptedContext.active.source_pack,
+                /** @type {Record<string, unknown>} */
+                sourceCandidate.value
+              )
+            }
+          };
           const sourceDigests = await guardedAwait2(() => acceptedDigests(runDirectory, candidateRevision));
           await guardedAwait2(() => writeCheckpoint(runDirectory, checkpoint(
             candidateRevision,
@@ -18437,44 +18627,58 @@ async function advanceStrictExclusive(runDirectory) {
             "Accepted case_drafts failed deterministic integrity validation."
           );
         }
-        const clarification = await guardedAwait2(
-          () => clarificationInput(runDirectory, sourceRevision, sourcePack)
-        );
-        const result = (
-          /** @type {any} */
-          evaluateRevision({
-            source_pack: sourcePack,
-            evidence_claims: accepted.evidence_claims,
-            behavior_views: accepted.behavior_views,
-            case_drafts: caseArtifact.value
-          }, {
-            systemLineage: {
-              compiler_version: registry.compilerVersion,
-              lineage: {
-                source_digest: digest(sourcePack),
-                case_draft_digest: digest(caseArtifact.value)
-              },
-              expert_recall_limits: ["Expert recall is benchmark-only."]
-            },
-            clarificationState: clarification,
-            interactionPolicy: "pause_for_clarification",
-            limits: ["Compilation is limited to the accepted immutable revision."]
-          })
+        const activeContext = acceptedContext.active;
+        if (!activeContext || activeContext.source_pack.source_revision !== sourceRevision) {
+          return fatalReply(
+            "RUN_INTEGRITY_ERROR",
+            "Accepted lifecycle context does not match the active revision."
+          );
+        }
+        const evaluationArtifacts = {
+          source_pack: sourcePack,
+          evidence_claims: (
+            /** @type {Record<string, unknown>} */
+            accepted.evidence_claims
+          ),
+          behavior_views: (
+            /** @type {Record<string, unknown>} */
+            accepted.behavior_views
+          ),
+          case_drafts: (
+            /** @type {Record<string, unknown>} */
+            caseArtifact.value
+          )
+        };
+        const result = !caseFromStaging && activeContext.complete ? activeContext.result : evaluateAdapterRevision(
+          evaluationArtifacts,
+          activeContext.clarification_input,
+          registry
         );
         if (result.status === "need_revision") {
           if (!caseFromStaging) return fatalReply(
             "RUN_INTEGRITY_ERROR",
             "Accepted complete revision no longer passes deterministic evaluation."
           );
+          const route = mapInternalRevision(result);
+          if (route.kind === "fatal") return fatalReply(
+            route.code,
+            "Pure revision diagnostics have no unique Agent-writable artifact owner."
+          );
           const stage = (
             /** @type {keyof typeof STAGE_SCHEMA} */
-            externalStage(result.stage)
+            route.stage
           );
+          const replyArtifacts = {
+            source_pack: sourcePack,
+            evidence_claims: accepted.evidence_claims,
+            behavior_views: accepted.behavior_views,
+            case_drafts: caseArtifact.value
+          };
           return revisionReply(
             runDirectory,
             stage,
             sourceRevision,
-            caseArtifact.value,
+            replyArtifacts[stage],
             result.diagnostics
           );
         }
@@ -18599,11 +18803,21 @@ function advanceStrict(runDirectory) {
 }
 
 // src/entry.mjs
+function fatalReply2(code2, message) {
+  return {
+    status: "fatal",
+    diagnostics: [{ category: "reference", code: code2, message }]
+  };
+}
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
     const compilerVersion = true ? "0.1.0" : "0.1.0";
-    const reply = nodeMajor >= 20 ? compilerVersion.length > 0 ? await advanceStrict(process.argv[2] ?? "") : {
+    const userArguments = process.argv.slice(2);
+    const reply = userArguments.length !== 1 ? fatalReply2(
+      "RUNNER_ARGUMENTS_INVALID",
+      "The private runner accepts exactly one absolute run directory argument."
+    ) : nodeMajor >= 20 ? compilerVersion.length > 0 ? await advanceStrict(userArguments[0]) : {
       status: "fatal",
       diagnostics: [{
         category: "reference",
@@ -18627,4 +18841,13 @@ async function main() {
 `);
   }
 }
-await main();
+var directExecution = false;
+try {
+  directExecution = typeof process.argv[1] === "string" && pathToFileURL(realpathSync2(process.argv[1])).href === pathToFileURL(realpathSync2(fileURLToPath2(import.meta.url))).href;
+} catch {
+  directExecution = false;
+}
+if (directExecution) await main();
+export {
+  advanceStrict
+};

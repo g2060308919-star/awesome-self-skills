@@ -76,6 +76,15 @@ test('skill static contract keeps the adapter private concise and complete', asy
   assert.match(frontmatter[1], /traceab/u);
   assert.match(frontmatter[1], /Blocked/u);
   assert.match(frontmatter[1], /clarification/u);
+  for (const trigger of [
+    'PRD', 'module description', 'module-description', '需求文档', '模块说明',
+    '功能变更', '规则变更', '验收标准', '交互说明', '接口契约', '粘贴需求',
+    '测试用例', '测试点', '测试场景'
+  ]) assert.ok(frontmatter[1].includes(trigger), `frontmatter trigger missing: ${trigger}`);
+  for (const excluded of [
+    'Playwright', '浏览器 E2E', 'API', '接口自动化', '单元测试代码生成',
+    'code-review-only', '仅代码审查'
+  ]) assert.ok(frontmatter[1].includes(excluded), `frontmatter exclusion missing: ${excluded}`);
 
   assert.ok(skill.includes(
     'node <skill-dir>/scripts/test-compiler.mjs <absolute-run-directory>'
@@ -237,7 +246,63 @@ test('skill static policies freeze clarification and source-review boundaries', 
 });
 
 test('skill static UI metadata remains the generated closed interface', async () => {
-  assert.equal(await text('agents/openai.yaml'), `interface:\n  display_name: "高精度测试用例生成"\n  short_description: "从 PRD 生成高准确、高覆盖且可追溯的人工功能测试用例"\n  default_prompt: "使用 $generate-test-cases 根据这份 PRD 生成有依据、可执行的测试用例。"\n`);
+  assert.equal(await text('agents/openai.yaml'), `interface:\n  display_name: "高精度测试用例生成"\n  short_description: "从 PRD、需求文档或模块说明生成可追溯的人工功能测试用例"\n  default_prompt: "使用 $generate-test-cases 根据 PRD/module description/module-description、需求文档、模块说明、功能变更、规则变更、验收标准、交互说明、接口契约或粘贴需求，生成人工功能测试用例、测试点和测试场景；不用于 Playwright/浏览器 E2E、API automation/API 自动化/接口自动化、单元测试代码生成或仅代码审查/code-review-only。"\n`);
+});
+
+test('skill adapter validates Reply before writes and freezes durable run recovery', async () => {
+  const skill = await text('SKILL.md');
+  assert.match(
+    skill,
+    /validate[\s\S]*single JSON reply[\s\S]*`scripts\/schemas\/reply\.schema\.json`[\s\S]*before[\s\S]*(?:inspect|handle)[\s\S]*status[\s\S]*before[\s\S]*writ/iu
+  );
+  assert.match(
+    skill,
+    /stage[\s\S]*schema_ref[\s\S]*one-to-one[\s\S]*source_pack[\s\S]*evidence_claims[\s\S]*behavior_views[\s\S]*case_drafts/iu
+  );
+  assert.match(skill, /unknown[\s\S]*mismatch[\s\S]*PIPELINE_PROTOCOL_ERROR[\s\S]*no artifact/iu);
+  assert.doesNotMatch(skill, /If another stage is requested, follow its returned `schema_ref`/u);
+
+  assert.match(
+    skill,
+    /run identity[\s\S]*canonical absolute[\s\S]*persistent[\s\S]*private[\s\S]*current task/iu
+  );
+  assert.match(skill, /never[\s\S]*Skill installation directory[\s\S]*OS temporary directory/iu);
+  assert.match(skill, /context recovery[\s\S]*same[\s\S]*run directory[\s\S]*invoke[\s\S]*runner first/iu);
+  assert.match(skill, /`\.\.`[\s\S]*same canonical run/iu);
+  assert.match(
+    skill,
+    /clarification[\s\S]*request_delivery[\s\S]*reopen[\s\S]*unresolved business facts[\s\S]*append[\s\S]*same run/iu
+  );
+  assert.match(
+    skill,
+    /NEW_RUN_REQUIRED[\s\S]*preserve[\s\S]*old run[\s\S]*sibling[\s\S]*actual user[\s\S]*(?:source|scope) change/iu
+  );
+});
+
+test('progressive references close reply routing and durable append boundaries', async () => {
+  const behavior = await text('references/behavior-views.md');
+  assert.match(
+    behavior,
+    /schema-validated[\s\S]*`behavior_views`[\s\S]*`behavior-views\.schema\.json`[\s\S]*before writing/iu
+  );
+  const cases = await text('references/case-writing-policy.md');
+  assert.match(
+    cases,
+    /schema-validated[\s\S]*`case_drafts`[\s\S]*`case-drafts\.schema\.json`[\s\S]*before writing/iu
+  );
+  const clarification = await text('references/clarification-policy.md');
+  assert.match(
+    clarification,
+    /same canonical absolute run directory[\s\S]*re-invoke the runner first[\s\S]*never guess the stage/iu
+  );
+  assert.match(
+    clarification,
+    /original PRD[\s\S]*supplementary source[\s\S]*task scope[\s\S]*NEW_RUN_REQUIRED[\s\S]*preserve the old run/iu
+  );
+  assert.match(
+    clarification,
+    /Read `references\/clarification-policy\.md` before writing[\s\S]*higher Source Pack revision/iu
+  );
 });
 
 test('installed artifact excludes development surfaces model calls and network dependencies', async () => {

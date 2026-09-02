@@ -2,6 +2,8 @@
 
 Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls compiler finalization, not whether candidate drafts may be submitted.
 
+Confirm the runner requested the schema-validated `case_drafts` stage with `case-drafts.schema.json` before writing. Reject any other stage/schema pairing and never write compiler-derived coverage, verification, or obligations as a fifth Agent artifact.
+
 ## Build Oracle-gated Cases
 
 Read `derived/rNNN/test-obligations.json` before drafting, using the zero-padded revision requested by the runner. Treat it as compiler output, never edit it. For each Case, copy only the caseable formal obligation IDs it actually covers. Create exactly one `obligation-oracle` expectation for each linked obligation and set its single `closes_obligation_id` to that compiler-returned obligation ID. Its nonempty, unique `oracle_evidence_refs` must include its `evidence_ref`, cover every optional `required_oracle_refs` prebinding, and consist only of accepted, scope-covering Oracle evidence that the compiler can verify from the obligation sources, owner facts, prebindings, or legal E2 ancestry. An unrelated same-scope E3 claim is not a valid shortcut. If accepted evidence cannot close the obligation, submit a blocker instead of merging unrelated expectations or inventing an aggregate.

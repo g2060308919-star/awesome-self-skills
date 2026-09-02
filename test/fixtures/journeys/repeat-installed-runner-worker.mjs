@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import * as nodeUrl from 'node:url';
 import * as workerThreads from 'node:worker_threads';
 
 const { runnerPath, runDirectory, stageFiles, stageInputs, runIndex } = /** @type {any} */ (
@@ -31,26 +31,31 @@ function rawBytesEqual(left, right) {
   return true;
 }
 
-/** @param {number} stageIndex */
-async function invokePackagedEntry(stageIndex) {
-  process.argv = [process.execPath, runnerPath, runDirectory];
-  let output = '';
-  const writableStdout = /** @type {any} */ (process.stdout);
-  const originalWrite = writableStdout.write;
-  writableStdout.write = (/** @type {string|Uint8Array} */ chunk) => {
-    output += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
-    return true;
-  };
-  try {
-    const runnerUrl = /** @type {any} */ (nodeUrl).pathToFileURL(runnerPath);
-    runnerUrl.searchParams.set('task14_run', `${runIndex}-${stageIndex}`);
-    await import(runnerUrl.href);
-  } finally {
-    writableStdout.write = originalWrite;
-  }
-  const lines = output.trimEnd().split('\n');
-  assert.equal(lines.length, 1, `installed runner emitted ${lines.length} lines`);
-  return JSON.parse(lines[0]);
+function invokePackagedEntry() {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [runnerPath, runDirectory], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (/** @type {string} */ chunk) => { stdout += chunk; });
+    child.stderr.on('data', (/** @type {string} */ chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('close', (/** @type {number|null} */ code) => {
+      if (code !== 0) reject(new Error(`packaged CLI exited ${code}: ${stderr}`));
+      else if (stderr !== '') reject(new Error(`packaged CLI wrote stderr: ${stderr}`));
+      else {
+        const lines = stdout.trimEnd().split('\n');
+        if (!stdout.endsWith('\n') || lines.length !== 1) {
+          reject(new Error(`packaged CLI emitted ${lines.length} reply lines`));
+        } else {
+          try { resolve(JSON.parse(lines[0])); } catch (error) { reject(error); }
+        }
+      }
+    });
+  });
 }
 
 async function main() {
@@ -64,7 +69,6 @@ async function main() {
   const inputSnapshots = {};
   /** @type {any} */
   let finalReply = null;
-  let stageIndex = 0;
   for (const [stageName, fileName] of Object.entries(stageFiles)) {
     const rawBytes = new TextEncoder().encode(stageInputs[stageName]);
     const stagingDirectory = path.join(runDirectory, 'staging');
@@ -72,7 +76,7 @@ async function main() {
     await mkdir(stagingDirectory, { recursive: true });
     await writeFile(stagingPath, rawBytes, { flag: 'wx' });
     const beforeStat = await lstat(stagingPath);
-    const reply = await invokePackagedEntry(stageIndex);
+    const reply = await invokePackagedEntry();
     finalReply = reply;
     replySequence.push(`${reply.status}/${reply.stage ?? 'done'}`);
     inputs[stageName] = {
@@ -86,7 +90,6 @@ async function main() {
       rawBytes,
       acceptedPath: path.join(runDirectory, 'accepted/r000', fileName)
     };
-    stageIndex += 1;
   }
   assert.equal(finalReply?.status, 'finished', JSON.stringify(finalReply));
   for (const [stageName, snapshot] of Object.entries(inputSnapshots)) {

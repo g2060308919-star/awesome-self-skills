@@ -1,6 +1,6 @@
 ---
 name: generate-test-cases
-description: Use when a PRD or module description must become manual functional test Cases with high accuracy, high coverage, end-to-end traceability, explicit Blocked accounting, and convergent clarification.
+description: Use when a PRD, module description, module-description, 需求文档, 模块说明, 功能变更, 规则变更, 验收标准, 交互说明, 接口契约, 粘贴需求, 测试用例, 测试点, or 测试场景 must become manual functional test Cases with high accuracy, high coverage, end-to-end traceability, explicit Blocked accounting, and convergent clarification. Do not use for Playwright, 浏览器 E2E, API automation, API 自动化, 接口自动化, 单元测试代码生成, code-review-only, or 仅代码审查 requests.
 ---
 
 # Generate Test Cases
@@ -9,10 +9,10 @@ Produce evidence-grounded manual functional test Cases through the bundled deter
 
 ## Load policy only when needed
 
-- Read `references/evidence-policy.md` when collecting sources, resolving authority, creating locators, or writing `source_pack` and `evidence_claims`.
+- Read `references/evidence-policy.md` when collecting sources, resolving authority, creating locators, or writing `source_pack` and `evidence_claims`; read it before writing either artifact.
 - Read `references/behavior-views.md` when routing accepted facts, supplying `obligation_inputs`, and checking formal Test Point coverage; read it before writing `behavior_views`.
 - Read `references/clarification-policy.md` when handling `need_user_answers`, interpreting answers, delivering now, or reopening suppressed root issues.
-- Read `references/case-writing-policy.md` when constructing `case_drafts`, Oracles, Testability profiles, support reviews, or user-facing Case wording.
+- Read `references/case-writing-policy.md` when constructing `case_drafts`, Oracles, Testability profiles, support reviews, or user-facing Case wording; read it before writing `case_drafts`.
 
 Read the requested `scripts/schemas/<schema_ref>` before writing an artifact. Do not preload every reference or schema.
 
@@ -24,13 +24,15 @@ If any requirement content is readable, continue. Record partial extraction gaps
 
 ## Run the private workflow
 
-Resolve `<skill-dir>` to the directory containing this file. Create a new private absolute run directory. Invoke exactly:
+Resolve `<skill-dir>` to the directory containing this file. Freeze the run identity as a canonical absolute path inside a persistent private directory owned by the current task. Never place a run in the Skill installation directory or an OS temporary directory. A spelling that contains `..` and resolves to the same canonical path identifies the same canonical run.
+
+For context recovery, use the same run directory and invoke the runner first. Never infer the next stage from conversation history, a checkpoint, or directory contents. For a new run, create the private run directory and invoke exactly:
 
 ```text
 node <skill-dir>/scripts/test-compiler.mjs <absolute-run-directory>
 ```
 
-Capture the single JSON object from stdout. Treat stderr as diagnostics only. Use no extra mode or configuration argument.
+Capture the single JSON object from stdout. Validate the single JSON reply against `scripts/schemas/reply.schema.json` before inspecting or handling its status and before writing any artifact. The four valid stage and `schema_ref` pairs are one-to-one: `source_pack`/`source-pack.schema.json`, `evidence_claims`/`evidence-claims.schema.json`, `behavior_views`/`behavior-views.schema.json`, and `case_drafts`/`case-drafts.schema.json`. Treat an unknown stage, mismatched schema reference, malformed JSON, extra reply field, or any other schema failure as `PIPELINE_PROTOCOL_ERROR`; write no artifact. Treat stderr as diagnostics only. Use no extra mode or configuration argument.
 
 Follow this loop:
 
@@ -70,7 +72,7 @@ Use these fixed staging names:
 - `behavior_views` → `staging/behavior-views.json`
 - `case_drafts` → `staging/case-drafts.json`
 
-If another stage is requested, follow its returned `schema_ref`; never invent a process surface.
+Any other requested stage is `PIPELINE_PROTOCOL_ERROR`; write no artifact and never invent a process surface.
 
 ### Handle `need_revision`
 
@@ -97,6 +99,8 @@ Report the compiler diagnostics and the last valid checkpoint, if one exists. Do
 ## Preserve adapter boundaries
 
 - Generate only artifacts requested by the runner.
+- Clarification answers, `request_delivery`, `reopen_root_issues`, and supplements for unresolved business facts must append to the same run. These are source revisions, not new run identities.
+- If the original PRD, a supplementary source, or the material task scope changes, return `NEW_RUN_REQUIRED`, preserve the old run, and create or use a sibling private run only for an actual user source or scope change. Never silently repurpose the old run.
 - Keep normal workflow replies on exit code 0; treat a nonzero process exit as inability to form a JSON reply.
 - Keep user-visible content limited to the requested final files, a merged clarification set, `INPUT_UNAVAILABLE`, `PIPELINE_NO_PROGRESS`, or fatal diagnostics.
 - Never weaken evidence, invent an Oracle, hide a formal Test Point in Exploratory, or remove a Blocked item to improve coverage.

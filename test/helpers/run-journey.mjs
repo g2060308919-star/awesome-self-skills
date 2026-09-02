@@ -720,10 +720,9 @@ export function runInstalledJourney(name) {
 }
 
 /**
- * Load the exact packaged entry script in one low-priority Node child while
- * giving every repetition a fresh ESM instance and run directory. This keeps
- * the installed entry shape (including its top-level main) under test without
- * creating 100 competing processes during the repository-wide parallel suite.
+ * Execute the exact packaged CLI entry for every stage while giving every
+ * repetition a fresh run directory. The harness bounds concurrency so the
+ * 100-run entry stress does not create 100 competing processes.
  * @param {string} name
  * @param {number} repetitions
  * @returns {Promise<any>}

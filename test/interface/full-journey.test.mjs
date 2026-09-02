@@ -62,50 +62,75 @@ test('full journey: installed-shape runner accepts the complete all-E3 artifact 
   }
 });
 
-test('full journey hard gate: record_only cannot lower the installed public clarification gate', async () => {
+test('full journey hard gate: record_only is rejected as an extra public runner argument', async () => {
   const unresolved = setSourceRevision(buildJourney('local-source-conflict'), 0);
   const run = await runInstalledRevision(unresolved, {
     extraArgs: ['record_only']
   });
   try {
-    assert.equal(run.reply.status, 'need_user_answers');
-    assert.equal(run.reply.stage, 'clarification');
-    assert.equal(run.reply.blockers.length, 1);
+    assert.equal(run.reply.status, 'fatal');
+    assert.deepEqual(run.reply.diagnostics.map((/** @type {any} */ item) => item.code), [
+      'RUNNER_ARGUMENTS_INVALID'
+    ]);
   } finally {
     await rm(run.runDirectory, { recursive: true, force: true });
   }
 });
 
 test('full journey hard gate: an old checkpoint never masks a newer accepted revision', async () => {
-  const revision = buildJourney('all-e3');
-  const run = await runInstalledJourney('all-e3');
+  const revision = buildJourney('clarification-grounded');
+  const run = await runInstalledRevision(revision);
   try {
-    const oldCheckpoint = await readFile(path.join(run.runDirectory, 'checkpoint.json'), 'utf8');
-    const nextRevision = structuredClone(revision);
-    setSourceRevision(nextRevision, 1);
-    nextRevision.source_pack.decision_records.push({
-      decision_id: 'decision_followup', question_id: 'question_followup',
-      root_issue_ids: ['root_followup'],
-      affected_obligation_ids: [revision.case_drafts.cases[0].obligation_ids[0]],
-      clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-30',
-      question: 'Keep the accepted behavior?', answer: 'unknown', disposition: 'unknown',
-      authority_scope: 'checkout', effective_scope: 'checkout',
-      evidence_ref: 'locator_checkout', evidence_level: 'E1'
+    assert.equal(run.reply.status, 'need_user_answers', JSON.stringify(run.reply));
+    const rootIssueIds = run.reply.blockers.map(
+      (/** @type {any} */ item) => item.root_issue_id
+    );
+    const nextSource = structuredClone(revision.source_pack);
+    nextSource.source_revision = 1;
+    nextSource.clarification_events.push({
+      event_id: 'event_deliver_pending', clarification_event_seq: 1,
+      type: 'request_delivery', actor: 'owner', event_at: '2026-08-30',
+      root_issue_ids: rootIssueIds
     });
-    const acceptedNext = await runInstalledRevision(nextRevision, {
+    const deliveredRevision = setSourceRevision(structuredClone(revision), 1);
+    deliveredRevision.source_pack = nextSource;
+    const delivered = await runInstalledRevision(deliveredRevision, {
+      runDirectory: run.runDirectory
+    });
+    assert.equal(delivered.reply.status, 'finished', JSON.stringify(delivered.reply));
+    assert.equal(delivered.reply.source_revision, 1);
+    const oldCheckpoint = await readFile(path.join(run.runDirectory, 'checkpoint.json'), 'utf8');
+    const currentBefore = await readFile(path.join(run.runDirectory, 'output/current.json'), 'utf8');
+    const bundleBefore = await readFile(
+      path.join(run.runDirectory, 'output/r001/test-bundle.json'), 'utf8'
+    );
+
+    const reopenedSource = structuredClone(nextSource);
+    reopenedSource.source_revision = 2;
+    reopenedSource.clarification_events.push({
+      event_id: 'event_reopen_delivered', clarification_event_seq: 2,
+      type: 'reopen_root_issues', actor: 'owner', event_at: '2026-08-31',
+      root_issue_ids: rootIssueIds
+    });
+    const acceptedReopen = await runInstalledRevision({ source_pack: reopenedSource }, {
       runDirectory: run.runDirectory, stageNames: ['source_pack']
     });
-    assert.equal(acceptedNext.reply.status, 'need_artifact');
-    assert.deepEqual(acceptedNext.reply.scope, { source_revision: 1 });
+    assert.equal(acceptedReopen.reply.status, 'need_artifact', JSON.stringify(acceptedReopen.reply));
+    assert.equal(acceptedReopen.reply.stage, 'evidence_claims');
+    assert.deepEqual(acceptedReopen.reply.scope, { source_revision: 2 });
+
     await writeFile(path.join(run.runDirectory, 'checkpoint.json'), oldCheckpoint, 'utf8');
     const replay = await runInstalledRevision(null, { runDirectory: run.runDirectory });
     assert.equal(replay.reply.status, 'need_artifact');
     assert.equal(replay.reply.stage, 'evidence_claims');
-    assert.deepEqual(replay.reply.scope, { source_revision: 1 });
-    const current = JSON.parse(await readFile(
-      path.join(run.runDirectory, 'output/current.json'), 'utf8'
-    ));
-    assert.equal(current.source_revision, 0);
+    assert.deepEqual(replay.reply.scope, { source_revision: 2 });
+    assert.equal(
+      await readFile(path.join(run.runDirectory, 'output/current.json'), 'utf8'), currentBefore
+    );
+    assert.equal(
+      await readFile(path.join(run.runDirectory, 'output/r001/test-bundle.json'), 'utf8'),
+      bundleBefore
+    );
   } finally {
     await rm(run.runDirectory, { recursive: true, force: true });
   }
