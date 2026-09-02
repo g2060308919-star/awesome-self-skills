@@ -98,10 +98,12 @@ test('an expectation must point to its containing action rather than any future 
     support_review: 'supported',
     expectations: [{
       ...structuredClone(draft.steps[0].expectations[0]),
+      kind: 'auxiliary',
       expectation_id: 'expectation_confirmation',
       preceding_action_id: 'step_confirm'
     }]
   });
+  delete draft.steps[1].expectations[0].closes_obligation_id;
   draft.steps[0].expectations[0].preceding_action_id = 'step_confirm';
   const steps = /** @type {any[]} */ (draft.steps);
   draft.execution_signature.action_path = steps.map((step) => step.action);

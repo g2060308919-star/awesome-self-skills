@@ -22,7 +22,28 @@
               "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
               "view_element_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
               "required_oracle_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-              "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+              "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "combination_vector": {
+                "type": "object",
+                "required": ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+                "properties": {
+                  "policy_id": { "const": "twise-candidate-cap-v1" },
+                  "strength": { "type": "integer", "minimum": 2 },
+                  "owner": {
+                    "type": "object",
+                    "required": ["view_id", "fact_ids", "view_element_refs"],
+                    "properties": {
+                      "view_id": { "type": "string", "minLength": 1 },
+                      "fact_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+                      "view_element_refs": { "type": "array", "items": { "type": "object", "required": ["view_id", "element_id"], "properties": { "view_id": { "type": "string", "minLength": 1 }, "element_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 1, "uniqueItems": true }
+                    },
+                    "additionalProperties": false
+                  },
+                  "assignments": { "type": "array", "items": { "type": "object", "required": ["parameter_id", "value_id", "evidence_claim_id"], "properties": { "parameter_id": { "type": "string", "minLength": 1 }, "value_id": { "type": "string", "minLength": 1 }, "evidence_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 3, "uniqueItems": true },
+                  "forbid_evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                },
+                "additionalProperties": false
+              }
             },
             "additionalProperties": false
           },

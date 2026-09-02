@@ -483,6 +483,26 @@ function canonicalSetProjection(entries) {
   return canonicalStringify(projected);
 }
 
+/** @param {Record<string, unknown>} step @param {Record<string, unknown>} expectation */
+function oracleSemanticId(step, expectation) {
+  const oracle = isRecord(expectation.oracle) ? expectation.oracle : {};
+  const type = String(oracle.type ?? '');
+  const expectedField = ORACLE_FIELDS[/** @type {keyof typeof ORACLE_FIELDS} */ (type)];
+  return stableId('oracle', {
+    action: normalizeSemanticString(step.action),
+    observer: normalizeSemanticString(expectation.observer),
+    observation_surface: normalizeSemanticString(expectation.observation_surface),
+    observation_target: normalizeSemanticString(expectation.observation_target),
+    oracle: {
+      type,
+      ...(expectedField ? { [expectedField]: normalizeSemanticString(oracle[expectedField]) } : {}),
+      comparison: normalizeSemanticString(oracle.comparison),
+      ...(oracle.tolerance === undefined ? {} : { tolerance: oracle.tolerance }),
+      ...(oracle.window === undefined ? {} : { window: normalizeSemanticString(oracle.window) })
+    }
+  });
+}
+
 /** @param {Record<string, unknown>} caseDraft */
 function derivedExecutionSignature(caseDraft) {
   const preconditions = records(caseDraft.preconditions);
@@ -506,7 +526,7 @@ function derivedExecutionSignature(caseDraft) {
     pushArray(actionPath, normalizeSemanticString(steps[stepIndex].action));
     const expectations = records(steps[stepIndex].expectations);
     for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
-      oracleRefs.add(normalizeSemanticString(expectations[expectationIndex].expectation_id));
+      oracleRefs.add(oracleSemanticId(steps[stepIndex], expectations[expectationIndex]));
     }
   }
   return {
@@ -1065,7 +1085,10 @@ function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption
   for (const datum of records(caseDraft.data)) if (isRecord(datum.provenance)) add(datum.provenance.ref);
   for (const step of records(caseDraft.steps)) {
     add(step.action_evidence_ref);
-    for (const expectation of records(step.expectations)) add(expectation.evidence_ref);
+    for (const expectation of records(step.expectations)) {
+      add(expectation.evidence_ref);
+      for (const ref of strings(expectation.oracle_evidence_refs)) add(ref);
+    }
   }
   if (isRecord(caseDraft.testability_profile)) {
     for (const capability of records(caseDraft.testability_profile.capabilities)) add(capability.provenance_ref);
@@ -1295,6 +1318,147 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, d
   }
 }
 
+/** @param {Record<string, unknown>} claim */
+function isTypedOracleClaim(claim) {
+  if (claim.level === 'E3' && claim.kind === 'requirement') return true;
+  if (claim.level === 'E1' && claim.kind === 'assumption') return true;
+  return claim.level === 'E2' && claim.kind === 'expected-value'
+    && claim.derivation_target === 'expected-value'
+    && (claim.derivation_kind === 'formula' || claim.derivation_kind === 'decision-table-instance');
+}
+
+/**
+ * Independently replay Task 8's closed one-to-one Oracle ownership.
+ * @param {Record<string, unknown>} caseDraft
+ * @param {Record<string, unknown>[]} obligations
+ * @param {ReturnType<typeof buildEvidenceGraph>} graph
+ * @param {Map<string, Set<string>>} factIdsByObligation
+ * @param {Map<string, Record<string, unknown>>} factsById
+ * @param {string} path
+ * @param {Diagnostic[]} diagnostics
+ */
+function validateExplicitOracleClosure(
+  caseDraft, obligations, graph, factIdsByObligation, factsById, path, diagnostics
+) {
+  const obligationsById = new Map();
+  const counts = new Map();
+  for (let index = 0; index < obligations.length; index += 1) {
+    const obligation = obligations[index];
+    const obligationId = String(obligation.obligation_id);
+    obligationsById.set(obligationId, obligation);
+    counts.set(obligationId, 0);
+  }
+  /** @type {Map<string, {roots:Set<string>, scope:string}>} */
+  const closureByObligation = new Map();
+  const forbiddenByObligation = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const descendantsByRootSignature = new Map();
+
+  /** @param {{roots:Set<string>,scope:string}} closure @param {string} claimId */
+  const allows = (closure, claimId) => {
+    const claim = graph.claimsById.get(claimId);
+    if (!claim || !isTypedOracleClaim(claim) || typeof claim.scope !== 'string'
+      || !scopeContains(claim.scope, closure.scope)) return false;
+    if (closure.roots.has(claimId)) return true;
+    if (claim.level !== 'E2') return false;
+    const parents = graph.parentsByClaim.get(claimId) ?? [];
+    for (let index = 0; index < parents.length; index += 1) {
+      if (closure.roots.has(parents[index])) return true;
+    }
+    const signature = canonicalStringify(sortArray([...closure.roots], compareCodePoints));
+    let descendants = descendantsByRootSignature.get(signature);
+    if (!descendants) {
+      descendants = new Set();
+      const pending = [...closure.roots];
+      let cursor = 0;
+      while (cursor < pending.length) {
+        const current = pending[cursor];
+        cursor += 1;
+        if (descendants.has(current)) continue;
+        descendants.add(current);
+        const children = graph.childrenByClaim.get(current) ?? [];
+        for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+          pushArray(pending, children[childIndex]);
+        }
+      }
+      descendantsByRootSignature.set(signature, descendants);
+    }
+    return descendants.has(claimId);
+  };
+
+  for (const [obligationId, obligation] of obligationsById) {
+    const roots = new Set([
+      ...strings(obligation.source_claim_ids), ...strings(obligation.required_oracle_refs)
+    ]);
+    for (const factId of factIdsByObligation.get(obligationId) ?? []) {
+      const fact = factsById.get(factId);
+      if (!fact) continue;
+      roots.add(String(fact.claim_id ?? ''));
+      for (const ref of strings(fact.source_claim_ids)) roots.add(ref);
+    }
+    const vector = isRecord(obligation.combination_vector) ? obligation.combination_vector : {};
+    const forbidden = new Set(strings(vector.forbid_evidence_refs));
+    closureByObligation.set(obligationId, { roots, scope: String(obligation.scope ?? '') });
+    forbiddenByObligation.set(obligationId, forbidden);
+  }
+  const expectations = caseExpectations(caseDraft);
+  for (let index = 0; index < expectations.length; index += 1) {
+    const expectation = expectations[index];
+    const expectationPath = `${path}/steps/expectations/${index}`;
+    const oracleRefs = strings(expectation.oracle_evidence_refs);
+    const oracleRefSet = new Set(oracleRefs);
+    const evidenceRef = String(expectation.evidence_ref ?? '');
+    if (oracleRefs.length === 0 || oracleRefSet.size !== oracleRefs.length
+      || !oracleRefSet.has(evidenceRef)) pushArray(diagnostics, diagnostic(
+      'traceability', 'CASE_ORACLE_EVIDENCE_INVALID', `${expectationPath}/oracle_evidence_refs`,
+      'Oracle evidence must be nonempty and include evidence_ref exactly once'
+    ));
+    if (expectation.kind === 'obligation-oracle') {
+      const obligationId = String(expectation.closes_obligation_id ?? '');
+      const obligation = obligationsById.get(obligationId);
+      if (!obligation || obligation.caseable !== true || obligation.kind === 'requirement-gap') {
+        pushArray(diagnostics, diagnostic(
+          'reference', 'CASE_ORACLE_CLOSE_TARGET_INVALID', `${expectationPath}/closes_obligation_id`,
+          'obligation-oracle must close one linked caseable Test Point'
+        ));
+        continue;
+      }
+      counts.set(obligationId, (counts.get(obligationId) ?? 0) + 1);
+      const required = strings(obligation.required_oracle_refs);
+      if (someArray(required, (ref) => !oracleRefSet.has(ref))) pushArray(diagnostics, diagnostic(
+        'traceability', 'CASE_ORACLE_PREBINDING_MISSING', expectationPath,
+        'closing expectation must include every required Oracle prebinding'
+      ));
+      const closure = closureByObligation.get(obligationId);
+      const forbidden = forbiddenByObligation.get(obligationId) ?? new Set();
+      if (someArray(oracleRefs, (ref) => forbidden.has(ref))) pushArray(diagnostics, diagnostic(
+        'traceability', 'CASE_ORACLE_EVIDENCE_FORBIDDEN', expectationPath,
+        'forbid evidence cannot become a selected-vector Oracle'
+      ));
+      else if (!closure || someArray(oracleRefs, (ref) => !allows(closure, ref))) pushArray(diagnostics, diagnostic(
+        'traceability', 'CASE_ORACLE_EVIDENCE_UNRELATED', expectationPath,
+        'Oracle evidence is outside the closed Test Point ancestry'
+      ));
+    } else if (expectation.kind === 'auxiliary') {
+      if (Object.hasOwn(expectation, 'closes_obligation_id')
+        || someArray(oracleRefs, (ref) => !someArray(
+          [...closureByObligation.values()], (closure) => allows(closure, ref)
+        ))) pushArray(diagnostics, diagnostic(
+        'traceability', 'CASE_AUXILIARY_ORACLE_INVALID', expectationPath,
+        'auxiliary expectations cannot close Test Points and must use legal Case Oracle evidence'
+      ));
+    } else pushArray(diagnostics, diagnostic(
+      'classification', 'CASE_EXPECTATION_KIND_INVALID', `${expectationPath}/kind`,
+      'expectation kind must be obligation-oracle or auxiliary'
+    ));
+  }
+  for (const [obligationId, count] of counts) if (count !== 1) pushArray(diagnostics, diagnostic(
+    'traceability', count === 0 ? 'CASE_ORACLE_CLOSURE_MISSING' : 'CASE_ORACLE_CLOSURE_DUPLICATE',
+    `${path}/obligation_ids/${pointerPart(obligationId)}`,
+    'every linked caseable Test Point must be closed by exactly one obligation-oracle expectation'
+  ));
+}
+
 /**
  * @param {Record<string, unknown>} caseDraft
  * @param {string} lane
@@ -1418,33 +1582,15 @@ function validateCaseTraceability(
   };
   if (canonicalStringify(submittedSignature) !== canonicalStringify(derivedSignature)) pushArray(diagnostics, diagnostic(
     'traceability', 'CASE_EXECUTION_SIGNATURE_MISMATCH', `${path}/execution_signature`,
-    'execution signature must be derived exactly from role, preconditions, data, ordered actions, and expectation identities'
+    'execution signature must be derived exactly from role, preconditions, data, ordered actions, and typed Oracle semantics'
   ));
-  const submittedOracleIds = strings(signature.oracle_refs);
-  if (expectations.length < obligationIds.length || expectationIds.length !== expectations.length
-    || new Set(expectationIds).size !== expectationIds.length || !sameStrings(expectationIds, submittedOracleIds)) pushArray(diagnostics, diagnostic(
-    'traceability', 'CASE_ORACLE_TRACE_MISSING', `${path}/execution_signature/oracle_refs`,
-    'every covered Test Point requires a distinct independently locatable expectation Oracle'
+  if (expectationIds.length !== expectations.length || new Set(expectationIds).size !== expectationIds.length) pushArray(diagnostics, diagnostic(
+    'traceability', 'CASE_ORACLE_TRACE_MISSING', `${path}/steps`,
+    'every expectation must remain independently locatable'
   ));
-  /** @type {Array<{required:string[]}>} */
-  const requirementList = [];
-  for (const obligationId of obligationIds) {
-    const oracleRoots = sortArray(strings(obligationsById.get(obligationId)?.required_oracle_refs), compareCodePoints);
-    pushArray(requirementList, { required: oracleRoots });
-  }
-  /** @type {Array<{evidenceRef:string}>} */
-  const expectationList = [];
-  for (const expectation of expectations) {
-    const evidenceRef = String(expectation.evidence_ref ?? '');
-    pushArray(expectationList, { evidenceRef });
-  }
-  if (!hasCompleteOracleOwnership(requirementList, expectationList, evidenceGraph)) pushArray(diagnostics, diagnostic(
-    'traceability', 'CASE_ORACLE_OWNERSHIP_INCOMPLETE', `${path}/steps`,
-    'every linked Test Point must own one distinct concrete expectation covering all required Oracles through accepted ancestry'
-  ));
-  if (Object.hasOwn(signature, 'test_point_ids') && !sameStrings(strings(signature.test_point_ids), obligationIds)) pushArray(diagnostics, diagnostic(
-    'traceability', 'CASE_TEST_POINT_TRACE_MISMATCH', `${path}/execution_signature/test_point_ids`, 'Case signature Test Point associations must be exact'
-  ));
+  validateExplicitOracleClosure(
+    caseDraft, linkedObligations, evidenceGraph, factIdsByObligation, factsById, path, diagnostics
+  );
 }
 
 /** @param {Record<string, unknown>} root */
@@ -1763,6 +1909,76 @@ function buildBundleTrusted(context) {
       factIds.add(String(route.fact_id ?? ''));
       factIdsByObligation.set(obligationId, factIds);
     }
+  }
+  for (const obligation of obligations) {
+    const obligationId = String(obligation.obligation_id ?? '');
+    const vector = isRecord(obligation.combination_vector) ? obligation.combination_vector : null;
+    if (!vector) continue;
+    const assignments = records(vector.assignments);
+    const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ''));
+    const validStrength = Number.isSafeInteger(vector.strength)
+      && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
+    if (vector.policy_id !== 'twise-candidate-cap-v1' || !validStrength
+      || new Set(parameterIds).size !== parameterIds.length
+      || obligation.kind !== 'interaction' || obligation.caseable !== true) pushArray(
+      diagnostics, diagnostic(
+        'traceability', 'TWISE_VECTOR_CONTRACT_INVALID',
+        `/obligations/${pointerPart(obligationId)}/combination_vector`,
+        'selected vectors must use the frozen policy, strength within unique assignments, and caseable interaction obligations'
+      )
+    );
+    const sourceClaims = new Set(strings(obligation.source_claim_ids));
+    const owner = isRecord(vector.owner) ? vector.owner : {};
+    const routedFacts = factIdsByObligation.get(obligationId) ?? new Set();
+    for (const factId of strings(owner.fact_ids)) {
+      if (!routedFacts.has(factId)) pushArray(diagnostics, diagnostic(
+        'traceability', 'TWISE_OWNER_FACT_ROUTE_MISSING',
+        `/obligations/${pointerPart(obligationId)}/combination_vector/owner/fact_ids/${pointerPart(factId)}`,
+        'every selected-vector owner fact must route to the vector obligation'
+      ));
+      const fact = factsById.get(factId);
+      for (const ref of fact ? [String(fact.claim_id ?? ''), ...strings(fact.source_claim_ids)] : []) {
+        if (!sourceClaims.has(ref)) pushArray(diagnostics, diagnostic(
+          'traceability', 'TWISE_OWNER_SOURCE_MISSING',
+          `/obligations/${pointerPart(obligationId)}/source_claim_ids`,
+          'selected-vector sources must inherit every owner fact root'
+        ));
+      }
+    }
+    const viewRefs = new Set(strings(obligation.view_element_refs));
+    for (const ref of records(owner.view_element_refs)) {
+      const qualified = `${String(ref.view_id ?? '')}#${String(ref.element_id ?? '')}`;
+      if (!viewRefs.has(qualified)) pushArray(diagnostics, diagnostic(
+        'traceability', 'TWISE_OWNER_ELEMENT_REF_MISSING',
+        `/obligations/${pointerPart(obligationId)}/combination_vector/owner/view_element_refs`,
+        'selected-vector obligations must inherit every owner view element reference'
+      ));
+    }
+    for (const [assignmentIndex, assignment] of assignments.entries()) {
+      const claimId = String(assignment.evidence_claim_id ?? '');
+      const claim = claimsById.get(claimId);
+      if (!sourceClaims.has(claimId)) pushArray(diagnostics, diagnostic(
+        'traceability', 'TWISE_SELECTED_VALUE_SOURCE_MISSING',
+        `/obligations/${pointerPart(obligationId)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+        'every selected-value evidence claim must be carried by the vector obligation sources'
+      ));
+      if (!claim || claim.kind === 'diagnostic' || typeof claim.scope !== 'string'
+        || typeof obligation.scope !== 'string' || !scopeContains(claim.scope, obligation.scope)) pushArray(
+        diagnostics, diagnostic(
+          'traceability', 'TWISE_SELECTED_VALUE_EVIDENCE_INVALID',
+          `/obligations/${pointerPart(obligationId)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+          'selected-value evidence must be accepted, non-diagnostic, and cover the obligation scope'
+        )
+      );
+    }
+    const forbidden = new Set(strings(vector.forbid_evidence_refs));
+    for (const ref of strings(obligation.required_oracle_refs)) if (forbidden.has(ref)) pushArray(
+      diagnostics, diagnostic(
+        'traceability', 'TWISE_ORACLE_FORBID_CONFLICT',
+        `/obligations/${pointerPart(obligationId)}/required_oracle_refs/${pointerPart(ref)}`,
+        'forbid evidence cannot be an Oracle prebinding'
+      )
+    );
   }
   /** @type {Map<string, Set<string>>} */
   const formalRootsByObligation = new Map();
@@ -2208,7 +2424,12 @@ function buildBundleTrusted(context) {
       const executableRouteIds = filterArray(
         obligationIds, (_id, index) => dispositions[index] === 'grounded' || dispositions[index] === 'conditional'
       );
-      if (executableRouteIds.length > 0 && everyArray(executableRouteIds, (id) => sharesCase(factId, id))) status = 'covered';
+      const hasRoutedRequirementGap = someArray(obligationIds, (id) => (
+        obligationsById.get(id)?.kind === 'requirement-gap'
+          && pointsById.get(id)?.classification === 'blocked'
+      ));
+      if (hasRoutedRequirementGap) status = 'blocked';
+      else if (executableRouteIds.length > 0 && everyArray(executableRouteIds, (id) => sharesCase(factId, id))) status = 'covered';
       else if (everyArray(dispositions, (item) => item === 'not_applicable')) status = 'not_applicable';
       else if (executableRouteIds.length > 0) pushArray(diagnostics, diagnostic(
         'traceability', 'REQUIREMENT_CASE_TRACE_MISSING', `/coverage/requirements/${pointerPart(factId)}`, 'an executable fact route requires a reverse Case association'

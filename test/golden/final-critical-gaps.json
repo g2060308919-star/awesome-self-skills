@@ -36,6 +36,7 @@
           "support_review": "supported",
           "expectations": [
             {
+              "kind": "obligation-oracle",
               "expectation_id": "expectation_order_accepted",
               "business_assertion": "The order is accepted",
               "preceding_action_id": "step_submit",
@@ -44,6 +45,8 @@
               "observation_target": "order status",
               "oracle": { "type": "state", "expected_state": "accepted", "comparison": "equals" },
               "evidence_ref": "claim_oracle_grounded",
+              "oracle_evidence_refs": ["claim_oracle_grounded"],
+              "closes_obligation_id": "obligation_grounded",
               "support_review": "supported"
             }
           ]
@@ -76,8 +79,7 @@
         "precondition_state": "[{\"condition\":\"cart is ready\",\"reachable_from\":\"empty cart\"}]",
         "data_partition": "[{\"name\":\"cart total boundary\",\"value\":\"100.00\"}]",
         "action_path": ["Submit checkout"],
-        "oracle_refs": ["expectation_order_accepted"],
-        "test_point_ids": ["obligation_grounded"]
+        "oracle_refs": ["oracle_8335fa52c651d8e3"]
       }
     }
   ],

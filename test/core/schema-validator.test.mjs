@@ -67,10 +67,10 @@ function completeCase(caseId = 'case_a') {
     steps: [{
       step_id: 'step_save', action: 'Save', action_evidence_ref: 'claim_a', support_review: 'supported',
       expectations: [
-        { expectation_id: 'expect_value', business_assertion: 'The save confirmation is visible.', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'ui', observation_target: 'toast', oracle: { type: 'value', expected_value: 'Saved', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' },
-        { expectation_id: 'expect_state', business_assertion: 'The profile enters saved state.', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'api', observation_target: 'profile.state', oracle: { type: 'state', expected_state: 'saved', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' },
-        { expectation_id: 'expect_event', business_assertion: 'A profile event is emitted.', preceding_action_id: 'step_save', observer: 'event-reader', observation_surface: 'event-stream', observation_target: 'profile.saved', oracle: { type: 'event', expected_event: 'profile.saved', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' },
-        { expectation_id: 'expect_effect', business_assertion: 'The audit entry is persisted.', preceding_action_id: 'step_save', observer: 'auditor', observation_surface: 'database', observation_target: 'audit_log', oracle: { type: 'side-effect', expected_side_effect: 'one new save entry', comparison: 'equals' }, evidence_ref: 'claim_a', support_review: 'supported' }
+        { kind: 'obligation-oracle', expectation_id: 'expect_value', business_assertion: 'The save confirmation is visible.', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'ui', observation_target: 'toast', oracle: { type: 'value', expected_value: 'Saved', comparison: 'equals' }, evidence_ref: 'claim_a', oracle_evidence_refs: ['claim_a'], closes_obligation_id: 'obligation_a', support_review: 'supported' },
+        { kind: 'auxiliary', expectation_id: 'expect_state', business_assertion: 'The profile enters saved state.', preceding_action_id: 'step_save', observer: 'member', observation_surface: 'api', observation_target: 'profile.state', oracle: { type: 'state', expected_state: 'saved', comparison: 'equals' }, evidence_ref: 'claim_a', oracle_evidence_refs: ['claim_a'], support_review: 'supported' },
+        { kind: 'auxiliary', expectation_id: 'expect_event', business_assertion: 'A profile event is emitted.', preceding_action_id: 'step_save', observer: 'event-reader', observation_surface: 'event-stream', observation_target: 'profile.saved', oracle: { type: 'event', expected_event: 'profile.saved', comparison: 'equals' }, evidence_ref: 'claim_a', oracle_evidence_refs: ['claim_a'], support_review: 'supported' },
+        { kind: 'auxiliary', expectation_id: 'expect_effect', business_assertion: 'The audit entry is persisted.', preceding_action_id: 'step_save', observer: 'auditor', observation_surface: 'database', observation_target: 'audit_log', oracle: { type: 'side-effect', expected_side_effect: 'one new save entry', comparison: 'equals' }, evidence_ref: 'claim_a', oracle_evidence_refs: ['claim_a'], support_review: 'supported' }
       ]
     }],
     testability_profile: {
@@ -81,7 +81,7 @@ function completeCase(caseId = 'case_a') {
     post_state: { state: 'saved', evidence_ref: 'claim_a', support_review: 'supported' },
     cleanup: { required: false, no_cleanup_reason: 'The fixture is isolated.', no_cleanup_evidence_ref: 'claim_a', support_review: 'supported' },
     evidence_refs: ['claim_a', 'claim_e2', 'claim_role'],
-    execution_signature: { role: 'member', precondition_state: 'signed-in', data_partition: 'valid-boundary', action_path: ['open', 'save'], oracle_refs: ['expect_effect', 'expect_event', 'expect_state', 'expect_value'], test_point_ids: ['obligation_a'] }
+    execution_signature: { role: 'member', precondition_state: 'signed-in', data_partition: 'valid-boundary', action_path: ['open', 'save'], oracle_refs: ['expect_effect', 'expect_event', 'expect_state', 'expect_value'] }
   };
 }
 

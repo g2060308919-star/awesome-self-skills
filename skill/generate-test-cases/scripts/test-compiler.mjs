@@ -69,7 +69,7 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/obligation_ids",
   "/case_ids",
   "/oracle_refs",
-  "/test_point_ids",
+  "/oracle_evidence_refs",
   "/asked_root_issue_ids",
   "/sources",
   "/locators",
@@ -109,11 +109,27 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/interaction_candidates",
   "/interaction_candidates/module_ids",
   "/interaction_candidates/source_claim_ids",
+  "/obligation_inputs/combination_requests",
+  "/obligation_inputs/combination_requests/owner/fact_ids",
+  "/obligation_inputs/combination_requests/owner/view_element_refs",
+  "/obligation_inputs/combination_requests/parameters",
+  "/obligation_inputs/combination_requests/parameters/values",
+  "/obligation_inputs/combination_requests/constraints",
+  "/obligation_inputs/combination_requests/constraints/assignments",
+  "/obligation_inputs/combination_requests/constraints/evidence_refs",
+  "/obligation_inputs/combination_requests/interaction_risk/evidence_refs",
+  "/obligation_inputs/combination_requests/vector_oracles",
+  "/obligation_inputs/combination_requests/vector_oracles/assignments",
+  "/obligation_inputs/combination_requests/vector_oracles/required_oracle_refs",
   "/obligations",
   "/obligations/source_claim_ids",
   "/obligations/view_element_refs",
   "/obligations/required_oracle_refs",
   "/obligations/required_capabilities",
+  "/obligations/combination_vector/owner/fact_ids",
+  "/obligations/combination_vector/owner/view_element_refs",
+  "/obligations/combination_vector/assignments",
+  "/obligations/combination_vector/forbid_evidence_refs",
   "/fact_routes",
   "/fact_routes/obligation_ids",
   "/interaction_routes",
@@ -126,22 +142,22 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/cases/preconditions/source_claim_ids",
   "/cases/data",
   "/cases/steps/expectations",
+  "/cases/steps/expectations/oracle_evidence_refs",
   "/cases/testability_profile/capabilities",
   "/cases/testability_profile/observers",
   "/cases/testability_profile/controls",
   "/cases/execution_signature/oracle_refs",
-  "/cases/execution_signature/test_point_ids",
   "/fact_ids",
   "/evidence_refs",
   "/preconditions",
   "/preconditions/source_claim_ids",
   "/data",
   "/steps/expectations",
+  "/steps/expectations/oracle_evidence_refs",
   "/testability_profile/capabilities",
   "/testability_profile/observers",
   "/testability_profile/controls",
   "/execution_signature/oracle_refs",
-  "/execution_signature/test_point_ids",
   "/obligation_dispositions",
   "/obligation_dispositions/case_ids",
   "/obligation_dispositions/evidence_refs",
@@ -156,11 +172,11 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/grounded/preconditions/source_claim_ids",
   "/grounded/data",
   "/grounded/steps/expectations",
+  "/grounded/steps/expectations/oracle_evidence_refs",
   "/grounded/testability_profile/capabilities",
   "/grounded/testability_profile/observers",
   "/grounded/testability_profile/controls",
   "/grounded/execution_signature/oracle_refs",
-  "/grounded/execution_signature/test_point_ids",
   "/conditional",
   "/conditional/fact_ids",
   "/conditional/obligation_ids",
@@ -170,11 +186,11 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/conditional/preconditions/source_claim_ids",
   "/conditional/data",
   "/conditional/steps/expectations",
+  "/conditional/steps/expectations/oracle_evidence_refs",
   "/conditional/testability_profile/capabilities",
   "/conditional/testability_profile/observers",
   "/conditional/testability_profile/controls",
   "/conditional/execution_signature/oracle_refs",
-  "/conditional/execution_signature/test_point_ids",
   "/blocked",
   "/exploratory",
   "/coverage/requirements/entries",
@@ -192,7 +208,7 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/blockers/affected_obligation_ids"
 ]);
 var ROOT_ISSUE_ASSOCIATIONS = /* @__PURE__ */ new Set(["case_ids", "case_id", "test_point_ids", "test_point_id", "obligation_ids", "obligation_id"]);
-var EXECUTION_SIGNATURE_ASSOCIATIONS = /* @__PURE__ */ new Set(["test_point_ids", "test_point_id", "obligation_ids", "obligation_id"]);
+var EXECUTION_SIGNATURE_ASSOCIATIONS = /* @__PURE__ */ new Set(["obligation_ids", "obligation_id"]);
 var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/sources", "source_id"],
   ["/locators", "locator_id"],
@@ -378,7 +394,7 @@ var behavior_views_schema_default = {
         { type: "object", required: ["kind", "fact_ids"], properties: { kind: { const: "facts" }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false },
         { type: "object", required: ["kind", "view_element_refs"], properties: { kind: { const: "view-elements" }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
       ] }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, source_claim_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, required_oracle_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }, required_capabilities: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } },
-      combination_requests: { type: "array", items: { type: "object", required: ["owner", "scope", "strength", "parameters", "constraints", "interaction_risk", "vector_oracles"], properties: { owner: { type: "object", required: ["view_id", "fact_ids", "view_element_refs"], properties: { view_id: { type: "string", minLength: 1 }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, scope: { type: "string", minLength: 1 }, strength: { type: "integer", minimum: 1 }, parameters: { type: "array", items: { type: "object", required: ["parameter_id", "values"], properties: { parameter_id: { type: "string", minLength: 1 }, values: { type: "array", items: { type: "object", required: ["value_id", "evidence_claim_id"], properties: { value_id: { type: "string", minLength: 1 }, evidence_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, minItems: 1 }, constraints: { type: "array", items: { type: "object", required: ["kind", "assignments", "evidence_refs"], properties: { kind: { const: "forbid" }, assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false } }, interaction_risk: { type: "object", required: ["risk", "evidence_refs"], properties: { risk: { enum: ["critical", "high", "medium", "low"] }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false }, vector_oracles: { type: "array", items: { type: "object", required: ["assignments", "required_oracle_refs"], properties: { assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }, required_oracle_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } } }, additionalProperties: false } }
+      combination_requests: { type: "array", items: { type: "object", required: ["owner", "scope", "strength", "parameters", "constraints", "interaction_risk", "vector_oracles"], properties: { owner: { type: "object", required: ["view_id", "fact_ids", "view_element_refs"], properties: { view_id: { type: "string", minLength: 1 }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, scope: { type: "string", minLength: 1 }, strength: { type: "integer", minimum: 2 }, parameters: { type: "array", items: { type: "object", required: ["parameter_id", "values"], properties: { parameter_id: { type: "string", minLength: 1 }, values: { type: "array", items: { type: "object", required: ["value_id", "evidence_claim_id"], properties: { value_id: { type: "string", minLength: 1 }, evidence_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, minItems: 3 }, constraints: { type: "array", items: { type: "object", required: ["kind", "assignments", "evidence_refs"], properties: { kind: { const: "forbid" }, assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false } }, interaction_risk: { type: "object", required: ["risk", "evidence_refs"], properties: { risk: { enum: ["critical", "high", "medium", "low"] }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, vector_oracles: { type: "array", items: { type: "object", required: ["assignments", "required_oracle_refs"], properties: { assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }, required_oracle_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false } } }, additionalProperties: false } }
     }, additionalProperties: false },
     interaction_matrix: { type: "array", items: { type: "object", required: ["module_ids", "dimension", "status"], properties: { module_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }, status: { enum: ["checked-no-signal", "candidate"] } }, additionalProperties: false } },
     interaction_candidates: { type: "array", items: { oneOf: [
@@ -423,22 +439,7 @@ var case_drafts_schema_default = {
             action: { type: "string", minLength: 1 },
             action_evidence_ref: { type: "string", minLength: 1 },
             support_review: { enum: ["supported", "contradicted", "uncertain"] },
-            expectations: { type: "array", minItems: 1, items: { type: "object", required: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"], properties: {
-              expectation_id: { type: "string", minLength: 1 },
-              business_assertion: { type: "string", minLength: 1 },
-              preceding_action_id: { type: "string", minLength: 1 },
-              observer: { type: "string", minLength: 1 },
-              observation_surface: { type: "string", minLength: 1 },
-              observation_target: { type: "string", minLength: 1 },
-              oracle: { oneOf: [
-                { type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-                { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-                { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-                { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }
-              ] },
-              evidence_ref: { type: "string", minLength: 1 },
-              support_review: { enum: ["supported", "contradicted", "uncertain"] }
-            }, additionalProperties: false } }
+            expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } }
           }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -452,7 +453,7 @@ var case_drafts_schema_default = {
           ] },
           evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           temporary_assumption: { type: "object", required: ["claim_id", "invalidation_condition"], properties: { claim_id: { type: "string", minLength: 1 }, invalidation_condition: { type: "string", minLength: 1 } }, additionalProperties: false },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, test_point_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false }
+          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
         },
         additionalProperties: false
       }
@@ -3205,7 +3206,11 @@ var KEYS = Object.freeze({
   evidence: ["claimsById", "factLedger", "conflicts"],
   obligationsArtifact: ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   caseDraftsArtifact: ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
-  obligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"],
+  obligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "combination_vector"],
+  combinationVector: ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+  combinationOwner: ["view_id", "fact_ids", "view_element_refs"],
+  combinationElementRef: ["view_id", "element_id"],
+  combinationAssignment: ["parameter_id", "value_id", "evidence_claim_id"],
   gapObligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "gap_issue"],
   gapIssue: ["root_issue_id", "root_issue_key", "missing_type", "semantic_refs", "scope", "answerable", "reasons", "evidence_refs"],
   fact: ["fact_id", "claim_id", "status", "source_claim_ids"],
@@ -3216,7 +3221,7 @@ var KEYS = Object.freeze({
   data: ["name", "value", "provenance", "support_review"],
   provenance: ["type", "ref"],
   step: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"],
-  expectation: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"],
+  expectation: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "oracle_evidence_refs", "closes_obligation_id", "support_review"],
   oracle: ["type", "expected_value", "expected_state", "expected_event", "expected_side_effect", "comparison", "tolerance", "window"],
   profile: ["capabilities", "observers", "controls"],
   capability: ["capability", "status", "provenance_ref"],
@@ -3225,7 +3230,7 @@ var KEYS = Object.freeze({
   postState: ["state", "evidence_ref", "support_review"],
   cleanup: ["required", "steps", "evidence_ref", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"],
   temporaryAssumption: ["claim_id", "invalidation_condition"],
-  execution: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs", "test_point_ids"],
+  execution: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"],
   exploratory: ["exploratory_id", "title", "scope", "risk", "source_claim_ids"]
 });
 function compareCodePoints3(left, right) {
@@ -3578,6 +3583,27 @@ function deriveDataPartition(draft) {
     value: normalizeSemanticString(item.value)
   })));
 }
+function oracleSemanticId(step, expectation) {
+  const oracle = isRecord2(expectation.oracle) ? expectation.oracle : {};
+  const type = String(oracle.type ?? "");
+  const expectedField = ORACLE_FIELDS[
+    /** @type {keyof typeof ORACLE_FIELDS} */
+    type
+  ];
+  return stableId("oracle", {
+    action: normalizeSemanticString(step.action),
+    observer: normalizeSemanticString(expectation.observer),
+    observation_surface: normalizeSemanticString(expectation.observation_surface),
+    observation_target: normalizeSemanticString(expectation.observation_target),
+    oracle: {
+      type,
+      ...expectedField ? { [expectedField]: normalizeSemanticString(oracle[expectedField]) } : {},
+      comparison: normalizeSemanticString(oracle.comparison),
+      ...oracle.tolerance === void 0 ? {} : { tolerance: oracle.tolerance },
+      ...oracle.window === void 0 ? {} : { window: normalizeSemanticString(oracle.window) }
+    }
+  });
+}
 function executionSignature(caseDraft) {
   try {
     const trusted = snapshotControlled2(caseDraft);
@@ -3586,7 +3612,7 @@ function executionSignature(caseDraft) {
     const steps = objectArray4(draft.steps) ?? [];
     const actionPath = steps.map((step) => normalizeSemanticString(step.action));
     const oracleRefs = [...new Set(steps.flatMap(
-      (step) => (objectArray4(step.expectations) ?? []).map((expectation) => normalizeSemanticString(expectation.expectation_id))
+      (step) => (objectArray4(step.expectations) ?? []).map((expectation) => oracleSemanticId(step, expectation))
     ))].sort(compareCodePoints3);
     return canonicalStringify({
       role,
@@ -3658,6 +3684,20 @@ function validateClosedShape(context, diagnostics) {
       `/obligations/obligations/${index}/gap_issue`,
       diagnostics
     );
+    if (isRecord2(obligation.combination_vector)) {
+      const vectorPath = `/obligations/obligations/${index}/combination_vector`;
+      checkKeys2(obligation.combination_vector, KEYS.combinationVector, vectorPath, diagnostics);
+      if (isRecord2(obligation.combination_vector.owner)) {
+        checkKeys2(obligation.combination_vector.owner, KEYS.combinationOwner, `${vectorPath}/owner`, diagnostics);
+        objectArray4(obligation.combination_vector.owner.view_element_refs)?.forEach((item, itemIndex) => {
+          checkKeys2(item, KEYS.combinationElementRef, `${vectorPath}/owner/view_element_refs/${itemIndex}`, diagnostics);
+        });
+      }
+      objectArray4(obligation.combination_vector.assignments)?.forEach((item, itemIndex) => {
+        checkKeys2(item, KEYS.combinationAssignment, `${vectorPath}/assignments/${itemIndex}`, diagnostics);
+        checkCanonical(item.evidence_claim_id, `${vectorPath}/assignments/${itemIndex}/evidence_claim_id`, diagnostics);
+      });
+    }
     for (const [field, value] of [["obligation_id", obligation.obligation_id], ["scope", obligation.scope]]) {
       checkCanonical(value, `/obligations/obligations/${index}/${field}`, diagnostics);
     }
@@ -3827,129 +3867,112 @@ function assessEvidenceRoots(roots, evidence, cache) {
   cache?.set(cacheKey, result);
   return result;
 }
-function buildOracleReachability(evidence, obligations) {
-  const oracleRefs = [...new Set(obligations.flatMap((obligation) => stringArray3(obligation.required_oracle_refs) ?? []))].sort(compareCodePoints3);
-  const oracleRefsByClaim = /* @__PURE__ */ new Map();
-  for (const oracleRef of oracleRefs) {
-    const assessment = evidence.get(oracleRef);
-    if (assessment && assessment.rank > 0 && assessment.reasons.length === 0) {
-      oracleRefsByClaim.set(oracleRef, /* @__PURE__ */ new Set([oracleRef]));
-    }
-  }
-  const indegree = /* @__PURE__ */ new Map();
-  for (const [claimId, assessment] of evidence) {
-    indegree.set(claimId, assessment.parents.reduce((count, parentId) => count + (evidence.has(parentId) ? 1 : 0), 0));
-  }
-  const queue = [...indegree].filter(([, count]) => count === 0).map(([claimId]) => claimId).sort(compareCodePoints3);
-  let cursor = 0;
-  while (cursor < queue.length) {
-    const claimId = queue[cursor++];
-    const reachableOracles = oracleRefsByClaim.get(claimId);
-    for (const childId of evidence.get(claimId)?.children ?? []) {
-      const child = evidence.get(childId);
-      if (reachableOracles && child && child.rank > 0 && child.reasons.length === 0) {
-        let childOracles = oracleRefsByClaim.get(childId);
-        if (!childOracles) {
-          childOracles = /* @__PURE__ */ new Set();
-          oracleRefsByClaim.set(childId, childOracles);
-        }
-        for (const oracleRef of reachableOracles) childOracles.add(oracleRef);
-      }
-      const remaining = (indegree.get(childId) ?? 0) - 1;
-      indegree.set(childId, remaining);
-      if (remaining === 0) queue.push(childId);
-    }
-  }
-  const oracleRefsByObligation = /* @__PURE__ */ new Map();
+function isTypedOracleClaim(claim) {
+  if (claim.level === "E3" && claim.kind === "requirement") return true;
+  if (claim.level === "E1" && claim.kind === "assumption") return true;
+  return claim.level === "E2" && claim.kind === "expected-value" && claim.derivation_target === "expected-value" && (claim.derivation_kind === "formula" || claim.derivation_kind === "decision-table-instance");
+}
+function buildOracleReachability(evidence, obligations, routedFactsByObligation, factsById) {
+  const allowedRefsByObligation = /* @__PURE__ */ new Map();
+  const forbiddenRefsByObligation = /* @__PURE__ */ new Map();
+  const descendantsByRootSignature = /* @__PURE__ */ new Map();
   for (const obligation of obligations) {
-    if (isCanonicalString(obligation.obligation_id)) oracleRefsByObligation.set(
-      String(obligation.obligation_id),
-      new Set(stringArray3(obligation.required_oracle_refs) ?? [])
-    );
+    const obligationId = String(obligation.obligation_id ?? "");
+    const factRoots = [...routedFactsByObligation.get(obligationId) ?? []].flatMap((factId) => {
+      const fact = factsById.get(factId);
+      return fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : [];
+    });
+    const roots = /* @__PURE__ */ new Set([
+      ...stringArray3(obligation.source_claim_ids) ?? [],
+      ...stringArray3(obligation.required_oracle_refs) ?? [],
+      ...factRoots
+    ]);
+    const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : {};
+    const forbidden = new Set(stringArray3(vector.forbid_evidence_refs) ?? []);
+    const rootSignature = canonicalStringify([...roots].sort(compareCodePoints3));
+    let descendants = descendantsByRootSignature.get(rootSignature);
+    if (!descendants) {
+      descendants = /* @__PURE__ */ new Set();
+      const pending = [...roots];
+      let cursor = 0;
+      while (cursor < pending.length) {
+        const current = pending[cursor++];
+        if (descendants.has(current)) continue;
+        descendants.add(current);
+        for (const childId of evidence.get(current)?.children ?? []) pending.push(childId);
+      }
+      descendantsByRootSignature.set(rootSignature, descendants);
+    }
+    const allowed = /* @__PURE__ */ new Set();
+    for (const [claimId, assessment] of evidence) {
+      const claim = assessment.claim;
+      if (assessment.rank === 0 || assessment.reasons.length > 0 || !isTypedOracleClaim(claim) || !scopeContains(String(claim.scope ?? ""), String(obligation.scope ?? ""))) continue;
+      if (roots.has(claimId) || claim.level === "E2" && descendants.has(claimId)) {
+        allowed.add(claimId);
+      }
+    }
+    for (const ref of forbidden) allowed.delete(ref);
+    allowedRefsByObligation.set(obligationId, allowed);
+    forbiddenRefsByObligation.set(obligationId, forbidden);
   }
-  return { oracleRefsByClaim, oracleRefsByObligation };
+  return { allowedRefsByObligation, forbiddenRefsByObligation };
 }
 function requireOracleOwnership(draft, obligations, expectations, reachability, reasons, diagnostics) {
-  if (expectations.length === 0) return;
-  const orderedExpectations = [...expectations].sort((left, right) => compareCodePoints3(left.expectationId, right.expectationId));
-  const orderedObligations = obligations.filter((obligation) => (stringArray3(obligation.required_oracle_refs) ?? []).length > 0).sort((left, right) => compareCodePoints3(String(left.obligation_id), String(right.obligation_id)));
-  const edges = [];
-  let missingEdge = false;
-  for (const obligation of orderedObligations) {
-    const obligationId = String(obligation.obligation_id);
-    const requiredOracles = reachability.oracleRefsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
-    const candidates = [];
-    for (const [expectationIndex, expectation] of orderedExpectations.entries()) {
-      const expectationOracles = reachability.oracleRefsByClaim.get(expectation.evidenceRef);
-      let coversAll = requiredOracles.size > 0 && Boolean(expectationOracles);
-      if (expectationOracles) {
-        for (const oracleRef of requiredOracles) {
-          if (!expectationOracles.has(oracleRef)) coversAll = false;
-        }
-      }
-      if (coversAll) candidates.push(expectationIndex);
+  const casePath = `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}`;
+  const obligationsById = new Map(obligations.map((obligation) => [String(obligation.obligation_id), obligation]));
+  const closedCounts = new Map([...obligationsById.keys()].map((obligationId) => [obligationId, 0]));
+  for (const expectation of expectations) {
+    const path4 = `${casePath}/expectations/${pointerPart2(expectation.expectationId)}`;
+    if (expectation.oracleEvidenceValid && !expectation.oracleEvidenceRefs.includes(expectation.evidenceRef)) {
+      diagnostics.push(diagnostic5("traceability", "ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED", path4, "evidence_ref must be included in oracle_evidence_refs"));
+      reasons.add("ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED");
     }
-    edges.push(candidates);
-    if (candidates.length === 0) {
-      missingEdge = true;
-      diagnostics.push(diagnostic5(
-        "traceability",
-        "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED",
-        `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/obligations/${pointerPart2(obligationId)}/required_oracle_refs`,
-        "one concrete expectation must cover every required Oracle for the formal obligation"
-      ));
+    if (expectation.kind === "obligation-oracle") {
+      const obligation = obligationsById.get(expectation.closesObligationId);
+      if (!obligation || obligation.caseable !== true || obligation.kind === "requirement-gap") {
+        diagnostics.push(diagnostic5("reference", "ORACLE_CLOSE_TARGET_INVALID", path4, "obligation-oracle must close one linked caseable obligation"));
+        reasons.add("ORACLE_CLOSE_TARGET_INVALID");
+        continue;
+      }
+      closedCounts.set(expectation.closesObligationId, (closedCounts.get(expectation.closesObligationId) ?? 0) + 1);
+      if (!expectation.oracleEvidenceValid) continue;
+      const allowed = reachability.allowedRefsByObligation.get(expectation.closesObligationId) ?? /* @__PURE__ */ new Set();
+      const forbidden = reachability.forbiddenRefsByObligation.get(expectation.closesObligationId) ?? /* @__PURE__ */ new Set();
+      const required = stringArray3(obligation.required_oracle_refs) ?? [];
+      if (required.some((ref) => !expectation.oracleEvidenceRefs.includes(ref))) {
+        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_PREBINDING_MISSING", path4, "the closing expectation must include every required Oracle prebinding"));
+        reasons.add("OBLIGATION_ORACLE_PREBINDING_MISSING");
+      }
+      if (expectation.oracleEvidenceRefs.some((ref) => forbidden.has(ref))) {
+        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN", path4, "forbid evidence cannot become a selected-vector Oracle"));
+        reasons.add("OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN");
+      } else if (expectation.oracleEvidenceRefs.some((ref) => !allowed.has(ref))) {
+        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_EVIDENCE_UNRELATED", path4, "Oracle evidence must belong to the obligation closure or legal E2 expected-value ancestry"));
+        reasons.add("OBLIGATION_ORACLE_EVIDENCE_UNRELATED");
+      }
+    } else if (expectation.kind === "auxiliary") {
+      if (!expectation.oracleEvidenceValid) continue;
+      const allowed = new Set([...obligationsById.keys()].flatMap((obligationId) => [
+        ...reachability.allowedRefsByObligation.get(obligationId) ?? []
+      ]));
+      if (expectation.closesObligationId || expectation.oracleEvidenceRefs.some((ref) => !allowed.has(ref))) {
+        diagnostics.push(diagnostic5("traceability", "AUXILIARY_ORACLE_EVIDENCE_UNRELATED", path4, "auxiliary expectations cannot close obligations and must use legal Case Oracle evidence"));
+        reasons.add("AUXILIARY_ORACLE_EVIDENCE_UNRELATED");
+      }
+    } else {
+      diagnostics.push(diagnostic5("classification", "EXPECTATION_KIND_INVALID", path4, "expectation kind must be obligation-oracle or auxiliary"));
+      reasons.add("EXPECTATION_KIND_INVALID");
     }
   }
-  if (missingEdge) {
-    reasons.add("OBLIGATION_ORACLE_EXPECTATION_UNMAPPED");
-    return;
-  }
-  const ownerByExpectation = new Array(orderedExpectations.length).fill(-1);
-  const expectationByObligation = new Array(orderedObligations.length).fill(-1);
-  for (let start = 0; start < orderedObligations.length; start += 1) {
-    const obligationQueue = [start];
-    const seenObligations = /* @__PURE__ */ new Set([start]);
-    const seenExpectations = /* @__PURE__ */ new Set();
-    const parentObligationByExpectation = /* @__PURE__ */ new Map();
-    let cursor = 0;
-    let freeExpectation = -1;
-    while (cursor < obligationQueue.length && freeExpectation < 0) {
-      const obligationIndex = obligationQueue[cursor++];
-      for (const expectationIndex2 of edges[obligationIndex]) {
-        if (seenExpectations.has(expectationIndex2)) continue;
-        seenExpectations.add(expectationIndex2);
-        parentObligationByExpectation.set(expectationIndex2, obligationIndex);
-        const owner = ownerByExpectation[expectationIndex2];
-        if (owner < 0) {
-          freeExpectation = expectationIndex2;
-          break;
-        }
-        if (!seenObligations.has(owner)) {
-          seenObligations.add(owner);
-          obligationQueue.push(owner);
-        }
-      }
-    }
-    if (freeExpectation < 0) {
+  for (const [obligationId, count] of closedCounts) {
+    if (count !== 1) {
       diagnostics.push(diagnostic5(
         "traceability",
-        "OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT",
-        `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/obligation_ids`,
-        "linked formal obligations require distinct concrete expectations with complete Oracle coverage"
+        count === 0 ? "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED" : "OBLIGATION_ORACLE_EXPECTATION_DUPLICATE",
+        `${casePath}/obligations/${pointerPart2(obligationId)}`,
+        count === 0 ? "every linked caseable obligation requires exactly one closing expectation" : "a linked obligation cannot be closed by multiple expectations"
       ));
-      reasons.add("OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT");
-      return;
-    }
-    let expectationIndex = freeExpectation;
-    while (expectationIndex >= 0) {
-      const obligationIndex = (
-        /** @type {number} */
-        parentObligationByExpectation.get(expectationIndex)
-      );
-      const previousExpectation = expectationByObligation[obligationIndex];
-      expectationByObligation[obligationIndex] = expectationIndex;
-      ownerByExpectation[expectationIndex] = obligationIndex;
-      expectationIndex = previousExpectation;
+      reasons.add(count === 0 ? "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED" : "OBLIGATION_ORACLE_EXPECTATION_DUPLICATE");
     }
   }
 }
@@ -4022,7 +4045,6 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   for (const obligation of obligations) {
     const sources = stringArray3(obligation.source_claim_ids, true) ?? [];
     const oracles = stringArray3(obligation.required_oracle_refs) ?? [];
-    if (oracles.length === 0) reasons.add("FORMAL_ORACLE_MISSING");
     for (const ref of [...sources, ...oracles]) {
       evidenceRoots.add(ref);
       formalEvidenceRoots.add(ref);
@@ -4083,20 +4105,29 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         expectation.expectation_id
       );
       if (expectation.preceding_action_id !== step.step_id) reasons.add("PRECEDING_ACTION_NOT_CONTAINING");
-      const expectationFieldsValid = isNonblank(expectation.business_assertion) && isCanonicalString(expectation.preceding_action_id) && isNonblank(expectation.observer) && isNonblank(expectation.observation_surface) && isNonblank(expectation.observation_target) && isCanonicalString(expectation.evidence_ref);
+      const oracleEvidenceRefs = stringArray3(expectation.oracle_evidence_refs, true);
+      const expectationFieldsValid = isNonblank(expectation.business_assertion) && isCanonicalString(expectation.preceding_action_id) && isNonblank(expectation.observer) && isNonblank(expectation.observation_surface) && isNonblank(expectation.observation_target) && isCanonicalString(expectation.evidence_ref) && oracleEvidenceRefs !== null && (expectation.kind === "auxiliary" || expectation.kind === "obligation-oracle" && isCanonicalString(expectation.closes_obligation_id));
       if (!expectationFieldsValid) reasons.add("EXPECTATION_GATE_INVALID");
       if (isCanonicalString(expectation.evidence_ref)) evidenceRoots.add(expectation.evidence_ref);
-      if (expectationFieldsValid && expectationLocatable) {
+      for (const ref of oracleEvidenceRefs ?? []) {
+        evidenceRoots.add(ref);
+        formalEvidenceRoots.add(ref);
+      }
+      const closureDeclarationValid = expectation.kind === "auxiliary" || expectation.kind === "obligation-oracle" && isCanonicalString(expectation.closes_obligation_id);
+      if (expectationLocatable && closureDeclarationValid) {
         expectationsForOwnership.push({
           expectationId: (
             /** @type {string} */
             expectation.expectation_id
           ),
-          evidenceRef: (
-            /** @type {string} */
-            expectation.evidence_ref
-          )
+          evidenceRef: isCanonicalString(expectation.evidence_ref) ? String(expectation.evidence_ref) : "",
+          kind: String(expectation.kind),
+          closesObligationId: String(expectation.closes_obligation_id ?? ""),
+          oracleEvidenceRefs: oracleEvidenceRefs ?? [],
+          oracleEvidenceValid: isCanonicalString(expectation.evidence_ref) && oracleEvidenceRefs !== null
         });
+      }
+      if (expectationFieldsValid && expectationLocatable) {
         requiredObservers.push({ observer: String(expectation.observer), target: String(expectation.observation_target) });
       }
       const oracle = isRecord2(expectation.oracle) ? expectation.oracle : null;
@@ -4123,7 +4154,9 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       )) reasons.add("PRECEDING_ACTION_UNKNOWN");
     }
   }
-  requireOracleOwnership(draft, obligations, expectationsForOwnership, oracleReachability, reasons, diagnostics);
+  if (steps.some((step) => (objectArray4(step.expectations)?.length ?? 0) > 0)) {
+    requireOracleOwnership(draft, obligations, expectationsForOwnership, oracleReachability, reasons, diagnostics);
+  }
   const profile = isRecord2(draft.testability_profile) ? draft.testability_profile : {};
   const capabilities = objectArray4(profile.capabilities) ?? [];
   const observers = objectArray4(profile.observers) ?? [];
@@ -4209,13 +4242,12 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const submittedRole = normalizeSemanticString(signature.role);
   const submittedActions = Array.isArray(signature.action_path) ? signature.action_path.map(normalizeSemanticString) : [];
   const submittedOracles = Array.isArray(signature.oracle_refs) ? [...new Set(signature.oracle_refs.map(normalizeSemanticString))].sort(compareCodePoints3) : [];
-  const submittedTestPoints = stringArray3(signature.test_point_ids, true);
-  const actualTestPoints = [...stringArray3(draft.obligation_ids, true) ?? []].sort(compareCodePoints3);
   const actualSignature = JSON.parse(executionSignature(draft));
+  const actualAgentOracleRefs = [...expectationIds].sort(compareCodePoints3);
   if (signature.precondition_state !== actualSignature.precondition_state || signature.data_partition !== actualSignature.data_partition) {
     reasons.add("EXECUTION_SIGNATURE_MISMATCH");
   }
-  if (submittedRole !== actualSignature.role || canonicalStringify(submittedActions) !== canonicalStringify(actualSignature.action_path) || canonicalStringify(submittedOracles) !== canonicalStringify(actualSignature.oracle_refs) || signature.test_point_ids !== void 0 && (!submittedTestPoints || canonicalStringify([...submittedTestPoints].sort(compareCodePoints3)) !== canonicalStringify(actualTestPoints))) {
+  if (submittedRole !== actualSignature.role || canonicalStringify(submittedActions) !== canonicalStringify(actualSignature.action_path) || canonicalStringify(submittedOracles) !== canonicalStringify(actualAgentOracleRefs)) {
     reasons.add("EXECUTION_SIGNATURE_MISMATCH");
   }
   const evidenceResult = assessEvidenceRoots([...evidenceRoots], evidence, evidenceCache);
@@ -4321,13 +4353,30 @@ function relatedEvidenceClosure(roots, evidence, ancestryCache, relationCache) {
 }
 function comparableCase(draft) {
   const copy = structuredClone(draft);
-  delete copy.case_id;
-  delete copy.fact_ids;
-  delete copy.obligation_ids;
-  delete copy.source_claim_ids;
-  delete copy.evidence_refs;
-  if (isRecord2(copy.execution_signature)) delete copy.execution_signature.test_point_ids;
-  return canonicalStringify(copy);
+  const ignored = /* @__PURE__ */ new Set([
+    "case_id",
+    "fact_ids",
+    "obligation_ids",
+    "source_claim_ids",
+    "evidence_refs",
+    "evidence_ref",
+    "oracle_evidence_refs",
+    "provenance_ref",
+    "action_evidence_ref",
+    "no_cleanup_evidence_ref",
+    "support_review",
+    "expectation_id",
+    "closes_obligation_id",
+    "step_id",
+    "preceding_action_id",
+    "execution_signature"
+  ]);
+  const strip = (value) => {
+    if (Array.isArray(value)) return value.map(strip);
+    if (!isRecord2(value)) return value;
+    return Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.has(key)).map(([key, item]) => [key, strip(item)]));
+  };
+  return canonicalStringify(strip(copy));
 }
 function mergeExactCases(drafts) {
   const sorted = [...drafts].sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
@@ -4336,10 +4385,41 @@ function mergeExactCases(drafts) {
     const values = new Set(sorted.flatMap((draft) => stringArray3(draft[field]) ?? []));
     merged[field] = [...values].sort(compareCodePoints3);
   }
+  const mergedSteps = objectArray4(merged.steps) ?? [];
+  for (const [stepIndex, step] of mergedSteps.entries()) {
+    const expectationsByClosure = /* @__PURE__ */ new Map();
+    for (const draft of sorted) {
+      const sourceStep = (objectArray4(draft.steps) ?? [])[stepIndex];
+      if (!sourceStep) continue;
+      for (const expectation of objectArray4(sourceStep.expectations) ?? []) {
+        const oracleId = oracleSemanticId(sourceStep, expectation);
+        const closureKey = canonicalStringify({
+          oracle_id: oracleId,
+          kind: expectation.kind,
+          ...expectation.kind === "obligation-oracle" ? { closes_obligation_id: expectation.closes_obligation_id } : {}
+        });
+        const existing = expectationsByClosure.get(closureKey);
+        if (!existing) expectationsByClosure.set(closureKey, structuredClone(expectation));
+        else {
+          existing.oracle_evidence_refs = [.../* @__PURE__ */ new Set([
+            ...stringArray3(existing.oracle_evidence_refs) ?? [],
+            ...stringArray3(expectation.oracle_evidence_refs) ?? []
+          ])].sort(compareCodePoints3);
+          const evidenceRefs = [existing.evidence_ref, expectation.evidence_ref].filter(isCanonicalString).sort(compareCodePoints3);
+          existing.evidence_ref = evidenceRefs[0] ?? "";
+        }
+      }
+    }
+    step.expectations = [...expectationsByClosure.entries()].sort(([left], [right]) => compareCodePoints3(left, right)).map(([closureKey, expectation]) => ({
+      ...expectation,
+      preceding_action_id: step.step_id,
+      expectation_id: stableId("expectation", JSON.parse(closureKey))
+    }));
+  }
   const signature = JSON.parse(executionSignature(merged));
   merged.case_id = stableId("case", signature);
   if (isRecord2(merged.execution_signature)) {
-    merged.execution_signature.test_point_ids = [...stringArray3(merged.obligation_ids, true) ?? []].sort(compareCodePoints3);
+    merged.execution_signature = signature;
   }
   return merged;
 }
@@ -4347,10 +4427,15 @@ function ownershipExpectations(draft) {
   const expectations = [];
   for (const step of objectArray4(draft.steps) ?? []) {
     for (const expectation of objectArray4(step.expectations) ?? []) {
-      if (isCanonicalString(expectation.expectation_id) && isCanonicalString(expectation.evidence_ref)) {
+      const oracleEvidenceRefs = stringArray3(expectation.oracle_evidence_refs, true);
+      if (isCanonicalString(expectation.expectation_id) && isCanonicalString(expectation.evidence_ref) && oracleEvidenceRefs) {
         expectations.push({
           expectationId: String(expectation.expectation_id),
-          evidenceRef: String(expectation.evidence_ref)
+          evidenceRef: String(expectation.evidence_ref),
+          kind: String(expectation.kind),
+          closesObligationId: String(expectation.closes_obligation_id ?? ""),
+          oracleEvidenceRefs,
+          oracleEvidenceValid: true
         });
       }
     }
@@ -4465,7 +4550,6 @@ function classifyCaseDrafts(submittedContext) {
       /** @type {Record<string, unknown>[]} */
       obligationArtifact.interaction_routes
     );
-    const oracleReachability = buildOracleReachability(evidence, obligations);
     const factsById = /* @__PURE__ */ new Map();
     for (const fact of facts) {
       const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
@@ -4503,6 +4587,33 @@ function classifyCaseDrafts(submittedContext) {
         `/obligations/${pointerPart2(id)}/caseable`,
         "normal compiler-owned obligations must be caseable"
       ));
+      const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : null;
+      if (vector) {
+        const sourceClaims = new Set(stringArray3(obligation.source_claim_ids) ?? []);
+        for (const [assignmentIndex, assignment] of (objectArray4(vector.assignments) ?? []).entries()) {
+          const claimId = String(assignment.evidence_claim_id ?? "");
+          const assessment = evidence.get(claimId);
+          if (!sourceClaims.has(claimId)) diagnostics.push(diagnostic5(
+            "traceability",
+            "TWISE_SELECTED_VALUE_SOURCE_MISSING",
+            `/obligations/${pointerPart2(id)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+            "every selected-value evidence claim must be carried by the vector obligation sources"
+          ));
+          if (!assessment || assessment.rank === 0 || assessment.reasons.length > 0 || assessment.claim.kind === "diagnostic" || typeof assessment.claim.scope !== "string" || typeof obligation.scope !== "string" || !scopeContains(assessment.claim.scope, obligation.scope)) diagnostics.push(diagnostic5(
+            "traceability",
+            "TWISE_SELECTED_VALUE_EVIDENCE_INVALID",
+            `/obligations/${pointerPart2(id)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+            "selected-value evidence must be accepted, non-diagnostic, and cover the obligation scope"
+          ));
+        }
+        const forbidden = new Set(stringArray3(vector.forbid_evidence_refs) ?? []);
+        for (const ref of stringArray3(obligation.required_oracle_refs) ?? []) if (forbidden.has(ref)) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_ORACLE_FORBID_CONFLICT",
+          `/obligations/${pointerPart2(id)}/required_oracle_refs/${pointerPart2(ref)}`,
+          "forbid evidence cannot be an Oracle prebinding"
+        ));
+      }
     }
     const routedFactsByObligation = /* @__PURE__ */ new Map();
     const routesByFact = /* @__PURE__ */ new Map();
@@ -4559,6 +4670,56 @@ function classifyCaseDrafts(submittedContext) {
         routedFactsByObligation.set(obligationId, routed);
       }
     }
+    for (const obligation of obligations) {
+      const obligationId = String(obligation.obligation_id ?? "");
+      const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : null;
+      if (!vector) continue;
+      const assignments = objectArray4(vector.assignments) ?? [];
+      const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ""));
+      const validStrength = Number.isSafeInteger(vector.strength) && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
+      if (vector.policy_id !== "twise-candidate-cap-v1" || !validStrength || new Set(parameterIds).size !== parameterIds.length || obligation.kind !== "interaction" || obligation.caseable !== true) diagnostics.push(diagnostic5(
+        "traceability",
+        "TWISE_VECTOR_CONTRACT_INVALID",
+        `/obligations/${pointerPart2(obligationId)}/combination_vector`,
+        "selected vectors must use the frozen policy, strength within unique assignments, and caseable interaction obligations"
+      ));
+      const sourceClaims = new Set(stringArray3(obligation.source_claim_ids) ?? []);
+      const owner = isRecord2(vector.owner) ? vector.owner : {};
+      const routedFacts = routedFactsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
+      for (const factId of stringArray3(owner.fact_ids) ?? []) {
+        if (!routedFacts.has(factId)) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_OWNER_FACT_ROUTE_MISSING",
+          `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/fact_ids/${pointerPart2(factId)}`,
+          "every selected-vector owner fact must route to the vector obligation"
+        ));
+        const fact = factsById.get(factId);
+        for (const ref of fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : []) {
+          if (!sourceClaims.has(ref)) diagnostics.push(diagnostic5(
+            "traceability",
+            "TWISE_OWNER_SOURCE_MISSING",
+            `/obligations/${pointerPart2(obligationId)}/source_claim_ids`,
+            "selected-vector sources must inherit every owner fact root"
+          ));
+        }
+      }
+      const viewRefs = new Set(stringArray3(obligation.view_element_refs) ?? []);
+      for (const ref of objectArray4(owner.view_element_refs) ?? []) {
+        const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
+        if (!viewRefs.has(qualified)) diagnostics.push(diagnostic5(
+          "traceability",
+          "TWISE_OWNER_ELEMENT_REF_MISSING",
+          `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/view_element_refs`,
+          "selected-vector obligations must inherit every owner view element reference"
+        ));
+      }
+    }
+    const oracleReachability = buildOracleReachability(
+      evidence,
+      obligations,
+      routedFactsByObligation,
+      factsById
+    );
     const dispositions = [];
     const blockerAffectedBySubmittedIndex = /* @__PURE__ */ new Map();
     for (const [index, submitted] of submittedDispositions.entries()) {
@@ -5089,22 +5250,7 @@ var test_bundle_schema_default = {
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
           ] }, support_review: { const: "supported" } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { type: "object", required: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"], properties: {
-            expectation_id: { type: "string", minLength: 1 },
-            business_assertion: { type: "string", minLength: 1 },
-            preceding_action_id: { type: "string", minLength: 1 },
-            observer: { type: "string", minLength: 1 },
-            observation_surface: { type: "string", minLength: 1 },
-            observation_target: { type: "string", minLength: 1 },
-            oracle: { oneOf: [
-              { type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }
-            ] },
-            evidence_ref: { type: "string", minLength: 1 },
-            support_review: { const: "supported" }
-          }, additionalProperties: false } } }, additionalProperties: false } },
+          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
             observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -5116,7 +5262,7 @@ var test_bundle_schema_default = {
             { type: "object", required: ["required", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"], properties: { required: { const: false }, no_cleanup_reason: { type: "string", minLength: 1 }, no_cleanup_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false }
           ] },
           evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, test_point_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false }
+          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
         },
         additionalProperties: false
       }
@@ -5140,22 +5286,7 @@ var test_bundle_schema_default = {
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
           ] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { type: "object", required: ["expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review"], properties: {
-            expectation_id: { type: "string", minLength: 1 },
-            business_assertion: { type: "string", minLength: 1 },
-            preceding_action_id: { type: "string", minLength: 1 },
-            observer: { type: "string", minLength: 1 },
-            observation_surface: { type: "string", minLength: 1 },
-            observation_target: { type: "string", minLength: 1 },
-            oracle: { oneOf: [
-              { type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false },
-              { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }
-            ] },
-            evidence_ref: { type: "string", minLength: 1 },
-            support_review: { enum: ["supported", "contradicted", "uncertain"] }
-          }, additionalProperties: false } } }, additionalProperties: false } },
+          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
             observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -5168,7 +5299,7 @@ var test_bundle_schema_default = {
           ] },
           evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           temporary_assumption: { type: "object", required: ["claim_id", "invalidation_condition"], properties: { claim_id: { type: "string", minLength: 1 }, invalidation_condition: { type: "string", minLength: 1 } }, additionalProperties: false },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, test_point_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false }
+          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
         },
         additionalProperties: false
       }
@@ -5212,7 +5343,28 @@ var test_obligations_schema_default = {
               source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
               view_element_refs: { type: "array", items: { type: "string" }, uniqueItems: true },
               required_oracle_refs: { type: "array", items: { type: "string" }, uniqueItems: true },
-              required_capabilities: { type: "array", items: { type: "string" }, uniqueItems: true }
+              required_capabilities: { type: "array", items: { type: "string" }, uniqueItems: true },
+              combination_vector: {
+                type: "object",
+                required: ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+                properties: {
+                  policy_id: { const: "twise-candidate-cap-v1" },
+                  strength: { type: "integer", minimum: 2 },
+                  owner: {
+                    type: "object",
+                    required: ["view_id", "fact_ids", "view_element_refs"],
+                    properties: {
+                      view_id: { type: "string", minLength: 1 },
+                      fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true },
+                      view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true }
+                    },
+                    additionalProperties: false
+                  },
+                  assignments: { type: "array", items: { type: "object", required: ["parameter_id", "value_id", "evidence_claim_id"], properties: { parameter_id: { type: "string", minLength: 1 }, value_id: { type: "string", minLength: 1 }, evidence_claim_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 3, uniqueItems: true },
+                  forbid_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }
+                },
+                additionalProperties: false
+              }
             },
             additionalProperties: false
           },
@@ -5744,14 +5896,6 @@ function everyArray2(values, predicate) {
     Reflect.apply(NATIVE_ARRAY_EVERY2, values, [predicate])
   );
 }
-function fillArray(values, value) {
-  for (let index = 0; index < values.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY4, Object, [
-    values,
-    String(index),
-    { value, writable: true, enumerable: true, configurable: true }
-  ]);
-  return values;
-}
 function filterArray3(values, predicate) {
   return (
     /** @type {T[]} */
@@ -6152,6 +6296,27 @@ function canonicalSetProjection2(entries) {
   for (let index = 0; index < ordered.length; index += 1) pushArray2(projected, ordered[index][1]);
   return canonicalStringify(projected);
 }
+function oracleSemanticId2(step, expectation) {
+  const oracle = isRecord3(expectation.oracle) ? expectation.oracle : {};
+  const type = String(oracle.type ?? "");
+  const expectedField = ORACLE_FIELDS2[
+    /** @type {keyof typeof ORACLE_FIELDS} */
+    type
+  ];
+  return stableId("oracle", {
+    action: normalizeSemanticString2(step.action),
+    observer: normalizeSemanticString2(expectation.observer),
+    observation_surface: normalizeSemanticString2(expectation.observation_surface),
+    observation_target: normalizeSemanticString2(expectation.observation_target),
+    oracle: {
+      type,
+      ...expectedField ? { [expectedField]: normalizeSemanticString2(oracle[expectedField]) } : {},
+      comparison: normalizeSemanticString2(oracle.comparison),
+      ...oracle.tolerance === void 0 ? {} : { tolerance: oracle.tolerance },
+      ...oracle.window === void 0 ? {} : { window: normalizeSemanticString2(oracle.window) }
+    }
+  });
+}
 function derivedExecutionSignature(caseDraft) {
   const preconditions = records(caseDraft.preconditions);
   const preconditionProjection = [];
@@ -6172,7 +6337,7 @@ function derivedExecutionSignature(caseDraft) {
     pushArray2(actionPath, normalizeSemanticString2(steps[stepIndex].action));
     const expectations = records(steps[stepIndex].expectations);
     for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
-      oracleRefs.add(normalizeSemanticString2(expectations[expectationIndex].expectation_id));
+      oracleRefs.add(oracleSemanticId2(steps[stepIndex], expectations[expectationIndex]));
     }
   }
   return {
@@ -6431,234 +6596,6 @@ function evidenceRelationIndex(roots, graph) {
     }
   };
 }
-function fenwick(size) {
-  const tree = fillArray(new Array(size + 1), 0);
-  return {
-    /** @param {number} index @param {number} delta */
-    add(index, delta) {
-      for (let cursor = index + 1; cursor < tree.length; cursor += cursor & -cursor) tree[cursor] += delta;
-    },
-    /** @param {number} end */
-    sum(end) {
-      let total = 0;
-      for (let cursor = end; cursor > 0; cursor -= cursor & -cursor) total += tree[cursor];
-      return total;
-    },
-    /** @param {number} target */
-    lowerBound(target) {
-      let index = 0;
-      let step = 1;
-      while (step * 2 < tree.length) step *= 2;
-      for (; step > 0; step = Math.floor(step / 2)) {
-        const next = index + step;
-        if (next < tree.length && tree[next] < target) {
-          index = next;
-          target -= tree[next];
-        }
-      }
-      return index;
-    }
-  };
-}
-function matchForestOracleOwnership(requirements, expectations, graph) {
-  const anchors = [];
-  for (const requirement of requirements) {
-    if (requirement.required.length === 0) return false;
-    let anchor = requirement.required[0];
-    for (let index = 1; index < requirement.required.length; index += 1) {
-      const candidate = requirement.required[index];
-      if (isEvidenceAncestor(anchor, candidate, graph)) anchor = candidate;
-      else if (!isEvidenceAncestor(candidate, anchor, graph)) return null;
-    }
-    const start = graph.entryByClaim.get(anchor);
-    const end = graph.exitByClaim.get(anchor);
-    if (start === void 0 || end === void 0) return false;
-    pushArray2(anchors, { start, end });
-  }
-  sortArray2(anchors, (left, right) => right.start - left.start || left.end - right.end);
-  const positions = [];
-  for (const expectation of expectations) {
-    const position = graph.entryByClaim.get(expectation.evidenceRef);
-    if (position !== void 0) pushArray2(positions, position);
-  }
-  sortArray2(positions, (left, right) => left - right);
-  const capacity = fenwick(positions.length);
-  for (let index = 0; index < positions.length; index += 1) capacity.add(index, 1);
-  const localBoundary = (target, after) => {
-    let low = 0;
-    let high = positions.length;
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2);
-      if (positions[middle] < target || after && positions[middle] === target) low = middle + 1;
-      else high = middle;
-    }
-    return low;
-  };
-  for (const anchor of anchors) {
-    const start = localBoundary(anchor.start, false);
-    const end = localBoundary(anchor.end, true);
-    const before = capacity.sum(start);
-    if (capacity.sum(end) === before) return false;
-    const position = capacity.lowerBound(before + 1);
-    capacity.add(position, -1);
-  }
-  return true;
-}
-function matchGeneralOracleOwnership(requirements, expectations, graph) {
-  const matchedRequirementByExpectation = fillArray(new Array(expectations.length), -1);
-  const matchedExpectationByRequirement = fillArray(new Array(requirements.length), -1);
-  const expectationsByClaim = /* @__PURE__ */ new Map();
-  for (let index = 0; index < expectations.length; index += 1) {
-    const claimId = expectations[index].evidenceRef;
-    const atClaim = expectationsByClaim.get(claimId) ?? [];
-    pushArray2(atClaim, index);
-    expectationsByClaim.set(claimId, atClaim);
-  }
-  const anchorByRequirement = [];
-  const requiredRootsByRequirement = [];
-  const requiredSignatureByRequirement = [];
-  for (const requirement of requirements) {
-    if (requirement.required.length === 0 || someArray2(requirement.required, (root) => !graph.claimsById.has(root))) return false;
-    let anchor = requirement.required[0];
-    for (let index = 1; index < requirement.required.length; index += 1) {
-      const candidate = requirement.required[index];
-      if ((graph.topologicalIndexByClaim.get(candidate) ?? -1) > (graph.topologicalIndexByClaim.get(anchor) ?? -1)) anchor = candidate;
-    }
-    pushArray2(anchorByRequirement, anchor);
-    const roots = new Set(requirement.required);
-    pushArray2(requiredRootsByRequirement, roots);
-    pushArray2(requiredSignatureByRequirement, canonicalStringify(sortArray2([...roots], compareCodePoints4)));
-  }
-  const requirementOrder = sortArray2(mapArray3(requirements, (_, index) => index), (left, right) => (graph.topologicalIndexByClaim.get(anchorByRequirement[right]) ?? -1) - (graph.topologicalIndexByClaim.get(anchorByRequirement[left]) ?? -1) || left - right);
-  let lastCompatibilitySignature = "";
-  let lastCompatibilityRepresentative = "";
-  let lastCompatibilityResult = false;
-  const compatible = (requirementIndex, claimId) => {
-    const requiredRoots = requiredRootsByRequirement[requirementIndex];
-    if (requiredRoots.size === 1) return true;
-    let representative = claimId;
-    let climbBudget = graph.claimsById.size;
-    while (!requiredRoots.has(representative) && climbBudget > 0) {
-      climbBudget -= 1;
-      const parents = graph.parentsByClaim.get(representative) ?? [];
-      if (parents.length !== 1) break;
-      representative = parents[0];
-    }
-    const signature = requiredSignatureByRequirement[requirementIndex];
-    if (signature === lastCompatibilitySignature && representative === lastCompatibilityRepresentative) {
-      return lastCompatibilityResult;
-    }
-    const pending = [representative];
-    const visited = /* @__PURE__ */ new Set();
-    let found = 0;
-    while (pending.length > 0 && found < requiredRoots.size) {
-      const current = (
-        /** @type {string} */
-        Reflect.apply(NATIVE_ARRAY_POP2, pending, [])
-      );
-      if (visited.has(current)) continue;
-      visited.add(current);
-      if (requiredRoots.has(current)) found += 1;
-      const parents = graph.parentsByClaim.get(current) ?? [];
-      for (let index = parents.length - 1; index >= 0; index -= 1) pushArray2(pending, parents[index]);
-    }
-    lastCompatibilitySignature = signature;
-    lastCompatibilityRepresentative = representative;
-    lastCompatibilityResult = found === requiredRoots.size;
-    return lastCompatibilityResult;
-  };
-  for (const start of requirementOrder) {
-    const seenRequirements = /* @__PURE__ */ new Set([start]);
-    const seenExpectations = /* @__PURE__ */ new Set();
-    const parentRequirementByExpectation = fillArray(new Array(expectations.length), -1);
-    const queue = [start];
-    let cursor = 0;
-    let freeExpectation = -1;
-    while (cursor < queue.length && freeExpectation < 0) {
-      const requirementIndex = queue[cursor];
-      cursor += 1;
-      const pendingClaims = [anchorByRequirement[requirementIndex]];
-      const seenClaims = /* @__PURE__ */ new Set();
-      let claimCursor = 0;
-      while (claimCursor < pendingClaims.length && freeExpectation < 0) {
-        const claimId = pendingClaims[claimCursor];
-        claimCursor += 1;
-        if (seenClaims.has(claimId)) continue;
-        seenClaims.add(claimId);
-        const atClaim = expectationsByClaim.get(claimId) ?? [];
-        if (atClaim.length > 0 && compatible(requirementIndex, claimId)) {
-          for (let offset = 0; offset < atClaim.length; offset += 1) {
-            const expectationIndex2 = atClaim[offset];
-            if (seenExpectations.has(expectationIndex2)) continue;
-            seenExpectations.add(expectationIndex2);
-            parentRequirementByExpectation[expectationIndex2] = requirementIndex;
-            const matched = matchedRequirementByExpectation[expectationIndex2];
-            if (matched < 0) {
-              freeExpectation = expectationIndex2;
-              break;
-            }
-            if (!seenRequirements.has(matched)) {
-              seenRequirements.add(matched);
-              pushArray2(queue, matched);
-            }
-          }
-        }
-        const children = graph.childrenByClaim.get(claimId) ?? [];
-        for (let childIndex = 0; childIndex < children.length; childIndex += 1) pushArray2(pendingClaims, children[childIndex]);
-      }
-    }
-    if (freeExpectation < 0) return false;
-    let expectationIndex = freeExpectation;
-    while (expectationIndex >= 0) {
-      const requirementIndex = parentRequirementByExpectation[expectationIndex];
-      const previousExpectation = matchedExpectationByRequirement[requirementIndex];
-      matchedExpectationByRequirement[requirementIndex] = expectationIndex;
-      matchedRequirementByExpectation[expectationIndex] = requirementIndex;
-      expectationIndex = previousExpectation;
-    }
-  }
-  return true;
-}
-function hasCompleteOracleOwnership(requirements, expectations, graph) {
-  if (requirements.length > expectations.length) return false;
-  const byComponent = /* @__PURE__ */ new Map();
-  for (let requirementIndex = 0; requirementIndex < requirements.length; requirementIndex += 1) {
-    const roots = requirements[requirementIndex].required;
-    if (roots.length === 0) return false;
-    let requiredComponent;
-    for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
-      const componentId = graph.componentByClaim.get(roots[rootIndex]);
-      if (componentId === void 0) return false;
-      if (requiredComponent === void 0) requiredComponent = componentId;
-      else if (requiredComponent !== componentId) return false;
-    }
-    const component = byComponent.get(
-      /** @type {number} */
-      requiredComponent
-    ) ?? { requirements: [], expectations: [] };
-    pushArray2(component.requirements, requirements[requirementIndex]);
-    byComponent.set(
-      /** @type {number} */
-      requiredComponent,
-      component
-    );
-  }
-  for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
-    const componentId = graph.componentByClaim.get(expectations[expectationIndex].evidenceRef);
-    if (componentId === void 0) continue;
-    const component = byComponent.get(componentId);
-    if (component) pushArray2(component.expectations, expectations[expectationIndex]);
-  }
-  for (const [componentId, component] of byComponent) {
-    if (component.requirements.length > component.expectations.length) return false;
-    if (graph.componentForestById.get(componentId) === true) {
-      const forestResult = matchForestOracleOwnership(component.requirements, component.expectations, graph);
-      if (forestResult === false) return false;
-      if (forestResult === null && !matchGeneralOracleOwnership(component.requirements, component.expectations, graph)) return false;
-    } else if (!matchGeneralOracleOwnership(component.requirements, component.expectations, graph)) return false;
-  }
-  return true;
-}
 function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption = true) {
   const direct = /* @__PURE__ */ new Set();
   const add = (value) => {
@@ -6683,7 +6620,10 @@ function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption
   for (const datum of records(caseDraft.data)) if (isRecord3(datum.provenance)) add(datum.provenance.ref);
   for (const step of records(caseDraft.steps)) {
     add(step.action_evidence_ref);
-    for (const expectation of records(step.expectations)) add(expectation.evidence_ref);
+    for (const expectation of records(step.expectations)) {
+      add(expectation.evidence_ref);
+      for (const ref of strings(expectation.oracle_evidence_refs)) add(ref);
+    }
   }
   if (isRecord3(caseDraft.testability_profile)) {
     for (const capability of records(caseDraft.testability_profile.capabilities)) add(capability.provenance_ref);
@@ -6894,6 +6834,139 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path4, 
     }
   }
 }
+function isTypedOracleClaim2(claim) {
+  if (claim.level === "E3" && claim.kind === "requirement") return true;
+  if (claim.level === "E1" && claim.kind === "assumption") return true;
+  return claim.level === "E2" && claim.kind === "expected-value" && claim.derivation_target === "expected-value" && (claim.derivation_kind === "formula" || claim.derivation_kind === "decision-table-instance");
+}
+function validateExplicitOracleClosure(caseDraft, obligations, graph, factIdsByObligation, factsById, path4, diagnostics) {
+  const obligationsById = /* @__PURE__ */ new Map();
+  const counts = /* @__PURE__ */ new Map();
+  for (let index = 0; index < obligations.length; index += 1) {
+    const obligation = obligations[index];
+    const obligationId = String(obligation.obligation_id);
+    obligationsById.set(obligationId, obligation);
+    counts.set(obligationId, 0);
+  }
+  const closureByObligation = /* @__PURE__ */ new Map();
+  const forbiddenByObligation = /* @__PURE__ */ new Map();
+  const descendantsByRootSignature = /* @__PURE__ */ new Map();
+  const allows = (closure, claimId) => {
+    const claim = graph.claimsById.get(claimId);
+    if (!claim || !isTypedOracleClaim2(claim) || typeof claim.scope !== "string" || !scopeContains(claim.scope, closure.scope)) return false;
+    if (closure.roots.has(claimId)) return true;
+    if (claim.level !== "E2") return false;
+    const parents = graph.parentsByClaim.get(claimId) ?? [];
+    for (let index = 0; index < parents.length; index += 1) {
+      if (closure.roots.has(parents[index])) return true;
+    }
+    const signature = canonicalStringify(sortArray2([...closure.roots], compareCodePoints4));
+    let descendants = descendantsByRootSignature.get(signature);
+    if (!descendants) {
+      descendants = /* @__PURE__ */ new Set();
+      const pending = [...closure.roots];
+      let cursor = 0;
+      while (cursor < pending.length) {
+        const current = pending[cursor];
+        cursor += 1;
+        if (descendants.has(current)) continue;
+        descendants.add(current);
+        const children = graph.childrenByClaim.get(current) ?? [];
+        for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+          pushArray2(pending, children[childIndex]);
+        }
+      }
+      descendantsByRootSignature.set(signature, descendants);
+    }
+    return descendants.has(claimId);
+  };
+  for (const [obligationId, obligation] of obligationsById) {
+    const roots = /* @__PURE__ */ new Set([
+      ...strings(obligation.source_claim_ids),
+      ...strings(obligation.required_oracle_refs)
+    ]);
+    for (const factId of factIdsByObligation.get(obligationId) ?? []) {
+      const fact = factsById.get(factId);
+      if (!fact) continue;
+      roots.add(String(fact.claim_id ?? ""));
+      for (const ref of strings(fact.source_claim_ids)) roots.add(ref);
+    }
+    const vector = isRecord3(obligation.combination_vector) ? obligation.combination_vector : {};
+    const forbidden = new Set(strings(vector.forbid_evidence_refs));
+    closureByObligation.set(obligationId, { roots, scope: String(obligation.scope ?? "") });
+    forbiddenByObligation.set(obligationId, forbidden);
+  }
+  const expectations = caseExpectations(caseDraft);
+  for (let index = 0; index < expectations.length; index += 1) {
+    const expectation = expectations[index];
+    const expectationPath = `${path4}/steps/expectations/${index}`;
+    const oracleRefs = strings(expectation.oracle_evidence_refs);
+    const oracleRefSet = new Set(oracleRefs);
+    const evidenceRef = String(expectation.evidence_ref ?? "");
+    if (oracleRefs.length === 0 || oracleRefSet.size !== oracleRefs.length || !oracleRefSet.has(evidenceRef)) pushArray2(diagnostics, diagnostic7(
+      "traceability",
+      "CASE_ORACLE_EVIDENCE_INVALID",
+      `${expectationPath}/oracle_evidence_refs`,
+      "Oracle evidence must be nonempty and include evidence_ref exactly once"
+    ));
+    if (expectation.kind === "obligation-oracle") {
+      const obligationId = String(expectation.closes_obligation_id ?? "");
+      const obligation = obligationsById.get(obligationId);
+      if (!obligation || obligation.caseable !== true || obligation.kind === "requirement-gap") {
+        pushArray2(diagnostics, diagnostic7(
+          "reference",
+          "CASE_ORACLE_CLOSE_TARGET_INVALID",
+          `${expectationPath}/closes_obligation_id`,
+          "obligation-oracle must close one linked caseable Test Point"
+        ));
+        continue;
+      }
+      counts.set(obligationId, (counts.get(obligationId) ?? 0) + 1);
+      const required = strings(obligation.required_oracle_refs);
+      if (someArray2(required, (ref) => !oracleRefSet.has(ref))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_ORACLE_PREBINDING_MISSING",
+        expectationPath,
+        "closing expectation must include every required Oracle prebinding"
+      ));
+      const closure = closureByObligation.get(obligationId);
+      const forbidden = forbiddenByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
+      if (someArray2(oracleRefs, (ref) => forbidden.has(ref))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_ORACLE_EVIDENCE_FORBIDDEN",
+        expectationPath,
+        "forbid evidence cannot become a selected-vector Oracle"
+      ));
+      else if (!closure || someArray2(oracleRefs, (ref) => !allows(closure, ref))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_ORACLE_EVIDENCE_UNRELATED",
+        expectationPath,
+        "Oracle evidence is outside the closed Test Point ancestry"
+      ));
+    } else if (expectation.kind === "auxiliary") {
+      if (Object.hasOwn(expectation, "closes_obligation_id") || someArray2(oracleRefs, (ref) => !someArray2(
+        [...closureByObligation.values()],
+        (closure) => allows(closure, ref)
+      ))) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "CASE_AUXILIARY_ORACLE_INVALID",
+        expectationPath,
+        "auxiliary expectations cannot close Test Points and must use legal Case Oracle evidence"
+      ));
+    } else pushArray2(diagnostics, diagnostic7(
+      "classification",
+      "CASE_EXPECTATION_KIND_INVALID",
+      `${expectationPath}/kind`,
+      "expectation kind must be obligation-oracle or auxiliary"
+    ));
+  }
+  for (const [obligationId, count] of counts) if (count !== 1) pushArray2(diagnostics, diagnostic7(
+    "traceability",
+    count === 0 ? "CASE_ORACLE_CLOSURE_MISSING" : "CASE_ORACLE_CLOSURE_DUPLICATE",
+    `${path4}/obligation_ids/${pointerPart3(obligationId)}`,
+    "every linked caseable Test Point must be closed by exactly one obligation-oracle expectation"
+  ));
+}
 function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact, factsById, factIdsByObligation, pointsById, evidenceGraph, diagnostics) {
   const caseId = typeof caseDraft.case_id === "string" ? caseDraft.case_id : "invalid";
   const path4 = `/${lane}/${pointerPart3(caseId)}`;
@@ -7025,37 +7098,23 @@ function validateCaseTraceability(caseDraft, lane, obligationsById, routesByFact
     "traceability",
     "CASE_EXECUTION_SIGNATURE_MISMATCH",
     `${path4}/execution_signature`,
-    "execution signature must be derived exactly from role, preconditions, data, ordered actions, and expectation identities"
+    "execution signature must be derived exactly from role, preconditions, data, ordered actions, and typed Oracle semantics"
   ));
-  const submittedOracleIds = strings(signature.oracle_refs);
-  if (expectations.length < obligationIds.length || expectationIds.length !== expectations.length || new Set(expectationIds).size !== expectationIds.length || !sameStrings(expectationIds, submittedOracleIds)) pushArray2(diagnostics, diagnostic7(
+  if (expectationIds.length !== expectations.length || new Set(expectationIds).size !== expectationIds.length) pushArray2(diagnostics, diagnostic7(
     "traceability",
     "CASE_ORACLE_TRACE_MISSING",
-    `${path4}/execution_signature/oracle_refs`,
-    "every covered Test Point requires a distinct independently locatable expectation Oracle"
-  ));
-  const requirementList = [];
-  for (const obligationId of obligationIds) {
-    const oracleRoots = sortArray2(strings(obligationsById.get(obligationId)?.required_oracle_refs), compareCodePoints4);
-    pushArray2(requirementList, { required: oracleRoots });
-  }
-  const expectationList = [];
-  for (const expectation of expectations) {
-    const evidenceRef = String(expectation.evidence_ref ?? "");
-    pushArray2(expectationList, { evidenceRef });
-  }
-  if (!hasCompleteOracleOwnership(requirementList, expectationList, evidenceGraph)) pushArray2(diagnostics, diagnostic7(
-    "traceability",
-    "CASE_ORACLE_OWNERSHIP_INCOMPLETE",
     `${path4}/steps`,
-    "every linked Test Point must own one distinct concrete expectation covering all required Oracles through accepted ancestry"
+    "every expectation must remain independently locatable"
   ));
-  if (Object.hasOwn(signature, "test_point_ids") && !sameStrings(strings(signature.test_point_ids), obligationIds)) pushArray2(diagnostics, diagnostic7(
-    "traceability",
-    "CASE_TEST_POINT_TRACE_MISMATCH",
-    `${path4}/execution_signature/test_point_ids`,
-    "Case signature Test Point associations must be exact"
-  ));
+  validateExplicitOracleClosure(
+    caseDraft,
+    linkedObligations,
+    evidenceGraph,
+    factIdsByObligation,
+    factsById,
+    path4,
+    diagnostics
+  );
 }
 function canonicalRootProjection(root) {
   const riskCounts = isRecord3(root.risk_counts) ? root.risk_counts : {};
@@ -7412,6 +7471,82 @@ function buildBundleTrusted(context) {
       factIds.add(String(route.fact_id ?? ""));
       factIdsByObligation.set(obligationId, factIds);
     }
+  }
+  for (const obligation of obligations) {
+    const obligationId = String(obligation.obligation_id ?? "");
+    const vector = isRecord3(obligation.combination_vector) ? obligation.combination_vector : null;
+    if (!vector) continue;
+    const assignments = records(vector.assignments);
+    const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ""));
+    const validStrength = Number.isSafeInteger(vector.strength) && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
+    if (vector.policy_id !== "twise-candidate-cap-v1" || !validStrength || new Set(parameterIds).size !== parameterIds.length || obligation.kind !== "interaction" || obligation.caseable !== true) pushArray2(
+      diagnostics,
+      diagnostic7(
+        "traceability",
+        "TWISE_VECTOR_CONTRACT_INVALID",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector`,
+        "selected vectors must use the frozen policy, strength within unique assignments, and caseable interaction obligations"
+      )
+    );
+    const sourceClaims = new Set(strings(obligation.source_claim_ids));
+    const owner = isRecord3(vector.owner) ? vector.owner : {};
+    const routedFacts = factIdsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
+    for (const factId of strings(owner.fact_ids)) {
+      if (!routedFacts.has(factId)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_OWNER_FACT_ROUTE_MISSING",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/owner/fact_ids/${pointerPart3(factId)}`,
+        "every selected-vector owner fact must route to the vector obligation"
+      ));
+      const fact = factsById.get(factId);
+      for (const ref of fact ? [String(fact.claim_id ?? ""), ...strings(fact.source_claim_ids)] : []) {
+        if (!sourceClaims.has(ref)) pushArray2(diagnostics, diagnostic7(
+          "traceability",
+          "TWISE_OWNER_SOURCE_MISSING",
+          `/obligations/${pointerPart3(obligationId)}/source_claim_ids`,
+          "selected-vector sources must inherit every owner fact root"
+        ));
+      }
+    }
+    const viewRefs = new Set(strings(obligation.view_element_refs));
+    for (const ref of records(owner.view_element_refs)) {
+      const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
+      if (!viewRefs.has(qualified)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_OWNER_ELEMENT_REF_MISSING",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/owner/view_element_refs`,
+        "selected-vector obligations must inherit every owner view element reference"
+      ));
+    }
+    for (const [assignmentIndex, assignment] of assignments.entries()) {
+      const claimId = String(assignment.evidence_claim_id ?? "");
+      const claim = claimsById.get(claimId);
+      if (!sourceClaims.has(claimId)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "TWISE_SELECTED_VALUE_SOURCE_MISSING",
+        `/obligations/${pointerPart3(obligationId)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+        "every selected-value evidence claim must be carried by the vector obligation sources"
+      ));
+      if (!claim || claim.kind === "diagnostic" || typeof claim.scope !== "string" || typeof obligation.scope !== "string" || !scopeContains(claim.scope, obligation.scope)) pushArray2(
+        diagnostics,
+        diagnostic7(
+          "traceability",
+          "TWISE_SELECTED_VALUE_EVIDENCE_INVALID",
+          `/obligations/${pointerPart3(obligationId)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+          "selected-value evidence must be accepted, non-diagnostic, and cover the obligation scope"
+        )
+      );
+    }
+    const forbidden = new Set(strings(vector.forbid_evidence_refs));
+    for (const ref of strings(obligation.required_oracle_refs)) if (forbidden.has(ref)) pushArray2(
+      diagnostics,
+      diagnostic7(
+        "traceability",
+        "TWISE_ORACLE_FORBID_CONFLICT",
+        `/obligations/${pointerPart3(obligationId)}/required_oracle_refs/${pointerPart3(ref)}`,
+        "forbid evidence cannot be an Oracle prebinding"
+      )
+    );
   }
   const formalRootsByObligation = /* @__PURE__ */ new Map();
   for (const obligation of obligations) {
@@ -7943,7 +8078,9 @@ function buildBundleTrusted(context) {
         obligationIds,
         (_id, index) => dispositions[index] === "grounded" || dispositions[index] === "conditional"
       );
-      if (executableRouteIds.length > 0 && everyArray2(executableRouteIds, (id) => sharesCase(factId, id))) status = "covered";
+      const hasRoutedRequirementGap = someArray2(obligationIds, (id) => obligationsById.get(id)?.kind === "requirement-gap" && pointsById.get(id)?.classification === "blocked");
+      if (hasRoutedRequirementGap) status = "blocked";
+      else if (executableRouteIds.length > 0 && everyArray2(executableRouteIds, (id) => sharesCase(factId, id))) status = "covered";
       else if (everyArray2(dispositions, (item) => item === "not_applicable")) status = "not_applicable";
       else if (executableRouteIds.length > 0) pushArray2(diagnostics, diagnostic7(
         "traceability",
@@ -10201,13 +10338,8 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
   ) : [];
   const combinations = isDenseObjectArray(inputs.combination_requests) ? (
     /** @type {Record<string, unknown>[]} */
-    inputs.combination_requests
+    inputs.combination_requests.map((request) => structuredClone(request)).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))
   ) : [];
-  if (combinations.length > 0) diagnostics.push(diagnostic10(
-    "OBLIGATION_INPUT_SEMANTICS_DEFERRED",
-    "/obligation_inputs/combination_requests",
-    "combination_requests semantics are reserved for a later remediation slice"
-  ));
   const terminalFactRoutes2 = terminal.map((entry) => entry.route);
   const notApplicableReviews = terminal.flatMap((entry) => entry.review ? [entry.review] : []);
   const customResponsibilitySeeds = custom.map((entry) => entry.seed);
@@ -10230,7 +10362,380 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
   };
 }
 
+// src/obligations/combinatorial.mjs
+var RISK_LEVELS3 = /* @__PURE__ */ new Set(["critical", "high", "medium", "low"]);
+var PARAMETER_KEYS = ["domains", "interaction_risk", "oracle_mappings"];
+var DOMAIN_KEYS = ["name", "values"];
+var CONSTRAINT_KEYS = ["forbidden"];
+var ASSIGNMENT_KEYS = ["parameter", "value"];
+var ORACLE_MAPPING_KEYS = ["assignments", "required_oracle_refs"];
+function assertExactKeys2(object, expected, label) {
+  const actual = Object.keys(object).sort(compareCodePoints7);
+  const wanted = [...expected].sort(compareCodePoints7);
+  if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
+    throw new TypeError(`${label} must have only ${wanted.join(", ")}`);
+  }
+}
+function isJsonScalar(value) {
+  return value === null || typeof value === "boolean" || typeof value === "string" || typeof value === "number" && Number.isFinite(value);
+}
+function scalarKey(value) {
+  if (value === null) return "null:null";
+  return `${typeof value}:${JSON.stringify(value)}`;
+}
+function compareScalars(left, right) {
+  return compareCodePoints7(scalarKey(left), scalarKey(right));
+}
+function requireScalar(value, label) {
+  if (!isJsonScalar(value)) throw new TypeError(`${label} must be a finite JSON scalar`);
+  return value;
+}
+function requireNonblankString(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new TypeError(`${label} must be a nonblank string`);
+  }
+  return value;
+}
+function requireDenseArray(value, label, minimumLength = 0) {
+  if (!Array.isArray(value) || value.length < minimumLength) {
+    throw new TypeError(`${label} must be a dense array${minimumLength > 0 ? ` of length at least ${minimumLength}` : ""}`);
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) throw new TypeError(`${label} must be a dense array`);
+  }
+  return value;
+}
+function validateParameters(parameters) {
+  if (!isObject6(parameters)) throw new TypeError("parameters must be an object");
+  assertExactKeys2(parameters, PARAMETER_KEYS, "parameters");
+  if (typeof parameters.interaction_risk !== "string" || !RISK_LEVELS3.has(parameters.interaction_risk)) {
+    throw new TypeError("parameters.interaction_risk must be explicit");
+  }
+  const rawDomains = requireDenseArray(parameters.domains, "parameters.domains", 3);
+  const domains = [];
+  const names = /* @__PURE__ */ new Set();
+  for (let index = 0; index < rawDomains.length; index += 1) {
+    const rawDomain = rawDomains[index];
+    if (!isObject6(rawDomain)) throw new TypeError(`domain ${index} must be an object`);
+    assertExactKeys2(rawDomain, DOMAIN_KEYS, `domain ${index}`);
+    const name = requireNonblankString(rawDomain.name, `domain ${index} name`);
+    if (names.has(name)) throw new TypeError(`duplicate domain name "${name}"`);
+    names.add(name);
+    const rawValues = requireDenseArray(rawDomain.values, `domain "${name}" values`, 1);
+    const values = [];
+    for (let valueIndex = 0; valueIndex < rawValues.length; valueIndex += 1) {
+      values.push(requireScalar(rawValues[valueIndex], `domain "${name}" value ${valueIndex}`));
+    }
+    const valueKeys = /* @__PURE__ */ new Set();
+    for (const value of values) {
+      const key = scalarKey(value);
+      if (valueKeys.has(key)) throw new TypeError(`domain "${name}" has duplicate values`);
+      valueKeys.add(key);
+    }
+    domains.push({ name, values: [...values].sort(compareScalars) });
+  }
+  domains.sort((left, right) => compareCodePoints7(left.name, right.name));
+  const oracleMappings = requireDenseArray(parameters.oracle_mappings, "parameters.oracle_mappings");
+  return { domains, oracleMappings };
+}
+function validateAssignments(raw, valuesByDomain, label) {
+  const rawAssignments = requireDenseArray(raw, `${label} assignments`, 1);
+  const assignments = [];
+  const assigned = /* @__PURE__ */ new Set();
+  for (let index = 0; index < rawAssignments.length; index += 1) {
+    const rawAssignment = rawAssignments[index];
+    if (!isObject6(rawAssignment)) throw new TypeError(`${label} assignment ${index} must be an object`);
+    assertExactKeys2(rawAssignment, ASSIGNMENT_KEYS, `${label} assignment ${index}`);
+    const parameter = requireNonblankString(
+      rawAssignment.parameter,
+      `${label} assignment ${index} parameter`
+    );
+    if (assigned.has(parameter)) throw new TypeError(`${label} repeats parameter "${parameter}"`);
+    assigned.add(parameter);
+    const domainValues = valuesByDomain.get(parameter);
+    if (!domainValues) throw new TypeError(`${label} names unknown parameter "${parameter}"`);
+    const value = requireScalar(rawAssignment.value, `${label} assignment ${index} value`);
+    if (!domainValues.has(scalarKey(value))) {
+      throw new TypeError(`${label} value is outside domain "${parameter}"`);
+    }
+    assignments.push({ parameter, value });
+  }
+  return assignments.sort((left, right) => compareCodePoints7(left.parameter, right.parameter));
+}
+function assignmentKey(assignments) {
+  return JSON.stringify(assignments.map(({ parameter, value }) => [parameter, scalarKey(value)]));
+}
+function validateConstraints(constraints, valuesByDomain) {
+  const rawConstraints = requireDenseArray(constraints, "constraints");
+  const normalized = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let index = 0; index < rawConstraints.length; index += 1) {
+    const rawConstraint = rawConstraints[index];
+    if (!isObject6(rawConstraint)) throw new TypeError(`constraint ${index} must be an object`);
+    assertExactKeys2(rawConstraint, CONSTRAINT_KEYS, `constraint ${index}`);
+    const forbidden = validateAssignments(rawConstraint.forbidden, valuesByDomain, `constraint ${index}`);
+    const key = assignmentKey(forbidden);
+    if (seen.has(key)) throw new TypeError("duplicate forbidden constraint");
+    seen.add(key);
+    normalized.push({ forbidden });
+  }
+  return normalized.sort((left, right) => compareCodePoints7(
+    assignmentKey(left.forbidden),
+    assignmentKey(right.forbidden)
+  ));
+}
+function vectorKey(values, domainNames) {
+  return JSON.stringify(domainNames.map((name) => [name, scalarKey(values[name])]));
+}
+function violatesConstraint(assigned, constraints) {
+  return constraints.some(({ forbidden }) => forbidden.every(({ parameter, value }) => assigned.has(parameter) && scalarKey(
+    /** @type {JsonScalar} */
+    assigned.get(parameter)
+  ) === scalarKey(value)));
+}
+function preprocessSearch(domains, constraints) {
+  const forbiddenValues = /* @__PURE__ */ new Map();
+  const multiConstraints = [];
+  for (const constraint of constraints) {
+    if (constraint.forbidden.length !== 1) {
+      multiConstraints.push(constraint);
+      continue;
+    }
+    const assignment = constraint.forbidden[0];
+    const values = forbiddenValues.get(assignment.parameter) ?? /* @__PURE__ */ new Set();
+    values.add(scalarKey(assignment.value));
+    forbiddenValues.set(assignment.parameter, values);
+  }
+  const filteredDomains = domains.map((domain) => ({
+    name: domain.name,
+    values: domain.values.filter((value) => !forbiddenValues.get(domain.name)?.has(scalarKey(value)))
+  }));
+  if (filteredDomains.some((domain) => domain.values.length === 0)) return null;
+  const constraintParticipation = new Map(filteredDomains.map(({ name }) => [name, 0]));
+  for (const { forbidden } of multiConstraints) {
+    for (const { parameter } of forbidden) {
+      constraintParticipation.set(parameter, (constraintParticipation.get(parameter) ?? 0) + 1);
+    }
+  }
+  return {
+    canonicalDomains: filteredDomains,
+    searchDomains: [...filteredDomains].sort((left, right) => left.values.length - right.values.length || (constraintParticipation.get(right.name) ?? 0) - (constraintParticipation.get(left.name) ?? 0) || compareCodePoints7(left.name, right.name)),
+    constraints: multiConstraints
+  };
+}
+function enumerateValidCandidates(canonicalDomains, searchDomains, constraints, maxCandidates) {
+  const candidates = [];
+  const assigned = /* @__PURE__ */ new Map();
+  const valueIndexes = new Array(searchDomains.length).fill(0);
+  let depth = 0;
+  while (depth >= 0) {
+    if (depth === searchDomains.length) {
+      const vector = Object.fromEntries(canonicalDomains.map(({ name }) => [name, assigned.get(name)]));
+      candidates.push(vector);
+      if (candidates.length > maxCandidates) return null;
+      depth -= 1;
+      if (depth >= 0) {
+        assigned.delete(searchDomains[depth].name);
+        valueIndexes[depth] += 1;
+      }
+      continue;
+    }
+    const domain = searchDomains[depth];
+    if (valueIndexes[depth] >= domain.values.length) {
+      valueIndexes[depth] = 0;
+      assigned.delete(domain.name);
+      depth -= 1;
+      if (depth >= 0) {
+        assigned.delete(searchDomains[depth].name);
+        valueIndexes[depth] += 1;
+      }
+      continue;
+    }
+    assigned.set(domain.name, domain.values[valueIndexes[depth]]);
+    if (violatesConstraint(assigned, constraints)) {
+      assigned.delete(domain.name);
+      valueIndexes[depth] += 1;
+      continue;
+    }
+    depth += 1;
+    if (depth < searchDomains.length) valueIndexes[depth] = 0;
+  }
+  const domainNames = canonicalDomains.map(({ name }) => name);
+  return candidates.sort((left, right) => compareCodePoints7(
+    vectorKey(left, domainNames),
+    vectorKey(right, domainNames)
+  ));
+}
+function chooseBigInt(n, k) {
+  if (k < 0 || k > n) return 0n;
+  const take = Math.min(k, n - k);
+  let result = 1n;
+  for (let index = 1; index <= take; index += 1) {
+    result = result * BigInt(n - take + index) / BigInt(index);
+  }
+  return result;
+}
+function uncoveredTupleCount(candidate, candidates, selectedIndexes, domainNames, strength) {
+  if (selectedIndexes.length === 0) return chooseBigInt(domainNames.length, strength);
+  const allSelected = (1n << BigInt(selectedIndexes.length)) - 1n;
+  const multiplicityByMask = /* @__PURE__ */ new Map();
+  for (const domainName of domainNames) {
+    let matchingSelected = 0n;
+    for (let position = 0; position < selectedIndexes.length; position += 1) {
+      const selectedIndex = selectedIndexes[position];
+      if (scalarKey(candidate[domainName]) === scalarKey(candidates[selectedIndex][domainName])) {
+        matchingSelected |= 1n << BigInt(position);
+      }
+    }
+    multiplicityByMask.set(matchingSelected, (multiplicityByMask.get(matchingSelected) ?? 0) + 1);
+  }
+  const commonMultiplicity = multiplicityByMask.get(allSelected) ?? 0;
+  multiplicityByMask.delete(allSelected);
+  let countsBySize = Array.from({ length: strength + 1 }, () => /* @__PURE__ */ new Map());
+  countsBySize[0].set(allSelected, 1n);
+  let visitedDomains = 0;
+  for (const [matchingSelected, multiplicity] of multiplicityByMask) {
+    const nextCounts = Array.from({ length: strength + 1 }, () => /* @__PURE__ */ new Map());
+    const maximumPriorSize = Math.min(strength, visitedDomains);
+    for (let priorSize = 0; priorSize <= maximumPriorSize; priorSize += 1) {
+      for (const [priorMask, count] of countsBySize[priorSize]) {
+        const maximumTake = Math.min(multiplicity, strength - priorSize);
+        for (let take = 0; take <= maximumTake; take += 1) {
+          const nextMask = take === 0 ? priorMask : priorMask & matchingSelected;
+          const weighted = count * chooseBigInt(multiplicity, take);
+          const size = priorSize + take;
+          nextCounts[size].set(nextMask, (nextCounts[size].get(nextMask) ?? 0n) + weighted);
+        }
+      }
+    }
+    visitedDomains += multiplicity;
+    countsBySize = nextCounts;
+  }
+  let uncovered = 0n;
+  for (let size = 0; size <= strength; size += 1) {
+    const nonCommonCount = countsBySize[size].get(0n) ?? 0n;
+    uncovered += nonCommonCount * chooseBigInt(commonMultiplicity, strength - size);
+  }
+  return uncovered;
+}
+function validateOracleMappings(rawMappings, valuesByDomain, domainNames, constraints) {
+  const result = /* @__PURE__ */ new Map();
+  for (let index = 0; index < rawMappings.length; index += 1) {
+    const rawMapping = rawMappings[index];
+    if (!isObject6(rawMapping)) throw new TypeError(`Oracle mapping ${index} must be an object`);
+    assertExactKeys2(rawMapping, ORACLE_MAPPING_KEYS, `Oracle mapping ${index}`);
+    const assignments = validateAssignments(
+      rawMapping.assignments,
+      valuesByDomain,
+      `Oracle mapping ${index}`
+    );
+    if (assignments.length !== domainNames.length || assignments.some(({ parameter }, assignmentIndex) => parameter !== domainNames[assignmentIndex])) {
+      throw new TypeError(`Oracle mapping ${index} must name every parameter exactly once`);
+    }
+    const rawRefs = requireDenseArray(
+      rawMapping.required_oracle_refs,
+      `Oracle mapping ${index} required_oracle_refs`
+    );
+    const refs = [];
+    for (let refIndex = 0; refIndex < rawRefs.length; refIndex += 1) {
+      refs.push(requireNonblankString(rawRefs[refIndex], `Oracle mapping ${index} ref ${refIndex}`));
+    }
+    if (new Set(refs).size !== refs.length) throw new TypeError(`Oracle mapping ${index} repeats an Oracle ref`);
+    const assigned = new Map(assignments.map(({ parameter, value }) => [parameter, value]));
+    if (violatesConstraint(assigned, constraints)) {
+      throw new TypeError(`Oracle mapping ${index} targets a forbidden vector`);
+    }
+    const values = Object.fromEntries(assignments.map(({ parameter, value }) => [parameter, value]));
+    const key = vectorKey(values, domainNames);
+    if (result.has(key)) throw new TypeError("duplicate Oracle vector mapping");
+    result.set(key, [...refs].sort(compareCodePoints7));
+  }
+  return result;
+}
+function selectTWiseVectors(parameters, strength, constraints, maxCandidates) {
+  const { domains, oracleMappings } = validateParameters(parameters);
+  if (!Number.isInteger(strength) || Number(strength) < 2 || Number(strength) > domains.length) {
+    throw new TypeError("strength must be an integer from 2 through the domain count");
+  }
+  if (!Number.isSafeInteger(maxCandidates) || Number(maxCandidates) <= 0) {
+    throw new TypeError("maxCandidates must be a positive safe integer");
+  }
+  const valuesByDomain = new Map(domains.map((domain) => [
+    domain.name,
+    new Map(domain.values.map((value) => [scalarKey(value), value]))
+  ]));
+  const normalizedConstraints = validateConstraints(constraints, valuesByDomain);
+  const domainNames = domains.map(({ name }) => name);
+  const oracleRefsByVector = validateOracleMappings(
+    oracleMappings,
+    valuesByDomain,
+    domainNames,
+    normalizedConstraints
+  );
+  const search = preprocessSearch(domains, normalizedConstraints);
+  if (search === null) return {
+    status: "blocked",
+    reason: "no_valid_candidates",
+    max_candidates: Number(maxCandidates)
+  };
+  const candidates = enumerateValidCandidates(
+    search.canonicalDomains,
+    search.searchDomains,
+    search.constraints,
+    Number(maxCandidates)
+  );
+  if (candidates === null) return {
+    status: "blocked",
+    reason: "max_candidates_exceeded",
+    max_candidates: Number(maxCandidates)
+  };
+  if (candidates.length === 0) return {
+    status: "blocked",
+    reason: "no_valid_candidates",
+    max_candidates: Number(maxCandidates)
+  };
+  const remaining = new Set(candidates.map((_, index) => index));
+  const selectedIndexes = [];
+  while (remaining.size > 0) {
+    let bestIndex = -1;
+    let bestCount = -1n;
+    let bestSignature = "";
+    for (const index of remaining) {
+      const count = uncoveredTupleCount(
+        candidates[index],
+        candidates,
+        selectedIndexes,
+        domainNames,
+        Number(strength)
+      );
+      const signature = vectorKey(candidates[index], domainNames);
+      if (count > bestCount || count === bestCount && (bestIndex < 0 || compareCodePoints7(signature, bestSignature) < 0)) {
+        bestIndex = index;
+        bestCount = count;
+        bestSignature = signature;
+      }
+    }
+    if (bestIndex < 0 || bestCount <= 0n) break;
+    selectedIndexes.push(bestIndex);
+    remaining.delete(bestIndex);
+  }
+  return {
+    status: "selected",
+    vectors: selectedIndexes.map((index) => {
+      const values = { ...candidates[index] };
+      return {
+        values,
+        required_oracle_refs: [...oracleRefsByVector.get(vectorKey(values, domainNames)) ?? []]
+      };
+    })
+  };
+}
+
 // src/obligations/compile-obligations.mjs
+var TWISE_POLICY = Object.freeze({
+  policy_id: "twise-candidate-cap-v1",
+  max_candidates: 4096
+});
 var ObligationCompilationError = class extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
   constructor(diagnostics) {
@@ -11634,7 +12139,370 @@ function indexCustomObligationsByOwnerFact(seeds, ownerFactIdsBySeed) {
   }
   return index;
 }
-function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, customObligationIdsByFactId, relations, diagnostics) {
+function isSupportedCombinationEvidence(claim) {
+  return claim.kind !== "diagnostic" && (claim.level === "E3" || claim.level === "E2");
+}
+function compileCombinationObligations(inputs, viewsById, factsById, claimsById, viewRoutes, relations, diagnostics) {
+  const obligations = [];
+  const obligationIdsByFactId = /* @__PURE__ */ new Map();
+  const modeledViewsByFactId = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === "string" ? [[route.fact_id, new Set(stringArray5(route.view_ids))]] : []));
+  for (const [requestIndex, request] of inputs.combinationRequests.entries()) {
+    const path4 = `/obligation_inputs/combination_requests/${requestIndex}`;
+    const owner = isObject7(request.owner) ? request.owner : {};
+    const viewId = String(owner.view_id ?? "");
+    const view = viewsById.get(viewId);
+    const factIds = [...new Set(stringArray5(owner.fact_ids))].sort(compareCodePoints7);
+    const publicElementRefs = objectArray8(owner.view_element_refs);
+    const qualifiedElementRefs = publicElementRefs.map((ref) => qualifyViewElementRef(String(ref.view_id ?? ""), String(ref.element_id ?? ""))).sort(compareCodePoints7);
+    let valid = true;
+    if (!view) {
+      diagnostics.push(diagnostic11(
+        "reference",
+        "TWISE_OWNER_VIEW_UNKNOWN",
+        `${path4}/owner/view_id`,
+        `combination owner references unknown view "${viewId}"`
+      ));
+      valid = false;
+    }
+    const elementsById = new Map(objectArray8(view?.elements).map((element) => [String(element.element_id), element]));
+    const ownerRoots = [];
+    const selectedElements = [];
+    for (const [refIndex, ref] of publicElementRefs.entries()) {
+      if (ref.view_id !== viewId || !elementsById.has(String(ref.element_id ?? ""))) {
+        diagnostics.push(diagnostic11(
+          "reference",
+          "TWISE_OWNER_ELEMENT_UNKNOWN",
+          `${path4}/owner/view_element_refs/${refIndex}`,
+          "combination owner elements must exist in the single named owner view"
+        ));
+        valid = false;
+        continue;
+      }
+      const roots = elementEvidenceRefs(
+        /** @type {Record<string, unknown>} */
+        elementsById.get(String(ref.element_id))
+      );
+      selectedElements.push({
+        index: refIndex,
+        ref: qualifyViewElementRef(String(ref.view_id), String(ref.element_id)),
+        roots
+      });
+      ownerRoots.push(...roots);
+    }
+    const ownerFacts = [];
+    const scope = String(request.scope ?? "");
+    for (const [factIndex, factId] of factIds.entries()) {
+      const fact = factsById.get(factId);
+      if (!fact) {
+        diagnostics.push(diagnostic11(
+          "reference",
+          "TWISE_OWNER_FACT_UNKNOWN",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          `combination owner references unknown formal fact "${factId}"`
+        ));
+        valid = false;
+        continue;
+      }
+      const modeledViews = modeledViewsByFactId.get(factId);
+      if (!modeledViews?.has(viewId)) {
+        diagnostics.push(diagnostic11(
+          "traceability",
+          "TWISE_OWNER_FACT_NOT_MODELED",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          `combination owner fact "${factId}" is not modeled by view "${viewId}"`
+        ));
+        valid = false;
+      }
+      const factRoots = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
+      ownerFacts.push({ factId, roots: factRoots });
+      ownerRoots.push(...factRoots);
+      const primaryClaim = claimsById.get(String(fact.claim_id));
+      if (!primaryClaim || !scopeContains(String(primaryClaim.scope ?? ""), scope)) {
+        diagnostics.push(diagnostic11(
+          "classification",
+          "TWISE_OWNER_SCOPE_MISMATCH",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          `combination owner fact "${factId}" must contain request scope "${scope}"`
+        ));
+        valid = false;
+      }
+      if (!qualifiedElementRefs.some((ref) => {
+        const parsed = parseQualifiedViewElementRef(ref);
+        const element = parsed ? elementsById.get(parsed.elementId) : void 0;
+        return elementEvidenceRefs(element ?? {}).some((root) => factRoots.some(
+          (factRoot) => claimsDirectionallyRelated(relations, root, factRoot)
+        ));
+      })) {
+        diagnostics.push(diagnostic11(
+          "traceability",
+          "TWISE_OWNER_FACT_AMBIGUOUS",
+          `${path4}/owner/fact_ids/${factIndex}`,
+          "every owner fact must connect directionally to a selected owner element"
+        ));
+        valid = false;
+      }
+    }
+    for (const element of selectedElements) {
+      if (!ownerFacts.some(({ roots }) => element.roots.some((elementRoot) => roots.some(
+        (factRoot) => claimsDirectionallyRelated(relations, elementRoot, factRoot)
+      )))) {
+        diagnostics.push(diagnostic11(
+          "traceability",
+          "TWISE_OWNER_ELEMENT_NOT_MODELED",
+          `${path4}/owner/view_element_refs/${element.index}`,
+          `combination owner element "${element.ref}" does not resolve to a declared owner fact`
+        ));
+        valid = false;
+      }
+    }
+    if (!view || !scopeContains(String(view.scope ?? ""), scope)) {
+      diagnostics.push(diagnostic11(
+        "classification",
+        "TWISE_OWNER_SCOPE_MISMATCH",
+        `${path4}/scope`,
+        "combination owner view must contain the request scope"
+      ));
+      valid = false;
+    }
+    const canonicalOwnerRoots = [...new Set(ownerRoots)].sort(compareCodePoints7);
+    const validateClaim = (claimId, claimPath, options = {}) => {
+      const claim = claimsById.get(claimId);
+      if (!claim) {
+        diagnostics.push(diagnostic11("reference", "TWISE_EVIDENCE_DANGLING", claimPath, `unknown accepted evidence "${claimId}"`));
+        valid = false;
+        return false;
+      }
+      if (options.oracle && (!isSupportedCombinationEvidence(claim) || !isOracleEvidence(claim))) {
+        diagnostics.push(diagnostic11(
+          "classification",
+          "TWISE_ORACLE_EVIDENCE_INVALID",
+          claimPath,
+          "vector Oracle prebindings require typed, supported E3 or E2 Oracle evidence"
+        ));
+        valid = false;
+        return false;
+      }
+      if (claim.kind === "diagnostic" || options.strong && !isSupportedCombinationEvidence(claim)) {
+        diagnostics.push(diagnostic11(
+          "classification",
+          "TWISE_EVIDENCE_LEVEL_INVALID",
+          claimPath,
+          options.strong ? "constraint, risk, and Oracle evidence requires non-diagnostic E3 or E2" : "selected values cannot use diagnostic evidence"
+        ));
+        valid = false;
+        return false;
+      }
+      if (!scopeContains(String(claim.scope ?? ""), scope)) {
+        diagnostics.push(diagnostic11("classification", "TWISE_EVIDENCE_SCOPE_MISMATCH", claimPath, "combination evidence must cover the request scope"));
+        valid = false;
+        return false;
+      }
+      const roots = options.roots ?? canonicalOwnerRoots;
+      if (!roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
+        diagnostics.push(diagnostic11("traceability", "TWISE_EVIDENCE_UNRELATED", claimPath, "combination evidence must connect directionally to its semantic target"));
+        valid = false;
+        return false;
+      }
+      return true;
+    };
+    const parameters = objectArray8(request.parameters);
+    const parameterIds = /* @__PURE__ */ new Set();
+    const valueClaimsByParameter = /* @__PURE__ */ new Map();
+    const selectorDomains = [];
+    for (const [parameterIndex, parameter] of parameters.entries()) {
+      const parameterId = String(parameter.parameter_id ?? "");
+      if (parameterIds.has(parameterId)) {
+        diagnostics.push(diagnostic11("classification", "TWISE_PARAMETER_DUPLICATE", `${path4}/parameters/${parameterIndex}/parameter_id`, `duplicate parameter "${parameterId}"`));
+        valid = false;
+      }
+      parameterIds.add(parameterId);
+      const claimsByValue = /* @__PURE__ */ new Map();
+      const values = [];
+      for (const [valueIndex, value] of objectArray8(parameter.values).entries()) {
+        const valueId = String(value.value_id ?? "");
+        const claimId = String(value.evidence_claim_id ?? "");
+        if (claimsByValue.has(valueId)) {
+          diagnostics.push(diagnostic11("classification", "TWISE_VALUE_DUPLICATE", `${path4}/parameters/${parameterIndex}/values/${valueIndex}/value_id`, `duplicate value "${valueId}"`));
+          valid = false;
+        }
+        validateClaim(claimId, `${path4}/parameters/${parameterIndex}/values/${valueIndex}/evidence_claim_id`);
+        claimsByValue.set(valueId, claimId);
+        values.push(valueId);
+      }
+      valueClaimsByParameter.set(parameterId, claimsByValue);
+      selectorDomains.push({ name: parameterId, values });
+    }
+    const risk = isObject7(request.interaction_risk) ? request.interaction_risk : {};
+    const riskRefs = [...new Set(stringArray5(risk.evidence_refs))].sort(compareCodePoints7);
+    for (const [index, claimId] of riskRefs.entries()) validateClaim(
+      claimId,
+      `${path4}/interaction_risk/evidence_refs/${index}`,
+      { strong: true }
+    );
+    const selectorConstraints = [];
+    const forbidEvidenceRefs = /* @__PURE__ */ new Set();
+    for (const [constraintIndex, constraint] of objectArray8(request.constraints).entries()) {
+      const assignments = objectArray8(constraint.assignments).map((assignment) => ({
+        parameter: String(assignment.parameter_id ?? ""),
+        value: String(assignment.value_id ?? "")
+      }));
+      const assignedRoots = assignments.flatMap(({ parameter, value }) => valueClaimsByParameter.get(parameter)?.get(value) ?? []);
+      for (const [refIndex, claimId] of stringArray5(constraint.evidence_refs).entries()) {
+        forbidEvidenceRefs.add(claimId);
+        validateClaim(
+          claimId,
+          `${path4}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
+          { strong: true, roots: [...canonicalOwnerRoots, ...assignedRoots] }
+        );
+      }
+      selectorConstraints.push({ forbidden: assignments });
+    }
+    const selectorOracleMappings = [];
+    for (const [mappingIndex, mapping] of objectArray8(request.vector_oracles).entries()) {
+      const assignments = objectArray8(mapping.assignments).map((assignment) => ({
+        parameter: String(assignment.parameter_id ?? ""),
+        value: String(assignment.value_id ?? "")
+      }));
+      for (const [refIndex, claimId] of stringArray5(mapping.required_oracle_refs).entries()) {
+        validateClaim(
+          claimId,
+          `${path4}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
+          { strong: true, oracle: true }
+        );
+        if (forbidEvidenceRefs.has(claimId)) {
+          diagnostics.push(diagnostic11(
+            "classification",
+            "TWISE_ORACLE_FORBID_CONFLICT",
+            `${path4}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
+            "forbid evidence cannot become a selected-vector Oracle prebinding"
+          ));
+          valid = false;
+        }
+      }
+      selectorOracleMappings.push({ assignments, required_oracle_refs: stringArray5(mapping.required_oracle_refs) });
+    }
+    if (!valid) continue;
+    let selection;
+    try {
+      selection = selectTWiseVectors({
+        domains: selectorDomains,
+        interaction_risk: risk.risk,
+        oracle_mappings: selectorOracleMappings
+      }, request.strength, selectorConstraints, TWISE_POLICY.max_candidates);
+    } catch (error) {
+      diagnostics.push(diagnostic11(
+        "classification",
+        "TWISE_REQUEST_INVALID",
+        path4,
+        error instanceof Error ? error.message : "combination request is invalid"
+      ));
+      continue;
+    }
+    const ownerIdentity = {
+      view_id: viewId,
+      fact_ids: factIds,
+      view_element_refs: publicElementRefs.map((ref) => ({
+        view_id: String(ref.view_id),
+        element_id: String(ref.element_id)
+      })).sort((left, right) => compareCodePoints7(canonicalStringify(left), canonicalStringify(right)))
+    };
+    if (selection.status === "blocked") {
+      if (selection.reason !== "max_candidates_exceeded") {
+        diagnostics.push(diagnostic11("classification", "TWISE_NO_VALID_CANDIDATES", path4, "combination constraints leave no valid candidate"));
+        continue;
+      }
+      const semanticRefs2 = [canonicalStringify({
+        kind: "combination-owner",
+        owner: ownerIdentity,
+        policy_id: TWISE_POLICY.policy_id
+      })];
+      const rootSignature = { missing_type: "resource_limit", semantic_refs: semanticRefs2, scope };
+      const rootIssueId = stableId("root", rootSignature);
+      const obligationId = stableId("obligation", {
+        kind: "requirement-gap",
+        owner: ownerIdentity,
+        missing_type: "resource_limit",
+        scope,
+        policy_id: TWISE_POLICY.policy_id
+      });
+      obligations.push({
+        obligation_id: obligationId,
+        kind: "requirement-gap",
+        caseable: false,
+        risk: risk.risk,
+        scope,
+        source_claim_ids: [.../* @__PURE__ */ new Set([...canonicalOwnerRoots, ...riskRefs])].sort(compareCodePoints7),
+        view_element_refs: qualifiedElementRefs,
+        required_oracle_refs: [],
+        required_capabilities: [],
+        gap_issue: {
+          root_issue_id: rootIssueId,
+          root_issue_key: canonicalStringify(rootSignature),
+          missing_type: "resource_limit",
+          semantic_refs: semanticRefs2,
+          scope,
+          answerable: false,
+          reasons: [`${TWISE_POLICY.policy_id}:${TWISE_POLICY.max_candidates}`],
+          evidence_refs: riskRefs
+        }
+      });
+      for (const factId of factIds) {
+        const ids = obligationIdsByFactId.get(factId) ?? /* @__PURE__ */ new Set();
+        ids.add(obligationId);
+        obligationIdsByFactId.set(factId, ids);
+      }
+      continue;
+    }
+    for (const vector of selection.vectors) {
+      const semanticAssignments = Object.entries(vector.values).map(([parameterId, valueId]) => ({
+        parameter_id: parameterId,
+        value_id: String(valueId)
+      })).sort((left, right) => compareCodePoints7(left.parameter_id, right.parameter_id));
+      const assignments = semanticAssignments.map(({ parameter_id: parameterId, value_id: valueId }) => ({
+        parameter_id: parameterId,
+        value_id: valueId,
+        evidence_claim_id: valueClaimsByParameter.get(parameterId)?.get(valueId) ?? ""
+      }));
+      const valueClaimIds = assignments.map(({ evidence_claim_id: evidenceClaimId }) => evidenceClaimId);
+      const identity = {
+        kind: "interaction",
+        responsibility: "t-wise-vector",
+        policy_id: TWISE_POLICY.policy_id,
+        owner: ownerIdentity,
+        scope,
+        strength: request.strength,
+        assignments: semanticAssignments
+      };
+      const obligationId = stableId("obligation", identity);
+      obligations.push({
+        obligation_id: obligationId,
+        kind: "interaction",
+        caseable: true,
+        risk: risk.risk,
+        scope,
+        source_claim_ids: [.../* @__PURE__ */ new Set([...canonicalOwnerRoots, ...valueClaimIds, ...riskRefs])].sort(compareCodePoints7),
+        view_element_refs: qualifiedElementRefs,
+        required_oracle_refs: [...vector.required_oracle_refs].sort(compareCodePoints7),
+        required_capabilities: [],
+        combination_vector: {
+          policy_id: TWISE_POLICY.policy_id,
+          strength: request.strength,
+          owner: ownerIdentity,
+          assignments,
+          forbid_evidence_refs: [...forbidEvidenceRefs].sort(compareCodePoints7)
+        }
+      });
+      for (const factId of factIds) {
+        const ids = obligationIdsByFactId.get(factId) ?? /* @__PURE__ */ new Set();
+        ids.add(obligationId);
+        obligationIdsByFactId.set(factId, ids);
+      }
+    }
+  }
+  obligations.sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
+  return { obligations, obligationIdsByFactId };
+}
+function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, customObligationIdsByFactId, combinationObligationIdsByFactId, relations, diagnostics) {
   const viewsByFact = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === "string" ? [[route.fact_id, new Set(stringArray5(route.view_ids))]] : []));
   const obligationIndex = indexObligationsByViewAndDirectClaim(obligations);
   const routes = [];
@@ -11643,7 +12511,8 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
     const terminal = terminalRoutes.get(factId);
     const viewIds = viewsByFact.get(factId);
     const customObligationIds = customObligationIdsByFactId.get(factId);
-    if (terminal && (viewIds || customObligationIds)) {
+    const combinationObligationIds = combinationObligationIdsByFactId.get(factId);
+    if (terminal && (viewIds || customObligationIds || combinationObligationIds)) {
       diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MULTIPLE", `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
       continue;
     }
@@ -11652,7 +12521,7 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
       terminal.route });
       continue;
     }
-    if (!viewIds && !customObligationIds) {
+    if (!viewIds && !customObligationIds && !combinationObligationIds) {
       diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MISSING", `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
       continue;
     }
@@ -11663,6 +12532,7 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
       relations.descendantsByRootSet
     );
     const obligationIds = new Set(customObligationIds ?? []);
+    for (const obligationId of combinationObligationIds ?? []) obligationIds.add(obligationId);
     for (const viewId of viewIds ?? []) {
       const claims = obligationIndex.get(viewId);
       if (!claims) continue;
@@ -11945,6 +12815,7 @@ function compileObligations(evidenceGraph, behaviorViews) {
     contextsByViewId: compiledInputs.contextsByViewId,
     customObligations: compiledInputs.customResponsibilitySeeds,
     customResponsibilityPaths: compiledInputs.customResponsibilityPaths,
+    combinationRequests: compiledInputs.combinationRequests,
     factRoutes: compiledInputs.terminalFactRoutes,
     terminalFactRoutePaths: compiledInputs.terminalFactRoutePaths,
     notApplicableReviews: compiledInputs.notApplicableReviews,
@@ -12003,8 +12874,24 @@ function compileObligations(evidenceGraph, behaviorViews) {
     /** @type {Record<string, unknown>[]} */
     interactionReconciliation.candidates
   );
+  const combinationCompilation = compileCombinationObligations(
+    inputs,
+    viewValidation.viewsById,
+    factsById,
+    claimsById,
+    /** @type {Record<string, unknown>[]} */
+    viewValidation.factRoutes,
+    evidence.relations,
+    diagnostics
+  );
+  assertNoDiagnostics(diagnostics);
   const gapObligations = [...terminalRoutes.values()].flatMap((entry) => isObject7(entry.gap) ? [entry.gap] : []).concat(interactionCompilation.gaps);
-  const obligations = [...systemObligations, ...customObligations, ...gapObligations].sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
+  const obligations = [
+    ...systemObligations,
+    ...customObligations,
+    ...combinationCompilation.obligations,
+    ...gapObligations
+  ].sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
   const customObligationIdsByFactId = indexCustomObligationsByOwnerFact(
     customValidation.seeds,
     customValidation.ownerFactIdsBySeed
@@ -12016,6 +12903,7 @@ function compileObligations(evidenceGraph, behaviorViews) {
     viewValidation.factRoutes,
     terminalRoutes,
     customObligationIdsByFactId,
+    combinationCompilation.obligationIdsByFactId,
     evidence.relations,
     diagnostics
   );
@@ -16475,7 +17363,7 @@ var schemaDirectory = path3.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "8e36ef5dc6a03f8df57b9749f4df0bb184f018ed32662bebaa7e586ba6540844" : void 0;
+var embeddedManifestDigest = true ? "227a411349f5ac664f44cd39b5daabd7e182a85e463e2aadb6825f50a161974d" : void 0;
 var embeddedSchemaVersion = true ? "1.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.1.0" : void 0;
 var STAGE_SCHEMA = Object.freeze({

@@ -136,6 +136,7 @@
             "support_review": "supported",
             "expectations": [
               {
+                "kind": "obligation-oracle",
                 "expectation_id": "expectation_checkout",
                 "business_assertion": "checkout accepted",
                 "preceding_action_id": "step_checkout",
@@ -144,6 +145,8 @@
                 "observation_target": "result",
                 "oracle": { "type": "state", "expected_state": "checkout accepted", "comparison": "equals" },
                 "evidence_ref": "claim_checkout",
+                "oracle_evidence_refs": ["claim_checkout"],
+                "closes_obligation_id": "obligation_8cc31c1b2773c94c",
                 "support_review": "supported"
               }
             ]
@@ -173,8 +176,7 @@
           "precondition_state": "[{\"condition\":\"cart is ready\",\"reachable_from\":\"revision start\"}]",
           "data_partition": "[{\"name\":\"scenario input\",\"value\":\"ready-cart\"}]",
           "action_path": ["Submit checkout"],
-          "oracle_refs": ["expectation_checkout"],
-          "test_point_ids": ["obligation_8cc31c1b2773c94c"]
+          "oracle_refs": ["expectation_checkout"]
         }
       }
     ],

@@ -164,6 +164,18 @@ test('skill static policies freeze clarification and source-review boundaries', 
     behavior,
     /fact owner[\s\S]*scope must contain the custom responsibility scope/u
   );
+  assert.match(
+    behavior,
+    /`combination_requests`[\s\S]*closed owner[\s\S]*every owner fact's primary scope must contain the request scope/u
+  );
+  assert.match(
+    behavior,
+    /Never submit `maxCandidates`[\s\S]*compiler-private[\s\S]*non-answerable `resource_limit` requirement gap/u
+  );
+  assert.match(
+    behavior,
+    /forbid[\s\S]*supported E3\/E2[\s\S]*never becomes an Oracle/u
+  );
   assert.match(behavior, /requirement-gap[\s\S]*`caseable=false`/u);
 
   const clarification = await text('references/clarification-policy.md');
@@ -198,7 +210,19 @@ test('skill static policies freeze clarification and source-review boundaries', 
     /Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply/u
   );
   assert.match(cases, /Read `derived\/rNNN\/test-obligations\.json` before drafting/u);
-  assert.match(cases, /one distinct expectation for each linked obligation[\s\S]*covers every `required_oracle_refs` entry/u);
+  assert.match(cases, /exactly one `obligation-oracle` expectation for each linked obligation[\s\S]*cover every optional `required_oracle_refs` prebinding/u);
+  assert.match(
+    cases,
+    /exactly one `obligation-oracle` expectation[\s\S]*single `closes_obligation_id`[\s\S]*nonempty, unique `oracle_evidence_refs`/u
+  );
+  assert.match(
+    cases,
+    /`auxiliary` expectation[\s\S]*never counts toward formal coverage/u
+  );
+  assert.match(
+    cases,
+    /Agent `execution_signature\.oracle_refs`[\s\S]*exact distinct expectation IDs[\s\S]*contains no Test Point or obligation IDs/u
+  );
   assert.match(cases, /`evidence_refs` must equal the exact sorted union of direct evidence roots/u);
   assert.match(
     cases,

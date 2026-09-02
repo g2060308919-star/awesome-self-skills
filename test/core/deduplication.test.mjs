@@ -66,7 +66,7 @@ test('every execution dimension keeps Cases separate', () => {
       }));
     }
     if (boundary.dimension === 'oracle_refs') {
-      changed.steps[0].expectations[0].expectation_id = boundary.value[0];
+      changed.steps[0].expectations[0].oracle.expected_state = boundary.value[0];
     }
     refreshExecutionSignature(changed);
     assert.notEqual(executionSignature(original), executionSignature(changed), boundary.dimension);
@@ -144,7 +144,11 @@ function exactDuplicateContext() {
   const secondObligationId = 'obligation_2222222222222222';
   const secondCaseId = 'case_2222222222222222';
   const secondFactId = 'fact_checkout_secondary';
-  const claims = [...baseClaims(), acceptedClaim('claim_fact_secondary')];
+  const alternateOracle = acceptedClaim('claim_oracle_alternate', 'E2', {
+    kind: 'expected-value', derivation_kind: 'formula', derivation_target: 'expected-value',
+    parent_claim_ids: ['claim_oracle'], rule_input: { expression: 'accepted' }
+  });
+  const claims = [...baseClaims(), acceptedClaim('claim_fact_secondary'), alternateOracle];
   const firstObligation = baseObligation();
   const secondObligation = baseObligation({
     obligation_id: secondObligationId,
@@ -159,13 +163,12 @@ function exactDuplicateContext() {
     source_claim_ids: ['claim_fact_secondary'],
     evidence_refs: [...baseCase().evidence_refs, 'claim_fact_secondary']
   });
-  for (const draft of [firstCase, secondCase]) {
-    draft.steps[0].expectations.push({
-      ...structuredClone(draft.steps[0].expectations[0]),
-      expectation_id: 'expectation_secondary_result'
-    });
-    refreshExecutionSignature(draft);
-  }
+  secondCase.steps[0].expectations[0].closes_obligation_id = secondObligationId;
+  secondCase.steps[0].expectations[0].evidence_ref = alternateOracle.claim_id;
+  secondCase.steps[0].expectations[0].oracle_evidence_refs = ['claim_oracle', alternateOracle.claim_id];
+  secondCase.evidence_refs.push(alternateOracle.claim_id);
+  refreshExecutionSignature(firstCase);
+  refreshExecutionSignature(secondCase);
   const context = classificationContext({
     claims,
     obligations: [firstObligation, secondObligation],
@@ -235,26 +238,26 @@ test('same-signature merge preserves complete Oracle ownership and remains valid
   const insufficient = classifyCaseDrafts(makeContext([insufficientFirst, insufficientSecond]));
   assert.equal(insufficient.grounded.length + insufficient.conditional.length + insufficient.blocked.length, 0);
   assert.equal(insufficient.diagnostics.some((item) =>
-    item.code === 'OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT'), true);
+    item.code === 'EXPECTATION_CLOSE_TARGET_UNLINKED'
+      || item.code === 'OBLIGATION_ORACLE_EXPECTATION_UNMAPPED'), true);
 
   const sufficientFirst = baseCase();
-  sufficientFirst.steps[0].expectations.push({
-    ...structuredClone(sufficientFirst.steps[0].expectations[0]),
-    expectation_id: 'expectation_secondary_result'
+  const sufficientSecond = baseCase({
+    case_id: secondCaseId,
+    obligation_ids: [secondObligationId]
   });
+  sufficientSecond.steps[0].expectations[0].closes_obligation_id = secondObligationId;
   refreshExecutionSignature(sufficientFirst);
-  const sufficientSecond = structuredClone(sufficientFirst);
-  sufficientSecond.case_id = secondCaseId;
-  sufficientSecond.obligation_ids = [secondObligationId];
   refreshExecutionSignature(sufficientSecond);
   const firstPass = classifyCaseDrafts(makeContext([sufficientFirst, sufficientSecond]));
   assert.equal(firstPass.grounded.length, 1);
   assert.deepEqual(firstPass.diagnostics, []);
 
   const merged = firstPass.grounded[0];
+  const replayDraft = refreshExecutionSignature(structuredClone(merged));
   const replay = classificationContext({
     obligations,
-    cases: [merged],
+    cases: [replayDraft],
     dispositions: obligations.map((obligation) => ({
       obligation_id: obligation.obligation_id,
       status: 'case_candidate',
@@ -267,7 +270,7 @@ test('same-signature merge preserves complete Oracle ownership and remains valid
   assert.deepEqual(secondPass.diagnostics, []);
 });
 
-test('merged Case derives complete test_point_ids when optional inputs are omitted or mixed', () => {
+test('merged Case preserves complete explicit Oracle closures without Test Point signature IDs', () => {
   const obligationIds = [IDS.obligation, 'obligation_2222222222222222'];
   const caseIds = [IDS.case, 'case_2222222222222222'];
   const baseObligations = [
@@ -277,16 +280,16 @@ test('merged Case derives complete test_point_ids when optional inputs are omitt
       view_element_refs: ['view_checkout#edge_second']
     })
   ];
-  /** @param {'omitted' | 'mixed'} mode @param {boolean} reverse */
-  const makeContext = (mode, reverse = false) => {
+  /** @param {boolean} reverse */
+  const makeContext = (reverse = false) => {
     const cases = caseIds.map((caseId, index) => {
       const draft = baseCase({ case_id: caseId, obligation_ids: [obligationIds[index]] });
-      draft.steps[0].expectations.push({
-        ...structuredClone(draft.steps[0].expectations[0]),
-        expectation_id: 'expectation_second_result'
-      });
+      draft.steps[0].expectations[0].closes_obligation_id = obligationIds[index];
+      if (index === 1) {
+        draft.steps[0].step_id = 'step_submit_alternate';
+        draft.steps[0].expectations[0].preceding_action_id = 'step_submit_alternate';
+      }
       refreshExecutionSignature(draft);
-      if (mode === 'omitted' || index === 0) delete draft.execution_signature.test_point_ids;
       return draft;
     });
     const obligations = structuredClone(baseObligations);
@@ -306,9 +309,10 @@ test('merged Case derives complete test_point_ids when optional inputs are omitt
   };
   /** @param {any} merged */
   const replay = (merged) => {
+    const replayDraft = refreshExecutionSignature(structuredClone(merged));
     const context = classificationContext({
       obligations: structuredClone(baseObligations),
-      cases: [merged],
+      cases: [replayDraft],
       dispositions: obligationIds.map((obligationId) => ({
         obligation_id: obligationId,
         status: 'case_candidate',
@@ -319,22 +323,24 @@ test('merged Case derives complete test_point_ids when optional inputs are omitt
     return classifyCaseDrafts(context);
   };
 
-  const allOmitted = classifyCaseDrafts(makeContext('omitted'));
-  assert.equal(allOmitted.grounded.length, 1);
-  assert.deepEqual(allOmitted.diagnostics, []);
-  const allOmittedMerged = /** @type {any} */ (allOmitted.grounded[0]);
-  assert.deepEqual(allOmittedMerged.obligation_ids, obligationIds);
-  assert.deepEqual(allOmittedMerged.execution_signature.test_point_ids, obligationIds);
-  const replayed = replay(allOmittedMerged);
+  const forward = classifyCaseDrafts(makeContext());
+  assert.equal(forward.grounded.length, 1);
+  assert.deepEqual(forward.diagnostics, []);
+  const merged = /** @type {any} */ (forward.grounded[0]);
+  assert.deepEqual(merged.obligation_ids, obligationIds);
+  assert.equal(Object.hasOwn(merged.execution_signature, 'test_point_ids'), false);
+  assert.deepEqual(merged.steps[0].expectations.map(
+    (/** @type {any} */ item) => item.closes_obligation_id
+  ).sort(), obligationIds);
+  assert.equal(merged.steps[0].expectations.every(
+    (/** @type {any} */ item) => item.preceding_action_id === merged.steps[0].step_id
+  ), true);
+  const replayed = replay(merged);
   assert.equal(replayed.grounded.length, 1);
   assert.deepEqual(replayed.diagnostics, []);
 
-  const mixedForward = classifyCaseDrafts(makeContext('mixed'));
-  const mixedReverse = classifyCaseDrafts(makeContext('mixed', true));
-  assert.equal(mixedForward.grounded.length, 1);
-  const mixedMerged = /** @type {any} */ (mixedForward.grounded[0]);
-  assert.deepEqual(mixedMerged.execution_signature.test_point_ids, obligationIds);
-  assert.deepEqual(mixedReverse, mixedForward);
+  const reverse = classifyCaseDrafts(makeContext(true));
+  assert.deepEqual(reverse, forward);
 });
 
 test('deduplication and merged ID are stable under input reordering', () => {
@@ -374,7 +380,7 @@ test('same-signature non-signature semantic conflicts are diagnosed and never si
     ['title', (draft) => { draft.title = 'A conflicting title'; }],
     ['scope', (draft) => { draft.scope = 'checkout.detail'; }],
     ['risk', (draft) => { draft.risk = 'low'; }],
-    ['Oracle content', (draft) => { draft.steps[0].expectations[0].oracle.expected_state = 'rejected'; }],
+    ['Oracle wording', (draft) => { draft.steps[0].expectations[0].business_assertion = 'A conflicting Oracle explanation'; }],
     ['cleanup', (draft) => { draft.cleanup.no_cleanup_reason = 'A conflicting cleanup reason'; }]
   ];
   for (const [name, mutate] of mutations) {
@@ -393,6 +399,32 @@ test('same-signature non-signature semantic conflicts are diagnosed and never si
     assert.equal(result.diagnostics.some((item) => item.code === 'DUPLICATE_SIGNATURE_SEMANTIC_CONFLICT'), true, name);
     assert.equal(result.grounded.length, 0, `${name}: diagnostic input must fail closed before downstream lanes`);
   }
+});
+
+test('same-signature cleanup action order remains an ordered semantic conflict', () => {
+  const first = baseCase();
+  const second = baseCase({ case_id: 'case_2222222222222222' });
+  for (const draft of [first, second]) draft.cleanup = {
+    required: true,
+    steps: ['Release checkout lock', 'Restore checkout fixture'],
+    evidence_ref: 'claim_cleanup',
+    support_review: 'supported'
+  };
+  second.cleanup.steps.reverse();
+  const context = classificationContext({
+    cases: [first, second],
+    dispositions: [{
+      obligation_id: IDS.obligation,
+      status: 'case_candidate',
+      case_ids: [first.case_id, second.case_id]
+    }]
+  });
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.diagnostics.some(
+    (item) => item.code === 'DUPLICATE_SIGNATURE_SEMANTIC_CONFLICT'
+  ), true, JSON.stringify(result));
+  assert.equal(result.grounded.length, 0);
 });
 
 test('duplicate stable Case IDs reject before lanes can contain the same Case twice', () => {
@@ -422,6 +454,7 @@ test('large independent case and obligation sets are reconciled through indexes'
       view_element_refs: [`view_checkout#edge_${index}`]
     }));
     const draft = baseCase({ case_id: caseId, obligation_ids: [obligationId] });
+    draft.steps[0].expectations[0].closes_obligation_id = obligationId;
     draft.data[0].value = `partition-${index}`;
     refreshExecutionSignature(draft);
     cases.push(draft);
@@ -496,9 +529,11 @@ test('blocked propagation visits the obligation-to-Case graph linearly while pre
       case_id: `case_${index.toString(16).padStart(16, '0')}`,
       obligation_ids: obligationIds
     });
+    draft.steps[0].expectations[0].closes_obligation_id = obligationIds[0];
     draft.steps[0].expectations.push({
       ...structuredClone(draft.steps[0].expectations[0]),
-      expectation_id: `expectation_bridge_${index.toString(16).padStart(8, '0')}`
+      expectation_id: `expectation_bridge_${index.toString(16).padStart(8, '0')}`,
+      closes_obligation_id: obligationIds[1]
     });
     refreshExecutionSignature(draft);
     cases.push(draft);
@@ -507,6 +542,7 @@ test('blocked propagation visits the obligation-to-Case graph linearly while pre
     case_id: 'case_ffffffffffffffff',
     obligation_ids: [obligations[size - 1].obligation_id]
   });
+  invalid.steps[0].expectations[0].closes_obligation_id = obligations[size - 1].obligation_id;
   invalid.steps[0].expectations[0].oracle.expected_state = '';
   cases.push(invalid);
   const dispositions = obligations.map((obligation, obligationIndex) => ({

@@ -57,8 +57,7 @@ export function refreshExecutionSignature(caseDraft) {
     action_path: steps.map((step) => normalizeSemanticString(step.action)),
     oracle_refs: [...new Set(steps.flatMap((step) =>
       (/** @type {any[]} */ (step.expectations)).map((expectation) => normalizeSemanticString(expectation.expectation_id))
-    ))].sort(compareCodePoints),
-    test_point_ids: [...caseDraft.obligation_ids]
+    ))].sort(compareCodePoints)
   };
   return caseDraft;
 }
@@ -198,6 +197,7 @@ export function baseCase(overrides = {}) {
       action_evidence_ref: 'claim_action',
       support_review: 'supported',
       expectations: [{
+        kind: 'obligation-oracle',
         expectation_id: IDS.expectation,
         business_assertion: 'The order is accepted',
         preceding_action_id: 'step_submit',
@@ -206,6 +206,8 @@ export function baseCase(overrides = {}) {
         observation_target: 'order status',
         oracle: { type: 'state', expected_state: 'accepted', comparison: 'equals' },
         evidence_ref: 'claim_oracle',
+        oracle_evidence_refs: ['claim_oracle'],
+        closes_obligation_id: IDS.obligation,
         support_review: 'supported'
       }]
     }],
@@ -230,8 +232,7 @@ export function baseCase(overrides = {}) {
       precondition_state: 'cart is ready',
       data_partition: 'total=100.00 boundary',
       action_path: ['Submit checkout'],
-      oracle_refs: [IDS.expectation],
-      test_point_ids: [IDS.obligation]
+      oracle_refs: [IDS.expectation]
     },
     ...overrides
   };
@@ -288,7 +289,25 @@ export function expectedCanonicalCaseId(caseDraft) {
     data_partition: expectedDataProjection(caseDraft),
     action_path: steps.map((step) => normalizeSemanticString(step.action)),
     oracle_refs: [...new Set(steps.flatMap((step) =>
-      (/** @type {any[]} */ (step.expectations)).map((item) => item.expectation_id)))].sort(compareCodePoints)
+      (/** @type {any[]} */ (step.expectations)).map((item) => {
+        const expectedField = /** @type {Record<string, string>} */ ({
+          value: 'expected_value', state: 'expected_state', event: 'expected_event',
+          'side-effect': 'expected_side_effect'
+        })[String(item.oracle.type)];
+        return stableId('oracle', {
+          action: normalizeSemanticString(step.action),
+          observer: normalizeSemanticString(item.observer),
+          observation_surface: normalizeSemanticString(item.observation_surface),
+          observation_target: normalizeSemanticString(item.observation_target),
+          oracle: {
+            type: item.oracle.type,
+            ...(expectedField ? { [expectedField]: normalizeSemanticString(item.oracle[expectedField]) } : {}),
+            comparison: normalizeSemanticString(item.oracle.comparison),
+            ...(item.oracle.tolerance === undefined ? {} : { tolerance: item.oracle.tolerance }),
+            ...(item.oracle.window === undefined ? {} : { window: normalizeSemanticString(item.oracle.window) })
+          }
+        });
+      })))].sort(compareCodePoints)
   }));
   return stableId('case', signature);
 }

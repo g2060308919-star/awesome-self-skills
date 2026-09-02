@@ -20,9 +20,15 @@ import {
 import { compile as compileState } from './state.mjs';
 import { compile as compileTiming } from './timing.mjs';
 import { compileObligationInputs } from './compile-obligation-inputs.mjs';
+import { selectTWiseVectors } from './combinatorial.mjs';
 
 /** @typedef {{category: string, code: string, path: string, message: string}} Diagnostic */
-/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,customObligations:Record<string,unknown>[],customResponsibilityPaths:Map<Record<string,unknown>,string>,factRoutes:Record<string,unknown>[],terminalFactRoutePaths:Map<Record<string,unknown>,string>,notApplicableReviews:Record<string,unknown>[],notApplicableReviewPaths:Map<Record<string,unknown>,string>,sourceRevision:number}} CompilationInputs */
+/** @typedef {{contextsByViewId:Map<string,Record<string,unknown>>,customObligations:Record<string,unknown>[],customResponsibilityPaths:Map<Record<string,unknown>,string>,combinationRequests:Record<string,unknown>[],factRoutes:Record<string,unknown>[],terminalFactRoutePaths:Map<Record<string,unknown>,string>,notApplicableReviews:Record<string,unknown>[],notApplicableReviewPaths:Map<Record<string,unknown>,string>,sourceRevision:number}} CompilationInputs */
+
+const TWISE_POLICY = Object.freeze({
+  policy_id: 'twise-candidate-cap-v1',
+  max_candidates: 4096
+});
 
 export class ObligationCompilationError extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
@@ -1439,8 +1445,348 @@ function indexCustomObligationsByOwnerFact(seeds, ownerFactIdsBySeed) {
   return index;
 }
 
-/** @param {Record<string, unknown>[]} facts @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>[]} viewRoutes @param {Map<string, Record<string, unknown>>} terminalRoutes @param {Map<string, Set<string>>} customObligationIdsByFactId @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
-function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, customObligationIdsByFactId, relations, diagnostics) {
+/** @param {Record<string, unknown>} claim */
+function isSupportedCombinationEvidence(claim) {
+  return claim.kind !== 'diagnostic' && (claim.level === 'E3' || claim.level === 'E2');
+}
+
+/**
+ * Compile public semantic combination requests through the existing pure
+ * selector. The candidate cap and its version are private compiler policy.
+ * @param {CompilationInputs} inputs
+ * @param {Map<string, Record<string, unknown>>} viewsById
+ * @param {Map<string, Record<string, unknown>>} factsById
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ * @param {Record<string, unknown>[]} viewRoutes
+ * @param {ReturnType<typeof claimRelations>} relations
+ * @param {Diagnostic[]} diagnostics
+ */
+function compileCombinationObligations(
+  inputs, viewsById, factsById, claimsById, viewRoutes, relations, diagnostics
+) {
+  /** @type {Record<string, unknown>[]} */
+  const obligations = [];
+  /** @type {Map<string, Set<string>>} */
+  const obligationIdsByFactId = new Map();
+  const modeledViewsByFactId = new Map(viewRoutes.flatMap((route) => (
+    typeof route.fact_id === 'string'
+      ? [[route.fact_id, new Set(stringArray(route.view_ids))]] : []
+  )));
+  for (const [requestIndex, request] of inputs.combinationRequests.entries()) {
+    const path = `/obligation_inputs/combination_requests/${requestIndex}`;
+    const owner = isObject(request.owner) ? request.owner : {};
+    const viewId = String(owner.view_id ?? '');
+    const view = viewsById.get(viewId);
+    const factIds = [...new Set(stringArray(owner.fact_ids))].sort(compareCodePoints);
+    const publicElementRefs = objectArray(owner.view_element_refs);
+    const qualifiedElementRefs = publicElementRefs.map((ref) => (
+      qualifyViewElementRef(String(ref.view_id ?? ''), String(ref.element_id ?? ''))
+    )).sort(compareCodePoints);
+    let valid = true;
+    if (!view) {
+      diagnostics.push(diagnostic(
+        'reference', 'TWISE_OWNER_VIEW_UNKNOWN', `${path}/owner/view_id`,
+        `combination owner references unknown view "${viewId}"`
+      ));
+      valid = false;
+    }
+    const elementsById = new Map(objectArray(view?.elements).map((element) => [String(element.element_id), element]));
+    /** @type {string[]} */
+    const ownerRoots = [];
+    /** @type {Array<{index:number, ref:string, roots:string[]}>} */
+    const selectedElements = [];
+    for (const [refIndex, ref] of publicElementRefs.entries()) {
+      if (ref.view_id !== viewId || !elementsById.has(String(ref.element_id ?? ''))) {
+        diagnostics.push(diagnostic(
+          'reference', 'TWISE_OWNER_ELEMENT_UNKNOWN', `${path}/owner/view_element_refs/${refIndex}`,
+          'combination owner elements must exist in the single named owner view'
+        ));
+        valid = false;
+        continue;
+      }
+      const roots = elementEvidenceRefs(
+        /** @type {Record<string, unknown>} */ (elementsById.get(String(ref.element_id)))
+      );
+      selectedElements.push({
+        index: refIndex,
+        ref: qualifyViewElementRef(String(ref.view_id), String(ref.element_id)),
+        roots
+      });
+      ownerRoots.push(...roots);
+    }
+    /** @type {Array<{factId:string, roots:string[]}>} */
+    const ownerFacts = [];
+    const scope = String(request.scope ?? '');
+    for (const [factIndex, factId] of factIds.entries()) {
+      const fact = factsById.get(factId);
+      if (!fact) {
+        diagnostics.push(diagnostic(
+          'reference', 'TWISE_OWNER_FACT_UNKNOWN', `${path}/owner/fact_ids/${factIndex}`,
+          `combination owner references unknown formal fact "${factId}"`
+        ));
+        valid = false;
+        continue;
+      }
+      const modeledViews = modeledViewsByFactId.get(factId);
+      if (!modeledViews?.has(viewId)) {
+        diagnostics.push(diagnostic(
+          'traceability', 'TWISE_OWNER_FACT_NOT_MODELED', `${path}/owner/fact_ids/${factIndex}`,
+          `combination owner fact "${factId}" is not modeled by view "${viewId}"`
+        ));
+        valid = false;
+      }
+      const factRoots = [String(fact.claim_id), ...stringArray(fact.source_claim_ids)];
+      ownerFacts.push({ factId, roots: factRoots });
+      ownerRoots.push(...factRoots);
+      const primaryClaim = claimsById.get(String(fact.claim_id));
+      if (!primaryClaim || !scopeContains(String(primaryClaim.scope ?? ''), scope)) {
+        diagnostics.push(diagnostic(
+          'classification', 'TWISE_OWNER_SCOPE_MISMATCH', `${path}/owner/fact_ids/${factIndex}`,
+          `combination owner fact "${factId}" must contain request scope "${scope}"`
+        ));
+        valid = false;
+      }
+      if (!qualifiedElementRefs.some((ref) => {
+        const parsed = parseQualifiedViewElementRef(ref);
+        const element = parsed ? elementsById.get(parsed.elementId) : undefined;
+        return elementEvidenceRefs(element ?? {}).some((root) => factRoots.some(
+          (factRoot) => claimsDirectionallyRelated(relations, root, factRoot)
+        ));
+      })) {
+        diagnostics.push(diagnostic(
+          'traceability', 'TWISE_OWNER_FACT_AMBIGUOUS', `${path}/owner/fact_ids/${factIndex}`,
+          'every owner fact must connect directionally to a selected owner element'
+        ));
+        valid = false;
+      }
+    }
+    for (const element of selectedElements) {
+      if (!ownerFacts.some(({ roots }) => element.roots.some((elementRoot) => roots.some(
+        (factRoot) => claimsDirectionallyRelated(relations, elementRoot, factRoot)
+      )))) {
+        diagnostics.push(diagnostic(
+          'traceability', 'TWISE_OWNER_ELEMENT_NOT_MODELED',
+          `${path}/owner/view_element_refs/${element.index}`,
+          `combination owner element "${element.ref}" does not resolve to a declared owner fact`
+        ));
+        valid = false;
+      }
+    }
+    if (!view || !scopeContains(String(view.scope ?? ''), scope)) {
+      diagnostics.push(diagnostic(
+        'classification', 'TWISE_OWNER_SCOPE_MISMATCH', `${path}/scope`,
+        'combination owner view must contain the request scope'
+      ));
+      valid = false;
+    }
+    const canonicalOwnerRoots = [...new Set(ownerRoots)].sort(compareCodePoints);
+    /** @param {string} claimId @param {string} claimPath @param {{strong?:boolean,oracle?:boolean,roots?:string[]}} [options] */
+    const validateClaim = (claimId, claimPath, options = {}) => {
+      const claim = claimsById.get(claimId);
+      if (!claim) {
+        diagnostics.push(diagnostic('reference', 'TWISE_EVIDENCE_DANGLING', claimPath, `unknown accepted evidence "${claimId}"`));
+        valid = false;
+        return false;
+      }
+      if (options.oracle && (!isSupportedCombinationEvidence(claim) || !isOracleEvidence(claim))) {
+        diagnostics.push(diagnostic(
+          'classification', 'TWISE_ORACLE_EVIDENCE_INVALID', claimPath,
+          'vector Oracle prebindings require typed, supported E3 or E2 Oracle evidence'
+        ));
+        valid = false;
+        return false;
+      }
+      if (claim.kind === 'diagnostic' || (options.strong && !isSupportedCombinationEvidence(claim))) {
+        diagnostics.push(diagnostic(
+          'classification', 'TWISE_EVIDENCE_LEVEL_INVALID', claimPath,
+          options.strong ? 'constraint, risk, and Oracle evidence requires non-diagnostic E3 or E2' : 'selected values cannot use diagnostic evidence'
+        ));
+        valid = false;
+        return false;
+      }
+      if (!scopeContains(String(claim.scope ?? ''), scope)) {
+        diagnostics.push(diagnostic('classification', 'TWISE_EVIDENCE_SCOPE_MISMATCH', claimPath, 'combination evidence must cover the request scope'));
+        valid = false;
+        return false;
+      }
+      const roots = options.roots ?? canonicalOwnerRoots;
+      if (!roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
+        diagnostics.push(diagnostic('traceability', 'TWISE_EVIDENCE_UNRELATED', claimPath, 'combination evidence must connect directionally to its semantic target'));
+        valid = false;
+        return false;
+      }
+      return true;
+    };
+
+    const parameters = objectArray(request.parameters);
+    const parameterIds = new Set();
+    /** @type {Map<string, Map<string, string>>} */
+    const valueClaimsByParameter = new Map();
+    const selectorDomains = [];
+    for (const [parameterIndex, parameter] of parameters.entries()) {
+      const parameterId = String(parameter.parameter_id ?? '');
+      if (parameterIds.has(parameterId)) {
+        diagnostics.push(diagnostic('classification', 'TWISE_PARAMETER_DUPLICATE', `${path}/parameters/${parameterIndex}/parameter_id`, `duplicate parameter "${parameterId}"`));
+        valid = false;
+      }
+      parameterIds.add(parameterId);
+      const claimsByValue = new Map();
+      const values = [];
+      for (const [valueIndex, value] of objectArray(parameter.values).entries()) {
+        const valueId = String(value.value_id ?? '');
+        const claimId = String(value.evidence_claim_id ?? '');
+        if (claimsByValue.has(valueId)) {
+          diagnostics.push(diagnostic('classification', 'TWISE_VALUE_DUPLICATE', `${path}/parameters/${parameterIndex}/values/${valueIndex}/value_id`, `duplicate value "${valueId}"`));
+          valid = false;
+        }
+        validateClaim(claimId, `${path}/parameters/${parameterIndex}/values/${valueIndex}/evidence_claim_id`);
+        claimsByValue.set(valueId, claimId);
+        values.push(valueId);
+      }
+      valueClaimsByParameter.set(parameterId, claimsByValue);
+      selectorDomains.push({ name: parameterId, values });
+    }
+    const risk = isObject(request.interaction_risk) ? request.interaction_risk : {};
+    const riskRefs = [...new Set(stringArray(risk.evidence_refs))].sort(compareCodePoints);
+    for (const [index, claimId] of riskRefs.entries()) validateClaim(
+      claimId, `${path}/interaction_risk/evidence_refs/${index}`, { strong: true }
+    );
+    const selectorConstraints = [];
+    const forbidEvidenceRefs = new Set();
+    for (const [constraintIndex, constraint] of objectArray(request.constraints).entries()) {
+      const assignments = objectArray(constraint.assignments).map((assignment) => ({
+        parameter: String(assignment.parameter_id ?? ''), value: String(assignment.value_id ?? '')
+      }));
+      const assignedRoots = assignments.flatMap(({ parameter, value }) => (
+        valueClaimsByParameter.get(parameter)?.get(value) ?? []
+      ));
+      for (const [refIndex, claimId] of stringArray(constraint.evidence_refs).entries()) {
+        forbidEvidenceRefs.add(claimId);
+        validateClaim(
+          claimId, `${path}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
+          { strong: true, roots: [...canonicalOwnerRoots, ...assignedRoots] }
+        );
+      }
+      selectorConstraints.push({ forbidden: assignments });
+    }
+    const selectorOracleMappings = [];
+    for (const [mappingIndex, mapping] of objectArray(request.vector_oracles).entries()) {
+      const assignments = objectArray(mapping.assignments).map((assignment) => ({
+        parameter: String(assignment.parameter_id ?? ''), value: String(assignment.value_id ?? '')
+      }));
+      for (const [refIndex, claimId] of stringArray(mapping.required_oracle_refs).entries()) {
+        validateClaim(
+          claimId, `${path}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
+          { strong: true, oracle: true }
+        );
+        if (forbidEvidenceRefs.has(claimId)) {
+          diagnostics.push(diagnostic(
+            'classification', 'TWISE_ORACLE_FORBID_CONFLICT',
+            `${path}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
+            'forbid evidence cannot become a selected-vector Oracle prebinding'
+          ));
+          valid = false;
+        }
+      }
+      selectorOracleMappings.push({ assignments, required_oracle_refs: stringArray(mapping.required_oracle_refs) });
+    }
+    if (!valid) continue;
+    let selection;
+    try {
+      selection = selectTWiseVectors({
+        domains: selectorDomains,
+        interaction_risk: risk.risk,
+        oracle_mappings: selectorOracleMappings
+      }, request.strength, selectorConstraints, TWISE_POLICY.max_candidates);
+    } catch (error) {
+      diagnostics.push(diagnostic(
+        'classification', 'TWISE_REQUEST_INVALID', path,
+        error instanceof Error ? error.message : 'combination request is invalid'
+      ));
+      continue;
+    }
+    const ownerIdentity = {
+      view_id: viewId, fact_ids: factIds,
+      view_element_refs: publicElementRefs.map((ref) => ({
+        view_id: String(ref.view_id), element_id: String(ref.element_id)
+      })).sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right)))
+    };
+    if (selection.status === 'blocked') {
+      if (selection.reason !== 'max_candidates_exceeded') {
+        diagnostics.push(diagnostic('classification', 'TWISE_NO_VALID_CANDIDATES', path, 'combination constraints leave no valid candidate'));
+        continue;
+      }
+      const semanticRefs = [canonicalStringify({
+        kind: 'combination-owner', owner: ownerIdentity, policy_id: TWISE_POLICY.policy_id
+      })];
+      const rootSignature = { missing_type: 'resource_limit', semantic_refs: semanticRefs, scope };
+      const rootIssueId = stableId('root', rootSignature);
+      const obligationId = stableId('obligation', {
+        kind: 'requirement-gap', owner: ownerIdentity,
+        missing_type: 'resource_limit', scope, policy_id: TWISE_POLICY.policy_id
+      });
+      obligations.push({
+        obligation_id: obligationId, kind: 'requirement-gap', caseable: false,
+        risk: risk.risk, scope,
+        source_claim_ids: [...new Set([...canonicalOwnerRoots, ...riskRefs])].sort(compareCodePoints),
+        view_element_refs: qualifiedElementRefs, required_oracle_refs: [], required_capabilities: [],
+        gap_issue: {
+          root_issue_id: rootIssueId, root_issue_key: canonicalStringify(rootSignature),
+          missing_type: 'resource_limit', semantic_refs: semanticRefs, scope,
+          answerable: false,
+          reasons: [`${TWISE_POLICY.policy_id}:${TWISE_POLICY.max_candidates}`],
+          evidence_refs: riskRefs
+        }
+      });
+      for (const factId of factIds) {
+        const ids = obligationIdsByFactId.get(factId) ?? new Set();
+        ids.add(obligationId);
+        obligationIdsByFactId.set(factId, ids);
+      }
+      continue;
+    }
+    for (const vector of selection.vectors) {
+      const semanticAssignments = Object.entries(vector.values).map(([parameterId, valueId]) => ({
+        parameter_id: parameterId, value_id: String(valueId)
+      })).sort((left, right) => compareCodePoints(left.parameter_id, right.parameter_id));
+      const assignments = semanticAssignments.map(({ parameter_id: parameterId, value_id: valueId }) => ({
+        parameter_id: parameterId, value_id: valueId,
+        evidence_claim_id: valueClaimsByParameter.get(parameterId)?.get(valueId) ?? ''
+      }));
+      const valueClaimIds = assignments.map(({ evidence_claim_id: evidenceClaimId }) => (
+        evidenceClaimId
+      ));
+      const identity = {
+        kind: 'interaction', responsibility: 't-wise-vector', policy_id: TWISE_POLICY.policy_id,
+        owner: ownerIdentity, scope, strength: request.strength, assignments: semanticAssignments
+      };
+      const obligationId = stableId('obligation', identity);
+      obligations.push({
+        obligation_id: obligationId, kind: 'interaction', caseable: true,
+        risk: risk.risk, scope,
+        source_claim_ids: [...new Set([...canonicalOwnerRoots, ...valueClaimIds, ...riskRefs])].sort(compareCodePoints),
+        view_element_refs: qualifiedElementRefs,
+        required_oracle_refs: [...vector.required_oracle_refs].sort(compareCodePoints),
+        required_capabilities: [],
+        combination_vector: {
+          policy_id: TWISE_POLICY.policy_id, strength: request.strength,
+          owner: ownerIdentity, assignments,
+          forbid_evidence_refs: [...forbidEvidenceRefs].sort(compareCodePoints)
+        }
+      });
+      for (const factId of factIds) {
+        const ids = obligationIdsByFactId.get(factId) ?? new Set();
+        ids.add(obligationId);
+        obligationIdsByFactId.set(factId, ids);
+      }
+    }
+  }
+  obligations.sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id)));
+  return { obligations, obligationIdsByFactId };
+}
+
+/** @param {Record<string, unknown>[]} facts @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>[]} viewRoutes @param {Map<string, Record<string, unknown>>} terminalRoutes @param {Map<string, Set<string>>} customObligationIdsByFactId @param {Map<string, Set<string>>} combinationObligationIdsByFactId @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
+function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, customObligationIdsByFactId, combinationObligationIdsByFactId, relations, diagnostics) {
   const viewsByFact = new Map(viewRoutes.flatMap((route) => typeof route.fact_id === 'string'
     ? [[route.fact_id, new Set(stringArray(route.view_ids))]] : []));
   const obligationIndex = indexObligationsByViewAndDirectClaim(obligations);
@@ -1450,7 +1796,8 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
     const terminal = terminalRoutes.get(factId);
     const viewIds = viewsByFact.get(factId);
     const customObligationIds = customObligationIdsByFactId.get(factId);
-    if (terminal && (viewIds || customObligationIds)) {
+    const combinationObligationIds = combinationObligationIdsByFactId.get(factId);
+    if (terminal && (viewIds || customObligationIds || combinationObligationIds)) {
       diagnostics.push(diagnostic('traceability', 'FACT_ROUTE_MULTIPLE', `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
       continue;
     }
@@ -1458,7 +1805,7 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
       routes.push({ .../** @type {Record<string, unknown>} */ (terminal.route) });
       continue;
     }
-    if (!viewIds && !customObligationIds) {
+    if (!viewIds && !customObligationIds && !combinationObligationIds) {
       diagnostics.push(diagnostic('traceability', 'FACT_ROUTE_MISSING', `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
       continue;
     }
@@ -1467,6 +1814,7 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
       relations.childrenById, claimIds, relations.descendantsByRootSet
     );
     const obligationIds = new Set(customObligationIds ?? []);
+    for (const obligationId of combinationObligationIds ?? []) obligationIds.add(obligationId);
     for (const viewId of viewIds ?? []) {
       const claims = obligationIndex.get(viewId);
       if (!claims) continue;
@@ -1749,6 +2097,7 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     contextsByViewId: compiledInputs.contextsByViewId,
     customObligations: compiledInputs.customResponsibilitySeeds,
     customResponsibilityPaths: compiledInputs.customResponsibilityPaths,
+    combinationRequests: compiledInputs.combinationRequests,
     factRoutes: compiledInputs.terminalFactRoutes,
     terminalFactRoutePaths: compiledInputs.terminalFactRoutePaths,
     notApplicableReviews: compiledInputs.notApplicableReviews,
@@ -1791,17 +2140,27 @@ export function compileObligations(evidenceGraph, behaviorViews) {
   const interactionCompilation = reconcileInteractionRoutes(
     /** @type {Record<string, unknown>[]} */ (interactionReconciliation.candidates)
   );
+  const combinationCompilation = compileCombinationObligations(
+    inputs, viewValidation.viewsById, factsById, claimsById,
+    /** @type {Record<string, unknown>[]} */ (viewValidation.factRoutes),
+    evidence.relations, diagnostics
+  );
+  assertNoDiagnostics(diagnostics);
   const gapObligations = [...terminalRoutes.values()].flatMap((entry) => (
     isObject(entry.gap) ? [entry.gap] : []
   )).concat(interactionCompilation.gaps);
-  const obligations = [...systemObligations, ...customObligations, ...gapObligations]
+  const obligations = [
+    ...systemObligations, ...customObligations,
+    ...combinationCompilation.obligations, ...gapObligations
+  ]
     .sort((left, right) => compareCodePoints(String(left.obligation_id), String(right.obligation_id)));
   const customObligationIdsByFactId = indexCustomObligationsByOwnerFact(
     customValidation.seeds, customValidation.ownerFactIdsBySeed
   );
   const factRoutes = reconcileFactRoutes(
     facts, obligations, /** @type {Record<string, unknown>[]} */ (viewValidation.factRoutes),
-    terminalRoutes, customObligationIdsByFactId, evidence.relations, diagnostics
+    terminalRoutes, customObligationIdsByFactId,
+    combinationCompilation.obligationIdsByFactId, evidence.relations, diagnostics
   );
   const interactionRoutes = interactionCompilation.routes;
   assertNoDiagnostics(diagnostics);

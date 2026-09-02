@@ -98,17 +98,20 @@ test('a conflict blocks only dependent Case evidence in the intersecting scope',
   assert.equal(unrelated.blocked.length, 0);
 });
 
-test('a formal obligation with no Oracle is Blocked and never reclassified Exploratory', () => {
+test('an empty Oracle prebinding is optional when the Case supplies a verifiable Oracle', () => {
   const obligation = baseObligation({ required_oracle_refs: [] });
-  const result = classifyCaseDrafts(classificationContext({ obligations: [obligation] }));
+  const draft = baseCase();
+  draft.steps[0].expectations[0].evidence_ref = 'claim_fact';
+  draft.steps[0].expectations[0].oracle_evidence_refs = ['claim_fact'];
+  const result = classifyCaseDrafts(classificationContext({ obligations: [obligation], cases: [draft] }));
 
-  assert.equal(result.grounded.length + result.conditional.length, 0);
-  assert.equal(result.blocked.length, 1, 'reversing this assertion drops a missing Blocked Test Point');
-  assert.match(result.blocked[0].reason, /FORMAL_ORACLE_MISSING/u);
+  assert.equal(result.grounded.length, 1);
+  assert.equal(result.conditional.length + result.blocked.length, 0);
   assert.equal(result.exploratory.length, 0);
+  assert.deepEqual(result.diagnostics, []);
 });
 
-test('a schema-legal explicit blocker stays Blocked when its formal Oracle is missing', () => {
+test('a final explicit blocker remains local when no Case Oracle exists', () => {
   const obligation = baseObligation({ required_oracle_refs: [] });
   const disposition = blockerDisposition();
   const result = classifyCaseDrafts(classificationContext({
@@ -475,7 +478,9 @@ test('each linked obligation maps every required Oracle to a concrete expectatio
   completeDraft.steps[0].expectations.push({
     ...clone(completeDraft.steps[0].expectations[0]),
     expectation_id: 'expectation_second_result',
-    evidence_ref: secondOracleId
+    evidence_ref: secondOracleId,
+    oracle_evidence_refs: [secondOracleId],
+    closes_obligation_id: secondObligationId
   });
   refreshExecutionSignature(completeDraft);
   const complete = classifyCaseDrafts(makeContext(completeDraft));
@@ -507,6 +512,7 @@ test('distinct obligations require a complete one-to-one matching to distinct co
   });
   const unionDraft = baseCase({ obligation_ids: [IDS.obligation, secondObligationId] });
   unionDraft.steps[0].expectations[0].evidence_ref = jointOracleId;
+  unionDraft.steps[0].expectations[0].oracle_evidence_refs = ['claim_oracle', jointOracleId];
   unionDraft.evidence_refs.push(secondOracleId, jointOracleId);
   refreshExecutionSignature(unionDraft);
   /** @param {any} draft */
@@ -527,14 +533,17 @@ test('distinct obligations require a complete one-to-one matching to distinct co
   const shared = classifyCaseDrafts(makeContext(unionDraft));
   assert.equal(shared.grounded.length + shared.conditional.length + shared.blocked.length, 0);
   assert.equal(shared.diagnostics.some((item) =>
-    item.code === 'OBLIGATION_ORACLE_EXPECTATION_OWNERSHIP_CONFLICT'), true);
+    item.code === 'OBLIGATION_ORACLE_EXPECTATION_UNMAPPED'), true);
 
   const distinctDraft = clone(unionDraft);
   distinctDraft.steps[0].expectations[0].evidence_ref = 'claim_oracle';
+  distinctDraft.steps[0].expectations[0].oracle_evidence_refs = ['claim_oracle'];
   distinctDraft.steps[0].expectations.push({
     ...clone(distinctDraft.steps[0].expectations[0]),
     expectation_id: 'expectation_second_result',
-    evidence_ref: secondOracleId
+    evidence_ref: secondOracleId,
+    oracle_evidence_refs: [secondOracleId],
+    closes_obligation_id: secondObligationId
   });
   distinctDraft.evidence_refs = distinctDraft.evidence_refs.filter((/** @type {string} */ ref) => ref !== jointOracleId);
   refreshExecutionSignature(distinctDraft);
@@ -543,26 +552,31 @@ test('distinct obligations require a complete one-to-one matching to distinct co
   assert.deepEqual(distinct.diagnostics, []);
 });
 
-test('Oracle ownership ancestry is indexed once instead of rescanned per expectation', () => {
+test('explicit Oracle ancestry is indexed once for a complete closure', () => {
   /** @param {number} size */
   const ancestryGets = (size) => {
     const chain = [];
     let parent = 'claim_oracle';
     for (let index = 0; index < size; index += 1) {
       const claim = acceptedClaim(`claim_expectation_${index.toString(16).padStart(8, '0')}`, 'E2', {
-        parent_claim_ids: [parent]
+        kind: 'expected-value',
+        derivation_kind: 'formula',
+        derivation_target: 'expected-value',
+        parent_claim_ids: [parent],
+        parameters: { formula_id: `oracle_chain_${index}` },
+        rule_input: { formula: 'parent value', inputs: [{ name: 'parent', value: index }] }
       });
       chain.push(claim);
       parent = claim.claim_id;
     }
     const context = classificationContext({ claims: [...baseClaims(), ...chain] });
     const draft = context.caseDrafts.cases[0];
-    const template = clone(draft.steps[0].expectations[0]);
-    draft.steps[0].expectations = chain.map((claim, index) => ({
-      ...clone(template),
-      expectation_id: `expectation_${index.toString(16).padStart(8, '0')}`,
-      evidence_ref: claim.claim_id
-    }));
+    const terminalClaimId = chain.at(-1)?.claim_id ?? 'claim_oracle';
+    draft.steps[0].expectations[0].evidence_ref = terminalClaimId;
+    draft.steps[0].expectations[0].oracle_evidence_refs = [
+      'claim_oracle',
+      ...chain.map((claim) => claim.claim_id)
+    ];
     draft.evidence_refs.push(...chain.map((claim) => claim.claim_id));
     refreshExecutionSignature(draft);
 

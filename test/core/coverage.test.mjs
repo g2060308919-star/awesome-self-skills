@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, stableId } from '../../src/canonical.mjs';
+import { executionSignature } from '../../src/classify.mjs';
 import { buildBundle, BundleReconciliationError } from '../../src/coverage.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 
@@ -17,6 +18,20 @@ const fixture = JSON.parse(await readFile(path.join(
 
 function context() {
   return structuredClone(fixture);
+}
+
+/** @param {any} expectation @param {string} obligationId @param {string[]} oracleEvidenceRefs */
+function bindOracle(expectation, obligationId, oracleEvidenceRefs) {
+  expectation.kind = 'obligation-oracle';
+  expectation.closes_obligation_id = obligationId;
+  expectation.oracle_evidence_refs = [...new Set(oracleEvidenceRefs)].sort();
+  return expectation;
+}
+
+/** @param {any} candidate */
+function refreshDerivedSignature(candidate) {
+  candidate.execution_signature = JSON.parse(executionSignature(candidate));
+  return candidate;
 }
 
 /** @type {string[]} */
@@ -104,9 +119,9 @@ function sharedAssumptionClosureContext(size) {
     candidate.obligation_ids = [obligationId];
     candidate.steps[0].expectations[0].expectation_id = `expectation_shared_${suffix}`;
     candidate.steps[0].expectations[0].evidence_ref = finalClaim;
+    bindOracle(candidate.steps[0].expectations[0], obligationId, [finalClaim]);
     candidate.evidence_refs = [...new Set([...candidate.evidence_refs, finalClaim])].sort();
-    candidate.execution_signature.oracle_refs = [`expectation_shared_${suffix}`];
-    candidate.execution_signature.test_point_ids = [obligationId];
+    refreshDerivedSignature(candidate);
     cases.push(candidate);
   }
   input.evidence_claims.claims.push(...chain);
@@ -172,6 +187,128 @@ test('coverage builds four independent ledgers with hand-counted denominators', 
   assert.equal(canonicalStringify(bundle), canonicalStringify(buildBundle(context())));
 });
 
+test('a routed resource gap keeps requirement coverage blocked beside an executable sibling', () => {
+  const input = context();
+  const rootSignature = {
+    missing_type: 'resource_limit', semantic_refs: ['combination-owner:view_checkout'], scope: 'checkout'
+  };
+  const rootIssueId = stableId('root', rootSignature);
+  const obligationId = stableId('obligation', {
+    kind: 'requirement-gap', owner: 'view_checkout',
+    missing_type: 'resource_limit', scope: 'checkout', policy_id: 'twise-candidate-cap-v1'
+  });
+  const gap = {
+    obligation_id: obligationId, kind: 'requirement-gap', caseable: false,
+    risk: 'high', scope: 'checkout', source_claim_ids: ['claim_grounded'],
+    view_element_refs: ['view_checkout#submit'], required_oracle_refs: [],
+    required_capabilities: [],
+    gap_issue: {
+      root_issue_id: rootIssueId, root_issue_key: canonicalStringify(rootSignature),
+      missing_type: rootSignature.missing_type,
+      semantic_refs: [...rootSignature.semantic_refs], scope: rootSignature.scope, answerable: false,
+      reasons: ['twise-candidate-cap-v1:4096'], evidence_refs: ['claim_grounded']
+    }
+  };
+  input.obligations_artifact.obligations.push(gap);
+  input.obligations_artifact.obligations.sort(
+    (/** @type {any} */ left, /** @type {any} */ right) => left.obligation_id.localeCompare(right.obligation_id, 'en')
+  );
+  input.obligations_artifact.fact_routes.find(
+    (/** @type {any} */ route) => route.fact_id === 'fact_grounded'
+  ).obligation_ids.push(obligationId);
+  input.obligations_artifact.fact_routes.find(
+    (/** @type {any} */ route) => route.fact_id === 'fact_grounded'
+  ).obligation_ids.sort();
+  input.classification.blocked.push({
+    obligation_id: obligationId, root_issue_id: rootIssueId,
+    reason: 'twise-candidate-cap-v1:4096', risk: 'high', evidence_refs: ['claim_grounded']
+  });
+  const currentRoot = {
+    root_issue_id: rootIssueId, root_issue_key: canonicalStringify(rootSignature),
+    missing_type: rootSignature.missing_type,
+    semantic_refs: [...rootSignature.semantic_refs], scope: rootSignature.scope,
+    affected_obligation_ids: [obligationId],
+    risk_counts: { critical: 0, high: 1, medium: 0, low: 0 }, source_revision: 4,
+    question: 'Compiler candidate policy limit was exceeded.', answerable: false,
+    reasons: ['twise-candidate-cap-v1:4096'], evidence_refs: ['claim_grounded'], batch_id: null
+  };
+  input.clarification.root_issues.push(currentRoot);
+  input.clarification.root_issues.sort(
+    (/** @type {any} */ left, /** @type {any} */ right) => left.root_issue_id.localeCompare(right.root_issue_id, 'en')
+  );
+  input.clarification.state.root_issue_dispositions.push({
+    root_issue_id: rootIssueId, status: 'suppressed_deferred'
+  });
+  input.clarification.state.root_issue_dispositions.sort(
+    (/** @type {any} */ left, /** @type {any} */ right) => left.root_issue_id.localeCompare(right.root_issue_id, 'en')
+  );
+  input.clarification.state.root_snapshot_ledger.push({
+    ...structuredClone(currentRoot), current: true
+  });
+  delete input.clarification.state.root_snapshot_ledger.at(-1).source_revision;
+  delete input.clarification.state.root_snapshot_ledger.at(-1).batch_id;
+  input.clarification.state.root_snapshot_ledger.sort(
+    (/** @type {any} */ left, /** @type {any} */ right) => left.root_issue_id.localeCompare(right.root_issue_id, 'en')
+  );
+  input.clarification.semantic_snapshot.formal_test_points.push({
+    obligation_id: obligationId, evidence_level: 'E0',
+    classification: 'blocked', blocked_reason: 'twise-candidate-cap-v1:4096'
+  });
+  input.clarification.semantic_snapshot.formal_test_points.sort(
+    (/** @type {any} */ left, /** @type {any} */ right) => left.obligation_id.localeCompare(right.obligation_id, 'en')
+  );
+  input.clarification.semantic_snapshot.coverage_denominator += 1;
+  input.clarification.semantic_snapshot.delivery_sections.blocked.push(obligationId);
+  input.clarification.semantic_snapshot.delivery_sections.blocked.sort();
+  input.clarification.semantic_snapshot.delivery_sections.coverage.formal_denominator += 1;
+
+  const bundle = buildBundle(input);
+  assert.deepEqual(bundle.coverage.requirements.entries.find(
+    (/** @type {any} */ entry) => entry.fact_id === 'fact_grounded'
+  ), { fact_id: 'fact_grounded', status: 'blocked' });
+});
+
+test('coverage independently replays selected-vector strength and owner fact routes', () => {
+  /** @returns {any} */
+  const vectorContext = () => {
+    const input = context();
+    const obligation = input.obligations_artifact.obligations.find(
+      (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
+    );
+    obligation.kind = 'interaction';
+    obligation.combination_vector = {
+      policy_id: 'twise-candidate-cap-v1', strength: 3,
+      owner: {
+        view_id: 'view_checkout', fact_ids: ['fact_grounded'],
+        view_element_refs: [{ view_id: 'view_checkout', element_id: 'submit' }]
+      },
+      assignments: [
+        { parameter_id: 'a', value_id: '0', evidence_claim_id: 'claim_grounded' },
+        { parameter_id: 'b', value_id: '0', evidence_claim_id: 'claim_grounded' },
+        { parameter_id: 'c', value_id: '0', evidence_claim_id: 'claim_grounded' }
+      ],
+      forbid_evidence_refs: []
+    };
+    return input;
+  };
+
+  assert.equal(buildBundle(vectorContext()).grounded.length, 1);
+  const strengthAboveAssignments = vectorContext();
+  strengthAboveAssignments.obligations_artifact.obligations.find(
+    (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
+  ).combination_vector.strength = 4;
+  assert.equal(diagnosticCodes(() => buildBundle(strengthAboveAssignments)).includes(
+    'TWISE_VECTOR_CONTRACT_INVALID'
+  ), true);
+  const missingRoute = vectorContext();
+  missingRoute.obligations_artifact.fact_routes.find(
+    (/** @type {any} */ route) => route.fact_id === 'fact_grounded'
+  ).obligation_ids = ['obligation_blocked'];
+  assert.equal(diagnosticCodes(() => buildBundle(missingRoute)).includes(
+    'TWISE_OWNER_FACT_ROUTE_MISSING'
+  ), true);
+});
+
 test('every formal Test Point has exactly one disposition', () => {
   for (const mutate of [
     (/** @type {any} */ input) => input.clarification.semantic_snapshot.formal_test_points.pop(),
@@ -212,7 +349,8 @@ test('Case associations are bidirectional across facts, Test Points, and indepen
     const input = context();
     mutate(input);
     const codes = diagnosticCodes(() => buildBundle(input));
-    assert.equal(codes.some((code) => code.includes('TRACE') || code.includes('UNKNOWN') || code.includes('ORACLE')), true, codes.join(','));
+    assert.equal(codes.some((code) => code.includes('TRACE') || code.includes('UNKNOWN')
+      || code.includes('ORACLE') || code.includes('SIGNATURE')), true, codes.join(','));
   }
 });
 
@@ -422,7 +560,7 @@ test('set-like upstream reorder is byte-stable and buildBundle never mutates its
   assert.deepEqual(reordered, before);
 });
 
-test('each covered Test Point owns one distinct expectation through accepted Oracle ancestry', () => {
+test('each covered Test Point requires one explicit distinct Oracle closure', () => {
   const input = context();
   const candidate = input.classification.grounded[0];
   input.obligations_artifact.obligations.push({
@@ -438,12 +576,11 @@ test('each covered Test Point owns one distinct expectation through accepted Ora
   input.obligations_artifact.fact_routes[1].obligation_ids.push('obligation_second');
   candidate.obligation_ids.push('obligation_second');
   candidate.evidence_refs.push('claim_second', 'claim_oracle_second');
-  candidate.execution_signature.test_point_ids.push('obligation_second');
   candidate.steps[0].expectations.push({
     ...structuredClone(candidate.steps[0].expectations[0]),
     expectation_id: 'expectation_second'
   });
-  candidate.execution_signature.oracle_refs.push('expectation_second');
+  refreshDerivedSignature(candidate);
   input.clarification.semantic_snapshot.formal_test_points.push({
     obligation_id: 'obligation_second', evidence_level: 'E3', classification: 'grounded', blocked_reason: null
   });
@@ -451,7 +588,9 @@ test('each covered Test Point owns one distinct expectation through accepted Ora
   input.clarification.semantic_snapshot.delivery_sections.grounded.push('obligation_second');
   input.clarification.semantic_snapshot.delivery_sections.coverage.formal_denominator += 1;
 
-  assert.equal(diagnosticCodes(() => buildBundle(input)).includes('CASE_ORACLE_OWNERSHIP_INCOMPLETE'), true);
+  const codes = diagnosticCodes(() => buildBundle(input));
+  assert.equal(codes.includes('CASE_ORACLE_CLOSURE_DUPLICATE'), true, codes.join(','));
+  assert.equal(codes.includes('CASE_ORACLE_CLOSURE_MISSING'), true, codes.join(','));
 });
 
 test('a final Blocked Test Point must trace to a Task 8 blocker or a projected executable Case', () => {
@@ -466,7 +605,7 @@ test('a final Blocked Test Point cannot retain both a Task 8 blocker and a proje
   projected.case_id = 'case_projected_blocked';
   projected.fact_ids = ['fact_blocked'];
   projected.obligation_ids = ['obligation_blocked'];
-  projected.execution_signature.test_point_ids = ['obligation_blocked'];
+  projected.steps[0].expectations[0].closes_obligation_id = 'obligation_blocked';
   input.classification.grounded.push(projected);
 
   assert.equal(diagnosticCodes(() => buildBundle(input)).includes('FORMAL_DISPOSITION_DUPLICATE'), true);
@@ -520,6 +659,9 @@ test('Oracle ownership accepts a concrete expectation derived from the required 
   });
   const candidate = input.classification.grounded[0];
   candidate.steps[0].expectations[0].evidence_ref = 'claim_oracle_derived';
+  candidate.steps[0].expectations[0].oracle_evidence_refs = [
+    'claim_oracle_derived', 'claim_oracle_grounded'
+  ];
   candidate.evidence_refs.push('claim_oracle_derived');
 
   assert.equal(buildBundle(input).grounded.length, 1);
@@ -923,7 +1065,7 @@ test('Case evidence is the exact accepted direct-root summary reconstructed from
       });
       input.classification.grounded[0].steps[0].expectations[0].evidence_ref = 'claim_oracle_child';
     } },
-    { code: 'CASE_ORACLE_OWNERSHIP_INCOMPLETE', apply: (/** @type {any} */ input) => {
+    { code: 'CASE_ORACLE_EVIDENCE_UNRELATED', apply: (/** @type {any} */ input) => {
       input.evidence_claims.claims.push({
         claim_id: 'claim_unrelated_oracle', claim_form: 'direct', level: 'E3', kind: 'description',
         scope: 'inventory', value: 'Inventory remains stable.',
@@ -931,6 +1073,7 @@ test('Case evidence is the exact accepted direct-root summary reconstructed from
       });
       const candidate = input.classification.grounded[0];
       candidate.steps[0].expectations[0].evidence_ref = 'claim_unrelated_oracle';
+      candidate.steps[0].expectations[0].oracle_evidence_refs = ['claim_unrelated_oracle'];
       candidate.post_state.evidence_ref = 'claim_unrelated_oracle';
       candidate.evidence_refs = candidate.evidence_refs.filter(
         (/** @type {string} */ ref) => ref !== 'claim_oracle_grounded'
@@ -1718,7 +1861,9 @@ function denseOracleContext(size) {
     facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
     points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
     expectations.push({
-      ...structuredClone(candidate.steps[0].expectations[0]), expectation_id: expectationId, evidence_ref: evidenceRef
+      ...structuredClone(candidate.steps[0].expectations[0]), expectation_id: expectationId,
+      evidence_ref: evidenceRef, closes_obligation_id: obligationId,
+      oracle_evidence_refs: ['claim_oracle_grounded', evidenceRef].sort()
     });
     derivedClaims.push({
       claim_id: evidenceRef, claim_form: 'derived', level: 'E2', kind: 'expected-value', scope: 'checkout',
@@ -1733,8 +1878,7 @@ function denseOracleContext(size) {
   candidate.obligation_ids = obligations.map((item) => item.obligation_id);
   candidate.steps[0].expectations = expectations;
   candidate.evidence_refs = [...new Set([...candidate.evidence_refs, ...derivedClaims.map((claim) => claim.claim_id)])].sort();
-  candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
-  candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
+  refreshDerivedSignature(candidate);
   input.evidence_claims.claims.push(...derivedClaims);
   input.evidence_claims.fact_ledger = facts;
   input.obligations_artifact.obligations = obligations;
@@ -1804,7 +1948,9 @@ function prefixOracleContext(size) {
     });
     expectations.push({
       ...structuredClone(candidate.steps[0].expectations[0]),
-      expectation_id: `expectation_prefix_${suffix}`, evidence_ref: evidenceRef
+      expectation_id: `expectation_prefix_${suffix}`, evidence_ref: evidenceRef,
+      closes_obligation_id: obligationId,
+      oracle_evidence_refs: [oracleId, evidenceRef].sort()
     });
   }
   candidate.case_id = 'case_prefix';
@@ -1814,8 +1960,7 @@ function prefixOracleContext(size) {
   candidate.evidence_refs = [...new Set([
     ...candidate.evidence_refs, ...prefixClaims.map((claim) => claim.claim_id)
   ])].sort();
-  candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
-  candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
+  refreshDerivedSignature(candidate);
   input.evidence_claims.claims.push(...prefixClaims);
   input.evidence_claims.fact_ledger = facts;
   input.obligations_artifact.obligations = obligations;
@@ -1916,7 +2061,9 @@ function componentIsolatedForestContext(size) {
     points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
     expectations.push({
       ...structuredClone(candidate.steps[0].expectations[0]),
-      expectation_id: `expectation_component_${suffix}`, evidence_ref: leaf
+      expectation_id: `expectation_component_${suffix}`, evidence_ref: leaf,
+      closes_obligation_id: obligationId,
+      oracle_evidence_refs: ['claim_component_root', leaf].sort()
     });
   }
   claims.push(
@@ -1926,17 +2073,18 @@ function componentIsolatedForestContext(size) {
   );
   expectations.push({
     ...structuredClone(candidate.steps[0].expectations[0]),
-    expectation_id: 'expectation_component_unowned', evidence_ref: 'claim_unrelated_merge'
+    kind: 'auxiliary', expectation_id: 'expectation_component_unowned',
+    evidence_ref: 'claim_grounded', oracle_evidence_refs: ['claim_grounded']
   });
+  delete expectations[expectations.length - 1].closes_obligation_id;
   candidate.case_id = 'case_component';
   candidate.fact_ids = facts.map((item) => item.fact_id);
   candidate.obligation_ids = obligations.map((item) => item.obligation_id);
   candidate.steps[0].expectations = expectations;
   candidate.evidence_refs = [...new Set([
-    ...candidate.evidence_refs, 'claim_component_root', 'claim_unrelated_merge', ...leaves
+    ...candidate.evidence_refs, 'claim_component_root', ...leaves
   ])].sort();
-  candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
-  candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
+  refreshDerivedSignature(candidate);
   input.evidence_claims.claims.push(...claims);
   input.evidence_claims.fact_ledger = facts;
   input.obligations_artifact.obligations = obligations;
@@ -2057,13 +2205,14 @@ function multiRootOracleContext(size) {
   candidate.fact_ids = ['fact_multi'];
   candidate.obligation_ids = ['obligation_multi'];
   candidate.steps[0].expectations = [{
-    ...candidate.steps[0].expectations[0], expectation_id: 'expectation_multi', evidence_ref: finalEvidence
+    ...candidate.steps[0].expectations[0], expectation_id: 'expectation_multi',
+    evidence_ref: finalEvidence, closes_obligation_id: 'obligation_multi',
+    oracle_evidence_refs: [...roots.map((item) => item.claim_id), finalEvidence].sort()
   }];
   candidate.evidence_refs = [...new Set([
     ...candidate.evidence_refs, ...roots.map((item) => item.claim_id), finalEvidence
   ])].sort();
-  candidate.execution_signature.oracle_refs = ['expectation_multi'];
-  candidate.execution_signature.test_point_ids = ['obligation_multi'];
+  refreshDerivedSignature(candidate);
   input.classification = {
     grounded: [candidate], conditional: [], blocked: [], not_applicable: [], exploratory: [], diagnostics: []
   };
@@ -2142,7 +2291,9 @@ function sharedMultiRootExpectationsContext(size) {
     points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
     expectations.push({
       ...structuredClone(candidate.steps[0].expectations[0]),
-      expectation_id: `expectation_multi_${suffix}`, evidence_ref: expectationRef
+      expectation_id: `expectation_multi_${suffix}`, evidence_ref: expectationRef,
+      closes_obligation_id: obligationId,
+      oracle_evidence_refs: [...roots, expectationRef].sort()
     });
   }
   input.evidence_claims.claims.push(...claims);
@@ -2156,8 +2307,7 @@ function sharedMultiRootExpectationsContext(size) {
     ...candidate.evidence_refs.filter((/** @type {string} */ ref) => ref !== finalMerge),
     ...claims.map((claim) => claim.claim_id)
   ])].sort();
-  candidate.execution_signature.oracle_refs = expectations.map((item) => item.expectation_id);
-  candidate.execution_signature.test_point_ids = obligations.map((item) => item.obligation_id);
+  refreshDerivedSignature(candidate);
   input.clarification.semantic_snapshot.formal_test_points = points;
   input.clarification.semantic_snapshot.coverage_denominator = size;
   input.clarification.semantic_snapshot.delivery_sections.grounded = obligations.map((item) => item.obligation_id);
@@ -2228,9 +2378,9 @@ function manyCaseForestContext(size) {
     candidate.obligation_ids = [obligationId];
     candidate.steps[0].expectations[0].expectation_id = `expectation_case_${suffix}`;
     candidate.steps[0].expectations[0].evidence_ref = evidenceRef;
+    bindOracle(candidate.steps[0].expectations[0], obligationId, [oracleId, evidenceRef]);
     candidate.evidence_refs = [...new Set([...candidate.evidence_refs, oracleId, evidenceRef])].sort();
-    candidate.execution_signature.oracle_refs = [`expectation_case_${suffix}`];
-    candidate.execution_signature.test_point_ids = [obligationId];
+    refreshDerivedSignature(candidate);
     cases.push(candidate);
   }
   input.evidence_claims.claims.push(...claims);
@@ -2258,7 +2408,7 @@ function manyCaseForestContext(size) {
   return input;
 }
 
-test('forest Oracle matching initializes Fenwick capacity from each Case local expectations only', () => {
+test('explicit Oracle closure bypasses legacy Fenwick matching for independent Cases', () => {
   const NativeArray = Array;
   const measurements = [];
   for (const size of [50, 100, 200]) {
@@ -2267,7 +2417,8 @@ test('forest Oracle matching initializes Fenwick capacity from each Case local e
       globalThis.Array = new Proxy(NativeArray, {
         construct(target, args, newTarget) {
           const value = Reflect.construct(target, args, newTarget);
-          if (args.length === 1 && args[0] === 2) localCells += 2;
+          if (args.length === 1 && args[0] === 2
+            && (new Error().stack?.includes('fenwick') ?? false)) localCells += 2;
           return value;
         }
       });
@@ -2277,7 +2428,5 @@ test('forest Oracle matching initializes Fenwick capacity from each Case local e
     }
     measurements.push(localCells);
   }
-  assert.equal(measurements.every(
-    (count, index) => count >= [100, 200, 400][index] && count <= [102, 202, 402][index]
-  ), true, measurements.join('/'));
+  assert.deepEqual(measurements, [0, 0, 0]);
 });

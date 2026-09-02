@@ -178,12 +178,14 @@ function caseDraft(rule) {
       step_id: `step_${rule.key}`, action: `Exercise ${rule.key}`,
       action_evidence_ref: rule.claimId, support_review: 'supported',
       expectations: [{
+        kind: 'obligation-oracle',
         expectation_id: expectationId,
         business_assertion: rule.result,
         preceding_action_id: `step_${rule.key}`,
         observer: 'tester', observation_surface: 'UI', observation_target: 'result',
         oracle: { type: 'state', expected_state: rule.result, comparison: 'equals' },
-        evidence_ref: rule.claimId, support_review: 'supported'
+        evidence_ref: rule.claimId, oracle_evidence_refs: [rule.claimId],
+        closes_obligation_id: id, support_review: 'supported'
       }]
     }],
     testability_profile: {
@@ -199,7 +201,7 @@ function caseDraft(rule) {
     evidence_refs: [rule.claimId],
     execution_signature: {
       role: 'tester', precondition_state: precondition, data_partition: dataPartition,
-      action_path: [`Exercise ${rule.key}`], oracle_refs: [expectationId], test_point_ids: [id]
+      action_path: [`Exercise ${rule.key}`], oracle_refs: [expectationId]
     }
   };
   if (rule.level === 'E1') draft.temporary_assumption = {

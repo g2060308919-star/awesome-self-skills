@@ -5,7 +5,7 @@
 
 ## Grounded Cases
 
-### <code>case\_4d4e5fcef00e6a88</code> — Verify checkout accepted
+### <code>case\_1c8a196253a78e34</code> — Verify checkout accepted
 
 - Scope: <code>checkout</code>
 - Risk: <code>high</code>
@@ -25,7 +25,7 @@
 #### Steps and Oracles
 
 1. <code>step\_checkout</code> — Exercise checkout (evidence: <code>claim\_checkout</code>)
-   - <code>expectation\_checkout</code>: checkout accepted
+   - <code>expectation\_9f914c210eb97186</code>: checkout accepted
      - Observe: tester via UI → result
      - Oracle: state equals <code>checkout accepted</code>
      - Evidence: <code>claim\_checkout</code>
@@ -71,7 +71,7 @@ Grounded: 1/1
 
 | Test Point | Case |
 | --- | --- |
-| <code>obligation\_a1d383c412180df9</code> | <code>case\_4d4e5fcef00e6a88</code> |
+| <code>obligation\_a1d383c412180df9</code> | <code>case\_1c8a196253a78e34</code> |
 
 ### Expert Recall Ledger
 

@@ -78,12 +78,12 @@ test('canonical set ordering uses true Unicode code points and retains duplicate
   assert.notEqual(canonicalStringify({}), canonicalStringify({ source_ids: [] }));
 });
 
-test('case stable IDs normalize direct and nested execution-signature Test Point sets', () => {
-  const direct = { role: 'member', action_path: ['open', 'save'], oracle_refs: ['oracle_b', 'oracle_a'], test_point_ids: ['obligation_b', 'obligation_a'] };
+test('case stable IDs normalize typed Oracle sets without execution-signature Test Point associations', () => {
+  const direct = { role: 'member', action_path: ['open', 'save'], oracle_refs: ['oracle_b', 'oracle_a'] };
   const nested = { title: 'Save settings', execution_signature: direct };
 
-  assert.equal(stableId('case', direct), stableId('case', { ...direct, test_point_ids: ['obligation_a', 'obligation_b'] }));
-  assert.equal(stableId('case', nested), stableId('case', { ...nested, execution_signature: { ...direct, test_point_ids: ['obligation_a', 'obligation_b'] } }));
+  assert.equal(stableId('case', direct), stableId('case', { ...direct, oracle_refs: ['oracle_a', 'oracle_b'] }));
+  assert.equal(stableId('case', nested), stableId('case', { ...nested, execution_signature: { ...direct, oracle_refs: ['oracle_a', 'oracle_b'] } }));
   assert.notEqual(stableId('case', nested), stableId('case', { ...nested, execution_signature: { ...direct, role: 'admin' } }));
 });
 

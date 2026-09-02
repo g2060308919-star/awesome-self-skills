@@ -5,7 +5,7 @@
 
 ## Grounded Cases
 
-### <code>case\_2be14d4a4e8c473f</code> — Verify shipping confirmed
+### <code>case\_07b6a31d7e08b43f</code> — Verify shipping confirmed
 
 - Scope: <code>checkout.shipping</code>
 - Risk: <code>high</code>
@@ -25,7 +25,7 @@
 #### Steps and Oracles
 
 1. <code>step\_shipping</code> — Exercise shipping (evidence: <code>claim\_shipping</code>)
-   - <code>expectation\_shipping</code>: shipping confirmed
+   - <code>expectation\_0345aca2b5b139ea</code>: shipping confirmed
      - Observe: tester via UI → result
      - Oracle: state equals <code>shipping confirmed</code>
      - Evidence: <code>claim\_shipping</code>
@@ -80,7 +80,7 @@ Grounded: 1/1
 
 | Test Point | Case |
 | --- | --- |
-| <code>obligation\_96bd8760ebfe5988</code> | <code>case\_2be14d4a4e8c473f</code> |
+| <code>obligation\_96bd8760ebfe5988</code> | <code>case\_07b6a31d7e08b43f</code> |
 
 ### Expert Recall Ledger
 

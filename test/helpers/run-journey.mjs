@@ -256,6 +256,7 @@ function caseDraft(rule) {
       action_evidence_ref: rule.claimId,
       support_review: 'supported',
       expectations: [{
+        kind: 'obligation-oracle',
         expectation_id: expectationId,
         business_assertion: rule.result,
         preceding_action_id: `step_${rule.key}`,
@@ -264,6 +265,8 @@ function caseDraft(rule) {
         observation_target: 'result',
         oracle: { type: 'state', expected_state: rule.result, comparison: 'equals' },
         evidence_ref: rule.claimId,
+        oracle_evidence_refs: [rule.claimId],
+        closes_obligation_id: id,
         support_review: 'supported'
       }]
     }],
@@ -293,8 +296,7 @@ function caseDraft(rule) {
       precondition_state: precondition,
       data_partition: dataPartition,
       action_path: [`Exercise ${rule.key}`],
-      oracle_refs: [expectationId],
-      test_point_ids: [id]
+      oracle_refs: [expectationId]
     }
   };
   if (rule.level === 'E1' || rule.capabilityStatus === 'approved-assumption') {
@@ -524,7 +526,7 @@ export function buildJourney(name) {
   }
   if (name === 'clarification-conditional' || name === 'clarification-grounded') {
     return revisionFromRules([journeyRule('checkout', {
-      scope: 'checkout', hasOracle: false, viewType: 'role'
+      scope: 'checkout', hasOracle: false, viewType: 'role', mode: 'blocker'
     })]);
   }
   if (name === 'partial-blocked') return revisionFromRules([

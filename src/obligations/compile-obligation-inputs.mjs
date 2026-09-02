@@ -327,8 +327,8 @@ function customResponsibilitySeed(responsibility) {
 
 /**
  * Compile the sole behavior-views seam into private strategy inputs. The three
- * terminal/custom inputs are normalized just far enough for the existing
- * obligation ledger. Combination semantics remain explicitly deferred.
+ * terminal/custom/combination inputs are normalized just far enough for the
+ * obligation ledger. Evidence and ownership semantics remain compiler-owned.
  *
  * @param {unknown} evidenceGraph
  * @param {unknown} behaviorViews
@@ -428,11 +428,10 @@ export function compileObligationInputs(evidenceGraph, behaviorViews) {
         return [];
       }) : [];
   const combinations = isDenseObjectArray(inputs.combination_requests)
-    ? /** @type {Record<string, unknown>[]} */ (inputs.combination_requests) : [];
-  if (combinations.length > 0) diagnostics.push(diagnostic(
-    'OBLIGATION_INPUT_SEMANTICS_DEFERRED', '/obligation_inputs/combination_requests',
-    'combination_requests semantics are reserved for a later remediation slice'
-  ));
+    ? /** @type {Record<string, unknown>[]} */ (inputs.combination_requests)
+      .map((request) => structuredClone(request))
+      .sort((left, right) => compareCodePoints(canonicalStringify(left), canonicalStringify(right)))
+    : [];
   const terminalFactRoutes = terminal.map((entry) => entry.route);
   const notApplicableReviews = terminal.flatMap((entry) => entry.review ? [entry.review] : []);
   const customResponsibilitySeeds = custom.map((entry) => entry.seed);

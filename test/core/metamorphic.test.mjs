@@ -5,7 +5,7 @@ import { classifyCaseDrafts } from '../../src/classify.mjs';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { auditInteractionMatrix } from '../../src/views/interaction-matrix.mjs';
 import {
-  IDS, acceptedClaim, baseCase, baseObligation, classificationContext
+  IDS, acceptedClaim, baseCase, baseObligation, blockerDisposition, classificationContext
 } from '../helpers/classification-context.mjs';
 import {
   addExploratory, buildJourney, evaluateJourneyRevision, journeyRule,
@@ -100,7 +100,7 @@ test('metamorphic hard gates: E3→E1 only moves Grounded to Conditional', () =>
   assert.deepEqual(conditional.conditional[0].obligation_ids, originalCheckout.obligation_ids);
 });
 
-test('metamorphic obligation input: empty Oracle prebinding defers blocking until Case classification', () => {
+test('metamorphic obligation input: empty Oracle prebinding preserves a Case-supplied Oracle', () => {
   const e1Input = revisionFromRules([
     journeyRule('checkout', {
       level: 'E1', decisionDisposition: 'temporary', viewType: 'role'
@@ -165,11 +165,13 @@ test('metamorphic obligation input: empty Oracle prebinding defers blocking unti
   );
   const e0 = finished(e0Input, 'record_only');
   assert.equal(e0.grounded.length, 1);
-  assert.equal(e0.conditional.length, 0);
-  assert.equal(e0.blocked.length, 1, 'only Case classification may block the still-missing Oracle');
+  assert.equal(e0.conditional.length, 1);
+  assert.equal(e0.blocked.length, 0, 'an empty prebinding must not erase a Case-supplied Oracle');
   assert.equal(e0.exploratory.length, 0);
-  assert.equal(e0.blocked[0].obligation_id, affectedBaseline.obligation_ids[0]);
-  assert.equal(e0.blocked[0].reason, 'FORMAL_ORACLE_MISSING');
+  const affectedResult = e0.conditional.find(
+    (/** @type {any} */ item) => item.scope === 'checkout'
+  );
+  assert.deepEqual(affectedResult, affectedBaseline, 'optional prebinding changed the executable Case');
   const unaffectedResult = e0.grounded.find(
     (/** @type {any} */ item) => item.scope === 'shipping'
   );
@@ -328,7 +330,8 @@ test('metamorphic hard gate: a missing formal Oracle retains its Blocked Test Po
   const obligation = baseObligation({ required_oracle_refs: [] });
   const result = classifyCaseDrafts(classificationContext({
     obligations: [obligation],
-    cases: [baseCase({ obligation_ids: [IDS.obligation] })]
+    cases: [],
+    dispositions: [blockerDisposition()]
   }));
   assert.equal(result.blocked.length, 1, 'reversal drops the missing Blocked Test Point');
   assert.equal(result.grounded.length + result.conditional.length + result.exploratory.length, 0);

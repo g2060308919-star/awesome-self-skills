@@ -975,7 +975,6 @@ test('compiler-owned gaps reject Agent Case NotApplicable and expectation closur
   const gapId = factGapObligationId();
   const caseAttempt = terminalGapRevision();
   caseAttempt.case_drafts.cases[0].obligation_ids.push(gapId);
-  caseAttempt.case_drafts.cases[0].execution_signature.test_point_ids.push(gapId);
   caseAttempt.case_drafts.obligation_dispositions.push({
     obligation_id: gapId, status: 'case_candidate',
     case_ids: [caseAttempt.case_drafts.cases[0].case_id]
@@ -994,7 +993,7 @@ test('compiler-owned gaps reject Agent Case NotApplicable and expectation closur
   for (const [name, revision, expectedCode] of [
     ['case', caseAttempt, 'REQUIREMENT_GAP_AGENT_DISPOSITION_FORBIDDEN'],
     ['not-applicable', notApplicableAttempt, 'REQUIREMENT_GAP_AGENT_DISPOSITION_FORBIDDEN'],
-    ['expectation', expectationAttempt, 'ADDITIONAL_PROPERTY']
+    ['expectation', expectationAttempt, 'ORACLE_CLOSE_TARGET_INVALID']
   ]) {
     const run = await runInstalledRevision(revision);
     try {
