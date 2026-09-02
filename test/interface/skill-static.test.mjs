@@ -189,6 +189,10 @@ test('skill static policies freeze clarification and source-review boundaries', 
     behavior,
     /forbid[\s\S]*supported E3\/E2[\s\S]*never becomes an Oracle/u
   );
+  assert.match(
+    behavior,
+    /Every `vector_oracles` mapping[\s\S]*every declared `parameter_id` exactly once[\s\S]*one declared `value_id`/u
+  );
   assert.match(behavior, /requirement-gap[\s\S]*`caseable=false`/u);
 
   const clarification = await text('references/clarification-policy.md');
