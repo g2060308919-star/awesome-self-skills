@@ -127,6 +127,22 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(evidence, /never delete the Claim or empty the Fact Ledger merely to advance/u);
   assert.match(evidence, /For `decision-table-instance`, `value` must exactly equal `rule_input\.outcome`/u);
   assert.match(evidence, /Before accepting `evidence_claims`[\s\S]*one replayable E2 `expected-value` child[\s\S]*all atomic Oracle parents/u);
+  assert.match(
+    evidence,
+    /unsupported[\s\S]*outside[\s\S]*two atomic E3 claims[\s\S]*different `claim_id`[\s\S]*same source locator/iu
+  );
+  assert.match(
+    evidence,
+    /test-process[\s\S]*output-format[\s\S]*not product behavior[\s\S]*diagnostic[\s\S]*never[\s\S]*formal Fact or Behavior View/iu
+  );
+  assert.match(
+    evidence,
+    /Product behavior or responsibility remains formal[\s\S]*missing Oracle or Testability[\s\S]*Blocked/iu
+  );
+  assert.match(
+    evidence,
+    /source-defined forbidden tuple[\s\S]*E2 `expected-value`[\s\S]*`decision-table-instance`[\s\S]*selected-value claims[\s\S]*forbid rule/iu
+  );
 
   const behavior = await text('references/behavior-views.md');
   for (const viewType of [
@@ -192,6 +208,14 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(
     behavior,
     /Every `vector_oracles` mapping[\s\S]*every declared `parameter_id` exactly once[\s\S]*one declared `value_id`/u
+  );
+  assert.match(
+    behavior,
+    /Every view element and relation[\s\S]*directly states that exact[\s\S]*state[\s\S]*transition[\s\S]*condition[\s\S]*result[\s\S]*surface[\s\S]*general path claim[\s\S]*omitted state/iu
+  );
+  assert.match(
+    behavior,
+    /one `forbid` constraint for every source-defined forbidden tuple[\s\S]*E2 outcome[\s\S]*(?:must not|do not) drop[\s\S]*constraint/iu
   );
   assert.match(behavior, /requirement-gap[\s\S]*`caseable=false`/u);
 
