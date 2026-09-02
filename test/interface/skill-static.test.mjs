@@ -147,6 +147,14 @@ test('skill static policies freeze clarification and source-review boundaries', 
     evidence,
     /Product behavior or responsibility remains formal[\s\S]*missing Oracle or Testability[\s\S]*Blocked/iu
   );
+  const enumeratedGapPolicy = evidence.split('\n').find(
+    (/** @type {string} */ line) => line.startsWith('When a source explicitly enumerates distinct in-scope scenarios')
+  );
+  // Production defect: fresh input merged named unresolved scenarios. Rule reversal: requiring an extra test-process instruction or permitting a generic root must fail.
+  assert.equal(
+    enumeratedGapPolicy,
+    'When a source explicitly enumerates distinct in-scope scenarios whose product outcome or Oracle is missing, create one separate formal responsibility per named scenario. Record one atomic `kind = requirement` Claim and one `status = ambiguous` Fact Ledger entry for each, then route it to its own Blocked Test Point; you must not collapse named scenarios into a generic missing-result or parse-failure gap. This records that each named behavior requires resolution and does not invent an outcome.'
+  );
   assert.match(
     evidence,
     /source-defined forbidden tuple[\s\S]*E2 `expected-value`[\s\S]*`decision-table-instance`[\s\S]*selected-value claims[\s\S]*forbid rule/iu
@@ -154,13 +162,26 @@ test('skill static policies freeze clarification and source-review boundaries', 
   const tWiseEvidencePolicy = evidence.split('\n').find(
     (/** @type {string} */ line) => line.startsWith('Apply that rule before t-wise modeling')
   );
-  assert.ok(tWiseEvidencePolicy);
-  assert.match(
+  // Production defect: a two-field forbid was cloned across a third domain. Rule reversal: adding an unspecified assignment or expanding a non-exhaustive rule must fail.
+  assert.equal(
     tWiseEvidencePolicy,
-    /source-defined forbidden tuple[^\n]*rule says a combination supports \*only\* one value[^\n]*tuple produced by that expansion[^\n]*include the authoritative closed enumeration Claim itself in `parent_claim_ids`[^\n]*source locator[^\n]*`source_locator_ids`[^\n]*not sufficient ancestry/iu
+    'Apply that rule before t-wise modeling. For every source-defined forbidden tuple, create a separate replayable E2 `expected-value` using the closed `decision-table-instance` derivation. Its parents must include the atomic selected-value claims for every assignment in that tuple and the joint forbid rule; its `value` must exactly equal the sourced forbidden outcome in `rule_input.outcome`. An explicit partial forbidden tuple keeps its exact assignment arity: you must not add an unspecified parameter and must not clone it across an unspecified domain. Only an authoritative exclusive rule that exhaustively proves the combination permits exactly one value may expand into complement tuples, and only when an authoritative closed enumeration makes those tuples mechanical. For every tuple produced by that expansion, include the authoritative closed enumeration Claim itself in `parent_claim_ids`; recording only its source locator in `source_locator_ids` is not sufficient ancestry. Keep one E2 outcome per tuple. A broad enumeration claim or separate value claims are not joint forbid proof, and an open domain must remain Blocked rather than being completed from recall.'
   );
 
   const behavior = await text('references/behavior-views.md');
+  // The stage-specific adapter rules must mirror the Evidence policy; deleting either copy reopens the observed forward-test defects.
+  assert.equal(
+    behavior.split('\n').find((/** @type {string} */ line) => line.startsWith('Keep every explicitly named unresolved in-scope scenario')),
+    'Keep every explicitly named unresolved in-scope scenario separate. Each formal ambiguous Fact needs its own modeled or terminal route and its own Blocked Test Point; never merge several named missing outcomes into one generic reason or root.'
+  );
+  assert.equal(
+    behavior.split('\n').find((/** @type {string} */ line) => line.startsWith('Submit one `forbid` constraint for every source-defined forbidden tuple')),
+    'Submit one `forbid` constraint for every source-defined forbidden tuple. Its assignments must be that exact tuple, and its `evidence_refs` must cite the tuple\'s replayable E2 outcome prepared during Evidence Claims, not a broad enum or the individual value Claims. Keep an explicit partial forbid partial: do not add a parameter that its source rule leaves unspecified or clone it across that parameter\'s domain. Only an authoritative exclusive rule that exhaustively proves the combination permits exactly one value may expand into complement tuples, and only with an authoritative closed enumeration. `constraints` may be empty only after a read-only source rebuttal finds no explicit invalid-combination rule. If the compiler rejects a tuple proof, do not drop the constraint and allow forbidden vectors; the accepted Evidence Claims are missing a closed E2 tuple outcome, so stop at the repair boundary rather than weakening combination coverage. Do not submit an unconstrained request when the source contains a forbid whose closed proof is unavailable; preserve the affected combination responsibility as Blocked.'
+  );
+  assert.equal(
+    behavior.split('\n').find((/** @type {string} */ line) => line.startsWith('Selection chooses input vectors')),
+    'Selection chooses input vectors; every vector still needs a product Oracle that is source-backed and independent of coverage-selection metadata, either directly or through a legal E2 derivation. Coverage strength, the selected vector, and a coverage record cannot supply that Oracle. E1 selected-value evidence makes the eventual Case at most Conditional, even when its Oracle is stronger.'
+  );
   for (const viewType of [
     'flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration'
   ]) assert.match(behavior, new RegExp(`${String.fromCodePoint(96)}${viewType}${String.fromCodePoint(96)}`, 'u'));
@@ -271,6 +292,14 @@ test('skill static policies freeze clarification and source-review boundaries', 
   assert.match(
     cases,
     /exactly one `obligation-oracle` expectation[\s\S]*single `closes_obligation_id`[\s\S]*nonempty, unique `oracle_evidence_refs`/u
+  );
+  const vectorOraclePolicy = cases.split('\n').find(
+    (/** @type {string} */ line) => line.startsWith('For a compiler-derived combination Test Point')
+  );
+  // Production defect: coverage metadata was emitted as an obligation Oracle. Rule reversal: treating selection metadata as product truth or drafting without E3/E2 support must fail.
+  assert.equal(
+    vectorOraclePolicy,
+    'For a compiler-derived combination Test Point, require a product Oracle that is source-backed and independent of coverage-selection metadata, either directly or through a legal E2 derivation. Coverage strength, the selected vector, or a coverage record is test-process metadata and must not become a business Oracle. If no accepted source or legal E2 derivation supplies the product outcome for that vector, block the Test Point rather than invent an expectation.'
   );
   assert.match(
     cases,
