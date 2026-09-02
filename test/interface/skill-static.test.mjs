@@ -309,6 +309,13 @@ test('skill static policies freeze clarification and source-review boundaries', 
     cases,
     /Agent `execution_signature\.oracle_refs`[\s\S]*exact distinct expectation IDs[\s\S]*contains no Test Point or obligation IDs/u
   );
+  const signaturePreflightPolicy = cases.split('\n').find(
+    (/** @type {string} */ line) => line.startsWith('Immediately before writing `staging/case-drafts.json`')
+  );
+  assert.equal(
+    signaturePreflightPolicy,
+    'Immediately before writing `staging/case-drafts.json`, mechanically compare each Case: `sort(unique(execution_signature.oracle_refs))` must equal `sort(unique(expectation_id values from all Case expectations))`. Use the Agent-authored expectation IDs such as `expect-payment-success`; never copy a compiler-owned `oracle_*` semantic ID from derived or final output. A mismatch is a repairable `case_drafts` error, never a business blocker or clarification root.'
+  );
   assert.match(cases, /`evidence_refs` must equal the exact sorted union of direct evidence roots/u);
   assert.match(
     cases,

@@ -134,6 +134,73 @@ test('real advanceStrict progresses every fixed artifact stage and atomically pu
   }
 });
 
+test('case execution-signature mistakes stay repairable and never become business clarification roots', async () => {
+  // Production defect caught: an Agent copied a compiler oracle_* semantic ID into
+  // oracle_refs, the runner accepted it as business Blocked, and delivery froze the
+  // false root. Rule reversal caught: accepting the draft or returning
+  // need_user_answers instead of need_revision(case_drafts) must fail this test.
+  const runDirectory = await temporaryRun('signature repair');
+  const revision = await fixture();
+  revision.case_drafts.cases[0].testability_profile.capabilities[0].status = 'unavailable';
+  const validCaseDrafts = structuredClone(revision.case_drafts);
+  revision.case_drafts.cases[0].execution_signature.oracle_refs = [
+    'oracle_deadbeefdeadbeef'
+  ];
+  const invalidCaseDrafts = structuredClone(revision.case_drafts);
+  try {
+    assert.equal((await advance(runDirectory)).stage, 'source_pack');
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    assert.equal((await advance(runDirectory)).stage, 'evidence_claims');
+    await stage(runDirectory, 'evidence_claims', revision.evidence_claims);
+    assert.equal((await advance(runDirectory)).stage, 'behavior_views');
+    await stage(runDirectory, 'behavior_views', revision.behavior_views);
+    assert.equal((await advance(runDirectory)).stage, 'case_drafts');
+
+    await stage(runDirectory, 'case_drafts', revision.case_drafts);
+    const repair = await advance(runDirectory);
+    assert.equal(repair.status, 'need_revision', JSON.stringify(repair));
+    assert.equal(repair.stage, 'case_drafts');
+    assert.equal(repair.schema_ref, 'case-drafts.schema.json');
+    assert.equal(repair.artifact_path, path.join(runDirectory, 'staging/case-drafts.json'));
+    assert.deepEqual(repair.diagnostics, [{
+      category: 'traceability',
+      code: 'CASE_EXECUTION_SIGNATURE_MISMATCH',
+      path: '/caseDrafts/cases/case_checkout/execution_signature',
+      message: 'Agent execution_signature must exactly summarize role, preconditions, data, ordered actions, and expectation IDs'
+    }]);
+    assert.deepEqual(
+      JSON.parse(await readFile(repair.artifact_path, 'utf8')),
+      invalidCaseDrafts
+    );
+    assert.deepEqual(await advance(runDirectory), repair);
+    await assert.rejects(
+      stat(path.join(runDirectory, 'accepted/r000/case-drafts.json')),
+      { code: 'ENOENT' }
+    );
+    await assert.rejects(
+      stat(path.join(runDirectory, 'derived/r000/clarification-state.json')),
+      { code: 'ENOENT' }
+    );
+
+    await stage(runDirectory, 'case_drafts', validCaseDrafts);
+    const finished = await advance(runDirectory);
+    assert.equal(finished.status, 'finished', JSON.stringify(finished));
+    assert.deepEqual(
+      JSON.parse(await readFile(path.join(runDirectory, 'accepted/r000/case-drafts.json'), 'utf8')),
+      validCaseDrafts
+    );
+    await assert.rejects(
+      stat(path.join(runDirectory, 'staging/case-drafts.json')),
+      { code: 'ENOENT' }
+    );
+    const bundle = JSON.parse(await readFile(finished.bundle_path, 'utf8'));
+    assert.equal(bundle.blocked.length, 1, JSON.stringify(bundle));
+    assert.match(bundle.blocked[0].reason, /CAPABILITY_UNAVAILABLE/u);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('real runner fails closed when an integration view omits responsibility-specific context', async () => {
   const runDirectory = await temporaryRun('integration context');
   const behaviorViews = JSON.parse(await readFile(integrationFixturePath, 'utf8'));

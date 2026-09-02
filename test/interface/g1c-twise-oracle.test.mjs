@@ -1142,7 +1142,10 @@ test('Agent signature names exact expectation IDs while the classified Case expo
   invalid.execution_signature.oracle_refs = [executionSignature(invalid)];
   const rejected = classifyCaseDrafts(classificationContext({ cases: [invalid] }));
   assert.equal(rejected.grounded.length + rejected.conditional.length, 0);
-  assert.match(rejected.blocked[0].reason, /EXECUTION_SIGNATURE_MISMATCH/u);
+  assert.equal(rejected.blocked.length, 0);
+  assert.equal(rejected.diagnostics.some(
+    (item) => item.code === 'CASE_EXECUTION_SIGNATURE_MISMATCH'
+  ), true, JSON.stringify(rejected));
 });
 
 test('Agent execution signatures reject legacy Test Point IDs', () => {

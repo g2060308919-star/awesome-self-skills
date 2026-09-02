@@ -1138,14 +1138,17 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     ? [...new Set(signature.oracle_refs.map(normalizeSemanticString))].sort(compareCodePoints) : [];
   const actualSignature = JSON.parse(executionSignature(draft));
   const actualAgentOracleRefs = [...expectationIds].sort(compareCodePoints);
-  if (signature.precondition_state !== actualSignature.precondition_state
-    || signature.data_partition !== actualSignature.data_partition) {
-    reasons.add('EXECUTION_SIGNATURE_MISMATCH');
-  }
-  if (submittedRole !== actualSignature.role
+  const signatureMismatch = signature.precondition_state !== actualSignature.precondition_state
+    || signature.data_partition !== actualSignature.data_partition
+    || submittedRole !== actualSignature.role
     || canonicalStringify(submittedActions) !== canonicalStringify(actualSignature.action_path)
-    || canonicalStringify(submittedOracles) !== canonicalStringify(actualAgentOracleRefs)) {
-    reasons.add('EXECUTION_SIGNATURE_MISMATCH');
+    || canonicalStringify(submittedOracles) !== canonicalStringify(actualAgentOracleRefs);
+  if (signatureMismatch) {
+    diagnostics.push(diagnostic(
+      'traceability', 'CASE_EXECUTION_SIGNATURE_MISMATCH',
+      `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/execution_signature`,
+      'Agent execution_signature must exactly summarize role, preconditions, data, ordered actions, and expectation IDs'
+    ));
   }
 
   const evidenceResult = assessEvidenceRoots([...evidenceRoots], evidence, evidenceCache);

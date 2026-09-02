@@ -165,7 +165,10 @@ test('precondition and data signature dimensions are derived from actual Case se
     assert.notEqual(executionSignature(draft), before);
     const result = classifyCaseDrafts(classificationContext({ cases: [draft] }));
     assert.equal(result.grounded.length + result.conditional.length, 0);
-    assert.match(result.blocked[0].reason, /EXECUTION_SIGNATURE_MISMATCH/u);
+    assert.equal(result.blocked.length, 0);
+    assert.equal(result.diagnostics.some(
+      (item) => item.code === 'CASE_EXECUTION_SIGNATURE_MISMATCH'
+    ), true, JSON.stringify(result));
   }
 });
 

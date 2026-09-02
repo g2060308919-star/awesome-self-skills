@@ -245,8 +245,35 @@ test('execution signature projection must match the actual role, ordered actions
     mutate(context.caseDrafts.cases[0]);
     const result = classifyCaseDrafts(context);
     assert.equal(result.grounded.length + result.conditional.length, 0);
-    assert.match(result.blocked[0].reason, /EXECUTION_SIGNATURE_MISMATCH/u);
+    assert.equal(result.blocked.length, 0);
+    assert.equal(result.diagnostics.some(
+      (item) => item.code === 'CASE_EXECUTION_SIGNATURE_MISMATCH'
+    ), true, JSON.stringify(result));
   }
+});
+
+test('all execution signature dimension errors collapse to one exact repair diagnostic', () => {
+  const context = classificationContext();
+  context.caseDrafts.cases[0].execution_signature = {
+    role: 'administrator',
+    precondition_state: 'forged precondition',
+    data_partition: 'forged data',
+    action_path: ['Approve checkout'],
+    oracle_refs: ['oracle_deadbeefdeadbeef']
+  };
+  const result = classifyCaseDrafts(context);
+
+  assert.deepEqual(result.diagnostics, [{
+    category: 'traceability',
+    code: 'CASE_EXECUTION_SIGNATURE_MISMATCH',
+    path: '/caseDrafts/cases/case_1111111111111111/execution_signature',
+    message: 'Agent execution_signature must exactly summarize role, preconditions, data, ordered actions, and expectation IDs'
+  }]);
+  assert.equal(result.grounded.length, 0);
+  assert.equal(result.conditional.length, 0);
+  assert.equal(result.blocked.length, 0);
+  assert.equal(result.not_applicable.length, 0);
+  assert.equal(result.exploratory.length, 0);
 });
 
 test('formal fact routes participate in the obligation evidence closure even when a Case omits the routed fact', () => {
