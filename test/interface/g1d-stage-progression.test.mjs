@@ -208,6 +208,61 @@ test('stage progression rebuilds missing prior clarification state before append
   }
 });
 
+test('case-classification blockers retain only formal-related evidence across delivery revision preflight', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'g1d-case-blocker-revision-'));
+  try {
+    const revision = await fixture();
+    revision.evidence_claims.claims.push({
+      claim_id: 'claim_observer', claim_form: 'direct', level: 'E3', kind: 'description',
+      scope: 'checkout', value: 'The tester can inspect an auxiliary observer.',
+      source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+    });
+    const draft = revision.case_drafts.cases[0];
+    draft.testability_profile.capabilities[0].provenance_ref = 'claim_observer';
+    draft.evidence_refs = ['claim_checkout', 'claim_observer'];
+    draft.execution_signature.action_path = ['Inspect an unrelated auxiliary observer'];
+
+    const pendingReply = await submitCompleteRevision(runDirectory, revision);
+    assert.equal(pendingReply.status, 'need_user_answers', JSON.stringify(pendingReply));
+    const priorState = JSON.parse(await readFile(
+      path.join(runDirectory, 'derived/r000/clarification-state.json'), 'utf8'
+    ));
+    const leaksUnrelatedEvidence = priorState.root_snapshot_ledger.some(
+      (/** @type {any} */ root) => root.evidence_refs.includes('claim_observer')
+    );
+    const retainsFormalEvidence = priorState.root_snapshot_ledger.every(
+      (/** @type {any} */ root) => root.evidence_refs.includes('claim_checkout')
+    );
+
+    const nextSource = structuredClone(revision.source_pack);
+    nextSource.source_revision = 1;
+    nextSource.clarification_events.push({
+      event_id: 'event_case_blocker_delivery', clarification_event_seq: 1,
+      type: 'request_delivery', actor: 'owner', event_at: '2026-09-02',
+      root_issue_ids: pendingReply.blockers.map(
+        (/** @type {any} */ blocker) => blocker.root_issue_id
+      )
+    });
+    await stage(runDirectory, 'source_pack', nextSource);
+    const advanced = /** @type {any} */ (await advanceStrict(runDirectory));
+    assert.deepEqual(advanced.scope, { source_revision: 1 });
+    assert.deepEqual({
+      leaks_unrelated_evidence: leaksUnrelatedEvidence,
+      retains_formal_evidence: retainsFormalEvidence,
+      reply: observableReply(advanced)
+    }, {
+      leaks_unrelated_evidence: false,
+      retains_formal_evidence: true,
+      reply: {
+        status: 'need_artifact', stage: 'evidence_claims',
+        schema_ref: 'evidence-claims.schema.json', diagnostic_codes: []
+      }
+    });
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('stage progression never uses orphan clarification state to bypass an incomplete prior revision', async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'g1d-orphan-prior-state-'));
   try {

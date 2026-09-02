@@ -687,7 +687,9 @@ test('capability blocker state must be structured in a candidate Case instead of
   const structuredResult = classifyCaseDrafts(structured);
   assert.equal(structuredResult.blocked.length, 1);
   assert.match(structuredResult.blocked[0].reason, /CAPABILITY_UNAVAILABLE/u);
-  assert.equal(structuredResult.blocked[0].evidence_refs.includes('claim_capability'), true);
+  assert.equal(structuredResult.blocked[0].evidence_refs.includes('claim_capability'), false);
+  assert.equal(structuredResult.blocked[0].evidence_refs.includes('claim_fact'), true);
+  assert.equal(structuredResult.blocked[0].evidence_refs.includes('claim_oracle'), true);
   assert.deepEqual(structuredResult.diagnostics, []);
 });
 

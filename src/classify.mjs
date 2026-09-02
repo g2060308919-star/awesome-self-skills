@@ -1921,7 +1921,24 @@ export function classifyCaseDrafts(submittedContext) {
         evidence, evidenceCache, oracleReachability, conflicts, diagnostics
       );
       if (evaluation.rank === 0) {
-        for (const obligation of linked) addBlocked(blocked, obligation, evaluation.reasons, evaluation.evidenceRefs, null);
+        for (const obligation of linked) {
+          const obligationId = String(obligation.obligation_id);
+          const formalRoots = [
+            ...(stringArray(obligation.source_claim_ids) ?? []),
+            ...(stringArray(obligation.required_oracle_refs) ?? []),
+            ...[...(routedFactsByObligation.get(obligationId) ?? [])].flatMap((factId) => {
+              const fact = factsById.get(factId);
+              return fact ? [String(fact.claim_id), ...(stringArray(fact.source_claim_ids) ?? [])] : [];
+            })
+          ];
+          const relatedEvidence = relatedEvidenceClosure(
+            formalRoots, evidence, evidenceCache, relatedEvidenceCache
+          );
+          addBlocked(
+            blocked, obligation, evaluation.reasons,
+            evaluation.evidenceRefs.filter((ref) => relatedEvidence.has(ref)), null
+          );
+        }
       } else executable.push({ draft: structuredClone(draft), rank: evaluation.rank });
     }
 
