@@ -1,22 +1,58 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import {
   BENCHMARK_STRATA,
   BENCHMARK_SYSTEMS,
+  deriveCandidateBinding,
   loadBenchmarkInputs,
-  scoreBenchmark
+  reconcileCandidateBindings,
+  scoreBenchmark,
+  verifyCandidateEvidenceBytes
 } from '../../benchmark/score.mjs';
+import { evaluateReleaseGates } from '../../benchmark/gates.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const symlink = fsPromises.symlink;
 const link = fsPromises.link;
+const execFileAsync = promisify(execFile);
+
+function candidateBindingPolicy() {
+  return {
+    mode: 'runtime-derived-clean-checkout', digest_algorithm: 'sha256',
+    required_artifacts: [
+      'compiler', 'schema', 'schema-manifest', 'skill', 'bundle', 'benchmark-manifest'
+    ]
+  };
+}
+
+function acquisitionReferences() {
+  return {
+    reviewer_acquisition: {
+      ledger_id: 'fixture-reviewers', path: 'fixture-reviewers.json', sha256: 'a'.repeat(64)
+    },
+    capture_acquisition: {
+      ledger_id: 'fixture-captures', path: 'fixture-captures.json', sha256: 'b'.repeat(64)
+    }
+  };
+}
+
+function fixtureCandidateBinding() {
+  return {
+    final_candidate_sha: 'a'.repeat(40), worktree_clean: true,
+    compiler_sha256: 'b'.repeat(64), schema_sha256: 'c'.repeat(64),
+    schema_manifest_sha256: 'd'.repeat(64), skill_sha256: 'e'.repeat(64),
+    bundle_sha256: 'f'.repeat(64), benchmark_manifest_sha256: '0'.repeat(64)
+  };
+}
 
 /** @param {string} key @param {unknown} value */
 function label(key, value) {
@@ -28,8 +64,8 @@ function labeledAsset(labels, second = labels, adjudications = []) {
   return {
     label_version: '1.0.0', correction_of: null, final_labels: labels,
     expert_annotations: [
-      { expert_id: 'expert-a', complete: true, labels },
-      { expert_id: 'expert-b', complete: true, labels: second }
+      { expert_id: 'expert-a', reviewer_class: 'external-human', complete: true, labels },
+      { expert_id: 'expert-b', reviewer_class: 'external-human', complete: true, labels: second }
     ],
     adjudications
   };
@@ -74,6 +110,63 @@ function expectedProvenance(benchmarkVersion) {
     schema_version: '1.0.0', model_id: `${system}-model`, prompt_or_reference_id: `${system}-reference`,
     baseline_version: 'baseline-v1', benchmark_version: benchmarkVersion
   }]));
+}
+
+/** @param {any} manifest @param {any[]} runs */
+function attachAcquisitionEvidence(manifest, runs) {
+  manifest._candidate_binding = fixtureCandidateBinding();
+  const reviewers = [
+    { reviewer_id: 'expert-a', reviewer_class: 'external-human', role: 'test-expert' },
+    { reviewer_id: 'expert-b', reviewer_class: 'external-human', role: 'test-expert' },
+    { reviewer_id: 'expert-adjudicator', reviewer_class: 'external-human', role: 'adjudicator' }
+  ].map((reviewer) => {
+    const attestation = {
+      ...reviewer, acquisition_source: 'external-engagement-v1',
+      independence_attestation: `independent:${reviewer.reviewer_id}`
+    };
+    return { ...attestation, attestation_digest: outputDigest(attestation) };
+  });
+  const reviewRecords = [];
+  const adjudicationRecords = [];
+  for (const benchmarkCase of manifest.cases) for (const [assetKind, asset] of [
+    ['expert_obligations', benchmarkCase.assets.expert_obligations],
+    ['supported_assertions', benchmarkCase.assets.supported_assertions],
+    ['accepted_cases', benchmarkCase.assets.accepted_cases]
+  ]) {
+    for (const annotation of asset.expert_annotations) reviewRecords.push({
+      case_id: benchmarkCase.case_id, asset_kind: assetKind,
+      reviewer_id: annotation.expert_id,
+      annotation_digest: outputDigest(annotation),
+      label_keys_digest: outputDigest(annotation.labels.map((/** @type {any} */ row) => row.label_key).sort())
+    });
+    for (const adjudication of asset.adjudications) adjudicationRecords.push({
+      case_id: benchmarkCase.case_id, asset_kind: assetKind,
+      label_key: adjudication.label_key, adjudicator_id: adjudication.adjudicator,
+      adjudication_digest: outputDigest(adjudication)
+    });
+  }
+  manifest._reviewer_acquisition = {
+    schema_version: '1.0.0', ledger_id: 'external-reviewer-ledger-v1',
+    evidence_class: 'external-expert-corpus', reviewers,
+    review_records: reviewRecords, adjudication_records: adjudicationRecords
+  };
+  manifest._capture_acquisition = {
+    schema_version: '1.0.0', ledger_id: 'external-capture-ledger-v1',
+    evidence_class: 'external-expert-corpus',
+    sessions: runs.map((run) => {
+      const attestation = {
+        capture_id: run.capture_id, case_id: run.case_id, system: run.system,
+        repeat: run.repeat, session_id: `session:${run.capture_id}`,
+        session_class: 'external-independent', acquired_at: '2026-09-02T00:00:00Z',
+        acquisition_source: 'external-capture-engagement-v1',
+        independence_attestation: `independent-session:${run.capture_id}`,
+        source_digest: run.provenance.source_digest, task_digest: run.provenance.task_digest,
+        system_identity_digest: outputDigest(manifest.expected_provenance[run.system]),
+        raw_output_digest: run.raw_output_digest, extraction_digest: run.extraction_digest
+      };
+      return { ...attestation, attestation_digest: outputDigest(attestation) };
+    })
+  };
 }
 
 /** @param {string} caseId @param {string} domain @param {string} stratum @param {any[]} obligations @param {any[]} assertions @param {any[]} acceptedCases @param {any[]} defects */
@@ -349,16 +442,20 @@ function completeContractCorpus() {
       cases.at(-1).assets.clarification_scenarios.scenarios = caseIndex <= 2 ? [{ scenario_id: `clarify-${caseId}`, required: true }] : [];
     }
   }
-  return {
+  const result = {
     manifest: {
       schema_version: '1.0.0', benchmark_version: 'v1-complete-contract', manifest_id: 'complete-contract',
       evidence_class: 'external-expert-corpus', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+      candidate_binding_policy: candidateBindingPolicy(),
+      ...acquisitionReferences(),
       expected_provenance: expectedProvenance('v1-complete-contract'),
       strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
       cases
     },
     runs
   };
+  attachAcquisitionEvidence(result.manifest, result.runs);
+  return result;
 }
 
 test('benchmark completeness accepts only the full 30-PRD six-stratum 360-capture contract', () => {
@@ -369,6 +466,100 @@ test('benchmark completeness accepts only the full 30-PRD six-stratum 360-captur
   assert.equal(report.systems['generate-test-cases'].overall.false_blocked_rate.denominator, 360);
   assert.equal(Object.hasOwn(report.systems['generate-test-cases'], 'by_domain_and_risk'), true);
   assert.ok(report.systems['generate-test-cases'].by_domain_and_risk['domain-0'].medium.false_blocked_rate.denominator > 0);
+});
+
+test('a complete scorer report with legitimate non-applicable critical-risk slices reaches the release gate', () => {
+  const { manifest, runs } = completeContractCorpus();
+  const report = /** @type {any} */ (scoreBenchmark(manifest, runs));
+  assert.deepEqual(report.candidate_binding, fixtureCandidateBinding());
+  assert.equal(
+    report.systems['generate-test-cases'].by_risk.low.expert_critical_test_point_recall.value,
+    null
+  );
+  assert.deepEqual(evaluateReleaseGates(report), { status: 'pass', failures: [] });
+});
+
+test('benchmark external evidence requires two human experts and a human adjudicator', () => {
+  const { manifest, runs } = completeContractCorpus();
+  const machineExperts = structuredClone(manifest);
+  machineExperts.cases[0].assets.expert_obligations.expert_annotations[0].reviewer_class = 'machine';
+  assert.equal(hasIssue(scoreBenchmark(machineExperts, runs), 'EXPERT_EVIDENCE_INELIGIBLE'), true);
+
+  const machineAdjudication = structuredClone(manifest);
+  const asset = machineAdjudication.cases[0].assets.expert_obligations;
+  const first = structuredClone(asset.final_labels[0]);
+  const disagreed = structuredClone(first);
+  disagreed.value.groundable = !disagreed.value.groundable;
+  asset.expert_annotations[1].labels = structuredClone(asset.expert_annotations[1].labels);
+  asset.expert_annotations[1].labels[0] = disagreed;
+  asset.adjudications = [{
+    label_key: first.label_key, completed: true,
+    expert_values: [first.value, disagreed.value], resolved_value: first.value,
+    adjudicator: 'machine-adjudicator', adjudicator_class: 'machine',
+    completed_at: '2026-09-02T00:00:00Z', rationale: 'adversarial fixture'
+  }];
+  const adjudicationReport = scoreBenchmark(machineAdjudication, runs);
+  assert.equal(
+    hasIssue(adjudicationReport, 'ADJUDICATOR_EVIDENCE_INELIGIBLE'), true,
+    JSON.stringify(adjudicationReport.completeness.issues)
+  );
+});
+
+test('benchmark completeness requires digest-bound reviewer and capture acquisition ledgers', () => {
+  const missingReviewers = /** @type {any} */ (completeContractCorpus());
+  delete missingReviewers.manifest._reviewer_acquisition;
+  assert.equal(hasIssue(
+    scoreBenchmark(missingReviewers.manifest, missingReviewers.runs),
+    'REVIEWER_ACQUISITION_INVALID'
+  ), true);
+
+  const forgedReview = /** @type {any} */ (completeContractCorpus());
+  forgedReview.manifest._reviewer_acquisition.reviewers[0].reviewer_class = 'machine';
+  forgedReview.manifest._reviewer_acquisition.review_records[0].annotation_digest = '0'.repeat(64);
+  assert.equal(hasIssue(
+    scoreBenchmark(forgedReview.manifest, forgedReview.runs),
+    'REVIEWER_ACQUISITION_INVALID'
+  ), true);
+
+  const forgedAttestation = /** @type {any} */ (completeContractCorpus());
+  forgedAttestation.manifest._reviewer_acquisition.reviewers[0].independence_attestation =
+    'forged-without-rebinding-the-attestation-digest';
+  assert.equal(hasIssue(
+    scoreBenchmark(forgedAttestation.manifest, forgedAttestation.runs),
+    'REVIEWER_ACQUISITION_INVALID'
+  ), true);
+
+  const missingCaptures = /** @type {any} */ (completeContractCorpus());
+  delete missingCaptures.manifest._capture_acquisition;
+  assert.equal(hasIssue(
+    scoreBenchmark(missingCaptures.manifest, missingCaptures.runs),
+    'CAPTURE_ACQUISITION_INVALID'
+  ), true);
+
+  const forgedCapture = /** @type {any} */ (completeContractCorpus());
+  forgedCapture.manifest._capture_acquisition.sessions[0].session_class = 'synthetic-fixture';
+  forgedCapture.manifest._capture_acquisition.sessions[0].raw_output_digest = '0'.repeat(64);
+  assert.equal(hasIssue(
+    scoreBenchmark(forgedCapture.manifest, forgedCapture.runs),
+    'CAPTURE_ACQUISITION_INVALID'
+  ), true);
+
+  const forgedSession = /** @type {any} */ (completeContractCorpus());
+  forgedSession.manifest._capture_acquisition.sessions[0].session_id = 'forged-session-id';
+  assert.equal(hasIssue(
+    scoreBenchmark(forgedSession.manifest, forgedSession.runs),
+    'CAPTURE_ACQUISITION_INVALID'
+  ), true);
+
+  const invalidAcquisitionTime = /** @type {any} */ (completeContractCorpus());
+  const invalidTimeSession = invalidAcquisitionTime.manifest._capture_acquisition.sessions[0];
+  invalidTimeSession.acquired_at = '2026-02-31T00:00:00Z';
+  const { attestation_digest: ignoredDigest, ...invalidTimeAttestation } = invalidTimeSession;
+  invalidTimeSession.attestation_digest = outputDigest(invalidTimeAttestation);
+  assert.equal(hasIssue(
+    scoreBenchmark(invalidAcquisitionTime.manifest, invalidAcquisitionTime.runs),
+    'CAPTURE_ACQUISITION_INVALID'
+  ), true);
 });
 
 test('benchmark closes metric inflation, provenance impersonation, and cloned-corpus bypasses', () => {
@@ -489,6 +680,7 @@ test('benchmark closes capture lanes, case evidence IDs, and capture identity wi
   }
   rebindOutput(left);
   rebindOutput(right);
+  attachAcquisitionEvidence(prefixManifest, prefixRuns);
   const prefixReport = scoreBenchmark(prefixManifest, prefixRuns);
   assert.equal(prefixReport.completeness.status, 'complete');
   assert.deepEqual(fraction(prefixReport.systems['generate-test-cases'].overall.grounded_factual_support_precision), [359, 360, 359 / 360]);
@@ -516,6 +708,7 @@ test('benchmark closes capture lanes, case evidence IDs, and capture identity wi
   }
   rebindOutput(targetRun);
   rebindOutput(baselineRun);
+  attachAcquisitionEvidence(crossManifest, crossRuns);
   const crossReport = scoreBenchmark(crossManifest, crossRuns);
   assert.equal(crossReport.completeness.status, 'complete');
   assert.deepEqual(fraction(crossReport.systems['generate-test-cases'].overall.grounded_factual_support_precision), [359, 360, 359 / 360]);
@@ -558,8 +751,8 @@ test('benchmark rejects renamed source clones and accepts complete empty retaine
   const emptySnapshot = {
     label_version: '0.9.0', correction_of: null, final_labels: emptyLabels,
     expert_annotations: [
-      { expert_id: 'expert-a', complete: true, labels: emptyLabels },
-      { expert_id: 'expert-b', complete: true, labels: emptyLabels }
+      { expert_id: 'expert-a', reviewer_class: 'external-human', complete: true, labels: emptyLabels },
+      { expert_id: 'expert-b', reviewer_class: 'external-human', complete: true, labels: emptyLabels }
     ],
     adjudications: []
   };
@@ -760,6 +953,8 @@ test('benchmark loader rejects a symlink that crosses the hidden-label directory
   await writeFile(manifestPath, JSON.stringify({
     schema_version: '1.0.0', benchmark_version: 'v1-symlink-test', manifest_id: 'symlink-test',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    candidate_binding_policy: candidateBindingPolicy(),
+    ...acquisitionReferences(),
     expected_provenance: expectedProvenance('v1-symlink-test'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: [{
@@ -778,6 +973,8 @@ test('benchmark loader rejects a symlink that crosses the hidden-label directory
   await writeFile(aliasManifestPath, JSON.stringify({
     schema_version: '1.0.0', benchmark_version: 'v1-symlink-test', manifest_id: 'inside-alias-test',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    candidate_binding_policy: candidateBindingPolicy(),
+    ...acquisitionReferences(),
     expected_provenance: expectedProvenance('v1-symlink-test'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: [{
@@ -801,6 +998,8 @@ test('benchmark loader rejects symlinked or overlapping top-level evidence roots
   await writeFile(manifestPath, JSON.stringify({
     schema_version: '1.0.0', benchmark_version: 'v1-root-test', manifest_id: 'root-test',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    candidate_binding_policy: candidateBindingPolicy(),
+    ...acquisitionReferences(),
     expected_provenance: expectedProvenance('v1-root-test'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: []
@@ -815,6 +1014,8 @@ test('benchmark loader rejects symlinked or overlapping top-level evidence roots
   await writeFile(overlapManifestPath, JSON.stringify({
     schema_version: '1.0.0', benchmark_version: 'v1-root-test', manifest_id: 'overlap-root-test',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    candidate_binding_policy: candidateBindingPolicy(),
+    ...acquisitionReferences(),
     expected_provenance: expectedProvenance('v1-root-test'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: []
@@ -834,6 +1035,8 @@ test('benchmark loader rejects hardlinks between hidden labels and generation so
   await writeFile(manifestPath, JSON.stringify({
     schema_version: '1.0.0', benchmark_version: 'v1-hardlink-test', manifest_id: 'hardlink-test',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    candidate_binding_policy: candidateBindingPolicy(),
+    ...acquisitionReferences(),
     expected_provenance: expectedProvenance('v1-hardlink-test'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: [{
@@ -853,6 +1056,8 @@ test('benchmark loader rejects a symlinked benchmark root and pairwise nested ca
   const emptyManifest = {
     schema_version: '1.0.0', benchmark_version: 'v1-root-alias', manifest_id: 'root-alias',
     evidence_class: 'synthetic-pilot', systems: [...BENCHMARK_SYSTEMS], repeats_per_system: 3,
+    candidate_binding_policy: candidateBindingPolicy(),
+    ...acquisitionReferences(),
     expected_provenance: expectedProvenance('v1-root-alias'),
     strata: BENCHMARK_STRATA.map((stratum) => ({ stratum, minimum_prds: 5, minimum_critical_obligations: 3, minimum_clarification_prds: 2, minimum_historical_defects: 5 })),
     cases: []
@@ -895,6 +1100,11 @@ test('benchmark V1 pilot has required hidden-label assets and only external capt
   const rawManifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const manifestSchema = JSON.parse(await readFile(path.join(root, 'benchmark/manifest.schema.json'), 'utf8'));
   assert.deepEqual(validateAgainstSchema(rawManifest, manifestSchema), []);
+  for (const acquisitionField of ['reviewer_acquisition', 'capture_acquisition']) {
+    const missingAcquisition = structuredClone(rawManifest);
+    delete missingAcquisition[acquisitionField];
+    assert.ok(validateAgainstSchema(missingAcquisition, manifestSchema).length > 0, acquisitionField);
+  }
   const required = [
     'task.json', 'expert-obligations.json', 'supported-assertions.json', 'accepted-cases.json',
     'historical-defects.json', 'clarification-scenarios.json'
@@ -906,6 +1116,9 @@ test('benchmark V1 pilot has required hidden-label assets and only external capt
     assert.equal(path.resolve(path.join(root, 'benchmark/v1', item.capture_directory)).startsWith(path.join(caseRoot, path.sep)), false);
   }
   assert.equal(manifest.evidence_class, 'synthetic-pilot');
+  assert.deepEqual(rawManifest.candidate_binding_policy, candidateBindingPolicy());
+  assert.equal(manifest._reviewer_acquisition.ledger_id, rawManifest.reviewer_acquisition.ledger_id);
+  assert.equal(manifest._capture_acquisition.ledger_id, rawManifest.capture_acquisition.ledger_id);
   assert.equal(Object.isFrozen(manifest), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => run.capture_kind === 'synthetic-pilot'), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => !Object.hasOwn(run, 'expert_labels')), true);
@@ -913,7 +1126,30 @@ test('benchmark V1 pilot has required hidden-label assets and only external capt
   assert.equal(capturedRuns.every((/** @type {any} */ run) => typeof run.extraction_path === 'string' && /^[a-f0-9]{64}$/.test(run.extraction_digest)), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => run._extraction?.capture_id === run.capture_id), true);
   assert.equal(capturedRuns.every((/** @type {any} */ run) => run.raw_output_digest !== outputDigest(run.output)), true, 'raw evidence must be the original opaque artifact, not a copied score summary');
-  assert.equal(scoreBenchmark(manifest, capturedRuns).completeness.status, 'insufficient_evidence');
+  const report = scoreBenchmark(manifest, capturedRuns);
+  assert.equal(report.completeness.status, 'insufficient_evidence');
+  assert.equal(hasIssue(report, 'REVIEWER_ACQUISITION_INVALID'), false);
+  assert.equal(hasIssue(report, 'CAPTURE_ACQUISITION_INVALID'), false);
+});
+
+test('benchmark loader fails closed when a root acquisition ledger digest is tampered', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'benchmark-ledger-tamper-'));
+  try {
+    await cp(path.join(root, 'benchmark/v1'), temporaryRoot, { recursive: true });
+    const manifestPath = path.join(temporaryRoot, 'manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.reviewer_acquisition.sha256 = '0'.repeat(64);
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const loaded = await loadBenchmarkInputs(manifestPath);
+    assert.equal(loaded.manifest.load_issues.some(
+      (/** @type {any} */ issue) => issue.code === 'REVIEWER_ACQUISITION_LOAD_FAILED'
+    ), true);
+    assert.equal(hasIssue(
+      scoreBenchmark(loaded.manifest, loaded.capturedRuns), 'REVIEWER_ACQUISITION_INVALID'
+    ), true);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test('benchmark scoring remains offline and never invokes fetch or network/model modules', async () => {
@@ -927,4 +1163,107 @@ test('benchmark scoring remains offline and never invokes fetch or network/model
   }
   const source = await readFile(path.join(root, 'benchmark/score.mjs'), 'utf8');
   assert.equal(/node:(?:http|https|net|tls|dns)|\bfetch\s*\(|openai|anthropic/i.test(source), false);
+});
+
+test('benchmark CLI binds its report to the actual checkout and frozen artifact bytes', async () => {
+  const { stdout, stderr } = /** @type {any} */ (await execFileAsync(
+    process.execPath, ['benchmark/score.mjs', 'benchmark/v1/manifest.json'], { cwd: root }
+  ));
+  assert.equal(stderr, '');
+  const report = JSON.parse(stdout);
+  const binding = report.metrics.candidate_binding;
+  const { stdout: head } = /** @type {any} */ (await execFileAsync(
+    'git', ['rev-parse', 'HEAD'], { cwd: root }
+  ));
+  assert.equal(binding.final_candidate_sha, head.trim());
+  assert.equal(typeof binding.worktree_clean, 'boolean');
+  for (const field of [
+    'compiler_sha256', 'schema_sha256', 'schema_manifest_sha256',
+    'skill_sha256', 'bundle_sha256', 'benchmark_manifest_sha256'
+  ]) assert.match(binding[field], /^[a-f0-9]{64}$/u, field);
+  const sha256 = (/** @type {any} */ bytes) => createHash('sha256').update(bytes).digest('hex');
+  assert.equal(binding.skill_sha256, sha256(await readFile(path.join(root, 'skill/generate-test-cases/SKILL.md'))));
+  assert.equal(binding.bundle_sha256, sha256(await readFile(path.join(root, 'skill/generate-test-cases/scripts/test-compiler.mjs'))));
+  assert.equal(binding.schema_manifest_sha256, sha256(await readFile(path.join(root, 'skill/generate-test-cases/scripts/schema-manifest.json'))));
+  const { stdout: manifestAtHead } = /** @type {any} */ (await execFileAsync(
+    'git', ['show', 'HEAD:benchmark/v1/manifest.json'], { cwd: root }
+  ));
+  assert.equal(binding.benchmark_manifest_sha256, sha256(manifestAtHead));
+});
+
+test('candidate binding is derived from one clean Git tree and rejects loaded-manifest drift or committed symlinks', async () => {
+  const candidateRoot = await mkdtemp(path.join(os.tmpdir(), 'benchmark-candidate-binding-'));
+  const outsideTarget = path.join(os.tmpdir(), `benchmark-outside-skill-${path.basename(candidateRoot)}`);
+  const files = {
+    'src/compiler.mjs': 'export const version = 1;\n',
+    'skill/generate-test-cases/scripts/schemas/input.json': '{"type":"object"}\n',
+    'skill/generate-test-cases/scripts/schema-manifest.json': '{"version":"1"}\n',
+    'skill/generate-test-cases/SKILL.md': '# Candidate\n',
+    'skill/generate-test-cases/scripts/test-compiler.mjs': 'export const advanceStrict = true;\n',
+    'benchmark/v1/manifest.json': '{"candidate":"fixture"}\n'
+  };
+  const sha256 = (/** @type {any} */ bytes) => createHash('sha256').update(bytes).digest('hex');
+  try {
+    for (const [relativePath, contents] of Object.entries(files)) {
+      const absolutePath = path.join(candidateRoot, relativePath);
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, contents);
+    }
+    await execFileAsync('git', ['init'], { cwd: candidateRoot });
+    await execFileAsync('git', ['add', '.'], { cwd: candidateRoot });
+    await execFileAsync('git', [
+      '-c', 'user.name=Benchmark Fixture', '-c', 'user.email=benchmark@example.invalid',
+      'commit', '-m', 'fixture'
+    ], { cwd: candidateRoot });
+    const manifestPath = path.join(candidateRoot, 'benchmark/v1/manifest.json');
+    const manifestDigest = sha256(await readFile(manifestPath));
+    const { stdout: head } = /** @type {any} */ (await execFileAsync(
+      'git', ['rev-parse', 'HEAD'], { cwd: candidateRoot }
+    ));
+    const clean = await deriveCandidateBinding(manifestPath, manifestDigest, candidateRoot);
+    assert.equal(clean.final_candidate_sha, head.trim());
+    assert.equal(clean.worktree_clean, true);
+
+    const skillPath = path.join(candidateRoot, 'skill/generate-test-cases/SKILL.md');
+    await writeFile(skillPath, '# tampered after the initial clean check\n');
+    await assert.rejects(
+      verifyCandidateEvidenceBytes(candidateRoot, head.trim(), skillPath, await readFile(skillPath)),
+      /does not match/u
+    );
+    await writeFile(skillPath, files['skill/generate-test-cases/SKILL.md']);
+
+    const drifted = await deriveCandidateBinding(manifestPath, '0'.repeat(64), candidateRoot);
+    assert.equal(drifted.worktree_clean, false);
+
+    await rm(skillPath);
+    await writeFile(outsideTarget, '# mutable outside target\n');
+    await symlink(outsideTarget, skillPath);
+    await execFileAsync('git', ['add', 'skill/generate-test-cases/SKILL.md'], { cwd: candidateRoot });
+    await execFileAsync('git', [
+      '-c', 'user.name=Benchmark Fixture', '-c', 'user.email=benchmark@example.invalid',
+      'commit', '-m', 'symlink fixture'
+    ], { cwd: candidateRoot });
+    const linked = await deriveCandidateBinding(manifestPath, manifestDigest, candidateRoot);
+    assert.equal(linked.worktree_clean, false);
+    assert.equal(linked.skill_sha256, null);
+  } finally {
+    await rm(candidateRoot, { recursive: true, force: true });
+    await rm(outsideTarget, { force: true });
+  }
+});
+
+test('a benchmark invocation that starts dirty can never be upgraded to a clean candidate binding', () => {
+  const initial = { ...fixtureCandidateBinding(), worktree_clean: false };
+  const finalClean = fixtureCandidateBinding();
+  const reconciled = reconcileCandidateBindings(initial, finalClean);
+  assert.equal(reconciled.worktree_clean, false);
+  assert.equal(reconciled.final_candidate_sha, initial.final_candidate_sha);
+
+  const changedHead = {
+    ...fixtureCandidateBinding(), final_candidate_sha: '1'.repeat(40)
+  };
+  assert.equal(
+    reconcileCandidateBindings(fixtureCandidateBinding(), changedHead).worktree_clean,
+    false
+  );
 });

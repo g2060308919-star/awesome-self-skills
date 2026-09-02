@@ -11,6 +11,7 @@ declare module 'node:assert/strict' {
 
 declare module 'node:child_process' {
   export const ChildProcess: any;
+  export const execFile: any;
   export const spawn: any;
 }
 
@@ -51,6 +52,10 @@ declare module 'node:path' {
 declare module 'node:test' {
   const test: any;
   export default test;
+}
+
+declare module 'node:util' {
+  export const promisify: any;
 }
 
 declare module 'node:worker_threads' {

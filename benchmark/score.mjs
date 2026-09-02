@@ -1,13 +1,18 @@
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import * as nodeUrl from 'node:url';
+import { promisify } from 'node:util';
 import { validateAgainstSchema } from '../src/schema-validator.mjs';
 import { evaluateReleaseGates } from './gates.mjs';
 
 const pathToFileURL = /** @type {any} */ (nodeUrl).pathToFileURL;
+const fileURLToPath = /** @type {any} */ (nodeUrl).fileURLToPath;
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const realpath = fsPromises.realpath;
+const execFileAsync = promisify(execFile);
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const BENCHMARK_SYSTEMS = Object.freeze([
   'long-prompt', 'test-case-designer', 'technique-router', 'generate-test-cases'
@@ -58,6 +63,9 @@ const METRIC_NAMES = Object.freeze([
 const REQUIRED_ASSETS = Object.freeze([
   'task', 'expert_obligations', 'supported_assertions', 'accepted_cases',
   'historical_defects', 'clarification_scenarios'
+]);
+const CANDIDATE_BINDING_ARTIFACTS = Object.freeze([
+  'compiler', 'schema', 'schema-manifest', 'skill', 'bundle', 'benchmark-manifest'
 ]);
 
 /** @param {number} numerator @param {number} denominator */
@@ -150,6 +158,21 @@ function isNonblankString(value) {
 }
 
 /** @param {unknown} value */
+function isRfc3339(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/u.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, offsetHourText = '0', offsetMinuteText = '0'] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  return month >= 1 && month <= 12 && day >= 1 &&
+    day <= new Date(Date.UTC(year, month, 0)).getUTCDate() &&
+    Number(hourText) <= 23 && Number(minuteText) <= 59 && Number(secondText) <= 60 &&
+    Number(offsetHourText) <= 23 && Number(offsetMinuteText) <= 59;
+}
+
+/** @param {unknown} value */
 function isSafeRelativePath(value) {
   if (!isNonblankString(value) || path.isAbsolute(value)) return false;
   const segments = value.split(/[\\/]+/u);
@@ -222,8 +245,8 @@ function validLabelValue(value, kind) {
   return typeof value.accepted_without_material_rewrite === 'boolean';
 }
 
-/** @param {any[]} issues @param {any} asset @param {string} pathValue @param {'obligation'|'assertion'|'case'} kind @param {any} lineageAnchors */
-function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = []) {
+/** @param {any[]} issues @param {any} asset @param {string} pathValue @param {'obligation'|'assertion'|'case'} kind @param {any} lineageAnchors @param {unknown} evidenceClass */
+function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = [], evidenceClass = null) {
   if (!asset || !Array.isArray(asset.final_labels) || !Array.isArray(asset.expert_annotations)) {
     issue(issues, 'EXPERT_LABELS_MISSING', pathValue, 'Final labels and two complete expert annotations are required.');
     return;
@@ -251,7 +274,7 @@ function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = [
       versions.set(snapshot.label_version, snapshot);
       /** @type {any[]} */
       const snapshotIssues = [];
-      validateLabeledAsset(snapshotIssues, { ...snapshot, correction_of: null, prior_versions: [] }, `${pathValue}/prior_versions/${snapshotIndex}`, kind, []);
+      validateLabeledAsset(snapshotIssues, { ...snapshot, correction_of: null, prior_versions: [] }, `${pathValue}/prior_versions/${snapshotIndex}`, kind, [], evidenceClass);
       if (snapshotIssues.length > 0) retained = false;
     }
     const visited = new Set();
@@ -283,6 +306,14 @@ function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = [
     !isNonblankString(item.expert_id) || item.complete !== true || !Array.isArray(item.labels))) {
     issue(issues, 'EXPERT_ANNOTATIONS_INCOMPLETE', pathValue, 'Exactly two independent complete expert annotations are required.');
   }
+  const expectedReviewerClass = evidenceClass === 'external-expert-corpus'
+    ? 'external-human' : 'synthetic-fixture';
+  if (annotations.some((/** @type {any} */ item) => item.reviewer_class !== expectedReviewerClass)) {
+    issue(
+      issues, 'EXPERT_EVIDENCE_INELIGIBLE', `${pathValue}/expert_annotations`,
+      'Formal release labels require two external-human experts; synthetic fixtures must identify themselves explicitly.'
+    );
+  }
   const maps = annotations.map((/** @type {any} */ annotation) => finalLabelMap({ final_labels: annotation.labels }));
   if (final.size !== asset.final_labels.length || maps.some((/** @type {Map<string, any>} */ map, /** @type {number} */ index) =>
     map.size !== (annotations[index].labels?.length ?? -1) || map.size !== final.size || [...final.keys()].some((key) => !map.has(key)))) {
@@ -301,10 +332,15 @@ function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = [
       if (!adjudication || JSON.stringify(adjudication.resolved_value) !== JSON.stringify(final.get(key))) {
         issue(issues, 'ADJUDICATION_MISSING', `${pathValue}/${key}`, 'Every expert disagreement requires a completed matching adjudication.');
       } else {
+        if (adjudication.adjudicator_class !== expectedReviewerClass) issue(
+          issues, 'ADJUDICATOR_EVIDENCE_INELIGIBLE', `${pathValue}/${key}`,
+          'A disagreement resolution must identify an eligible external-human adjudicator for formal release evidence.'
+        );
         const recordedValues = (Array.isArray(adjudication.expert_values) ? adjudication.expert_values : [])
           .map((/** @type {any} */ value) => JSON.stringify(value)).sort();
         const validRecord = recordedValues.length === 2 && JSON.stringify(recordedValues) === JSON.stringify([...serialized].sort()) &&
           typeof adjudication.adjudicator === 'string' && adjudication.adjudicator.length > 0 &&
+          adjudication.adjudicator_class === expectedReviewerClass &&
           typeof adjudication.completed_at === 'string' && adjudication.completed_at.length > 0 &&
           typeof adjudication.rationale === 'string' && adjudication.rationale.length > 0;
         if (!validRecord) issue(issues, 'ADJUDICATION_INVALID', `${pathValue}/${key}`, 'Adjudication must retain both expert values, adjudicator, completion time, and rationale.');
@@ -313,6 +349,144 @@ function validateLabeledAsset(issues, asset, pathValue, kind, lineageAnchors = [
       issue(issues, 'FINAL_LABEL_UNSUPPORTED', `${pathValue}/${key}`, 'The final label must equal expert agreement or a completed adjudication.');
     }
   }
+}
+
+const REVIEW_ASSET_KINDS = Object.freeze([
+  'expert_obligations', 'supported_assertions', 'accepted_cases'
+]);
+
+/** @param {any} manifest @param {any[]} cases */
+function validReviewerAcquisition(manifest, cases) {
+  const ledger = manifest?._reviewer_acquisition;
+  if (!hasExactKeys(ledger, [
+    'schema_version', 'ledger_id', 'evidence_class', 'reviewers',
+    'review_records', 'adjudication_records'
+  ]) || ledger.schema_version !== '1.0.0' || !isNonblankString(ledger.ledger_id) ||
+      ledger.evidence_class !== manifest?.evidence_class || !Array.isArray(ledger.reviewers) ||
+      !Array.isArray(ledger.review_records) || !Array.isArray(ledger.adjudication_records)) return false;
+  const expectedClass = manifest.evidence_class === 'external-expert-corpus'
+    ? 'external-human' : 'synthetic-fixture';
+  const reviewers = new Map();
+  for (const reviewer of ledger.reviewers) {
+    if (!hasExactKeys(reviewer, [
+      'reviewer_id', 'reviewer_class', 'role', 'acquisition_source',
+      'independence_attestation', 'attestation_digest'
+    ]) || !isNonblankString(reviewer.reviewer_id) || reviewer.reviewer_class !== expectedClass ||
+        !['test-expert', 'adjudicator'].includes(reviewer.role) ||
+        !isNonblankString(reviewer.acquisition_source) ||
+        !isNonblankString(reviewer.independence_attestation) ||
+        !/^[a-f0-9]{64}$/u.test(reviewer.attestation_digest) ||
+        reviewer.attestation_digest !== semanticDigest({
+          reviewer_id: reviewer.reviewer_id,
+          reviewer_class: reviewer.reviewer_class,
+          role: reviewer.role,
+          acquisition_source: reviewer.acquisition_source,
+          independence_attestation: reviewer.independence_attestation
+        }) ||
+        reviewers.has(reviewer.reviewer_id)) return false;
+    reviewers.set(reviewer.reviewer_id, reviewer);
+  }
+  const expectedReviews = new Map();
+  const expectedAdjudications = new Map();
+  for (const benchmarkCase of cases) for (const assetKind of REVIEW_ASSET_KINDS) {
+    const asset = benchmarkCase.assets?.[assetKind];
+    if (!asset || !Array.isArray(asset.expert_annotations) || !Array.isArray(asset.adjudications)) return false;
+    const expertIds = new Set();
+    for (const annotation of asset.expert_annotations) {
+      const reviewer = reviewers.get(annotation?.expert_id);
+      if (!reviewer || reviewer.role !== 'test-expert') return false;
+      expertIds.add(annotation.expert_id);
+      const key = `${benchmarkCase.case_id}\0${assetKind}\0${annotation.expert_id}`;
+      if (expectedReviews.has(key)) return false;
+      expectedReviews.set(key, {
+        case_id: benchmarkCase.case_id, asset_kind: assetKind,
+        reviewer_id: annotation.expert_id,
+        annotation_digest: semanticDigest(annotation),
+        label_keys_digest: semanticDigest((Array.isArray(annotation.labels) ? annotation.labels : [])
+          .map((/** @type {any} */ row) => row?.label_key).sort())
+      });
+    }
+    for (const adjudication of asset.adjudications) {
+      const reviewer = reviewers.get(adjudication?.adjudicator);
+      if (!reviewer || reviewer.role !== 'adjudicator' || expertIds.has(adjudication.adjudicator)) return false;
+      const key = `${benchmarkCase.case_id}\0${assetKind}\0${adjudication.label_key}`;
+      if (expectedAdjudications.has(key)) return false;
+      expectedAdjudications.set(key, {
+        case_id: benchmarkCase.case_id, asset_kind: assetKind,
+        label_key: adjudication.label_key, adjudicator_id: adjudication.adjudicator,
+        adjudication_digest: semanticDigest(adjudication)
+      });
+    }
+  }
+  if (ledger.review_records.length !== expectedReviews.size ||
+      ledger.adjudication_records.length !== expectedAdjudications.size) return false;
+  const seenReviews = new Set();
+  for (const record of ledger.review_records) {
+    if (!hasExactKeys(record, [
+      'case_id', 'asset_kind', 'reviewer_id', 'annotation_digest', 'label_keys_digest'
+    ])) return false;
+    const key = `${record.case_id}\0${record.asset_kind}\0${record.reviewer_id}`;
+    if (seenReviews.has(key) || semanticJson(record) !== semanticJson(expectedReviews.get(key))) return false;
+    seenReviews.add(key);
+  }
+  const seenAdjudications = new Set();
+  for (const record of ledger.adjudication_records) {
+    if (!hasExactKeys(record, [
+      'case_id', 'asset_kind', 'label_key', 'adjudicator_id', 'adjudication_digest'
+    ])) return false;
+    const key = `${record.case_id}\0${record.asset_kind}\0${record.label_key}`;
+    if (seenAdjudications.has(key) ||
+        semanticJson(record) !== semanticJson(expectedAdjudications.get(key))) return false;
+    seenAdjudications.add(key);
+  }
+  return [...reviewers.values()].some((reviewer) => reviewer.role === 'adjudicator');
+}
+
+/** @param {any} manifest @param {any[]} runs */
+function validCaptureAcquisition(manifest, runs) {
+  const ledger = manifest?._capture_acquisition;
+  if (!hasExactKeys(ledger, [
+    'schema_version', 'ledger_id', 'evidence_class', 'sessions'
+  ]) || ledger.schema_version !== '1.0.0' || !isNonblankString(ledger.ledger_id) ||
+      ledger.evidence_class !== manifest?.evidence_class || !Array.isArray(ledger.sessions) ||
+      ledger.sessions.length !== runs.length) return false;
+  const expectedClass = manifest.evidence_class === 'external-expert-corpus'
+    ? 'external-independent' : 'synthetic-fixture';
+  const runsById = new Map();
+  for (const run of runs) {
+    if (!isNonblankString(run.capture_id) || runsById.has(run.capture_id)) return false;
+    runsById.set(run.capture_id, run);
+  }
+  const seenCaptures = new Set();
+  const seenSessions = new Set();
+  for (const session of ledger.sessions) {
+    if (!hasExactKeys(session, [
+      'capture_id', 'case_id', 'system', 'repeat', 'session_id', 'session_class',
+      'acquired_at', 'acquisition_source', 'independence_attestation',
+      'source_digest', 'task_digest', 'system_identity_digest',
+      'raw_output_digest', 'extraction_digest', 'attestation_digest'
+    ]) || !isNonblankString(session.session_id) || seenSessions.has(session.session_id) ||
+        session.session_class !== expectedClass || !isRfc3339(session.acquired_at) ||
+        !isNonblankString(session.acquisition_source) ||
+        !isNonblankString(session.independence_attestation) ||
+        !/^[a-f0-9]{64}$/u.test(session.raw_output_digest) ||
+        !/^[a-f0-9]{64}$/u.test(session.extraction_digest) ||
+        !/^[a-f0-9]{64}$/u.test(session.attestation_digest)) return false;
+    const { attestation_digest: attestationDigest, ...attestedSession } = session;
+    if (attestationDigest !== semanticDigest(attestedSession)) return false;
+    const run = runsById.get(session.capture_id);
+    const expectedSystemDigest = semanticDigest(manifest.expected_provenance?.[run?.system]);
+    if (!run || seenCaptures.has(session.capture_id) || session.case_id !== run.case_id ||
+        session.system !== run.system || session.repeat !== run.repeat ||
+        session.source_digest !== run.provenance?.source_digest ||
+        session.task_digest !== run.provenance?.task_digest ||
+        session.system_identity_digest !== expectedSystemDigest ||
+        session.raw_output_digest !== run.raw_output_digest ||
+        session.extraction_digest !== run.extraction_digest) return false;
+    seenCaptures.add(session.capture_id);
+    seenSessions.add(session.session_id);
+  }
+  return seenCaptures.size === runs.length;
 }
 
 /** @param {any} benchmarkCase @param {string | null} risk */
@@ -450,6 +624,16 @@ export function scoreBenchmark(manifest, capturedRuns) {
   if (JSON.stringify(manifest?.systems) !== JSON.stringify(BENCHMARK_SYSTEMS)) issue(issues, 'SYSTEM_ENUM_INVALID', '/systems', 'Systems must be the exact frozen four-system enum.');
   if (manifest?.repeats_per_system !== 3) issue(issues, 'REPEAT_COUNT_INVALID', '/repeats_per_system', 'Exactly three independent runs are required.');
   if (manifest?.evidence_class !== 'external-expert-corpus') issue(issues, 'RELEASE_EVIDENCE_CLASS_INELIGIBLE', '/evidence_class', 'Synthetic pilot fixtures are never release evidence.');
+  const bindingPolicy = manifest?.candidate_binding_policy;
+  if (!hasExactKeys(bindingPolicy, ['mode', 'digest_algorithm', 'required_artifacts']) ||
+      bindingPolicy?.mode !== 'runtime-derived-clean-checkout' ||
+      bindingPolicy?.digest_algorithm !== 'sha256' ||
+      JSON.stringify(bindingPolicy?.required_artifacts) !== JSON.stringify(CANDIDATE_BINDING_ARTIFACTS)) {
+    issue(
+      issues, 'CANDIDATE_BINDING_POLICY_INVALID', '/candidate_binding_policy',
+      'The manifest must require a runtime-derived clean-checkout binding for every frozen candidate artifact.'
+    );
+  }
   const expectedProvenance = manifest?.expected_provenance;
   if (!hasExactKeys(expectedProvenance, BENCHMARK_SYSTEMS) || BENCHMARK_SYSTEMS.some((system) => {
     const expected = expectedProvenance?.[system];
@@ -504,9 +688,9 @@ export function scoreBenchmark(manifest, capturedRuns) {
 
   for (const [caseIndex, benchmarkCase] of cases.entries()) {
     for (const asset of REQUIRED_ASSETS) if (!benchmarkCase.assets?.[asset]) issue(issues, 'CASE_ASSET_MISSING', `/cases/${caseIndex}/assets/${asset}`, 'Every case requires the complete frozen asset set.');
-    validateLabeledAsset(issues, benchmarkCase.assets?.expert_obligations, `/cases/${caseIndex}/expert-obligations`, 'obligation', benchmarkCase.label_lineage_anchors?.expert_obligations);
-    validateLabeledAsset(issues, benchmarkCase.assets?.supported_assertions, `/cases/${caseIndex}/supported-assertions`, 'assertion', benchmarkCase.label_lineage_anchors?.supported_assertions);
-    validateLabeledAsset(issues, benchmarkCase.assets?.accepted_cases, `/cases/${caseIndex}/accepted-cases`, 'case', benchmarkCase.label_lineage_anchors?.accepted_cases);
+    validateLabeledAsset(issues, benchmarkCase.assets?.expert_obligations, `/cases/${caseIndex}/expert-obligations`, 'obligation', benchmarkCase.label_lineage_anchors?.expert_obligations, manifest?.evidence_class);
+    validateLabeledAsset(issues, benchmarkCase.assets?.supported_assertions, `/cases/${caseIndex}/supported-assertions`, 'assertion', benchmarkCase.label_lineage_anchors?.supported_assertions, manifest?.evidence_class);
+    validateLabeledAsset(issues, benchmarkCase.assets?.accepted_cases, `/cases/${caseIndex}/accepted-cases`, 'case', benchmarkCase.label_lineage_anchors?.accepted_cases, manifest?.evidence_class);
     const sourceFiles = benchmarkCase.assets?.sources?.files;
     const sourcePaths = benchmarkCase.assets?.task?.source_paths;
     if (!Array.isArray(sourceFiles) || sourceFiles.length === 0 || !Array.isArray(sourcePaths) || sourcePaths.length === 0 ||
@@ -527,6 +711,14 @@ export function scoreBenchmark(manifest, capturedRuns) {
       if (matches.length !== 1) issue(issues, 'CAPTURE_RUN_MISSING', `/cases/${caseIndex}/captures/${system}/${repeat}`, 'Every PRD requires one capture for every system and repeat.');
     }
   }
+  if (!validReviewerAcquisition(manifest, cases)) issue(
+    issues, 'REVIEWER_ACQUISITION_INVALID', '/reviewer_acquisition',
+    'Every expert annotation and disagreement requires an independent digest-bound eligible reviewer record.'
+  );
+  if (!validCaptureAcquisition(manifest, runs)) issue(
+    issues, 'CAPTURE_ACQUISITION_INVALID', '/capture_acquisition',
+    'Every capture requires one unique digest-bound eligible acquisition session.'
+  );
 
   /** @type {any[]} */
   const scorableRuns = [];
@@ -710,13 +902,9 @@ export function scoreBenchmark(manifest, capturedRuns) {
     systems,
     unsupported_critical_high_grounded_oracle_count: unsupportedOracleCount,
     process_failures: processFailures,
-    mutation_kill_signal: { release_gate: false, overall: ratioMetric(mutationsKilled, mutationsObserved) }
+    mutation_kill_signal: { release_gate: false, overall: ratioMetric(mutationsKilled, mutationsObserved) },
+    candidate_binding: manifest?._candidate_binding ?? null
   };
-}
-
-/** @param {string} filename */
-async function readJson(filename) {
-  return JSON.parse(await readFile(filename, 'utf8'));
 }
 
 /** @param {string} directory @param {string} root @returns {Promise<string[]>} */
@@ -753,23 +941,207 @@ function pathsOverlap(left, right) {
   return left === right || isPathInside(left, right) || isPathInside(right, left);
 }
 
-/** @param {string} caseRoot @param {string[]} files */
-async function digestSources(caseRoot, files) {
-  const hash = createHash('sha256');
-  for (const filename of files) {
-    hash.update(filename);
-    hash.update('\0');
-    hash.update(await readFile(path.join(caseRoot, filename)));
-    hash.update('\0');
-  }
-  return hash.digest('hex');
+/** @param {string} candidateRoot @param {string[]} args @returns {Promise<string>} */
+async function gitOutput(candidateRoot, args) {
+  const { stdout } = /** @type {any} */ (await execFileAsync(
+    'git', args, { cwd: candidateRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+  ));
+  return stdout;
 }
 
-/** @param {string} caseRoot @param {string[]} files */
-async function digestSourceContents(caseRoot, files) {
-  const contentDigests = [];
-  for (const filename of files) contentDigests.push(createHash('sha256').update(await readFile(path.join(caseRoot, filename))).digest('hex'));
-  return createHash('sha256').update(JSON.stringify(contentDigests.sort())).digest('hex');
+/**
+ * @param {string} candidateRoot
+ * @param {string} head
+ * @param {string} prefix
+ * @returns {Promise<Array<{mode:string, objectId:string, relativePath:string}>>}
+ */
+async function gitTreeEntries(candidateRoot, head, prefix) {
+  const output = await gitOutput(candidateRoot, ['ls-tree', '-r', head, '--', prefix]);
+  if (output.length === 0) throw new Error(`Candidate tree is missing ${prefix}.`);
+  return output.trimEnd().split('\n').map((line) => {
+    const separator = line.indexOf('\t');
+    const [mode, type, objectId] = line.slice(0, separator).split(' ');
+    const relativePath = line.slice(separator + 1);
+    if (separator < 0 || !['100644', '100755'].includes(mode) || type !== 'blob' ||
+        !/^[a-f0-9]+$/u.test(objectId) || !isSafeRelativePath(relativePath)) {
+      throw new Error(`Candidate tree contains an unsafe entry under ${prefix}.`);
+    }
+    return { mode, objectId, relativePath };
+  });
+}
+
+/** @param {string} candidateRoot @param {string} head @param {string} relativePath */
+async function gitBlob(candidateRoot, head, relativePath) {
+  const entries = await gitTreeEntries(candidateRoot, head, relativePath);
+  if (entries.length !== 1 || entries[0].relativePath !== relativePath) {
+    throw new Error(`Candidate tree does not contain exactly one regular file at ${relativePath}.`);
+  }
+  return gitOutput(candidateRoot, ['show', `${head}:${relativePath}`]);
+}
+
+/**
+ * @param {string} candidateRoot
+ * @param {string} head
+ * @param {string} prefix
+ * @param {string} suffix
+ * @param {string} displayBase
+ */
+async function gitFileSetDigest(candidateRoot, head, prefix, suffix, displayBase) {
+  const treeEntries = (await gitTreeEntries(candidateRoot, head, prefix))
+    .filter((entry) => entry.relativePath.endsWith(suffix));
+  if (treeEntries.length === 0) throw new Error(`Candidate tree has no ${suffix} files under ${prefix}.`);
+  const entries = [];
+  for (const entry of treeEntries.sort((left, right) => left.relativePath.localeCompare(right.relativePath))) {
+    const bytes = await gitOutput(candidateRoot, ['show', `${head}:${entry.relativePath}`]);
+    entries.push({
+      path: displayBase ? path.posix.relative(displayBase, entry.relativePath) : entry.relativePath,
+      sha256: createHash('sha256').update(bytes).digest('hex')
+    });
+  }
+  return createHash('sha256').update(JSON.stringify(entries)).digest('hex');
+}
+
+/**
+ * Bind a benchmark invocation to the actual repository state without asking a
+ * version-controlled manifest to contain its own future commit SHA.
+ * @param {string} manifestPath
+ * @param {string} expectedManifestDigest
+ * @param {string} [candidateRoot]
+ */
+export async function deriveCandidateBinding(
+  manifestPath, expectedManifestDigest, candidateRoot = repositoryRoot
+) {
+  try {
+    const absoluteRoot = path.resolve(candidateRoot);
+    const absoluteManifest = path.resolve(manifestPath);
+    const manifestRelative = path.relative(absoluteRoot, absoluteManifest).split(path.sep).join('/');
+    if (!manifestRelative || manifestRelative === '..' || manifestRelative.startsWith('../') ||
+        !isSafeRelativePath(manifestRelative)) throw new Error('Benchmark manifest must be inside the candidate checkout.');
+    const headBefore = (await gitOutput(absoluteRoot, ['rev-parse', 'HEAD'])).trim();
+    const statusBefore = await gitOutput(
+      absoluteRoot, ['status', '--porcelain=v1', '--untracked-files=all']
+    );
+    const compilerDigest = await gitFileSetDigest(absoluteRoot, headBefore, 'src', '.mjs', '');
+    const schemaDigest = await gitFileSetDigest(
+      absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/schemas', '.json',
+      'skill/generate-test-cases/scripts'
+    );
+    const schemaManifestBytes = await gitBlob(
+      absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/schema-manifest.json'
+    );
+    const skillBytes = await gitBlob(
+      absoluteRoot, headBefore, 'skill/generate-test-cases/SKILL.md'
+    );
+    const bundleBytes = await gitBlob(
+      absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/test-compiler.mjs'
+    );
+    const benchmarkManifestBytes = await gitBlob(absoluteRoot, headBefore, manifestRelative);
+    const benchmarkManifestDigest = createHash('sha256')
+      .update(benchmarkManifestBytes).digest('hex');
+    const statusAfter = await gitOutput(
+      absoluteRoot, ['status', '--porcelain=v1', '--untracked-files=all']
+    );
+    const headAfter = (await gitOutput(absoluteRoot, ['rev-parse', 'HEAD'])).trim();
+    return {
+      final_candidate_sha: headBefore,
+      worktree_clean: statusBefore.length === 0 && statusAfter.length === 0 &&
+        headBefore === headAfter && /^[a-f0-9]{64}$/u.test(expectedManifestDigest) &&
+        expectedManifestDigest === benchmarkManifestDigest,
+      compiler_sha256: compilerDigest,
+      schema_sha256: schemaDigest,
+      schema_manifest_sha256: createHash('sha256').update(schemaManifestBytes).digest('hex'),
+      skill_sha256: createHash('sha256').update(skillBytes).digest('hex'),
+      bundle_sha256: createHash('sha256').update(bundleBytes).digest('hex'),
+      benchmark_manifest_sha256: benchmarkManifestDigest
+    };
+  } catch {
+    return {
+      final_candidate_sha: null, worktree_clean: false,
+      compiler_sha256: null, schema_sha256: null, schema_manifest_sha256: null,
+      skill_sha256: null, bundle_sha256: null, benchmark_manifest_sha256: null
+    };
+  }
+}
+
+/**
+ * A benchmark invocation is eligible only when both endpoint observations
+ * describe the same clean immutable candidate. In particular, restoring a
+ * checkout that was dirty when loading began must never upgrade that run.
+ * @param {any} initial
+ * @param {any} final
+ */
+export function reconcileCandidateBindings(initial, final) {
+  const digestFields = [
+    'compiler_sha256', 'schema_sha256', 'schema_manifest_sha256',
+    'skill_sha256', 'bundle_sha256', 'benchmark_manifest_sha256'
+  ];
+  const initialRecord = initial && typeof initial === 'object' ? initial : {};
+  const finalRecord = final && typeof final === 'object' ? final : initialRecord;
+  const sameCandidate = initialRecord.worktree_clean === true &&
+    finalRecord.worktree_clean === true &&
+    typeof initialRecord.final_candidate_sha === 'string' &&
+    initialRecord.final_candidate_sha === finalRecord.final_candidate_sha &&
+    digestFields.every((field) => typeof initialRecord[field] === 'string' &&
+      initialRecord[field] === finalRecord[field]);
+  return { ...finalRecord, worktree_clean: sameCandidate };
+}
+
+/**
+ * @param {string} candidateRoot
+ * @param {string} head
+ * @param {string} filename
+ * @param {any} bytes
+ */
+export async function verifyCandidateEvidenceBytes(candidateRoot, head, filename, bytes) {
+  const absoluteRoot = path.resolve(candidateRoot);
+  const relativePath = path.relative(absoluteRoot, path.resolve(filename)).split(path.sep).join('/');
+  if (!relativePath || relativePath === '..' || relativePath.startsWith('../') ||
+      !isSafeRelativePath(relativePath)) throw new Error('Candidate evidence escaped its checkout.');
+  const committed = await gitBlob(absoluteRoot, head, relativePath);
+  const loadedDigest = createHash('sha256').update(bytes).digest('hex');
+  const committedDigest = createHash('sha256').update(committed).digest('hex');
+  if (loadedDigest !== committedDigest) throw new Error(
+    `Loaded benchmark evidence does not match ${head}:${relativePath}.`
+  );
+}
+
+/** @param {string} filename @param {any} binding @param {string} candidateRoot */
+async function readCandidateEvidence(filename, binding, candidateRoot) {
+  const bytes = await readFile(filename);
+  if (binding?.worktree_clean === true) await verifyCandidateEvidenceBytes(
+    candidateRoot, binding.final_candidate_sha, filename, bytes
+  );
+  return bytes;
+}
+
+/** @param {string} filename @param {any} binding @param {string} candidateRoot */
+async function readCandidateJson(filename, binding, candidateRoot) {
+  return JSON.parse((await readCandidateEvidence(filename, binding, candidateRoot)).toString('utf8'));
+}
+
+/** @param {string} benchmarkRoot @param {any} reference @param {any} binding @param {string} candidateRoot */
+async function loadBoundRootAsset(benchmarkRoot, reference, binding, candidateRoot) {
+  if (!reference || !isSafeRelativePath(reference.path) || path.dirname(reference.path) !== '.' ||
+      !/^[a-f0-9]{64}$/u.test(reference.sha256) || !isNonblankString(reference.ledger_id)) {
+    throw new Error('Acquisition ledger reference is incomplete or unsafe.');
+  }
+  const filename = path.resolve(benchmarkRoot, reference.path);
+  const root = await realpath(benchmarkRoot);
+  const entryStat = await fsPromises.lstat(filename);
+  if (entryStat.isSymbolicLink() || !entryStat.isFile() || entryStat.nlink !== 1) {
+    throw new Error('Acquisition ledger must be a real, singly linked file.');
+  }
+  const realFilename = await realpath(filename);
+  if (!isPathInside(root, realFilename)) throw new Error('Acquisition ledger escaped its benchmark root.');
+  const bytes = await readCandidateEvidence(realFilename, binding, candidateRoot);
+  if (createHash('sha256').update(bytes).digest('hex') !== reference.sha256) {
+    throw new Error('Acquisition ledger digest does not match its retained bytes.');
+  }
+  const value = JSON.parse(bytes.toString('utf8'));
+  if (value?.ledger_id !== reference.ledger_id) throw new Error(
+    'Acquisition ledger identity does not match its manifest reference.'
+  );
+  return value;
 }
 
 /** @template T @param {T} value @param {WeakSet<object>} [seen] @returns {T} */
@@ -780,12 +1152,14 @@ function deepFreeze(value, seen = new WeakSet()) {
   return Object.freeze(value);
 }
 
-/** @param {string} manifestPath */
-export async function loadBenchmarkInputs(manifestPath) {
+/** @param {string} manifestPath @param {string} [candidateRoot] */
+export async function loadBenchmarkInputs(manifestPath, candidateRoot = repositoryRoot) {
   const absoluteManifest = path.resolve(manifestPath);
+  const absoluteCandidateRoot = path.resolve(candidateRoot);
   const benchmarkRoot = path.dirname(absoluteManifest);
   /** @type {any} */
   let raw;
+  let loadedManifestDigest = null;
   try {
     const benchmarkRootStat = await fsPromises.lstat(benchmarkRoot);
     const manifestStat = await fsPromises.lstat(absoluteManifest);
@@ -802,7 +1176,9 @@ export async function loadBenchmarkInputs(manifestPath) {
       if (!handleStat.isFile() || handleStat.nlink !== 1 || handleStat.dev !== manifestStat.dev || handleStat.ino !== manifestStat.ino) {
         throw new Error('Manifest identity changed before its verified read.');
       }
-      raw = JSON.parse(await handle.readFile({ encoding: 'utf8' }));
+      const manifestBytes = await handle.readFile();
+      loadedManifestDigest = createHash('sha256').update(manifestBytes).digest('hex');
+      raw = JSON.parse(manifestBytes.toString('utf8'));
     } finally {
       await handle.close();
     }
@@ -812,7 +1188,16 @@ export async function loadBenchmarkInputs(manifestPath) {
       capturedRuns: deepFreeze([])
     };
   }
-  const manifestSchema = await readJson(path.join(path.dirname(nodeUrl.fileURLToPath(import.meta.url)), 'manifest.schema.json'));
+  const initialCandidateBinding = await deriveCandidateBinding(
+    absoluteManifest, loadedManifestDigest, absoluteCandidateRoot
+  );
+  let candidateBinding = initialCandidateBinding;
+  const manifestSchemaPath = path.join(
+    path.dirname(nodeUrl.fileURLToPath(import.meta.url)), 'manifest.schema.json'
+  );
+  const manifestSchema = JSON.parse((await readCandidateEvidence(
+    manifestSchemaPath, candidateBinding, absoluteCandidateRoot
+  )).toString('utf8'));
   const schemaDiagnostics = validateAgainstSchema(raw, manifestSchema);
   const loadIssues = schemaDiagnostics.map((diagnostic) => ({
     code: 'MANIFEST_SCHEMA_INVALID', path: diagnostic.path,
@@ -823,10 +1208,41 @@ export async function loadBenchmarkInputs(manifestPath) {
   const capturedRuns = [];
   if (schemaDiagnostics.length > 0) {
     return {
-      manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }),
+      manifest: deepFreeze({
+        ...raw, _manifest_sha256: loadedManifestDigest,
+        _candidate_binding: candidateBinding, cases: [], load_issues: loadIssues
+      }),
       capturedRuns: deepFreeze(capturedRuns)
     };
   }
+  let reviewerAcquisition = null;
+  let captureAcquisition = null;
+  try {
+    reviewerAcquisition = await loadBoundRootAsset(
+      benchmarkRoot, raw.reviewer_acquisition, candidateBinding, absoluteCandidateRoot
+    );
+  } catch (error) {
+    loadIssues.push({
+      code: 'REVIEWER_ACQUISITION_LOAD_FAILED', path: '/reviewer_acquisition',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+  try {
+    captureAcquisition = await loadBoundRootAsset(
+      benchmarkRoot, raw.capture_acquisition, candidateBinding, absoluteCandidateRoot
+    );
+  } catch (error) {
+    loadIssues.push({
+      code: 'CAPTURE_ACQUISITION_LOAD_FAILED', path: '/capture_acquisition',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+  const systemEvidence = {
+    _manifest_sha256: loadedManifestDigest,
+    _candidate_binding: candidateBinding,
+    _reviewer_acquisition: reviewerAcquisition,
+    _capture_acquisition: captureAcquisition
+  };
   const expectedCaseRoot = path.resolve(benchmarkRoot, 'cases');
   const expectedCaptureRoot = path.resolve(benchmarkRoot, 'captured');
   let realCaseRoot;
@@ -849,7 +1265,7 @@ export async function loadBenchmarkInputs(manifestPath) {
     }
   } catch (error) {
     loadIssues.push({ code: 'BENCHMARK_PATH_INVALID', path: '/', message: error instanceof Error ? error.message : String(error) });
-    return { manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
+    return { manifest: deepFreeze({ ...raw, ...systemEvidence, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
   }
   /** @type {Array<{index:number, caseRoot:string, captureRoot:string}>} */
   const resolvedRoots = [];
@@ -886,7 +1302,7 @@ export async function loadBenchmarkInputs(manifestPath) {
     }
   }
   if (loadIssues.some((loadIssue) => loadIssue.code === 'BENCHMARK_PATH_INVALID')) {
-    return { manifest: deepFreeze({ ...raw, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
+    return { manifest: deepFreeze({ ...raw, ...systemEvidence, cases: [], load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
   }
   const seenPhysicalEvidencePaths = new Set();
   for (const [caseIndex, item] of (raw.cases ?? []).entries()) {
@@ -923,22 +1339,46 @@ export async function loadBenchmarkInputs(manifestPath) {
       historical_defects: 'historical-defects.json', clarification_scenarios: 'clarification-scenarios.json'
     };
     for (const [asset, filename] of Object.entries(assetFiles)) {
-      try { assets[asset] = await readJson(path.join(caseRoot, filename)); } catch (error) {
+      try {
+        assets[asset] = await readCandidateJson(
+          path.join(caseRoot, filename), candidateBinding, absoluteCandidateRoot
+        );
+      } catch (error) {
         loadIssues.push({ code: 'BENCHMARK_ASSET_LOAD_FAILED', path: `/cases/${caseIndex}/${filename}`, message: error instanceof Error ? error.message : String(error) });
       }
     }
-    try { assets.business_model_mutations = await readJson(path.join(caseRoot, 'business-model-mutations.json')); } catch (error) {
+    try {
+      assets.business_model_mutations = await readCandidateJson(
+        path.join(caseRoot, 'business-model-mutations.json'), candidateBinding,
+        absoluteCandidateRoot
+      );
+    } catch (error) {
       assets.business_model_mutations = { mutations: [] };
       if (item.high_risk === true) loadIssues.push({ code: 'HIGH_RISK_MUTATIONS_MISSING', path: `/cases/${caseIndex}/business-model-mutations.json`, message: error instanceof Error ? error.message : String(error) });
     }
     try {
       const sourceFiles = await listSourceFiles(path.join(caseRoot, 'sources'));
+      const sourceHash = createHash('sha256');
+      const contentDigests = [];
+      for (const filename of sourceFiles) {
+        const bytes = await readCandidateEvidence(
+          path.join(caseRoot, filename), candidateBinding, absoluteCandidateRoot
+        );
+        sourceHash.update(filename);
+        sourceHash.update('\0');
+        sourceHash.update(bytes);
+        sourceHash.update('\0');
+        contentDigests.push(createHash('sha256').update(bytes).digest('hex'));
+      }
       assets.sources = {
         files: sourceFiles,
-        digest: await digestSources(caseRoot, sourceFiles),
-        content_digest: await digestSourceContents(caseRoot, sourceFiles)
+        digest: sourceHash.digest('hex'),
+        content_digest: createHash('sha256')
+          .update(JSON.stringify(contentDigests.sort())).digest('hex')
       };
-      assets.task_digest = createHash('sha256').update(await readFile(path.join(caseRoot, 'task.json'))).digest('hex');
+      assets.task_digest = createHash('sha256').update(await readCandidateEvidence(
+        path.join(caseRoot, 'task.json'), candidateBinding, absoluteCandidateRoot
+      )).digest('hex');
     } catch (error) {
       loadIssues.push({ code: 'CASE_SOURCE_TASK_BINDING_INVALID', path: `/cases/${caseIndex}/sources`, message: error instanceof Error ? error.message : String(error) });
     }
@@ -949,7 +1389,9 @@ export async function loadBenchmarkInputs(manifestPath) {
     }
     for (const filename of captureFiles) {
       try {
-        const run = await readJson(path.join(captureRoot, filename));
+        const run = await readCandidateJson(
+          path.join(captureRoot, filename), candidateBinding, absoluteCandidateRoot
+        );
         if (CAPTURE_INTERNAL_FIELDS.some((field) => Object.hasOwn(run, field))) {
           loadIssues.push({ code: 'CAPTURE_SCHEMA_INVALID', path: `/cases/${caseIndex}/captures/${filename}`, message: 'Capture files may not provide scorer-owned raw evidence fields.' });
         }
@@ -971,8 +1413,12 @@ export async function loadBenchmarkInputs(manifestPath) {
           }
           seenPhysicalEvidencePaths.add(realRawPath);
           seenPhysicalEvidencePaths.add(realExtractionPath);
-          rawOutputDigest = createHash('sha256').update(await readFile(realRawPath)).digest('hex');
-          const extractionBytes = await readFile(realExtractionPath);
+          rawOutputDigest = createHash('sha256').update(await readCandidateEvidence(
+            realRawPath, candidateBinding, absoluteCandidateRoot
+          )).digest('hex');
+          const extractionBytes = await readCandidateEvidence(
+            realExtractionPath, candidateBinding, absoluteCandidateRoot
+          );
           extractionDigest = createHash('sha256').update(extractionBytes).digest('hex');
           extraction = JSON.parse(extractionBytes.toString('utf8'));
         } catch (error) {
@@ -984,7 +1430,12 @@ export async function loadBenchmarkInputs(manifestPath) {
       }
     }
   }
-  return { manifest: deepFreeze({ ...raw, cases, load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
+  const finalCandidateBinding = await deriveCandidateBinding(
+    absoluteManifest, loadedManifestDigest, absoluteCandidateRoot
+  );
+  candidateBinding = reconcileCandidateBindings(initialCandidateBinding, finalCandidateBinding);
+  systemEvidence._candidate_binding = candidateBinding;
+  return { manifest: deepFreeze({ ...raw, ...systemEvidence, cases, load_issues: loadIssues }), capturedRuns: deepFreeze(capturedRuns) };
 }
 
 async function main() {

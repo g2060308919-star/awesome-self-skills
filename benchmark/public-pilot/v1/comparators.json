@@ -8,25 +8,25 @@
       "system_id": "generate-test-cases",
       "status": "frozen",
       "version": "0.1.0",
-      "repository_revision": "dbd7ac690dd45ac712c1cb176ca9ea23a4cf2734",
+      "repository_revision": "9ef2f723b8e06e6bd8e943be6a3809ee88f3a832",
       "artifacts": [
         {
           "artifact_id": "generate-test-cases-skill",
           "kind": "skill",
           "repository_path": "skill/generate-test-cases/SKILL.md",
-          "sha256": "b42da41e5aa5f3f5ebcc15e1800a10a2b465575b2258ea7ca64a8fe7093ffa23"
+          "sha256": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94"
         },
         {
           "artifact_id": "generate-test-cases-compiler",
           "kind": "compiler",
           "repository_path": "skill/generate-test-cases/scripts/test-compiler.mjs",
-          "sha256": "0b1fe31b7f10c058258a6e1c16301c2a945ef6bc807c0e1e2488845c8f7ace16"
+          "sha256": "5725952e95195ba85f9887c46f4b65bdfe5035fa80b27a85ffa0c7f71921db16"
         },
         {
           "artifact_id": "generate-test-cases-schema-manifest",
           "kind": "schema",
           "repository_path": "skill/generate-test-cases/scripts/schema-manifest.json",
-          "sha256": "e17b24df5588aabb26ec5afac27b291da34f9bee90cc91fd52baa853ccd10470"
+          "sha256": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a"
         }
       ],
       "model_identity": {

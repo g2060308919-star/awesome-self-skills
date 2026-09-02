@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "generate-test-cases-benchmark-manifest.schema.json",
   "type": "object",
-  "required": ["schema_version", "benchmark_version", "manifest_id", "evidence_class", "systems", "repeats_per_system", "expected_provenance", "strata", "cases"],
+  "required": ["schema_version", "benchmark_version", "manifest_id", "evidence_class", "systems", "repeats_per_system", "candidate_binding_policy", "reviewer_acquisition", "capture_acquisition", "expected_provenance", "strata", "cases"],
   "properties": {
     "schema_version": { "const": "1.0.0" },
     "benchmark_version": { "type": "string", "minLength": 1 },
@@ -10,6 +10,36 @@
     "evidence_class": { "enum": ["synthetic-pilot", "external-expert-corpus"] },
     "systems": { "const": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"] },
     "repeats_per_system": { "const": 3 },
+    "candidate_binding_policy": {
+      "type": "object",
+      "required": ["mode", "digest_algorithm", "required_artifacts"],
+      "properties": {
+        "mode": { "const": "runtime-derived-clean-checkout" },
+        "digest_algorithm": { "const": "sha256" },
+        "required_artifacts": { "const": ["compiler", "schema", "schema-manifest", "skill", "bundle", "benchmark-manifest"] }
+      },
+      "additionalProperties": false
+    },
+    "reviewer_acquisition": {
+      "type": "object",
+      "required": ["ledger_id", "path", "sha256"],
+      "properties": {
+        "ledger_id": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*\\.json$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "capture_acquisition": {
+      "type": "object",
+      "required": ["ledger_id", "path", "sha256"],
+      "properties": {
+        "ledger_id": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*\\.json$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "expected_provenance": {
       "type": "object",
       "required": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"],

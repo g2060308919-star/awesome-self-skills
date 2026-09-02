@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "synthetic-reviewer-acquisition-v1",
+  "evidence_class": "synthetic-pilot",
+  "reviewers": [
+    {
+      "reviewer_id": "synthetic-expert-a",
+      "reviewer_class": "synthetic-fixture",
+      "role": "test-expert",
+      "acquisition_source": "synthetic-fixture",
+      "independence_attestation": "synthetic-only:synthetic-expert-a",
+      "attestation_digest": "9ec5c20c52b11871f8aa3a4db16afe698af266bd500f63afb34ec99a04e1bd36"
+    },
+    {
+      "reviewer_id": "synthetic-expert-b",
+      "reviewer_class": "synthetic-fixture",
+      "role": "test-expert",
+      "acquisition_source": "synthetic-fixture",
+      "independence_attestation": "synthetic-only:synthetic-expert-b",
+      "attestation_digest": "1c914317bdc29e0ab4de5fd4e7211e0634749e9c2d27ad7af4cb45ad4ae24ba7"
+    },
+    {
+      "reviewer_id": "synthetic-adjudicator",
+      "reviewer_class": "synthetic-fixture",
+      "role": "adjudicator",
+      "acquisition_source": "synthetic-fixture",
+      "independence_attestation": "synthetic-only:synthetic-adjudicator",
+      "attestation_digest": "48a8c040b4a6757581d74d40fa3bcaac51dd9ee8c4f581204ad88d43d7c55806"
+    }
+  ],
+  "review_records": [
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "expert_obligations",
+      "reviewer_id": "synthetic-expert-a",
+      "annotation_digest": "72f49eccf8dd557c0aa758437bc5bd35cc97f1fcdb5bde0d8622d3e80e6a955d",
+      "label_keys_digest": "0df12a272ff3c80ce05fd8889cc2152db8e1725814f2613967b28c7b19bbfa81"
+    },
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "expert_obligations",
+      "reviewer_id": "synthetic-expert-b",
+      "annotation_digest": "10ddca9d0e32906cdaf2077a277a422b6e16e981bf78e5951f18e292ee746975",
+      "label_keys_digest": "0df12a272ff3c80ce05fd8889cc2152db8e1725814f2613967b28c7b19bbfa81"
+    },
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "supported_assertions",
+      "reviewer_id": "synthetic-expert-a",
+      "annotation_digest": "d4c94a16896e61c5acba814f99f14679fead56bdae2906fef80b3ecf36ad8792",
+      "label_keys_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "supported_assertions",
+      "reviewer_id": "synthetic-expert-b",
+      "annotation_digest": "cb4cd1ce607d8aef0329e60e84a28ef5a4b5e813c6125b48ed14bd2fe14e56d5",
+      "label_keys_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "accepted_cases",
+      "reviewer_id": "synthetic-expert-a",
+      "annotation_digest": "d4c94a16896e61c5acba814f99f14679fead56bdae2906fef80b3ecf36ad8792",
+      "label_keys_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "accepted_cases",
+      "reviewer_id": "synthetic-expert-b",
+      "annotation_digest": "cb4cd1ce607d8aef0329e60e84a28ef5a4b5e813c6125b48ed14bd2fe14e56d5",
+      "label_keys_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  ],
+  "adjudication_records": [
+    {
+      "case_id": "synthetic-checkout-001",
+      "asset_kind": "expert_obligations",
+      "label_key": "failed-payment-outcome",
+      "adjudicator_id": "synthetic-adjudicator",
+      "adjudication_digest": "464dd003321b1ab8e285b3c087abf782cd60c37f1b29e9944271620f72b82b96"
+    }
+  ]
+}

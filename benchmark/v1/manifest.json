@@ -5,6 +5,21 @@
   "evidence_class": "synthetic-pilot",
   "systems": ["long-prompt", "test-case-designer", "technique-router", "generate-test-cases"],
   "repeats_per_system": 3,
+  "candidate_binding_policy": {
+    "mode": "runtime-derived-clean-checkout",
+    "digest_algorithm": "sha256",
+    "required_artifacts": ["compiler", "schema", "schema-manifest", "skill", "bundle", "benchmark-manifest"]
+  },
+  "reviewer_acquisition": {
+    "ledger_id": "synthetic-reviewer-acquisition-v1",
+    "path": "reviewer-acquisition.json",
+    "sha256": "a4fd0f7589b5169469f8fa1774496607ff7ac88e5b36a3410a82ecef60889984"
+  },
+  "capture_acquisition": {
+    "ledger_id": "synthetic-capture-acquisition-v1",
+    "path": "capture-acquisition.json",
+    "sha256": "0134c80e4224b839c9077e0aeb90d1a31b91bdae5332a3966f491677b39d9366"
+  },
   "expected_provenance": {
     "long-prompt": {
       "skill_version": "not-applicable", "compiler_version": "not-applicable", "schema_version": "1.0.0",
