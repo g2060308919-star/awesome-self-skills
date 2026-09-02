@@ -22,6 +22,9 @@ const childProcess = /** @type {any} */ (await import('node:child_process'));
 const test = /** @type {(name: string, callback: (context: any) => Promise<any>) => any} */ (nodeTest);
 const validatorPath = fileURLToPath(new URL('../../benchmark/public-pilot/validate.mjs', import.meta.url));
 const schemaPath = fileURLToPath(new URL('../../benchmark/public-pilot/catalog.schema.json', import.meta.url));
+const checkedInCatalogPath = fileURLToPath(new URL('../../benchmark/public-pilot/v1/catalog.json', import.meta.url));
+const checkedInComparatorsPath = fileURLToPath(new URL('../../benchmark/public-pilot/v1/comparators.json', import.meta.url));
+const checkedInRepositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const catalogSchema = JSON.parse(await readFile(schemaPath, 'utf8'));
 
 /** @param {string} executable @param {string[]} args */
@@ -575,6 +578,30 @@ test('public pilot can never claim release eligibility', async (context) => {
   assert.equal(report.captures_ready, false);
   assert.deepEqual(Object.keys(report.counts.by_stratum), [...FROZEN_STRATA]);
   assert.deepEqual(Object.values(report.counts.by_stratum), [5, 5, 5, 5, 5, 5]);
+});
+
+test('checked-in public pilot stays bound to the current target artifacts', async () => {
+  const report = await validatePublicPilot(checkedInCatalogPath);
+  const registry = JSON.parse(await readFile(checkedInComparatorsPath, 'utf8'));
+
+  assert.equal(report.status, 'pilot_ready');
+  assert.equal(report.release_eligible, false);
+  assert.equal(report.release_status, 'insufficient_evidence');
+  assert.equal(report.captures_ready, false);
+  assert.equal(hasIssue(report.issues, 'COMPARATOR_ARTIFACT_DIGEST_MISMATCH'), false);
+
+  for (const system of registry.systems.filter((/** @type {any} */ item) => item.status === 'frozen')) {
+    await execFileAsync('git', [
+      '-C', checkedInRepositoryRoot, 'cat-file', '-e', `${system.repository_revision}^{commit}`
+    ]);
+    for (const artifact of system.artifacts) {
+      const { stdout } = /** @type {{ stdout: string }} */ (await execFileAsync('git', [
+        '-C', checkedInRepositoryRoot, 'show',
+        `${system.repository_revision}:${artifact.repository_path}`
+      ]));
+      assert.equal(sha256(stdout), artifact.sha256);
+    }
+  }
 });
 
 test('captures stay closed while any comparator identity is unresolved', async (context) => {
