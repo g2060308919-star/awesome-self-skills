@@ -167,6 +167,10 @@ test('skill static policies freeze clarification and source-review boundaries', 
   );
   assert.match(
     behavior,
+    /Before setting `support_review` to `supported`[\s\S]*directly proves the exclusion[\s\S]*generic same-scope claim[\s\S]*non-exhaustive inclusion list[\s\S]*route the fact as Blocked/u
+  );
+  assert.match(
+    behavior,
     /interaction issue scope[\s\S]*candidate module[\s\S]*every semantic subject scope/u
   );
   assert.match(
