@@ -165,6 +165,63 @@ test('installed t-wise request compiles the frozen binary strength-2 cover with 
   ), true);
 });
 
+test('installed t-wise blockers survive deferred delivery revision preflight', async () => {
+  const revision = combinationRevision();
+  const { run, artifact } = await installedCompilation(revision);
+  try {
+    assert.equal(run.reply.status, 'need_artifact', JSON.stringify(run.reply));
+    const vectorIds = artifact.obligations.filter(
+      (/** @type {any} */ obligation) => obligation.combination_vector
+    ).map((/** @type {any} */ obligation) => obligation.obligation_id).sort();
+    assert.equal(vectorIds.length, 4);
+    revision.case_drafts.obligation_dispositions.push({
+      status: 'blocker', affected_obligation_ids: vectorIds,
+      issue_intent: {
+        missing_type: 'accepted-combination-outcome', scope: 'checkout',
+        answerable: true, risk: 'high',
+        reasons: ['The selected combinations have no accepted-outcome Oracle.'],
+        evidence_refs: ['claim_checkout']
+      },
+      subject: { kind: 'facts', fact_ids: ['fact_checkout'] }
+    });
+    const pendingRun = await runInstalledRevision(
+      { case_drafts: revision.case_drafts },
+      { runDirectory: run.runDirectory, stageNames: ['case_drafts'] }
+    );
+    assert.equal(pendingRun.reply.status, 'need_user_answers', JSON.stringify(pendingRun.reply));
+    const rootIds = pendingRun.reply.blockers.map(
+      (/** @type {any} */ blocker) => blocker.root_issue_id
+    );
+    assert.equal(rootIds.length, 1, JSON.stringify(pendingRun.reply));
+
+    const nextSource = clone(revision.source_pack);
+    nextSource.source_revision = 1;
+    nextSource.decision_records.push({
+      decision_id: 'decision_defer_combination_oracle',
+      question_id: stableId('question', { root_issue_ids: rootIds }),
+      root_issue_ids: rootIds, affected_obligation_ids: vectorIds,
+      clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-09-02',
+      question: pendingRun.reply.blockers[0].question, answer: '', disposition: 'deferred',
+      authority_scope: 'checkout', effective_scope: 'checkout',
+      evidence_ref: 'claim_checkout', evidence_level: 'E3'
+    });
+    nextSource.clarification_events.push({
+      event_id: 'event_deliver_deferred_combinations', clarification_event_seq: 2,
+      type: 'request_delivery', actor: 'owner', event_at: '2026-09-02',
+      root_issue_ids: rootIds
+    });
+    const advanced = await runInstalledRevision(
+      { source_pack: nextSource },
+      { runDirectory: run.runDirectory, stageNames: ['source_pack'] }
+    );
+    assert.equal(advanced.reply.status, 'need_artifact', JSON.stringify(advanced.reply));
+    assert.equal(advanced.reply.stage, 'evidence_claims', JSON.stringify(advanced.reply));
+    assert.deepEqual(advanced.reply.scope, { source_revision: 1 });
+  } finally {
+    await rm(run.runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('installed t-wise strength is closed to the declared parameter count', async (/** @type {any} */ t) => {
   await t.test('strength equal to three declared parameters compiles all full-strength vectors', async () => {
     const artifact = await installedObligations(combinationRevision({ strength: 3 }));

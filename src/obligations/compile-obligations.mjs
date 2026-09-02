@@ -1802,12 +1802,17 @@ function compileCombinationObligations(
         obligation_id: obligationId, kind: 'interaction', caseable: true,
         risk: risk.risk, scope,
         source_claim_ids: [...new Set([...canonicalOwnerRoots, ...valueClaimIds, ...riskRefs])].sort(compareCodePoints),
-        view_element_refs: qualifiedElementRefs,
+        view_element_refs: [...qualifiedElementRefs],
         required_oracle_refs: [...vector.required_oracle_refs].sort(compareCodePoints),
         required_capabilities: [],
         combination_vector: {
           policy_id: TWISE_POLICY.policy_id, strength: request.strength,
-          owner: ownerIdentity, assignments,
+          owner: {
+            view_id: ownerIdentity.view_id,
+            fact_ids: [...ownerIdentity.fact_ids],
+            view_element_refs: ownerIdentity.view_element_refs.map((ref) => ({ ...ref }))
+          },
+          assignments,
           forbid_evidence_refs: [...forbidEvidenceRefs].sort(compareCodePoints)
         }
       });

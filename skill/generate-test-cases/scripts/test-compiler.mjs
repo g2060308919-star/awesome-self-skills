@@ -12610,13 +12610,17 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         risk: risk.risk,
         scope,
         source_claim_ids: [.../* @__PURE__ */ new Set([...canonicalOwnerRoots, ...valueClaimIds, ...riskRefs])].sort(compareCodePoints7),
-        view_element_refs: qualifiedElementRefs,
+        view_element_refs: [...qualifiedElementRefs],
         required_oracle_refs: [...vector.required_oracle_refs].sort(compareCodePoints7),
         required_capabilities: [],
         combination_vector: {
           policy_id: TWISE_POLICY.policy_id,
           strength: request.strength,
-          owner: ownerIdentity,
+          owner: {
+            view_id: ownerIdentity.view_id,
+            fact_ids: [...ownerIdentity.fact_ids],
+            view_element_refs: ownerIdentity.view_element_refs.map((ref) => ({ ...ref }))
+          },
           assignments,
           forbid_evidence_refs: [...forbidEvidenceRefs].sort(compareCodePoints7)
         }
