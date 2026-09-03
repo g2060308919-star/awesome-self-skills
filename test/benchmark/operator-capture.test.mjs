@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -79,4 +80,26 @@ test('operator capture refuses a worker-edited witness in capture state', async 
 
   assert.equal(output.status, 'fatal');
   assert.match(output.message, /witnessed Agent assignment/u);
+});
+
+test('operator capture refuses a workspace whose ancestor resolves outside operator-work', async (/** @type {any} */ context) => {
+  const external = await mkdtemp(path.join(os.tmpdir(), 'capture-workspace-external-'));
+  const linkPath = path.join(
+    repositoryRoot, 'benchmark/release/v1/operator-work', `.capture-test-parent-link-${process.pid}`
+  );
+  await mkdir(path.dirname(linkPath), { recursive: true });
+  await symlink(external, linkPath);
+  context.after(async () => {
+    await rm(linkPath, { force: true });
+    await rm(external, { recursive: true, force: true });
+  });
+  const workspace = path.join(linkPath, 'capture');
+
+  const result = await execFileAsync(process.execPath, [
+    entry, 'start', workspace, 'PF-TR-01', '1', '/root/formal_defect_gate_audit'
+  ], { cwd: repositoryRoot });
+  const output = JSON.parse(result.stdout);
+
+  assert.equal(output.status, 'fatal');
+  assert.match(output.message, /resolved outside operator-work/u);
 });

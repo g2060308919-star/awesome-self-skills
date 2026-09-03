@@ -252,7 +252,7 @@ export async function buildCaptureLedger() {
   const sessionIds = new Set();
   const observationIds = new Set();
   const seenPairs = new Set();
-  /** @type {Array<{bytes:Uint8Array,transcript:any}>} */
+  /** @type {Array<{filename:string,transcript:any,transcriptSha256:string}>} */
   const validated = [];
   for (const filename of paths) {
     const bytes = await readTranscript(filename, rootReal);
@@ -269,7 +269,7 @@ export async function buildCaptureLedger() {
     captureIds.add(transcript.capture_id);
     sessionIds.add(transcript.session_id);
     observationIds.add(transcript.operator_witness.observation_id);
-    validated.push({ bytes, transcript });
+    validated.push({ filename, transcript, transcriptSha256: sha256(bytes) });
   }
   if (seenPairs.size !== expectedPairs.size
     || [...expectedPairs].some((pair) => !seenPairs.has(pair))) {
@@ -280,7 +280,7 @@ export async function buildCaptureLedger() {
   if (!isRecord(manifest) || !isRecord(manifest.capture_ledger)) {
     throw new Error('Release manifest has no capture ledger descriptor.');
   }
-  const captures = validated.map(({ bytes, transcript }) => ({
+  const captures = validated.map(({ transcript, transcriptSha256 }) => ({
     capture_id: transcript.capture_id,
     case_id: transcript.case_id,
     system: transcript.system,
@@ -296,7 +296,7 @@ export async function buildCaptureLedger() {
         'benchmark/release/v1/evidence', transcript.case_id.toLowerCase(),
         `repeat-${transcript.repeat}`, 'transcript.json'
       ),
-      sha256: sha256(bytes)
+      sha256: transcriptSha256
     }
   })).sort((left, right) => left.capture_id.localeCompare(right.capture_id));
   const ledgerBytes = `${JSON.stringify({
@@ -313,7 +313,9 @@ export async function buildCaptureLedger() {
   try {
     const stagedEvidence = path.join(stageRoot, 'evidence');
     await mkdir(stagedEvidence);
-    for (const { bytes, transcript } of validated) {
+    for (const { filename, transcript, transcriptSha256 } of validated) {
+      const bytes = await readTranscript(filename, rootReal);
+      if (sha256(bytes) !== transcriptSha256) throw new Error('Transcript changed after validation.');
       const destination = path.join(
         stagedEvidence, transcript.case_id.toLowerCase(),
         `repeat-${transcript.repeat}`, 'transcript.json'

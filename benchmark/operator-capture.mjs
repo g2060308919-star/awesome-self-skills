@@ -14,6 +14,8 @@ import {
 
 const execFileAsync = promisify(execFile);
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+const fsModule = /** @type {any} */ (await import('node:fs'));
+const fsConstants = fsModule.constants ?? fsModule.default.constants;
 const cryptoModule = /** @type {any} */ (await import('node:crypto'));
 const randomUUID = cryptoModule.randomUUID ?? cryptoModule.default.randomUUID;
 const repositoryRoot = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -69,6 +71,16 @@ async function safeWorkspace(workspace) {
   if (!path.isAbsolute(workspace) || !isInside(operatorRoot, workspace)) {
     throw new Error('Capture workspace must be an absolute child of operator-work.');
   }
+  try {
+    const [operatorRootReal, workspaceReal] = await Promise.all([
+      fsPromises.realpath(operatorRoot), fsPromises.realpath(workspace)
+    ]);
+    if (!isInside(operatorRootReal, workspaceReal)) {
+      throw new Error('Capture workspace resolved outside operator-work.');
+    }
+  } catch (error) {
+    if (/** @type {any} */ (error).code !== 'ENOENT') throw error;
+  }
   return path.resolve(workspace);
 }
 
@@ -81,6 +93,12 @@ async function start(workspace, caseId, repeat, agentTaskId) {
   const item = catalog.items.find((/** @type {any} */ candidate) => candidate.pilot_id === caseId && candidate.status === 'pilot-admitted');
   if (!item) throw new Error('Capture case is not admitted in the public corpus.');
   await mkdir(operatorRoot, { recursive: true });
+  const [operatorRootReal, parentReal] = await Promise.all([
+    fsPromises.realpath(operatorRoot), fsPromises.realpath(path.dirname(workspace))
+  ]);
+  if (parentReal !== operatorRootReal && !isInside(operatorRootReal, parentReal)) {
+    throw new Error('Capture workspace parent resolved outside operator-work.');
+  }
   await mkdir(workspace);
   const runDirectory = path.join(workspace, 'run');
   await mkdir(runDirectory);
@@ -147,7 +165,23 @@ async function submit(workspace, artifactPath) {
     fsPromises.realpath(workspace), fsPromises.realpath(absoluteArtifact)
   ]);
   if (!isInside(workspaceReal, artifactReal)) throw new Error('Submitted artifact resolved outside the capture workspace.');
-  const artifact = JSON.parse(await readFile(absoluteArtifact, 'utf8'));
+  const handle = await fsPromises.open(artifactReal, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  let artifactBytes;
+  try {
+    const opened = await handle.stat();
+    if (opened.dev !== artifactEntry.dev || opened.ino !== artifactEntry.ino
+      || opened.size !== artifactEntry.size || opened.nlink !== 1) {
+      throw new Error('Submitted artifact changed while it was being opened.');
+    }
+    artifactBytes = await handle.readFile();
+    const after = await handle.stat();
+    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size) {
+      throw new Error('Submitted artifact changed while it was being read.');
+    }
+  } finally {
+    await handle.close();
+  }
+  const artifact = JSON.parse(artifactBytes.toString('utf8'));
   const stage = state.expected_stage;
   const stageFile = /** @type {Record<string,string>} */ (STAGE_FILES)[stage];
   if (!stageFile) throw new Error('Capture has no writable Agent stage.');

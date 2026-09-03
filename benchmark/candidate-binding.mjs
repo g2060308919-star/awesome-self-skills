@@ -6,6 +6,9 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_REPOSITORY_ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
+const CANDIDATE_BINDING_TIMEOUT_MS = 30_000;
+const MAX_GIT_TREE_ENTRIES = 4096;
+const MAX_CANDIDATE_ARTIFACT_BYTES = 64 * 1024 * 1024;
 
 /** @param {unknown} value */
 function isSafeRelativePath(value) {
@@ -13,20 +16,29 @@ function isSafeRelativePath(value) {
   return value.split(/[\\/]+/u).every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
 }
 
-/** @param {string} candidateRoot @param {string[]} args */
-async function gitOutput(candidateRoot, args) {
+/** @param {number} deadline */
+function remainingTimeout(deadline) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new Error('Candidate binding exceeded its fixed deadline.');
+  return Math.max(1, Math.min(CANDIDATE_BINDING_TIMEOUT_MS, remaining));
+}
+
+/** @param {string} candidateRoot @param {string[]} args @param {number} deadline */
+async function gitOutput(candidateRoot, args, deadline) {
   const { stdout } = /** @type {any} */ (await execFileAsync('git', args, {
-    cwd: candidateRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-    timeout: 30_000, env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+    cwd: candidateRoot, encoding: 'utf8', maxBuffer: MAX_CANDIDATE_ARTIFACT_BYTES,
+    timeout: remainingTimeout(deadline), env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
   }));
   return stdout;
 }
 
-/** @param {string} candidateRoot @param {string} head @param {string} prefix */
-async function gitTreeEntries(candidateRoot, head, prefix) {
-  const output = await gitOutput(candidateRoot, ['ls-tree', '-r', head, '--', prefix]);
+/** @param {string} candidateRoot @param {string} head @param {string} prefix @param {number} deadline */
+async function gitTreeEntries(candidateRoot, head, prefix, deadline) {
+  const output = await gitOutput(candidateRoot, ['ls-tree', '-r', head, '--', prefix], deadline);
   if (output.length === 0) throw new Error(`Candidate tree is missing ${prefix}.`);
-  return output.trimEnd().split('\n').map((/** @type {string} */ line) => {
+  const lines = output.trimEnd().split('\n');
+  if (lines.length > MAX_GIT_TREE_ENTRIES) throw new Error(`Candidate tree has too many entries under ${prefix}.`);
+  return lines.map((/** @type {string} */ line) => {
     const separator = line.indexOf('\t');
     const [mode, type, objectId] = line.slice(0, separator).split(' ');
     const relativePath = line.slice(separator + 1);
@@ -38,26 +50,33 @@ async function gitTreeEntries(candidateRoot, head, prefix) {
   });
 }
 
-/** @param {string} candidateRoot @param {string} head @param {string} relativePath */
-async function gitBlob(candidateRoot, head, relativePath) {
-  const entries = await gitTreeEntries(candidateRoot, head, relativePath);
+/** @param {string} candidateRoot @param {string} head @param {string} relativePath @param {number} deadline */
+async function gitBlob(candidateRoot, head, relativePath, deadline) {
+  const entries = await gitTreeEntries(candidateRoot, head, relativePath, deadline);
   if (entries.length !== 1 || entries[0].relativePath !== relativePath) {
     throw new Error(`Candidate tree does not contain exactly one regular file at ${relativePath}.`);
   }
-  return gitOutput(candidateRoot, ['show', `${head}:${relativePath}`]);
+  const bytes = await gitOutput(candidateRoot, ['show', `${head}:${relativePath}`], deadline);
+  if (new TextEncoder().encode(bytes).byteLength > MAX_CANDIDATE_ARTIFACT_BYTES) {
+    throw new Error(`Candidate artifact exceeds the size limit: ${relativePath}.`);
+  }
+  return bytes;
 }
 
-/** @param {string} candidateRoot @param {string} head @param {string} prefix @param {string} suffix @param {string} displayBase */
-async function gitFileSetDigest(candidateRoot, head, prefix, suffix, displayBase) {
-  const treeEntries = (await gitTreeEntries(candidateRoot, head, prefix))
+/** @param {string} candidateRoot @param {string} head @param {string} prefix @param {string} suffix @param {string} displayBase @param {number} deadline */
+async function gitFileSetDigest(candidateRoot, head, prefix, suffix, displayBase, deadline) {
+  const treeEntries = (await gitTreeEntries(candidateRoot, head, prefix, deadline))
     .filter((/** @type {{mode:string,objectId:string,relativePath:string}} */ entry) => entry.relativePath.endsWith(suffix));
   if (treeEntries.length === 0) throw new Error(`Candidate tree has no ${suffix} files under ${prefix}.`);
   const entries = [];
+  let totalBytes = 0;
   for (const entry of treeEntries.sort((
     /** @type {{relativePath:string}} */ left,
     /** @type {{relativePath:string}} */ right
   ) => left.relativePath.localeCompare(right.relativePath))) {
-    const bytes = await gitOutput(candidateRoot, ['show', `${head}:${entry.relativePath}`]);
+    const bytes = await gitOutput(candidateRoot, ['show', `${head}:${entry.relativePath}`], deadline);
+    totalBytes += new TextEncoder().encode(bytes).byteLength;
+    if (totalBytes > MAX_CANDIDATE_ARTIFACT_BYTES) throw new Error('Candidate artifact set exceeds the size limit.');
     entries.push({
       path: displayBase ? path.posix.relative(displayBase, entry.relativePath) : entry.relativePath,
       sha256: createHash('sha256').update(bytes).digest('hex')
@@ -71,25 +90,26 @@ export async function deriveCandidateBinding(
   manifestPath, expectedManifestDigest, candidateRoot = DEFAULT_REPOSITORY_ROOT
 ) {
   try {
+    const deadline = Date.now() + CANDIDATE_BINDING_TIMEOUT_MS;
     const absoluteRoot = path.resolve(candidateRoot);
     const absoluteManifest = path.resolve(manifestPath);
     const manifestRelative = path.relative(absoluteRoot, absoluteManifest).split(path.sep).join('/');
     if (!manifestRelative || manifestRelative === '..' || manifestRelative.startsWith('../')
       || !isSafeRelativePath(manifestRelative)) throw new Error('Benchmark manifest must be inside the candidate checkout.');
-    const headBefore = (await gitOutput(absoluteRoot, ['rev-parse', 'HEAD'])).trim();
-    const statusBefore = await gitOutput(absoluteRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
-    const compilerDigest = await gitFileSetDigest(absoluteRoot, headBefore, 'src', '.mjs', '');
+    const headBefore = (await gitOutput(absoluteRoot, ['rev-parse', 'HEAD'], deadline)).trim();
+    const statusBefore = await gitOutput(absoluteRoot, ['status', '--porcelain=v1', '--untracked-files=all'], deadline);
+    const compilerDigest = await gitFileSetDigest(absoluteRoot, headBefore, 'src', '.mjs', '', deadline);
     const schemaDigest = await gitFileSetDigest(
       absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/schemas', '.json',
-      'skill/generate-test-cases/scripts'
+      'skill/generate-test-cases/scripts', deadline
     );
-    const schemaManifestBytes = await gitBlob(absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/schema-manifest.json');
-    const skillBytes = await gitBlob(absoluteRoot, headBefore, 'skill/generate-test-cases/SKILL.md');
-    const bundleBytes = await gitBlob(absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/test-compiler.mjs');
-    const benchmarkManifestBytes = await gitBlob(absoluteRoot, headBefore, manifestRelative);
+    const schemaManifestBytes = await gitBlob(absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/schema-manifest.json', deadline);
+    const skillBytes = await gitBlob(absoluteRoot, headBefore, 'skill/generate-test-cases/SKILL.md', deadline);
+    const bundleBytes = await gitBlob(absoluteRoot, headBefore, 'skill/generate-test-cases/scripts/test-compiler.mjs', deadline);
+    const benchmarkManifestBytes = await gitBlob(absoluteRoot, headBefore, manifestRelative, deadline);
     const benchmarkManifestDigest = createHash('sha256').update(benchmarkManifestBytes).digest('hex');
-    const statusAfter = await gitOutput(absoluteRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
-    const headAfter = (await gitOutput(absoluteRoot, ['rev-parse', 'HEAD'])).trim();
+    const statusAfter = await gitOutput(absoluteRoot, ['status', '--porcelain=v1', '--untracked-files=all'], deadline);
+    const headAfter = (await gitOutput(absoluteRoot, ['rev-parse', 'HEAD'], deadline)).trim();
     return {
       final_candidate_sha: headBefore,
       worktree_clean: statusBefore.length === 0 && statusAfter.length === 0 && headBefore === headAfter
@@ -129,11 +149,12 @@ export function reconcileCandidateBindings(initial, final) {
 
 /** @param {string} candidateRoot @param {string} head @param {string} filename @param {any} bytes */
 export async function verifyCandidateEvidenceBytes(candidateRoot, head, filename, bytes) {
+  const deadline = Date.now() + CANDIDATE_BINDING_TIMEOUT_MS;
   const absoluteRoot = path.resolve(candidateRoot);
   const relativePath = path.relative(absoluteRoot, path.resolve(filename)).split(path.sep).join('/');
   if (!relativePath || relativePath === '..' || relativePath.startsWith('../')
     || !isSafeRelativePath(relativePath)) throw new Error('Candidate evidence escaped its checkout.');
-  const committed = await gitBlob(absoluteRoot, head, relativePath);
+  const committed = await gitBlob(absoluteRoot, head, relativePath, deadline);
   const loadedDigest = createHash('sha256').update(bytes).digest('hex');
   const committedDigest = createHash('sha256').update(committed).digest('hex');
   if (loadedDigest !== committedDigest) {

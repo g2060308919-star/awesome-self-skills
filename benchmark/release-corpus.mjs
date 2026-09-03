@@ -19,6 +19,10 @@ const COMMIT = /^[a-f0-9]{40}$/u;
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const lstat = fsPromises.lstat;
 const realpath = fsPromises.realpath;
+const open = fsPromises.open;
+const fsModule = /** @type {any} */ (await import('node:fs'));
+const fsConstants = fsModule.constants ?? fsModule.default.constants;
+const MAX_CORPUS_ARTIFACT_BYTES = 16 * 1024 * 1024;
 
 /** @param {unknown} value */
 function isRecord(value) {
@@ -86,15 +90,31 @@ async function readCorpusArtifact(options) {
   const relativePath = /** @type {string} */ (options.relativePath);
   const filename = path.resolve(options.catalogRoot, relativePath);
   const entry = await lstat(filename);
-  if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
-    throw new Error('Corpus artifact must be a regular singly linked file.');
+  if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1
+    || entry.size > MAX_CORPUS_ARTIFACT_BYTES) {
+    throw new Error('Corpus artifact must be a bounded regular singly linked file.');
   }
   const resolved = await realpath(filename);
   if (!isInside(options.catalogRootReal, resolved) || options.physicalPaths.has(resolved)) {
     throw new Error('Corpus artifact escaped or reused its physical path.');
   }
   options.physicalPaths.add(resolved);
-  const bytes = await readFile(resolved);
+  const handle = await open(resolved, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  let bytes;
+  try {
+    const opened = await handle.stat();
+    if (opened.dev !== entry.dev || opened.ino !== entry.ino || opened.size !== entry.size
+      || opened.nlink !== 1 || opened.size > MAX_CORPUS_ARTIFACT_BYTES) {
+      throw new Error('Corpus artifact changed identity while opening.');
+    }
+    bytes = await handle.readFile();
+    const after = await handle.stat();
+    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size) {
+      throw new Error('Corpus artifact changed while it was read.');
+    }
+  } finally {
+    await handle.close();
+  }
   if (sha256(bytes) !== options.expectedDigest) throw new Error('Corpus artifact digest mismatch.');
   if (options.candidateBinding?.worktree_clean === true) {
     await verifyCandidateEvidenceBytes(
