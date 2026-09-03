@@ -6,5 +6,6 @@
     "module": "NodeNext",
     "target": "ES2022"
   },
-  "include": ["src", "test", "build", "benchmark"]
+  "include": ["src", "test", "build", "benchmark"],
+  "exclude": ["benchmark/release/v1/operator-work"]
 }

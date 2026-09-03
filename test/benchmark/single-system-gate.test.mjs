@@ -76,6 +76,10 @@ function passingInput() {
             source_revision_mismatch: false,
             schema_invalid: false,
             traceability_integrity_failure: false
+          },
+          operator_witness: {
+            method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
+            agent_task_id: '/root/test-worker', observation_id: `${caseId}-observation-${repeat}`
           }
         });
       }

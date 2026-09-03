@@ -17,12 +17,16 @@ const STAGE_FILES = Object.freeze({
 });
 const TRANSCRIPT_KEYS = Object.freeze([
   'schema_version', 'capture_id', 'case_id', 'system', 'repeat', 'session_id',
-  'source_sha256', 'task_sha256', 'runtime_revision', 'artifact_digests', 'events'
+  'source_sha256', 'task_sha256', 'runtime_revision', 'artifact_digests',
+  'operator_witness', 'events'
 ]);
 const EVENT_KEYS = Object.freeze(['stage', 'artifact', 'reply']);
 const ARTIFACT_KEYS = Object.freeze(['compiler', 'schema', 'schema_manifest', 'skill', 'bundle']);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const REVISION = /^[a-f0-9]{40}$/u;
+const WITNESS_KEYS = Object.freeze([
+  'method', 'operator_task_id', 'agent_task_id', 'observation_id'
+]);
 export const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
 const STAGE_TIMEOUT_MS = 20_000;
 const REPLAY_TIMEOUT_MS = 120_000;
@@ -67,6 +71,16 @@ function sameArtifactDigests(left, right) {
   const rightRecord = /** @type {Record<string,unknown>} */ (right);
   return isArtifactDigests(leftRecord) && isArtifactDigests(rightRecord)
     && ARTIFACT_KEYS.every((key) => leftRecord[key] === rightRecord[key]);
+}
+
+/** @param {unknown} value */
+function isOperatorWitness(value) {
+  if (!hasExactKeys(value, WITNESS_KEYS)) return false;
+  const witness = /** @type {Record<string,unknown>} */ (value);
+  return witness.method === 'operator-observed-codex-subagent-v1'
+    && witness.operator_task_id === '/root'
+    && isNonblankString(witness.agent_task_id)
+    && isNonblankString(witness.observation_id);
 }
 
 /** @param {Uint8Array|string} bytes */
@@ -273,6 +287,8 @@ export async function verifyCaptureTranscript(options) {
     || typeof transcript.runtime_revision !== 'string' || !REVISION.test(transcript.runtime_revision)
     || transcript.runtime_revision !== options.expected.runtime_revision
     || !sameArtifactDigests(transcript.artifact_digests, options.expected.artifact_digests)
+    || !isOperatorWitness(transcript.operator_witness)
+    || canonicalStringify(transcript.operator_witness) !== canonicalStringify(options.expected.operator_witness)
     || !Array.isArray(transcript.events)
     || transcript.events.length < 4 || transcript.events.length > 32) {
     throw new Error('Capture transcript contract or binding is invalid.');

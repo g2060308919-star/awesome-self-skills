@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { readFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const entry = path.join(repositoryRoot, 'benchmark/operator-capture.mjs');
+
+test('operator capture starts a fresh witnessed durable run with one JSON reply', async (/** @type {any} */ context) => {
+  const workspace = path.join(
+    repositoryRoot, 'benchmark/release/v1/operator-work', `.capture-test-${process.pid}`
+  );
+  context.after(async () => rm(workspace, { recursive: true, force: true }));
+  const result = await execFileAsync(process.execPath, [
+    entry, 'start', workspace, 'PF-TR-01', '1', '/root/formal_defect_gate_audit'
+  ], { cwd: repositoryRoot });
+  const output = JSON.parse(result.stdout);
+  const state = JSON.parse(await readFile(path.join(workspace, 'capture-state.json'), 'utf8'));
+
+  assert.equal(result.stderr, '');
+  assert.equal(result.stdout.trim().split('\n').length, 1);
+  assert.equal(output.status, 'started');
+  assert.equal(output.reply.status, 'need_artifact');
+  assert.equal(output.reply.stage, 'source_pack');
+  assert.equal(state.operator_witness.method, 'operator-observed-codex-subagent-v1');
+  assert.equal(state.operator_witness.agent_task_id, '/root/formal_defect_gate_audit');
+  assert.equal(state.events.length, 0);
+});
+
+test('operator capture refuses an unwitnessed Agent identity', async (/** @type {any} */ context) => {
+  const workspace = path.join(
+    repositoryRoot, 'benchmark/release/v1/operator-work', `.capture-test-reject-${process.pid}`
+  );
+  context.after(async () => rm(workspace, { recursive: true, force: true }));
+  const result = await execFileAsync(process.execPath, [
+    entry, 'start', workspace, 'PF-TR-01', '1', '/root/unobserved-agent'
+  ], { cwd: repositoryRoot });
+  const output = JSON.parse(result.stdout);
+
+  assert.equal(output.status, 'fatal');
+  assert.match(output.message, /witnessed Agent task/u);
+});

@@ -61,7 +61,8 @@ const CAPTURE_KEYS = Object.freeze([
   'replay_bundle_sha256',
   'evidence_valid',
   'terminal_status',
-  'process_failures'
+  'process_failures',
+  'operator_witness'
 ]);
 const PROCESS_FAILURE_KEYS = Object.freeze([
   'runner_protocol_violation',
@@ -82,6 +83,7 @@ const LEDGER_CAPTURE_KEYS = Object.freeze([
   'task_sha256',
   'runtime_revision',
   'artifact_digests',
+  'operator_witness',
   'transcript'
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -223,6 +225,7 @@ export function evaluateSingleSystemRelease(input) {
   }
   const captureIds = new Set();
   const sessionIds = new Set();
+  const observationIds = new Set();
   const repeatsByCase = new Map([...caseIndex.keys()].map((caseId) => [caseId, new Set()]));
   let completedCaptures = 0;
 
@@ -238,6 +241,15 @@ export function evaluateSingleSystemRelease(input) {
     if (!isNonblankString(capture.session_id) || sessionIds.has(capture.session_id)) {
       fail('CAPTURE_SESSION_DUPLICATE', `${path}/session_id`, 'Every capture requires a distinct session identity.');
     } else sessionIds.add(capture.session_id);
+    const witness = capture.operator_witness;
+    if (!hasExactKeys(witness, ['method', 'operator_task_id', 'agent_task_id', 'observation_id'])
+      || witness.method !== 'operator-observed-codex-subagent-v1'
+      || witness.operator_task_id !== '/root'
+      || !isNonblankString(witness.agent_task_id)
+      || !isNonblankString(witness.observation_id)
+      || observationIds.has(witness.observation_id)) {
+      fail('CAPTURE_WITNESS_INVALID', `${path}/operator_witness`, 'Every capture requires one distinct operator-observed Agent session witness.');
+    } else observationIds.add(witness.observation_id);
 
     const caseValue = caseIndex.get(capture.case_id);
     if (!caseValue || capture.system !== 'generate-test-cases' || ![1, 2, 3].includes(capture.repeat)) {
@@ -623,6 +635,7 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
         source_sha256: record.source_sha256,
         task_sha256: record.task_sha256,
         runtime_revision: record.runtime_revision,
+        operator_witness: record.operator_witness,
         artifact_digests: record.artifact_digests,
         transcript_sha256: replay.transcript_sha256,
         run_directory_sha256: replay.reply_sequence_sha256,
@@ -661,7 +674,8 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     replay_bundle_sha256: capture.replay_bundle_sha256,
     evidence_valid: capture.evidence_valid,
     terminal_status: capture.terminal_status,
-    process_failures: capture.process_failures
+    process_failures: capture.process_failures,
+    operator_witness: capture.operator_witness
   }));
 
   const report = evaluateSingleSystemRelease({

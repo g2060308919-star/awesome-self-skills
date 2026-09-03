@@ -31,6 +31,15 @@ The three immutable baseline handoff documents remain unchanged.
 - Installation: not performed.
 - RC tag: not created.
 
+## Operator witness authorization
+
+The user explicitly accepted operator-witnessed real sub-Agent runs on
+2026-09-03. Each run must name one of the three live assigned Agent task IDs and
+carry a unique observation ID. The root operator observes source reading,
+artifact authoring, runner progression, and transcript sealing. This replaces
+an unavailable platform-signed session receipt but is not represented as a
+cryptographic model attestation.
+
 Any production, release-policy, manifest, capture, or evidence change invalidates
 prior candidate-binding evidence and requires a new clean-checkout run.
 

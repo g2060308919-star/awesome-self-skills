@@ -22,7 +22,7 @@ The command emits one JSON report. Its status is exactly `pass`, `fail`, or
   labels, and adjudication files are neither read nor required.
 - `captures.json` must contain 90 distinct target-system records. Every record
   binds its source and task digests, acquisition revision, five candidate
-  artifact digests, and one transcript descriptor.
+  artifact digests, one operator witness, and one transcript descriptor.
 - A transcript contains the exact four Agent-writable artifact submissions and
   the normalized runner reply after each submission. Completion, reply-schema
   validity, final bundle validity, recovery, and bundle digests are derived by
@@ -42,6 +42,16 @@ The command emits one JSON report. Its status is exactly `pass`, `fail`, or
 `pass` means the target completed all 90 source-bound runs without an observed
 engineering hard failure and every transcript replayed byte-identically. It is
 not an expert quality score and makes no comparative-superiority claim.
+
+The user accepted live operator observation in place of a platform-signed Agent
+receipt. `operator_witness` records the root operator and observed sub-Agent task
+for every fresh run. This proves the declared collection procedure only through
+the operator's attestation; the offline gate cannot cryptographically
+authenticate model execution. It must never be described as platform-signed.
+
+Use `benchmark/operator-capture.mjs` while the root task observes the assigned
+sub-Agent. `start` creates a fresh durable run and `submit` records each exact
+artifact and runner reply; only `finished` produces `transcript.json`.
 
 The initial checked-in ledger is intentionally empty, so the correct status is
 `insufficient_evidence` until genuine Agent-authored runs are retained. Synthetic

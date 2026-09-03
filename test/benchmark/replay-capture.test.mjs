@@ -45,7 +45,11 @@ async function genuineTranscript() {
   const capture = {
     capture_id: 'capture-genuine-1', case_id: 'case-genuine', system: 'generate-test-cases',
     repeat: 1, session_id: 'session-genuine-1', source_sha256: sourceDigest,
-    task_sha256: 'f'.repeat(64), runtime_revision: '1'.repeat(40), artifact_digests: artifactDigests
+    task_sha256: 'f'.repeat(64), runtime_revision: '1'.repeat(40), artifact_digests: artifactDigests,
+    operator_witness: {
+      method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
+      agent_task_id: '/root/test-worker', observation_id: 'observation-genuine-1'
+    }
   };
   const run = await runInstalledRevision(revision);
   const stages = ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'];

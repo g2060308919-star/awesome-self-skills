@@ -31,6 +31,8 @@ The release evidence requires:
 - exactly 30 retained public PRDs, with five in each frozen stratum;
 - exactly three target-system captures per PRD, for 90 captures total;
 - a distinct capture and session identity for every run;
+- one distinct `operator-observed-codex-subagent-v1` witness record per run,
+  naming the root operator task and the observed sub-Agent task;
 - exact source, task, compiler-source, Schema, schema-manifest, Skill, and bundle
   bindings;
 - retained transcripts containing the exact Agent artifact submissions and
@@ -77,6 +79,14 @@ Every saved report carries the final candidate revision and its artifact
 digests, plus deterministic manifest, corpus, capture-ledger, and capture
 evidence-root digests. A report detached from those bindings has no release
 meaning.
+
+On 2026-09-03 the user explicitly accepted operator-witnessed sub-Agent runs
+because this environment exposes no platform-signed Agent session receipt. This
+is a process attestation, not a cryptographic identity proof. The operator must
+actually observe the assigned sub-Agent reading the Skill and source, authoring
+the four requested artifacts, and advancing a fresh durable run. Replay proves
+the retained submissions and outputs; it does not independently authenticate
+the model provider. Release evidence and final reporting must state this limit.
 
 The previously discovered historical-defect traceability bypass remains a defect
 in the legacy expert scorer. Removing that scorer from the release path prevents
