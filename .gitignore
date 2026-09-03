@@ -1,5 +1,6 @@
 # Local handoff and import material
 /generate-test-cases-v1-handoff/
+/.worktrees/
 
 # Dependencies
 node_modules/
