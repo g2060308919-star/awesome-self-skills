@@ -10,7 +10,7 @@ import { validateAgainstSchema, validateUniqueStableIds } from '../src/schema-va
 import {
   OPERATOR_TASK_ID,
   OPERATOR_WITNESS_METHOD,
-  isAllowedAgentTaskId
+  isAllowedAgentForCase
 } from './operator-witness.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -78,13 +78,13 @@ function sameArtifactDigests(left, right) {
     && ARTIFACT_KEYS.every((key) => leftRecord[key] === rightRecord[key]);
 }
 
-/** @param {unknown} value */
-function isOperatorWitness(value) {
+/** @param {unknown} value @param {unknown} caseId */
+function isOperatorWitness(value, caseId) {
   if (!hasExactKeys(value, WITNESS_KEYS)) return false;
   const witness = /** @type {Record<string,unknown>} */ (value);
   return witness.method === OPERATOR_WITNESS_METHOD
     && witness.operator_task_id === OPERATOR_TASK_ID
-    && isAllowedAgentTaskId(witness.agent_task_id)
+    && isAllowedAgentForCase(witness.agent_task_id, caseId)
     && isNonblankString(witness.observation_id);
 }
 
@@ -292,7 +292,7 @@ export async function verifyCaptureTranscript(options) {
     || typeof transcript.runtime_revision !== 'string' || !REVISION.test(transcript.runtime_revision)
     || transcript.runtime_revision !== options.expected.runtime_revision
     || !sameArtifactDigests(transcript.artifact_digests, options.expected.artifact_digests)
-    || !isOperatorWitness(transcript.operator_witness)
+    || !isOperatorWitness(transcript.operator_witness, transcript.case_id)
     || canonicalStringify(transcript.operator_witness) !== canonicalStringify(options.expected.operator_witness)
     || !Array.isArray(transcript.events)
     || transcript.events.length < 4 || transcript.events.length > 32) {

@@ -28,13 +28,22 @@ const SHA_C = 'c'.repeat(64);
 const SHA_D = 'd'.repeat(64);
 const SHA_E = 'e'.repeat(64);
 const REVISION = '1'.repeat(40);
+const CASE_PREFIXES = Object.freeze(['TR', 'ID', 'WF', 'FM', 'AS', 'TM']);
+const AGENT_BY_STRATUM = Object.freeze([
+  '/root/formal_defect_gate_audit',
+  '/root/formal_defect_gate_audit',
+  '/root/time_quota_defect_expansion',
+  '/root/time_quota_defect_expansion',
+  '/root/time_quota_defect_expansion/standards_review',
+  '/root/time_quota_defect_expansion/standards_review'
+]);
 
 function passingInput() {
   const cases = [];
   const captures = [];
   for (const [stratumIndex, stratum] of RELEASE_STRATA.entries()) {
     for (let caseIndex = 1; caseIndex <= 5; caseIndex += 1) {
-      const caseId = `case-${stratumIndex + 1}-${caseIndex}`;
+      const caseId = `PF-${CASE_PREFIXES[stratumIndex]}-${String(caseIndex).padStart(2, '0')}`;
       const sourceSha256 = `${stratumIndex + 1}`.repeat(64);
       const taskSha256 = `${caseIndex}`.repeat(64);
       cases.push({
@@ -79,7 +88,7 @@ function passingInput() {
           },
           operator_witness: {
             method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
-            agent_task_id: '/root/formal_defect_gate_audit', observation_id: `${caseId}-observation-${repeat}`
+            agent_task_id: AGENT_BY_STRATUM[stratumIndex], observation_id: `${caseId}-observation-${repeat}`
           }
         });
       }
@@ -175,6 +184,17 @@ test('single-system release fails closed for forged provenance and observed proc
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_SESSION_DUPLICATE'), true);
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_REPLAY_MISMATCH'), true);
   assert.equal(report.issues.some((issue) => issue.code === 'PROCESS_HARD_FAILURE'), true);
+  assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_WITNESS_INVALID'), true);
+});
+
+test('single-system release rejects an allowed Agent assigned to the wrong PRD stratum', () => {
+  const input = passingInput();
+  input.captures[0].operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
+
+  const report = evaluateSingleSystemRelease(input);
+
+  assert.equal(report.status, 'fail');
+  assert.equal(report.release_eligible, false);
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_WITNESS_INVALID'), true);
 });
 

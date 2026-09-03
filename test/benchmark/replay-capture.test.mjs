@@ -43,7 +43,7 @@ async function genuineTranscript() {
   revision.source_pack.source_policy.rules[0].authority = 'public-repository:example/project';
   for (const locator of revision.source_pack.locators) locator.content_digest = sourceDigest;
   const capture = {
-    capture_id: 'capture-genuine-1', case_id: 'case-genuine', system: 'generate-test-cases',
+    capture_id: 'PF-TR-01-r1', case_id: 'PF-TR-01', system: 'generate-test-cases',
     repeat: 1, session_id: 'session-genuine-1', source_sha256: sourceDigest,
     task_sha256: 'f'.repeat(64), runtime_revision: '1'.repeat(40), artifact_digests: artifactDigests,
     operator_witness: {

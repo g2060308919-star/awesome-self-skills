@@ -11,7 +11,7 @@ import { materializeCandidateRuntime } from './candidate-runtime.mjs';
 import {
   OPERATOR_TASK_ID,
   OPERATOR_WITNESS_METHOD,
-  isAllowedAgentTaskId
+  isAllowedAgentForCase
 } from './operator-witness.mjs';
 import {
   deriveCandidateBinding,
@@ -252,7 +252,7 @@ export function evaluateSingleSystemRelease(input) {
     if (!hasExactKeys(witness, ['method', 'operator_task_id', 'agent_task_id', 'observation_id'])
       || witness.method !== OPERATOR_WITNESS_METHOD
       || witness.operator_task_id !== OPERATOR_TASK_ID
-      || !isAllowedAgentTaskId(witness.agent_task_id)
+      || !isAllowedAgentForCase(witness.agent_task_id, capture.case_id)
       || !isNonblankString(witness.observation_id)
       || observationIds.has(witness.observation_id)) {
       fail('CAPTURE_WITNESS_INVALID', `${path}/operator_witness`, 'Every capture requires one distinct operator-observed Agent session witness.');
