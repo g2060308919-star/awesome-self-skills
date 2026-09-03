@@ -1,0 +1,12 @@
+{
+  "repository": "aa2246740/pi-company",
+  "commit": "e4c27fdf626b28d3adf59d245a66cb8f3791b70e",
+  "source_url": "https://raw.githubusercontent.com/aa2246740/pi-company/e4c27fdf626b28d3adf59d245a66cb8f3791b70e/PRD.md",
+  "source_sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+  "content_digest": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+  "license_url": "https://raw.githubusercontent.com/aa2246740/pi-company/e4c27fdf626b28d3adf59d245a66cb8f3791b70e/LICENSE",
+  "license_sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

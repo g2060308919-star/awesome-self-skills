@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-AS-03",
+  "scope": "Isolated background MuJoCo simulation jobs with start, stop, status, and completed-job listing",
+  "stratum": "asynchronous integration/event",
+  "source_paths": [
+    "cases/pf-as-03/source/PRD.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

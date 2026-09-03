@@ -1,0 +1,50 @@
+{
+  "source_revision": 0,
+  "blocked_obligations": [
+    {
+      "obligation_id": "obligation_refund_failure",
+      "missing_type": "oracle",
+      "semantic_refs": ["claim_refund", "view_refund#failure"],
+      "scope": "refund",
+      "risk": "high",
+      "reason": "MISSING_ORACLE",
+      "evidence_refs": ["claim_refund"],
+      "answerable": true,
+      "question": "What state and side effects must follow a failed refund?"
+    }
+  ],
+  "prior_state": {
+    "source_revision": 0,
+    "clarification_event_seq": 0,
+    "asked_root_issue_ids": [],
+    "root_issue_dispositions": [],
+    "last_pending_root_issue_ids": [],
+    "last_question_set_digest": "",
+    "clarification_stop": null,
+    "semantic_snapshot": null,
+    "root_snapshot_ledger": []
+  },
+  "append_batch": {
+    "decision_records": [],
+    "clarification_events": []
+  },
+  "semantic_snapshot": {
+    "formal_test_points": [
+      {
+        "obligation_id": "obligation_refund_failure",
+        "evidence_level": "E0",
+        "classification": "blocked",
+        "blocked_reason": "MISSING_ORACLE"
+      }
+    ],
+    "coverage_denominator": 1,
+    "delivery_sections": {
+      "grounded": [],
+      "conditional": [],
+      "blocked": ["obligation_refund_failure"],
+      "exploratory": [],
+      "coverage": { "formal_denominator": 1 },
+      "quality": { "delivery_status": "no_deterministic_cases" }
+    }
+  }
+}

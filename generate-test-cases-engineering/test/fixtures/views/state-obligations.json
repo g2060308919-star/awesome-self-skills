@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 7,
+  "views": [
+    {
+      "view_id": "view_approval_state",
+      "type": "state",
+      "scope": "approval.request",
+      "source_claim_ids": ["claim_approved", "claim_approve_transition", "claim_audit_transition", "claim_pending", "claim_reject_transition", "claim_rejected"],
+      "elements": [
+        {
+          "element_id": "state_pending",
+          "kind": "state",
+          "state": "pending",
+          "source_claim_ids": ["claim_pending"],
+          "model_refs": []
+        },
+        {
+          "element_id": "state_approved",
+          "kind": "state",
+          "state": "approved",
+          "source_claim_ids": ["claim_approved"],
+          "model_refs": []
+        },
+        {
+          "element_id": "state_rejected",
+          "kind": "state",
+          "state": "rejected",
+          "source_claim_ids": ["claim_rejected"],
+          "model_refs": []
+        },
+        {
+          "element_id": "transition_approve",
+          "kind": "transition",
+          "from_state": "pending",
+          "event": "manager approves",
+          "to_state": "approved",
+          "condition": "request is complete",
+          "transition_order": ["validate", "persist", "notify"],
+          "source_claim_ids": ["claim_approve_transition"],
+          "model_refs": []
+        },
+        {
+          "element_id": "transition_reject",
+          "kind": "transition",
+          "from_state": "pending",
+          "event": "manager rejects",
+          "to_state": "rejected",
+          "condition": "rejection reason supplied",
+          "transition_order": ["validate", "persist", "notify"],
+          "source_claim_ids": ["claim_reject_transition"],
+          "model_refs": []
+        },
+        {
+          "element_id": "transition_audit",
+          "kind": "transition",
+          "from_state": "approved",
+          "event": "audit note added",
+          "to_state": "approved",
+          "condition": "request remains approved",
+          "transition_order": ["append audit note"],
+          "source_claim_ids": ["claim_audit_transition"],
+          "model_refs": ["model_audit_transition"]
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "interaction_matrix": [
+    { "module_ids": ["approval"], "dimension": "shared-entity", "status": "checked-no-signal" },
+    { "module_ids": ["approval"], "dimension": "role", "status": "checked-no-signal" },
+    { "module_ids": ["approval"], "dimension": "client", "status": "checked-no-signal" },
+    { "module_ids": ["approval"], "dimension": "interface-event", "status": "checked-no-signal" },
+    { "module_ids": ["approval"], "dimension": "time", "status": "checked-no-signal" },
+    { "module_ids": ["approval"], "dimension": "concurrency", "status": "checked-no-signal" },
+    { "module_ids": ["approval"], "dimension": "side-effect", "status": "checked-no-signal" }
+  ],
+  "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
+  "interaction_candidates": []
+}

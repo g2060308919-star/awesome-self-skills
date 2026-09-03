@@ -1,0 +1,9 @@
+[
+  { "name": "all E3/E2 supported and provided or verified", "mutation": "none", "expected": "grounded" },
+  { "name": "one E1 assertion lowers the entire case", "mutation": "e1-role", "expected": "conditional" },
+  { "name": "one approved capability assumption lowers the entire case", "mutation": "approved-capability", "expected": "conditional" },
+  { "name": "an E0-like unknown assertion blocks the entire case", "mutation": "unknown-evidence", "expected": "blocked" },
+  { "name": "an unsupported semantic review blocks the entire case", "mutation": "uncertain-review", "expected": "blocked" },
+  { "name": "an unavailable capability blocks the entire case", "mutation": "unavailable-capability", "expected": "blocked" },
+  { "name": "an unresolved relevant conflict blocks the entire case", "mutation": "relevant-conflict", "expected": "blocked" }
+]

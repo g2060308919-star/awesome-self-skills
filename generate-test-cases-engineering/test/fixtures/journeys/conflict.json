@@ -1,0 +1,12 @@
+{
+  "scenario": "conflict",
+  "interaction_policy": "record_only",
+  "expected": {
+    "status": "finished",
+    "grounded": 1,
+    "conditional": 0,
+    "blocked": 1,
+    "exploratory": 0,
+    "delivery_status": "critical_gaps"
+  }
+}

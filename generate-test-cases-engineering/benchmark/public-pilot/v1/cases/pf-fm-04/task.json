@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-FM-04",
+  "scope": "Agent ToolTrust JSON and YAML policy parsing, validation, and actionable configuration diagnostics",
+  "stratum": "form/configuration/input validation",
+  "source_paths": [
+    "cases/pf-fm-04/source/PRD.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

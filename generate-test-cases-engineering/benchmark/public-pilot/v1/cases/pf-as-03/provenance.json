@@ -1,0 +1,12 @@
+{
+  "repository": "sandraschi/mujoco-mcp",
+  "commit": "778c332f990434f5a1009bb4d11620dae5c75791",
+  "source_url": "https://raw.githubusercontent.com/sandraschi/mujoco-mcp/778c332f990434f5a1009bb4d11620dae5c75791/PRD.md",
+  "source_sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+  "content_digest": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+  "license_url": "https://raw.githubusercontent.com/sandraschi/mujoco-mcp/778c332f990434f5a1009bb4d11620dae5c75791/LICENSE",
+  "license_sha256": "408dff2e3167a75e92d211f7f7f5c96f314ba08adc4fbed701a9543deff8c216",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

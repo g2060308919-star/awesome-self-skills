@@ -1,0 +1,12 @@
+{
+  "repository": "christag/moss",
+  "commit": "9c35e52f6525a34adec63c94063c58b08019096e",
+  "source_url": "https://raw.githubusercontent.com/christag/moss/9c35e52f6525a34adec63c94063c58b08019096e/planning/prd.md",
+  "source_sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+  "content_digest": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+  "license_url": "https://raw.githubusercontent.com/christag/moss/9c35e52f6525a34adec63c94063c58b08019096e/LICENSE",
+  "license_sha256": "3090fc30c6d96160ea49c0e7d1971137b98089e87c02280720741a76046b7c17",
+  "reported_license": "AGPL-3.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

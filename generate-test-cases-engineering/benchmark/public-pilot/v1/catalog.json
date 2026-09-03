@@ -1,0 +1,1940 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "public-source-machine-pilot-v1",
+  "evidence_class": "public-source-machine-pilot",
+  "release_eligible": false,
+  "release_status": "insufficient_evidence",
+  "intake_report": {
+    "path": "intake-report.md",
+    "sha256": "bf21470b33ce6aec2c3643de070d7de5aa720160f6261a13c6c810f8089dac08"
+  },
+  "items": [
+    {
+      "pilot_id": "PF-TR-01",
+      "status": "pilot-admitted",
+      "repository": "clintecker/press",
+      "commit": "5848b6990d6632c0d543a861af590036e9dc8533",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-01",
+        "path": "cases/pf-tr-01/source/DIRECT-ORDERING-PLAN.md",
+        "sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+        "content_digest": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+        "upstream_url": "https://raw.githubusercontent.com/clintecker/press/5848b6990d6632c0d543a861af590036e9dc8533/docs/DIRECT-ORDERING-PLAN.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-01/license/LICENSE",
+        "sha256": "707445a9840fb3e9321d712a456d7d833f41baf777719bd9877676bfddd9f38c",
+        "upstream_url": "https://raw.githubusercontent.com/clintecker/press/5848b6990d6632c0d543a861af590036e9dc8533/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-01/provenance.json",
+        "sha256": "d249c0ff77357e1cfba789192980a4da3716742adf68d9cef917e1fc303fbc17"
+      },
+      "task": {
+        "task_id": "task-pf-tr-01",
+        "path": "cases/pf-tr-01/task.json",
+        "sha256": "d7397de75d6eba2cca31a3779e0e1bf8f60ecdb1c4777ad613dac2d1fdac1a11",
+        "source_id": "source-pf-tr-01",
+        "scope": "Direct ordering payment capture, fulfillment, and idempotent order processing"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-01",
+          "task_id": "task-pf-tr-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-01",
+          "task_id": "task-pf-tr-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-01",
+          "task_id": "task-pf-tr-01",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-02",
+      "status": "pilot-admitted",
+      "repository": "profullstack/coinpayportal",
+      "commit": "13f160c0897168931e407eccd6411e88946d0f23",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-02",
+        "path": "cases/pf-tr-02/source/PRD.md",
+        "sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+        "content_digest": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+        "upstream_url": "https://raw.githubusercontent.com/profullstack/coinpayportal/13f160c0897168931e407eccd6411e88946d0f23/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-02/license/LICENSE",
+        "sha256": "de1b680e8cf8ebf3641646e14f5c0730f726da2d9d6d211d498032c20d0d9e2c",
+        "upstream_url": "https://raw.githubusercontent.com/profullstack/coinpayportal/13f160c0897168931e407eccd6411e88946d0f23/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-02/provenance.json",
+        "sha256": "7cc7436bb79cf6273c0af8588a3e298582ec041964e0031717f8ddc81e687990"
+      },
+      "task": {
+        "task_id": "task-pf-tr-02",
+        "path": "cases/pf-tr-02/task.json",
+        "sha256": "58438f619573522601b78f829c1ce5051ccec108f0e3d714bcaba9d31d920109",
+        "source_id": "source-pf-tr-02",
+        "scope": "CoinPay checkout gateway and merchant plugin payment processing"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-02",
+          "task_id": "task-pf-tr-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-02",
+          "task_id": "task-pf-tr-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-02",
+          "task_id": "task-pf-tr-02",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-03",
+      "status": "pilot-admitted",
+      "repository": "unbrowse-ai/unbrowse",
+      "commit": "e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T20:10:30Z",
+      "source": {
+        "source_id": "source-pf-tr-03",
+        "path": "cases/pf-tr-03/source/prd.md",
+        "sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+        "content_digest": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+        "upstream_url": "https://raw.githubusercontent.com/unbrowse-ai/unbrowse/e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca/docs/architecture/ACCEPTANCE-CRITERIA.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-03/license/LICENSE",
+        "sha256": "53ba032af8ce6e762d8a0f97b1c946bc49d1f9edf9fee41a3555c2eb1ed907c2",
+        "upstream_url": "https://raw.githubusercontent.com/unbrowse-ai/unbrowse/e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-03/provenance.json",
+        "sha256": "a25101542f5e65b54c54d6a840d4196941bd8cee75d008b07fde8d590bf805a8"
+      },
+      "task": {
+        "task_id": "task-pf-tr-03",
+        "path": "cases/pf-tr-03/task.json",
+        "sha256": "890d5fbf68a97f486ed54702ae91fa00225925ed4c2119a4f26f9c55cc297ad9",
+        "source_id": "source-pf-tr-03",
+        "scope": "Unbrowse paid-route admission, Stripe/crypto subscription checkout, x402 retries, and payment settlement"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-03",
+          "task_id": "task-pf-tr-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-03",
+          "task_id": "task-pf-tr-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-03",
+          "task_id": "task-pf-tr-03",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-04",
+      "status": "pilot-admitted",
+      "repository": "chuhemiao/agentic-transaction-firewall",
+      "commit": "b652229d87d4e5b8f732184c779fb54ed83dd2bf",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-04",
+        "path": "cases/pf-tr-04/source/PRD.md",
+        "sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+        "content_digest": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+        "upstream_url": "https://raw.githubusercontent.com/chuhemiao/agentic-transaction-firewall/b652229d87d4e5b8f732184c779fb54ed83dd2bf/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-04/license/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream_url": "https://raw.githubusercontent.com/chuhemiao/agentic-transaction-firewall/b652229d87d4e5b8f732184c779fb54ed83dd2bf/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-04/provenance.json",
+        "sha256": "0bd22981d3149531f0ea533a77e560949a71f2696bbb18bc86393ff764ae794d"
+      },
+      "task": {
+        "task_id": "task-pf-tr-04",
+        "path": "cases/pf-tr-04/task.json",
+        "sha256": "66a8ec95cab2a0646aacf17f4db2d18c67f7e06bc0750f7db53163ab54fde70a",
+        "source_id": "source-pf-tr-04",
+        "scope": "Agent payment intent authorization, transaction policy decisions, and constrained execution"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-04",
+          "task_id": "task-pf-tr-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-04",
+          "task_id": "task-pf-tr-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-04",
+          "task_id": "task-pf-tr-04",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TR-05",
+      "status": "pilot-admitted",
+      "repository": "cwvedvik/tripletex-mcp",
+      "commit": "3b88f1644511d7266ccd0d19bc62a8ecebd6d48c",
+      "stratum": "transaction/order/payment",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tr-05",
+        "path": "cases/pf-tr-05/source/PRD-Tripletex-MCP-Rebuild.md",
+        "sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+        "content_digest": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+        "upstream_url": "https://raw.githubusercontent.com/cwvedvik/tripletex-mcp/3b88f1644511d7266ccd0d19bc62a8ecebd6d48c/docs/PRD-Tripletex-MCP-Rebuild.md"
+      },
+      "license": {
+        "path": "cases/pf-tr-05/license/LICENSE",
+        "sha256": "7891d3a7ea07b88c47528cfa399de5d085b63f4592b8fde6d739e9b0b5043a88",
+        "upstream_url": "https://raw.githubusercontent.com/cwvedvik/tripletex-mcp/3b88f1644511d7266ccd0d19bc62a8ecebd6d48c/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tr-05/provenance.json",
+        "sha256": "a4960e780035166634e0385b8c798eb067b9e34757e63bf0785528be6d9c16c2"
+      },
+      "task": {
+        "task_id": "task-pf-tr-05",
+        "path": "cases/pf-tr-05/task.json",
+        "sha256": "970225b9d6661f73acee0e3968f89b5189fcfb76b1bc6685642b3fada29dba96",
+        "source_id": "source-pf-tr-05",
+        "scope": "Tripletex order-to-invoice lifecycle and payment-term enforcement"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TR-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-05",
+          "task_id": "task-pf-tr-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TR-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-05",
+          "task_id": "task-pf-tr-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TR-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tr-05",
+          "task_id": "task-pf-tr-05",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-01",
+      "status": "pilot-admitted",
+      "repository": "sakibtamim/Jasper",
+      "commit": "73d7e8f6b54c4fedd04a26f98ba9711cf74bef54",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-01",
+        "path": "cases/pf-id-01/source/prd.md",
+        "sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+        "content_digest": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+        "upstream_url": "https://raw.githubusercontent.com/sakibtamim/Jasper/73d7e8f6b54c4fedd04a26f98ba9711cf74bef54/docs/hosted-jasper/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-id-01/license/LICENSE",
+        "sha256": "6c07710a2f51e0b496d3f528e7731ce9f925d90359e8ebced5de97e074551f4d",
+        "upstream_url": "https://raw.githubusercontent.com/sakibtamim/Jasper/73d7e8f6b54c4fedd04a26f98ba9711cf74bef54/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-01/provenance.json",
+        "sha256": "cb52eb473a52c77175582322b85e50791cf2e384d7fdf95ce041aa5672fffc86"
+      },
+      "task": {
+        "task_id": "task-pf-id-01",
+        "path": "cases/pf-id-01/task.json",
+        "sha256": "6e2d14b431a40c649b4e714243ddc433fef800c8f52cbc863dda7171409a0b4b",
+        "source_id": "source-pf-id-01",
+        "scope": "Hosted Jasper customer and staff authentication with OIDC, MFA, and role separation"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-01",
+          "task_id": "task-pf-id-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-01",
+          "task_id": "task-pf-id-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-01",
+          "task_id": "task-pf-id-01",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-02",
+      "status": "pilot-admitted",
+      "repository": "christag/moss",
+      "commit": "9c35e52f6525a34adec63c94063c58b08019096e",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-02",
+        "path": "cases/pf-id-02/source/prd.md",
+        "sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+        "content_digest": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+        "upstream_url": "https://raw.githubusercontent.com/christag/moss/9c35e52f6525a34adec63c94063c58b08019096e/planning/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-id-02/license/LICENSE",
+        "sha256": "3090fc30c6d96160ea49c0e7d1971137b98089e87c02280720741a76046b7c17",
+        "upstream_url": "https://raw.githubusercontent.com/christag/moss/9c35e52f6525a34adec63c94063c58b08019096e/LICENSE",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-02/provenance.json",
+        "sha256": "911bdee3b33af7e566f3fe5b969f209209108d932c817a580507a053ef1db6b7"
+      },
+      "task": {
+        "task_id": "task-pf-id-02",
+        "path": "cases/pf-id-02/task.json",
+        "sha256": "32408e3b865de34872daeed3fbf56b10cdb27f3f3a9b54edf510740d942d84ca",
+        "source_id": "source-pf-id-02",
+        "scope": "Scoped RBAC role assignments, object-level permission overrides, and explicit grant/deny outcomes"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-02",
+          "task_id": "task-pf-id-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-02",
+          "task_id": "task-pf-id-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-02",
+          "task_id": "task-pf-id-02",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-03",
+      "status": "pilot-admitted",
+      "repository": "aiperceivable/apcore-mcp",
+      "commit": "7ef64c6b7d9b5b57399b82aa6f10c629207120e4",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-03",
+        "path": "cases/pf-id-03/source/prd-apcore-mcp.md",
+        "sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+        "content_digest": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+        "upstream_url": "https://raw.githubusercontent.com/aiperceivable/apcore-mcp/7ef64c6b7d9b5b57399b82aa6f10c629207120e4/docs/prd-apcore-mcp.md"
+      },
+      "license": {
+        "path": "cases/pf-id-03/license/LICENSE",
+        "sha256": "d33d844565d01a24cad007e6991cf468421b6f7b9737d19b84840cf4e02eeb1a",
+        "upstream_url": "https://raw.githubusercontent.com/aiperceivable/apcore-mcp/7ef64c6b7d9b5b57399b82aa6f10c629207120e4/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-03/provenance.json",
+        "sha256": "c3185d1b647c1a6af422ad6b1707d64ccbd03b0743b58449fba1332421996fbd"
+      },
+      "task": {
+        "task_id": "task-pf-id-03",
+        "path": "cases/pf-id-03/task.json",
+        "sha256": "54d838c1fb2798a986826120fba8cce88733199a9dcc7c1e5f2c4019089b11c3",
+        "source_id": "source-pf-id-03",
+        "scope": "APCore MCP JWT authentication, claim mapping, ACL roles, and unauthorized responses"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-03",
+          "task_id": "task-pf-id-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-03",
+          "task_id": "task-pf-id-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-03",
+          "task_id": "task-pf-id-03",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-04",
+      "status": "pilot-admitted",
+      "repository": "stone16/context-engine",
+      "commit": "f180a976796a50e98ba43845409ddbc1bf3299a9",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-04",
+        "path": "cases/pf-id-04/source/prd-contextengine-implementation.md",
+        "sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+        "content_digest": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+        "upstream_url": "https://raw.githubusercontent.com/stone16/context-engine/f180a976796a50e98ba43845409ddbc1bf3299a9/docs/agents/prd-contextengine-implementation.md"
+      },
+      "license": {
+        "path": "cases/pf-id-04/license/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream_url": "https://raw.githubusercontent.com/stone16/context-engine/f180a976796a50e98ba43845409ddbc1bf3299a9/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-04/provenance.json",
+        "sha256": "92891a6e6404d07bb517cf8b28af13adb331404684469138e8e18364680e1748"
+      },
+      "task": {
+        "task_id": "task-pf-id-04",
+        "path": "cases/pf-id-04/task.json",
+        "sha256": "36304b61b1458a748b2d4d7283f8a847e08f68836a64c05d7de9f061fc6632bd",
+        "source_id": "source-pf-id-04",
+        "scope": "ContextEngine tenant-isolated context access, ownership, sharing, and deletion permissions"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-04",
+          "task_id": "task-pf-id-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-04",
+          "task_id": "task-pf-id-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-04",
+          "task_id": "task-pf-id-04",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-ID-05",
+      "status": "pilot-admitted",
+      "repository": "proishan11/open-agent-policy",
+      "commit": "e4866fde2ed9ebe1005410203faf6343819e31ff",
+      "stratum": "identity/role/permission",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-id-05",
+        "path": "cases/pf-id-05/source/open-agent-policy-prd.md",
+        "sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+        "content_digest": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+        "upstream_url": "https://raw.githubusercontent.com/proishan11/open-agent-policy/e4866fde2ed9ebe1005410203faf6343819e31ff/open-agent-policy-prd.md"
+      },
+      "license": {
+        "path": "cases/pf-id-05/license/LICENSE",
+        "sha256": "e83572966daa76934f1fbeedd9ed372605c56b97c54f6d1b5e8acf33b603e8b4",
+        "upstream_url": "https://raw.githubusercontent.com/proishan11/open-agent-policy/e4866fde2ed9ebe1005410203faf6343819e31ff/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-id-05/provenance.json",
+        "sha256": "112dd55d3a49330b8596d63f75baf89143f7e7e6724f9cf9bf2d0776d85bb2a2"
+      },
+      "task": {
+        "task_id": "task-pf-id-05",
+        "path": "cases/pf-id-05/task.json",
+        "sha256": "6aa61970077c2da65b77263d87e6ef9acff18406796433e8a7d92a1379594e8f",
+        "source_id": "source-pf-id-05",
+        "scope": "AI agent identities, sessions, grants, delegated authority, and deny-by-default enforcement"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-ID-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-05",
+          "task_id": "task-pf-id-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-ID-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-05",
+          "task_id": "task-pf-id-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-ID-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-id-05",
+          "task_id": "task-pf-id-05",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-01",
+      "status": "pilot-admitted",
+      "repository": "mohammadmaso/kherad",
+      "commit": "2a8d6992b87a33760688e1f956653c21a6292294",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-01",
+        "path": "cases/pf-wf-01/source/PRD.md",
+        "sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+        "content_digest": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+        "upstream_url": "https://raw.githubusercontent.com/mohammadmaso/kherad/2a8d6992b87a33760688e1f956653c21a6292294/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-01/license/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream_url": "https://raw.githubusercontent.com/mohammadmaso/kherad/2a8d6992b87a33760688e1f956653c21a6292294/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-01/provenance.json",
+        "sha256": "5b2eb051481e788ea8718079cfbd2857babc4e43ea3310804eb87643bc6ac400"
+      },
+      "task": {
+        "task_id": "task-pf-wf-01",
+        "path": "cases/pf-wf-01/task.json",
+        "sha256": "fd430f2e28a1358cee3554dd68ff8ccabd25d12304e9860062caa3e6850a924f",
+        "source_id": "source-pf-wf-01",
+        "scope": "Kherad contribution submission, review, approval, and merge workflow"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-01",
+          "task_id": "task-pf-wf-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-01",
+          "task_id": "task-pf-wf-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-01",
+          "task_id": "task-pf-wf-01",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-02",
+      "status": "pilot-admitted",
+      "repository": "aa2246740/pi-company",
+      "commit": "e4c27fdf626b28d3adf59d245a66cb8f3791b70e",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-02",
+        "path": "cases/pf-wf-02/source/PRD.md",
+        "sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+        "content_digest": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+        "upstream_url": "https://raw.githubusercontent.com/aa2246740/pi-company/e4c27fdf626b28d3adf59d245a66cb8f3791b70e/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-02/license/LICENSE",
+        "sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+        "upstream_url": "https://raw.githubusercontent.com/aa2246740/pi-company/e4c27fdf626b28d3adf59d245a66cb8f3791b70e/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-02/provenance.json",
+        "sha256": "92660ee59d7c20bc5665748109353201b78adada5513dc932ec97a47b72fc07e"
+      },
+      "task": {
+        "task_id": "task-pf-wf-02",
+        "path": "cases/pf-wf-02/task.json",
+        "sha256": "4315e05f41d18fbc1b14cb3dfae25dcb0458d0d402e8240e82f53b941ff14c72",
+        "source_id": "source-pf-wf-02",
+        "scope": "Pi Company event-sourced review, testing, acceptance, and merge gates"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-02",
+          "task_id": "task-pf-wf-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-02",
+          "task_id": "task-pf-wf-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-02",
+          "task_id": "task-pf-wf-02",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-03",
+      "status": "pilot-admitted",
+      "repository": "beettlle/pi-spine",
+      "commit": "528f2fd128ac1878c700d9248f22f36500e27aa9",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-03",
+        "path": "cases/pf-wf-03/source/pi-spine-PRD.md",
+        "sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+        "content_digest": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+        "upstream_url": "https://raw.githubusercontent.com/beettlle/pi-spine/528f2fd128ac1878c700d9248f22f36500e27aa9/pi-spine-PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-03/license/LICENSE",
+        "sha256": "41bc36dc57bcc0d6154887b7993dc22bd4a0be15d8e74dc8fbb946d0a4ce7d92",
+        "upstream_url": "https://raw.githubusercontent.com/beettlle/pi-spine/528f2fd128ac1878c700d9248f22f36500e27aa9/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-03/provenance.json",
+        "sha256": "5351a59297292459981eb9dc184307fe47ce52cb79cc98c79b7d09cebabcd85f"
+      },
+      "task": {
+        "task_id": "task-pf-wf-03",
+        "path": "cases/pf-wf-03/task.json",
+        "sha256": "e81ebca1d8ee4b66527e4f070904b7cbb471496b684b1607b03108a22f8f3f98",
+        "source_id": "source-pf-wf-03",
+        "scope": "Pi Spine orchestration journal, run state machine, recovery, and human integration gates"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-03",
+          "task_id": "task-pf-wf-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-03",
+          "task_id": "task-pf-wf-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-03",
+          "task_id": "task-pf-wf-03",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-04",
+      "status": "pilot-admitted",
+      "repository": "dinpd/AgentAction",
+      "commit": "84722312663cc46a7d928d0d883332f8d6d1d821",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T20:46:16Z",
+      "source": {
+        "source_id": "source-pf-wf-04",
+        "path": "cases/pf-wf-04/source/prd.md",
+        "sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+        "content_digest": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+        "upstream_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/docs/agentaction-gateway-prd.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-04/license/LICENSE",
+        "sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+        "upstream_url": "https://raw.githubusercontent.com/dinpd/AgentAction/84722312663cc46a7d928d0d883332f8d6d1d821/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-04/provenance.json",
+        "sha256": "dc077b126d52bf96681129c0c4de0968a106b95e8ceba4f3611d196f7d86b67c"
+      },
+      "task": {
+        "task_id": "task-pf-wf-04",
+        "path": "cases/pf-wf-04/task.json",
+        "sha256": "619614e2b9d7c006ca7685ce9e8c7681cb872c76e7ff191e941065f54c3dd27f",
+        "source_id": "source-pf-wf-04",
+        "scope": "AgentAction exact-action challenge, approval/grant binding, replay, and fail-closed context drift"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-04",
+          "task_id": "task-pf-wf-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-04",
+          "task_id": "task-pf-wf-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-04",
+          "task_id": "task-pf-wf-04",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-WF-05",
+      "status": "pilot-admitted",
+      "repository": "deghosal-2026/ai-incident-commander",
+      "commit": "ea0d3867a390cb94bfa51cf76054212ccef8f000",
+      "stratum": "workflow/approval/state",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-wf-05",
+        "path": "cases/pf-wf-05/source/PRD.md",
+        "sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+        "content_digest": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/ai-incident-commander/ea0d3867a390cb94bfa51cf76054212ccef8f000/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-wf-05/license/LICENSE",
+        "sha256": "dd8ad7eec2a658b99c50281a286b8cdc6676b392019ac981e7d67f932331b0f6",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/ai-incident-commander/ea0d3867a390cb94bfa51cf76054212ccef8f000/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-wf-05/provenance.json",
+        "sha256": "e9f0cb7a4e23921de5a5824704d68ffa6229a6f3adf2cd06107555a8fa5d4185"
+      },
+      "task": {
+        "task_id": "task-pf-wf-05",
+        "path": "cases/pf-wf-05/task.json",
+        "sha256": "6db36dd5df52733b0faf760b5c96c04622ed9362529ccb650f4f7bc1755c7d00",
+        "source_id": "source-pf-wf-05",
+        "scope": "Incident response state transitions and human approval gates for communications and remediation"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-WF-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-05",
+          "task_id": "task-pf-wf-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-WF-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-05",
+          "task_id": "task-pf-wf-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-WF-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-wf-05",
+          "task_id": "task-pf-wf-05",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-01",
+      "status": "pilot-admitted",
+      "repository": "m18h/kanea",
+      "commit": "c5407e089e9d44098871cb00f883fcf5f7132fa2",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-01",
+        "path": "cases/pf-fm-01/source/PRD.md",
+        "sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+        "content_digest": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+        "upstream_url": "https://raw.githubusercontent.com/m18h/kanea/c5407e089e9d44098871cb00f883fcf5f7132fa2/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-01/license/LICENSE",
+        "sha256": "8787ce0a1184eaed0b190d84bb34a3f89d63bc298fea53805c5054cb326d6e79",
+        "upstream_url": "https://raw.githubusercontent.com/m18h/kanea/c5407e089e9d44098871cb00f883fcf5f7132fa2/LICENSE",
+        "reported_license": "Apache-2.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-01/provenance.json",
+        "sha256": "633dbc748e141b28fbf4f137ff07df589314557a4ed337937919c700a76adc72"
+      },
+      "task": {
+        "task_id": "task-pf-fm-01",
+        "path": "cases/pf-fm-01/task.json",
+        "sha256": "02be20dd4eeea79202562ef9560c620c728788865219114066dbc0aff144dc2c",
+        "source_id": "source-pf-fm-01",
+        "scope": "Kanea service configuration schema validation, invalid architecture rejection, and diagnostics"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-01",
+          "task_id": "task-pf-fm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-01",
+          "task_id": "task-pf-fm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-01",
+          "task_id": "task-pf-fm-01",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-02",
+      "status": "pilot-admitted",
+      "repository": "devaxl/VoiceType-AI",
+      "commit": "26334e5143cddc28bfa6351751df36b67efdac4f",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-02",
+        "path": "cases/pf-fm-02/source/PRD.md",
+        "sha256": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+        "content_digest": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+        "upstream_url": "https://raw.githubusercontent.com/devaxl/VoiceType-AI/26334e5143cddc28bfa6351751df36b67efdac4f/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-02/license/LICENSE",
+        "sha256": "7ead18f6607bd81d06662843a66adacbfbb78670405272abe698528f86b92b7e",
+        "upstream_url": "https://raw.githubusercontent.com/devaxl/VoiceType-AI/26334e5143cddc28bfa6351751df36b67efdac4f/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-02/provenance.json",
+        "sha256": "1fbc19bb0c6df34e3f63f71fcd2b6ab218060d064a4c61f2bdffedd88c2e57e5"
+      },
+      "task": {
+        "task_id": "task-pf-fm-02",
+        "path": "cases/pf-fm-02/task.json",
+        "sha256": "4ef5112f78411c084f3f18d5f657edc634404ce3ff90b5bbea63f34b8773546b",
+        "source_id": "source-pf-fm-02",
+        "scope": "VoiceType shortcut collision handling, configuration migrations, and malformed provider-response fallback"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-02",
+          "task_id": "task-pf-fm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-02",
+          "task_id": "task-pf-fm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-02",
+          "task_id": "task-pf-fm-02",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-03",
+      "status": "pilot-admitted",
+      "repository": "System-Error-Worldwide/the-loop",
+      "commit": "e53bda761fc0f2467e5f686b0e1d9e2b773ab870",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-03",
+        "path": "cases/pf-fm-03/source/prd.md",
+        "sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+        "content_digest": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+        "upstream_url": "https://raw.githubusercontent.com/System-Error-Worldwide/the-loop/e53bda761fc0f2467e5f686b0e1d9e2b773ab870/docs/specs/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-03/license/LICENSE",
+        "sha256": "f008c1469cc26b68c21d912a0083a2fc1161e11ccbc0ec9c35a39de8e3c16787",
+        "upstream_url": "https://raw.githubusercontent.com/System-Error-Worldwide/the-loop/e53bda761fc0f2467e5f686b0e1d9e2b773ab870/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-03/provenance.json",
+        "sha256": "8751939510d152856d5697103da54c506963aa3ab11aec7fcbb0619b27636948"
+      },
+      "task": {
+        "task_id": "task-pf-fm-03",
+        "path": "cases/pf-fm-03/task.json",
+        "sha256": "ad8f2eaaa5b94a429e2eea50f9fd32924e4106acfa4e69db295c9af26978b873",
+        "source_id": "source-pf-fm-03",
+        "scope": "The Loop setup, capability, and configuration validation with fail-closed collision handling"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-03",
+          "task_id": "task-pf-fm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-03",
+          "task_id": "task-pf-fm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-03",
+          "task_id": "task-pf-fm-03",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-04",
+      "status": "pilot-admitted",
+      "repository": "deghosal-2026/agent-tooltrust",
+      "commit": "e4a8522df2613b1ad94373a4e5b40e930654e452",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-04",
+        "path": "cases/pf-fm-04/source/PRD.md",
+        "sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+        "content_digest": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/agent-tooltrust/e4a8522df2613b1ad94373a4e5b40e930654e452/docs/design/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-04/license/LICENSE",
+        "sha256": "f6feb22ed5d9fadd7db789aafddd3b32b3c849791fa45983270482f6204bdf25",
+        "upstream_url": "https://raw.githubusercontent.com/deghosal-2026/agent-tooltrust/e4a8522df2613b1ad94373a4e5b40e930654e452/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-04/provenance.json",
+        "sha256": "7feab19fb82773ec7f0cf1aa85bbcc494b6254f58bd1b8250989d6f3062b2a47"
+      },
+      "task": {
+        "task_id": "task-pf-fm-04",
+        "path": "cases/pf-fm-04/task.json",
+        "sha256": "d8aff933b4b56c1860b8598f6d58b1e9cf7c1cc64b8fd407accc77e27df93c4f",
+        "source_id": "source-pf-fm-04",
+        "scope": "Agent ToolTrust JSON and YAML policy parsing, validation, and actionable configuration diagnostics"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-04",
+          "task_id": "task-pf-fm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-04",
+          "task_id": "task-pf-fm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-04",
+          "task_id": "task-pf-fm-04",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-FM-05",
+      "status": "pilot-admitted",
+      "repository": "arthursantos67/cineprime-api",
+      "commit": "e66b7ec1485ecbb2970043b459db32c1bd85f436",
+      "stratum": "form/configuration/input validation",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-fm-05",
+        "path": "cases/pf-fm-05/source/product-requirements-document.md",
+        "sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+        "content_digest": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+        "upstream_url": "https://raw.githubusercontent.com/arthursantos67/cineprime-api/e66b7ec1485ecbb2970043b459db32c1bd85f436/product-requirements-document.md"
+      },
+      "license": {
+        "path": "cases/pf-fm-05/license/LICENSE",
+        "sha256": "6a7276de4d2e7a6cf5a239444c122be86ce7bcc699f94f8910eeb58ae645c1ba",
+        "upstream_url": "https://raw.githubusercontent.com/arthursantos67/cineprime-api/e66b7ec1485ecbb2970043b459db32c1bd85f436/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-fm-05/provenance.json",
+        "sha256": "d3828059a33e2d02a5545951faef238905edaee471d850e4365def77398e5cfc"
+      },
+      "task": {
+        "task_id": "task-pf-fm-05",
+        "path": "cases/pf-fm-05/task.json",
+        "sha256": "741de9a4da9354feda430f6fc08d390410d882fcbb18872d6ffca028216c61ca",
+        "source_id": "source-pf-fm-05",
+        "scope": "Cineprime request and form constraints with standardized field-level validation errors"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-FM-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-05",
+          "task_id": "task-pf-fm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-FM-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-05",
+          "task_id": "task-pf-fm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-FM-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-fm-05",
+          "task_id": "task-pf-fm-05",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-01",
+      "status": "pilot-admitted",
+      "repository": "marketcalls/openalgo",
+      "commit": "01910584c4c7e89583ebdaaf8a3ce3a006155e68",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-01",
+        "path": "cases/pf-as-01/source/PRD.md",
+        "sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+        "content_digest": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openalgo/01910584c4c7e89583ebdaaf8a3ce3a006155e68/docs/scalping/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-01/license/License.md",
+        "sha256": "76a97c878c9c7a8321bb395c2b44d3fe2f8d81314d219b20138ed0e2dddd5182",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openalgo/01910584c4c7e89583ebdaaf8a3ce3a006155e68/License.md",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-01/provenance.json",
+        "sha256": "fcb79c669c6aed784e743c35a14d603724967c3e2fb4120493c730d3bcc58177"
+      },
+      "task": {
+        "task_id": "task-pf-as-01",
+        "path": "cases/pf-as-01/task.json",
+        "sha256": "4a1ae1ef8659e250ea8d6d4f5501a23e1aff4603728e5ff35ce2eeea78293496",
+        "source_id": "source-pf-as-01",
+        "scope": "OpenAlgo scalping event triggers, message buses, reconnect handling, and asynchronous failure recovery"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-01",
+          "task_id": "task-pf-as-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-01",
+          "task_id": "task-pf-as-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-01",
+          "task_id": "task-pf-as-01",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-02",
+      "status": "pilot-admitted",
+      "repository": "sandraschi/ocr-mcp",
+      "commit": "f5c662299fc13925daa5760a3ee17cb9cc34eff5",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-02",
+        "path": "cases/pf-as-02/source/PRD.md",
+        "sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+        "content_digest": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/ocr-mcp/f5c662299fc13925daa5760a3ee17cb9cc34eff5/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-02/license/LICENSE",
+        "sha256": "57bd85d017f3eaea7a2de0b78323f1bfa92b05ae53c73d07ba8dc622c50009ca",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/ocr-mcp/f5c662299fc13925daa5760a3ee17cb9cc34eff5/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-02/provenance.json",
+        "sha256": "fabd3f06725f80a7869d28be88fa1592b0f4a8bc1422729b679f8cf87241ef9d"
+      },
+      "task": {
+        "task_id": "task-pf-as-02",
+        "path": "cases/pf-as-02/task.json",
+        "sha256": "ff803d7a0fcc2951cf4f6c43c0e12fd1a9be0ea64678622721d7cc00e85346d3",
+        "source_id": "source-pf-as-02",
+        "scope": "OCR scan watcher behavior and multi-page batch-processing pipeline"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-02",
+          "task_id": "task-pf-as-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-02",
+          "task_id": "task-pf-as-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-02",
+          "task_id": "task-pf-as-02",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-03",
+      "status": "pilot-admitted",
+      "repository": "sandraschi/mujoco-mcp",
+      "commit": "778c332f990434f5a1009bb4d11620dae5c75791",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-as-03",
+        "path": "cases/pf-as-03/source/PRD.md",
+        "sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+        "content_digest": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/mujoco-mcp/778c332f990434f5a1009bb4d11620dae5c75791/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-as-03/license/LICENSE",
+        "sha256": "408dff2e3167a75e92d211f7f7f5c96f314ba08adc4fbed701a9543deff8c216",
+        "upstream_url": "https://raw.githubusercontent.com/sandraschi/mujoco-mcp/778c332f990434f5a1009bb4d11620dae5c75791/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-03/provenance.json",
+        "sha256": "4b0300a45c3526de6016ec2fba91ad8c3805f779b944a0848e0a8c0d0a12c288"
+      },
+      "task": {
+        "task_id": "task-pf-as-03",
+        "path": "cases/pf-as-03/task.json",
+        "sha256": "333a1391f72f0254b0c53607e980cb125d5693628579426f83df55879b124a44",
+        "source_id": "source-pf-as-03",
+        "scope": "Isolated background MuJoCo simulation jobs with start, stop, status, and completed-job listing"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-03",
+          "task_id": "task-pf-as-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-03",
+          "task_id": "task-pf-as-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-03",
+          "task_id": "task-pf-as-03",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-04",
+      "status": "pilot-admitted",
+      "repository": "cloudflare/agents",
+      "commit": "73d2ed457ba02035d2b1d3efc785c012254ac216",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T20:46:16Z",
+      "source": {
+        "source_id": "source-pf-as-04",
+        "path": "cases/pf-as-04/source/PRD.md",
+        "sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+        "content_digest": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+        "upstream_url": "https://raw.githubusercontent.com/cloudflare/agents/73d2ed457ba02035d2b1d3efc785c012254ac216/docs/agents/queue.md"
+      },
+      "license": {
+        "path": "cases/pf-as-04/license/LICENSE",
+        "sha256": "b33ae783f02478cd31787cd07cbf61cd3a6fbee1a50b2baf832b8f0fb7c600f7",
+        "upstream_url": "https://raw.githubusercontent.com/cloudflare/agents/73d2ed457ba02035d2b1d3efc785c012254ac216/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-04/provenance.json",
+        "sha256": "a012986a303e20158837f5840c6648f2a483a8fa0c125b608b4b48578b64b77a"
+      },
+      "task": {
+        "task_id": "task-pf-as-04",
+        "path": "cases/pf-as-04/task.json",
+        "sha256": "b087039cd553edadbc09ccb4da90d5959296d17583294a85e6b0583ca9086eab",
+        "source_id": "source-pf-as-04",
+        "scope": "Cloudflare Agents persistent FIFO callback queue, automatic processing, bounded retry, and dequeue outcomes"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-04",
+          "task_id": "task-pf-as-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-04",
+          "task_id": "task-pf-as-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-04",
+          "task_id": "task-pf-as-04",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-AS-05",
+      "status": "pilot-admitted",
+      "repository": "mikigraf/Runmill",
+      "commit": "4fab5115bba155f5dbb0f9afc10ad582663dac2c",
+      "stratum": "asynchronous integration/event",
+      "acquired_at": "2026-08-31T20:46:16Z",
+      "source": {
+        "source_id": "source-pf-as-05",
+        "path": "cases/pf-as-05/source/PRD.md",
+        "sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+        "content_digest": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+        "upstream_url": "https://raw.githubusercontent.com/mikigraf/Runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/docs/asf-production-worker-prd.md"
+      },
+      "license": {
+        "path": "cases/pf-as-05/license/LICENSE",
+        "sha256": "6962539f271cbc5ad019068670412eda21cea30ea1675a5d39bd46721a39f3e6",
+        "upstream_url": "https://raw.githubusercontent.com/mikigraf/Runmill/4fab5115bba155f5dbb0f9afc10ad582663dac2c/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-as-05/provenance.json",
+        "sha256": "9e618748548d544c57b5ed40fc06212b7bf53dabe1b1c335d7c907a1bcebf03e"
+      },
+      "task": {
+        "task_id": "task-pf-as-05",
+        "path": "cases/pf-as-05/task.json",
+        "sha256": "e6bc81c6f85228b5bfead5b3c97260a1f5d67062631530795256ec26615847ff",
+        "source_id": "source-pf-as-05",
+        "scope": "Runmill immediate run-ID submission, durable events, checkpoint recovery, reconciliation, and terminal retry disposition"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-AS-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-05",
+          "task_id": "task-pf-as-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-AS-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-05",
+          "task_id": "task-pf-as-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-AS-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-as-05",
+          "task_id": "task-pf-as-05",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-01",
+      "status": "pilot-admitted",
+      "repository": "mangopudding/mcp-server-iru-api",
+      "commit": "6743958ad8fa3329035a663d60b931cf0419058e",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-01",
+        "path": "cases/pf-tm-01/source/PRD.md",
+        "sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+        "content_digest": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+        "upstream_url": "https://raw.githubusercontent.com/mangopudding/mcp-server-iru-api/6743958ad8fa3329035a663d60b931cf0419058e/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-01/license/LICENSE",
+        "sha256": "4847b39a59a0b59db4f878b7236c77502e79120dccfd34c859b31a40295cc224",
+        "upstream_url": "https://raw.githubusercontent.com/mangopudding/mcp-server-iru-api/6743958ad8fa3329035a663d60b931cf0419058e/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-01/provenance.json",
+        "sha256": "42d635e881b345ed33d40e47ff31e66e80b61c901e5c7373c3dbc9105bebb3ad"
+      },
+      "task": {
+        "task_id": "task-pf-tm-01",
+        "path": "cases/pf-tm-01/task.json",
+        "sha256": "ff1c30f21c12bf424fba0d033845ad1b87f7a63e93e020dca7aefdf05269615c",
+        "source_id": "source-pf-tm-01",
+        "scope": "Kandji MCP cache TTL behavior and rate-limit retry/backoff"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-01",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-01",
+          "task_id": "task-pf-tm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-01",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-01",
+          "task_id": "task-pf-tm-01",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-01",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-01",
+          "task_id": "task-pf-tm-01",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-02",
+      "status": "pilot-admitted",
+      "repository": "juniper-tc02e/ayin",
+      "commit": "773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-02",
+        "path": "cases/pf-tm-02/source/Ayin-PRD-and-SaaS-Plan.md",
+        "sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+        "content_digest": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+        "upstream_url": "https://raw.githubusercontent.com/juniper-tc02e/ayin/773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8/docs/Ayin-PRD-and-SaaS-Plan.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-02/license/LICENSE",
+        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+        "upstream_url": "https://raw.githubusercontent.com/juniper-tc02e/ayin/773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8/LICENSE",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-02/provenance.json",
+        "sha256": "2ef58e00c70cf787ab30d138be5566226f9bbbfee6057c11532cd023f1e59448"
+      },
+      "task": {
+        "task_id": "task-pf-tm-02",
+        "path": "cases/pf-tm-02/task.json",
+        "sha256": "b65c3b00552535128da6e87363a87e18cf14df3785012ad93e0cb7cb7872a27f",
+        "source_id": "source-pf-tm-02",
+        "scope": "Ayin plan entitlements, API rate limits, data retention windows, and quota enforcement"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-02",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-02",
+          "task_id": "task-pf-tm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-02",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-02",
+          "task_id": "task-pf-tm-02",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-02",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-02",
+          "task_id": "task-pf-tm-02",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-03",
+      "status": "pilot-admitted",
+      "repository": "yat-hk/yat",
+      "commit": "0c206d5ea88b5fe256904d960875d9d0af5c6309",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-03",
+        "path": "cases/pf-tm-03/source/PRD.md",
+        "sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+        "content_digest": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+        "upstream_url": "https://raw.githubusercontent.com/yat-hk/yat/0c206d5ea88b5fe256904d960875d9d0af5c6309/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-03/license/LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "upstream_url": "https://raw.githubusercontent.com/yat-hk/yat/0c206d5ea88b5fe256904d960875d9d0af5c6309/LICENSE",
+        "reported_license": "GPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-03/provenance.json",
+        "sha256": "7659e6156b6f7f1fb623c4d482de49fe4c69b81641a4a5b905a7baa93e5570d9"
+      },
+      "task": {
+        "task_id": "task-pf-tm-03",
+        "path": "cases/pf-tm-03/task.json",
+        "sha256": "b2acfe62970b324b68b3b8cd8cc71f9a35538a42803297f0ea3a962391ca554f",
+        "source_id": "source-pf-tm-03",
+        "scope": "YAT device data update freshness, sleep schedules, and time-window behavior"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-03",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-03",
+          "task_id": "task-pf-tm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-03",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-03",
+          "task_id": "task-pf-tm-03",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-03",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-03",
+          "task_id": "task-pf-tm-03",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-04",
+      "status": "pilot-admitted",
+      "repository": "marketcalls/openrag",
+      "commit": "76303a9a88cbb779093a682b2be6c645eef7ed8b",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-04",
+        "path": "cases/pf-tm-04/source/prd.md",
+        "sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+        "content_digest": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openrag/76303a9a88cbb779093a682b2be6c645eef7ed8b/docs/prd.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-04/license/LICENSE",
+        "sha256": "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b",
+        "upstream_url": "https://raw.githubusercontent.com/marketcalls/openrag/76303a9a88cbb779093a682b2be6c645eef7ed8b/LICENSE",
+        "reported_license": "AGPL-3.0",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-04/provenance.json",
+        "sha256": "653c84ce97ef197d0a7107aec95d71f4857a09194b93b31bf7c097a2fa10ba65"
+      },
+      "task": {
+        "task_id": "task-pf-tm-04",
+        "path": "cases/pf-tm-04/task.json",
+        "sha256": "48e3d00e0d9eeb7aa1773d92d252c2bc5ddfd900ae7c2d4e4ea0a8f9e7108c51",
+        "source_id": "source-pf-tm-04",
+        "scope": "OpenRAG monthly token allocations, reset-day behavior, debits, and exhaustion handling"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-04",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-04",
+          "task_id": "task-pf-tm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-04",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-04",
+          "task_id": "task-pf-tm-04",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-04",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-04",
+          "task_id": "task-pf-tm-04",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    },
+    {
+      "pilot_id": "PF-TM-05",
+      "status": "pilot-admitted",
+      "repository": "girish-kor/AutoTube",
+      "commit": "d88a214be289c0f44df4c37aa6f2d2b04e613bac",
+      "stratum": "time-window/quota/entitlement",
+      "acquired_at": "2026-08-31T18:23:03.336Z",
+      "source": {
+        "source_id": "source-pf-tm-05",
+        "path": "cases/pf-tm-05/source/PRD.md",
+        "sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+        "content_digest": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+        "upstream_url": "https://raw.githubusercontent.com/girish-kor/AutoTube/d88a214be289c0f44df4c37aa6f2d2b04e613bac/docs/PRD.md"
+      },
+      "license": {
+        "path": "cases/pf-tm-05/license/LICENSE",
+        "sha256": "e8e8f198d6b831e3e3442ab0066382dd06e9c791a1f5167518cf8394cf74aef5",
+        "upstream_url": "https://raw.githubusercontent.com/girish-kor/AutoTube/d88a214be289c0f44df4c37aa6f2d2b04e613bac/LICENSE",
+        "reported_license": "MIT",
+        "scope_decision": "applicable"
+      },
+      "provenance": {
+        "path": "cases/pf-tm-05/provenance.json",
+        "sha256": "33bc06cf1bffaa64f1a08abd42bffced02828d336098fb87e18a64e8c0581a73"
+      },
+      "task": {
+        "task_id": "task-pf-tm-05",
+        "path": "cases/pf-tm-05/task.json",
+        "sha256": "6d9b937a19191deb5b0e301eed40e3279eadb632513c0529d0f87c67d42526f5",
+        "source_id": "source-pf-tm-05",
+        "scope": "AutoTube publishing cadence, daily volume, API-quota preflight, and quota-exhaustion queuing"
+      },
+      "reviews": [
+        {
+          "review_id": "machine-expert-a-v3:PF-TM-05",
+          "report_id": "machine-expert-a-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-05",
+          "task_id": "task-pf-tm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-expert-b-v3:PF-TM-05",
+          "report_id": "machine-expert-b-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-05",
+          "task_id": "task-pf-tm-05",
+          "decision": "admit"
+        },
+        {
+          "review_id": "machine-adjudication-v3:PF-TM-05",
+          "report_id": "machine-adjudication-v3",
+          "reviewer_class": "machine-agent",
+          "review_scope": "intake-only",
+          "source_id": "source-pf-tm-05",
+          "task_id": "task-pf-tm-05",
+          "decision": "admit"
+        }
+      ],
+      "defects": []
+    }
+  ],
+  "corpus_snapshot_sha256": "cfa0ca2dbc2f985951f6ea20e9ac6e7570172a6c76f6157485ab484c9b66bfa6",
+  "review_reports": [
+    {
+      "report_id": "machine-expert-a-v3",
+      "path": "reviews/machine-expert-a.json",
+      "sha256": "49f22e117113831736cc91faa87d883df5f5b520327b2a2cdb081fe793f7b439",
+      "reviewer_id": "machine-test-expert-a",
+      "reviewer_class": "machine-agent",
+      "review_scope": "intake-only"
+    },
+    {
+      "report_id": "machine-expert-b-v3",
+      "path": "reviews/machine-expert-b.json",
+      "sha256": "80319d452bdfcc6c76b91eec85f74767fd69bec51e92f4d4f4921851969f3f5e",
+      "reviewer_id": "machine-test-expert-b",
+      "reviewer_class": "machine-agent",
+      "review_scope": "intake-only"
+    }
+  ],
+  "adjudication_report": {
+    "report_id": "machine-adjudication-v3",
+    "path": "reviews/machine-adjudication.json",
+    "sha256": "7cc727f8beee455c37df48de279423c565b9c0f015e3049109bfca84042307c0",
+    "reviewer_id": "machine-adjudicator",
+    "reviewer_class": "machine-agent",
+    "review_scope": "intake-only"
+  },
+  "defect_ledger": {
+    "ledger_id": "public-defect-leads-v1",
+    "path": "defect-leads.json",
+    "sha256": "399ec5e83e08b6f9e277fb19ab987847ef4022b9751bc805585f6569aab5737b"
+  },
+  "comparators": {
+    "registry_id": "public-pilot-comparators-v1",
+    "path": "comparators.json",
+    "sha256": "17a45ddce895fa5c8652a861e0f6f51225d09de418c94c415d86c7e0288e6c61"
+  }
+}

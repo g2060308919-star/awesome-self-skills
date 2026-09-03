@@ -1,0 +1,36 @@
+{
+  "run_scope": "checkout.payment",
+  "claims": [
+    { "claim_id": "claim_present", "level": "E3", "kind": "requirement", "scope": "checkout" },
+    { "claim_id": "claim_broad", "level": "E3", "kind": "requirement", "scope": "checkout" },
+    { "claim_id": "claim_global", "level": "E3", "kind": "requirement", "scope": "*" },
+    { "claim_id": "claim_narrow", "level": "E3", "kind": "requirement", "scope": "checkout.payment" },
+    { "claim_id": "claim_disjoint", "level": "E3", "kind": "requirement", "scope": "shipping" }
+  ],
+  "facts": [
+    { "fact_id": "fact_present", "claim_id": "claim_present", "status": "active", "source_claim_ids": ["claim_present"] },
+    { "fact_id": "fact_broad", "claim_id": "claim_broad", "status": "active", "source_claim_ids": ["claim_broad"] },
+    { "fact_id": "fact_global", "claim_id": "claim_global", "status": "active", "source_claim_ids": ["claim_global"] },
+    { "fact_id": "fact_narrow", "claim_id": "claim_narrow", "status": "active", "source_claim_ids": ["claim_narrow"] },
+    { "fact_id": "fact_disjoint", "claim_id": "claim_disjoint", "status": "active", "source_claim_ids": ["claim_disjoint"] }
+  ],
+  "artifact": {
+    "schema_version": "1.0.0",
+    "source_revision": 0,
+    "views": [
+      {
+        "view_id": "view_present",
+        "type": "flow",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_present"],
+        "elements": [
+          { "element_id": "node_present", "kind": "flow-node", "node_type": "action", "label": "Submit", "source_claim_ids": ["claim_present"], "model_refs": [] }
+        ],
+        "relations": []
+      }
+    ],
+    "interaction_matrix": [],
+    "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
+    "interaction_candidates": []
+  }
+}

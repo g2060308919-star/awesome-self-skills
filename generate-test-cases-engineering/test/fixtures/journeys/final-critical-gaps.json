@@ -1,0 +1,436 @@
+{
+  "schema_version": "1.0.0",
+  "source_revision": 4,
+  "compiler_version": "0.1.0",
+  "lineage": {
+    "source_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "case_draft_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "evidence_claims": {
+    "schema_version": "1.0.0",
+    "source_revision": 4,
+    "claims": [
+      {
+        "claim_id": "claim_action",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "The buyer submits checkout.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_blocked",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/refund",
+        "value": "Refund failure is a formal checkout responsibility.",
+        "source_locator_ids": [
+          "locator_refund"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_capability",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "Checkout control and order observation are available.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_cleanup",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "Isolated test orders may remain for audit.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_data",
+        "claim_form": "derived",
+        "level": "E2",
+        "kind": "test-data",
+        "scope": "checkout",
+        "value": "100.00",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "derivation_kind": "boundary-representative",
+        "derivation_target": "test-data",
+        "parent_claim_ids": [
+          "claim_grounded"
+        ],
+        "parameters": {
+          "domain_id": "cart-total"
+        },
+        "rule_input": {
+          "lower": 0,
+          "upper": 100,
+          "inclusive": true
+        }
+      },
+      {
+        "claim_id": "claim_exclusion",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/legacy",
+        "value": "Legacy checkout is excluded from this delivery scope.",
+        "source_locator_ids": [
+          "locator_legacy_exclusion"
+        ],
+        "source_id": "source_scope"
+      },
+      {
+        "claim_id": "claim_grounded",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout",
+        "value": "A ready cart can be submitted by a buyer.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_legacy",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/legacy",
+        "value": "Legacy checkout is represented in the formal model.",
+        "source_locator_ids": [
+          "locator_legacy"
+        ],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_latency_risk",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout/network",
+        "value": "Degraded-network latency remains a risk hypothesis.",
+        "source_locator_ids": [
+          "locator_network"
+        ],
+        "source_id": "source_risk"
+      },
+      {
+        "claim_id": "claim_oracle_blocked",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/refund",
+        "value": "A failed refund has a defined result.",
+        "source_locator_ids": ["locator_refund"],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_oracle_grounded",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout",
+        "value": "A submitted ready cart becomes an accepted order.",
+        "source_locator_ids": ["locator_checkout"],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_legacy_oracle",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "requirement",
+        "scope": "checkout/legacy",
+        "value": "Legacy checkout has a defined terminal state.",
+        "source_locator_ids": ["locator_legacy"],
+        "source_id": "source_prd"
+      },
+      {
+        "claim_id": "claim_role",
+        "claim_form": "direct",
+        "level": "E3",
+        "kind": "description",
+        "scope": "checkout",
+        "value": "The buyer performs checkout.",
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
+        "source_id": "source_prd"
+      }
+    ],
+    "fact_ledger": [
+      {
+        "fact_id": "fact_blocked",
+        "claim_id": "claim_blocked",
+        "status": "active",
+        "source_claim_ids": [
+          "claim_blocked"
+        ]
+      },
+      {
+        "fact_id": "fact_grounded",
+        "claim_id": "claim_grounded",
+        "status": "active",
+        "source_claim_ids": [
+          "claim_grounded"
+        ]
+      },
+      {
+        "fact_id": "fact_na",
+        "claim_id": "claim_legacy",
+        "status": "active",
+        "source_claim_ids": [
+          "claim_legacy"
+        ]
+      }
+    ]
+  },
+  "obligations_artifact": {
+    "schema_version": "1.0.0",
+    "source_revision": 4,
+    "obligations": [
+      {
+        "obligation_id": "obligation_blocked",
+        "kind": "flow",
+        "caseable": true,
+        "risk": "critical",
+        "scope": "checkout/refund",
+        "source_claim_ids": ["claim_blocked"],
+        "view_element_refs": ["view_checkout#refund"],
+        "required_oracle_refs": ["claim_oracle_blocked"],
+        "required_capabilities": []
+      },
+      {
+        "obligation_id": "obligation_grounded",
+        "kind": "flow",
+        "caseable": true,
+        "risk": "high",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_grounded"],
+        "view_element_refs": ["view_checkout#submit"],
+        "required_oracle_refs": ["claim_oracle_grounded"],
+        "required_capabilities": ["checkout-control"]
+      },
+      {
+        "obligation_id": "obligation_na",
+        "kind": "state",
+        "caseable": true,
+        "risk": "low",
+        "scope": "checkout/legacy",
+        "source_claim_ids": ["claim_legacy"],
+        "view_element_refs": ["view_checkout#legacy"],
+        "required_oracle_refs": ["claim_legacy_oracle"],
+        "required_capabilities": []
+      }
+    ],
+    "fact_routes": [
+      { "fact_id": "fact_blocked", "route_type": "obligations", "obligation_ids": ["obligation_blocked"] },
+      { "fact_id": "fact_grounded", "route_type": "obligations", "obligation_ids": ["obligation_grounded"] },
+      { "fact_id": "fact_na", "route_type": "not_applicable", "not_applicable_claim_id": "claim_exclusion" }
+    ],
+    "interaction_routes": [
+      { "candidate_id": "interaction_risk", "route_type": "exploratory", "exploratory_id": "exploratory_latency" }
+    ]
+  },
+  "classification": {
+    "grounded": [
+      {
+        "case_id": "case_grounded",
+        "title": "Submit a ready cart",
+        "scope": "checkout",
+        "risk": "high",
+        "role": { "value": "buyer", "evidence_ref": "claim_role", "support_review": "supported" },
+        "fact_ids": ["fact_grounded"],
+        "obligation_ids": ["obligation_grounded"],
+        "source_claim_ids": ["claim_grounded"],
+        "preconditions": [
+          {
+            "condition": "cart is ready",
+            "reachable_from": "empty cart",
+            "source_claim_ids": ["claim_grounded"],
+            "evidence_ref": "claim_grounded",
+            "support_review": "supported"
+          }
+        ],
+        "data": [
+          {
+            "name": "cart total boundary",
+            "value": "100.00",
+            "provenance": { "type": "derivation", "ref": "claim_data" },
+            "support_review": "supported"
+          }
+        ],
+        "steps": [
+          {
+            "step_id": "step_submit",
+            "action": "Submit checkout",
+            "action_evidence_ref": "claim_action",
+            "support_review": "supported",
+            "expectations": [
+              {
+                "kind": "obligation-oracle",
+                "expectation_id": "expectation_order_accepted",
+                "business_assertion": "The order is accepted",
+                "preceding_action_id": "step_submit",
+                "observer": "tester",
+                "observation_surface": "UI",
+                "observation_target": "order status",
+                "oracle": { "type": "state", "expected_state": "accepted", "comparison": "equals" },
+                "evidence_ref": "claim_oracle_grounded",
+                "oracle_evidence_refs": ["claim_oracle_grounded"],
+                "closes_obligation_id": "obligation_grounded",
+                "support_review": "supported"
+              }
+            ]
+          }
+        ],
+        "testability_profile": {
+          "capabilities": [
+            { "capability": "checkout-control", "status": "provided", "provenance_ref": "claim_capability" }
+          ],
+          "observers": [
+            { "observer": "tester", "observation_target": "order status", "status": "verified", "provenance_ref": "claim_capability" }
+          ],
+          "controls": [
+            { "control": "submit checkout", "status": "provided", "provenance_ref": "claim_capability" }
+          ]
+        },
+        "post_state": { "state": "order accepted", "evidence_ref": "claim_oracle_grounded", "support_review": "supported" },
+        "cleanup": {
+          "required": false,
+          "no_cleanup_reason": "The isolated order may remain for audit",
+          "no_cleanup_evidence_ref": "claim_cleanup",
+          "support_review": "supported"
+        },
+        "evidence_refs": [
+          "claim_action", "claim_capability", "claim_cleanup", "claim_data",
+          "claim_grounded", "claim_oracle_grounded", "claim_role"
+        ],
+        "execution_signature": {
+          "role": "buyer",
+          "precondition_state": "[{\"condition\":\"cart is ready\",\"reachable_from\":\"empty cart\"}]",
+          "data_partition": "[{\"name\":\"cart total boundary\",\"value\":\"100.00\"}]",
+          "action_path": ["Submit checkout"],
+          "oracle_refs": ["oracle_8335fa52c651d8e3"]
+        }
+      }
+    ],
+    "conditional": [],
+    "blocked": [
+      {
+        "obligation_id": "obligation_blocked",
+        "root_issue_id": "root_1b6bf4470ac73ce7",
+        "reason": "MISSING_ORACLE",
+        "risk": "critical",
+        "evidence_refs": ["claim_blocked"]
+      }
+    ],
+    "not_applicable": [
+      {
+        "obligation_id": "obligation_na",
+        "status": "not_applicable",
+        "exclusion_claim_id": "claim_exclusion",
+        "scope": "checkout/legacy",
+        "support_review": "supported"
+      }
+    ],
+    "exploratory": [
+      {
+        "exploratory_id": "exploratory_latency",
+        "title": "Probe degraded-network latency",
+        "scope": "checkout/network",
+        "risk": "medium",
+        "source_claim_ids": ["claim_latency_risk"]
+      }
+    ],
+    "diagnostics": []
+  },
+  "clarification": {
+    "action": "deliver",
+    "source_revision": 4,
+    "root_issues": [
+      {
+        "root_issue_id": "root_1b6bf4470ac73ce7",
+        "root_issue_key": "{\"missing_type\":\"oracle\",\"scope\":\"checkout/refund\",\"semantic_refs\":[\"claim_blocked\",\"claim_oracle_blocked\"]}",
+        "missing_type": "oracle",
+        "semantic_refs": ["claim_blocked", "claim_oracle_blocked"],
+        "scope": "checkout/refund",
+        "affected_obligation_ids": ["obligation_blocked"],
+        "risk_counts": { "critical": 1, "high": 0, "medium": 0, "low": 0 },
+        "source_revision": 4,
+        "question": "What state proves that a refund failed?",
+        "answerable": true,
+        "reasons": ["MISSING_ORACLE"],
+        "evidence_refs": ["claim_blocked"],
+        "batch_id": null
+      }
+    ],
+    "pending_root_issues": [],
+    "state": {
+      "source_revision": 4,
+      "clarification_event_seq": 1,
+      "asked_root_issue_ids": ["root_1b6bf4470ac73ce7"],
+      "root_issue_dispositions": [
+        { "root_issue_id": "root_1b6bf4470ac73ce7", "status": "suppressed_deferred" }
+      ],
+      "last_pending_root_issue_ids": [],
+      "last_question_set_digest": "",
+      "clarification_stop": { "reason": "user_requested_delivery", "source_revision": 4 },
+      "semantic_snapshot": null,
+      "root_snapshot_ledger": [
+        {
+          "root_issue_id": "root_1b6bf4470ac73ce7",
+          "root_issue_key": "{\"missing_type\":\"oracle\",\"scope\":\"checkout/refund\",\"semantic_refs\":[\"claim_blocked\",\"claim_oracle_blocked\"]}",
+          "missing_type": "oracle",
+          "semantic_refs": ["claim_blocked", "claim_oracle_blocked"],
+          "scope": "checkout/refund",
+          "affected_obligation_ids": ["obligation_blocked"],
+          "risk_counts": { "critical": 1, "high": 0, "medium": 0, "low": 0 },
+          "question": "What state proves that a refund failed?",
+          "answerable": true,
+          "reasons": ["MISSING_ORACLE"],
+          "evidence_refs": ["claim_blocked"],
+          "current": true
+        }
+      ]
+    },
+    "semantic_snapshot": {
+      "formal_test_points": [
+        { "obligation_id": "obligation_blocked", "evidence_level": "E0", "classification": "blocked", "blocked_reason": "MISSING_ORACLE" },
+        { "obligation_id": "obligation_grounded", "evidence_level": "E3", "classification": "grounded", "blocked_reason": null },
+        { "obligation_id": "obligation_na", "evidence_level": "E3", "classification": "not_applicable", "blocked_reason": null }
+      ],
+      "coverage_denominator": 3,
+      "delivery_sections": {
+        "grounded": ["obligation_grounded"],
+        "conditional": [],
+        "blocked": ["obligation_blocked"],
+        "exploratory": ["exploratory_latency"],
+        "coverage": { "formal_denominator": 3 },
+        "quality": { "delivery_status": "critical_gaps" }
+      }
+    },
+    "interaction": { "policy": "pause_for_clarification", "paused": false },
+    "diagnostics": []
+  },
+  "limits": [
+    "The bundle accounts only for accepted source facts and model Test Points.",
+    "Markdown is a projection and is not evidence."
+  ],
+  "expert_recall_limits": ["Expert recall requires hidden benchmark labels."]
+}

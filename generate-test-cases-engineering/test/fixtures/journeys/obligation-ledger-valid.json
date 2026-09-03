@@ -1,0 +1,137 @@
+{
+  "source_revision": 4,
+  "run_scope": "checkout",
+  "claims": [
+    {
+      "claim_id": "claim_rule",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": ["claim_rule_parent"]
+    },
+    {
+      "claim_id": "claim_rule_parent",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    },
+    {
+      "claim_id": "claim_blocked",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    },
+    {
+      "claim_id": "claim_not_applicable",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    },
+    {
+      "claim_id": "claim_exclusion",
+      "level": "E3",
+      "kind": "requirement",
+      "scope": "checkout",
+      "parent_claim_ids": []
+    }
+  ],
+  "fact_ledger": [
+    {
+      "fact_id": "fact_rule",
+      "claim_id": "claim_rule",
+      "status": "active",
+      "source_claim_ids": ["claim_rule"]
+    },
+    {
+      "fact_id": "fact_blocked",
+      "claim_id": "claim_blocked",
+      "status": "ambiguous",
+      "source_claim_ids": ["claim_blocked"]
+    },
+    {
+      "fact_id": "fact_not_applicable",
+      "claim_id": "claim_not_applicable",
+      "status": "active",
+      "source_claim_ids": ["claim_not_applicable"]
+    }
+  ],
+  "behavior_views": {
+    "schema_version": "1.0.0",
+    "source_revision": 4,
+    "views": [
+      {
+        "view_id": "view_decision",
+        "type": "decision",
+        "scope": "checkout",
+        "source_claim_ids": ["claim_rule"],
+        "elements": [
+          {
+            "element_id": "rule_checkout",
+            "kind": "decision-rule",
+            "conditions": ["cart is ready"],
+            "result": "checkout is allowed",
+            "priority": 0,
+            "source_claim_ids": ["claim_rule"],
+            "model_refs": []
+          }
+        ],
+        "relations": []
+      }
+    ],
+    "interaction_matrix": [
+      { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
+      { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+    ],
+    "obligation_inputs": {
+      "view_contexts": [],
+      "terminal_fact_routes": [
+        {
+          "fact_id": "fact_blocked",
+          "disposition": "blocked",
+          "issue_intent": {
+            "missing_type": "requirement",
+            "scope": "checkout",
+            "answerable": true,
+            "risk": "high",
+            "reasons": ["Required behavior is unresolved."],
+            "evidence_refs": []
+          }
+        },
+        {
+          "fact_id": "fact_not_applicable",
+          "disposition": "not_applicable",
+          "exclusion_claim_id": "claim_exclusion",
+          "scope": "checkout",
+          "support_review": "supported"
+        }
+      ],
+      "custom_responsibilities": [
+        {
+          "responsibility_type": "decision-outcome",
+          "semantic_key": "custom-checkout-observer",
+          "owner": {
+            "kind": "view-elements",
+            "view_element_refs": [
+              { "view_id": "view_decision", "element_id": "rule_checkout" }
+            ]
+          },
+          "scope": "checkout",
+          "risk": "medium",
+          "source_claim_ids": ["claim_rule"],
+          "required_oracle_refs": ["claim_rule"],
+          "required_capabilities": ["custom-observer"]
+        }
+      ],
+      "combination_requests": []
+    },
+    "interaction_candidates": []
+  }
+}

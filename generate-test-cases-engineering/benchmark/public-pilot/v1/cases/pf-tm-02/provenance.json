@@ -1,0 +1,12 @@
+{
+  "repository": "juniper-tc02e/ayin",
+  "commit": "773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8",
+  "source_url": "https://raw.githubusercontent.com/juniper-tc02e/ayin/773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8/docs/Ayin-PRD-and-SaaS-Plan.md",
+  "source_sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+  "content_digest": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+  "license_url": "https://raw.githubusercontent.com/juniper-tc02e/ayin/773fdd11e6cdc1c61234440ccdbdcd0188d3bcd8/LICENSE",
+  "license_sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+  "reported_license": "AGPL-3.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

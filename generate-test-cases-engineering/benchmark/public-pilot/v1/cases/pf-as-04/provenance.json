@@ -1,0 +1,12 @@
+{
+  "repository": "cloudflare/agents",
+  "commit": "73d2ed457ba02035d2b1d3efc785c012254ac216",
+  "source_url": "https://raw.githubusercontent.com/cloudflare/agents/73d2ed457ba02035d2b1d3efc785c012254ac216/docs/agents/queue.md",
+  "source_sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+  "content_digest": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+  "license_url": "https://raw.githubusercontent.com/cloudflare/agents/73d2ed457ba02035d2b1d3efc785c012254ac216/LICENSE",
+  "license_sha256": "b33ae783f02478cd31787cd07cbf61cd3a6fbee1a50b2baf832b8f0fb7c600f7",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T20:46:16Z"
+}

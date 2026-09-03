@@ -38,4 +38,4 @@ The `generate-test-cases` installed-shape artifact passed the revised single-sys
 - Capture ledger: `9a6db5c69ab6b9ab47d51020c27f2b8c73385b61c38cb7e12b199f66449d3af7`
 - Capture evidence root: `9c8666cfa550ec5f9fb77a25a8c926472fc86c38e2037b7e86280499300b1231`
 
-The candidate commit identifies the isolated development repository used to build and validate the installed artifact. The public repository intentionally publishes the installed Skill shape rather than local development dependencies or temporary worktrees.
+The candidate commit identifies the isolated development repository used to build and validate the installed artifact. Its tracked source snapshot is published under `generate-test-cases-engineering/`; local dependencies, nested Git metadata, runtime caches, and temporary worktrees remain excluded.

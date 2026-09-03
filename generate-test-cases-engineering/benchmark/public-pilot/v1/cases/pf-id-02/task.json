@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-ID-02",
+  "scope": "Scoped RBAC role assignments, object-level permission overrides, and explicit grant/deny outcomes",
+  "stratum": "identity/role/permission",
+  "source_paths": [
+    "cases/pf-id-02/source/prd.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}
