@@ -33,20 +33,27 @@ The release evidence requires:
 - a distinct capture and session identity for every run;
 - exact source, task, compiler-source, Schema, schema-manifest, Skill, and bundle
   bindings;
-- retained raw output and run-snapshot bytes with SHA-256 verification;
-- a completed terminal bundle for every capture;
-- byte-identical final and replay bundle digests for each durable run;
-- zero observed runner-protocol, source-revision, Schema, or traceability-integrity
-  hard failures;
+- retained transcripts containing the exact Agent artifact submissions and
+  normalized runner replies, with SHA-256 and Git-byte verification;
+- loader-derived completion, reply-schema validation, final-bundle validation,
+  and recovery for every capture—never submitter-authored pass booleans;
+- two independent transcript replays against the evaluated installed-shape
+  bundle, plus a completed-run CLI replay, with byte-identical output;
+- an acquisition revision that is an ancestor of the final evidence commit and
+  has byte-identical production source, Schema, Skill, references, and bundle;
+- zero derived runner-protocol, source-revision, Schema, or
+  traceability-integrity hard failures;
 - a clean runtime-derived candidate binding.
 
 Missing corpus, capture, or clean-candidate evidence returns
 `insufficient_evidence`. Malformed, contradictory, forged, or hard-failure
 evidence returns `fail`. Only complete evidence returns `pass`.
 
-The legacy comparative scorer remains in the repository to preserve historical
-tests and prior research, but it is not called by `npm run benchmark` and is not
-a release authority.
+The release loader validates only PRD, license, provenance, task, and stratum
+evidence. The legacy comparative scorer, comparator registry, machine review
+reports, adjudication, and defect ledgers remain in the repository to preserve
+historical tests and prior research, but they are not called or consumed by the
+release path and are not release authorities.
 
 ## Removed release prerequisites
 
@@ -65,6 +72,11 @@ provenance, protocol correctness, closed artifacts, durable replay, candidate
 binding, and repeat execution. It does **not** prove that humans judge the
 generated cases more accurate, more complete, or better than another system.
 Release reports must not make those claims.
+
+Every saved report carries the final candidate revision and its artifact
+digests, plus deterministic manifest, corpus, capture-ledger, and capture
+evidence-root digests. A report detached from those bindings has no release
+meaning.
 
 The previously discovered historical-defect traceability bypass remains a defect
 in the legacy expert scorer. Removing that scorer from the release path prevents

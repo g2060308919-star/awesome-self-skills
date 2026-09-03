@@ -17,25 +17,33 @@ The command emits one JSON report. Its status is exactly `pass`, `fail`, or
 
 - `manifest.json` fixes the policy, system, six strata, 30-case total, and three
   repeats per case.
-- The bound public catalog retains the exact PRD, license, provenance, and task
-  bytes. It must contain five admitted cases in every stratum.
+- The release-corpus validator reads only the bound PRD, license, provenance,
+  task, and stratum evidence. Comparator registries, review reports, expert
+  labels, and adjudication files are neither read nor required.
 - `captures.json` must contain 90 distinct target-system records. Every record
-  binds its source and task digests, five candidate artifact digests, one raw
-  output descriptor, and one run-snapshot descriptor.
-- Every run snapshot must record a completed terminal state, the durable run
-  digest, matching final/replay bundle digests, and the four closed hard-failure
-  observations.
-- The loader reads and hashes every referenced evidence file. Absolute paths,
-  parent traversal, symlinks, hardlinks, path reuse, unknown fields, digest drift,
-  duplicate IDs, duplicate sessions, duplicate repeats, and candidate drift fail
-  closed.
+  binds its source and task digests, acquisition revision, five candidate
+  artifact digests, and one transcript descriptor.
+- A transcript contains the exact four Agent-writable artifact submissions and
+  the normalized runner reply after each submission. Completion, reply-schema
+  validity, final bundle validity, recovery, and bundle digests are derived by
+  the loader; they are never accepted as submitter booleans.
+- The loader independently replays every transcript twice against the evaluated
+  installed-shape bundle and also re-invokes the CLI on the completed durable
+  run. The acquisition revision must be an ancestor whose production artifacts
+  are unchanged. Absolute paths, parent traversal, symlinks, hardlinks, path
+  reuse, unknown fields, digest drift, duplicate IDs/sessions/repeats, reply
+  drift, and candidate drift fail closed.
+- A successful report includes the final candidate SHA and artifact digests plus
+  manifest, corpus, ledger, transcript-root, reply-sequence, and bundle evidence
+  digests.
 
 ## Interpretation
 
 `pass` means the target completed all 90 source-bound runs without an observed
-engineering hard failure and every durable run replayed byte-identically. It is
+engineering hard failure and every transcript replayed byte-identically. It is
 not an expert quality score and makes no comparative-superiority claim.
 
 The initial checked-in ledger is intentionally empty, so the correct status is
-`insufficient_evidence` until genuine runs are retained. Synthetic pilot outputs
-must never be copied into this ledger.
+`insufficient_evidence` until genuine Agent-authored runs are retained. Synthetic
+journey fixtures, self-attested snapshots, and arbitrary raw output must never be
+copied into this ledger.
