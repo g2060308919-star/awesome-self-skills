@@ -29,6 +29,21 @@ test('release corpus validates only source, license, provenance, task, and strat
   assert.deepEqual(report.issues, []);
 });
 
+test('release corpus consumes caller-verified catalog bytes without rereading a mutable catalog path', async (/** @type {any} */ context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-release-corpus-bound-'));
+  context.after(async () => rm(root, { recursive: true, force: true }));
+  const corpusRoot = path.join(root, 'benchmark/public-pilot/v1');
+  await cp(path.dirname(catalogPath), corpusRoot, { recursive: true });
+  const verifiedBytes = await readFile(path.join(corpusRoot, 'catalog.json'));
+
+  const report = await validateReleaseCorpus(
+    path.join(corpusRoot, 'catalog-does-not-exist.json'), root, undefined, verifiedBytes
+  );
+
+  assert.equal(report.status, 'valid');
+  assert.equal(report.cases.length, 30);
+});
+
 test('release corpus fails when retained source bytes do not match the catalog', async (/** @type {any} */ context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-release-corpus-tamper-'));
   context.after(async () => rm(root, { recursive: true, force: true }));

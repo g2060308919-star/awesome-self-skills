@@ -16,12 +16,17 @@ The three immutable baseline handoff documents remain unchanged.
 | Independent corpus boundary | Importing `benchmark/release-corpus.mjs` failed with `ERR_MODULE_NOT_FOUND` | Focused corpus tests passed 2/2 after removing all release-path reads of comparator, review, and adjudication assets |
 | Anti-forgery capture evidence | A complete 90-record layout containing arbitrary raw bytes and hand-written snapshots returned only `insufficient_evidence` and reported 90 completed captures | The same retained layout now returns `fail`, reports zero completed captures, and emits `CAPTURE_EVIDENCE_FORGED` |
 | Actual runner replay | No test exercised retained submissions against the final installed-shape bundle | Focused replay tests passed 2/2: genuine artifact/reply transcript reproduced twice plus CLI recovery; a changed recorded reply was rejected |
+| Operator-witnessed corpus | The checked-in ledger contained 0/90 captures | Three observed sub-Agents produced 90 unique case/repeat, session, and observation records across all 30 PRDs |
+| Witness enforcement | The release verifier accepted any nonblank Agent task ID | Capture, build, replay, and release evaluation share a closed three-Agent allowlist; the builder also enforces each Agent's assigned strata |
+| Immutable corpus consumption | The loader bound catalog bytes and then reread the mutable path | The release corpus validator consumes the already Git-bound catalog bytes supplied by the loader |
+| Safe evidence assembly | The builder wrote while validating and accepted unbounded linked input files | The builder validates the exact 30-by-3 matrix first, rejects unsafe files and paths, stages all outputs, and replaces the output set only after validation |
 
 ## Current evidence state
 
 - Corpus: 30 retained public PRDs, six frozen strata, five per stratum.
-- Target captures: 0/90.
-- Current single-system result: `insufficient_evidence`.
+- Target captures: 90/90, with three unique captures for each of 30 PRDs.
+- Expected clean-candidate result: `pass`; release authority still requires a
+  successful fresh-checkout run bound to the exact final commit.
 - Capture evidence contract: exact Agent submissions and normalized replies;
   completion and replay are loader-derived, not self-attested.
 - Candidate/evidence report binding: final SHA, six candidate artifact digests,

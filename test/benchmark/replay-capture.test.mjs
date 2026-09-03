@@ -48,7 +48,7 @@ async function genuineTranscript() {
     task_sha256: 'f'.repeat(64), runtime_revision: '1'.repeat(40), artifact_digests: artifactDigests,
     operator_witness: {
       method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
-      agent_task_id: '/root/test-worker', observation_id: 'observation-genuine-1'
+      agent_task_id: '/root/formal_defect_gate_audit', observation_id: 'observation-genuine-1'
     }
   };
   const run = await runInstalledRevision(revision);
@@ -122,5 +122,20 @@ test('capture verifier rejects a matching PRD used only as a decoy source', asyn
       replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
     }),
     /not exactly bound/u
+  );
+});
+
+test('capture verifier rejects a transcript that names an unassigned Agent task', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  capture.operator_witness.agent_task_id = '/root/unobserved-agent';
+  transcript.operator_witness.agent_task_id = '/root/unobserved-agent';
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /contract or binding/u
   );
 });

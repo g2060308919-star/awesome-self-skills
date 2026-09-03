@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -44,4 +44,21 @@ test('capture verifier rejects transcript bytes above the fixed resource limit',
     }),
     /size limit/u
   );
+});
+
+test('candidate runtime rejects committed symlinks inside the installed runtime tree', async (/** @type {any} */ context) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-runtime-link-'));
+  context.after(async () => rm(temporaryRoot, { recursive: true, force: true }));
+  const cloneRoot = path.join(temporaryRoot, 'candidate');
+  await execFileAsync('git', ['clone', '--quiet', '--no-hardlinks', repositoryRoot, cloneRoot]);
+  const linkPath = path.join(cloneRoot, 'skill/generate-test-cases/scripts/unsafe-link');
+  await symlink('test-compiler.mjs', linkPath);
+  await execFileAsync('git', ['add', 'skill/generate-test-cases/scripts/unsafe-link'], { cwd: cloneRoot });
+  await execFileAsync('git', [
+    '-c', 'user.name=Runtime Test', '-c', 'user.email=runtime-test@example.invalid',
+    'commit', '--quiet', '-m', 'test runtime symlink'
+  ], { cwd: cloneRoot });
+  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: cloneRoot });
+
+  await assert.rejects(materializeCandidateRuntime(cloneRoot, stdout.trim()), /missing or unsafe/u);
 });

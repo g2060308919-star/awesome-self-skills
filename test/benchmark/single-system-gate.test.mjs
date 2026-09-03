@@ -79,7 +79,7 @@ function passingInput() {
           },
           operator_witness: {
             method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
-            agent_task_id: '/root/test-worker', observation_id: `${caseId}-observation-${repeat}`
+            agent_task_id: '/root/formal_defect_gate_audit', observation_id: `${caseId}-observation-${repeat}`
           }
         });
       }
@@ -165,6 +165,7 @@ test('single-system release fails closed for forged provenance and observed proc
   forged.captures[1].session_id = forged.captures[0].session_id;
   forged.captures[2].replay_bundle_sha256 = SHA_D;
   forged.captures[3].process_failures.runner_protocol_violation = true;
+  forged.captures[4].operator_witness.agent_task_id = '/root/unobserved-agent';
 
   const report = evaluateSingleSystemRelease(forged);
 
@@ -174,6 +175,7 @@ test('single-system release fails closed for forged provenance and observed proc
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_SESSION_DUPLICATE'), true);
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_REPLAY_MISMATCH'), true);
   assert.equal(report.issues.some((issue) => issue.code === 'PROCESS_HARD_FAILURE'), true);
+  assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_WITNESS_INVALID'), true);
 });
 
 test('single-system release keeps blocked or unreadable captures incomplete rather than passing them', () => {
@@ -224,6 +226,18 @@ test('single-system release CLI emits one JSON line and rejects any argument cou
     assert.equal(report.release_eligible, false);
     assert.equal(report.issues[0].code, 'RELEASE_ARGUMENTS_INVALID');
   }
+});
+
+test('release loader rejects an oversized manifest before parsing it', async (/** @type {any} */ context) => {
+  const temporaryRoot = await fsPromises.mkdtemp(path.join(repositoryRoot, 'benchmark/release/.oversized-manifest-'));
+  context.after(async () => fsPromises.rm(temporaryRoot, { recursive: true, force: true }));
+  const manifestPath = path.join(temporaryRoot, 'manifest.json');
+  await fsPromises.writeFile(manifestPath, ' '.repeat((1024 * 1024) + 1));
+
+  const report = await loadSingleSystemRelease(manifestPath, repositoryRoot);
+
+  assert.equal(report.status, 'fail');
+  assert.equal(report.issues[0].code, 'RELEASE_MANIFEST_UNREADABLE');
 });
 
 test('npm benchmark is the single-system release gate and exposes no expert metrics', async () => {

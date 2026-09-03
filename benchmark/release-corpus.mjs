@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { canonicalStringify } from '../src/canonical.mjs';
-import { verifyCandidateEvidenceBytes } from './score.mjs';
+import { verifyCandidateEvidenceBytes } from './candidate-binding.mjs';
 
 export const RELEASE_CORPUS_STRATA = Object.freeze([
   'transaction/order/payment',
@@ -115,8 +115,9 @@ async function readCorpusArtifact(options) {
  * @param {string} catalogPath
  * @param {string} repositoryRoot
  * @param {any} [candidateBinding]
+ * @param {Uint8Array|string} [verifiedCatalogBytes]
  */
-export async function validateReleaseCorpus(catalogPath, repositoryRoot, candidateBinding) {
+export async function validateReleaseCorpus(catalogPath, repositoryRoot, candidateBinding, verifiedCatalogBytes) {
   /** @type {{code:string,path:string,message:string,severity:'error'|'incomplete'}[]} */
   const issues = [];
   /** @param {string} code @param {string} issuePath @param {string} message @param {'error'|'incomplete'} [severity] */
@@ -130,7 +131,11 @@ export async function validateReleaseCorpus(catalogPath, repositoryRoot, candida
   let catalogRootReal;
   try {
     [catalog, catalogRootReal] = await Promise.all([
-      readFile(absoluteCatalogPath, 'utf8').then(JSON.parse),
+      verifiedCatalogBytes === undefined
+        ? readFile(absoluteCatalogPath, 'utf8').then(JSON.parse)
+        : Promise.resolve(JSON.parse(typeof verifiedCatalogBytes === 'string'
+          ? verifiedCatalogBytes
+          : new TextDecoder().decode(verifiedCatalogBytes))),
       realpath(catalogRoot)
     ]);
   } catch (error) {

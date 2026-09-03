@@ -5,9 +5,15 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
-import { deriveCandidateBinding } from './score.mjs';
+import { deriveCandidateBinding } from './candidate-binding.mjs';
+import {
+  OPERATOR_TASK_ID,
+  OPERATOR_WITNESS_METHOD,
+  isAllowedAgentForCase
+} from './operator-witness.mjs';
 
 const execFileAsync = promisify(execFile);
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const cryptoModule = /** @type {any} */ (await import('node:crypto'));
 const randomUUID = cryptoModule.randomUUID ?? cryptoModule.default.randomUUID;
 const repositoryRoot = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -19,11 +25,7 @@ const STAGE_FILES = Object.freeze({
   source_pack: 'source-pack.json', evidence_claims: 'evidence-claims.json',
   behavior_views: 'behavior-views.json', case_drafts: 'case-drafts.json'
 });
-const ALLOWED_AGENTS = new Set([
-  '/root/formal_defect_gate_audit',
-  '/root/time_quota_defect_expansion',
-  '/root/time_quota_defect_expansion/standards_review'
-]);
+const MAX_AGENT_ARTIFACT_BYTES = 16 * 1024 * 1024;
 
 /** @param {any} bytes */
 function sha256(bytes) {
@@ -72,7 +74,7 @@ async function safeWorkspace(workspace) {
 
 /** @param {string} workspace @param {string} caseId @param {number} repeat @param {string} agentTaskId */
 async function start(workspace, caseId, repeat, agentTaskId) {
-  if (![1, 2, 3].includes(repeat) || !ALLOWED_AGENTS.has(agentTaskId)) {
+  if (![1, 2, 3].includes(repeat) || !isAllowedAgentForCase(agentTaskId, caseId)) {
     throw new Error('Capture repeat or witnessed Agent task is invalid.');
   }
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
@@ -103,7 +105,7 @@ async function start(workspace, caseId, repeat, agentTaskId) {
       bundle: binding.bundle_sha256
     },
     operator_witness: {
-      method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
+      method: OPERATOR_WITNESS_METHOD, operator_task_id: OPERATOR_TASK_ID,
       agent_task_id: agentTaskId, observation_id: `observation-${randomUUID()}`
     },
     expected_stage: 'source_pack',
@@ -121,10 +123,30 @@ async function start(workspace, caseId, repeat, agentTaskId) {
 async function submit(workspace, artifactPath) {
   const statePath = path.join(workspace, 'capture-state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
+  if (state?.schema_version !== '1.0.0'
+    || state?.capture_id !== `${state?.case_id}-r${state?.repeat}`
+    || ![1, 2, 3].includes(state?.repeat)
+    || state?.operator_witness?.method !== OPERATOR_WITNESS_METHOD
+    || state?.operator_witness?.operator_task_id !== OPERATOR_TASK_ID
+    || !isAllowedAgentForCase(state?.operator_witness?.agent_task_id, state?.case_id)
+    || typeof state?.session_id !== 'string' || state.session_id.trim().length === 0
+    || typeof state?.operator_witness?.observation_id !== 'string'
+    || state.operator_witness.observation_id.trim().length === 0) {
+    throw new Error('Capture state no longer matches the witnessed Agent assignment.');
+  }
   const absoluteArtifact = path.resolve(artifactPath);
   if (!path.isAbsolute(artifactPath) || !isInside(workspace, absoluteArtifact)) {
     throw new Error('Submitted artifact must be an absolute file inside the capture workspace.');
   }
+  const artifactEntry = await fsPromises.lstat(absoluteArtifact);
+  if (artifactEntry.isSymbolicLink() || !artifactEntry.isFile() || artifactEntry.nlink !== 1
+    || artifactEntry.size > MAX_AGENT_ARTIFACT_BYTES) {
+    throw new Error('Submitted artifact must be a bounded regular singly linked file.');
+  }
+  const [workspaceReal, artifactReal] = await Promise.all([
+    fsPromises.realpath(workspace), fsPromises.realpath(absoluteArtifact)
+  ]);
+  if (!isInside(workspaceReal, artifactReal)) throw new Error('Submitted artifact resolved outside the capture workspace.');
   const artifact = JSON.parse(await readFile(absoluteArtifact, 'utf8'));
   const stage = state.expected_stage;
   const stageFile = /** @type {Record<string,string>} */ (STAGE_FILES)[stage];

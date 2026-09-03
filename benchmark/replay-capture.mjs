@@ -7,6 +7,11 @@ import { promisify } from 'node:util';
 
 import { canonicalStringify, digest as semanticDigest } from '../src/canonical.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../src/schema-validator.mjs';
+import {
+  OPERATOR_TASK_ID,
+  OPERATOR_WITNESS_METHOD,
+  isAllowedAgentTaskId
+} from './operator-witness.mjs';
 
 const execFileAsync = promisify(execFile);
 const STAGE_FILES = Object.freeze({
@@ -77,9 +82,9 @@ function sameArtifactDigests(left, right) {
 function isOperatorWitness(value) {
   if (!hasExactKeys(value, WITNESS_KEYS)) return false;
   const witness = /** @type {Record<string,unknown>} */ (value);
-  return witness.method === 'operator-observed-codex-subagent-v1'
-    && witness.operator_task_id === '/root'
-    && isNonblankString(witness.agent_task_id)
+  return witness.method === OPERATOR_WITNESS_METHOD
+    && witness.operator_task_id === OPERATOR_TASK_ID
+    && isAllowedAgentTaskId(witness.agent_task_id)
     && isNonblankString(witness.observation_id);
 }
 
@@ -183,11 +188,11 @@ function evidenceClaimsUseOnlySource(evidenceClaims, sourceId) {
 /**
  * Replay a transcript once using the candidate's named export. Every recorded
  * reply is schema-validated and compared after run-path normalization.
- * @param {{transcript:any,runnerPath:string,replySchema:any,bundleSchema:any,taskContract:any,sourceContract:any}} options
+ * @param {{transcript:any,runnerPath:string,replySchema:any,bundleSchema:any,taskContract:any,sourceContract:any,deadline?:number}} options
  */
 async function replayOnce(options) {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-release-replay-'));
-  const deadline = Date.now() + REPLAY_TIMEOUT_MS;
+  const deadline = Math.min(options.deadline ?? Number.POSITIVE_INFINITY, Date.now() + REPLAY_TIMEOUT_MS);
   try {
     let expectedStage = 'source_pack';
     /** @type {any[]} */
@@ -262,7 +267,7 @@ async function replayOnce(options) {
 /**
  * Verify retained capture bytes by replaying the exact Agent submissions twice
  * against the evaluated installed-shape bundle.
- * @param {{transcriptBytes:any,expected:any,candidateRoot:string,runnerPath:string,replySchemaPath:string,bundleSchemaPath:string,taskContract:any,sourceContract:any}} options
+ * @param {{transcriptBytes:any,expected:any,candidateRoot:string,runnerPath:string,replySchemaPath:string,bundleSchemaPath:string,taskContract:any,sourceContract:any,deadline?:number}} options
  */
 export async function verifyCaptureTranscript(options) {
   if (!options.transcriptBytes || typeof options.transcriptBytes.byteLength !== 'number'
@@ -299,7 +304,8 @@ export async function verifyCaptureTranscript(options) {
   ]);
   const replayOptions = {
     transcript, runnerPath: options.runnerPath, replySchema, bundleSchema,
-    taskContract: options.taskContract, sourceContract: options.sourceContract
+    taskContract: options.taskContract, sourceContract: options.sourceContract,
+    deadline: options.deadline
   };
   const first = await replayOnce(replayOptions);
   const second = await replayOnce(replayOptions);

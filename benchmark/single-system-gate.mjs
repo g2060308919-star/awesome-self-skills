@@ -9,10 +9,15 @@ import { validateReleaseCorpus } from './release-corpus.mjs';
 import { verifyCaptureTranscript } from './replay-capture.mjs';
 import { materializeCandidateRuntime } from './candidate-runtime.mjs';
 import {
+  OPERATOR_TASK_ID,
+  OPERATOR_WITNESS_METHOD,
+  isAllowedAgentTaskId
+} from './operator-witness.mjs';
+import {
   deriveCandidateBinding,
   reconcileCandidateBindings,
   verifyCandidateEvidenceBytes
-} from './score.mjs';
+} from './candidate-binding.mjs';
 
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const lstat = fsPromises.lstat;
@@ -90,6 +95,8 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 const REVISION = /^[a-f0-9]{40}$/u;
 const DEFAULT_REPOSITORY_ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const MAX_RETAINED_ARTIFACT_BYTES = 64 * 1024 * 1024;
+const MAX_RELEASE_MANIFEST_BYTES = 1024 * 1024;
+const RELEASE_GATE_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function isRecord(value) {
@@ -243,9 +250,9 @@ export function evaluateSingleSystemRelease(input) {
     } else sessionIds.add(capture.session_id);
     const witness = capture.operator_witness;
     if (!hasExactKeys(witness, ['method', 'operator_task_id', 'agent_task_id', 'observation_id'])
-      || witness.method !== 'operator-observed-codex-subagent-v1'
-      || witness.operator_task_id !== '/root'
-      || !isNonblankString(witness.agent_task_id)
+      || witness.method !== OPERATOR_WITNESS_METHOD
+      || witness.operator_task_id !== OPERATOR_TASK_ID
+      || !isAllowedAgentTaskId(witness.agent_task_id)
       || !isNonblankString(witness.observation_id)
       || observationIds.has(witness.observation_id)) {
       fail('CAPTURE_WITNESS_INVALID', `${path}/operator_witness`, 'Every capture requires one distinct operator-observed Agent session witness.');
@@ -475,6 +482,7 @@ function mergeLoadIssues(report, loadIssues) {
  * @param {string} [candidateRoot]
  */
 export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFAULT_REPOSITORY_ROOT) {
+  const releaseDeadline = Date.now() + RELEASE_GATE_TIMEOUT_MS;
   if (!isNonblankString(manifestPath) || !isNonblankString(candidateRoot)) {
     return loadFailureReport('RELEASE_PATH_INVALID', 'Manifest and candidate root paths are required.');
   }
@@ -491,7 +499,10 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
   let manifestDigest;
   try {
     const manifestEntry = await lstat(absoluteManifest);
-    if (manifestEntry.isSymbolicLink() || !manifestEntry.isFile() || manifestEntry.nlink !== 1) throw new Error('Manifest is not a regular singly linked file.');
+    if (manifestEntry.isSymbolicLink() || !manifestEntry.isFile() || manifestEntry.nlink !== 1
+      || manifestEntry.size > MAX_RELEASE_MANIFEST_BYTES) {
+      throw new Error('Manifest is not a bounded regular singly linked file.');
+    }
     const manifestBytes = await readFile(absoluteManifest);
     manifestDigest = digest(manifestBytes);
     manifest = JSON.parse(manifestBytes.toString('utf8'));
@@ -518,7 +529,8 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     catalogReport = await validateReleaseCorpus(
       path.resolve(repositoryRoot, manifest.corpus_catalog.repository_path),
       repositoryRoot,
-      initialBinding
+      initialBinding,
+      catalogBytes
     );
     for (const issue of catalogReport.issues) loadIssues.push({
       code: issue.code,
@@ -595,6 +607,7 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     }
     const caseValue = corpusIndex.get(record.case_id);
     try {
+      if (Date.now() >= releaseDeadline) throw new Error('Release gate exceeded its fixed execution deadline.');
       if (!caseValue) throw new Error('Capture case is not present in the verified corpus.');
       if (!candidateRuntime) throw new Error('Frozen candidate runtime is unavailable.');
       if (!initialBinding.final_candidate_sha) throw new Error('Candidate revision is unavailable.');
@@ -624,7 +637,8 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
           repository: caseValue.repository,
           commit: caseValue.commit,
           source_sha256: caseValue.source_sha256
-        }
+        },
+        deadline: releaseDeadline
       });
       verifiedCaptures.push({
         capture_id: record.capture_id,

@@ -59,9 +59,16 @@ export async function materializeCandidateRuntime(repositoryRoot, revision) {
   }
   const root = path.resolve(repositoryRoot);
   await rejectLocalObjectSubstitution(root);
-  const listing = await git(root, ['ls-tree', '-r', '--name-only', revision, '--', RUNTIME_PREFIX]);
-  const files = listing.trimEnd().split('\n').filter(Boolean);
-  if (files.length === 0 || files.length > 64 || files.some((/** @type {string} */ entry) => !safeTreePath(entry))) {
+  const listing = await git(root, ['ls-tree', '-r', revision, '--', RUNTIME_PREFIX]);
+  const entries = listing.trimEnd().split('\n').filter(Boolean).map((/** @type {string} */ line) => {
+    const match = /^(\d{6}) (\w+) [a-f0-9]{40}\t(.+)$/u.exec(line);
+    if (!match) throw new Error('Candidate runtime tree entry is malformed.');
+    return { mode: match[1], type: match[2], path: match[3] };
+  });
+  const files = entries.map((/** @type {{mode:string,type:string,path:string}} */ entry) => entry.path);
+  if (files.length === 0 || files.length > 64
+    || entries.some((/** @type {{mode:string,type:string,path:string}} */ entry) => !['100644', '100755'].includes(entry.mode)
+      || entry.type !== 'blob' || !safeTreePath(entry.path))) {
     throw new Error('Candidate runtime tree is missing or unsafe.');
   }
   for (const required of REQUIRED_FILES) {

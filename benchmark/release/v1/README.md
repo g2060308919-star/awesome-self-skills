@@ -53,7 +53,8 @@ Use `benchmark/operator-capture.mjs` while the root task observes the assigned
 sub-Agent. `start` creates a fresh durable run and `submit` records each exact
 artifact and runner reply; only `finished` produces `transcript.json`.
 
-The initial checked-in ledger is intentionally empty, so the correct status is
-`insufficient_evidence` until genuine Agent-authored runs are retained. Synthetic
-journey fixtures, self-attested snapshots, and arbitrary raw output must never be
-copied into this ledger.
+The checked-in ledger contains 90 operator-witnessed runs: 30 distinct PRDs with
+three fresh captures each. The offline verifier accepts only the three assigned
+Agent task IDs, and the capture builder also enforces the recorded stratum
+assignment. Synthetic journey fixtures, self-attested snapshots, and arbitrary
+raw output must never be copied into this ledger.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -43,4 +43,40 @@ test('operator capture refuses an unwitnessed Agent identity', async (/** @type 
 
   assert.equal(output.status, 'fatal');
   assert.match(output.message, /witnessed Agent task/u);
+});
+
+test('operator capture refuses an allowed Agent assigned to another corpus stratum', async (/** @type {any} */ context) => {
+  const workspace = path.join(
+    repositoryRoot, 'benchmark/release/v1/operator-work', `.capture-test-wrong-assignment-${process.pid}`
+  );
+  context.after(async () => rm(workspace, { recursive: true, force: true }));
+  const result = await execFileAsync(process.execPath, [
+    entry, 'start', workspace, 'PF-TR-01', '1', '/root/time_quota_defect_expansion'
+  ], { cwd: repositoryRoot });
+  const output = JSON.parse(result.stdout);
+
+  assert.equal(output.status, 'fatal');
+  assert.match(output.message, /witnessed Agent task/u);
+});
+
+test('operator capture refuses a worker-edited witness in capture state', async (/** @type {any} */ context) => {
+  const workspace = path.join(
+    repositoryRoot, 'benchmark/release/v1/operator-work', `.capture-test-state-tamper-${process.pid}`
+  );
+  context.after(async () => rm(workspace, { recursive: true, force: true }));
+  await execFileAsync(process.execPath, [
+    entry, 'start', workspace, 'PF-TR-01', '1', '/root/formal_defect_gate_audit'
+  ], { cwd: repositoryRoot });
+  const statePath = path.join(workspace, 'capture-state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  const artifactPath = path.join(workspace, 'submission.json');
+  await writeFile(artifactPath, '{}\n');
+
+  const result = await execFileAsync(process.execPath, [entry, 'submit', workspace, artifactPath], { cwd: repositoryRoot });
+  const output = JSON.parse(result.stdout);
+
+  assert.equal(output.status, 'fatal');
+  assert.match(output.message, /witnessed Agent assignment/u);
 });
