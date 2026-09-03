@@ -366,20 +366,66 @@ function canonicalCaptureEvidence(captures) {
  * @param {string} finalRevision
  */
 async function verifyRuntimeRevision(repositoryRoot, runtimeRevision, finalRevision) {
+  const projectRoot = await realpath(path.resolve(repositoryRoot));
+  const { stdout: gitRootOutput } = /** @type {any} */ (await execFileAsync(
+    'git', ['rev-parse', '--show-toplevel'], {
+      cwd: projectRoot, encoding: 'utf8', timeout: 30_000,
+      env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+    }
+  ));
+  const gitRoot = await realpath(path.resolve(gitRootOutput.trim()));
+  const currentPrefix = path.relative(gitRoot, projectRoot).split(path.sep).join('/');
+  if (currentPrefix === '..' || currentPrefix.startsWith('../') || path.isAbsolute(currentPrefix)) {
+    throw new Error('Candidate project root escaped its Git checkout.');
+  }
   await execFileAsync('git', ['merge-base', '--is-ancestor', runtimeRevision, finalRevision], {
-    cwd: repositoryRoot, encoding: 'utf8', timeout: 30_000,
+    cwd: gitRoot, encoding: 'utf8', timeout: 30_000,
     env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
   });
-  await execFileAsync('git', [
-    'diff', '--quiet', runtimeRevision, finalRevision, '--',
+
+  const revisionPrefix = async (/** @type {string} */ revision) => {
+    const candidates = currentPrefix.length > 0 ? [currentPrefix, ''] : [''];
+    for (const candidate of candidates) {
+      const rooted = (/** @type {string} */ relativePath) => candidate.length > 0
+        ? `${candidate}/${relativePath}`
+        : relativePath;
+      try {
+        await execFileAsync('git', ['cat-file', '-e', `${revision}:${rooted('src')}`], {
+          cwd: gitRoot, encoding: 'utf8', timeout: 30_000,
+          env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+        });
+        await execFileAsync('git', ['cat-file', '-e', `${revision}:${rooted('skill/generate-test-cases/scripts')}`], {
+          cwd: gitRoot, encoding: 'utf8', timeout: 30_000,
+          env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+        });
+        return candidate;
+      } catch {
+        // The historical development repository stored the project at its Git root.
+      }
+    }
+    throw new Error(`Revision ${revision} does not contain the generate-test-cases project.`);
+  };
+
+  const runtimePrefix = await revisionPrefix(runtimeRevision);
+  const finalPrefix = await revisionPrefix(finalRevision);
+  const rooted = (/** @type {string} */ prefix, /** @type {string} */ relativePath) => prefix.length > 0
+    ? `${prefix}/${relativePath}`
+    : relativePath;
+  for (const productionPath of [
     'src',
     'skill/generate-test-cases/SKILL.md',
     'skill/generate-test-cases/references',
     'skill/generate-test-cases/scripts'
-  ], {
-    cwd: repositoryRoot, encoding: 'utf8', timeout: 30_000,
-    env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
-  });
+  ]) {
+    await execFileAsync('git', [
+      'diff', '--quiet',
+      `${runtimeRevision}:${rooted(runtimePrefix, productionPath)}`,
+      `${finalRevision}:${rooted(finalPrefix, productionPath)}`
+    ], {
+      cwd: gitRoot, encoding: 'utf8', timeout: 30_000,
+      env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+    });
+  }
 }
 
 /**
