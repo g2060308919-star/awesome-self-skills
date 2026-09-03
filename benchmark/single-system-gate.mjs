@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 
-import { validatePublicPilot } from './public-pilot/validate.mjs';
+import { validateReleaseCorpus } from './release-corpus.mjs';
+import { verifyCaptureTranscript } from './replay-capture.mjs';
 import {
   deriveCandidateBinding,
   reconcileCandidateBindings,
@@ -13,6 +16,7 @@ import {
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const lstat = fsPromises.lstat;
 const realpath = fsPromises.realpath;
+const execFileAsync = promisify(execFile);
 
 export const RELEASE_STRATA = Object.freeze([
   'transaction/order/payment',
@@ -32,7 +36,7 @@ const POLICY_KEYS = Object.freeze([
   'required_case_count',
   'strata'
 ]);
-const CASE_KEYS = Object.freeze(['case_id', 'stratum', 'source_sha256', 'task_sha256']);
+const CASE_KEYS = Object.freeze(['case_id', 'stratum', 'source_sha256', 'task_sha256', 'task_scope']);
 const CANDIDATE_KEYS = Object.freeze([
   'valid', 'clean', 'repository_revision', 'artifact_digests'
 ]);
@@ -72,18 +76,9 @@ const LEDGER_CAPTURE_KEYS = Object.freeze([
   'session_id',
   'source_sha256',
   'task_sha256',
+  'runtime_revision',
   'artifact_digests',
-  'raw_output',
-  'run_snapshot'
-]);
-const RUN_SNAPSHOT_KEYS = Object.freeze([
-  'schema_version',
-  'capture_id',
-  'terminal_status',
-  'run_directory_sha256',
-  'final_bundle_sha256',
-  'replay_bundle_sha256',
-  'process_failures'
+  'transcript'
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const REVISION = /^[a-f0-9]{40}$/u;
@@ -182,7 +177,8 @@ export function evaluateSingleSystemRelease(input) {
       || !isNonblankString(caseValue.case_id)
       || !RELEASE_STRATA.includes(caseValue.stratum)
       || !isDigest(caseValue.source_sha256)
-      || !isDigest(caseValue.task_sha256)) {
+      || !isDigest(caseValue.task_sha256)
+      || !isNonblankString(caseValue.task_scope)) {
       fail('CORPUS_CASE_INVALID', path, 'Corpus cases must use the closed source-bound contract.');
       continue;
     }
@@ -320,6 +316,40 @@ function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+/** @param {any[]} captures */
+function canonicalCaptureEvidence(captures) {
+  return JSON.stringify([...captures]
+    .sort((left, right) => left.capture_id.localeCompare(right.capture_id))
+    .map((capture) => ({
+      capture_id: capture.capture_id,
+      runtime_revision: capture.runtime_revision,
+      transcript_sha256: capture.transcript_sha256,
+      reply_sequence_sha256: capture.run_directory_sha256,
+      final_bundle_sha256: capture.final_bundle_sha256,
+      replay_bundle_sha256: capture.replay_bundle_sha256
+    })));
+}
+
+/**
+ * A capture may precede the evidence commit, but only when the evaluated
+ * production artifacts are byte-identical and its revision is an ancestor.
+ * @param {string} repositoryRoot
+ * @param {string} runtimeRevision
+ * @param {string} finalRevision
+ */
+async function verifyRuntimeRevision(repositoryRoot, runtimeRevision, finalRevision) {
+  await execFileAsync('git', ['merge-base', '--is-ancestor', runtimeRevision, finalRevision], {
+    cwd: repositoryRoot, encoding: 'utf8'
+  });
+  await execFileAsync('git', [
+    'diff', '--quiet', runtimeRevision, finalRevision, '--',
+    'src',
+    'skill/generate-test-cases/SKILL.md',
+    'skill/generate-test-cases/references',
+    'skill/generate-test-cases/scripts'
+  ], { cwd: repositoryRoot, encoding: 'utf8' });
+}
+
 /**
  * @param {string} repositoryRoot
  * @param {any} descriptor
@@ -454,10 +484,22 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
   /** @type {any} */
   let catalogReport;
   let ledger;
+  /** @type {any|null} */
+  let ledgerBytes = null;
   try {
     const catalogBytes = await readBoundArtifact(repositoryRoot, manifest.corpus_catalog, initialBinding, physicalPaths);
     catalog = JSON.parse(catalogBytes.toString('utf8'));
-    catalogReport = await validatePublicPilot(path.resolve(repositoryRoot, manifest.corpus_catalog.repository_path));
+    catalogReport = await validateReleaseCorpus(
+      path.resolve(repositoryRoot, manifest.corpus_catalog.repository_path),
+      repositoryRoot,
+      initialBinding
+    );
+    for (const issue of catalogReport.issues) loadIssues.push({
+      code: issue.code,
+      path: `/corpus_catalog/file${issue.path}`,
+      message: issue.message,
+      severity: issue.severity === 'error' ? 'fail' : 'incomplete'
+    });
   } catch (error) {
     loadIssues.push({
       code: 'CORPUS_EVIDENCE_INVALID', path: '/corpus_catalog',
@@ -468,7 +510,7 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     catalogReport = { status: 'invalid', counts: { pilot_admitted: 0, by_stratum: {} }, issues: [] };
   }
   try {
-    const ledgerBytes = await readBoundArtifact(repositoryRoot, manifest.capture_ledger, initialBinding, physicalPaths);
+    ledgerBytes = await readBoundArtifact(repositoryRoot, manifest.capture_ledger, initialBinding, physicalPaths);
     ledger = JSON.parse(ledgerBytes.toString('utf8'));
   } catch (error) {
     loadIssues.push({
@@ -491,68 +533,96 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     });
   }
 
-  const corpusCases = Array.isArray(catalog?.items)
-    ? catalog.items.filter((/** @type {any} */ item) => item?.status === 'pilot-admitted').map((/** @type {any} */ item) => ({
-      case_id: item.pilot_id,
-      stratum: item.stratum,
-      source_sha256: item.source?.sha256,
-      task_sha256: item.task?.sha256
-    }))
-    : [];
-  const corpusValid = catalogReport?.status === 'pilot_ready'
-    && catalogReport?.counts?.pilot_admitted === 30
-    && RELEASE_STRATA.every((stratum) => catalogReport?.counts?.by_stratum?.[stratum] === 5)
-    && !catalogReport?.issues?.some((/** @type {any} */ issue) => issue.severity === 'error');
+  const corpusCases = Array.isArray(catalogReport?.cases) ? catalogReport.cases : [];
+  const corpusValid = catalogReport?.status === 'valid';
 
-  const finalBinding = await deriveCandidateBinding(absoluteManifest, manifestDigest, repositoryRoot);
-  const candidate = candidateForEvaluation(reconcileCandidateBindings(initialBinding, finalBinding));
   /** @type {any[]} */
-  const captures = [];
+  const verifiedCaptures = [];
+  const corpusIndex = new Map(corpusCases.map((/** @type {any} */ caseValue) => [caseValue.case_id, caseValue]));
+  const runnerPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/test-compiler.mjs');
+  const replySchemaPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/reply.schema.json');
+  const bundleSchemaPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/test-bundle.schema.json');
+  const runtimeRevisionChecks = new Map();
   for (const [index, record] of (Array.isArray(ledger.captures) ? ledger.captures : []).entries()) {
     const recordPath = `/capture_ledger/file/captures/${index}`;
-    if (!hasExactKeys(record, LEDGER_CAPTURE_KEYS) || !isArtifactDigests(record.artifact_digests)) {
+    if (!hasExactKeys(record, LEDGER_CAPTURE_KEYS)
+      || !isArtifactDigests(record.artifact_digests)
+      || typeof record.runtime_revision !== 'string' || !REVISION.test(record.runtime_revision)) {
       loadIssues.push({
-        code: 'CAPTURE_LEDGER_RECORD_INVALID', path: recordPath,
-        message: 'Capture ledger record must use the closed source, candidate, and evidence descriptor contract.', severity: 'fail'
+        code: 'CAPTURE_EVIDENCE_FORGED', path: recordPath,
+        message: 'Capture ledger record is not a replayable, revision-bound transcript descriptor.', severity: 'fail'
       });
       continue;
     }
-    let evidenceValid = true;
-    /** @type {any} */
-    let snapshot = null;
+    const caseValue = corpusIndex.get(record.case_id);
     try {
-      await readBoundArtifact(repositoryRoot, record.raw_output, initialBinding, physicalPaths);
-      const snapshotBytes = await readBoundArtifact(repositoryRoot, record.run_snapshot, initialBinding, physicalPaths);
-      snapshot = JSON.parse(snapshotBytes.toString('utf8'));
-      if (!hasExactKeys(snapshot, RUN_SNAPSHOT_KEYS)
-        || snapshot.schema_version !== '1.0.0'
-        || snapshot.capture_id !== record.capture_id) throw new Error('Run snapshot contract or capture identity is invalid.');
+      if (!caseValue) throw new Error('Capture case is not present in the verified corpus.');
+      if (!initialBinding.final_candidate_sha) throw new Error('Candidate revision is unavailable.');
+      if (!runtimeRevisionChecks.has(record.runtime_revision)) {
+        runtimeRevisionChecks.set(record.runtime_revision, verifyRuntimeRevision(
+          repositoryRoot, record.runtime_revision, initialBinding.final_candidate_sha
+        ));
+      }
+      await runtimeRevisionChecks.get(record.runtime_revision);
+      const transcriptBytes = await readBoundArtifact(
+        repositoryRoot, record.transcript, initialBinding, physicalPaths
+      );
+      const replay = await verifyCaptureTranscript({
+        transcriptBytes,
+        expected: record,
+        candidateRoot: repositoryRoot,
+        runnerPath,
+        replySchemaPath,
+        bundleSchemaPath,
+        taskScope: caseValue.task_scope
+      });
+      verifiedCaptures.push({
+        capture_id: record.capture_id,
+        case_id: record.case_id,
+        system: record.system,
+        repeat: record.repeat,
+        session_id: record.session_id,
+        source_sha256: record.source_sha256,
+        task_sha256: record.task_sha256,
+        runtime_revision: record.runtime_revision,
+        artifact_digests: record.artifact_digests,
+        transcript_sha256: replay.transcript_sha256,
+        run_directory_sha256: replay.reply_sequence_sha256,
+        final_bundle_sha256: replay.final_bundle_sha256,
+        replay_bundle_sha256: replay.replay_bundle_sha256,
+        evidence_valid: true,
+        terminal_status: 'completed',
+        process_failures: Object.fromEntries(PROCESS_FAILURE_KEYS.map((key) => [key, false]))
+      });
     } catch (error) {
-      evidenceValid = false;
       loadIssues.push({
-        code: 'CAPTURE_EVIDENCE_UNAVAILABLE', path: recordPath,
-        message: `Cannot verify capture evidence: ${/** @type {any} */ (error).message ?? 'unknown error'}`, severity: 'incomplete'
+        code: 'CAPTURE_EVIDENCE_FORGED', path: recordPath,
+        message: `Capture cannot be reproduced from retained runner evidence: ${/** @type {any} */ (error).message ?? 'unknown error'}`, severity: 'fail'
       });
     }
-    captures.push({
-      capture_id: record.capture_id,
-      case_id: record.case_id,
-      system: record.system,
-      repeat: record.repeat,
-      session_id: record.session_id,
-      source_sha256: record.source_sha256,
-      task_sha256: record.task_sha256,
-      candidate_revision: candidate.repository_revision,
-      artifact_digests: record.artifact_digests,
-      raw_output_sha256: record.raw_output?.sha256 ?? '0'.repeat(64),
-      run_directory_sha256: snapshot?.run_directory_sha256 ?? '0'.repeat(64),
-      final_bundle_sha256: snapshot?.final_bundle_sha256 ?? '0'.repeat(64),
-      replay_bundle_sha256: snapshot?.replay_bundle_sha256 ?? '0'.repeat(64),
-      evidence_valid: evidenceValid,
-      terminal_status: snapshot?.terminal_status ?? 'unavailable',
-      process_failures: snapshot?.process_failures ?? Object.fromEntries(PROCESS_FAILURE_KEYS.map((key) => [key, false]))
-    });
   }
+
+  const finalBinding = await deriveCandidateBinding(absoluteManifest, manifestDigest, repositoryRoot);
+  const reconciledBinding = reconcileCandidateBindings(initialBinding, finalBinding);
+  const candidate = candidateForEvaluation(reconciledBinding);
+  const captures = verifiedCaptures.map((capture) => ({
+    capture_id: capture.capture_id,
+    case_id: capture.case_id,
+    system: capture.system,
+    repeat: capture.repeat,
+    session_id: capture.session_id,
+    source_sha256: capture.source_sha256,
+    task_sha256: capture.task_sha256,
+    candidate_revision: candidate.repository_revision,
+    artifact_digests: capture.artifact_digests,
+    raw_output_sha256: capture.transcript_sha256,
+    run_directory_sha256: capture.run_directory_sha256,
+    final_bundle_sha256: capture.final_bundle_sha256,
+    replay_bundle_sha256: capture.replay_bundle_sha256,
+    evidence_valid: capture.evidence_valid,
+    terminal_status: capture.terminal_status,
+    process_failures: capture.process_failures
+  }));
 
   const report = evaluateSingleSystemRelease({
     policy: policyFromManifest(manifest),
@@ -560,7 +630,19 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     candidate,
     captures
   });
-  return mergeLoadIssues(report, loadIssues);
+  const merged = mergeLoadIssues(report, loadIssues);
+  const evidenceBinding = {
+    release_manifest_sha256: manifestDigest,
+    corpus_catalog_sha256: manifest.corpus_catalog.sha256,
+    corpus_content_sha256: catalogReport?.corpus_digest ?? '0'.repeat(64),
+    capture_ledger_sha256: ledgerBytes ? digest(ledgerBytes) : '0'.repeat(64),
+    capture_evidence_root_sha256: digest(canonicalCaptureEvidence(verifiedCaptures))
+  };
+  return Object.freeze({
+    ...merged,
+    candidate_binding: Object.freeze({ ...reconciledBinding }),
+    evidence_binding: Object.freeze(evidenceBinding)
+  });
 }
 
 async function main() {

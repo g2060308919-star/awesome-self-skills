@@ -41,7 +41,8 @@ function passingInput() {
         case_id: caseId,
         stratum,
         source_sha256: sourceSha256,
-        task_sha256: taskSha256
+        task_sha256: taskSha256,
+        task_scope: `scope-${caseId}`
       });
       for (let repeat = 1; repeat <= 3; repeat += 1) {
         captures.push({
@@ -191,6 +192,11 @@ test('checked-in release manifest admits the 30 real PRDs without requiring comp
   assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.includes('COMPARATOR')), false);
   assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.includes('EXPERT')), false);
   assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_SET_INCOMPLETE'), true);
+  assert.match(report.candidate_binding.final_candidate_sha, /^[a-f0-9]{40}$/u);
+  assert.match(report.candidate_binding.bundle_sha256, /^[a-f0-9]{64}$/u);
+  assert.equal(report.evidence_binding.release_manifest_sha256, sha256(await fsPromises.readFile(checkedInManifest)));
+  assert.match(report.evidence_binding.corpus_content_sha256, /^[a-f0-9]{64}$/u);
+  assert.match(report.evidence_binding.capture_evidence_root_sha256, /^[a-f0-9]{64}$/u);
 });
 
 test('single-system release CLI emits one JSON line and rejects any argument count except one', async () => {
@@ -223,7 +229,7 @@ test('npm benchmark is the single-system release gate and exposes no expert metr
   assert.equal('experts' in report, false);
 });
 
-test('loader verifies a complete 90-capture retained evidence layout before candidate eligibility', async (/** @type {any} */ context) => {
+test('loader rejects 90 self-attested snapshots that contain no replayable runner evidence', async (/** @type {any} */ context) => {
   const temporaryRoot = await fsPromises.mkdtemp(path.join(repositoryRoot, 'benchmark/release/.capture-fixture-'));
   context.after(async () => fsPromises.rm(temporaryRoot, { recursive: true, force: true }));
   const catalogPath = path.join(repositoryRoot, 'benchmark/public-pilot/v1/catalog.json');
@@ -309,9 +315,8 @@ test('loader verifies a complete 90-capture retained evidence layout before cand
 
   const report = await loadSingleSystemRelease(manifestPath, repositoryRoot);
 
-  assert.equal(report.status, 'insufficient_evidence');
-  assert.equal(report.counts.captures, 90);
-  assert.equal(report.counts.completed_captures, 90);
-  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.startsWith('CAPTURE_')), false);
-  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code === 'CANDIDATE_EVIDENCE_UNAVAILABLE'), true);
+  assert.equal(report.status, 'fail');
+  assert.equal(report.counts.captures, 0);
+  assert.equal(report.counts.completed_captures, 0);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_EVIDENCE_FORGED'), true);
 });
