@@ -8,6 +8,8 @@ node_modules/
 # Build and test output
 dist/
 build/
+!/generate-test-cases-engineering/build/
+!/generate-test-cases-engineering/build/build.mjs
 coverage/
 .nyc_output/
 *.tsbuildinfo
