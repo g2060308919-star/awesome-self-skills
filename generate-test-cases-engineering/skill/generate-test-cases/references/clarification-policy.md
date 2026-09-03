@@ -37,7 +37,7 @@ Keep the candidate revision in staging until the compiler validates the complete
 
 When the user requests immediate delivery, append `request_delivery` with the complete pending-root set from the current `need_user_answers` reply. Submit it as a new Source Pack revision. Do not encode delivery as a business answer.
 
-The compiler defers the current pending set and any new roots revealed while recompiling the same answer group. Deliver the finished executable subset and retain unresolved formal Test Points as Blocked. Never infer defaults, delete blockers, or hand-edit final files.
+The compiler defers the current pending set and any new roots revealed while recompiling the same answer group, then enters execution closure. It does not finish or become runner-ready. Retain unresolved formal Test Points as Blocked and pending until the user explicitly chooses DoNotExecute or later supplies enough business truth to regenerate them. Never infer defaults, delete blockers, or hand-edit final files.
 
 ## Reopen suppressed issues
 
@@ -48,5 +48,9 @@ After recompilation, present every fresh issue returned by the compiler, includi
 ## Converge without arbitrary round limits
 
 Continue only while new information reveals fresh answerable roots. Stop when no fresh roots remain, the user requests delivery, or the answer group has no information gain. Unknown, deferred, and unanswered roots are not automatically asked again; only an explicit reopen changes that state.
+
+Suppression affects business questioning only; it does not select an execution disposition. “Only execute the currently available Cases” must become explicit per-item decisions for every non-NotApplicable exclusion, normally using `scope_excluded_for_run`, followed by display and confirmation of the complete plan. A reply with some valid answers leaves omitted items pending rather than silently deciding or pausing them. An entirely non-informative or explicit stop response uses a presentation-bound pause event.
+
+A `request_reanalysis` is a non-evidence control. It may cite only existing source locators and current displayed item versions, adds no business outcome, and invalidates the affected downstream artifacts for recompilation. Original source text or material scope changes require a new run instead.
 
 If every formal Oracle remains unknown, a valid result can contain zero Grounded/Conditional Cases and a complete Blocked ledger. That is an evidence outcome, not a pipeline error.

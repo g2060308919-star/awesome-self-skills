@@ -53,7 +53,8 @@ function evidenceGraphFor(artifact) {
 function acceptedFlowEvidence(artifact) {
   const view = artifact.views[0];
   const sourcePack = {
-    schema_version: '1.0.0', source_revision: artifact.source_revision, run_scope: view.scope,
+    schema_version: '2.0.0', source_revision: artifact.source_revision,
+    run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_flow', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
       content: 'Flow topology', content_digest: sourceDigest, scope: view.scope
@@ -65,7 +66,7 @@ function acceptedFlowEvidence(artifact) {
     source_policy: { rules: [{
       rule_id: 'rule_flow_source', source_ids: ['source_flow'], scope: view.scope, authority: 'owner', status: 'effective'
     }] },
-    decision_records: [], clarification_events: []
+    decision_records: [], clarification_events: [], execution_events: []
   };
   const directClaimIds = new Set([
     ...view.source_claim_ids,
@@ -86,7 +87,7 @@ function acceptedFlowEvidence(artifact) {
     });
   }
   const evidenceClaims = {
-    schema_version: '1.0.0', source_revision: artifact.source_revision, claims, fact_ledger: []
+    schema_version: '2.0.0', source_revision: artifact.source_revision, claims, fact_ledger: []
   };
   assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
   assert.deepEqual(validateUniqueStableIds(sourcePack), []);
@@ -211,7 +212,7 @@ test('flow obligations hand-count every explicit edge, terminal, sourced excepti
   assert.equal(actual.length, 9);
   assert.deepEqual(actual, expectedFlowSeeds);
   const obligationsArtifact = {
-    schema_version: '1.0.0', source_revision: 4,
+    schema_version: '2.0.0', source_revision: 4,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

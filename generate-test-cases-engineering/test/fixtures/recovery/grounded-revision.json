@@ -1,7 +1,8 @@
 {
   "source_pack": {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "source_revision": 0,
+    "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
     "run_scope": "checkout",
     "sources": [
       {
@@ -37,10 +38,10 @@
       ]
     },
     "decision_records": [],
-    "clarification_events": []
+    "clarification_events": [], "execution_events": []
   },
   "evidence_claims": {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "source_revision": 0,
     "claims": [
       {
@@ -64,7 +65,7 @@
     ]
   },
   "behavior_views": {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "source_revision": 0,
     "views": [
       {
@@ -99,7 +100,7 @@
     "interaction_candidates": []
   },
   "case_drafts": {
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "source_revision": 0,
     "cases": [
       {

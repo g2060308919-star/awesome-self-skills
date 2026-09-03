@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "source_revision": 0,
   "views": [
     { "view_id": "view_flow", "type": "flow", "scope": "orders", "source_claim_ids": ["claim_shared"], "elements": [], "relations": [] }

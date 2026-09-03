@@ -197,7 +197,9 @@ test('runner one absolute user argument starts the normal workflow', async () =>
     const result = /** @type {any} */ (await runBundle([runDirectory], cwd));
     assert.equal(result.code, 0, result.stderr);
     assert.equal(result.stderr, '');
-    assert.deepEqual(parseOneLine(result.stdout), {
+    const reply = parseOneLine(result.stdout);
+    assert.match(reply.scope.run_instance_id, /^RUN-[0-9a-f-]{36}$/u);
+    assert.deepEqual({ ...reply, scope: { source_revision: reply.scope.source_revision } }, {
       status: 'need_artifact', stage: 'source_pack',
       schema_ref: 'source-pack.schema.json', scope: { source_revision: 0 }, diagnostics: []
     });
@@ -232,7 +234,9 @@ test('runner symlink main remains directly executable with preserve-symlinks-mai
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(result.stderr, '');
-    assert.deepEqual(parseOneLine(result.stdout), {
+    const reply = parseOneLine(result.stdout);
+    assert.match(reply.scope.run_instance_id, /^RUN-[0-9a-f-]{36}$/u);
+    assert.deepEqual({ ...reply, scope: { source_revision: reply.scope.source_revision } }, {
       status: 'need_artifact', stage: 'source_pack',
       schema_ref: 'source-pack.schema.json', scope: { source_revision: 0 }, diagnostics: []
     });

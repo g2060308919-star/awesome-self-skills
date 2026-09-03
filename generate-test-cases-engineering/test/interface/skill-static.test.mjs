@@ -330,7 +330,7 @@ test('skill static policies freeze clarification and source-review boundaries', 
 });
 
 test('skill static UI metadata remains the generated closed interface', async () => {
-  assert.equal(await text('agents/openai.yaml'), `interface:\n  display_name: "高精度测试用例生成"\n  short_description: "从 PRD、需求文档或模块说明生成可追溯的人工功能测试用例"\n  default_prompt: "使用 $generate-test-cases 根据 PRD/module description/module-description、需求文档、模块说明、功能变更、规则变更、验收标准、交互说明、接口契约或粘贴需求，生成人工功能测试用例、测试点和测试场景；不用于 Playwright/浏览器 E2E、API automation/API 自动化/接口自动化、单元测试代码生成或仅代码审查/code-review-only。"\n`);
+  assert.equal(await text('agents/openai.yaml'), `interface:\n  display_name: "高精度测试用例生成"\n  short_description: "生成并确认可追溯的人工功能测试执行清单，不自动执行测试"\n  default_prompt: "使用 $generate-test-cases 根据 PRD/module description/module-description、需求文档、模块说明、功能变更、规则变更、验收标准、交互说明、接口契约或粘贴需求，生成高准确、可追溯的人工功能测试用例、测试点和经用户确认的执行清单；只生成并确认计划，不会自动执行 E2E 测试，也不用于 Playwright、API 自动化、单元测试代码生成或仅代码审查。"\n`);
 });
 
 test('skill adapter validates Reply before writes and freezes durable run recovery', async () => {

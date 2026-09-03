@@ -24,6 +24,15 @@ async function temporaryRun() {
 
 /** @param {string} runDirectory @param {any} sourcePack */
 async function stageSource(runDirectory, sourcePack) {
+  let runInstance;
+  try {
+    runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+  } catch (error) {
+    if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error;
+    await advanceStrict(runDirectory);
+    runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+  }
+  sourcePack.run_instance_id = runInstance.run_instance_id;
   await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
   await writeFile(
     path.join(runDirectory, 'staging', STAGE_FILES.source_pack),
@@ -34,6 +43,8 @@ async function stageSource(runDirectory, sourcePack) {
 function decision(sequence = 1) {
   return {
     decision_id: `decision_${sequence}`, question_id: `question_${sequence}`,
+    presentation_id: `presentation_accepted_${sequence}`,
+    decision_group_ids: [`group_accepted_${sequence}`],
     root_issue_ids: [`root_${sequence}`], affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
     clarification_event_seq: sequence, confirmer: 'owner', confirmed_at: '2026-08-30',
     question: 'What should checkout do?', answer: 'Keep the accepted behavior.',
@@ -64,8 +75,9 @@ async function submitCompleteRevision(runDirectory, revision) {
   let reply;
   for (const stageName of ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']) {
     const typedStage = /** @type {keyof typeof STAGE_FILES} */ (stageName);
-    await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
-    await writeFile(
+    if (typedStage === 'source_pack') await stageSource(runDirectory, revision[typedStage]);
+    else await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
+    if (typedStage !== 'source_pack') await writeFile(
       path.join(runDirectory, 'staging', STAGE_FILES[typedStage]),
       `${JSON.stringify(revision[typedStage])}\n`, 'utf8'
     );
@@ -87,6 +99,7 @@ function makeAnswerableConflict(revision) {
   });
   revision.source_pack.decision_records = [{
     decision_id: 'decision_checkout', question_id: 'question_temporary',
+    presentation_id: 'presentation_accepted_checkout', decision_group_ids: ['group_accepted_checkout'],
     root_issue_ids: ['root_temporary'],
     affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
     clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-29',
@@ -129,6 +142,8 @@ test('one append-only Decision batch creates exactly the next accepted source re
     next.decision_records.push({
       decision_id: 'decision_final_checkout',
       question_id: stableId('question', { root_issue_ids: rootIssueIds }),
+      presentation_id: pending.presentation_id,
+      decision_group_ids: pending.groups.map((/** @type {any} */ group) => group.group_id),
       root_issue_ids: rootIssueIds, affected_obligation_ids: affectedObligationIds,
       clarification_event_seq: 2, confirmer: 'owner', confirmed_at: '2026-08-30',
       question: pending.blockers[0].question, answer: 'checkout accepted',
@@ -139,7 +154,8 @@ test('one append-only Decision batch creates exactly the next accepted source re
     const reply = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
     assert.equal(reply.stage, 'evidence_claims');
-    assert.deepEqual(reply.scope, { source_revision: 1 });
+    assert.equal(reply.scope.source_revision, 1);
+    assert.match(reply.scope.run_instance_id, /^RUN-/u);
     await stat(path.join(runDirectory, 'accepted/r001/source-pack.json'));
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
@@ -209,7 +225,9 @@ test('source revision rejects history modification, deletion, reordering, and ev
     }],
     ['sequence reuse', (next) => { next.clarification_events.push({
       event_id: 'event_reopen', clarification_event_seq: 2, type: 'reopen_root_issues',
-      actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_1']
+      actor: 'owner', event_at: '2026-08-30',
+      presentation_id: 'presentation_accepted_reopen', decision_group_ids: ['group_accepted_reopen'],
+      root_issue_ids: ['root_1']
     }); }]
   ];
   for (const [name, mutate] of variants) {
@@ -276,19 +294,25 @@ test('initial clarification control history is never silently treated as already
   const fixture = await revisionFixture();
   fixture.source_pack.clarification_events.push({
     event_id: 'event_initial', clarification_event_seq: 1, type: 'reopen_root_issues',
-    actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_never_existed']
+    actor: 'owner', event_at: '2026-08-30',
+    presentation_id: 'presentation_initial', decision_group_ids: ['group_initial'],
+    root_issue_ids: ['root_never_existed']
   });
   try {
     /** @type {any} */
     let reply;
     for (const stageName of ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']) {
       const typedStage = /** @type {keyof typeof STAGE_FILES} */ (stageName);
-      await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
-      await writeFile(
+      if (typedStage === 'source_pack') await stageSource(runDirectory, fixture[typedStage]);
+      else {
+        await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
+        await writeFile(
         path.join(runDirectory, 'staging', STAGE_FILES[typedStage]),
         `${JSON.stringify(fixture[typedStage])}\n`, 'utf8'
-      );
+        );
+      }
       reply = await advanceStrict(runDirectory);
+      if (reply.status === 'need_revision' || reply.status === 'fatal') break;
     }
     assert.notEqual(reply.status, 'finished', JSON.stringify(reply));
     assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
@@ -307,7 +331,9 @@ test('initial Decision and control history must start at one and be globally con
     (/** @type {any} */ pack) => { pack.decision_records = [decision(2)]; },
     (/** @type {any} */ pack) => { pack.clarification_events = [{
       event_id: 'event_gap', clarification_event_seq: 100, type: 'reopen_root_issues',
-      actor: 'owner', event_at: '2026-08-30', root_issue_ids: ['root_never_existed']
+      actor: 'owner', event_at: '2026-08-30',
+      presentation_id: 'presentation_gap', decision_group_ids: ['group_gap'],
+      root_issue_ids: ['root_never_existed']
     }]; }
   ]) {
     const runDirectory = await temporaryRun();

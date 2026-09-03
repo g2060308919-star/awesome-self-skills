@@ -67,10 +67,18 @@ async function main() {
   const inputs = {};
   /** @type {Record<string, any>} */
   const inputSnapshots = {};
+  /** @type {Record<string, any>} */
+  const artifacts = {};
   /** @type {any} */
   let finalReply = null;
+  const initialReply = await invokePackagedEntry();
+  const assignedRunId = initialReply?.scope?.run_instance_id;
+  assert.match(assignedRunId, /^RUN-[0-9a-f-]{36}$/u);
   for (const [stageName, fileName] of Object.entries(stageFiles)) {
-    const rawBytes = new TextEncoder().encode(stageInputs[stageName]);
+    const artifact = JSON.parse(stageInputs[stageName]);
+    if (stageName === 'source_pack') artifact.run_instance_id = assignedRunId;
+    artifacts[stageName] = artifact;
+    const rawBytes = new TextEncoder().encode(`${JSON.stringify(artifact)}\n`);
     const stagingDirectory = path.join(runDirectory, 'staging');
     const stagingPath = path.join(stagingDirectory, fileName);
     await mkdir(stagingDirectory, { recursive: true });
@@ -90,6 +98,36 @@ async function main() {
       rawBytes,
       acceptedPath: path.join(runDirectory, 'accepted/r000', fileName)
     };
+  }
+  if (finalReply?.status === 'need_user_answers'
+    && finalReply.purpose === 'final_confirmation') {
+    const nextRevision = structuredClone(artifacts);
+    for (const artifact of Object.values(nextRevision)) artifact.source_revision += 1;
+    nextRevision.source_pack.execution_events.push({
+      event_id: 'event_repeat_confirmation_1',
+      clarification_event_seq: finalReply.next_event_seq,
+      type: 'confirm_execution_plan',
+      actor: 'test-operator',
+      event_at: '2026-09-03T00:01:00.000Z',
+      authority_scope: '*',
+      run_instance_id: assignedRunId,
+      run_identity_digest: finalReply.execution_plan.run_identity_digest,
+      presented_prompt_id: finalReply.prompt_id,
+      presented_plan_digest: finalReply.execution_plan.plan_digest,
+      presented_plan_change_head_seq: finalReply.execution_plan.plan_change_head_seq,
+      presented_source_revision: finalReply.source_revision
+    });
+    for (const [stageName, fileName] of Object.entries(stageFiles)) {
+      const stagingDirectory = path.join(runDirectory, 'staging');
+      await mkdir(stagingDirectory, { recursive: true });
+      await writeFile(
+        path.join(stagingDirectory, fileName),
+        `${JSON.stringify(nextRevision[stageName])}\n`,
+        { flag: 'wx' }
+      );
+      finalReply = await invokePackagedEntry();
+      replySequence.push(`${finalReply.status}/${finalReply.stage ?? 'done'}`);
+    }
   }
   assert.equal(finalReply?.status, 'finished', JSON.stringify(finalReply));
   for (const [stageName, snapshot] of Object.entries(inputSnapshots)) {

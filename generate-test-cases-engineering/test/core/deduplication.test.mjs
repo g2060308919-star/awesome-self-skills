@@ -42,7 +42,7 @@ function fixtureClassificationContext(cases, extraClaims = []) {
     },
     obligations,
     caseDrafts: {
-      schema_version: '1.0.0', source_revision: coverageFixture.source_revision,
+      schema_version: '2.0.0', source_revision: coverageFixture.source_revision,
       cases,
       obligation_dispositions: [{
         obligation_id: 'obligation_grounded', status: 'case_candidate',

@@ -31,6 +31,17 @@ async function temporaryRun(label = 'stage progression') {
 
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stageName @param {any} artifact */
 async function stage(runDirectory, stageName, artifact) {
+  if (stageName === 'source_pack') {
+    let runInstance;
+    try {
+      runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+    } catch (error) {
+      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error;
+      await advanceStrict(runDirectory);
+      runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+    }
+    artifact.run_instance_id = runInstance.run_instance_id;
+  }
   const staging = path.join(runDirectory, 'staging');
   await mkdir(staging, { recursive: true });
   await writeFile(path.join(staging, STAGE_FILES[stageName]), `${JSON.stringify(artifact)}\n`, 'utf8');
@@ -51,6 +62,56 @@ async function submitCompleteRevision(runDirectory, revision) {
   return reply;
 }
 
+/** Drive only the private execution-decision/final-confirmation tail. */
+/** @param {string} runDirectory @param {any} submitted @param {any} initialReply */
+async function finishExecutionClosure(runDirectory, submitted, initialReply) {
+  let revision = structuredClone(submitted);
+  let reply = initialReply;
+  for (let attempt = 0; attempt < 3 && reply.status === 'need_user_answers'; attempt += 1) {
+    const next = structuredClone(revision);
+    setRevision(next, next.source_pack.source_revision + 1);
+    const plan = reply.execution_plan;
+    const sequence = reply.next_event_seq;
+    if (reply.purpose === 'execution_closure') {
+      const reasons = {
+        conditional: 'temporary_rule_unconfirmed', blocked: 'business_rule_missing',
+        exploratory: 'risk_not_adopted'
+      };
+      next.source_pack.execution_events.push({
+        event_id: `event_test_decisions_${sequence}`, clarification_event_seq: sequence,
+        type: 'set_dispositions', actor: 'test-operator', event_at: '2026-09-03T00:00:00.000Z',
+        authority_scope: '*', run_instance_id: next.source_pack.run_instance_id,
+        run_identity_digest: plan.run_identity_digest,
+        presented_plan_digest: plan.plan_digest,
+        presented_presentation_id: reply.presentation_id,
+        decision_group_ids: reply.groups.map((/** @type {any} */ group) => group.group_id),
+        decisions: reply.pending_items.map((/** @type {any} */ item) => ({
+          item_kind: item.item_kind, item_id: item.item_id,
+          item_semantic_digest: item.item_semantic_digest,
+          item_semantic_change_head_seq: item.item_semantic_change_head_seq,
+          execution_disposition: 'do_not_execute',
+          reason_code: reasons[/** @type {keyof typeof reasons} */ (item.semantic_status)] ?? 'other_explicit',
+          reason: 'Explicitly excluded by the test operator.'
+        }))
+      });
+    } else if (reply.purpose === 'final_confirmation') {
+      next.source_pack.execution_events.push({
+        event_id: `event_test_confirmation_${sequence}`, clarification_event_seq: sequence,
+        type: 'confirm_execution_plan', actor: 'test-operator', event_at: '2026-09-03T00:00:00.000Z',
+        authority_scope: '*', run_instance_id: next.source_pack.run_instance_id,
+        run_identity_digest: plan.run_identity_digest,
+        presented_prompt_id: reply.prompt_id,
+        presented_plan_digest: plan.plan_digest,
+        presented_plan_change_head_seq: plan.plan_change_head_seq,
+        presented_source_revision: reply.source_revision
+      });
+    } else return reply;
+    reply = await submitCompleteRevision(runDirectory, next);
+    revision = next;
+  }
+  return reply;
+}
+
 /** @param {any} revision */
 function makeAnswerableConflict(revision) {
   revision.source_pack.sources.push({
@@ -65,6 +126,7 @@ function makeAnswerableConflict(revision) {
   });
   revision.source_pack.decision_records = [{
     decision_id: 'decision_checkout', question_id: 'question_temp',
+    presentation_id: 'presentation_accepted_checkout', decision_group_ids: ['group_accepted_checkout'],
     root_issue_ids: ['root_unrelated'], affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
     clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-30',
     question: 'Temporary checkout?', answer: 'checkout accepted', disposition: 'temporary',
@@ -95,7 +157,10 @@ test('real advanceStrict progresses every fixed artifact stage and atomically pu
   const runDirectory = await temporaryRun();
   const revision = await fixture();
   try {
-    assert.deepEqual(await advance(runDirectory), {
+    const initial = await advance(runDirectory);
+    assert.match(initial.scope.run_instance_id, /^RUN-[0-9a-f-]{36}$/u);
+    revision.source_pack.run_instance_id = initial.scope.run_instance_id;
+    assert.deepEqual({ ...initial, scope: { source_revision: initial.scope.source_revision } }, {
       status: 'need_artifact', stage: 'source_pack', schema_ref: 'source-pack.schema.json',
       scope: { source_revision: 0 }, diagnostics: []
     });
@@ -118,17 +183,19 @@ test('real advanceStrict progresses every fixed artifact stage and atomically pu
     assert.equal(derived.obligations[0].obligation_id, 'obligation_8cc31c1b2773c94c');
 
     await stage(runDirectory, 'case_drafts', revision.case_drafts);
-    const finished = await advance(runDirectory);
+    const awaitingConfirmation = await advance(runDirectory);
+    assert.equal(awaitingConfirmation.purpose, 'final_confirmation');
+    const finished = await finishExecutionClosure(runDirectory, revision, awaitingConfirmation);
     assert.equal(finished.status, 'finished', JSON.stringify(finished));
-    assert.equal(finished.source_revision, 0);
-    assert.equal(finished.bundle_path, path.join(runDirectory, 'output/r000/test-bundle.json'));
-    assert.equal(finished.markdown_path, path.join(runDirectory, 'output/r000/test-cases.md'));
-    assert.deepEqual(JSON.parse(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8')), {
-      source_revision: 0,
-      bundle_path: finished.bundle_path,
-      bundle_digest: finished.bundle_digest,
-      markdown_path: finished.markdown_path
-    });
+    assert.equal(finished.source_revision, 1);
+    assert.equal(finished.bundle_path, path.join(runDirectory, 'output/r001/test-bundle.json'));
+    assert.equal(finished.markdown_path, path.join(runDirectory, 'output/r001/test-cases.md'));
+    const current = JSON.parse(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'));
+    assert.equal(current.status, 'ready');
+    assert.equal(current.source_revision, 1);
+    assert.equal(current.bundle_path, finished.bundle_path);
+    assert.equal(current.bundle_digest, finished.bundle_digest);
+    assert.equal(current.plan_digest, finished.plan_digest);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -183,7 +250,10 @@ test('case execution-signature mistakes stay repairable and never become busines
     );
 
     await stage(runDirectory, 'case_drafts', validCaseDrafts);
-    const finished = await advance(runDirectory);
+    const closure = await advance(runDirectory);
+    const closureRevision = structuredClone(revision);
+    closureRevision.case_drafts = validCaseDrafts;
+    const finished = await finishExecutionClosure(runDirectory, closureRevision, closure);
     assert.equal(finished.status, 'finished', JSON.stringify(finished));
     assert.deepEqual(
       JSON.parse(await readFile(path.join(runDirectory, 'accepted/r000/case-drafts.json'), 'utf8')),
@@ -209,7 +279,7 @@ test('real runner fails closed when an integration view omits responsibility-spe
   const claimIds = [...new Set(view.source_claim_ids)];
   const sourceDigest = 'd'.repeat(64);
   const sourcePack = {
-    schema_version: '1.0.0', source_revision: 0, run_scope: view.scope,
+    schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
       authority: 'owner', content: 'Integration contract requirements',
@@ -224,10 +294,10 @@ test('real runner fails closed when an integration view omits responsibility-spe
       rule_id: 'rule_integration', source_ids: ['source_integration'], scope: view.scope,
       authority: 'owner', status: 'effective'
     }] },
-    decision_records: [], clarification_events: []
+    decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '1.0.0', source_revision: 0,
+    schema_version: '2.0.0', source_revision: 0,
     claims: claimIds.map((claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
@@ -556,7 +626,9 @@ test('private subprocess returns all five workflow statuses with exit zero', asy
   const clarificationDirectory = await temporaryRun('need answers');
   try {
     await stage(invalid, 'source_pack', {});
-    await submitCompleteRevision(finishedDirectory, await fixture());
+    const finishedRevision = await fixture();
+    const finishedTail = await submitCompleteRevision(finishedDirectory, finishedRevision);
+    await finishExecutionClosure(finishedDirectory, finishedRevision, finishedTail);
     const clarification = await submitCompleteRevision(
       clarificationDirectory, makeAnswerableConflict(await fixture())
     );
@@ -609,10 +681,13 @@ test('a higher resolved revision atomically replaces the current final output', 
     const finalDecision = {
       decision_id: 'decision_checkout_final',
       question_id: stableId('question', { root_issue_ids: [blocker.root_issue_id] }),
+      presentation_id: pending.presentation_id,
+      decision_group_ids: pending.groups.map((/** @type {any} */ group) => group.group_id),
       root_issue_ids: [blocker.root_issue_id],
       affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
       clarification_event_seq: 2, confirmer: 'owner', confirmed_at: '2026-08-30',
       question: blocker.question, answer: 'checkout accepted', disposition: 'final',
+      supersedes_decision_ids: ['decision_checkout'],
       authority_scope: 'checkout', effective_scope: 'checkout',
       evidence_ref: 'locator_checkout', evidence_level: 'E3'
     };
@@ -622,13 +697,14 @@ test('a higher resolved revision atomically replaces the current final output', 
       decision_id: finalDecision.decision_id, authority: 'checkout'
     });
     delete secondRevision.case_drafts.cases[0].temporary_assumption;
-    const finished = await submitCompleteRevision(runDirectory, secondRevision);
+    const closure = await submitCompleteRevision(runDirectory, secondRevision);
+    const finished = await finishExecutionClosure(runDirectory, secondRevision, closure);
     assert.equal(finished.status, 'finished', JSON.stringify(finished));
-    assert.equal(finished.source_revision, 1);
+    assert.ok(finished.source_revision > 1);
     const current = JSON.parse(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'));
-    assert.equal(current.source_revision, 1);
+    assert.equal(current.source_revision, finished.source_revision);
     assert.equal(current.bundle_digest, finished.bundle_digest);
-    assert.match(current.bundle_path, /output\/r001\/test-bundle\.json$/u);
+    assert.match(current.bundle_path, new RegExp(`output/r${String(finished.source_revision).padStart(3, '0')}/test-bundle\\.json$`, 'u'));
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }

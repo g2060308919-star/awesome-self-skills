@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "behavior-views.schema.json", "type": "object",
   "required": ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
   "properties": {
-    "schema_version": { "const": "1.0.0" }, "source_revision": { "type": "integer", "minimum": 0 },
+    "schema_version": { "const": "2.0.0" }, "source_revision": { "type": "integer", "minimum": 0 },
     "views": { "type": "array", "items": { "type": "object", "required": ["view_id", "type", "scope", "source_claim_ids", "elements", "relations"], "properties": { "view_id": { "type": "string", "minLength": 1 }, "type": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration"] }, "scope": { "type": "string", "minLength": 1 }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
       "elements": { "type": "array", "items": { "oneOf": [
         { "type": "object", "required": ["element_id", "kind", "node_type", "label", "source_claim_ids", "model_refs"], "properties": { "element_id": { "type": "string", "minLength": 1 }, "kind": { "const": "flow-node" }, "node_type": { "enum": ["start", "action", "decision", "end", "exception"] }, "label": { "type": "string", "minLength": 1 }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "model_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true } }, "additionalProperties": false },

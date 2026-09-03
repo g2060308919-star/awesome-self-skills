@@ -4,18 +4,17 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify } from '../../src/canonical.mjs';
-import { buildBundle } from '../../src/coverage.mjs';
 import { BundleRenderError, renderMarkdown } from '../../src/render-markdown.mjs';
+import { evaluateJourney } from '../helpers/run-journey.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 /** @param {string} relative */
 const loadJson = async (relative) => JSON.parse(await readFile(path.join(repositoryRoot, relative), 'utf8'));
 
 test('markdown is a byte-stable mechanical projection of the hand-reviewed canonical golden', async () => {
-  const context = await loadJson('test/fixtures/journeys/final-critical-gaps.json');
-  const expectedBundle = await loadJson('test/golden/final-critical-gaps.json');
-  const expectedMarkdown = await readFile(path.join(repositoryRoot, 'test/golden/final-critical-gaps.md'), 'utf8');
-  const bundle = buildBundle(context);
+  const expectedBundle = await loadJson('test/golden/journeys/all-e3.json');
+  const expectedMarkdown = await readFile(path.join(repositoryRoot, 'test/golden/journeys/all-e3.md'), 'utf8');
+  const bundle = (await evaluateJourney('all-e3')).bundle;
 
   assert.equal(canonicalStringify(bundle), canonicalStringify(expectedBundle));
   assert.equal(renderMarkdown(bundle), expectedMarkdown);
@@ -23,7 +22,7 @@ test('markdown is a byte-stable mechanical projection of the hand-reviewed canon
 });
 
 test('renderer internal arrays never invoke inherited zero-index setters', async () => {
-  const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const bundle = (await evaluateJourney('all-e3')).bundle;
   const expectedMarkdown = renderMarkdown(bundle);
   const invalid = structuredClone(bundle);
   invalid.executive_summary = 'outside the closed bundle';
@@ -49,7 +48,7 @@ test('renderer internal arrays never invoke inherited zero-index setters', async
 });
 
 test('renderer rejects bundle-external free text and never treats Markdown as evidence', async () => {
-  const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const bundle = (await evaluateJourney('all-e3')).bundle;
   const injected = structuredClone(bundle);
   injected.executive_summary = 'UNTRUSTED FREE TEXT';
   assert.throws(() => renderMarkdown(injected), (/** @type {any} */ error) => {
@@ -62,7 +61,7 @@ test('renderer rejects bundle-external free text and never treats Markdown as ev
 });
 
 test('renderer snapshots own data without executing submitted getters or iterators', async () => {
-  const getterBundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const getterBundle = structuredClone((await evaluateJourney('all-e3')).bundle);
   let getterReads = 0;
   Object.defineProperty(getterBundle, 'source_revision', {
     enumerable: true,
@@ -77,7 +76,7 @@ test('renderer snapshots own data without executing submitted getters or iterato
   });
   assert.equal(getterReads, 0);
 
-  const iteratorBundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const iteratorBundle = structuredClone((await evaluateJourney('all-e3')).bundle);
   let iteratorCalls = 0;
   Object.defineProperty(iteratorBundle.grounded, Symbol.iterator, {
     value() { iteratorCalls += 1; return [][Symbol.iterator](); }
@@ -90,7 +89,7 @@ test('renderer snapshots own data without executing submitted getters or iterato
   });
   assert.equal(iteratorCalls, 0);
 
-  const methodBundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const methodBundle = structuredClone((await evaluateJourney('all-e3')).bundle);
   let methodCalls = 0;
   Object.defineProperty(methodBundle.grounded, 'entries', {
     value() { methodCalls += 1; return [][Symbol.iterator](); }
@@ -112,7 +111,7 @@ test('renderer snapshots own data without executing submitted getters or iterato
 });
 
 test('renderer uses captured array traversal intrinsics after snapshot validation', async () => {
-  const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+  const bundle = (await evaluateJourney('all-e3')).bundle;
   const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'entries');
   let reads = 0;
   try {
@@ -136,7 +135,7 @@ test('renderer projection has no direct mutable Array prototype or iterator trav
 test('renderer diagnostics reserve one canonical truncation marker on real overflow', async () => {
   /** @param {boolean} reversed */
   const diagnosticsFor = async (reversed) => {
-    const bundle = buildBundle(await loadJson('test/fixtures/journeys/final-critical-gaps.json'));
+    const bundle = structuredClone((await evaluateJourney('all-e3')).bundle);
     const keys = Array.from({ length: 300 }, (_, index) => `accessor_${String(index).padStart(3, '0')}`);
     if (reversed) keys.reverse();
     let reads = 0;

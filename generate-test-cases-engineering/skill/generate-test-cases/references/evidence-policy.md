@@ -2,6 +2,8 @@
 
 Use this policy while creating Source Packs and Evidence Claims. The bundled schemas define the exact closed record shapes; this file defines the semantic choices.
 
+An execution decision is not evidence. Execute, DoNotExecute, pause, resume, final-plan confirmation, presentation data, and post-ready preview requests never receive E1/E2/E3, never supply an Oracle, never upgrade support review or Testability, and never create NotApplicable. Only a separately authorized business Decision Record may add business truth, and it must pass the normal evidence pipeline after recompilation.
+
 ## Preserve source identity and scope
 
 Record each source's kind, version, status, authority, content digest, and applicable scope. Treat historical defects and production behavior as diagnostic signals unless an effective source explicitly makes them normative.

@@ -20,6 +20,17 @@ async function fixture() {
 
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stageName @param {any} artifact */
 async function stage(runDirectory, stageName, artifact) {
+  if (stageName === 'source_pack') {
+    let runInstance;
+    try {
+      runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+    } catch (error) {
+      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error;
+      await advanceStrict(runDirectory);
+      runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+    }
+    artifact.run_instance_id = runInstance.run_instance_id;
+  }
   await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
   await writeFile(
     path.join(runDirectory, 'staging', STAGE_FILES[stageName]),
@@ -74,6 +85,7 @@ function makeAnswerableConflict(revision) {
   });
   revision.source_pack.decision_records = [{
     decision_id: 'decision_checkout', question_id: 'question_temp',
+    presentation_id: 'presentation_accepted_checkout', decision_group_ids: ['group_accepted_checkout'],
     root_issue_ids: ['root_unrelated'],
     affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
     clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-30',
@@ -102,18 +114,22 @@ function revisionOneSource(pending, variant) {
   const affectedIds = [...new Set(pending.reply.blockers.flatMap(
     (/** @type {any} */ item) => item.affected_obligation_ids
   ))].sort();
+  const binding = {
+    presentation_id: pending.reply.presentation_id,
+    decision_group_ids: pending.reply.groups.map((/** @type {any} */ group) => group.group_id)
+  };
   if (variant === 'invalid-delivery') next.clarification_events.push({
     event_id: 'event_invalid_delivery', clarification_event_seq: 2,
     type: 'request_delivery', actor: 'owner', event_at: '2026-08-31',
-    root_issue_ids: ['root_not_pending']
+    ...binding, root_issue_ids: ['root_not_pending']
   });
   else if (variant === 'invalid-reopen') next.clarification_events.push({
     event_id: 'event_invalid_reopen', clarification_event_seq: 2,
     type: 'reopen_root_issues', actor: 'owner', event_at: '2026-08-31',
-    root_issue_ids: rootIds
+    ...binding, root_issue_ids: rootIds
   });
   else if (variant === 'invalid-decision') next.decision_records.push({
-    decision_id: 'decision_invalid_answer', question_id: 'question_not_the_pending_set',
+    ...binding, decision_id: 'decision_invalid_answer', question_id: 'question_not_the_pending_set',
     root_issue_ids: rootIds, affected_obligation_ids: affectedIds,
     clarification_event_seq: 2, confirmer: 'owner', confirmed_at: '2026-08-31',
     question: pending.reply.blockers[0].question, answer: 'checkout accepted',
@@ -121,7 +137,7 @@ function revisionOneSource(pending, variant) {
     evidence_ref: 'locator_checkout', evidence_level: 'E3'
   });
   else if (variant === 'valid-decision') next.decision_records.push({
-    decision_id: 'decision_valid_answer',
+    ...binding, decision_id: 'decision_valid_answer',
     question_id: stableId('question', { root_issue_ids: rootIds }),
     root_issue_ids: rootIds, affected_obligation_ids: affectedIds,
     clarification_event_seq: 2, confirmer: 'owner', confirmed_at: '2026-08-31',
@@ -132,7 +148,7 @@ function revisionOneSource(pending, variant) {
   else next.clarification_events.push({
     event_id: 'event_valid_delivery', clarification_event_seq: 2,
     type: 'request_delivery', actor: 'owner', event_at: '2026-08-31',
-    root_issue_ids: rootIds
+    ...binding, root_issue_ids: rootIds
   });
   return next;
 }
@@ -143,6 +159,8 @@ function invalidDecisionWithoutPriorLifecycle(sourcePack) {
   next.source_revision = 1;
   (/** @type {any[]} */ (next.decision_records)).push({
     decision_id: 'decision_without_prior_lifecycle',
+    presentation_id: 'presentation_without_prior_lifecycle',
+    decision_group_ids: ['group_without_prior_lifecycle'],
     question_id: 'question_forged_without_prior_lifecycle',
     root_issue_ids: ['root_forged_without_prior_lifecycle'],
     affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
@@ -175,7 +193,8 @@ test('stage progression rejects clarification append when the prior revision is 
     const resumed = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.equal(resumed.status, 'need_artifact', JSON.stringify(resumed));
     assert.equal(resumed.stage, 'evidence_claims');
-    assert.deepEqual(resumed.scope, { source_revision: 0 });
+    assert.equal(resumed.scope.source_revision, 0);
+    assert.match(resumed.scope.run_instance_id, /^RUN-/u);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -202,7 +221,8 @@ test('stage progression rebuilds missing prior clarification state before append
     const corrected = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.equal(corrected.status, 'need_artifact', JSON.stringify(corrected));
     assert.equal(corrected.stage, 'evidence_claims');
-    assert.deepEqual(corrected.scope, { source_revision: 1 });
+    assert.equal(corrected.scope.source_revision, 1);
+    assert.match(corrected.scope.run_instance_id, /^RUN-/u);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -239,13 +259,16 @@ test('case-classification blockers retain only formal-related evidence across de
     nextSource.clarification_events.push({
       event_id: 'event_case_blocker_delivery', clarification_event_seq: 1,
       type: 'request_delivery', actor: 'owner', event_at: '2026-09-02',
+      presentation_id: pendingReply.presentation_id,
+      decision_group_ids: pendingReply.groups.map((/** @type {any} */ group) => group.group_id),
       root_issue_ids: pendingReply.blockers.map(
         (/** @type {any} */ blocker) => blocker.root_issue_id
       )
     });
     await stage(runDirectory, 'source_pack', nextSource);
     const advanced = /** @type {any} */ (await advanceStrict(runDirectory));
-    assert.deepEqual(advanced.scope, { source_revision: 1 });
+    assert.equal(advanced.scope.source_revision, 1);
+    assert.match(advanced.scope.run_instance_id, /^RUN-/u);
     assert.deepEqual({
       leaks_unrelated_evidence: leaksUnrelatedEvidence,
       retains_formal_evidence: retainsFormalEvidence,
@@ -282,7 +305,8 @@ test('stage progression never uses orphan clarification state to bypass an incom
     const resumed = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.equal(resumed.status, 'need_artifact', JSON.stringify(resumed));
     assert.equal(resumed.stage, 'case_drafts');
-    assert.deepEqual(resumed.scope, { source_revision: 0 });
+    assert.equal(resumed.scope.source_revision, 0);
+    assert.match(resumed.scope.run_instance_id, /^RUN-/u);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -305,7 +329,7 @@ test('accepted-run reinvoke rejects a forged delivered clarification state befor
     const reply = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.deepEqual(await recoveryObservation(runDirectory, reply), {
       status: 'fatal', diagnostic_codes: ['RUN_INTEGRITY_ERROR'],
-      current_exists: false, bundle_exists: false
+      current_exists: true, bundle_exists: false
     });
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
@@ -326,7 +350,7 @@ test('accepted-run reinvoke rejects a forged clarification event sequence before
     const reply = /** @type {any} */ (await advanceStrict(runDirectory));
     assert.deepEqual(await recoveryObservation(runDirectory, reply), {
       status: 'fatal', diagnostic_codes: ['RUN_INTEGRITY_ERROR'],
-      current_exists: false, bundle_exists: false
+      current_exists: true, bundle_exists: false
     });
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
@@ -347,7 +371,7 @@ test('accepted-run reinvoke rebuilds missing clarification state and returns the
     await stat(statePath);
     assert.deepEqual(await recoveryObservation(runDirectory, recovered), {
       status: 'need_user_answers', diagnostic_codes: [],
-      current_exists: false, bundle_exists: false
+      current_exists: true, bundle_exists: false
     });
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
@@ -375,7 +399,8 @@ test('stage progression rejects invalid r001 clarification append before Source 
         const correctedReply = /** @type {any} */ (await advanceStrict(runDirectory));
         assert.equal(correctedReply.status, 'need_artifact', JSON.stringify(correctedReply));
         assert.equal(correctedReply.stage, 'evidence_claims');
-        assert.deepEqual(correctedReply.scope, { source_revision: 1 });
+        assert.equal(correctedReply.scope.source_revision, 1);
+        assert.match(correctedReply.scope.run_instance_id, /^RUN-/u);
         await stat(path.join(runDirectory, 'accepted/r001/source-pack.json'));
       } finally {
         await rm(runDirectory, { recursive: true, force: true });
@@ -414,15 +439,44 @@ async function runJourney(forged) {
       );
     }
     const replies = [observableReply(await advanceStrict(runDirectory))];
+    let lastReply;
     for (const stageName of [
       /** @type {const} */ ('source_pack'), /** @type {const} */ ('evidence_claims'),
       /** @type {const} */ ('behavior_views'), /** @type {const} */ ('case_drafts')
     ]) {
       await stage(runDirectory, stageName, revision[stageName]);
-      replies.push(observableReply(await advanceStrict(runDirectory)));
+      lastReply = await advanceStrict(runDirectory);
+      replies.push(observableReply(lastReply));
     }
+    assert.equal(lastReply.status, 'need_user_answers');
+    assert.equal(lastReply.purpose, 'final_confirmation');
+    const confirmed = structuredClone(revision);
+    for (const artifact of [
+      confirmed.source_pack, confirmed.evidence_claims,
+      confirmed.behavior_views, confirmed.case_drafts
+    ]) artifact.source_revision = 1;
+    confirmed.source_pack.execution_events.push({
+      event_id: 'event_confirm_forged_staging_test',
+      clarification_event_seq: lastReply.next_event_seq,
+      type: 'confirm_execution_plan', actor: 'owner', event_at: '2026-09-03T00:00:00.000Z',
+      authority_scope: '*', run_instance_id: confirmed.source_pack.run_instance_id,
+      run_identity_digest: lastReply.execution_plan.run_identity_digest,
+      presented_prompt_id: lastReply.prompt_id,
+      presented_plan_digest: lastReply.execution_plan.plan_digest,
+      presented_plan_change_head_seq: lastReply.execution_plan.plan_change_head_seq,
+      presented_source_revision: 0
+    });
+    for (const stageName of [
+      /** @type {const} */ ('source_pack'), /** @type {const} */ ('evidence_claims'),
+      /** @type {const} */ ('behavior_views'), /** @type {const} */ ('case_drafts')
+    ]) {
+      await stage(runDirectory, stageName, confirmed[stageName]);
+      lastReply = await advanceStrict(runDirectory);
+      replies.push(observableReply(lastReply));
+    }
+    assert.equal(lastReply.status, 'finished', JSON.stringify(lastReply));
     const bundle = JSON.parse(await readFile(
-      path.join(runDirectory, 'output/r000/test-bundle.json'), 'utf8'
+      path.join(runDirectory, 'output/r001/test-bundle.json'), 'utf8'
     ));
     const obligations = JSON.parse(await readFile(
       path.join(runDirectory, 'derived/r000/test-obligations.json'), 'utf8'

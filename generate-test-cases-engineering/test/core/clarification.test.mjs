@@ -360,7 +360,7 @@ test('clarification keeps an absent explicitly reopened historical root replayab
 
   const replay = structuredClone(reopenedContext);
   replay.prior_state = reopened.state;
-  replay.append_batch = { decision_records: [], clarification_events: [] };
+  replay.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
   const replayed = evaluateClarification(replay, 'pause_for_clarification');
   assert.deepEqual(replayed.diagnostics, []);
   assert.equal(replayed.action, 'deliver');
@@ -479,7 +479,7 @@ test('clarification replays a user-delivery projection from the unchanged compil
 
   const replay = structuredClone(context);
   replay.prior_state = delivered.state;
-  replay.append_batch = { decision_records: [], clarification_events: [] };
+  replay.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
   const replayed = evaluateClarification(replay, 'pause_for_clarification');
   assert.deepEqual(replayed.diagnostics, []);
   assert.equal(replayed.action, 'deliver');
@@ -770,7 +770,7 @@ test('clarification binds empty and nonempty append batches to exact revision tr
   const emptyBackstep = structuredClone(next);
   emptyBackstep.source_revision = 0;
   emptyBackstep.prior_state = structuredClone(accepted.state);
-  emptyBackstep.append_batch = { decision_records: [], clarification_events: [] };
+  emptyBackstep.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
   const rejectedBackstep = evaluateClarification(emptyBackstep, 'pause_for_clarification');
   assert.equal(rejectedBackstep.action, 'need_revision');
   assert.equal(rejectedBackstep.diagnostics.some(
@@ -1118,7 +1118,7 @@ test('clarification binds a retained suppressed root reason to its Blocked forma
   const replay = structuredClone(deliveredContext);
   replay.prior_state = structuredClone(delivered.state);
   replay.prior_state.root_snapshot_ledger[0].reasons = ['CAPABILITY_UNKNOWN'];
-  replay.append_batch = { decision_records: [], clarification_events: [] };
+  replay.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
   const result = evaluateClarification(replay, 'pause_for_clarification');
   assert.equal(result.action, 'need_revision');
   assert.equal(result.diagnostics.some(
@@ -1148,7 +1148,7 @@ test('clarification replaces a current suppressed root reason and replays the de
 
   const replay = structuredClone(changed);
   replay.prior_state = result.state;
-  replay.append_batch = { decision_records: [], clarification_events: [] };
+  replay.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
   const replayed = evaluateClarification(replay, 'pause_for_clarification');
   assert.deepEqual(replayed.diagnostics, []);
   assert.deepEqual(replayed.state, result.state);
@@ -1471,7 +1471,7 @@ function run(size) {
     confirmer: 'owner', confirmed_at: '2026-08-30', question: 'What should happen?', answer: 'Apply the oracle.',
     disposition: 'final', authority_scope: 'refund', effective_scope: 'refund',
     evidence_ref: 'locator_decision', evidence_level: 'E3'
-  }], clarification_events: [] }, semantic_snapshot: currentSemantic };
+  }], clarification_events: [], execution_events: [] }, semantic_snapshot: currentSemantic };
   comparisons = 0;
   const result = evaluateClarification(context, 'pause_for_clarification');
   return { size, comparisons, action: result.action, diagnostics: result.diagnostics };
@@ -1551,7 +1551,7 @@ function run(size) {
     confirmer: 'owner', confirmed_at: '2026-08-30', question: 'What should happen?',
     answer: 'Apply each stated oracle.', disposition: 'final', authority_scope: 'refund',
     effective_scope: 'refund', evidence_ref: 'locator_decision', evidence_level: 'E3'
-  }], clarification_events: [] }, semantic_snapshot: currentSemantic };
+  }], clarification_events: [], execution_events: [] }, semantic_snapshot: currentSemantic };
   hasCalls = 0;
   const result = evaluateClarification(context, 'pause_for_clarification');
   return { size, hasCalls, action: result.action, diagnostics: result.diagnostics };

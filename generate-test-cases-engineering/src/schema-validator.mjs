@@ -2,7 +2,7 @@ import { canonicalStringify } from './canonical.mjs';
 import { STABLE_ID_COLLECTIONS } from './contracts.mjs';
 
 const supportedKeywords = new Set([
-  '$schema', '$id', 'type', 'required', 'properties', 'items', 'enum', 'const',
+  '$schema', '$id', '$defs', '$ref', 'type', 'required', 'properties', 'items', 'enum', 'const',
   'oneOf', 'allOf', 'minItems', 'minLength', 'pattern', 'minimum', 'maximum',
   'uniqueItems', 'additionalProperties'
 ]);
@@ -99,9 +99,13 @@ export function assertSupportedSchema(schema) {
   }
   for (const [key, value] of Object.entries(schema)) {
     if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
-    if (key === '$schema' || key === '$id' || key === 'pattern') {
+    if (key === '$schema' || key === '$id' || key === 'pattern' || key === '$ref') {
       if (typeof value !== 'string') throw new Error(`Schema ${key} must be a string.`);
       if (key === 'pattern') { try { new RegExp(value); } catch { throw new Error('Schema pattern must be a valid regular expression.'); } }
+      if (key === '$ref' && !value.startsWith('#/$defs/')) throw new Error('Schema $ref must be a local $defs reference.');
+    } else if (key === '$defs') {
+      if (!isSchemaObject(value)) throw new Error('Schema $defs must be an object.');
+      for (const child of Object.values(value)) assertSupportedSchema(child);
     } else if (key === 'type') {
       const types = Array.isArray(value) ? value : [value];
       if (!types.length || someArray(types, (item) => typeof item !== 'string' || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error('Schema type must name supported unique types.');
@@ -134,14 +138,36 @@ export function assertSupportedSchema(schema) {
 /** @param {unknown} value @param {unknown} schema */
 export function validateAgainstSchema(value, schema) {
   assertSupportedSchema(schema);
-  return validate(value, /** @type {Record<string, unknown>} */ (schema), '');
+  return validate(
+    value,
+    /** @type {Record<string, unknown>} */ (schema),
+    '',
+    /** @type {Record<string, unknown>} */ (schema)
+  );
 }
 
-/** @param {unknown} value @param {Record<string, unknown>} schema @param {string} path */
-function validate(value, schema, path) {
+/** @param {Record<string, unknown>} root @param {string} reference */
+function resolveReference(root, reference) {
+  const segments = reference.slice(2).split('/').map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'));
+  /** @type {unknown} */
+  let current = root;
+  for (const segment of segments) {
+    if (!isSchemaObject(current) || !Object.hasOwn(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
+    current = current[segment];
+  }
+  if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
+  return current;
+}
+
+/** @param {unknown} value @param {Record<string, unknown>} schema @param {string} path @param {Record<string, unknown>} root */
+function validate(value, schema, path, root) {
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [];
   const pointer = path || '/';
+  if (typeof schema.$ref === 'string') pushArray(
+    diagnostics,
+    ...validate(value, resolveReference(root, schema.$ref), path, root)
+  );
   if (schema.type && !matchesType(value, schema.type)) {
     return [diagnostic('TYPE_MISMATCH', pointer, `must be ${Array.isArray(schema.type) ? joinArray(schema.type, ' or ') : schema.type}`)];
   }
@@ -170,7 +196,7 @@ function validate(value, schema, path) {
       });
     }
     if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
-      forEachArray(value, (item, index) => pushArray(diagnostics, ...validate(item, /** @type {Record<string, unknown>} */ (schema.items), `${path}/${index}`)));
+      forEachArray(value, (item, index) => pushArray(diagnostics, ...validate(item, /** @type {Record<string, unknown>} */ (schema.items), `${path}/${index}`, root)));
     }
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -188,29 +214,32 @@ function validate(value, schema, path) {
       }
     } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object' && !Array.isArray(schema.additionalProperties)) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, ...validate(object[key], /** @type {Record<string, unknown>} */ (schema.additionalProperties), childPointer(path, key)));
+        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, ...validate(object[key], /** @type {Record<string, unknown>} */ (schema.additionalProperties), childPointer(path, key), root));
       }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path, key)));
+      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path, key), root));
     }
   }
-  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(value, /** @type {Record<string, unknown>} */ (child), path));
+  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(value, /** @type {Record<string, unknown>} */ (child), path, root));
   if (Array.isArray(schema.oneOf)) {
     const variants = mapArray(schema.oneOf, (child) => /** @type {Record<string, unknown>} */ (child));
-    const matching = filterArray(variants, (child) => validate(value, child, path).length === 0);
+    const matching = filterArray(variants, (child) => validate(value, child, path, root).length === 0);
     if (matching.length !== 1) {
-      const discriminated = filterArray(variants, (child) => matchesDiscriminator(value, child));
-      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path));
+      const discriminated = filterArray(variants, (child) => matchesDiscriminator(value, child, root));
+      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path, root));
       else pushArray(diagnostics, diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
     }
   }
   return diagnostics;
 }
 
-/** @param {unknown} value @param {Record<string, unknown>} schema */
-function matchesDiscriminator(value, schema) {
+/** @param {unknown} value @param {Record<string, unknown>} schema @param {Record<string, unknown>} root */
+function matchesDiscriminator(value, schema, root) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (typeof schema.$ref === 'string') return matchesDiscriminator(
+    value, resolveReference(root, schema.$ref), root
+  );
   const properties = schema.properties;
   if (!isSchemaObject(properties)) return false;
   /** @type {Array<[string, Record<string, unknown>]>} */

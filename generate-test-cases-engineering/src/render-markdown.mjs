@@ -488,14 +488,44 @@ function renderMarkdownTrusted(bundle) {
     }
     appendArray(lines, table(['Test Point', 'Exclusion evidence', 'Scope', 'Review'], notApplicableRows));
   }
+  const plan = snapshot.execution_plan;
+  /** @type {string[][]} */
+  const planRows = [];
+  for (let index = 0; index < plan.items.length; index += 1) {
+    const item = plan.items[index];
+    append(planRows, [
+      code(item.item_kind), code(item.item_id), inline(item.title), code(item.semantic_status),
+      code(item.execution_disposition), code(item.reason_code)
+    ]);
+  }
+  append(
+    lines,
+    '', '## Execution Plan', '',
+    `- Status: ${code(plan.status)}`,
+    `- Plan digest: ${code(plan.plan_digest)}`,
+    `- Semantic result digest: ${code(plan.semantic_result_digest)}`,
+    `- Execute Cases: ${plan.summary.execute_case_count}`,
+    `- DoNotExecute Cases: ${plan.summary.do_not_execute_case_count}`,
+    `- DoNotExecute formal Test Points: ${plan.summary.do_not_execute_formal_test_point_count}`,
+    `- DoNotExecute Exploratory items: ${plan.summary.do_not_execute_exploratory_count}`,
+    `- Applicable Test Point execution coverage: full ${plan.summary.full_test_point_count}, partial ${plan.summary.partial_test_point_count}, none ${plan.summary.none_test_point_count}`,
+    `- Runner Case IDs: ${codeList(plan.runner_case_ids)}`,
+    ''
+  );
+  appendArray(lines, table(
+    ['Kind', 'ID', 'Title', 'True status', 'Execution disposition', 'Reason code'], planRows
+  ));
   append(
     lines,
     '', '## Quality', '',
     `- Delivery status: ${code(snapshot.quality.delivery_status)}`,
     `- Compiler version: ${code(snapshot.quality.compiler_version)}`,
     `- Schema version: ${code(snapshot.quality.schema_version)}`,
-    `- Source lineage digest: ${code(snapshot.quality.lineage.source_digest)}`,
-    `- Case-draft lineage digest: ${code(snapshot.quality.lineage.case_draft_digest)}`,
+    `- Semantic source digest: ${code(snapshot.quality.lineage.semantic_source_digest)}`,
+    `- Evidence semantic digest: ${code(snapshot.quality.lineage.evidence_semantic_digest)}`,
+    `- Behavior Views semantic digest: ${code(snapshot.quality.lineage.behavior_views_semantic_digest)}`,
+    `- Test Obligations semantic digest: ${code(snapshot.quality.lineage.test_obligations_semantic_digest)}`,
+    `- Case Drafts semantic digest: ${code(snapshot.quality.lineage.case_drafts_semantic_digest)}`,
     '- Limits:'
   );
   for (let index = 0; index < snapshot.quality.limits.length; index += 1) {

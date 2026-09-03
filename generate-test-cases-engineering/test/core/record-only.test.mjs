@@ -112,7 +112,7 @@ test('record only and strict preserve an effective answer and both replay the sa
   ]) {
     const replay = structuredClone(answered);
     replay.prior_state = structuredClone(result.state);
-    replay.append_batch = { decision_records: [], clarification_events: [] };
+    replay.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
     const replayed = evaluateClarification(replay, /** @type {any} */ (policy));
     assert.deepEqual(replayed.diagnostics, [], policy);
     assert.equal(replayed.action, 'deliver', policy);

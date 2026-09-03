@@ -33,6 +33,7 @@ declare module 'node:fs' {
 
 declare module 'node:crypto' {
   export const createHash: any;
+  export const randomUUID: any;
 }
 
 declare module 'node:events' {

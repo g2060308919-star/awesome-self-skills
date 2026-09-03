@@ -1,7 +1,7 @@
 # Test Case Bundle
 
-- Schema version: <code>1.0.0</code>
-- Source revision: <code>0</code>
+- Schema version: <code>2.0.0</code>
+- Source revision: <code>1</code>
 
 ## Grounded Cases
 
@@ -82,12 +82,31 @@ Status: <code>benchmark\_only</code>
 
 _None._
 
+## Execution Plan
+
+- Status: <code>ready</code>
+- Plan digest: <code>c2fe1fd11be0cdb13441196315a5fbd72435a09ea74a19e0e9159e8a29638714</code>
+- Semantic result digest: <code>834a42875d4d6741564467160350a0a447a4cc0769624e0c1766b7424da0b653</code>
+- Execute Cases: 1
+- DoNotExecute Cases: 0
+- DoNotExecute formal Test Points: 0
+- DoNotExecute Exploratory items: 0
+- Applicable Test Point execution coverage: full 1, partial 0, none 0
+- Runner Case IDs: <code>case\_1c8a196253a78e34</code>
+
+| Kind | ID | Title | True status | Execution disposition | Reason code |
+| --- | --- | --- | --- | --- | --- |
+| <code>case</code> | <code>case\_1c8a196253a78e34</code> | Verify checkout accepted | <code>grounded</code> | <code>execute</code> | <code>selected\_for\_run</code> |
+
 ## Quality
 
 - Delivery status: <code>executable\_subset\_ready</code>
-- Compiler version: <code>0.1.0</code>
-- Schema version: <code>1.0.0</code>
-- Source lineage digest: <code>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</code>
-- Case-draft lineage digest: <code>cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc</code>
+- Compiler version: <code>0.2.0</code>
+- Schema version: <code>2.0.0</code>
+- Semantic source digest: <code>f077ac00150cc58283e641ee899d8afb491ac20729e339e5faec1a90ad4817da</code>
+- Evidence semantic digest: <code>55049791528884de45f209f6687bd4db24dd3e85af8e8cafde254356b1cd06bc</code>
+- Behavior Views semantic digest: <code>5116203c0e991da91ed3bba3aaa21dfd5c77599db67dce7b2532e9b955700fec</code>
+- Test Obligations semantic digest: <code>2990ea13a93510c32162b2cead69d00a9270e6eea982e1e750d5a9957c1423b9</code>
+- Case Drafts semantic digest: <code>0e79bb15c31ec37de8a47e37903ce1dc58a4dd5ca9a822c62b82952df63402b5</code>
 - Limits:
   - Compilation is limited to the supplied revision.

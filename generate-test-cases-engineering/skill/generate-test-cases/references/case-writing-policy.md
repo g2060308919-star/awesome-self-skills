@@ -1,6 +1,8 @@
 # Case Writing Policy
 
-Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls compiler finalization, not whether candidate drafts may be submitted.
+Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls entry into execution closure, not finalization and not whether candidate drafts may be submitted.
+
+A Case is the atomic execution unit. Execution closure may select the whole Case, exclude the whole Case, or pause; it cannot partially execute selected steps, split responsibilities after classification, or generate automation. A distinct executable responsibility must pass through normal evidence, Test Point, Oracle, and Case generation before it can become its own Case.
 
 Confirm the runner requested the schema-validated `case_drafts` stage with `case-drafts.schema.json` before writing. Reject any other stage/schema pairing and never write compiler-derived coverage, verification, or obligations as a fifth Agent artifact.
 

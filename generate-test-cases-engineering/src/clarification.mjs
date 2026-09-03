@@ -10,7 +10,7 @@ const ROOT_STATUSES = new Set([
 ]);
 const STOP_REASONS = new Set(['converged', 'user_requested_delivery', 'no_information_gain']);
 const DECISION_DISPOSITIONS = new Set(['final', 'temporary', 'unknown', 'deferred']);
-const CONTROL_TYPES = new Set(['request_delivery', 'reopen_root_issues']);
+const CONTROL_TYPES = new Set(['request_delivery', 'reopen_root_issues', 'request_reanalysis']);
 const DELIVERY_STATUSES = new Set([
   'no_applicable_formal_test_points', 'no_deterministic_cases', 'critical_gaps', 'executable_subset_ready'
 ]);
@@ -711,17 +711,50 @@ function validateRootPartition(ledger, dispositionById, semantics, diagnostics, 
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
 function normalizeAppendBatch(value, path, diagnostics) {
   const batch = record(value, path, diagnostics);
-  checkKeys(batch, ['decision_records', 'clarification_events'], path, diagnostics);
+  // Execution events share the Source Pack append batch and global sequence,
+  // but this pure clarification evaluator deliberately leaves their semantic
+  // replay to execution-events.mjs.
+  checkKeys(batch, ['decision_records', 'clarification_events', 'execution_events'], path, diagnostics);
   /** @type {any[]} */
   const decisions = [];
   const decisionIds = new Set();
   for (const [index, raw] of arrayEntries(array(batch.decision_records, `${path}/decision_records`, diagnostics))) {
     const itemPath = `${path}/decision_records/${index}`;
     const item = record(raw, itemPath, diagnostics);
+    if (item.decision_type === 'exploratory_adoption') {
+      checkKeys(item, [
+        'decision_id', 'decision_type', 'clarification_event_seq', 'confirmer', 'confirmed_at',
+        'presentation_id', 'decision_group_ids', 'exploratory_id', 'item_semantic_digest',
+        'item_semantic_change_head_seq', 'business_rule', 'expected_result',
+        'authority_scope', 'effective_scope', 'evidence_ref', 'evidence_level'
+      ], itemPath, diagnostics);
+      const decisionId = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
+      if (decisionIds.has(decisionId)) arrayPush(diagnostics, diagnostic('reference', 'DECISION_ID_DUPLICATE', `${itemPath}/decision_id`, 'append Decision Record IDs must be unique'));
+      decisionIds.add(decisionId);
+      arrayPush(decisions, {
+        decision_id: decisionId, decision_type: 'exploratory_adoption',
+        clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
+        confirmer: canonicalString(item.confirmer, `${itemPath}/confirmer`, diagnostics),
+        confirmed_at: canonicalString(item.confirmed_at, `${itemPath}/confirmed_at`, diagnostics),
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false),
+        exploratory_id: canonicalString(item.exploratory_id, `${itemPath}/exploratory_id`, diagnostics),
+        item_semantic_digest: canonicalString(item.item_semantic_digest, `${itemPath}/item_semantic_digest`, diagnostics),
+        item_semantic_change_head_seq: integer(item.item_semantic_change_head_seq, `${itemPath}/item_semantic_change_head_seq`, diagnostics, 0),
+        business_rule: canonicalString(item.business_rule, `${itemPath}/business_rule`, diagnostics),
+        expected_result: canonicalString(item.expected_result, `${itemPath}/expected_result`, diagnostics),
+        authority_scope: canonicalString(item.authority_scope, `${itemPath}/authority_scope`, diagnostics),
+        effective_scope: canonicalString(item.effective_scope, `${itemPath}/effective_scope`, diagnostics),
+        evidence_ref: canonicalString(item.evidence_ref, `${itemPath}/evidence_ref`, diagnostics),
+        evidence_level: enumeration(item.evidence_level, new Set(['E3']), `${itemPath}/evidence_level`, diagnostics)
+      });
+      continue;
+    }
     checkKeys(item, [
-      'decision_id', 'question_id', 'root_issue_ids', 'affected_obligation_ids', 'clarification_event_seq',
+      'decision_id', 'question_id', 'presentation_id', 'decision_group_ids',
+      'root_issue_ids', 'affected_obligation_ids', 'clarification_event_seq',
       'confirmer', 'confirmed_at', 'question', 'answer', 'disposition', 'authority_scope', 'effective_scope',
-      'evidence_ref', 'evidence_level'
+      'evidence_ref', 'evidence_level', 'supersedes_decision_ids'
     ], itemPath, diagnostics);
     const decisionId = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
     if (decisionIds.has(decisionId)) arrayPush(diagnostics, diagnostic('reference', 'DECISION_ID_DUPLICATE', `${itemPath}/decision_id`, 'append Decision Record IDs must be unique'));
@@ -734,6 +767,10 @@ function normalizeAppendBatch(value, path, diagnostics) {
     arrayPush(decisions, {
       decision_id: decisionId,
       question_id: canonicalString(item.question_id, `${itemPath}/question_id`, diagnostics),
+      ...(item.presentation_id === undefined ? {} : {
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false)
+      }),
       root_issue_ids: stringSet(item.root_issue_ids, `${itemPath}/root_issue_ids`, diagnostics, true),
       affected_obligation_ids: stringSet(item.affected_obligation_ids, `${itemPath}/affected_obligation_ids`, diagnostics),
       clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
@@ -744,7 +781,10 @@ function normalizeAppendBatch(value, path, diagnostics) {
       authority_scope: canonicalString(item.authority_scope, `${itemPath}/authority_scope`, diagnostics),
       effective_scope: canonicalString(item.effective_scope, `${itemPath}/effective_scope`, diagnostics),
       evidence_ref: canonicalString(item.evidence_ref, `${itemPath}/evidence_ref`, diagnostics),
-      evidence_level: evidenceLevel
+      evidence_level: evidenceLevel,
+      ...(item.supersedes_decision_ids === undefined ? {} : {
+        supersedes_decision_ids: stringSet(item.supersedes_decision_ids, `${itemPath}/supersedes_decision_ids`, diagnostics, true)
+      })
     });
   }
   /** @type {any[]} */
@@ -753,16 +793,35 @@ function normalizeAppendBatch(value, path, diagnostics) {
   for (const [index, raw] of arrayEntries(array(batch.clarification_events, `${path}/clarification_events`, diagnostics))) {
     const itemPath = `${path}/clarification_events/${index}`;
     const item = record(raw, itemPath, diagnostics);
-    checkKeys(item, ['event_id', 'clarification_event_seq', 'type', 'actor', 'event_at', 'root_issue_ids'], itemPath, diagnostics);
+    const eventType = enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics);
+    checkKeys(item, eventType === 'request_reanalysis'
+      ? ['event_id', 'clarification_event_seq', 'type', 'actor', 'event_at', 'presentation_id', 'decision_group_ids', 'source_locator_ids', 'affected_items', 'reason']
+      : ['event_id', 'clarification_event_seq', 'type', 'actor', 'event_at', 'presentation_id', 'decision_group_ids', 'root_issue_ids'], itemPath, diagnostics);
     const eventId = canonicalString(item.event_id, `${itemPath}/event_id`, diagnostics);
     if (eventIds.has(eventId)) arrayPush(diagnostics, diagnostic('reference', 'CONTROL_EVENT_ID_DUPLICATE', `${itemPath}/event_id`, 'append control event IDs must be unique'));
     eventIds.add(eventId);
-    arrayPush(events, {
+    const common = {
       event_id: eventId,
       clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
-      type: enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics),
+      type: eventType,
       actor: canonicalString(item.actor, `${itemPath}/actor`, diagnostics),
-      event_at: canonicalString(item.event_at, `${itemPath}/event_at`, diagnostics),
+      event_at: canonicalString(item.event_at, `${itemPath}/event_at`, diagnostics)
+    };
+    arrayPush(events, eventType === 'request_reanalysis' ? {
+      ...common,
+      ...(item.presentation_id === undefined ? {} : {
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false)
+      }),
+      source_locator_ids: stringSet(item.source_locator_ids, `${itemPath}/source_locator_ids`, diagnostics, false),
+      affected_items: array(item.affected_items, `${itemPath}/affected_items`, diagnostics),
+      reason: canonicalString(item.reason, `${itemPath}/reason`, diagnostics)
+    } : {
+      ...common,
+      ...(item.presentation_id === undefined ? {} : {
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false)
+      }),
       root_issue_ids: stringSet(item.root_issue_ids, `${itemPath}/root_issue_ids`, diagnostics, true)
     });
   }
@@ -819,6 +878,7 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
   const pending = new Set(prior.last_pending_root_issue_ids);
   const decidedRoots = new Set();
   for (const [index, item] of arrayEntries(batch.decision_records)) {
+    if (item.decision_type === 'exploratory_adoption') continue;
     const expectedQuestionId = stableId('question', { root_issue_ids: arraySort([...item.root_issue_ids], compareCodePoints) });
     if (item.question_id !== expectedQuestionId) arrayPush(diagnostics, diagnostic(
       'traceability', 'DECISION_QUESTION_ID_MISMATCH', `/append_batch/decision_records/${index}/question_id`,

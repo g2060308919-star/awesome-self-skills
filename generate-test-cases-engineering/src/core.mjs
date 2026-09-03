@@ -9,6 +9,10 @@ import { buildBundle, BundleReconciliationError } from './coverage.mjs';
 import { scopeContains } from './decision-record.mjs';
 import { validateEvidenceGraph } from './evidence.mjs';
 import {
+  compileExecutionPlan, normalizeSemantic, projectReadyExecutionPlan, semanticResultDigest
+} from './execution-plan.mjs';
+import { createPresentationSnapshot } from './execution-events.mjs';
+import {
   compileObligations, ObligationCompilationError
 } from './obligations/compile-obligations.mjs';
 import { renderMarkdown, BundleRenderError } from './render-markdown.mjs';
@@ -21,7 +25,7 @@ const INPUT_KEYS = Object.freeze([
   'source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'
 ]);
 const OPTIONS_KEYS = Object.freeze([
-  'systemLineage', 'clarificationState', 'interactionPolicy', 'limits'
+  'systemLineage', 'clarificationState', 'workflowState', 'interactionPolicy', 'limits'
 ]);
 const SYSTEM_LINEAGE_KEYS = Object.freeze([
   'compiler_version', 'lineage', 'expert_recall_limits'
@@ -810,6 +814,11 @@ function normalizeOptions(submitted) {
     'clarification state must be a closed record'
   ));
   else requireClosed(clarification, CLARIFICATION_KEYS, '/options/clarificationState', diagnostics);
+  if (options.workflowState !== null && options.workflowState !== undefined
+    && !isRecord(options.workflowState)) pushArray(diagnostics, diagnostic(
+    'schema', 'CORE_WORKFLOW_STATE_INVALID', '/options/workflowState',
+    'workflow state must be a closed record or null'
+  ));
   if (!NATIVE_ARRAY_IS_ARRAY(options.limits)) pushArray(diagnostics, diagnostic(
     'schema', 'CORE_LIMITS_INVALID', '/options/limits', 'limits must be an array'
   ));
@@ -1659,6 +1668,61 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
   return output;
 }
 
+/**
+ * Turn compiler-owned clarification roots into the exact closed snapshot that
+ * the adapter must display before accepting a business answer.
+ * @param {Record<string, unknown>[]} pendingRoots
+ * @param {Record<string, unknown>} semantic
+ * @param {Record<string, unknown>} sourcePack
+ * @param {Record<string, unknown>} clarificationState
+ */
+function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, clarificationState) {
+  const pointById = makeMap(mapArray(
+    records(semantic.formal_test_points), (point) => [String(point.obligation_id), point]
+  ));
+  const planDigest = digest({
+    purpose: 'semantic_clarification',
+    semantic_snapshot: semantic,
+    roots: mapArray(pendingRoots, (root) => ({
+      root_issue_key: root.root_issue_key,
+      affected_obligation_ids: sortArray(strings(root.affected_obligation_ids), compareCodePoints)
+    }))
+  });
+  const changeHead = toNumber(clarificationState.clarification_event_seq);
+  return createPresentationSnapshot({
+    purpose: 'semantic_clarification', entryContext: 'active_analysis',
+    runInstanceId: String(sourcePack.run_instance_id),
+    sourceRevision: toNumber(sourcePack.source_revision),
+    planDigest, planChangeHeadSeq: changeHead,
+    groups: mapArray(pendingRoots, (root) => ({
+      question: String(root.question),
+      items: mapArray(strings(root.affected_obligation_ids), (obligationId) => {
+        const point = mapGet(pointById, obligationId) ?? {};
+        return {
+          item_kind: 'formal_test_point', item_id: obligationId,
+          title: `Formal Test Point ${obligationId}`,
+          item_semantic_digest: digest({
+            obligation_id: obligationId,
+            evidence_level: point.evidence_level,
+            classification: point.classification,
+            blocked_reason: point.blocked_reason,
+            root_issue_key: root.root_issue_key
+          }),
+          item_semantic_change_head_seq: changeHead
+        };
+      }),
+      allowedOptions: [
+        { option_code: 'final', label: 'Final answer', meaning: 'Apply an authoritative final business answer.' },
+        { option_code: 'temporary', label: 'Temporary answer', meaning: 'Record a provisional answer without upgrading evidence.' },
+        { option_code: 'unknown', label: 'Unknown', meaning: 'Record that the answer is currently unknown.' },
+        { option_code: 'deferred', label: 'Defer', meaning: 'Leave this issue unresolved for later.' },
+        { option_code: 'request_delivery', label: 'Continue to execution closure', meaning: 'Keep the true Blocked status and decide its run disposition.' }
+      ],
+      answerExample: `Answer ${String(root.root_issue_id)} with a final, temporary, unknown, deferred, or delivery decision.`
+    }))
+  });
+}
+
 /** @param {Record<string, unknown>} obligation @param {Record<string, unknown>[]} cases @param {Map<string, Record<string, unknown>>} claimsById @param {string} lane @param {Record<string, unknown>|undefined} notApplicable */
 function evidenceLevel(obligation, cases, claimsById, lane, notApplicable) {
   if (lane === 'blocked') return 'E0';
@@ -1808,6 +1872,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     expert_recall_limits: systemLineage.expert_recall_limits
   });
   const interactionPolicy = String(trustedOptions.interactionPolicy);
+  const sourcePack = /** @type {Record<string, unknown>} */ (input.source_pack);
   try {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired('schema', sourceRevision, schemaDiagnostics);
@@ -1884,15 +1949,34 @@ function evaluateRevisionCaptured(submittedInput, options) {
     if (clarification.diagnostics.length > 0) return revisionRequired(
       'clarification', sourceRevision, diagnosticArray(clarification.diagnostics)
     );
-    if (clarification.action === 'need_user_answers') return {
-      status: 'need_user_answers', source_revision: sourceRevision,
-      pending_root_issues: externalizePendingRoots(
+    if (clarification.action === 'need_user_answers') {
+      const pendingRootIssues = externalizePendingRoots(
         clarification.pending_root_issues, graph.conflicts, sourceConflictBridge
-      ),
-      clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
-      semantic_snapshot: NATIVE_STRUCTURED_CLONE(clarification.semantic_snapshot),
-      diagnostics: []
-    };
+      );
+      const presentation = semanticClarificationPresentation(
+        pendingRootIssues, clarification.semantic_snapshot, sourcePack, clarification.state
+      );
+      return {
+        status: 'need_user_answers', purpose: 'semantic_clarification',
+        entry_context: 'active_analysis', source_revision: sourceRevision,
+        pending_root_issues: pendingRootIssues, presentation,
+        next_event_seq: toNumber(clarification.state.clarification_event_seq) + 1,
+        workflow_state: {
+          execution_plan: null,
+          presentation_snapshot: presentation,
+          workflow_event_head_seq: toNumber(clarification.state.clarification_event_seq),
+          workflow_event_log_digest: digest({
+            decision_records: sourcePack.decision_records,
+            clarification_events: sourcePack.clarification_events,
+            execution_events: sourcePack.execution_events
+          }),
+          confirmation: null, active_pause: null, promoted_exploratory: []
+        },
+        clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
+        semantic_snapshot: NATIVE_STRUCTURED_CLONE(clarification.semantic_snapshot),
+        diagnostics: []
+      };
+    }
 
     let bundle;
     try {
@@ -1901,7 +1985,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         /** @type {Record<string, unknown>} */ (input.case_drafts)
       );
       bundle = buildBundle({
-        schema_version: '1.0.0', source_revision: sourceRevision,
+        schema_version: '2.0.0', source_revision: sourceRevision,
         compiler_version: input.compiler_version, lineage: input.lineage,
         evidence_claims: input.evidence_claims, obligations_artifact: obligations,
         classification: bundleClassification, clarification,
@@ -1913,6 +1997,92 @@ function evaluateRevisionCaptured(submittedInput, options) {
       );
       throw error;
     }
+    const execution = compileExecutionPlan({
+      semanticBundle: bundle,
+      obligations: records(obligations.obligations),
+      evidenceClaims: input.evidence_claims,
+      sourcePack,
+      runIdentityDigest: digest({
+        sources: records(sourcePack.sources).map((source) => ({
+          source_id: source.source_id, content_digest: source.content_digest
+        })),
+        run_scope: sourcePack.run_scope
+      }),
+      // Clarification state already proves that events through its accepted
+      // sequence belong to history. This fallback is required for the first
+      // execution-closure compilation of a run, before a workflow checkpoint
+      // exists; otherwise accepted business decisions are incorrectly replayed
+      // as fresh UI actions against a presentation that did not exist yet.
+      priorWorkflowState: trustedOptions.workflowState ?? {
+        workflow_event_head_seq: toNumber(
+          /** @type {Record<string, unknown>} */ (translatedClarification.prior_state).clarification_event_seq
+        )
+      }
+    });
+    if (execution.diagnostics.length > 0) return revisionRequired(
+      'execution_plan', sourceRevision, diagnosticArray(execution.diagnostics)
+    );
+    const promotedExploratoryIds = new Set(mapArray(
+      records(execution.plan.promoted_exploratory),
+      (promotion) => String(promotion.exploratory_id)
+    ));
+    if (promotedExploratoryIds.size > 0) bundle = {
+      ...bundle,
+      exploratory: records(bundle.exploratory).filter(
+        (candidate) => !promotedExploratoryIds.has(String(candidate.exploratory_id))
+      )
+    };
+    if (execution.kind !== 'ready') {
+      const presentation = /** @type {any} */ (execution.presentation);
+      const workflowState = {
+        execution_plan: execution.plan,
+        presentation_snapshot: presentation,
+        workflow_event_head_seq: execution.workflow_event_head_seq,
+        workflow_event_log_digest: execution.workflow_event_log_digest,
+        confirmation: execution.plan.confirmation,
+        active_pause: execution.plan.status === 'paused' ? {
+          resume_target: execution.plan.resume_target
+        } : null,
+        promoted_exploratory: execution.plan.promoted_exploratory
+      };
+      if (interactionPolicy === 'record_only') return {
+        kind: 'analysis_only', source_revision: sourceRevision,
+        semantic_sections: bundle,
+        execution_plan_snapshot: execution.plan,
+        presentation_snapshot: presentation,
+        workflow_state: workflowState,
+        diagnostics: []
+      };
+      return {
+        status: 'need_user_answers', source_revision: sourceRevision,
+        purpose: presentation.purpose,
+        entry_context: presentation.entry_context,
+        execution_plan: execution.plan,
+        presentation,
+        next_event_seq: execution.workflow_event_head_seq + 1,
+        workflow_state: workflowState,
+        clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
+        diagnostics: []
+      };
+    }
+    const readyPlan = projectReadyExecutionPlan(
+      execution.plan, sourcePack, input.evidence_claims
+    );
+    bundle = {
+      ...bundle,
+      execution_plan: readyPlan,
+      quality: {
+        ...bundle.quality,
+        lineage: {
+          semantic_source_digest: execution.plan.semantic_source_digest,
+          evidence_semantic_digest: digest(normalizeSemantic(input.evidence_claims)),
+          behavior_views_semantic_digest: digest(normalizeSemantic(input.behavior_views)),
+          test_obligations_semantic_digest: digest(normalizeSemantic(obligations)),
+          case_drafts_semantic_digest: digest(normalizeSemantic(input.case_drafts))
+        }
+      }
+    };
+    bundle.execution_plan.semantic_result_digest = semanticResultDigest(bundle);
     let markdown;
     try {
       markdown = renderMarkdown(bundle);
@@ -1925,7 +2095,17 @@ function evaluateRevisionCaptured(submittedInput, options) {
     return {
       status: 'finished', source_revision: sourceRevision,
       bundle, bundle_digest: digest(bundle), markdown, markdown_digest: digest(markdown),
-      clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state), diagnostics: []
+      clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
+      workflow_state: {
+        execution_plan: execution.plan,
+        presentation_snapshot: null,
+        workflow_event_head_seq: execution.workflow_event_head_seq,
+        workflow_event_log_digest: execution.workflow_event_log_digest,
+        confirmation: execution.plan.confirmation,
+        active_pause: null,
+        promoted_exploratory: execution.plan.promoted_exploratory
+      },
+      diagnostics: []
     };
   } catch {
     return revisionRequired('core', sourceRevision, [diagnostic(

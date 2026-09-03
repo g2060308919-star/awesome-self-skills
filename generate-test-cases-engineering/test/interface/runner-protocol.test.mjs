@@ -65,13 +65,29 @@ const emptyRunReply = {
   diagnostics: []
 };
 
+/** @param {any} reply */
+function assertInitialReply(reply) {
+  assert.match(reply.scope.run_instance_id, /^RUN-[0-9a-f-]{36}$/u);
+  assert.deepEqual({ ...reply, scope: { source_revision: reply.scope.source_revision } }, emptyRunReply);
+}
+
+/** @param {string} runDirectory @param {any} sourcePack */
+async function bindRunInstance(runDirectory, sourcePack) {
+  const initial = await runCompiler(runDirectory);
+  const reply = parseSingleJsonValue(initial.stdout);
+  assert.equal(initial.code, 0, initial.stderr);
+  assertInitialReply(reply);
+  sourcePack.run_instance_id = reply.scope.run_instance_id;
+  return reply.scope.run_instance_id;
+}
+
 test('empty run returns the source-pack artifact request', async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
   try {
     const result = await runCompiler(runDirectory);
 
     assert.equal(result.code, 0, result.stderr);
-    assert.deepEqual(parseSingleJsonValue(result.stdout), emptyRunReply);
+    assertInitialReply(parseSingleJsonValue(result.stdout));
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -81,9 +97,11 @@ test('installed runner accepts the requested source pack after an initial empty 
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-'));
   try {
     const initial = await runCompiler(runDirectory);
-    assert.deepEqual(parseSingleJsonValue(initial.stdout), emptyRunReply);
+    const initialReply = parseSingleJsonValue(initial.stdout);
+    assertInitialReply(initialReply);
 
     const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+    revision.source_pack.run_instance_id = initialReply.scope.run_instance_id;
     await mkdir(path.join(runDirectory, 'staging'));
     await writeFile(
       path.join(runDirectory, 'staging/source-pack.json'),
@@ -96,7 +114,7 @@ test('installed runner accepts the requested source pack after an initial empty 
     assert.deepEqual(parseSingleJsonValue(advanced.stdout), {
       status: 'need_artifact', stage: 'evidence_claims',
       schema_ref: 'evidence-claims.schema.json',
-      scope: { source_revision: 0 }, diagnostics: []
+      scope: { source_revision: 0, run_instance_id: initialReply.scope.run_instance_id }, diagnostics: []
     });
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
@@ -111,7 +129,7 @@ test('installed runner rejects an empty responsibility view without accepting or
   view.elements = [];
   const sourceDigest = 'd'.repeat(64);
   const sourcePack = {
-    schema_version: '1.0.0', source_revision: 0, run_scope: view.scope,
+    schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
       authority: 'owner', content: 'Integration contract requirements',
@@ -126,10 +144,10 @@ test('installed runner rejects an empty responsibility view without accepting or
       rule_id: 'rule_integration', source_ids: ['source_integration'], scope: view.scope,
       authority: 'owner', status: 'effective'
     }] },
-    decision_records: [], clarification_events: []
+    decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '1.0.0', source_revision: 0,
+    schema_version: '2.0.0', source_revision: 0,
     claims: view.source_claim_ids.map((/** @type {string} */ claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
@@ -141,6 +159,7 @@ test('installed runner rejects an empty responsibility view without accepting or
     }))
   };
   try {
+    await bindRunInstance(runDirectory, sourcePack);
     await mkdir(path.join(runDirectory, 'staging'));
     for (const [file, artifact] of [
       ['source-pack.json', sourcePack],
@@ -170,6 +189,7 @@ test('installed runner rejects a normative claim disguised as a diagnostic Fact'
   const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
   revision.evidence_claims.fact_ledger[0].status = 'diagnostic';
   try {
+    await bindRunInstance(runDirectory, revision.source_pack);
     await mkdir(path.join(runDirectory, 'staging'));
     await writeFile(
       path.join(runDirectory, 'staging/source-pack.json'),
@@ -219,6 +239,7 @@ test('installed runner preserves valid ambiguous and nested-scope conflicted Fac
       });
     }
     try {
+      await bindRunInstance(runDirectory, revision.source_pack);
       await mkdir(path.join(runDirectory, 'staging'));
       await writeFile(
         path.join(runDirectory, 'staging/source-pack.json'),
@@ -246,6 +267,7 @@ test('installed runner rejects a single-source conflicted Fact owner', async () 
   const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
   revision.evidence_claims.fact_ledger[0].status = 'conflicted';
   try {
+    await bindRunInstance(runDirectory, revision.source_pack);
     await mkdir(path.join(runDirectory, 'staging'));
     await writeFile(
       path.join(runDirectory, 'staging/source-pack.json'),
@@ -282,6 +304,7 @@ test('installed runner rejects grouped normative alternatives in disjoint siblin
     source_claim_ids: ['claim_checkout', 'claim_checkout_sibling']
   });
   try {
+    await bindRunInstance(runDirectory, revision.source_pack);
     await mkdir(path.join(runDirectory, 'staging'));
     await writeFile(
       path.join(runDirectory, 'staging/source-pack.json'),
@@ -318,6 +341,7 @@ test('installed runner rejects a grouped primary broader than an alternative sco
       source_claim_ids: ['claim_checkout', 'claim_checkout_child']
     });
     try {
+      await bindRunInstance(runDirectory, revision.source_pack);
       await mkdir(path.join(runDirectory, 'staging'));
       await writeFile(
         path.join(runDirectory, 'staging/source-pack.json'),
@@ -357,6 +381,7 @@ test('installed runner rejects normative ownership laundered through a non-norma
         source_claim_ids: ['claim_context', 'claim_checkout']
       });
       try {
+        await bindRunInstance(runDirectory, revision.source_pack);
         await mkdir(path.join(runDirectory, 'staging'));
         await writeFile(
           path.join(runDirectory, 'staging/source-pack.json'),

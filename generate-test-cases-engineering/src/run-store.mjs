@@ -1,5 +1,6 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { ChildProcess, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -13,7 +14,7 @@ export const STAGE_FILES = Object.freeze({
 });
 
 const CONTROLLED_DIRECTORIES = Object.freeze(['accepted', 'staging', 'derived', 'output']);
-const CONTROLLED_FILES = Object.freeze(['checkpoint.json']);
+const CONTROLLED_FILES = Object.freeze(['checkpoint.json', 'run-instance.json']);
 const REVISION_DIRECTORY = /^r([0-9]+)$/u;
 const TEMPORARY_FILE = /^\..+\.tmp-([0-9]+)-[0-9]+$/u;
 const RUN_LOCK_RESIDUE_DIRECTORY = /^\.compiler-advance\.lock\.(?:release|stale)-[0-9]+-[0-9]+(?:\.cleanup-[0-9]+-[0-9]+)*$/u;
@@ -97,6 +98,8 @@ const NATIVE_SET_TIMEOUT = setTimeout;
 const NATIVE_CLEAR_TIMEOUT = clearTimeout;
 const NATIVE_DATE = Date;
 const NATIVE_DATE_NOW = Date.now;
+const NATIVE_DATE_TO_ISO_STRING = Date.prototype.toISOString;
+const NATIVE_RANDOM_UUID = randomUUID;
 const NATIVE_MATH = Math;
 const NATIVE_MATH_MIN = Math.min;
 const NATIVE_PROCESS = process;
@@ -1811,6 +1814,33 @@ export async function prepareRunStore(runDirectory) {
   return canonicalRoot;
 }
 
+/** Create or recover the immutable identity for one private run directory. */
+/** @param {string} runDirectory */
+export async function ensureRunInstance(runDirectory) {
+  const target = pathJoin(runDirectory, 'run-instance.json');
+  const existing = await readJsonIfPresent(runDirectory, target);
+  if (existing) {
+    const value = existing.value;
+    if (!value || typeof value !== 'object'
+      || value.schema_version !== '2.0.0'
+      || typeof value.run_instance_id !== 'string'
+      || !/^RUN-[0-9a-f-]{36}$/u.test(value.run_instance_id)
+      || typeof value.created_at !== 'string') throw new RunStoreIntegrityError(
+      'Immutable run-instance.json is invalid.'
+    );
+    return value;
+  }
+  const value = {
+    schema_version: '2.0.0',
+    run_instance_id: `RUN-${NATIVE_RANDOM_UUID()}`,
+    created_at: NATIVE_REFLECT_APPLY(
+      NATIVE_DATE_TO_ISO_STRING, new NATIVE_DATE(currentTimeMilliseconds()), []
+    )
+  };
+  await atomicWriteJson(runDirectory, target, value);
+  return value;
+}
+
 /** Restore a staging file claimed immediately before a crashed promotion. */
 /** @param {string} runDirectory */
 export async function recoverStagingClaims(runDirectory) {
@@ -1875,6 +1905,36 @@ export async function recoverStagingClaims(runDirectory) {
     for (let index = 1; index < unresolvedClaims.length; index += 1) {
       await removeFileDurably(runDirectory, pathJoin(directory, unresolvedClaims[index]));
     }
+  }
+  const previewPrefix = '.post-ready-preview-request.json.claim-';
+  /** @type {string[]} */
+  const previewClaims = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (direntIsFile(entry) && stringStartsWith(entry.name, previewPrefix)) {
+      append(previewClaims, entry.name);
+    }
+  }
+  NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT, previewClaims, []);
+  if (previewClaims.length === 0) return;
+  const canonical = postReadyPreviewRequestPath(runDirectory);
+  const firstClaim = pathJoin(directory, previewClaims[0]);
+  const firstText = await readText(runDirectory, firstClaim);
+  for (let index = 1; index < previewClaims.length; index += 1) {
+    if (await readText(runDirectory, pathJoin(directory, previewClaims[index])) !== firstText) {
+      throw new RunStoreIntegrityError('Conflicting post-ready preview claims require manual revision.');
+    }
+  }
+  const canonicalText = await readTextIfPresent(runDirectory, canonical);
+  if (canonicalText !== null && canonicalText !== firstText) throw new RunStoreIntegrityError(
+    'Recovered post-ready preview claim conflicts with the current private request.'
+  );
+  if (canonicalText === null) {
+    await rename(firstClaim, canonical);
+    await syncDirectory(directory);
+  } else await removeFileDurably(runDirectory, firstClaim);
+  for (let index = 1; index < previewClaims.length; index += 1) {
+    await removeFileDurably(runDirectory, pathJoin(directory, previewClaims[index]));
   }
 }
 
@@ -1992,6 +2052,27 @@ export async function readJsonIfPresent(runDirectory, filePath) {
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stage */
 export function stagingPath(runDirectory, stage) {
   return pathJoin(runDirectory, 'staging', STAGE_FILES[stage]);
+}
+
+/** @param {string} runDirectory */
+export function postReadyPreviewRequestPath(runDirectory) {
+  return pathJoin(runDirectory, 'staging', 'post-ready-preview-request.json');
+}
+
+/** Remove an exact validated private preview request snapshot. */
+/** @param {string} runDirectory @param {{text:string}} snapshot */
+export async function discardPostReadyPreviewRequest(runDirectory, snapshot) {
+  const source = postReadyPreviewRequestPath(runDirectory);
+  const directory = pathDirname(source);
+  const claim = pathJoin(directory, `.post-ready-preview-request.json.claim-${NATIVE_PROCESS_PID}-${++temporarySequence}`);
+  await rename(source, claim);
+  await syncDirectory(directory);
+  const claimedText = await readText(runDirectory, claim);
+  if (claimedText !== snapshot.text) {
+    if (await readTextIfPresent(runDirectory, source) === null) await rename(claim, source);
+    throw new RunStoreIntegrityError('Post-ready preview request changed after validation.');
+  }
+  await removeFileDurably(runDirectory, claim);
 }
 
 /** @param {string} runDirectory @param {number} sourceRevision @param {keyof typeof STAGE_FILES} stage */
@@ -2126,4 +2207,35 @@ export async function writeFinalOutput(runDirectory, sourceRevision, bundle, mar
   await atomicWriteJson(runDirectory, paths.bundle, bundle);
   await atomicWriteText(runDirectory, paths.markdown, markdown);
   return paths;
+}
+
+/** @param {string} runDirectory */
+export async function readCurrentState(runDirectory) {
+  const current = await readJsonIfPresent(runDirectory, outputPaths(runDirectory, 0).current);
+  return current ? current.value : null;
+}
+
+/** @param {string} runDirectory @param {Record<string,unknown>} pointer */
+export async function writeReadyCurrent(runDirectory, pointer) {
+  await atomicWriteJson(runDirectory, outputPaths(runDirectory, 0).current, {
+    status: 'ready',
+    run_instance_id: pointer.run_instance_id,
+    source_revision: pointer.source_revision,
+    bundle_path: pointer.bundle_path,
+    bundle_digest: pointer.bundle_digest,
+    plan_digest: pointer.plan_digest
+  });
+}
+
+/** @param {string} runDirectory @param {string} runInstanceId @param {number} activeSourceRevision */
+export async function writeNonReadyCurrent(runDirectory, runInstanceId, activeSourceRevision) {
+  const prior = await readCurrentState(runDirectory);
+  const previousReadyRevision = prior?.status === 'ready'
+    ? prior.source_revision : prior?.status === 'stale' ? prior.previous_ready_revision : null;
+  await atomicWriteJson(runDirectory, outputPaths(runDirectory, 0).current, {
+    status: 'stale', run_instance_id: runInstanceId,
+    active_source_revision: activeSourceRevision,
+    reason: 'higher_revision_not_ready',
+    previous_ready_revision: previousReadyRevision ?? null
+  });
 }

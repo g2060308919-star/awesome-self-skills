@@ -140,7 +140,8 @@ function customId(responsibility) {
 /** @returns {any} */
 function task3SourcePack() {
   return {
-    schema_version: '1.0.0', source_revision: 7, run_scope: 'checkout',
+    schema_version: '2.0.0', source_revision: 7,
+    run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
     sources: [{
       source_id: 'source_prd', kind: 'prd', version: '1', status: 'effective',
       authority: 'owner', content: 'Rule', content_digest: digestA, scope: 'checkout'
@@ -155,13 +156,13 @@ function task3SourcePack() {
         authority: 'owner', status: 'effective'
       }]
     },
-    decision_records: [], clarification_events: []
+    decision_records: [], clarification_events: [], execution_events: []
   };
 }
 
 function task3DirectEvidence() {
   return {
-    schema_version: '1.0.0', source_revision: 7,
+    schema_version: '2.0.0', source_revision: 7,
     claims: [{
       claim_id: 'claim_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: 'checkout', value: 'approved', source_locator_ids: ['locator_rule'], source_id: 'source_prd'
@@ -178,13 +179,14 @@ function task3DecisionEvidence(disposition) {
   return {
     packDecision: {
       decision_id: 'decision_rule', question_id: 'question_rule', root_issue_ids: ['root_rule'],
+      presentation_id: 'presentation_rule', decision_group_ids: ['group_rule'],
       affected_obligation_ids: [], clarification_event_seq: 1, confirmer: 'owner',
       confirmed_at: '2026-08-30T00:00:00Z', question: 'Result?', answer: 'approved',
       disposition, authority_scope: 'checkout', effective_scope: 'checkout',
       evidence_ref: 'locator_rule', evidence_level: level
     },
     artifact: {
-      schema_version: '1.0.0', source_revision: 7,
+      schema_version: '2.0.0', source_revision: 7,
       claims: [{
         claim_id: 'claim_rule', claim_form: 'decision-record', level,
         kind: disposition === 'final' ? 'requirement' : 'assumption', scope: 'checkout',
@@ -330,7 +332,7 @@ test('obligation ledger compiles an empty formal scope into the frozen artifact 
     runScope: 'empty'
   };
   const behaviorViews = {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     source_revision: 0,
     views: [],
     interaction_matrix: interactionDimensions.map((dimension) => ({
@@ -340,7 +342,7 @@ test('obligation ledger compiles an empty formal scope into the frozen artifact 
   };
 
   assert.deepEqual(compileObligations(evidenceGraph, behaviorViews), {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     source_revision: 0,
     obligations: [],
     fact_routes: [],
@@ -1072,7 +1074,7 @@ test('obligation ledger surfaces Task 4 interaction omissions and mutually exclu
 test('obligation ledger orchestrates the closed seven-strategy registry and rejects unknown or duplicate registrations', () => {
   const viewTypes = ['flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration'];
   const behaviorViews = {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     source_revision: 11,
     views: viewTypes.map((type) => ({
       view_id: `view_${type}`,
@@ -1481,7 +1483,7 @@ test('obligation ledger memoizes one NotApplicable exclusion closure across many
   }));
   /** @type {any} */
   const behaviorViews = {
-    schema_version: '1.0.0', source_revision: 0, views: [],
+    schema_version: '2.0.0', source_revision: 0, views: [],
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['checkout'], dimension, status: 'checked-no-signal'
     })),
@@ -1526,7 +1528,7 @@ test('obligation ledger answers distinct independent NotApplicable exclusions wi
       status: 'active', source_claim_ids: ['claim_distinct_na_fact']
     }));
     const behaviorViews = {
-      schema_version: '1.0.0', source_revision: 0, views: [],
+      schema_version: '2.0.0', source_revision: 0, views: [],
       interaction_matrix: interactionDimensions.map((dimension) => ({
         module_ids: ['checkout'], dimension, status: 'checked-no-signal'
       })),
@@ -1578,7 +1580,7 @@ test('obligation ledger keeps related NotApplicable rejection deterministic unde
   }));
   /** @type {any} */
   const behaviorViews = {
-    schema_version: '1.0.0', source_revision: 0, views: [],
+    schema_version: '2.0.0', source_revision: 0, views: [],
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['checkout'], dimension, status: 'checked-no-signal'
     })),

@@ -117,7 +117,7 @@ test('interaction matrix audit defers terminal candidate routing to final reconc
 });
 
 test('interaction matrix rejects an empty audit instead of treating it as no signal', () => {
-  const result = auditInteractionMatrix({ schema_version: '1.0.0', source_revision: 0, views: [], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] });
+  const result = auditInteractionMatrix({ schema_version: '2.0.0', source_revision: 0, views: [], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] });
 
   assert.equal(result.diagnostics.some((item) => item.code === 'INTERACTION_AUDIT_EMPTY'), true);
 });
@@ -389,7 +389,7 @@ test('interaction matrix audits 120 declared modules and 49,980 cells in bounded
       });
     }
   }
-  const artifact = { schema_version: '1.0.0', source_revision: 0, views: [], interaction_matrix: matrix, obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
+  const artifact = { schema_version: '2.0.0', source_revision: 0, views: [], interaction_matrix: matrix, obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
 
   const startedAt = performance.now();
   const result = auditInteractionMatrix(artifact);

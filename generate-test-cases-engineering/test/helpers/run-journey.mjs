@@ -150,6 +150,8 @@ function decisionRecord(rule) {
   return {
     decision_id: `decision_${rule.key}`,
     question_id: `question_${rule.key}`,
+    presentation_id: 'PRESENTATION-test-history',
+    decision_group_ids: ['GROUP-test-history'],
     root_issue_ids: [`root_answer_${rule.key}`],
     affected_obligation_ids: [obligationId(rule)],
     clarification_event_seq: 0,
@@ -397,33 +399,40 @@ export function revisionFromRules(rules, options = {}) {
     return { obligation_id: id, status: 'case_candidate', case_ids: [`case_${rule.key}`] };
   });
   return {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     source_revision: sourceRevision,
-    compiler_version: '0.1.0',
+    compiler_version: '0.2.0',
     lineage: { source_digest: alternateContentDigest, case_draft_digest: revisedContentDigest },
     source_pack: {
-      schema_version: '1.0.0', source_revision: sourceRevision, run_scope: '*',
+      schema_version: '2.0.0', source_revision: sourceRevision,
+      run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: '*',
       sources, locators, source_policy: { rules: policyRules },
-      decision_records: decisions, clarification_events: []
+      decision_records: decisions, clarification_events: [], execution_events: []
     },
     evidence_claims: {
-      schema_version: '1.0.0', source_revision: sourceRevision,
+      schema_version: '2.0.0', source_revision: sourceRevision,
       claims, fact_ledger: facts
     },
     behavior_views: {
-      schema_version: '1.0.0', source_revision: sourceRevision,
+      schema_version: '2.0.0', source_revision: sourceRevision,
       views: rules.map(behaviorView),
       interaction_matrix: interaction.matrix,
       interaction_candidates: interaction.candidates,
       obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
-      schema_version: '1.0.0', source_revision: sourceRevision,
+      schema_version: '2.0.0', source_revision: sourceRevision,
       cases, obligation_dispositions: dispositions, exploratory_candidates: []
     },
     clarification: {
       prior_state: initialClarificationState(sourceRevision, decisions.length),
       append_batch: { decision_records: [], clarification_events: [] }
+    },
+    workflow: decisions.length === 0 ? null : {
+      execution_plan: null, presentation_snapshot: null,
+      workflow_event_head_seq: decisions.length,
+      workflow_event_log_digest: digest({ decision_records: decisions, clarification_events: [], execution_events: [] }),
+      confirmation: null, active_pause: null, promoted_exploratory: []
     },
     limits: ['Compilation is limited to the supplied revision.'],
     expert_recall_limits: ['Expert recall is benchmark-only.']
@@ -600,9 +609,82 @@ export function evaluateJourneyRevision(input, interactionPolicy = 'pause_for_cl
       expert_recall_limits: input.expert_recall_limits
     },
     clarificationState: input.clarification,
+    workflowState: input.workflow ?? null,
     interactionPolicy,
     limits: input.limits
   });
+}
+
+/** @param {any} result */
+function workflowPresentation(result) {
+  return result.presentation ?? result.presentation_snapshot ?? null;
+}
+
+/**
+ * Drive the private execution-closure protocol with explicit synthetic user
+ * records. Production never calls this helper; it exists so pre-closure
+ * journey tests still exercise a fully delivered bundle rather than bypassing
+ * the new confirmation gate.
+ * @param {any} submitted
+ * @param {'pause_for_clarification'|'record_only'} [interactionPolicy]
+ */
+export function completeJourneyRevision(submitted, interactionPolicy = 'pause_for_clarification') {
+  let revision = structuredClone(submitted);
+  let result = evaluateJourneyRevision(revision, interactionPolicy);
+  for (let step = 0; step < 3; step += 1) {
+    if (result.status === 'finished') return result;
+    if (result.status === 'need_user_answers' && result.purpose === 'semantic_clarification') return result;
+    const presentation = workflowPresentation(result);
+    const workflow = result.workflow_state;
+    const plan = result.execution_plan ?? result.execution_plan_snapshot;
+    if (!presentation || !workflow || !plan) return result;
+    revision = structuredClone(revision);
+    revision.clarification.prior_state = result.clarification_state
+      ?? revision.clarification.prior_state;
+    setSourceRevision(revision, revision.source_pack.source_revision + 1);
+    revision.workflow = workflow;
+    revision.clarification.append_batch = { decision_records: [], clarification_events: [] };
+    const sequence = Number(workflow.workflow_event_head_seq ?? 0) + 1;
+    if (presentation.purpose === 'execution_closure') {
+      const pending = plan.items.filter((/** @type {any} */ item) => item.execution_disposition === 'pending');
+      revision.source_pack.execution_events.push({
+        event_id: `event_test_dispositions_${sequence}`,
+        clarification_event_seq: sequence,
+        type: 'set_dispositions', actor: 'test-operator',
+        event_at: `2026-09-03T00:00:${String(sequence).padStart(2, '0')}.000Z`,
+        authority_scope: '*', run_instance_id: revision.source_pack.run_instance_id,
+        run_identity_digest: plan.run_identity_digest,
+        presented_plan_digest: plan.plan_digest,
+        presented_presentation_id: presentation.presentation_id,
+        decision_group_ids: presentation.groups.map((/** @type {any} */ group) => group.group_id),
+        decisions: pending.map((/** @type {any} */ item) => ({
+          item_kind: item.item_kind, item_id: item.item_id,
+          item_semantic_digest: item.item_semantic_digest,
+          item_semantic_change_head_seq: item.item_semantic_change_head_seq,
+          execution_disposition: 'do_not_execute',
+          reason_code: item.semantic_status === 'conditional' ? 'temporary_rule_unconfirmed'
+            : item.semantic_status === 'blocked' ? 'business_rule_missing'
+              : item.semantic_status === 'exploratory' ? 'risk_not_adopted' : 'other_explicit',
+          reason: `Test operator explicitly excluded this ${item.semantic_status} item.`
+        }))
+      });
+    } else if (presentation.purpose === 'final_confirmation') {
+      revision.source_pack.execution_events.push({
+        event_id: `event_test_confirmation_${sequence}`,
+        clarification_event_seq: sequence,
+        type: 'confirm_execution_plan', actor: 'test-operator',
+        event_at: `2026-09-03T00:00:${String(sequence).padStart(2, '0')}.000Z`,
+        authority_scope: '*', run_instance_id: revision.source_pack.run_instance_id,
+        run_identity_digest: plan.run_identity_digest,
+        presented_prompt_id: presentation.presentation_id,
+        presented_plan_digest: plan.plan_digest,
+        presented_plan_change_head_seq: plan.plan_change_head_seq,
+        presented_source_revision: presentation.source_revision
+      });
+    } else return result;
+    result = evaluateJourneyRevision(revision, interactionPolicy);
+  }
+  return result;
 }
 
 /** @param {'clarification-conditional'|'clarification-grounded'} name */
@@ -630,11 +712,18 @@ export async function runClarificationJourney(name) {
   decision.question_id = stableId('question', { root_issue_ids: decision.root_issue_ids });
   decision.affected_obligation_ids = [...root.affected_obligation_ids];
   decision.question = root.question;
+  decision.presentation_id = pending.presentation.presentation_id;
+  decision.decision_group_ids = pending.presentation.groups
+    .filter((/** @type {any} */ group) => group.item_refs.some(
+      (/** @type {any} */ item) => root.affected_obligation_ids.includes(item.item_id)
+    ))
+    .map((/** @type {any} */ group) => group.group_id);
   resolved.clarification.prior_state = pending.clarification_state;
+  resolved.workflow = pending.workflow_state;
   /** @type {any} */ (resolved.clarification.append_batch).decision_records = [
     structuredClone(decision)
   ];
-  return { specification, initial, pending, resolved, result: evaluateJourneyRevision(resolved) };
+  return { specification, initial, pending, resolved, result: completeJourneyRevision(resolved) };
 }
 
 /** @param {string} name @param {'pause_for_clarification'|'record_only'} [interactionPolicy] @returns {Promise<any>} */
@@ -646,7 +735,7 @@ export async function evaluateJourney(name, interactionPolicy) {
     name === 'partial-blocked' || name === 'all-blocked' || name === 'local-source-conflict'
       ? 'record_only' : 'pause_for_clarification'
   );
-  return evaluateJourneyRevision(buildJourney(name), policy);
+  return completeJourneyRevision(buildJourney(name), policy);
 }
 
 /** @param {any} input @param {number} sourceRevision */
@@ -705,7 +794,7 @@ function invokeRunner(runDirectory, extraArgs) {
  * Run a complete revision through the built, installed-shape script. Passing
  * null replays an existing run directory without staging new input.
  * @param {any|null} revision
- * @param {{runDirectory?:string,extraArgs?:string[],stageNames?:string[]}} [options]
+ * @param {{runDirectory?:string,extraArgs?:string[],stageNames?:string[],complete?:boolean}} [options]
  * @returns {Promise<any>}
  */
 export async function runInstalledRevision(revision, options = {}) {
@@ -717,12 +806,77 @@ export async function runInstalledRevision(revision, options = {}) {
   /** @type {any[]} */
   const replies = [];
   if (revision) {
+    const initial = await invokeRunner(runDirectory, extraArgs);
+    const assignedRunId = initial?.scope?.run_instance_id ?? initial?.run_instance_id;
+    if (typeof assignedRunId === 'string' && revision.source_pack) {
+      revision.source_pack.run_instance_id = assignedRunId;
+    }
     for (const stage of selectedStages) {
       await stageArtifact(runDirectory, revision[stage], /** @type {keyof typeof stageFiles} */ (stage));
       replies.push(await invokeRunner(runDirectory, extraArgs));
       if (replies.at(-1).status === 'need_revision'
         || replies.at(-1).status === 'need_user_answers'
         || replies.at(-1).status === 'fatal') break;
+    }
+    if ((options.complete ?? true) && selectedStages.includes('case_drafts')) {
+      let activeRevision = revision;
+      for (let step = 0; step < 3; step += 1) {
+        const activeReply = replies.at(-1);
+        if (activeReply?.status !== 'need_user_answers'
+          || activeReply.purpose === 'semantic_clarification') break;
+        let presentation = activeReply.presentation;
+        if (!presentation) {
+          try {
+            const saved = JSON.parse(await readFile(path.join(runDirectory, 'checkpoint.json'), 'utf8'));
+            presentation = saved.presentation_snapshot;
+          } catch {}
+        }
+        const plan = activeReply.execution_plan;
+        if (!presentation || !plan) break;
+        activeRevision = structuredClone(activeRevision);
+        setSourceRevision(activeRevision, activeRevision.source_pack.source_revision + 1);
+        const sequence = Number(activeReply.next_event_seq);
+        if (activeReply.purpose === 'execution_closure') {
+          const pending = plan.items.filter((/** @type {any} */ item) => item.execution_disposition === 'pending');
+          activeRevision.source_pack.execution_events.push({
+            event_id: `event_installed_dispositions_${sequence}`,
+            clarification_event_seq: sequence, type: 'set_dispositions',
+            actor: 'test-operator', event_at: `2026-09-03T00:01:${String(sequence).padStart(2, '0')}.000Z`,
+            authority_scope: '*', run_instance_id: activeRevision.source_pack.run_instance_id,
+            run_identity_digest: plan.run_identity_digest,
+            presented_plan_digest: plan.plan_digest,
+            presented_presentation_id: presentation.presentation_id,
+            decision_group_ids: presentation.groups.map((/** @type {any} */ group) => group.group_id),
+            decisions: pending.map((/** @type {any} */ item) => ({
+              item_kind: item.item_kind, item_id: item.item_id,
+              item_semantic_digest: item.item_semantic_digest,
+              item_semantic_change_head_seq: item.item_semantic_change_head_seq,
+              execution_disposition: 'do_not_execute',
+              reason_code: item.semantic_status === 'conditional' ? 'temporary_rule_unconfirmed'
+                : item.semantic_status === 'blocked' ? 'business_rule_missing'
+                  : item.semantic_status === 'exploratory' ? 'risk_not_adopted' : 'other_explicit',
+              reason: `Test operator explicitly excluded this ${item.semantic_status} item.`
+            }))
+          });
+        } else if (activeReply.purpose === 'final_confirmation') {
+          activeRevision.source_pack.execution_events.push({
+            event_id: `event_installed_confirmation_${sequence}`,
+            clarification_event_seq: sequence, type: 'confirm_execution_plan',
+            actor: 'test-operator', event_at: `2026-09-03T00:01:${String(sequence).padStart(2, '0')}.000Z`,
+            authority_scope: '*', run_instance_id: activeRevision.source_pack.run_instance_id,
+            run_identity_digest: plan.run_identity_digest,
+            presented_prompt_id: activeReply.prompt_id ?? presentation.presentation_id,
+            presented_plan_digest: plan.plan_digest,
+            presented_plan_change_head_seq: plan.plan_change_head_seq,
+            presented_source_revision: presentation.source_revision
+          });
+        } else break;
+        for (const stage of stages) {
+          await stageArtifact(runDirectory, activeRevision[stage], /** @type {keyof typeof stageFiles} */ (stage));
+          replies.push(await invokeRunner(runDirectory, extraArgs));
+          if (replies.at(-1).status === 'need_revision' || replies.at(-1).status === 'fatal') break;
+        }
+      }
     }
   } else replies.push(await invokeRunner(runDirectory, extraArgs));
   const reply = replies.at(-1);

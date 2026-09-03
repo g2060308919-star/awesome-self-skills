@@ -472,6 +472,8 @@ test('unknown and deferred answerable interaction gaps remain suppressed until e
     const decision = {
       decision_id: `decision_interaction_${disposition}`,
       question_id: stableId('question', { root_issue_ids: [root.root_issue_id] }),
+      presentation_id: first.presentation.presentation_id,
+      decision_group_ids: first.presentation.groups.map((/** @type {any} */ group) => group.group_id),
       root_issue_ids: [root.root_issue_id],
       affected_obligation_ids: [...root.affected_obligation_ids],
       clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-09-02',
@@ -481,9 +483,11 @@ test('unknown and deferred answerable interaction gaps remain suppressed until e
     };
     next.source_pack.decision_records.push(decision);
     next.clarification.prior_state = first.clarification_state;
+    next.workflow = first.workflow_state;
     next.clarification.append_batch.decision_records = [structuredClone(decision)];
     const resolved = evaluateJourneyRevision(next);
-    assert.equal(resolved.status, 'finished', `${disposition}: ${JSON.stringify(resolved)}`);
+    assert.equal(resolved.status, 'need_user_answers', `${disposition}: ${JSON.stringify(resolved)}`);
+    assert.equal(resolved.purpose, 'execution_closure', disposition);
     const expectedStatus = disposition === 'unknown' ? 'suppressed_unknown' : 'suppressed_deferred';
     assert.equal(resolved.clarification_state.root_issue_dispositions.find(
       (/** @type {any} */ item) => item.root_issue_id === root.root_issue_id
@@ -493,7 +497,8 @@ test('unknown and deferred answerable interaction gaps remain suppressed until e
     replay.clarification.prior_state = resolved.clarification_state;
     replay.clarification.append_batch = { decision_records: [], clarification_events: [] };
     const replayed = evaluateJourneyRevision(replay);
-    assert.equal(replayed.status, 'finished', disposition);
+    assert.equal(replayed.status, 'need_user_answers', disposition);
+    assert.equal(replayed.purpose, 'execution_closure', disposition);
     assert.deepEqual(replayed.clarification_state.last_pending_root_issue_ids, [], disposition);
 
     const reopened = /** @type {any} */ (structuredClone(replay));
@@ -505,8 +510,12 @@ test('unknown and deferred answerable interaction gaps remain suppressed until e
     const reopenEvent = {
       event_id: `event_reopen_interaction_${disposition}`,
       clarification_event_seq: 2, type: 'reopen_root_issues', actor: 'owner',
-      event_at: '2026-09-02', root_issue_ids: [root.root_issue_id]
+      event_at: '2026-09-02',
+      presentation_id: replayed.presentation.presentation_id,
+      decision_group_ids: replayed.presentation.groups.map((/** @type {any} */ group) => group.group_id),
+      root_issue_ids: [root.root_issue_id]
     };
+    reopened.workflow = replayed.workflow_state;
     reopened.source_pack.clarification_events.push(reopenEvent);
     reopened.clarification.append_batch = {
       decision_records: [], clarification_events: [structuredClone(reopenEvent)]

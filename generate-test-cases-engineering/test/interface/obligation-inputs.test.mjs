@@ -6,7 +6,7 @@ import { digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
 import { compileObligationInputs } from '../../src/obligations/compile-obligation-inputs.mjs';
 import {
-  buildJourney, runInstalledRevision
+  buildJourney, completeJourneyRevision, runInstalledRevision
 } from '../helpers/run-journey.mjs';
 
 const dimensions = [
@@ -37,7 +37,7 @@ function fourViewRevision() {
   ];
   return {
     source_pack: {
-      schema_version: '1.0.0', source_revision: 0, run_scope: 'checkout',
+      schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
       sources: [{
         source_id: 'source_prd', kind: 'prd', version: '1', status: 'effective',
         authority: 'owner', content: 'Four view responsibilities.',
@@ -52,10 +52,10 @@ function fourViewRevision() {
         rule_id: 'policy_prd', source_ids: ['source_prd'], scope: 'checkout',
         authority: 'owner', status: 'effective'
       }] },
-      decision_records: [], clarification_events: []
+      decision_records: [], clarification_events: [], execution_events: []
     },
     evidence_claims: {
-      schema_version: '1.0.0', source_revision: 0,
+      schema_version: '2.0.0', source_revision: 0,
       claims: claimIds.map((claimId) => ({
         claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
         scope: 'checkout', value: claimId, source_locator_ids: ['locator_prd'],
@@ -67,7 +67,7 @@ function fourViewRevision() {
       }))
     },
     behavior_views: {
-      schema_version: '1.0.0', source_revision: 0,
+      schema_version: '2.0.0', source_revision: 0,
       views: [
         {
           view_id: 'view_input', type: 'input-domain', scope: 'checkout',
@@ -446,7 +446,7 @@ test('installed obligation input rejects malformed nonempty reserved arrays inst
 
 test('obligation input compiler ignores the removed hidden fifth input', () => {
   const artifact = {
-    schema_version: '1.0.0', source_revision: 7, views: [], interaction_matrix: [],
+    schema_version: '2.0.0', source_revision: 7, views: [], interaction_matrix: [],
     interaction_candidates: [], obligation_inputs: emptyObligationInputs()
   };
   const clean = compileObligationInputs({}, artifact);
@@ -464,6 +464,7 @@ test('obligation input compiler ignores the removed hidden fifth input', () => {
 test('obligation input pure core accepts only four Agent artifacts and matches installed digest', async () => {
   const revision = buildJourney('all-e3');
   revision.behavior_views.obligation_inputs = emptyObligationInputs();
+  revision.limits = ['Compilation is limited to the accepted immutable revision.'];
   const agentArtifacts = {
     source_pack: revision.source_pack,
     evidence_claims: revision.evidence_claims,
@@ -480,10 +481,13 @@ test('obligation input pure core accepts only four Agent artifacts and matches i
       expert_recall_limits: revision.expert_recall_limits
     },
     clarificationState: revision.clarification,
+    workflowState: null,
     interactionPolicy: 'pause_for_clarification',
     limits: ['Compilation is limited to the accepted immutable revision.']
   };
-  const core = evaluateRevision(agentArtifacts, options);
+  const awaiting = evaluateRevision(agentArtifacts, options);
+  assert.equal(awaiting.status, 'need_user_answers', JSON.stringify(awaiting));
+  const core = completeJourneyRevision(revision);
   assert.equal(core.status, 'finished', JSON.stringify(core));
   const installed = await runInstalledRevision(revision);
   try {

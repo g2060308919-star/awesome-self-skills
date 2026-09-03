@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
+import { completeJourneyRevision } from '../helpers/run-journey.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const dimensions = [
@@ -234,6 +235,8 @@ function revisionFromRules(rules, options = {}) {
   locators.push(...(options.extraLocators ?? []));
   const decisions = options.decisions ?? rules.filter((rule) => rule.level === 'E1').map((rule, index) => ({
     decision_id: `decision_${rule.key}`, question_id: `question_${rule.key}`,
+    presentation_id: `presentation_accepted_${rule.key}`,
+    decision_group_ids: [`group_accepted_${rule.key}`],
     root_issue_ids: [`root_answer_${rule.key}`], affected_obligation_ids: [obligationId(rule)],
     clarification_event_seq: index + 1, confirmer: 'owner', confirmed_at: '2026-08-30',
     question: `What is the ${rule.key} result?`, answer: rule.result, disposition: 'temporary',
@@ -267,23 +270,24 @@ function revisionFromRules(rules, options = {}) {
     return { obligation_id: id, status: 'case_candidate', case_ids: [`case_${rule.key}`] };
   });
   return {
-    schema_version: '1.0.0', source_revision: sourceRevision, compiler_version: '0.1.0',
+    schema_version: '2.0.0', source_revision: sourceRevision, compiler_version: '0.1.0',
     lineage: { source_digest: digestB, case_draft_digest: digestC },
     source_pack: {
-      schema_version: '1.0.0', source_revision: sourceRevision, run_scope: '*',
+      schema_version: '2.0.0', source_revision: sourceRevision,
+      run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: '*',
       sources, locators, source_policy: { rules: policyRules },
-      decision_records: decisions, clarification_events: []
+      decision_records: decisions, clarification_events: [], execution_events: []
     },
     evidence_claims: {
-      schema_version: '1.0.0', source_revision: sourceRevision, claims, fact_ledger: facts
+      schema_version: '2.0.0', source_revision: sourceRevision, claims, fact_ledger: facts
     },
     behavior_views: {
-      schema_version: '1.0.0', source_revision: sourceRevision, views,
+      schema_version: '2.0.0', source_revision: sourceRevision, views,
       interaction_matrix: interaction.matrix, interaction_candidates: interaction.candidates,
       obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
-      schema_version: '1.0.0', source_revision: sourceRevision, cases,
+      schema_version: '2.0.0', source_revision: sourceRevision, cases,
       obligation_dispositions: dispositions, exploratory_candidates: []
     },
     clarification: {
@@ -403,6 +407,7 @@ function runRevision(input, interactionPolicy) {
       expert_recall_limits: input.expert_recall_limits
     },
     clarificationState: input.clarification,
+    workflowState: input.workflow ?? null,
     interactionPolicy,
     limits: input.limits
   });
@@ -420,6 +425,7 @@ function conflictRevision() {
   });
   const decision = {
     decision_id: 'decision_payment', question_id: 'question_payment', root_issue_ids: ['root_unrelated'],
+    presentation_id: 'presentation_accepted_payment', decision_group_ids: ['group_accepted_payment'],
     affected_obligation_ids: [obligationId(payment)], clarification_event_seq: 1,
     confirmer: 'owner', confirmed_at: '2026-08-30', question: 'Temporary settlement?',
     answer: payment.result, disposition: 'temporary', authority_scope: payment.scope,
@@ -493,8 +499,8 @@ for (const fixtureName of [
     const fixture = await journeyFixture(fixtureName);
     const input = buildRevision(fixture.scenario);
     const before = structuredClone(input);
-    const first = runRevision(input, fixture.interaction_policy);
-    const second = runRevision(structuredClone(input), fixture.interaction_policy);
+    const first = completeJourneyRevision(input, fixture.interaction_policy);
+    const second = completeJourneyRevision(structuredClone(input), fixture.interaction_policy);
     assertFinished(first, fixture.expected);
     assert.equal(second.bundle_digest, first.bundle_digest, 'the canonical bundle digest must be stable');
     assert.equal(second.markdown_digest, first.markdown_digest, 'the Markdown projection digest must be stable');
@@ -520,7 +526,7 @@ test('core journey one missing capability pauses strict while preserving its una
   assert.deepEqual(strict.semantic_snapshot.delivery_sections.grounded.length, 1);
   assert.deepEqual(strict.semantic_snapshot.delivery_sections.blocked.length, 1);
 
-  const delivered = runRevision(input, fixture.interaction_policy);
+  const delivered = completeJourneyRevision(input, fixture.interaction_policy);
   assertFinished(delivered, fixture.expected);
   assert.equal(delivered.bundle.grounded[0].scope, 'checkout');
   const blockerDisposition = input.case_drafts.obligation_dispositions.find((/** @type {any} */ item) => item.status === 'blocker');
@@ -529,7 +535,7 @@ test('core journey one missing capability pauses strict while preserving its una
 });
 
 test('core journey risk-only stays Exploratory and outside every formal denominator', () => {
-  const result = runRevision(buildRevision('risk-only'), 'pause_for_clarification');
+  const result = completeJourneyRevision(buildRevision('risk-only'), 'pause_for_clarification');
   assertFinished(result, {
     status: 'finished', grounded: 0, conditional: 0, blocked: 0, exploratory: 1,
     not_applicable: 0, delivery_status: 'no_applicable_formal_test_points'
@@ -596,6 +602,12 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   const finalDecision = {
     decision_id: 'decision_payment_conflict_final',
     question_id: stableId('question', { root_issue_ids: [sourceConflictRootId] }),
+    presentation_id: first.presentation.presentation_id,
+    decision_group_ids: first.presentation.groups
+      .filter((/** @type {any} */ group) => group.item_refs.some(
+        (/** @type {any} */ item) => item.item_id === paymentObligationId
+      ))
+      .map((/** @type {any} */ group) => group.group_id),
     root_issue_ids: [sourceConflictRootId], affected_obligation_ids: [paymentObligationId],
     clarification_event_seq: 2, confirmer: 'payments-owner', confirmed_at: '2026-08-30',
     question: first.pending_root_issues[0].question,
@@ -615,6 +627,7 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   delete paymentCase.temporary_assumption;
   secondInput.clarification.prior_state = first.clarification_state;
   secondInput.clarification.append_batch.decision_records = [finalDecision];
+  secondInput.workflow = first.workflow_state;
 
   const invalidQuestionInput = structuredClone(secondInput);
   invalidQuestionInput.clarification.append_batch.decision_records[0].question_id = 'question_forged';
@@ -622,7 +635,7 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   assert.equal(invalidQuestion.status, 'need_revision');
   assert.equal(invalidQuestion.stage, 'clarification', canonicalStringify(invalidQuestion));
 
-  const second = runRevision(secondInput, 'pause_for_clarification');
+  const second = completeJourneyRevision(secondInput, 'pause_for_clarification');
   assert.equal(second.status, 'finished', canonicalStringify(second));
   assert.equal(second.bundle.grounded.length, 2);
   assert.equal(second.bundle.blocked.length, 0);
@@ -890,7 +903,7 @@ test('core boundary never consults a replaced String iterator while sorting diag
 test('core rejects polluted constructors and dynamic String methods before a valid revision executes them', async () => {
   const fixture = await journeyFixture('grounded');
   const input = buildRevision(fixture.scenario);
-  assert.equal(runRevision(input, 'pause_for_clarification').status, 'finished');
+  assert.equal(completeJourneyRevision(input, 'pause_for_clarification').status, 'finished');
 
   const constructorNames = ['Array', 'Set', 'Map', 'String'];
   const stringMethodNames = ['trim', 'includes', 'split'];
@@ -959,7 +972,7 @@ test('core rejects polluted constructors and dynamic String methods before a val
 test('core rejects Number Object and Symbol proxies before any forwarding or throwing trap runs', async () => {
   const fixture = await journeyFixture('grounded');
   const input = buildRevision(fixture.scenario);
-  assert.equal(runRevision(input, 'pause_for_clarification').status, 'finished');
+  assert.equal(completeJourneyRevision(input, 'pause_for_clarification').status, 'finished');
   const defineProperty = Object.defineProperty;
   const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
   const globalNames = ['Number', 'Object', 'Symbol'];

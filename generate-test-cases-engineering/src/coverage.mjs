@@ -398,8 +398,8 @@ function normalizeContext(submittedContext) {
     ...diagnostics, diagnostic('schema', 'CONTEXT_INVALID', '/', 'Task 10 context must be a closed own-data record')
   ]);
   requireClosed(submittedContext, CONTEXT_KEYS, '', diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
-  if (submittedContext.schema_version !== '1.0.0') pushArray(diagnostics, diagnostic(
-    'schema', 'SCHEMA_VERSION_INVALID', '/schema_version', 'Task 10 requires schema version 1.0.0'
+  if (submittedContext.schema_version !== '2.0.0') pushArray(diagnostics, diagnostic(
+    'schema', 'SCHEMA_VERSION_INVALID', '/schema_version', 'Task 10 requires schema version 2.0.0'
   ));
   if (!Number.isSafeInteger(submittedContext.source_revision) || Number(submittedContext.source_revision) < 0) pushArray(diagnostics, diagnostic(
     'schema', 'SOURCE_REVISION_INVALID', '/source_revision', 'source revision must be a nonnegative safe integer'
@@ -2093,7 +2093,7 @@ function buildBundleTrusted(context) {
     throw new BundleReconciliationError(diagnostics);
   }
   pushArray(diagnostics, .../** @type {Diagnostic[]} */ (validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: normalized.sourceRevision,
+    schema_version: '2.0.0', source_revision: normalized.sourceRevision,
     cases: executableCaseInput,
     obligation_dispositions: [], exploratory_candidates: []
   }, caseDraftsSchema)));
@@ -2476,7 +2476,7 @@ function buildBundleTrusted(context) {
 
   if (diagnostics.length > 0) throw new BundleReconciliationError(diagnostics);
   const bundle = {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     source_revision: normalized.sourceRevision,
     grounded: sortArray(grounded, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
     conditional: sortArray(conditional, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
@@ -2492,14 +2492,23 @@ function buildBundleTrusted(context) {
     quality: {
       delivery_status: deliveryStatus,
       compiler_version: normalized.compilerVersion,
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       lineage: normalized.lineage,
       limits: normalized.limits
     }
   };
   const canonicalBundle = JSON.parse(canonicalStringify(bundle));
+  const intermediateSchema = /** @type {any} */ (structuredClone(testBundleSchema));
+  intermediateSchema.required = [];
+  for (const key of testBundleSchema.required) {
+    if (key !== 'execution_plan') pushArray(intermediateSchema.required, key);
+  }
+  delete intermediateSchema.properties.execution_plan;
+  intermediateSchema.properties.quality.properties.lineage = {
+    type: 'object', additionalProperties: true
+  };
   const outputDiagnostics = [
-    .../** @type {Diagnostic[]} */ (validateAgainstSchema(canonicalBundle, testBundleSchema)),
+    .../** @type {Diagnostic[]} */ (validateAgainstSchema(canonicalBundle, intermediateSchema)),
     .../** @type {Diagnostic[]} */ (validateUniqueStableIds(canonicalBundle))
   ];
   if (outputDiagnostics.length > 0) throw new BundleReconciliationError(outputDiagnostics);

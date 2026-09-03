@@ -26,7 +26,7 @@
   },
   "append_batch": {
     "decision_records": [],
-    "clarification_events": []
+    "clarification_events": [], "execution_events": []
   },
   "semantic_snapshot": {
     "formal_test_points": [

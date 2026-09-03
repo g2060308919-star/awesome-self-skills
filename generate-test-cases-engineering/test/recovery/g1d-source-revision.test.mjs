@@ -17,6 +17,15 @@ async function fixture() {
 
 /** @param {string} runDirectory @param {any} sourcePack */
 async function stageSource(runDirectory, sourcePack) {
+  let runInstance;
+  try {
+    runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+  } catch (error) {
+    if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error;
+    await advanceStrict(runDirectory);
+    runInstance = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8'));
+  }
+  sourcePack.run_instance_id = runInstance.run_instance_id;
   await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
   await writeFile(
     path.join(runDirectory, 'staging/source-pack.json'),
@@ -27,6 +36,7 @@ async function stageSource(runDirectory, sourcePack) {
 function decision() {
   return {
     decision_id: 'decision_scope_change', question_id: 'question_scope_change',
+    presentation_id: 'presentation_scope_change', decision_group_ids: ['group_scope_change'],
     root_issue_ids: ['root_scope_change'],
     affected_obligation_ids: ['obligation_8cc31c1b2773c94c'],
     clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-31',
@@ -51,7 +61,8 @@ test('recovery canonical absolute path containing dot-dot resumes the same durab
     const accepted = /** @type {any} */ (await advanceStrict(equivalentPath));
     assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
-    assert.deepEqual(accepted.scope, { source_revision: 0 });
+    assert.equal(accepted.scope.source_revision, 0);
+    assert.equal(accepted.scope.run_instance_id, initial.scope.run_instance_id);
     await stat(path.join(runDirectory, 'accepted/r000/source-pack.json'));
 
     const recovered = /** @type {any} */ (await advanceStrict(runDirectory));
@@ -74,20 +85,21 @@ test('source revision material run_scope change returns NEW_RUN_REQUIRED and pre
       ['behavior-views.json', revision.behavior_views],
       ['case-drafts.json', revision.case_drafts]
     ]) {
-      await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
-      await writeFile(
+      if (filename === 'source-pack.json') await stageSource(runDirectory, artifact);
+      else {
+        await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
+        await writeFile(
         path.join(runDirectory, 'staging', filename), `${JSON.stringify(artifact)}\n`, 'utf8'
-      );
+        );
+      }
       initial = await advanceStrict(runDirectory);
     }
-    assert.equal(initial.status, 'finished', JSON.stringify(initial));
+    assert.equal(initial.status, 'need_user_answers', JSON.stringify(initial));
+    assert.equal(initial.purpose, 'final_confirmation');
     const acceptedBefore = await readFile(
       path.join(runDirectory, 'accepted/r000/source-pack.json'), 'utf8'
     );
     const currentBefore = await readFile(path.join(runDirectory, 'output/current.json'), 'utf8');
-    const bundleBefore = await readFile(
-      path.join(runDirectory, 'output/r000/test-bundle.json'), 'utf8'
-    );
 
     const changed = structuredClone(revision.source_pack);
     changed.source_revision = 1;
@@ -106,10 +118,6 @@ test('source revision material run_scope change returns NEW_RUN_REQUIRED and pre
     );
     assert.equal(
       await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'), currentBefore
-    );
-    assert.equal(
-      await readFile(path.join(runDirectory, 'output/r000/test-bundle.json'), 'utf8'),
-      bundleBefore
     );
     await assert.rejects(stat(path.join(runDirectory, 'accepted/r001/source-pack.json')));
   } finally {

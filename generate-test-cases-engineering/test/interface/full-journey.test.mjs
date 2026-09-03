@@ -55,6 +55,10 @@ test('full journey: installed-shape runner accepts the complete all-E3 artifact 
       'need_artifact/evidence_claims',
       'need_artifact/behavior_views',
       'need_artifact/case_drafts',
+      'need_user_answers/done',
+      'need_artifact/evidence_claims',
+      'need_artifact/behavior_views',
+      'need_artifact/case_drafts',
       'finished/done'
     ]);
     assert.equal(run.reply.status, 'finished');
@@ -101,6 +105,8 @@ test('full journey hard gate: an old checkpoint never masks a newer accepted rev
     nextSource.clarification_events.push({
       event_id: 'event_deliver_pending', clarification_event_seq: 1,
       type: 'request_delivery', actor: 'owner', event_at: '2026-08-30',
+      presentation_id: run.reply.presentation_id,
+      decision_group_ids: run.reply.groups.map((/** @type {any} */ group) => group.group_id),
       root_issue_ids: rootIssueIds
     });
     const deliveredRevision = setSourceRevision(structuredClone(revision), 1);
@@ -109,18 +115,49 @@ test('full journey hard gate: an old checkpoint never masks a newer accepted rev
       runDirectory: run.runDirectory
     });
     assert.equal(delivered.reply.status, 'finished', JSON.stringify(delivered.reply));
-    assert.equal(delivered.reply.source_revision, 1);
+    assert.equal(delivered.reply.source_revision, 3);
     const oldCheckpoint = await readFile(path.join(run.runDirectory, 'checkpoint.json'), 'utf8');
     const currentBefore = await readFile(path.join(run.runDirectory, 'output/current.json'), 'utf8');
     const bundleBefore = await readFile(
-      path.join(run.runDirectory, 'output/r001/test-bundle.json'), 'utf8'
+      path.join(run.runDirectory, 'output/r003/test-bundle.json'), 'utf8'
     );
 
-    const reopenedSource = structuredClone(nextSource);
-    reopenedSource.source_revision = 2;
+    const reopenedSource = JSON.parse(await readFile(
+      path.join(run.runDirectory, 'accepted/r003/source-pack.json'), 'utf8'
+    ));
+    const readyBundle = JSON.parse(await readFile(delivered.reply.bundle_path, 'utf8'));
+    const previewItem = readyBundle.execution_plan.items.find(
+      (/** @type {any} */ item) => item.item_kind === 'formal_test_point'
+    ) ?? readyBundle.execution_plan.items[0];
+    const previewRequest = {
+      operation: 'open_preview',
+      request_instance_id: delivered.reply.preview_control.next_request_instance_id,
+      expected_preview_epoch: delivered.reply.preview_control.expected_preview_epoch,
+      run_instance_id: delivered.reply.run_instance_id,
+      bound_source_revision: delivered.reply.source_revision,
+      bound_bundle_digest: delivered.reply.bundle_digest,
+      bound_plan_digest: delivered.reply.plan_digest,
+      bound_confirmation_semantic_digest:
+        readyBundle.execution_plan.confirmation.confirmation_semantic_digest,
+      candidate_item_refs: [{
+        item_kind: previewItem.item_kind, item_id: previewItem.item_id,
+        item_semantic_digest: previewItem.item_semantic_digest
+      }],
+      verbatim_user_request: 'Reopen the delivered requirement issue.',
+      proposed_change: { kind: 'reopen_root_issues', root_issue_ids: rootIssueIds }
+    };
+    await writeFile(
+      path.join(run.runDirectory, 'staging/post-ready-preview-request.json'),
+      `${JSON.stringify(previewRequest)}\n`, 'utf8'
+    );
+    const preview = await runInstalledRevision(null, { runDirectory: run.runDirectory });
+    assert.equal(preview.reply.entry_context, 'post_ready_change', JSON.stringify(preview.reply));
+    reopenedSource.source_revision = 4;
     reopenedSource.clarification_events.push({
-      event_id: 'event_reopen_delivered', clarification_event_seq: 2,
+      event_id: 'event_reopen_delivered', clarification_event_seq: 4,
       type: 'reopen_root_issues', actor: 'owner', event_at: '2026-08-31',
+      presentation_id: preview.reply.presentation_id,
+      decision_group_ids: preview.reply.groups.map((/** @type {any} */ group) => group.group_id),
       root_issue_ids: rootIssueIds
     });
     const acceptedReopen = await runInstalledRevision({ source_pack: reopenedSource }, {
@@ -128,18 +165,24 @@ test('full journey hard gate: an old checkpoint never masks a newer accepted rev
     });
     assert.equal(acceptedReopen.reply.status, 'need_artifact', JSON.stringify(acceptedReopen.reply));
     assert.equal(acceptedReopen.reply.stage, 'evidence_claims');
-    assert.deepEqual(acceptedReopen.reply.scope, { source_revision: 2 });
+    assert.equal(acceptedReopen.reply.scope.source_revision, 4);
+    assert.match(acceptedReopen.reply.scope.run_instance_id, /^RUN-/u);
 
     await writeFile(path.join(run.runDirectory, 'checkpoint.json'), oldCheckpoint, 'utf8');
     const replay = await runInstalledRevision(null, { runDirectory: run.runDirectory });
     assert.equal(replay.reply.status, 'need_artifact');
     assert.equal(replay.reply.stage, 'evidence_claims');
-    assert.deepEqual(replay.reply.scope, { source_revision: 2 });
+    assert.equal(replay.reply.scope.source_revision, 4);
+    assert.equal(replay.reply.scope.run_instance_id, acceptedReopen.reply.scope.run_instance_id);
+    const reconciledCurrent = JSON.parse(await readFile(
+      path.join(run.runDirectory, 'output/current.json'), 'utf8'
+    ));
+    assert.equal(reconciledCurrent.status, 'stale');
+    assert.equal(reconciledCurrent.active_source_revision, 4);
+    assert.equal(reconciledCurrent.previous_ready_revision, 3);
+    assert.notEqual(JSON.stringify(reconciledCurrent), currentBefore.trim());
     assert.equal(
-      await readFile(path.join(run.runDirectory, 'output/current.json'), 'utf8'), currentBefore
-    );
-    assert.equal(
-      await readFile(path.join(run.runDirectory, 'output/r001/test-bundle.json'), 'utf8'),
+      await readFile(path.join(run.runDirectory, 'output/r003/test-bundle.json'), 'utf8'),
       bundleBefore
     );
   } finally {

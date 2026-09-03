@@ -10,11 +10,14 @@ import {
 } from './obligations/compile-obligations.mjs';
 import {
   acceptedPath, acceptedSourceRevisions, acquireRunLock, atomicWriteJson, clarificationStatePath,
-  cleanupTemporaryFiles, discardStagingSnapshot, obligationsPath, outputPaths,
-  prepareRunStore, promoteArtifact, readJson, readJsonIfPresent, readTextIfPresent,
-  recoverStagingClaims,
-  runStoreIntrinsicsIntact, stagingPath, STAGE_FILES, writeCheckpoint, writeFinalOutput
+  cleanupTemporaryFiles, discardPostReadyPreviewRequest, discardStagingSnapshot,
+  obligationsPath, outputPaths, postReadyPreviewRequestPath,
+  ensureRunInstance, prepareRunStore, promoteArtifact, readJson, readJsonIfPresent, readTextIfPresent,
+  readCurrentState, recoverStagingClaims,
+  runStoreIntrinsicsIntact, stagingPath, STAGE_FILES, writeCheckpoint, writeFinalOutput,
+  writeNonReadyCurrent, writeReadyCurrent
 } from './run-store.mjs';
+import { nextPreviewControl, processPreviewRequest } from './post-ready-preview.mjs';
 import { loadSchemaRegistry } from './schema-registry.mjs';
 import { AGENT_STAGE_SCHEMA, mapInternalRevision } from './reply-routing.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
@@ -105,11 +108,11 @@ function pathResolve(value) {
   return NATIVE_REFLECT_APPLY(NATIVE_PATH_RESOLVE, path, [value]);
 }
 
-/** @param {number} sourceRevision @param {keyof typeof STAGE_SCHEMA} stage */
-function artifactRequest(sourceRevision, stage) {
+/** @param {number} sourceRevision @param {keyof typeof STAGE_SCHEMA} stage @param {string} runInstanceId */
+function artifactRequest(sourceRevision, stage, runInstanceId) {
   return {
     status: 'need_artifact', stage, schema_ref: STAGE_SCHEMA[stage],
-    scope: { source_revision: sourceRevision }, diagnostics: []
+    scope: { source_revision: sourceRevision, run_instance_id: runInstanceId }, diagnostics: []
   };
 }
 
@@ -129,6 +132,21 @@ function newRunRequired(message) {
       {
         category: 'traceability', code: 'NEW_RUN_REQUIRED',
         message: 'Original sources or task scope changed; create a new run.'
+      }
+    ]
+  };
+}
+
+function migrationRequired() {
+  return {
+    status: 'fatal', diagnostics: [
+      {
+        category: 'reference', code: 'RUN_MIGRATION_REQUIRED',
+        message: 'Schema v1 runs cannot resume under the v2 execution-closure protocol.'
+      },
+      {
+        category: 'traceability', code: 'NEW_RUN_REQUIRED',
+        message: 'Create a new v2 run; the prior run remains preserved and read-only.'
       }
     ]
   };
@@ -198,7 +216,7 @@ async function stagedArtifact(runDirectory, stage, sourceRevision) {
 /** @param {Record<string, unknown>} sourcePack */
 function maximumEventSequence(sourcePack) {
   let maximum = 0;
-  for (const field of ['decision_records', 'clarification_events']) {
+  for (const field of ['decision_records', 'clarification_events', 'execution_events']) {
     const values = arrayIsArray(sourcePack[field]) ? sourcePack[field] : [];
     for (let index = 0; index < values.length; index += 1) {
       const sequence = values[index]?.clarification_event_seq;
@@ -221,7 +239,8 @@ function isExactPrefix(prior, next) {
 function historySequenceIntegrity(sourcePack) {
   const sequences = [];
   for (const [field, identityField] of [
-    ['decision_records', 'decision_id'], ['clarification_events', 'event_id']
+    ['decision_records', 'decision_id'], ['clarification_events', 'event_id'],
+    ['execution_events', 'event_id']
   ]) {
     const values = arrayIsArray(sourcePack[field]) ? sourcePack[field] : [];
     const identities = new Set();
@@ -290,13 +309,17 @@ function sourceRevisionIntegrity(prior, next) {
   const nextDecisions = arrayIsArray(next.decision_records) ? next.decision_records : [];
   const priorEvents = arrayIsArray(prior.clarification_events) ? prior.clarification_events : [];
   const nextEvents = arrayIsArray(next.clarification_events) ? next.clarification_events : [];
-  if (!isExactPrefix(priorDecisions, nextDecisions) || !isExactPrefix(priorEvents, nextEvents)) {
+  const priorExecution = arrayIsArray(prior.execution_events) ? prior.execution_events : [];
+  const nextExecution = arrayIsArray(next.execution_events) ? next.execution_events : [];
+  if (!isExactPrefix(priorDecisions, nextDecisions) || !isExactPrefix(priorEvents, nextEvents)
+    || !isExactPrefix(priorExecution, nextExecution)) {
     return fatalReply('RUN_INTEGRITY_ERROR', 'Decision and clarification histories are append-only and order-preserving.');
   }
   const historyIntegrity = historySequenceIntegrity(next);
   if (historyIntegrity) return historyIntegrity;
   const added = [
-    ...nextDecisions.slice(priorDecisions.length), ...nextEvents.slice(priorEvents.length)
+    ...nextDecisions.slice(priorDecisions.length), ...nextEvents.slice(priorEvents.length),
+    ...nextExecution.slice(priorExecution.length)
   ];
   if (added.length === 0) return fatalReply(
     'RUN_INTEGRITY_ERROR', 'A higher source revision must contain one nonempty append batch.'
@@ -444,14 +467,34 @@ function appendBatch(previous, current) {
   };
 }
 
-/** @param {number} sourceRevision @param {string} stage @param {Record<string, unknown>} sourcePack @param {Record<string, unknown>|null} state @param {Record<string,string>} acceptedDigests */
-function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests) {
+/** Preserve clarification semantics when a revision contains only execution events.
+ * @param {any} previousState @param {any} previousSource @param {any} sourcePack
+ */
+function clarificationAppendInput(previousState, previousSource, sourcePack) {
+  const append = appendBatch(previousSource, sourcePack);
+  const priorState = structuredClone(previousState);
+  if (append.decision_records.length === 0 && append.clarification_events.length === 0) {
+    priorState.source_revision = sourcePack.source_revision;
+    priorState.clarification_event_seq = maximumEventSequence(sourcePack);
+    if (priorState.clarification_stop) {
+      priorState.clarification_stop.source_revision = sourcePack.source_revision;
+    }
+  }
+  return { prior_state: priorState, append_batch: append };
+}
+
+/** @param {number} sourceRevision @param {string} stage @param {Record<string, unknown>} sourcePack @param {Record<string, unknown>|null} state @param {Record<string,string>} acceptedDigests @param {string} runInstanceId @param {Record<string,unknown>|null} [workflowState] @param {Record<string,unknown>|null} [priorCheckpoint] */
+function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests, runInstanceId, workflowState = null, priorCheckpoint = null) {
+  const presentation = workflowState?.presentation_snapshot ?? null;
+  const plan = workflowState?.execution_plan ?? null;
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests }),
     source_revision: sourceRevision, stage,
-    compiler_version: embeddedCompilerVersion ?? '0.1.0',
-    schema_version: embeddedSchemaVersion ?? '1.0.0',
+    compiler_version: embeddedCompilerVersion ?? '0.2.0',
+    schema_version: embeddedSchemaVersion ?? '2.0.0',
+    run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests,
+    audit_lineage: structuredClone(acceptedDigests),
     clarification_event_seq: state && Number.isSafeInteger(state.clarification_event_seq)
       ? state.clarification_event_seq : maximumEventSequence(sourcePack),
     asked_root_issue_ids: state && arrayIsArray(state.asked_root_issue_ids)
@@ -462,7 +505,46 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests) {
       })) : [],
     last_question_set_digest: state && typeof state.last_question_set_digest === 'string'
       ? state.last_question_set_digest : '',
-    clarification_stop: state?.clarification_stop ?? null
+    clarification_stop: state?.clarification_stop ?? null,
+    workflow_event_head_seq: Number(workflowState?.workflow_event_head_seq ?? maximumEventSequence(sourcePack)),
+    workflow_event_log_digest: typeof workflowState?.workflow_event_log_digest === 'string'
+      ? workflowState.workflow_event_log_digest : digest([]),
+    execution_plan_snapshot: plan ? structuredClone(plan) : null,
+    presentation_snapshot: presentation ? structuredClone(presentation) : null,
+    presentation_snapshot_digest: presentation ? digest(presentation) : null,
+    confirmation: workflowState?.confirmation ? structuredClone(workflowState.confirmation) : null,
+    preview_epoch: Number(priorCheckpoint?.preview_epoch ?? 0),
+    preview_state: priorCheckpoint?.preview_state ?? 'idle',
+    active_preview_presentation: priorCheckpoint?.active_preview_presentation ?? null,
+    last_preview_request: priorCheckpoint?.last_preview_request ?? null,
+    internal_result_kind: null
+  };
+}
+
+/** @param {any} result @param {Record<string,unknown>} checkpointValue @param {Record<string,unknown>} current @param {string} markdownPath @param {string|null} [noticeCode] */
+function finishedReply(result, checkpointValue, current, markdownPath, noticeCode = null) {
+  const summary = result.bundle.execution_plan.summary;
+  return {
+    ...current, status: 'finished', markdown_path: markdownPath,
+    semantic_result_digest: result.bundle.execution_plan.semantic_result_digest,
+    execute_case_count: summary.execute_case_count,
+    do_not_execute_case_count: summary.do_not_execute_case_count,
+    do_not_execute_formal_test_point_count: summary.do_not_execute_formal_test_point_count,
+    do_not_execute_exploratory_count: summary.do_not_execute_exploratory_count,
+    applicable_test_point_coverage: {
+      full: summary.full_test_point_count,
+      partial: summary.partial_test_point_count,
+      none: summary.none_test_point_count
+    },
+    modification_hint: 'This Skill does not start E2E execution. You may later supplement rules, reopen issues, request reanalysis, or change this run disposition.',
+    preview_control: nextPreviewControl({
+      run_instance_id: checkpointValue.run_instance_id,
+      source_revision: result.source_revision,
+      bundle_digest: result.bundle_digest,
+      plan_digest: result.bundle.execution_plan.plan_digest,
+      confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
+    }, checkpointValue, String(checkpointValue.compiler_version)),
+    ...(noticeCode ? { notice_code: noticeCode } : {})
   };
 }
 
@@ -484,7 +566,7 @@ async function acceptedDigests(runDirectory, sourceRevision) {
 }
 
 /** @param {Record<string, Record<string, unknown>>} artifacts @param {Record<string, unknown>} clarification @param {any} registry */
-function evaluateAdapterRevision(artifacts, clarification, registry) {
+function evaluateAdapterRevision(artifacts, clarification, registry, workflowState = null) {
   const sourcePack = artifacts.source_pack;
   const caseDrafts = artifacts.case_drafts;
   return /** @type {any} */ (evaluateRevision(artifacts, {
@@ -496,6 +578,7 @@ function evaluateAdapterRevision(artifacts, clarification, registry) {
       expert_recall_limits: ['Expert recall is benchmark-only.']
     },
     clarificationState: clarification,
+    workflowState,
     interactionPolicy: 'pause_for_clarification',
     limits: ['Compilation is limited to the accepted immutable revision.']
   }));
@@ -517,6 +600,22 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
     'RUN_INTEGRITY_ERROR', 'The prior accepted source revision is unavailable.'
   );
   const appended = appendBatch(prior.source_pack, sourcePack);
+  if (prior.workflow_state?.presentation_snapshot?.entry_context === 'post_ready_change') {
+    const previousExecutionEvents = arrayIsArray(prior.source_pack.execution_events)
+      ? prior.source_pack.execution_events : [];
+    const currentExecutionEvents = arrayIsArray(sourcePack.execution_events)
+      ? sourcePack.execution_events : [];
+    const appendedExecutionMutations = currentExecutionEvents.slice(previousExecutionEvents.length)
+      .filter((event) => event?.type === 'set_dispositions');
+    const appliedRecordCount = appended.decision_records.length
+      + appended.clarification_events.length
+      + appendedExecutionMutations.length;
+    if (appliedRecordCount === 0) return { kind: 'need_revision', diagnostics: [{
+      category: 'classification', code: 'POST_READY_PREVIEW_APPLICATION_REQUIRED',
+      path: '/source_revision',
+      message: 'A higher revision created from an active preview must append the bound proposed change.'
+    }] };
+  }
   if (!prior.complete) {
     const diagnostics = [];
     if (appended.decision_records.length > 0) diagnostics.push({
@@ -542,27 +641,23 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
     .../** @type {Record<string, unknown>} */ (prior.artifacts[stage]),
     source_revision: sourceRevision
   };
-  const clarification = { prior_state: prior.state, append_batch: appended };
+  const clarification = clarificationAppendInput(
+    prior.state, prior.source_pack, sourcePack
+  );
   const caseDrafts = priorArtifacts.case_drafts;
   const result = evaluateAdapterRevision({
     source_pack: sourcePack,
     evidence_claims: priorArtifacts.evidence_claims,
     behavior_views: priorArtifacts.behavior_views,
     case_drafts: caseDrafts
-  }, clarification, registry);
+  }, clarification, registry, prior.workflow_state ?? null);
   if (result.status === 'finished' || result.status === 'need_user_answers') return null;
   if (result.status !== 'need_revision') return fatalReply(
     'RUNNER_PROTOCOL_VIOLATION',
     'Pure revision evaluation returned an unrecognized clarification result.'
   );
-  const route = mapInternalRevision(result);
-  if (route.kind === 'fatal') return fatalReply(
-    route.code, 'Pure revision diagnostics have no unique Agent-writable artifact owner.'
-  );
-  if (route.stage !== 'source_pack') return fatalReply(
-    'RUN_INTEGRITY_ERROR',
-    'Prior accepted artifacts cannot be reused to validate this source revision.'
-  );
+  // At this boundary the only changed input is the candidate Source Pack append;
+  // all reused downstream artifacts were already accepted and replay-verified.
   return { kind: 'need_revision', diagnostics: result.diagnostics };
 }
 
@@ -573,8 +668,9 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
  * @param {string} runDirectory
  * @param {number[]} revisions
  * @param {any} registry
+ * @param {any} runInstance
  */
-async function acceptedRunIntegrity(runDirectory, revisions, registry) {
+async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstance) {
   if (revisions.length === 0) return { kind: 'accepted_context', active: null };
   for (let index = 0; index < revisions.length; index += 1) {
     if (revisions[index] !== index) return fatalReply(
@@ -584,6 +680,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
   let previousSource = null;
   let previousState = null;
   let previousComplete = true;
+  /** @type {any} */
   let active = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
     const sourceRevision = revisions[revisionIndex];
@@ -595,6 +692,10 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
     ));
     const sourcePack = /** @type {Record<string, unknown>} */ (sourceArtifact.value);
+    if (sourcePack.schema_version !== '2.0.0') return migrationRequired();
+    if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
+      'RUN_INTEGRITY_ERROR', 'Accepted Source Pack belongs to a different run instance.'
+    );
     if (sourcePack.source_revision !== sourceRevision) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack revision does not match its revision directory.'
     );
@@ -664,12 +765,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     const clarificationInput = sourceRevision === 0 ? {
       prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
       append_batch: { decision_records: [], clarification_events: [] }
-    } : {
-      prior_state: previousState,
-      append_batch: appendBatch(
-        /** @type {Record<string, unknown>} */ (previousSource), sourcePack
-      )
-    };
+    } : clarificationAppendInput(
+      previousState, /** @type {Record<string, unknown>} */ (previousSource), sourcePack
+    );
     if (caseDrafts) {
       /** @type {Record<string, Record<string, unknown>>} */
       const artifacts = {
@@ -678,7 +776,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         behavior_views: /** @type {Record<string, unknown>} */ (behaviorViews),
         case_drafts: caseDrafts
       };
-      const replay = evaluateAdapterRevision(artifacts, clarificationInput, registry);
+      const replay = evaluateAdapterRevision(
+        artifacts, clarificationInput, registry, active?.workflow_state ?? null
+      );
       if ((replay.status !== 'finished' && replay.status !== 'need_user_answers')
         || !replay.clarification_state
         || typeof replay.clarification_state !== 'object') return fatalReply(
@@ -698,14 +798,16 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       previousComplete = true;
       active = {
         complete: true, source_pack: sourcePack, artifacts, state,
-        clarification_input: clarificationInput, result: replay
+        clarification_input: clarificationInput, result: replay,
+        workflow_state: replay.workflow_state ?? active?.workflow_state ?? null
       };
     } else {
       previousState = null;
       previousComplete = false;
       active = {
         complete: false, source_pack: sourcePack,
-        clarification_input: clarificationInput
+        clarification_input: clarificationInput,
+        workflow_state: active?.workflow_state ?? null
       };
     }
     previousSource = sourcePack;
@@ -744,17 +846,71 @@ async function advanceStrictExclusive(runDirectory) {
     try {
       if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
       runDirectory = await guardedAwait(() => prepareRunStore(runDirectory));
+      const runInstance = await guardedAwait(() => ensureRunInstance(runDirectory));
       await guardedAwait(() => recoverStagingClaims(runDirectory));
       await guardedAwait(() => cleanupTemporaryFiles(runDirectory));
       let revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
     const acceptedAudit = await guardedAwait(() =>
-      acceptedRunIntegrity(runDirectory, revisions, registry)
+      acceptedRunIntegrity(runDirectory, revisions, registry, runInstance)
     );
     if ('status' in acceptedAudit) return acceptedAudit;
     const acceptedContext = /** @type {any} */ (acceptedAudit);
+    let recoveryCheckpointArtifact = null;
+    try {
+      recoveryCheckpointArtifact = await guardedAwait(() => readJsonIfPresent(
+        runDirectory, path.join(runDirectory, 'checkpoint.json')
+      ));
+    } catch {
+      // Accepted artifacts are authoritative and can deterministically rebuild a
+      // torn checkpoint; no user-authored input is inferred from the corrupt bytes.
+      recoveryCheckpointArtifact = null;
+    }
+    const recoveryCheckpoint = /** @type {any} */ (recoveryCheckpointArtifact?.value ?? null);
+    if (acceptedContext.active && recoveryCheckpoint
+      && recoveryCheckpoint.run_instance_id === runInstance.run_instance_id
+      && recoveryCheckpoint.source_revision === acceptedContext.active.source_pack.source_revision
+      && (recoveryCheckpoint.active_preview_presentation || recoveryCheckpoint.presentation_snapshot)) {
+      acceptedContext.active.workflow_state = {
+        ...(acceptedContext.active.workflow_state ?? {}),
+        presentation_snapshot: recoveryCheckpoint.active_preview_presentation
+          ?? recoveryCheckpoint.presentation_snapshot
+      };
+    }
+    if (acceptedContext.active) {
+      const activeRevision = Number(acceptedContext.active.source_pack.source_revision);
+      const activeIsReady = acceptedContext.active.complete
+        && acceptedContext.active.result?.status === 'finished';
+      const currentState = /** @type {any} */ (await guardedAwait(() => readCurrentState(runDirectory)));
+      if (currentState?.status === 'ready'
+        && (currentState.source_revision < activeRevision || !activeIsReady)) {
+        await guardedAwait(() => writeNonReadyCurrent(
+          runDirectory, runInstance.run_instance_id, activeRevision
+        ));
+      }
+    }
     let sourceCandidate = await guardedAwait(() => stagedArtifact(
       runDirectory, 'source_pack', revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1
     ));
+    const previewRequestPath = postReadyPreviewRequestPath(runDirectory);
+    const previewRequestText = await guardedAwait(() => readTextIfPresent(
+      runDirectory, previewRequestPath
+    ));
+    /** @type {any} */
+    let previewCandidate = null;
+    if (previewRequestText !== null) {
+      try {
+        const value = JSON.parse(previewRequestText);
+        previewCandidate = { text: previewRequestText, value, digest: digest(value) };
+      } catch {
+        return revisionReply(runDirectory, 'source_pack', revisions.at(-1) ?? 0, previewRequestText, [{
+          category: 'schema', code: 'PREVIEW_REQUEST_JSON_INVALID', path: '/',
+          message: 'Private post-ready preview request is not valid JSON.'
+        }]);
+      }
+    }
+    if (sourceCandidate && previewCandidate) return fatalReply(
+      'RUN_INTEGRITY_ERROR', 'A source revision and post-ready preview request cannot be staged together.'
+    );
     if (sourceCandidate) {
       const candidateRecord = sourceCandidate.value && typeof sourceCandidate.value === 'object'
         ? /** @type {Record<string, unknown>} */ (sourceCandidate.value) : null;
@@ -786,6 +942,7 @@ async function advanceStrictExclusive(runDirectory) {
       if (candidateRevision !== expectedRevision) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Source revisions must begin at r000 and advance by exactly one.'
       );
+      if (candidateRecord?.schema_version === '1.0.0') return migrationRequired();
       const diagnostics = sourceCandidate.parseDiagnostics.length > 0
         ? sourceCandidate.parseDiagnostics
         : stableDiagnostics(validateAgainstSchema(
@@ -795,6 +952,9 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, 'source_pack', candidateRevision, sourceCandidate.value, diagnostics
       );
       if (candidateRecord) {
+        if (candidateRecord.run_instance_id !== runInstance.run_instance_id) return fatalReply(
+          'RUN_INTEGRITY_ERROR', 'Staged Source Pack belongs to a different run instance.'
+        );
         const transition = revisions.length === 0
           ? historySequenceIntegrity(candidateRecord)
           : sourceRevisionIntegrity(
@@ -841,9 +1001,14 @@ async function advanceStrictExclusive(runDirectory) {
       await guardedAwait(() => promoteArtifact(
         runDirectory, candidateRevision, 'source_pack', sourceCandidate.value, sourceCandidate
       ));
+      await guardedAwait(() => writeNonReadyCurrent(
+        runDirectory, runInstance.run_instance_id, candidateRevision
+      ));
+      const priorActiveContext = acceptedContext.active;
       acceptedContext.active = {
         complete: false,
         source_pack: /** @type {Record<string, unknown>} */ (sourceCandidate.value),
+        workflow_state: priorActiveContext?.workflow_state ?? null,
         clarification_input: candidateRevision === 0 ? {
           prior_state: initialClarificationState(
             0, maximumEventSequence(
@@ -851,22 +1016,130 @@ async function advanceStrictExclusive(runDirectory) {
             )
           ),
           append_batch: { decision_records: [], clarification_events: [] }
-        } : {
-          prior_state: acceptedContext.active.state,
-          append_batch: appendBatch(
-            acceptedContext.active.source_pack,
-            /** @type {Record<string, unknown>} */ (sourceCandidate.value)
-          )
-        }
+        } : clarificationAppendInput(
+          priorActiveContext.state, priorActiveContext.source_pack,
+          /** @type {Record<string, unknown>} */ (sourceCandidate.value)
+        )
       };
       const sourceDigests = await guardedAwait(() => acceptedDigests(runDirectory, candidateRevision));
-      await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
+      const sourceCheckpoint = checkpoint(
         candidateRevision, 'source_pack',
-        /** @type {Record<string, unknown>} */ (sourceCandidate.value), null, sourceDigests
-      )));
+        /** @type {Record<string, unknown>} */ (sourceCandidate.value), null, sourceDigests,
+        runInstance.run_instance_id, priorActiveContext?.workflow_state ?? null,
+        recoveryCheckpoint
+      );
+      if (recoveryCheckpoint?.preview_state === 'active') {
+        sourceCheckpoint.preview_epoch = Number(recoveryCheckpoint.preview_epoch ?? 0) + 1;
+        sourceCheckpoint.preview_state = 'consumed';
+        sourceCheckpoint.active_preview_presentation = null;
+      }
+      await guardedAwait(() => writeCheckpoint(runDirectory, sourceCheckpoint));
       revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
     }
-    if (revisions.length === 0) return artifactRequest(0, 'source_pack');
+    if (previewCandidate) {
+      const active = acceptedContext.active;
+      if (!active?.complete || active.result?.status !== 'finished') return revisionReply(
+        runDirectory, 'source_pack', revisions.at(-1) ?? 0, previewCandidate.value, [{
+          category: 'classification', code: 'POST_READY_PREVIEW_NOT_READY', path: '/',
+          message: 'A post-ready preview requires the current highest accepted revision to be ready.'
+        }]
+      );
+      const previewDiagnostics = artifactDiagnostics(
+        previewCandidate.value,
+        registry.schemas.get('post-ready-preview-request.schema.json')
+      );
+      if (previewDiagnostics.length > 0) return revisionReply(
+        runDirectory, 'source_pack', revisions.at(-1) ?? 0,
+        previewCandidate.value, previewDiagnostics
+      );
+      const currentState = /** @type {any} */ (await guardedAwait(() => readCurrentState(runDirectory)));
+      const result = active.result;
+      if (!currentState || currentState.status !== 'ready'
+        || currentState.source_revision !== result.source_revision
+        || currentState.bundle_digest !== result.bundle_digest
+        || currentState.plan_digest !== result.bundle.execution_plan.plan_digest) return fatalReply(
+        'RUN_INTEGRITY_ERROR', 'The ready pointer does not match the highest accepted ready revision.'
+      );
+      const storedCheckpoint = /** @type {any} */ ((await guardedAwait(() => readJsonIfPresent(
+        runDirectory, path.join(runDirectory, 'checkpoint.json')
+      )))?.value ?? {});
+      const processed = processPreviewRequest({
+        request: previewCandidate.value,
+        state: storedCheckpoint,
+        ready: {
+          run_instance_id: runInstance.run_instance_id,
+          source_revision: result.source_revision,
+          bundle_digest: result.bundle_digest,
+          plan_digest: result.bundle.execution_plan.plan_digest,
+          plan_change_head_seq: result.workflow_state.execution_plan.plan_change_head_seq,
+          confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest,
+          items: result.bundle.execution_plan.items
+        },
+        compilerVersion: registry.compilerVersion
+      });
+      if (processed.kind === 'rejected') return revisionReply(
+        runDirectory, 'source_pack', result.source_revision,
+        previewCandidate.value, processed.diagnostics
+      );
+      const updatedCheckpoint = {
+        ...storedCheckpoint,
+        preview_epoch: processed.state.preview_epoch,
+        preview_state: processed.state.preview_state,
+        active_preview_presentation: processed.state.active_preview_presentation,
+        last_preview_request: processed.state.last_preview_request,
+        presentation_snapshot: processed.presentation,
+        presentation_snapshot_digest: processed.presentation ? digest(processed.presentation) : null
+      };
+      await guardedAwait(() => writeCheckpoint(runDirectory, updatedCheckpoint));
+      await guardedAwait(() => discardPostReadyPreviewRequest(runDirectory, previewCandidate));
+      if (processed.kind === 'cancelled') return finishedReply(
+        result, updatedCheckpoint, currentState,
+        outputPaths(runDirectory, result.source_revision).markdown,
+        'POST_READY_CHANGE_CANCELLED'
+      );
+      const groups = processed.presentation.groups.map((/** @type {any} */ group) => ({
+        question_id: group.question_id,
+        presentation_id: processed.presentation.presentation_id,
+        group_id: group.group_id,
+        question: group.question,
+        affected_items: group.item_refs.map((/** @type {any} */ item) => ({
+          item_kind: item.item_kind, item_id: item.item_id, title: item.title
+        })),
+        counts_by_kind: group.item_refs.reduce((/** @type {any} */ counts, /** @type {any} */ item) => {
+          counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
+          return counts;
+        }, { case: 0, formal_test_point: 0, exploratory: 0 }),
+        risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+        options: group.allowed_options,
+        answer_example: group.answer_example
+      }));
+      return {
+        status: 'need_user_answers', purpose: processed.presentation.purpose,
+        entry_context: 'post_ready_change', run_instance_id: runInstance.run_instance_id,
+        run_identity_digest: result.workflow_state.execution_plan.run_identity_digest,
+        source_revision: result.source_revision,
+        next_event_seq: Number(updatedCheckpoint.workflow_event_head_seq ?? 0) + 1,
+        presentation_id: processed.presentation.presentation_id,
+        presentation_digest: digest(processed.presentation),
+        execution_plan: result.bundle.execution_plan,
+        ready_binding: {
+          bundle_digest: result.bundle_digest,
+          plan_digest: result.bundle.execution_plan.plan_digest,
+          confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
+        },
+        proposed_change: previewCandidate.value.proposed_change,
+        groups,
+        preview_control: nextPreviewControl({
+          run_instance_id: runInstance.run_instance_id,
+          source_revision: result.source_revision,
+          bundle_digest: result.bundle_digest,
+          plan_digest: result.bundle.execution_plan.plan_digest,
+          confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
+        }, updatedCheckpoint, registry.compilerVersion),
+        diagnostics: []
+      };
+    }
+    if (revisions.length === 0) return artifactRequest(0, 'source_pack', runInstance.run_instance_id);
     const sourceRevision = revisions[revisions.length - 1];
     const sourceAccepted = await guardedAwait(() => readJson(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
@@ -903,7 +1176,7 @@ async function advanceStrictExclusive(runDirectory) {
         candidate = null;
       }
       if (!artifact) {
-        if (!candidate) return artifactRequest(sourceRevision, typedStage);
+        if (!candidate) return artifactRequest(sourceRevision, typedStage, runInstance.run_instance_id);
         const diagnostics = candidate.parseDiagnostics.length > 0
           ? candidate.parseDiagnostics
           : artifactDiagnostics(candidate.value, registry.schemas.get(STAGE_SCHEMA[typedStage]));
@@ -952,7 +1225,8 @@ async function advanceStrictExclusive(runDirectory) {
         ));
         const digests = await guardedAwait(() => acceptedDigests(runDirectory, sourceRevision));
         await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
-          sourceRevision, typedStage, sourcePack, null, digests
+          sourceRevision, typedStage, sourcePack, null, digests, runInstance.run_instance_id,
+          acceptedContext.active?.workflow_state ?? null, recoveryCheckpoint
         )));
       }
       const diagnostics = artifactDiagnostics(
@@ -997,7 +1271,7 @@ async function advanceStrictExclusive(runDirectory) {
     let caseFromStaging = false;
     if (!caseArtifact) {
       const candidate = caseCandidate;
-      if (!candidate) return artifactRequest(sourceRevision, 'case_drafts');
+      if (!candidate) return artifactRequest(sourceRevision, 'case_drafts', runInstance.run_instance_id);
       const diagnostics = candidate.parseDiagnostics.length > 0
         ? candidate.parseDiagnostics
         : artifactDiagnostics(candidate.value, registry.schemas.get(STAGE_SCHEMA.case_drafts));
@@ -1038,7 +1312,8 @@ async function advanceStrictExclusive(runDirectory) {
     const result = !caseFromStaging && activeContext.complete
       ? activeContext.result
       : evaluateAdapterRevision(
-          evaluationArtifacts, activeContext.clarification_input, registry
+          evaluationArtifacts, activeContext.clarification_input, registry,
+          activeContext.workflow_state ?? null
         );
     if (result.status === 'need_revision') {
       if (!caseFromStaging) return fatalReply(
@@ -1047,7 +1322,7 @@ async function advanceStrictExclusive(runDirectory) {
       );
       const route = mapInternalRevision(result);
       if (route.kind === 'fatal') return fatalReply(
-        route.code, 'Pure revision diagnostics have no unique Agent-writable artifact owner.'
+        route.code, `Pure revision diagnostics have no unique Agent-writable artifact owner: ${canonicalStringify(result.diagnostics)}`
       );
       const stage = /** @type {keyof typeof STAGE_SCHEMA} */ (route.stage);
       const replyArtifacts = {
@@ -1069,11 +1344,79 @@ async function advanceStrictExclusive(runDirectory) {
     ));
     const digests = await guardedAwait(() => acceptedDigests(runDirectory, sourceRevision));
     if (result.status === 'need_user_answers') {
-      await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
-        sourceRevision, 'verification', sourcePack, clarificationState, digests
-      )));
+      const workflowState = /** @type {Record<string,unknown>|null} */ (result.workflow_state ?? null);
+      const checkpointValue = checkpoint(
+        sourceRevision, 'verification', sourcePack, clarificationState, digests,
+        runInstance.run_instance_id, workflowState, recoveryCheckpoint
+      );
+      await guardedAwait(() => writeCheckpoint(runDirectory, checkpointValue));
+      await guardedAwait(() => writeNonReadyCurrent(
+        runDirectory, runInstance.run_instance_id, sourceRevision
+      ));
+      if (result.purpose === 'execution_closure' || result.purpose === 'final_confirmation') {
+        const plan = result.execution_plan;
+        const groups = result.presentation.groups.map((/** @type {any} */ group) => ({
+          question_id: group.question_id,
+          presentation_id: result.presentation.presentation_id,
+          group_id: group.group_id,
+          question: group.question,
+          affected_items: group.item_refs.map((/** @type {any} */ item) => ({
+            item_kind: item.item_kind, item_id: item.item_id, title: item.title
+          })),
+          counts_by_kind: group.item_refs.reduce((/** @type {any} */ counts, /** @type {any} */ item) => {
+            counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
+            return counts;
+          }, { case: 0, formal_test_point: 0, exploratory: 0 }),
+          risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+          options: group.allowed_options,
+          answer_example: group.answer_example
+        }));
+        return {
+          status: 'need_user_answers', purpose: result.purpose,
+          entry_context: result.entry_context,
+          run_instance_id: runInstance.run_instance_id,
+          source_revision: sourceRevision,
+          next_event_seq: result.next_event_seq,
+          presentation_id: result.presentation.presentation_id,
+          presentation_digest: digest(result.presentation),
+          execution_plan: plan,
+          groups,
+          ...(result.purpose === 'execution_closure' ? {
+            pending_items: plan.items.filter((/** @type {any} */ item) => item.execution_disposition === 'pending'),
+            resume_hint: plan.status === 'paused'
+              ? `Resume run ${runInstance.run_instance_id} at ${plan.resume_target}.` : null
+          } : {
+            prompt_id: result.presentation.presentation_id,
+            execute_summary: { case_ids: plan.runner_case_ids },
+            do_not_execute_summary: plan.items.filter((/** @type {any} */ item) => item.execution_disposition === 'do_not_execute')
+              .map((/** @type {any} */ item) => ({ item_kind: item.item_kind, item_id: item.item_id, title: item.title })),
+            critical_high_do_not_execute: [], pending_count: 0
+          }),
+          diagnostics: []
+        };
+      }
       return {
-        status: 'need_user_answers', source_revision: sourceRevision, stage: 'clarification',
+        status: 'need_user_answers', purpose: 'semantic_clarification',
+        entry_context: 'active_analysis', run_instance_id: runInstance.run_instance_id,
+        source_revision: sourceRevision, next_event_seq: result.next_event_seq,
+        presentation_id: result.presentation.presentation_id,
+        presentation_digest: digest(result.presentation),
+        groups: result.presentation.groups.map((/** @type {any} */ group) => ({
+          question_id: group.question_id,
+          presentation_id: result.presentation.presentation_id,
+          group_id: group.group_id,
+          question: group.question,
+          affected_items: group.item_refs.map((/** @type {any} */ item) => ({
+            item_kind: item.item_kind, item_id: item.item_id, title: item.title
+          })),
+          counts_by_kind: group.item_refs.reduce((/** @type {any} */ counts, /** @type {any} */ item) => {
+            counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
+            return counts;
+          }, { case: 0, formal_test_point: 0, exploratory: 0 }),
+          risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+          options: group.allowed_options,
+          answer_example: group.answer_example
+        })),
         diagnostics: [], blockers: result.pending_root_issues.map((/** @type {any} */ item) => ({
           root_issue_id: item.root_issue_id,
           root_issue_key: item.root_issue_key,
@@ -1094,19 +1437,31 @@ async function advanceStrictExclusive(runDirectory) {
       runDirectory, sourceRevision, result.bundle, result.markdown
     ));
     digests.test_bundle = result.bundle_digest;
-    await guardedAwait(() => writeCheckpoint(runDirectory, checkpoint(
-      sourceRevision, 'finished', sourcePack, clarificationState, digests
-    )));
+    const priorCheckpointArtifact = recoveryCheckpointArtifact;
+    const priorCheckpoint = /** @type {Record<string,unknown>|null} */ (
+      priorCheckpointArtifact?.value ?? null
+    );
+    const checkpointValue = checkpoint(
+      sourceRevision, 'finished', sourcePack, clarificationState, digests,
+      runInstance.run_instance_id, result.workflow_state ?? null, priorCheckpoint
+    );
+    if (priorCheckpoint?.preview_state === 'active') {
+      checkpointValue.preview_epoch = Number(priorCheckpoint.preview_epoch ?? 0) + 1;
+      checkpointValue.preview_state = 'consumed';
+      checkpointValue.active_preview_presentation = null;
+      checkpointValue.presentation_snapshot = null;
+      checkpointValue.presentation_snapshot_digest = null;
+    }
+    await guardedAwait(() => writeCheckpoint(runDirectory, checkpointValue));
     const current = {
+      run_instance_id: runInstance.run_instance_id,
       source_revision: sourceRevision,
       bundle_path: paths.bundle,
       bundle_digest: result.bundle_digest,
-      markdown_path: paths.markdown
+      plan_digest: result.bundle.execution_plan.plan_digest
     };
-    await guardedAwait(() => atomicWriteJson(
-      runDirectory, outputPaths(runDirectory, sourceRevision).current, current
-    ));
-      return { status: 'finished', ...current };
+    await guardedAwait(() => writeReadyCurrent(runDirectory, current));
+    return finishedReply(result, checkpointValue, current, paths.markdown);
     } finally {
       await baseGuardedAwait(releaseRunLock());
     }

@@ -25,7 +25,8 @@ const diagnostic = {
 function needArtifact(stage, schemaRef) {
   return {
     status: 'need_artifact', stage, schema_ref: schemaRef,
-    scope: { source_revision: 0 }, diagnostics: []
+    scope: { source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc' },
+    diagnostics: []
   };
 }
 

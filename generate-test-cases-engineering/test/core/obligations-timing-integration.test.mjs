@@ -42,7 +42,8 @@ function acceptedView(artifact) {
     ...view.elements.flatMap((/** @type {any} */ element) => [...element.source_claim_ids, ...element.model_refs])
   ])];
   const sourcePack = {
-    schema_version: '1.0.0', source_revision: artifact.source_revision, run_scope: view.scope,
+    schema_version: '2.0.0', source_revision: artifact.source_revision,
+    run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_task6_time_integration', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
       content: 'Task 6 timing and integration evidence', content_digest: sourceDigest, scope: view.scope
@@ -55,10 +56,10 @@ function acceptedView(artifact) {
       rule_id: 'rule_task6_time_integration', source_ids: ['source_task6_time_integration'],
       scope: view.scope, authority: 'owner', status: 'effective'
     }] },
-    decision_records: [], clarification_events: []
+    decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '1.0.0', source_revision: artifact.source_revision,
+    schema_version: '2.0.0', source_revision: artifact.source_revision,
     claims: claimIds.map((claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement', scope: view.scope,
       value: claimId, source_locator_ids: ['locator_task6_time_integration'], source_id: 'source_task6_time_integration'
@@ -215,7 +216,7 @@ test('timing integration obligations hand-count before equal after and only evid
   const retry = actual.find((seed) => seed.source_claim_ids.includes('claim_retry_signal'));
   assert.deepEqual(retry?.required_oracle_refs, []);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: 6,
+    schema_version: '2.0.0', source_revision: 6,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);
@@ -240,7 +241,7 @@ test('timing integration obligations keep every request response persistence eve
   assert.equal(actual.filter((seed) => seed.source_claim_ids.includes('claim_security_signal')).length, 1);
   assert.equal(actual.some((seed) => seed.source_claim_ids.some((claim) => claim.includes('generic'))), false);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '1.0.0', source_revision: 6,
+    schema_version: '2.0.0', source_revision: 6,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);

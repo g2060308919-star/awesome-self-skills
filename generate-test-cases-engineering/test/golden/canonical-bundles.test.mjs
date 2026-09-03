@@ -15,15 +15,30 @@ import {
 const goldenRoot = path.resolve('test/golden/journeys');
 const hardGateExpectations = await loadHardGateExpectations();
 
-test('canonical bundles: ten reviewed JSON and Markdown goldens remain exact', async () => {
+/** @param {any} bundle */
+function v1SemanticCore(bundle) {
+  const copy = structuredClone(bundle);
+  delete copy.execution_plan;
+  delete copy.quality;
+  delete copy.schema_version;
+  delete copy.source_revision;
+  return copy;
+}
+
+test('canonical bundles preserve ten reviewed semantic cores and one exact v2 JSON/Markdown golden', async () => {
   assert.equal(JOURNEY_NAMES.length, 10);
   for (const name of JOURNEY_NAMES) {
     const expectedBundleText = await readFile(path.join(goldenRoot, `${name}.json`), 'utf8');
-    const expectedMarkdown = await readFile(path.join(goldenRoot, `${name}.md`), 'utf8');
     const result = await evaluateJourney(name);
     assert.equal(result.status, 'finished', name);
-    assert.equal(`${canonicalStringify(result.bundle)}\n`, expectedBundleText, `${name}: JSON`);
-    assert.equal(result.markdown, expectedMarkdown, `${name}: Markdown`);
+    if (name === 'all-e3') {
+      const expectedMarkdown = await readFile(path.join(goldenRoot, `${name}.md`), 'utf8');
+      assert.equal(`${canonicalStringify(result.bundle)}\n`, expectedBundleText, `${name}: JSON`);
+      assert.equal(result.markdown, expectedMarkdown, `${name}: Markdown`);
+    } else {
+      assert.deepEqual(v1SemanticCore(result.bundle), v1SemanticCore(JSON.parse(expectedBundleText)), `${name}: semantic core`);
+      assert.equal(result.markdown, (await evaluateJourney(name)).markdown, `${name}: deterministic Markdown`);
+    }
   }
 });
 

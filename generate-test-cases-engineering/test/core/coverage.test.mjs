@@ -183,7 +183,10 @@ test('coverage builds four independent ledgers with hand-counted denominators', 
   }]);
   assert.equal(bundle.exploratory.length, 1);
   assert.equal(bundle.coverage.formal.total, 3, 'NotApplicable remains declared formal inventory while Exploratory stays outside');
-  assert.deepEqual(validateAgainstSchema(bundle, bundleSchema), []);
+  assert.equal(Object.hasOwn(bundle, 'execution_plan'), false, 'Task 10 output remains pre-execution-closure');
+  assert.equal(validateAgainstSchema(bundle, bundleSchema).some(
+    (item) => item.path === '/execution_plan' && item.code === 'REQUIRED_FIELD_MISSING'
+  ), true, 'only the ready core projection is a final v2 test bundle');
   assert.equal(canonicalStringify(bundle), canonicalStringify(buildBundle(context())));
 });
 

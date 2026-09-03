@@ -16,7 +16,7 @@ function fatalReply(code, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
-    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.1.0';
+    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.2.0';
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1
       ? fatalReply(

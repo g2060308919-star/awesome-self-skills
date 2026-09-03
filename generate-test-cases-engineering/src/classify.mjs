@@ -489,7 +489,7 @@ function validateClosedShape(context, diagnostics) {
     diagnostics.push(diagnostic('classification', 'CONTEXT_INVALID', '/', 'classification context collections have invalid types'));
     return;
   }
-  if (obligations.schema_version !== '1.0.0' || drafts.schema_version !== '1.0.0'
+  if (obligations.schema_version !== '2.0.0' || drafts.schema_version !== '2.0.0'
     || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
     diagnostics.push(diagnostic('classification', 'SOURCE_REVISION_MISMATCH', '/', 'all classification inputs must share source_revision'));
   }

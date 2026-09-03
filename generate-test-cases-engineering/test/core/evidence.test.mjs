@@ -39,14 +39,15 @@ async function fixture(relativePath) {
 /** @param {'verified' | 'machine-extracted' | 'uncertain'} [integrity] @param {string} [kind] @returns {any} */
 function sourcePack(integrity = 'verified', kind = 'prd') {
   return {
-    schema_version: '1.0.0', source_revision: 0, run_scope: 'checkout',
+    schema_version: '2.0.0', source_revision: 0,
+    run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
     sources: [{ source_id: 'source_prd', kind, version: '1', status: 'effective', authority: 'owner', content: 'Rule', content_digest: digestA, scope: 'checkout' }],
     locators: [
       { locator_id: 'locator_rule', source_id: 'source_prd', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: digestA, extraction_integrity: integrity },
       { locator_id: 'locator_formula', source_id: 'source_prd', type: 'text-range', text_range: { start: 5, end: 9 }, content_digest: digestA, extraction_integrity: integrity }
     ],
     source_policy: { rules: [{ rule_id: 'rule_prd', source_ids: ['source_prd'], scope: 'checkout', authority: 'owner', status: 'effective' }] },
-    decision_records: [], clarification_events: []
+    decision_records: [], clarification_events: [], execution_events: []
   };
 }
 
@@ -69,11 +70,20 @@ function derived(overrides = {}) {
 
 /** @param {Array<Record<string, unknown>>} claims @returns {any} */
 function artifact(claims) {
-  return { schema_version: '1.0.0', source_revision: 0, claims, fact_ledger: [] };
+  return { schema_version: '2.0.0', source_revision: 0, claims, fact_ledger: [] };
 }
 
 /** @param {unknown} pack @param {unknown} claims */
 function assertValidContracts(pack, claims) {
+  const source = /** @type {any} */ (pack);
+  for (const [index, record] of source.decision_records.entries()) {
+    record.presentation_id ??= `presentation_accepted_${index}`;
+    record.decision_group_ids ??= [`group_accepted_${index}`];
+  }
+  for (const [index, event] of source.clarification_events.entries()) {
+    event.presentation_id ??= `presentation_accepted_control_${index}`;
+    event.decision_group_ids ??= [`group_accepted_control_${index}`];
+  }
   assert.deepEqual(validateAgainstSchema(pack, sourcePackSchema), []);
   assert.deepEqual(validateUniqueStableIds(pack), []);
   assert.deepEqual(validateAgainstSchema(claims, evidenceClaimsSchema), []);
@@ -84,6 +94,7 @@ function assertValidContracts(pack, claims) {
 function decisionRecord(disposition) {
   return {
     decision_id: 'decision_review', question_id: 'question_review', root_issue_ids: ['root_review'], affected_obligation_ids: [], clarification_event_seq: 1,
+    presentation_id: 'presentation_review', decision_group_ids: ['group_review'],
     confirmer: 'owner', confirmed_at: '2026-08-29T00:00:00Z', question: 'Result?', answer: 'approved', disposition,
     authority_scope: 'checkout', effective_scope: 'checkout', evidence_ref: 'locator_rule', evidence_level: disposition === 'final' ? 'E3' : 'E1'
   };

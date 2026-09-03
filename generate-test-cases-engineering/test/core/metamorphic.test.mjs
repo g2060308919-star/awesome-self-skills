@@ -8,7 +8,7 @@ import {
   IDS, acceptedClaim, baseCase, baseObligation, blockerDisposition, classificationContext
 } from '../helpers/classification-context.mjs';
 import {
-  addExploratory, buildJourney, evaluateJourneyRevision, journeyRule,
+  addExploratory, buildJourney, completeJourneyRevision, evaluateJourneyRevision, journeyRule,
   loadHardGateExpectations, revisionFromRules, setSourceRevision
 } from '../helpers/run-journey.mjs';
 
@@ -21,7 +21,7 @@ const hardGateExpectations = await loadHardGateExpectations();
 
 /** @param {any} input @param {'pause_for_clarification'|'record_only'} [policy] @returns {any} */
 function finished(input, policy = 'pause_for_clarification') {
-  const result = evaluateJourneyRevision(input, policy);
+  const result = completeJourneyRevision(input, policy);
   assert.equal(result.status, 'finished', canonicalStringify(result));
   return result.bundle;
 }
@@ -409,10 +409,10 @@ test('metamorphic hard gate: hidden record_only changes interruption, never clas
   assert.equal(paused.status, 'need_user_answers');
 
   const recorded = evaluateJourneyRevision(input, 'record_only');
-  assert.equal(recorded.status, 'finished');
-  assert.equal(recorded.bundle.blocked.length, 1);
-  assert.equal(recorded.bundle.conditional.length, 0);
-  assert.equal(recorded.bundle.coverage.formal.entries.some(
+  assert.equal(recorded.kind, 'analysis_only');
+  assert.equal(recorded.semantic_sections.blocked.length, 1);
+  assert.equal(recorded.semantic_sections.conditional.length, 0);
+  assert.equal(recorded.semantic_sections.coverage.formal.entries.some(
     (/** @type {any} */ item) => item.status === 'blocked'
   ), true, 'reversal lets record_only erase or cover an unresolved formal Test Point');
 });
