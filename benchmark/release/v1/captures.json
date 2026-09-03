@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "generate-test-cases-single-system-captures-v1",
+  "policy_id": "generate-test-cases-single-system-public-prd-v1",
+  "system": "generate-test-cases",
+  "captures": []
+}

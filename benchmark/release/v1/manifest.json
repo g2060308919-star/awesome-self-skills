@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "generate-test-cases-single-system-public-prd-v1",
+  "evidence_class": "public-prd-single-system",
+  "system": "generate-test-cases",
+  "repeats_per_case": 3,
+  "required_case_count": 30,
+  "strata": [
+    { "stratum": "transaction/order/payment", "minimum_cases": 5 },
+    { "stratum": "identity/role/permission", "minimum_cases": 5 },
+    { "stratum": "workflow/approval/state", "minimum_cases": 5 },
+    { "stratum": "form/configuration/input validation", "minimum_cases": 5 },
+    { "stratum": "asynchronous integration/event", "minimum_cases": 5 },
+    { "stratum": "time-window/quota/entitlement", "minimum_cases": 5 }
+  ],
+  "corpus_catalog": {
+    "repository_path": "benchmark/public-pilot/v1/catalog.json",
+    "sha256": "aef05da4807d8783e1c82fc0fb299e643ffbb5d04a1464088e56aa95bead238a"
+  },
+  "capture_ledger": {
+    "repository_path": "benchmark/release/v1/captures.json",
+    "sha256": "6b727a6e85bf78f4f257581e039d02e3a9a0d696f3336be5ba5142466bc2d07e"
+  }
+}

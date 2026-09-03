@@ -1,15 +1,25 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import {
   RELEASE_STRATA,
-  evaluateSingleSystemRelease
+  evaluateSingleSystemRelease,
+  loadSingleSystemRelease
 } from '../../benchmark/single-system-gate.mjs';
+
+const execFileAsync = promisify(execFile);
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const checkedInManifest = path.join(repositoryRoot, 'benchmark/release/v1/manifest.json');
 
 const SHA_A = 'a'.repeat(64);
 const SHA_B = 'b'.repeat(64);
 const SHA_C = 'c'.repeat(64);
 const SHA_D = 'd'.repeat(64);
+const SHA_E = 'e'.repeat(64);
 const REVISION = '1'.repeat(40);
 
 function passingInput() {
@@ -37,10 +47,11 @@ function passingInput() {
           task_sha256: taskSha256,
           candidate_revision: REVISION,
           artifact_digests: {
-            skill: SHA_A,
-            compiler: SHA_B,
+            compiler: SHA_A,
+            schema: SHA_B,
             schema_manifest: SHA_C,
-            bundle: SHA_D
+            skill: SHA_D,
+            bundle: SHA_E
           },
           raw_output_sha256: SHA_A,
           run_directory_sha256: SHA_B,
@@ -74,10 +85,11 @@ function passingInput() {
       clean: true,
       repository_revision: REVISION,
       artifact_digests: {
-        skill: SHA_A,
-        compiler: SHA_B,
+        compiler: SHA_A,
+        schema: SHA_B,
         schema_manifest: SHA_C,
-        bundle: SHA_D
+        skill: SHA_D,
+        bundle: SHA_E
       }
     },
     captures
@@ -159,4 +171,35 @@ test('single-system release keeps blocked or unreadable captures incomplete rath
   assert.equal(report.release_eligible, false);
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_NOT_COMPLETED'), true);
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_EVIDENCE_UNAVAILABLE'), true);
+});
+
+test('checked-in release manifest admits the 30 real PRDs without requiring comparators or experts', async () => {
+  const report = await loadSingleSystemRelease(checkedInManifest, repositoryRoot);
+
+  assert.equal(report.status, 'insufficient_evidence');
+  assert.equal(report.release_eligible, false);
+  assert.equal(report.counts.cases, 30);
+  assert.deepEqual(Object.values(report.counts.by_stratum), [5, 5, 5, 5, 5, 5]);
+  assert.equal(report.counts.captures, 0);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.includes('COMPARATOR')), false);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.includes('EXPERT')), false);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_SET_INCOMPLETE'), true);
+});
+
+test('single-system release CLI emits one JSON line and rejects any argument count except one', async () => {
+  const entry = path.join(repositoryRoot, 'benchmark/single-system-gate.mjs');
+  const accepted = await execFileAsync(process.execPath, [entry, checkedInManifest], { cwd: repositoryRoot });
+  assert.equal(accepted.stderr, '');
+  assert.equal(accepted.stdout.trim().split('\n').length, 1);
+  assert.equal(JSON.parse(accepted.stdout).status, 'insufficient_evidence');
+
+  for (const args of [[], [checkedInManifest, checkedInManifest]]) {
+    const rejected = await execFileAsync(process.execPath, [entry, ...args], { cwd: repositoryRoot });
+    const report = JSON.parse(rejected.stdout);
+    assert.equal(rejected.stderr, '');
+    assert.equal(rejected.stdout.trim().split('\n').length, 1);
+    assert.equal(report.status, 'fail');
+    assert.equal(report.release_eligible, false);
+    assert.equal(report.issues[0].code, 'RELEASE_ARGUMENTS_INVALID');
+  }
 });
