@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +15,12 @@ import {
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const checkedInManifest = path.join(repositoryRoot, 'benchmark/release/v1/manifest.json');
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+
+/** @param {string} value */
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
 
 const SHA_A = 'a'.repeat(64);
 const SHA_B = 'b'.repeat(64);
@@ -214,4 +221,97 @@ test('npm benchmark is the single-system release gate and exposes no expert metr
   assert.equal('metrics' in report, false);
   assert.equal('comparators' in report, false);
   assert.equal('experts' in report, false);
+});
+
+test('loader verifies a complete 90-capture retained evidence layout before candidate eligibility', async (/** @type {any} */ context) => {
+  const temporaryRoot = await fsPromises.mkdtemp(path.join(repositoryRoot, 'benchmark/release/.capture-fixture-'));
+  context.after(async () => fsPromises.rm(temporaryRoot, { recursive: true, force: true }));
+  const catalogPath = path.join(repositoryRoot, 'benchmark/public-pilot/v1/catalog.json');
+  const catalogBytes = await fsPromises.readFile(catalogPath, 'utf8');
+  const catalog = JSON.parse(catalogBytes);
+  const captures = [];
+  const zeroArtifacts = {
+    compiler: '0'.repeat(64),
+    schema: '0'.repeat(64),
+    schema_manifest: '0'.repeat(64),
+    skill: '0'.repeat(64),
+    bundle: '0'.repeat(64)
+  };
+
+  for (const item of catalog.items) {
+    for (let repeat = 1; repeat <= 3; repeat += 1) {
+      const captureId = `${item.pilot_id}-capture-${repeat}`;
+      const evidenceDirectory = path.join(temporaryRoot, item.pilot_id.toLowerCase(), String(repeat));
+      await fsPromises.mkdir(evidenceDirectory, { recursive: true });
+      const rawBytes = `${JSON.stringify({ capture_id: captureId, replies: [] })}\n`;
+      const rawPath = path.join(evidenceDirectory, 'raw-output.json');
+      await fsPromises.writeFile(rawPath, rawBytes);
+      const finalDigest = sha256(`${captureId}:final`);
+      const snapshotBytes = `${JSON.stringify({
+        schema_version: '1.0.0',
+        capture_id: captureId,
+        terminal_status: 'completed',
+        run_directory_sha256: sha256(`${captureId}:run`),
+        final_bundle_sha256: finalDigest,
+        replay_bundle_sha256: finalDigest,
+        process_failures: {
+          runner_protocol_violation: false,
+          source_revision_mismatch: false,
+          schema_invalid: false,
+          traceability_integrity_failure: false
+        }
+      })}\n`;
+      const snapshotPath = path.join(evidenceDirectory, 'run-snapshot.json');
+      await fsPromises.writeFile(snapshotPath, snapshotBytes);
+      captures.push({
+        capture_id: captureId,
+        case_id: item.pilot_id,
+        system: 'generate-test-cases',
+        repeat,
+        session_id: `${captureId}-session`,
+        source_sha256: item.source.sha256,
+        task_sha256: item.task.sha256,
+        artifact_digests: zeroArtifacts,
+        raw_output: {
+          repository_path: path.relative(repositoryRoot, rawPath).split(path.sep).join('/'),
+          sha256: sha256(rawBytes)
+        },
+        run_snapshot: {
+          repository_path: path.relative(repositoryRoot, snapshotPath).split(path.sep).join('/'),
+          sha256: sha256(snapshotBytes)
+        }
+      });
+    }
+  }
+
+  const ledgerBytes = `${JSON.stringify({
+    schema_version: '1.0.0',
+    ledger_id: 'generate-test-cases-single-system-captures-v1',
+    policy_id: 'generate-test-cases-single-system-public-prd-v1',
+    system: 'generate-test-cases',
+    captures
+  }, null, 2)}\n`;
+  const ledgerPath = path.join(temporaryRoot, 'captures.json');
+  await fsPromises.writeFile(ledgerPath, ledgerBytes);
+  const manifest = {
+    ...passingInput().policy,
+    corpus_catalog: {
+      repository_path: 'benchmark/public-pilot/v1/catalog.json',
+      sha256: sha256(catalogBytes)
+    },
+    capture_ledger: {
+      repository_path: path.relative(repositoryRoot, ledgerPath).split(path.sep).join('/'),
+      sha256: sha256(ledgerBytes)
+    }
+  };
+  const manifestPath = path.join(temporaryRoot, 'manifest.json');
+  await fsPromises.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const report = await loadSingleSystemRelease(manifestPath, repositoryRoot);
+
+  assert.equal(report.status, 'insufficient_evidence');
+  assert.equal(report.counts.captures, 90);
+  assert.equal(report.counts.completed_captures, 90);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.startsWith('CAPTURE_')), false);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code === 'CANDIDATE_EVIDENCE_UNAVAILABLE'), true);
 });
