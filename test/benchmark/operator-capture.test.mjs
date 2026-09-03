@@ -19,13 +19,13 @@ test('operator capture starts a fresh witnessed durable run with one JSON reply'
     entry, 'start', workspace, 'PF-TR-01', '1', '/root/formal_defect_gate_audit'
   ], { cwd: repositoryRoot });
   const output = JSON.parse(result.stdout);
-  const state = JSON.parse(await readFile(path.join(workspace, 'capture-state.json'), 'utf8'));
 
   assert.equal(result.stderr, '');
   assert.equal(result.stdout.trim().split('\n').length, 1);
   assert.equal(output.status, 'started');
   assert.equal(output.reply.status, 'need_artifact');
   assert.equal(output.reply.stage, 'source_pack');
+  const state = JSON.parse(await readFile(path.join(workspace, 'capture-state.json'), 'utf8'));
   assert.equal(state.operator_witness.method, 'operator-observed-codex-subagent-v1');
   assert.equal(state.operator_witness.agent_task_id, '/root/formal_defect_gate_audit');
   assert.equal(state.events.length, 0);

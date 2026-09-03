@@ -78,6 +78,7 @@ async function start(workspace, caseId, repeat, agentTaskId) {
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
   const item = catalog.items.find((/** @type {any} */ candidate) => candidate.pilot_id === caseId && candidate.status === 'pilot-admitted');
   if (!item) throw new Error('Capture case is not admitted in the public corpus.');
+  await mkdir(operatorRoot, { recursive: true });
   await mkdir(workspace);
   const runDirectory = path.join(workspace, 'run');
   await mkdir(runDirectory);
