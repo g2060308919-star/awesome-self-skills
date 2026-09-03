@@ -3,5 +3,2436 @@
   "ledger_id": "generate-test-cases-single-system-captures-v1",
   "policy_id": "generate-test-cases-single-system-public-prd-v1",
   "system": "generate-test-cases",
-  "captures": []
+  "captures": [
+    {
+      "capture_id": "PF-AS-01-r1",
+      "case_id": "PF-AS-01",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-a972fc46-3b74-4d85-a3b9-3b16cec8cb18",
+      "source_sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+      "task_sha256": "4a1ae1ef8659e250ea8d6d4f5501a23e1aff4603728e5ff35ce2eeea78293496",
+      "runtime_revision": "4301480b544d690b4914beac5cda6634616f5d77",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-760d1c3a-2a45-448f-b42f-3b59c25cf783"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-01/repeat-1/transcript.json",
+        "sha256": "ee58687ca4bf1b8b395e533ca706020b743364430d43262e0db4dde7de906077"
+      }
+    },
+    {
+      "capture_id": "PF-AS-01-r2",
+      "case_id": "PF-AS-01",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-f6c26962-bc0f-49c4-8c7d-8c119a39958c",
+      "source_sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+      "task_sha256": "4a1ae1ef8659e250ea8d6d4f5501a23e1aff4603728e5ff35ce2eeea78293496",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-1bca4979-f1fb-49ab-9691-c7d9305a6266"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-01/repeat-2/transcript.json",
+        "sha256": "14b635734beca4fbbece678a86787aab34ce4a180c1f4c686b3c8eb950d39b87"
+      }
+    },
+    {
+      "capture_id": "PF-AS-01-r3",
+      "case_id": "PF-AS-01",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-624b7c42-9317-4b89-ac4d-5bfb7e36fcfd",
+      "source_sha256": "751f80cd01e3f2e382f7f124a8dca18b0bd3619ad10e7b1f52b84d1fb1264a43",
+      "task_sha256": "4a1ae1ef8659e250ea8d6d4f5501a23e1aff4603728e5ff35ce2eeea78293496",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-c1ce81b3-e545-472e-b9d6-1d7b1caf8d08"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-01/repeat-3/transcript.json",
+        "sha256": "3d4a267b68f88e91920fa0f882b47f4f388bb6c6d24ae05edf9e34ede6a6491b"
+      }
+    },
+    {
+      "capture_id": "PF-AS-02-r1",
+      "case_id": "PF-AS-02",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-5d761bdd-b104-44f7-b5a9-0cc2c7080ae7",
+      "source_sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+      "task_sha256": "ff803d7a0fcc2951cf4f6c43c0e12fd1a9be0ea64678622721d7cc00e85346d3",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-2ade1b1e-904b-400e-a32b-49249f2edd33"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-02/repeat-1/transcript.json",
+        "sha256": "88a476a51f65e723704e2ecdc17d61d7c9be8031113ce6b183fc80169d1713d5"
+      }
+    },
+    {
+      "capture_id": "PF-AS-02-r2",
+      "case_id": "PF-AS-02",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-9b94a345-0271-4d3d-8342-ded4a6ff2924",
+      "source_sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+      "task_sha256": "ff803d7a0fcc2951cf4f6c43c0e12fd1a9be0ea64678622721d7cc00e85346d3",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-46a6d900-b5ab-4236-bf46-89d7fe1f1c3b"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-02/repeat-2/transcript.json",
+        "sha256": "ee7ff91c7a577d05bc3ddd08ad08d2359f40849f525e888daf876ddcd85707d4"
+      }
+    },
+    {
+      "capture_id": "PF-AS-02-r3",
+      "case_id": "PF-AS-02",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-4906f629-f8ac-443e-b343-f067c1eec84b",
+      "source_sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+      "task_sha256": "ff803d7a0fcc2951cf4f6c43c0e12fd1a9be0ea64678622721d7cc00e85346d3",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-b9f05c50-bd63-44ed-aa36-6ca7a5536274"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-02/repeat-3/transcript.json",
+        "sha256": "7a14eae850762ad72770364e0b9f32cc73102df8b353a7c401ec9956156cee0c"
+      }
+    },
+    {
+      "capture_id": "PF-AS-03-r1",
+      "case_id": "PF-AS-03",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-cf60600f-dacb-4a5f-9e0e-8652d1e46c67",
+      "source_sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+      "task_sha256": "333a1391f72f0254b0c53607e980cb125d5693628579426f83df55879b124a44",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-c64ab1c3-202c-4d5d-9c24-2fe5ed916ac0"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-03/repeat-1/transcript.json",
+        "sha256": "7f1d58fb0bb482b3c789ab050f31748e3872ec34d708e41bcf53aa069151cfb3"
+      }
+    },
+    {
+      "capture_id": "PF-AS-03-r2",
+      "case_id": "PF-AS-03",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-4afebf9b-ef73-418c-a44c-77217e319180",
+      "source_sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+      "task_sha256": "333a1391f72f0254b0c53607e980cb125d5693628579426f83df55879b124a44",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-3c4bee4d-ed28-4673-b869-387312a52de7"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-03/repeat-2/transcript.json",
+        "sha256": "07f0336095a1ab46a9b613cb01fb26a4021ff99d7c6d0fd7f6a80768cb7c8b8a"
+      }
+    },
+    {
+      "capture_id": "PF-AS-03-r3",
+      "case_id": "PF-AS-03",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-2b6ca627-9e15-4c76-ba11-0256b7d66f8b",
+      "source_sha256": "de17d20419bfef9e2e3b0c0430c3013c4582fd76c5fdc96424919bea96db86eb",
+      "task_sha256": "333a1391f72f0254b0c53607e980cb125d5693628579426f83df55879b124a44",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-233fe089-897e-4e4a-967d-2631bf119a35"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-03/repeat-3/transcript.json",
+        "sha256": "23cef3ecb5fdee1bc9a55fb2b02a31838eecc9a0b7a0aeb8eebe38ccc1c7641d"
+      }
+    },
+    {
+      "capture_id": "PF-AS-04-r1",
+      "case_id": "PF-AS-04",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-bfcf3ed0-44ab-4270-8422-f656dff4e194",
+      "source_sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+      "task_sha256": "b087039cd553edadbc09ccb4da90d5959296d17583294a85e6b0583ca9086eab",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-de29719a-d5c4-43de-9dd9-60fe86f434b8"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-04/repeat-1/transcript.json",
+        "sha256": "fd24686f5711ec71971911a78df76a811bb3ef2d2b9b8b530f9d15d12eb2aeac"
+      }
+    },
+    {
+      "capture_id": "PF-AS-04-r2",
+      "case_id": "PF-AS-04",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-e262d5a5-4a71-496f-9a74-0b174fc9dd92",
+      "source_sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+      "task_sha256": "b087039cd553edadbc09ccb4da90d5959296d17583294a85e6b0583ca9086eab",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-ed7413a8-f99c-47f1-8d33-33d9d1977da9"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-04/repeat-2/transcript.json",
+        "sha256": "1aff6c77251e323458a2d5e8253c489266debae6b05b7298d13d38634a5ee86c"
+      }
+    },
+    {
+      "capture_id": "PF-AS-04-r3",
+      "case_id": "PF-AS-04",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-2cfe2f02-af07-44bf-8dff-0cd75a0ea3f4",
+      "source_sha256": "8e23d8e981067a119186d836a47a2ded2f32bce5ec5508d9db76105a8371cea9",
+      "task_sha256": "b087039cd553edadbc09ccb4da90d5959296d17583294a85e6b0583ca9086eab",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-e1d98b07-117d-4b5f-9b58-6501df6f5377"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-04/repeat-3/transcript.json",
+        "sha256": "8454d0a91b52d0ff90b3d94f8baa7f4c3ac84c3f264bfebac985d1fa137f787c"
+      }
+    },
+    {
+      "capture_id": "PF-AS-05-r1",
+      "case_id": "PF-AS-05",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-8c8c396a-e851-43a3-bde1-c4c3dc76a63d",
+      "source_sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+      "task_sha256": "e6bc81c6f85228b5bfead5b3c97260a1f5d67062631530795256ec26615847ff",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-051cf8c9-33e8-42a6-aa9f-6c91241bdefa"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-05/repeat-1/transcript.json",
+        "sha256": "33582dc6766cf7a0ff12a027ecba010d948240b72db61e3b4f51f43a3058261f"
+      }
+    },
+    {
+      "capture_id": "PF-AS-05-r2",
+      "case_id": "PF-AS-05",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-f6f9ab6b-5035-4867-b7e7-ac3cfc6211ae",
+      "source_sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+      "task_sha256": "e6bc81c6f85228b5bfead5b3c97260a1f5d67062631530795256ec26615847ff",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-3b2ba75e-df26-4895-89ad-e80f3a0e8742"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-05/repeat-2/transcript.json",
+        "sha256": "bb7bd9442097680691b49da993c9339ff36081b63772cd6151cecd574c94df36"
+      }
+    },
+    {
+      "capture_id": "PF-AS-05-r3",
+      "case_id": "PF-AS-05",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-2a213414-afff-4908-a192-093b358baf79",
+      "source_sha256": "c1a6947dfaac56f6bd0efb8227c3969435437264ecb12c62417c0348ead869a2",
+      "task_sha256": "e6bc81c6f85228b5bfead5b3c97260a1f5d67062631530795256ec26615847ff",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-849ebafd-b6b8-4e59-aa30-6e67b7d5acee"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-as-05/repeat-3/transcript.json",
+        "sha256": "c21c90105c813ad4530a359bc722f1d69c9ff9ce092dde1091902932d83f58f2"
+      }
+    },
+    {
+      "capture_id": "PF-FM-01-r1",
+      "case_id": "PF-FM-01",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-96acb9b5-262d-46b0-8f38-b5dc3826cd42",
+      "source_sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+      "task_sha256": "02be20dd4eeea79202562ef9560c620c728788865219114066dbc0aff144dc2c",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-9875d316-25f1-4d99-9e1a-becbc2d90714"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-01/repeat-1/transcript.json",
+        "sha256": "efa5b90491653a9f81b1dff3b89eea69183c17948fe53492dcfe26c15891b670"
+      }
+    },
+    {
+      "capture_id": "PF-FM-01-r2",
+      "case_id": "PF-FM-01",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-0f028e2b-5c25-45fa-8d09-248af57ea3e1",
+      "source_sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+      "task_sha256": "02be20dd4eeea79202562ef9560c620c728788865219114066dbc0aff144dc2c",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-51bda283-74cb-4672-81c0-9e9100540e1c"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-01/repeat-2/transcript.json",
+        "sha256": "4d4e922962dc97dd0c92992716885191c7b1d43c6b78503fb5dbd57d175e693c"
+      }
+    },
+    {
+      "capture_id": "PF-FM-01-r3",
+      "case_id": "PF-FM-01",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-f1a698cd-f4a8-4ed1-836b-a5e587f8a371",
+      "source_sha256": "cc31e99fdaa41c6a37b281393736d18e3e4e008982446364e75f7194da2d0f0e",
+      "task_sha256": "02be20dd4eeea79202562ef9560c620c728788865219114066dbc0aff144dc2c",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-5194e6ab-2299-4395-90ee-1cdae2227412"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-01/repeat-3/transcript.json",
+        "sha256": "f1b4d8e27b02e883b6f3c9024d6c3c3f5c2b2fb6a1ce0b508e12f96c857222f7"
+      }
+    },
+    {
+      "capture_id": "PF-FM-02-r1",
+      "case_id": "PF-FM-02",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-8f8f4696-07a3-42be-9b84-b52556b13ecf",
+      "source_sha256": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+      "task_sha256": "4ef5112f78411c084f3f18d5f657edc634404ce3ff90b5bbea63f34b8773546b",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-a236bfbb-6276-4ed9-9cbc-ce20f72d609f"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-02/repeat-1/transcript.json",
+        "sha256": "30de169c13578c43b8a8a63437772b455cd3f49f12e7d11ffc8f8252a6353edc"
+      }
+    },
+    {
+      "capture_id": "PF-FM-02-r2",
+      "case_id": "PF-FM-02",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-5c2667b6-6b6b-44f3-8ecf-24387a6e55c5",
+      "source_sha256": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+      "task_sha256": "4ef5112f78411c084f3f18d5f657edc634404ce3ff90b5bbea63f34b8773546b",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-e32dd3bd-9324-4010-bd54-e4d43185b55e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-02/repeat-2/transcript.json",
+        "sha256": "b46fa3593ff5087ec4f52ee54c9afe2c3c1e24c60457a6f0cde048f3ee2cc9ce"
+      }
+    },
+    {
+      "capture_id": "PF-FM-02-r3",
+      "case_id": "PF-FM-02",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-a21f94ff-02bc-4fa4-9fd0-bc4cefd64ee6",
+      "source_sha256": "e45053befd4247520e329805c27f41dcb0a1f2e24209c570b2b282d5145a2145",
+      "task_sha256": "4ef5112f78411c084f3f18d5f657edc634404ce3ff90b5bbea63f34b8773546b",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-45971fd8-5c2a-4373-97be-6f5917b50d0e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-02/repeat-3/transcript.json",
+        "sha256": "c114754e9bc1f24a0d1d950aa9557544483e1a9bfb4086cc65677dbb7845725e"
+      }
+    },
+    {
+      "capture_id": "PF-FM-03-r1",
+      "case_id": "PF-FM-03",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-4f68fddd-b21a-4e6c-a7fb-f2acaf38ecb7",
+      "source_sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+      "task_sha256": "ad8f2eaaa5b94a429e2eea50f9fd32924e4106acfa4e69db295c9af26978b873",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-1ee43c5f-2b04-48a7-bbec-9909b9529cee"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-03/repeat-1/transcript.json",
+        "sha256": "de7623530922436fb35bbfbb33f7b210e4875c5f0e5453465de485737e6da62f"
+      }
+    },
+    {
+      "capture_id": "PF-FM-03-r2",
+      "case_id": "PF-FM-03",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-7f3f09e4-dbe1-4c7d-97b8-5268b2604739",
+      "source_sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+      "task_sha256": "ad8f2eaaa5b94a429e2eea50f9fd32924e4106acfa4e69db295c9af26978b873",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-384aa656-e47a-45d8-b1ef-8f85ddf86a2e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-03/repeat-2/transcript.json",
+        "sha256": "4f1378cc630e2444e0c8048db44d0d4fcf880a4b51f37b5a5f710351f6694144"
+      }
+    },
+    {
+      "capture_id": "PF-FM-03-r3",
+      "case_id": "PF-FM-03",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-7c96f02f-4224-4182-82aa-0199e5c0a88d",
+      "source_sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+      "task_sha256": "ad8f2eaaa5b94a429e2eea50f9fd32924e4106acfa4e69db295c9af26978b873",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-17f8c64e-24a5-464a-a36f-213cf16b6d77"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-03/repeat-3/transcript.json",
+        "sha256": "1a3ac71b7f4f7c4595ca2edd8e08babf47bf4d0ae0148a6847abddbcac546e9e"
+      }
+    },
+    {
+      "capture_id": "PF-FM-04-r1",
+      "case_id": "PF-FM-04",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-63ba31c9-5b98-4ad2-bb0a-6ce18bea7d17",
+      "source_sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+      "task_sha256": "d8aff933b4b56c1860b8598f6d58b1e9cf7c1cc64b8fd407accc77e27df93c4f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-d7022c83-a6fe-4372-9a93-9df9a922ba7f"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-04/repeat-1/transcript.json",
+        "sha256": "601870922901dce270fd1344fba42dd96f178e04c1fa2323694a9f7628428a5a"
+      }
+    },
+    {
+      "capture_id": "PF-FM-04-r2",
+      "case_id": "PF-FM-04",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-532899ab-7305-455c-866d-7cf48ca932a6",
+      "source_sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+      "task_sha256": "d8aff933b4b56c1860b8598f6d58b1e9cf7c1cc64b8fd407accc77e27df93c4f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-9fea02ca-e20b-459a-97f8-66f06093fe4e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-04/repeat-2/transcript.json",
+        "sha256": "9d8dfd74112356c14dc5c0d7d1b582cde377bf3f01fcaeb58ce5c8ec43edfb4e"
+      }
+    },
+    {
+      "capture_id": "PF-FM-04-r3",
+      "case_id": "PF-FM-04",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-ae0c6d04-af3a-4ab0-b713-4ad329d83b84",
+      "source_sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+      "task_sha256": "d8aff933b4b56c1860b8598f6d58b1e9cf7c1cc64b8fd407accc77e27df93c4f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-9c81eb09-6872-4d63-aca6-fc636510f794"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-04/repeat-3/transcript.json",
+        "sha256": "e0087b10bc50917ca85b8f2f582ca19104dd4e0e358a0ce1f4aa7ff3f1d21323"
+      }
+    },
+    {
+      "capture_id": "PF-FM-05-r1",
+      "case_id": "PF-FM-05",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-f40761ea-2e4d-498d-afe9-3f9fcee36b14",
+      "source_sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+      "task_sha256": "741de9a4da9354feda430f6fc08d390410d882fcbb18872d6ffca028216c61ca",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-400100cd-15c6-4a06-bd44-aa1b48ff859f"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-05/repeat-1/transcript.json",
+        "sha256": "0831dda6c482ded8c4f88cb339d95dd737d9e805f2045b9736661f2e3ca75ec9"
+      }
+    },
+    {
+      "capture_id": "PF-FM-05-r2",
+      "case_id": "PF-FM-05",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-1b304e51-332a-4040-a369-33361ad9372e",
+      "source_sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+      "task_sha256": "741de9a4da9354feda430f6fc08d390410d882fcbb18872d6ffca028216c61ca",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-5044d096-4fcb-4600-be00-f4e49c4819aa"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-05/repeat-2/transcript.json",
+        "sha256": "3bcc599810cf2545cb4485821ada934570ceac648a105a831475ae756c4e4f95"
+      }
+    },
+    {
+      "capture_id": "PF-FM-05-r3",
+      "case_id": "PF-FM-05",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-09bde5d0-96cf-4332-9ef9-60c72bd348ff",
+      "source_sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+      "task_sha256": "741de9a4da9354feda430f6fc08d390410d882fcbb18872d6ffca028216c61ca",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-00f73413-5fc0-4811-ae5d-d1c43f0d2f4e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-fm-05/repeat-3/transcript.json",
+        "sha256": "08d750cb96887b1be09a6fb320a7baf5f6e85f5674e107d41150866bbdbb5f86"
+      }
+    },
+    {
+      "capture_id": "PF-ID-01-r1",
+      "case_id": "PF-ID-01",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-601fd753-8c0f-47db-8ec1-e9895c5e89bb",
+      "source_sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+      "task_sha256": "6e2d14b431a40c649b4e714243ddc433fef800c8f52cbc863dda7171409a0b4b",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-e4851318-304d-4019-937b-29d52326e8b2"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-01/repeat-1/transcript.json",
+        "sha256": "bc2928feb109fd85306c27b50abf931cb26d16d3b63811504658f144f81b5fb0"
+      }
+    },
+    {
+      "capture_id": "PF-ID-01-r2",
+      "case_id": "PF-ID-01",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-4914ab25-c914-4c55-a507-4d69f99e0946",
+      "source_sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+      "task_sha256": "6e2d14b431a40c649b4e714243ddc433fef800c8f52cbc863dda7171409a0b4b",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-15086e3f-c27f-4e93-a0ee-d08e4e5e3a63"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-01/repeat-2/transcript.json",
+        "sha256": "864f6f5c6a872069346555be77d1a56ab58f4c62830b5f07c597ddc5f4b99954"
+      }
+    },
+    {
+      "capture_id": "PF-ID-01-r3",
+      "case_id": "PF-ID-01",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-3ac684eb-eefe-482c-a99e-8c7b6cd8d1a9",
+      "source_sha256": "dd7e68e17acfb74f80fc9620d1a5d5ddc4682792c865d99e530e7a1ddf2cfeb6",
+      "task_sha256": "6e2d14b431a40c649b4e714243ddc433fef800c8f52cbc863dda7171409a0b4b",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-98abd5b4-a658-4764-8ee4-455382402708"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-01/repeat-3/transcript.json",
+        "sha256": "d982142b2dfb9cee69c0a0a325344fa5f52cfe8a6cfa04ce03c250be658f24c9"
+      }
+    },
+    {
+      "capture_id": "PF-ID-02-r1",
+      "case_id": "PF-ID-02",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-d063a37d-45bf-4e15-88b2-796c3f467cf4",
+      "source_sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+      "task_sha256": "32408e3b865de34872daeed3fbf56b10cdb27f3f3a9b54edf510740d942d84ca",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-efe6f296-5c2d-4f9c-a2b1-5398e306c9a0"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-02/repeat-1/transcript.json",
+        "sha256": "448ea8a5045bc60ef5bf2da73ac8e25276a5bb5772f7fbc09cb7e2c3ac01742e"
+      }
+    },
+    {
+      "capture_id": "PF-ID-02-r2",
+      "case_id": "PF-ID-02",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-a6277cec-446d-407b-b093-f63fed4d0585",
+      "source_sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+      "task_sha256": "32408e3b865de34872daeed3fbf56b10cdb27f3f3a9b54edf510740d942d84ca",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-e98bfd99-7d6c-44a2-bb86-558e0665ea56"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-02/repeat-2/transcript.json",
+        "sha256": "80c6addcbf9959912a617c1a4efa05f75601d1400707307023bcf3a38adece32"
+      }
+    },
+    {
+      "capture_id": "PF-ID-02-r3",
+      "case_id": "PF-ID-02",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-739cab62-4117-48b0-bd1a-0b87f52ab91b",
+      "source_sha256": "e30f4e88ef35f4820e9cc05f761adda92429c7091585b44a8560bd09e26cd943",
+      "task_sha256": "32408e3b865de34872daeed3fbf56b10cdb27f3f3a9b54edf510740d942d84ca",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-c15e3bcf-a77f-42d9-92dd-e332a67af754"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-02/repeat-3/transcript.json",
+        "sha256": "14f1bab1bcaf9281f4b1349d6271385752a17de03cc411a2fe4823f27b248f78"
+      }
+    },
+    {
+      "capture_id": "PF-ID-03-r1",
+      "case_id": "PF-ID-03",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-df8e4509-79e7-4e21-9ab2-39fa12423682",
+      "source_sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+      "task_sha256": "54d838c1fb2798a986826120fba8cce88733199a9dcc7c1e5f2c4019089b11c3",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-7ee3f574-4c2b-488f-bea9-754e75508db7"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-03/repeat-1/transcript.json",
+        "sha256": "7881924337635399edde4b6021ed6da75964092b31343e4ac4456b6863feac72"
+      }
+    },
+    {
+      "capture_id": "PF-ID-03-r2",
+      "case_id": "PF-ID-03",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-c7343c21-9848-4fe7-9fe3-0d570b705e7d",
+      "source_sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+      "task_sha256": "54d838c1fb2798a986826120fba8cce88733199a9dcc7c1e5f2c4019089b11c3",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-594fcc82-e9af-4aba-89ad-970b240b6802"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-03/repeat-2/transcript.json",
+        "sha256": "1b317e46e21dceb835be93d0b4c95681a4f09185be892f1592f4563e59950d8d"
+      }
+    },
+    {
+      "capture_id": "PF-ID-03-r3",
+      "case_id": "PF-ID-03",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-33d20624-667a-4b4a-a7d8-b6027b5ea223",
+      "source_sha256": "93c0eed81d07a281704244310a6adec76fdf07b971d8c4408612d4afddc56c65",
+      "task_sha256": "54d838c1fb2798a986826120fba8cce88733199a9dcc7c1e5f2c4019089b11c3",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-df2b8900-e572-49bb-bc42-0c486fc22851"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-03/repeat-3/transcript.json",
+        "sha256": "6f5eaf0f4122ea684427b8451531c2744b327ca8d7716d72c4d6ee450002a803"
+      }
+    },
+    {
+      "capture_id": "PF-ID-04-r1",
+      "case_id": "PF-ID-04",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-72a885dc-4abb-4343-97c3-aed4350ef6d7",
+      "source_sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+      "task_sha256": "36304b61b1458a748b2d4d7283f8a847e08f68836a64c05d7de9f061fc6632bd",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-b351b91a-27ef-48a0-b513-fc920b53cb41"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-04/repeat-1/transcript.json",
+        "sha256": "550dbb563207c9ada80e361c81658a6090d738ce8d9d2f38c468a202abe8c75f"
+      }
+    },
+    {
+      "capture_id": "PF-ID-04-r2",
+      "case_id": "PF-ID-04",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-bb0874c8-2f40-46fe-978c-81c4c48b7428",
+      "source_sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+      "task_sha256": "36304b61b1458a748b2d4d7283f8a847e08f68836a64c05d7de9f061fc6632bd",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-147c58c2-3aae-4df8-a905-6bdc5c2509f1"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-04/repeat-2/transcript.json",
+        "sha256": "27d5a1873ff44566a86e240831adf454b18c354a73eaf81e3a706d0611cf86dc"
+      }
+    },
+    {
+      "capture_id": "PF-ID-04-r3",
+      "case_id": "PF-ID-04",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-9494651d-24f3-4dd2-a273-8a91ee33ac8f",
+      "source_sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+      "task_sha256": "36304b61b1458a748b2d4d7283f8a847e08f68836a64c05d7de9f061fc6632bd",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-1fab7428-781e-4b6c-b69f-342baf661638"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-04/repeat-3/transcript.json",
+        "sha256": "8eb55c0530ce12a2ce1c6deee6a7387c0295ba293325a1f9df366a976b298321"
+      }
+    },
+    {
+      "capture_id": "PF-ID-05-r1",
+      "case_id": "PF-ID-05",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-5e4c6ddf-89e5-44a4-b045-af2e8460f855",
+      "source_sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+      "task_sha256": "6aa61970077c2da65b77263d87e6ef9acff18406796433e8a7d92a1379594e8f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-983c4d48-956c-4885-a14c-1bae198ffc1d"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-05/repeat-1/transcript.json",
+        "sha256": "d2f8bbb948d6afa228b1ac9f300eb271ec50c6b482dd6c4de01094169f149441"
+      }
+    },
+    {
+      "capture_id": "PF-ID-05-r2",
+      "case_id": "PF-ID-05",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-198f9d7e-8d81-40b8-bf22-ef8a27584e37",
+      "source_sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+      "task_sha256": "6aa61970077c2da65b77263d87e6ef9acff18406796433e8a7d92a1379594e8f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-fc427a23-9736-4b1b-b028-16b317a64e40"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-05/repeat-2/transcript.json",
+        "sha256": "6bb98bca533253a048d995fc63d11ffcc25f572c6f57075f202d44cd4becf9f7"
+      }
+    },
+    {
+      "capture_id": "PF-ID-05-r3",
+      "case_id": "PF-ID-05",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-18794bb4-4cf4-4142-9d31-d7018aec1227",
+      "source_sha256": "465d176e8c17493ae6432779eb275b31791ddf0c51a8f90ce238deb7cf83390e",
+      "task_sha256": "6aa61970077c2da65b77263d87e6ef9acff18406796433e8a7d92a1379594e8f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-b8e46134-bbf8-4046-bf0a-d3e82741ddf2"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-id-05/repeat-3/transcript.json",
+        "sha256": "13e9e8bf8a37bc445fd49a28686f80bc662723fc9de2660363a07599f10073de"
+      }
+    },
+    {
+      "capture_id": "PF-TM-01-r1",
+      "case_id": "PF-TM-01",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-1363dde5-fe73-4094-811a-9fc59e0932a7",
+      "source_sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+      "task_sha256": "ff1c30f21c12bf424fba0d033845ad1b87f7a63e93e020dca7aefdf05269615c",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-7b2b5ae5-1b66-40ca-ab5e-35d1ff4ec12d"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-01/repeat-1/transcript.json",
+        "sha256": "a1f8429ecc3d253e854cd6e2eb79ac1b8f17ba34e3298ba9af6c8f2f1ed2bd33"
+      }
+    },
+    {
+      "capture_id": "PF-TM-01-r2",
+      "case_id": "PF-TM-01",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-13bffed1-a8ba-4e41-9084-2a4022b6ff8e",
+      "source_sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+      "task_sha256": "ff1c30f21c12bf424fba0d033845ad1b87f7a63e93e020dca7aefdf05269615c",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-4a4dd221-d384-4277-9737-a0112d005502"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-01/repeat-2/transcript.json",
+        "sha256": "7ff96d99fd6c967fca36447cae3b09528efaade2446ef6103b75e1b74b4e0cdc"
+      }
+    },
+    {
+      "capture_id": "PF-TM-01-r3",
+      "case_id": "PF-TM-01",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-5bf54257-5612-4b32-ade4-dc05038b0251",
+      "source_sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+      "task_sha256": "ff1c30f21c12bf424fba0d033845ad1b87f7a63e93e020dca7aefdf05269615c",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-4a4fc3e8-489c-47bc-83ad-17b54935cd6e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-01/repeat-3/transcript.json",
+        "sha256": "20acf1468347081d7bef50df13438381a8141d8e8cb09b2d56048d21f1aa4642"
+      }
+    },
+    {
+      "capture_id": "PF-TM-02-r1",
+      "case_id": "PF-TM-02",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-a47d15cf-e27a-49e8-98da-a38f1146c773",
+      "source_sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+      "task_sha256": "b65c3b00552535128da6e87363a87e18cf14df3785012ad93e0cb7cb7872a27f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-3d6d0fa6-7f30-485c-9139-a54e1bae6f63"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-02/repeat-1/transcript.json",
+        "sha256": "fff02fb9331a38220c7803e52978bee54abaeb445d67660482cdd5cc1a160300"
+      }
+    },
+    {
+      "capture_id": "PF-TM-02-r2",
+      "case_id": "PF-TM-02",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-0f0e48d1-c59e-4f6a-afa0-c176e0da9353",
+      "source_sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+      "task_sha256": "b65c3b00552535128da6e87363a87e18cf14df3785012ad93e0cb7cb7872a27f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-b1091b02-8d1e-479a-a9c3-881db1b52186"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-02/repeat-2/transcript.json",
+        "sha256": "211887d36dd7444963cc39b31e465d32f46312e63926753f0347d6680561a768"
+      }
+    },
+    {
+      "capture_id": "PF-TM-02-r3",
+      "case_id": "PF-TM-02",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-d418bf98-f4e9-45a4-a84d-4a31d220ad63",
+      "source_sha256": "7c8e48cf87ce773d0414d4037e1d5689a15b1909d33b9459c460f48929b83af9",
+      "task_sha256": "b65c3b00552535128da6e87363a87e18cf14df3785012ad93e0cb7cb7872a27f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-ccb938c9-f7f3-4fe6-9e13-2538be14598b"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-02/repeat-3/transcript.json",
+        "sha256": "2a27c5c054ae1267d5006c04a5afa361e6ddb8ed02e080526953236429def10e"
+      }
+    },
+    {
+      "capture_id": "PF-TM-03-r1",
+      "case_id": "PF-TM-03",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-01348162-f252-4bff-a904-df06c445e53b",
+      "source_sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+      "task_sha256": "b2acfe62970b324b68b3b8cd8cc71f9a35538a42803297f0ea3a962391ca554f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-eb8fd5aa-d08c-4655-9b1f-f8793113c036"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-03/repeat-1/transcript.json",
+        "sha256": "8dcb5509a8412894923923a380320bb713cd7b6a186b45cf750e9da86adc13a4"
+      }
+    },
+    {
+      "capture_id": "PF-TM-03-r2",
+      "case_id": "PF-TM-03",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-0daaea40-0a0c-4816-ac01-b562ccafa234",
+      "source_sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+      "task_sha256": "b2acfe62970b324b68b3b8cd8cc71f9a35538a42803297f0ea3a962391ca554f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-5c4a4b6d-17f3-43d5-b16d-401f42040266"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-03/repeat-2/transcript.json",
+        "sha256": "3e0a002573d52d3b2086b847294bec1429581526efdedb3eabc981e30188ec99"
+      }
+    },
+    {
+      "capture_id": "PF-TM-03-r3",
+      "case_id": "PF-TM-03",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-4b74ce04-1048-44ee-afdf-71b93a8539b6",
+      "source_sha256": "386037c6f365660555426fe96e004c8badee7577aad9c88ad1f58bc4e690fa02",
+      "task_sha256": "b2acfe62970b324b68b3b8cd8cc71f9a35538a42803297f0ea3a962391ca554f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-776ff804-94f9-45ea-aedd-76df94a53c3e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-03/repeat-3/transcript.json",
+        "sha256": "580b96883a49003311131fb9afa42e6c87ad555f72d4c99932e57db21d994b95"
+      }
+    },
+    {
+      "capture_id": "PF-TM-04-r1",
+      "case_id": "PF-TM-04",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-7d36103a-58ed-4a75-ba89-14f3c13e443e",
+      "source_sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+      "task_sha256": "48e3d00e0d9eeb7aa1773d92d252c2bc5ddfd900ae7c2d4e4ea0a8f9e7108c51",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-39ccbd78-d615-4012-9d8d-d76db318c796"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-04/repeat-1/transcript.json",
+        "sha256": "3ed09503f14d8a869db02403e9cb37d208a60ee6938836f475aeee1dc0b2d079"
+      }
+    },
+    {
+      "capture_id": "PF-TM-04-r2",
+      "case_id": "PF-TM-04",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-f4aca7e0-8b9b-4849-8e0b-b708ff3d6e63",
+      "source_sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+      "task_sha256": "48e3d00e0d9eeb7aa1773d92d252c2bc5ddfd900ae7c2d4e4ea0a8f9e7108c51",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-51584cb9-26f7-4e76-a320-906e525ddfa6"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-04/repeat-2/transcript.json",
+        "sha256": "4d59ea6931ceb0f857499886903026599e41bf0f3965a55d5273e69e2b512379"
+      }
+    },
+    {
+      "capture_id": "PF-TM-04-r3",
+      "case_id": "PF-TM-04",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-291b6766-f1bc-4d86-b487-2d27db0b97dc",
+      "source_sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+      "task_sha256": "48e3d00e0d9eeb7aa1773d92d252c2bc5ddfd900ae7c2d4e4ea0a8f9e7108c51",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-78287d22-009a-4f88-9105-a0d6bd13eee8"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-04/repeat-3/transcript.json",
+        "sha256": "f55dc29d9d6b8b8a8f305259242c11ae8938beaf363aeaf4eacb069f2752f4d8"
+      }
+    },
+    {
+      "capture_id": "PF-TM-05-r1",
+      "case_id": "PF-TM-05",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-066accd3-e04b-4ab3-84f8-171d7880f203",
+      "source_sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+      "task_sha256": "6d9b937a19191deb5b0e301eed40e3279eadb632513c0529d0f87c67d42526f5",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-addb3e53-7fb6-45e1-bdde-f80f990e07ce"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-05/repeat-1/transcript.json",
+        "sha256": "7b6d549430e066a9b4dc5c6618389fc64407f2e211ffe41f936507e0ba4a6daa"
+      }
+    },
+    {
+      "capture_id": "PF-TM-05-r2",
+      "case_id": "PF-TM-05",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-1d929133-1db0-4a90-b898-74676e9def66",
+      "source_sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+      "task_sha256": "6d9b937a19191deb5b0e301eed40e3279eadb632513c0529d0f87c67d42526f5",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-ff4bec42-1d8d-46a4-899c-ec8883ab04d4"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-05/repeat-2/transcript.json",
+        "sha256": "9f8c82747bbe4ff5b992188bed0c588a4b073c9eb827503402d09cd4b24f136b"
+      }
+    },
+    {
+      "capture_id": "PF-TM-05-r3",
+      "case_id": "PF-TM-05",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-ff0191eb-64c5-471a-86c9-66c384bcbe67",
+      "source_sha256": "2ef8dfee5e4b712f882afc37394853bbbc375896087143365799556c068100d3",
+      "task_sha256": "6d9b937a19191deb5b0e301eed40e3279eadb632513c0529d0f87c67d42526f5",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion/standards_review",
+        "observation_id": "observation-ee0b6bed-38d0-4929-97f6-9f0988007e27"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tm-05/repeat-3/transcript.json",
+        "sha256": "6623537f13f99e872b407d9c9b9e914dc4584919f9333a013257deb067c0c265"
+      }
+    },
+    {
+      "capture_id": "PF-TR-01-r1",
+      "case_id": "PF-TR-01",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-8576b354-16b8-40c8-8af3-b90ab63331a5",
+      "source_sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+      "task_sha256": "d7397de75d6eba2cca31a3779e0e1bf8f60ecdb1c4777ad613dac2d1fdac1a11",
+      "runtime_revision": "4301480b544d690b4914beac5cda6634616f5d77",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-7f4b7589-184e-41ea-97e9-cc6c450366f8"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-01/repeat-1/transcript.json",
+        "sha256": "00d26a36e07147e42a1658daf568cb86c35f67a3f133a006fb26f0dfc31439a8"
+      }
+    },
+    {
+      "capture_id": "PF-TR-01-r2",
+      "case_id": "PF-TR-01",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-fc3f25f5-6524-4eac-a415-a2cee42d0934",
+      "source_sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+      "task_sha256": "d7397de75d6eba2cca31a3779e0e1bf8f60ecdb1c4777ad613dac2d1fdac1a11",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-3f124548-90c1-4fdc-8d2d-7e8d0304975a"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-01/repeat-2/transcript.json",
+        "sha256": "54e1ca96d177743400393401cd1a12dcae31d9455e2333ce91e226a5e4d82001"
+      }
+    },
+    {
+      "capture_id": "PF-TR-01-r3",
+      "case_id": "PF-TR-01",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-e57106fe-2e99-4fd1-b5ac-51eebee9397e",
+      "source_sha256": "601219c4a4abcb883b5d487b7267c7c24e614506ef2c29dc893b975bf9489e1c",
+      "task_sha256": "d7397de75d6eba2cca31a3779e0e1bf8f60ecdb1c4777ad613dac2d1fdac1a11",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-d5891721-8904-4827-b111-7aa3ad0d50d4"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-01/repeat-3/transcript.json",
+        "sha256": "6ffb05cde9034768314119ed903718dd8c0c0bdd24c98c169721575ff51fcae0"
+      }
+    },
+    {
+      "capture_id": "PF-TR-02-r1",
+      "case_id": "PF-TR-02",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-787557d9-7d76-461a-9815-863a2ece8a7e",
+      "source_sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+      "task_sha256": "58438f619573522601b78f829c1ce5051ccec108f0e3d714bcaba9d31d920109",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-39ab8b6b-f7d2-4db5-931f-e495f1623e23"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-02/repeat-1/transcript.json",
+        "sha256": "3db538ccc5a2e7eb96b9a4dfff7f960735f52548bb3e41fca01586b2faed4add"
+      }
+    },
+    {
+      "capture_id": "PF-TR-02-r2",
+      "case_id": "PF-TR-02",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-048f6310-49ea-4528-b0b6-2e3b470902f4",
+      "source_sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+      "task_sha256": "58438f619573522601b78f829c1ce5051ccec108f0e3d714bcaba9d31d920109",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-fbf5c7d3-9b35-4923-9d17-e02f57a7cbbf"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-02/repeat-2/transcript.json",
+        "sha256": "198b465143bb64ef8e01d04c9abe739bbb24a100f0ecd265d680a5742c7c0f4b"
+      }
+    },
+    {
+      "capture_id": "PF-TR-02-r3",
+      "case_id": "PF-TR-02",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-66474bdf-3535-4df8-a74c-950251b7c4bb",
+      "source_sha256": "f27845a7705879333c1140ebac231ce339c71198c2f3eb77bf177c475b935273",
+      "task_sha256": "58438f619573522601b78f829c1ce5051ccec108f0e3d714bcaba9d31d920109",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-283b0dd5-ceca-430b-a7e2-34324af35822"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-02/repeat-3/transcript.json",
+        "sha256": "35585e4019cb90f190e19e247b1b409c69923edb23a3f722462a27f5d51dccc3"
+      }
+    },
+    {
+      "capture_id": "PF-TR-03-r1",
+      "case_id": "PF-TR-03",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-be8eeaee-042c-40ee-8ef0-0bc6d9d97a7a",
+      "source_sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+      "task_sha256": "890d5fbf68a97f486ed54702ae91fa00225925ed4c2119a4f26f9c55cc297ad9",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-ba863d24-7883-4730-ae42-b6f371c52302"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-03/repeat-1/transcript.json",
+        "sha256": "d3510296b55566a523b22f031a2b470fa0a89f74c805ad689bfaf36a0b94a4bb"
+      }
+    },
+    {
+      "capture_id": "PF-TR-03-r2",
+      "case_id": "PF-TR-03",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-cd75d09f-938c-4b0a-a215-b84f2f879d5c",
+      "source_sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+      "task_sha256": "890d5fbf68a97f486ed54702ae91fa00225925ed4c2119a4f26f9c55cc297ad9",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-2dcd809d-e966-4a68-84ed-a05996a7942c"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-03/repeat-2/transcript.json",
+        "sha256": "a5f3fce7d009bcf1e3a68f5a248d3c7482df5ff6c16aed9d8e28cd8cc7ba3680"
+      }
+    },
+    {
+      "capture_id": "PF-TR-03-r3",
+      "case_id": "PF-TR-03",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-57158cfe-3030-46d6-bba4-3e51fa3bc4b5",
+      "source_sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+      "task_sha256": "890d5fbf68a97f486ed54702ae91fa00225925ed4c2119a4f26f9c55cc297ad9",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-37c7f7e6-f42d-472c-bf6a-26abf84e956a"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-03/repeat-3/transcript.json",
+        "sha256": "caf4f3916bee5ed376df2a418adca639869cc36b6208d348fae335bb9880a5e2"
+      }
+    },
+    {
+      "capture_id": "PF-TR-04-r1",
+      "case_id": "PF-TR-04",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-ae40ba1b-3462-41f7-b147-6d0b1e17d35a",
+      "source_sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+      "task_sha256": "66a8ec95cab2a0646aacf17f4db2d18c67f7e06bc0750f7db53163ab54fde70a",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-20eef634-af4a-4f5b-993e-a6320ed0ac1f"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-04/repeat-1/transcript.json",
+        "sha256": "89cc82639750098ce568063b3b351e15c77d6ce3f57e349ce8e91e0c42f82d3e"
+      }
+    },
+    {
+      "capture_id": "PF-TR-04-r2",
+      "case_id": "PF-TR-04",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-4b600fe6-5f90-4a09-97e2-73f3daac9443",
+      "source_sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+      "task_sha256": "66a8ec95cab2a0646aacf17f4db2d18c67f7e06bc0750f7db53163ab54fde70a",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-cfb05865-19a5-4e06-9469-d3e0a5f2702a"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-04/repeat-2/transcript.json",
+        "sha256": "42c6457158db06f3fbda7aeb4b09a430bc6e6f4bbfb1ed12a0bdb636872b5905"
+      }
+    },
+    {
+      "capture_id": "PF-TR-04-r3",
+      "case_id": "PF-TR-04",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-9d2776ac-0bd2-4c26-b073-f6158277b828",
+      "source_sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+      "task_sha256": "66a8ec95cab2a0646aacf17f4db2d18c67f7e06bc0750f7db53163ab54fde70a",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-13928d1d-137c-4648-bd69-3f3de8b33f2f"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-04/repeat-3/transcript.json",
+        "sha256": "dfe38abc45eb3ea617efb3a2d5227db8c606122bb1466f80c7aa005bf60a2a7e"
+      }
+    },
+    {
+      "capture_id": "PF-TR-05-r1",
+      "case_id": "PF-TR-05",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-495baf9d-7bbb-471e-907c-cd5d2cf13963",
+      "source_sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+      "task_sha256": "970225b9d6661f73acee0e3968f89b5189fcfb76b1bc6685642b3fada29dba96",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-38589f45-cc7b-48e4-af17-c0d19c78a397"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-05/repeat-1/transcript.json",
+        "sha256": "f75bc88e1e01798ce60e2ea43c3bf6c621e7ecdeee6442a7af8a44258aa77773"
+      }
+    },
+    {
+      "capture_id": "PF-TR-05-r2",
+      "case_id": "PF-TR-05",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-61912dfc-f7bb-4197-af77-c3c39cb05c14",
+      "source_sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+      "task_sha256": "970225b9d6661f73acee0e3968f89b5189fcfb76b1bc6685642b3fada29dba96",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-3804f7c7-00e5-4e42-bd48-f4571d8e6722"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-05/repeat-2/transcript.json",
+        "sha256": "8bafecf89ac65a6ae5117911c9e1e8164537d5ecccc53fce9b42599168a24b6b"
+      }
+    },
+    {
+      "capture_id": "PF-TR-05-r3",
+      "case_id": "PF-TR-05",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-32c39944-a63d-4518-8f80-01a49886df0c",
+      "source_sha256": "adef26207947d1f9f7c912bdba8704e80129c57bd48ad3b5e67b8b36ab60a5b1",
+      "task_sha256": "970225b9d6661f73acee0e3968f89b5189fcfb76b1bc6685642b3fada29dba96",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/formal_defect_gate_audit",
+        "observation_id": "observation-91aae959-35a6-414d-a805-d816bab93a20"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-tr-05/repeat-3/transcript.json",
+        "sha256": "8fc7a6fe09472fd14e696db1b95f938a59a97a09d958612f51873ddefc6ccb03"
+      }
+    },
+    {
+      "capture_id": "PF-WF-01-r1",
+      "case_id": "PF-WF-01",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-8168244b-f74b-4985-aef8-65dfc6ac3256",
+      "source_sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+      "task_sha256": "fd430f2e28a1358cee3554dd68ff8ccabd25d12304e9860062caa3e6850a924f",
+      "runtime_revision": "4301480b544d690b4914beac5cda6634616f5d77",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-49c58b18-d01c-4ae6-8343-2872071b0cd3"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-01/repeat-1/transcript.json",
+        "sha256": "6c7a5d42cb75f3829bee71d0fc53a7eb796b830dc8b754d30515d95bc5a1fc67"
+      }
+    },
+    {
+      "capture_id": "PF-WF-01-r2",
+      "case_id": "PF-WF-01",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-44157d77-8e40-4974-bfa7-0f438dd4bf15",
+      "source_sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+      "task_sha256": "fd430f2e28a1358cee3554dd68ff8ccabd25d12304e9860062caa3e6850a924f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-a6019db0-cf42-40f5-b73d-6c02ae6f7704"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-01/repeat-2/transcript.json",
+        "sha256": "2836f5a1e260c6c53ae0b941ccab273acce7f15c9a59bc273d9c2553edfabad3"
+      }
+    },
+    {
+      "capture_id": "PF-WF-01-r3",
+      "case_id": "PF-WF-01",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-520d5b26-5f07-4ca8-bfb3-8dd62d9a7a89",
+      "source_sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+      "task_sha256": "fd430f2e28a1358cee3554dd68ff8ccabd25d12304e9860062caa3e6850a924f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-006b17ec-8c2d-4f33-ae60-f19f3eb624c1"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-01/repeat-3/transcript.json",
+        "sha256": "88525d31f8e40c09aed104c960ec1d6717462a4cee6730713e87e0156782e8b8"
+      }
+    },
+    {
+      "capture_id": "PF-WF-02-r1",
+      "case_id": "PF-WF-02",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-67a702cb-d52f-4c4e-a40f-5595b3f6b9cd",
+      "source_sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+      "task_sha256": "4315e05f41d18fbc1b14cb3dfae25dcb0458d0d402e8240e82f53b941ff14c72",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-fa668b72-e017-4df1-ba60-4c5c0e57a932"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-02/repeat-1/transcript.json",
+        "sha256": "add98e11ee6c00033fde676c8296a3ae0026185c9f48dc2f9afe2726e3fd6ca0"
+      }
+    },
+    {
+      "capture_id": "PF-WF-02-r2",
+      "case_id": "PF-WF-02",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-c29837f6-2738-4534-a55e-e6341861f1b3",
+      "source_sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+      "task_sha256": "4315e05f41d18fbc1b14cb3dfae25dcb0458d0d402e8240e82f53b941ff14c72",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-fc9256a7-84dd-4ab3-a4de-2119cb3c58de"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-02/repeat-2/transcript.json",
+        "sha256": "edbf0bd92b903803a1bc499f02b69c9d8dcbbc2930a2ac2e62b43b1bf12daa49"
+      }
+    },
+    {
+      "capture_id": "PF-WF-02-r3",
+      "case_id": "PF-WF-02",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-3803bb38-b3d2-4a6b-beb2-60ed7dce3313",
+      "source_sha256": "0df819bb79a5eb74ee18931cd43f4f626c26d6698bd67d031520f08ce0553eba",
+      "task_sha256": "4315e05f41d18fbc1b14cb3dfae25dcb0458d0d402e8240e82f53b941ff14c72",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-893072c0-73e6-4aee-84a2-04d9b4d946e1"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-02/repeat-3/transcript.json",
+        "sha256": "7651ac0b22ca340aa5ed48e391f03fb90974decf629212ee41310e15df63b4d9"
+      }
+    },
+    {
+      "capture_id": "PF-WF-03-r1",
+      "case_id": "PF-WF-03",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-9f2898cd-b17e-4a4f-9339-f085cd2896cc",
+      "source_sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+      "task_sha256": "e81ebca1d8ee4b66527e4f070904b7cbb471496b684b1607b03108a22f8f3f98",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-5129b6e9-ab73-47c5-84e9-d90aed8f381a"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-03/repeat-1/transcript.json",
+        "sha256": "f5fb1ba5fe04cc244da51c6f936dca5f784c81a037f54d016afd65059e3c110f"
+      }
+    },
+    {
+      "capture_id": "PF-WF-03-r2",
+      "case_id": "PF-WF-03",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-84f1f856-a876-4815-bb8f-480bc148124b",
+      "source_sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+      "task_sha256": "e81ebca1d8ee4b66527e4f070904b7cbb471496b684b1607b03108a22f8f3f98",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-311e09a6-8e44-453c-b4ed-9a3ecfa4b2cd"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-03/repeat-2/transcript.json",
+        "sha256": "b114626da68a3f822c410998aeaf4616ec502cfe5845a559343ccada5325abbc"
+      }
+    },
+    {
+      "capture_id": "PF-WF-03-r3",
+      "case_id": "PF-WF-03",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-4fa8bb2e-6132-49e1-8b43-06a219c5fb1f",
+      "source_sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+      "task_sha256": "e81ebca1d8ee4b66527e4f070904b7cbb471496b684b1607b03108a22f8f3f98",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-5daae1c6-aee6-4887-94db-5fc669bf9f2f"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-03/repeat-3/transcript.json",
+        "sha256": "0326651010ce3fc186966cb1f614e1a3325a87a6f3345302e32dc87eafdbc514"
+      }
+    },
+    {
+      "capture_id": "PF-WF-04-r1",
+      "case_id": "PF-WF-04",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-dc620cd2-fb7a-4adb-84de-2d0514ede0d5",
+      "source_sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+      "task_sha256": "619614e2b9d7c006ca7685ce9e8c7681cb872c76e7ff191e941065f54c3dd27f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-0a8267e3-505e-4c14-8c20-264a58ec0e5e"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-04/repeat-1/transcript.json",
+        "sha256": "cb7118183a4f72ebe4d86a4282d0745f435ffb052f24cb76739f3f0746761819"
+      }
+    },
+    {
+      "capture_id": "PF-WF-04-r2",
+      "case_id": "PF-WF-04",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-bb4c4813-43e7-4443-8951-e6552ccf6b84",
+      "source_sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+      "task_sha256": "619614e2b9d7c006ca7685ce9e8c7681cb872c76e7ff191e941065f54c3dd27f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-f9626f6b-e3bb-472f-a9ab-9818aab00845"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-04/repeat-2/transcript.json",
+        "sha256": "39e6b59fbe4e99ec5b94c7702a60448a1753215f308da77143f83aed23640b60"
+      }
+    },
+    {
+      "capture_id": "PF-WF-04-r3",
+      "case_id": "PF-WF-04",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-8aba9205-85c5-4483-8092-c83afca5e9b7",
+      "source_sha256": "9439a8d9808354ccf4cbae7781ca09ced5141f8d9b31b12511f89846d5544d89",
+      "task_sha256": "619614e2b9d7c006ca7685ce9e8c7681cb872c76e7ff191e941065f54c3dd27f",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-99ea9e2f-f234-4cf8-832e-b6460b129eb7"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-04/repeat-3/transcript.json",
+        "sha256": "60f46c2978b0a49239317ace8441455e54ba83670921444e732e9ae5c5512a80"
+      }
+    },
+    {
+      "capture_id": "PF-WF-05-r1",
+      "case_id": "PF-WF-05",
+      "system": "generate-test-cases",
+      "repeat": 1,
+      "session_id": "session-7ce37038-a5f5-4ba4-8f16-a5e087faf896",
+      "source_sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+      "task_sha256": "6db36dd5df52733b0faf760b5c96c04622ed9362529ccb650f4f7bc1755c7d00",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-db22cf85-82d8-4919-9e52-960b61cfe04c"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-05/repeat-1/transcript.json",
+        "sha256": "afd626ac7db8f883c67deee90f01075b1f326496a7c1feb8c25fbe498c6d7213"
+      }
+    },
+    {
+      "capture_id": "PF-WF-05-r2",
+      "case_id": "PF-WF-05",
+      "system": "generate-test-cases",
+      "repeat": 2,
+      "session_id": "session-84263298-6ee8-4f67-926c-1ec65d9c2737",
+      "source_sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+      "task_sha256": "6db36dd5df52733b0faf760b5c96c04622ed9362529ccb650f4f7bc1755c7d00",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-11ebf60e-c0e9-48a5-b00e-e4dc5afa9344"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-05/repeat-2/transcript.json",
+        "sha256": "f8d268ca28395e6791bbabcc6b06ee9d91d64283ffe9d1d5790349edbfa5d624"
+      }
+    },
+    {
+      "capture_id": "PF-WF-05-r3",
+      "case_id": "PF-WF-05",
+      "system": "generate-test-cases",
+      "repeat": 3,
+      "session_id": "session-1d1d478b-4473-42c2-9696-3ad7ccf32077",
+      "source_sha256": "220de80aa4da423266dc4160f78687b9414d8135e430617fa1f11870bafc7d50",
+      "task_sha256": "6db36dd5df52733b0faf760b5c96c04622ed9362529ccb650f4f7bc1755c7d00",
+      "runtime_revision": "15c0445a5d06ee0e5ee3a5a310393d670a1e74f7",
+      "artifact_digests": {
+        "compiler": "96a3b2fcbc168240a2f79b0c8c36c8fa78566e99ee10b16138aa69aa6ebbb6b9",
+        "schema": "5c8bdc6d6b2d3c22b3fcf44f6195d83f683a73c57cc9008b8ac746f7aeb3e91c",
+        "schema_manifest": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a",
+        "skill": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94",
+        "bundle": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+      },
+      "operator_witness": {
+        "method": "operator-observed-codex-subagent-v1",
+        "operator_task_id": "/root",
+        "agent_task_id": "/root/time_quota_defect_expansion",
+        "observation_id": "observation-74f5de8b-e14e-4931-a4bb-7eeb56772172"
+      },
+      "transcript": {
+        "repository_path": "benchmark/release/v1/evidence/pf-wf-05/repeat-3/transcript.json",
+        "sha256": "55bd1f2cd4f47a3d710a6921662fc1b7137d80ea37ffe1fd51c89eb45d680958"
+      }
+    }
+  ]
 }
