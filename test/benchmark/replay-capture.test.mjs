@@ -139,3 +139,18 @@ test('capture verifier rejects a transcript that names an unassigned Agent task'
     /contract or binding/u
   );
 });
+
+test('capture verifier rejects an allowed Agent assigned to another PRD stratum', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  capture.operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
+  transcript.operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /contract or binding/u
+  );
+});

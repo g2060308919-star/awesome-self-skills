@@ -155,7 +155,7 @@ test('single-system release rejects the removed comparator and expert contract',
 test('single-system release reports missing corpus or capture evidence as insufficient', () => {
   const missingCase = passingInput();
   missingCase.corpus.cases.pop();
-  missingCase.captures = missingCase.captures.filter((capture) => capture.case_id !== 'case-6-5');
+  missingCase.captures = missingCase.captures.filter((capture) => capture.case_id !== 'PF-TM-05');
   const caseReport = evaluateSingleSystemRelease(missingCase);
   assert.equal(caseReport.status, 'insufficient_evidence');
   assert.equal(caseReport.release_eligible, false);
