@@ -173,15 +173,22 @@ async function submit(workspace, artifactPath) {
       || opened.size !== artifactEntry.size || opened.nlink !== 1) {
       throw new Error('Submitted artifact changed while it was being opened.');
     }
-    artifactBytes = await handle.readFile();
+    artifactBytes = new Uint8Array(opened.size);
+    let offset = 0;
+    while (offset < artifactBytes.length) {
+      const result = await handle.read(artifactBytes, offset, artifactBytes.length - offset, offset);
+      if (result.bytesRead === 0) break;
+      offset += result.bytesRead;
+    }
     const after = await handle.stat();
-    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size) {
+    if (offset !== artifactBytes.length || after.dev !== opened.dev
+      || after.ino !== opened.ino || after.size !== opened.size) {
       throw new Error('Submitted artifact changed while it was being read.');
     }
   } finally {
     await handle.close();
   }
-  const artifact = JSON.parse(artifactBytes.toString('utf8'));
+  const artifact = JSON.parse(new TextDecoder().decode(artifactBytes));
   const stage = state.expected_stage;
   const stageFile = /** @type {Record<string,string>} */ (STAGE_FILES)[stage];
   if (!stageFile) throw new Error('Capture has no writable Agent stage.');

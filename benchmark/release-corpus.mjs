@@ -107,9 +107,16 @@ async function readCorpusArtifact(options) {
       || opened.nlink !== 1 || opened.size > MAX_CORPUS_ARTIFACT_BYTES) {
       throw new Error('Corpus artifact changed identity while opening.');
     }
-    bytes = await handle.readFile();
+    bytes = new Uint8Array(opened.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const result = await handle.read(bytes, offset, bytes.length - offset, offset);
+      if (result.bytesRead === 0) break;
+      offset += result.bytesRead;
+    }
     const after = await handle.stat();
-    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size) {
+    if (offset !== bytes.length || after.dev !== opened.dev
+      || after.ino !== opened.ino || after.size !== opened.size) {
       throw new Error('Corpus artifact changed while it was read.');
     }
   } finally {
@@ -222,8 +229,10 @@ export async function validateReleaseCorpus(catalogPath, repositoryRoot, candida
       issue('CORPUS_PROVENANCE_INVALID', itemPath, 'Source and license provenance must be immutable, applicable, and digest-bound.');
     }
     try {
-      const provenance = JSON.parse(retained.provenance?.toString('utf8') ?? 'null');
-      const task = JSON.parse(retained.task?.toString('utf8') ?? 'null');
+      const provenance = JSON.parse(retained.provenance
+        ? new TextDecoder().decode(retained.provenance) : 'null');
+      const task = JSON.parse(retained.task
+        ? new TextDecoder().decode(retained.task) : 'null');
       if (provenance?.repository !== item.repository
         || provenance?.commit !== item.commit
         || provenance?.source_sha256 !== item.source.sha256
