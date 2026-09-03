@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import { canonicalStringify, digest as semanticDigest } from '../src/canonical.mjs';
@@ -24,6 +23,12 @@ const EVENT_KEYS = Object.freeze(['stage', 'artifact', 'reply']);
 const ARTIFACT_KEYS = Object.freeze(['compiler', 'schema', 'schema_manifest', 'skill', 'bundle']);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const REVISION = /^[a-f0-9]{40}$/u;
+export const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
+const STAGE_TIMEOUT_MS = 20_000;
+const REPLAY_TIMEOUT_MS = 120_000;
+const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
+const lstat = fsPromises.lstat;
+const realpath = fsPromises.realpath;
 
 /** @param {unknown} value */
 function isRecord(value) {
@@ -101,10 +106,13 @@ async function stageArtifact(runDirectory, stage, artifact) {
   await writeFile(path.join(staging, filename), `${JSON.stringify(artifact)}\n`, 'utf8');
 }
 
-/** @param {string} runnerPath @param {string} runDirectory */
-async function invokeCli(runnerPath, runDirectory) {
+/** @param {string} runnerPath @param {string} runDirectory @param {number} timeout */
+async function invokeCli(runnerPath, runDirectory, timeout = STAGE_TIMEOUT_MS) {
   const result = await execFileAsync(process.execPath, [runnerPath, runDirectory], {
-    encoding: 'utf8', maxBuffer: 4 * 1024 * 1024
+    encoding: 'utf8', maxBuffer: 4 * 1024 * 1024,
+    timeout: Math.max(1, Math.min(STAGE_TIMEOUT_MS, timeout)),
+    killSignal: 'SIGKILL',
+    cwd: path.dirname(runnerPath)
   });
   if (result.stderr !== '') throw new Error('Runner wrote to stderr.');
   const lines = result.stdout.trimEnd().split('\n');
@@ -112,26 +120,61 @@ async function invokeCli(runnerPath, runDirectory) {
   return JSON.parse(lines[0]);
 }
 
-/** @param {any} sourcePack @param {string} sourceSha256 @param {string} taskScope */
-function sourcePackMatchesCapture(sourcePack, sourceSha256, taskScope) {
-  if (!isRecord(sourcePack) || sourcePack.run_scope !== taskScope || !Array.isArray(sourcePack.sources)) return false;
-  return sourcePack.sources.some((/** @type {any} */ source) => isRecord(source)
-    && ['prd', 'acceptance-criteria', 'interaction-spec', 'interface-contract', 'formal-rule'].includes(source.kind)
+/** @param {string} runDirectory @param {string} relativePath */
+async function readRunFile(runDirectory, relativePath) {
+  const filename = path.resolve(runDirectory, relativePath);
+  if (!isInside(runDirectory, filename)) throw new Error('Run output path escapes the run directory.');
+  const entry = await lstat(filename);
+  if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
+    throw new Error('Run output must be a regular singly linked file.');
+  }
+  const resolved = await realpath(filename);
+  if (!isInside(await realpath(runDirectory), resolved)) throw new Error('Run output resolved outside the run directory.');
+  return readFile(resolved);
+}
+
+/** @param {any} sourcePack @param {any} sourceContract @param {any} taskContract */
+function sourcePackMatchesCapture(sourcePack, sourceContract, taskContract) {
+  if (!isRecord(sourcePack)
+    || sourcePack.run_scope !== taskContract?.scope
+    || !Array.isArray(sourcePack.sources) || sourcePack.sources.length !== 1
+    || !Array.isArray(sourcePack.locators) || sourcePack.locators.length === 0
+    || !isRecord(sourcePack.source_policy) || !Array.isArray(sourcePack.source_policy.rules)
+    || sourcePack.source_policy.rules.length === 0) return false;
+  const source = sourcePack.sources[0];
+  return isRecord(source)
+    && source.source_id === sourceContract?.source_id
+    && source.kind === 'prd'
+    && source.version === sourceContract?.commit
+    && source.status === 'effective'
+    && source.authority === `public-repository:${sourceContract?.repository}`
     && typeof source.content === 'string'
-    && source.content_digest === sourceSha256
-    && sha256(source.content) === sourceSha256);
+    && source.content_digest === sourceContract?.source_sha256
+    && sha256(source.content) === sourceContract?.source_sha256
+    && sourcePack.locators.every((/** @type {any} */ locator) => isRecord(locator)
+      && locator.source_id === sourceContract.source_id
+      && locator.content_digest === sourceContract.source_sha256)
+    && sourcePack.source_policy.rules.every((/** @type {any} */ rule) => isRecord(rule)
+      && Array.isArray(rule.source_ids) && rule.source_ids.length === 1
+      && rule.source_ids[0] === sourceContract.source_id);
+}
+
+/** @param {any} evidenceClaims @param {string} sourceId */
+function evidenceClaimsUseOnlySource(evidenceClaims, sourceId) {
+  if (!isRecord(evidenceClaims) || !Array.isArray(evidenceClaims.claims)) return false;
+  const direct = evidenceClaims.claims.filter((/** @type {any} */ claim) => claim?.claim_form === 'direct');
+  return direct.length > 0 && direct.every((/** @type {any} */ claim) => claim.source_id === sourceId);
 }
 
 /**
  * Replay a transcript once using the candidate's named export. Every recorded
  * reply is schema-validated and compared after run-path normalization.
- * @param {{transcript:any,runnerPath:string,replySchema:any,bundleSchema:any,taskScope:string}} options
+ * @param {{transcript:any,runnerPath:string,replySchema:any,bundleSchema:any,taskContract:any,sourceContract:any}} options
  */
 async function replayOnce(options) {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-release-replay-'));
+  const deadline = Date.now() + REPLAY_TIMEOUT_MS;
   try {
-    const imported = await import(`${pathToFileURL(options.runnerPath).href}?release-replay=${encodeURIComponent(options.transcript.capture_id)}`);
-    if (typeof imported.advanceStrict !== 'function') throw new Error('Candidate bundle has no advanceStrict export.');
     let expectedStage = 'source_pack';
     /** @type {any[]} */
     const replies = [];
@@ -141,12 +184,14 @@ async function replayOnce(options) {
         throw new Error(`Transcript event ${index} does not match the runner-requested stage.`);
       }
       if (index === 0 && !sourcePackMatchesCapture(
-        event.artifact,
-        options.transcript.source_sha256,
-        options.taskScope
-      )) throw new Error('Transcript source_pack is not bound to the retained PRD and task scope.');
+        event.artifact, options.sourceContract, options.taskContract
+      )) throw new Error('Transcript source_pack is not exactly bound to the retained PRD and task.');
+      if (event.stage === 'evidence_claims'
+        && !evidenceClaimsUseOnlySource(event.artifact, options.sourceContract.source_id)) {
+        throw new Error('Transcript evidence claims are not exactly bound to the retained PRD.');
+      }
       await stageArtifact(runDirectory, event.stage, event.artifact);
-      const actualReply = await imported.advanceStrict(runDirectory);
+      const actualReply = await invokeCli(options.runnerPath, runDirectory, deadline - Date.now());
       const diagnostics = validateAgainstSchema(actualReply, options.replySchema);
       if (diagnostics.length > 0) throw new Error(`Runner reply schema invalid at event ${index}.`);
       const normalized = normalizeReply(actualReply, runDirectory);
@@ -162,7 +207,7 @@ async function replayOnce(options) {
       } else if (actualReply.status === 'finished') {
         if (index !== options.transcript.events.length - 1) throw new Error('Transcript continues after terminal completion.');
         const bundlePath = path.resolve(runDirectory, normalized.bundle_path);
-        finalBundleBytes = await readFile(bundlePath);
+        finalBundleBytes = await readRunFile(runDirectory, normalized.bundle_path);
         const bundle = JSON.parse(finalBundleBytes.toString('utf8'));
         const bundleDiagnostics = [
           ...validateAgainstSchema(bundle, options.bundleSchema),
@@ -175,12 +220,20 @@ async function replayOnce(options) {
     if (!finalBundleBytes || replies.at(-1)?.status !== 'finished') {
       throw new Error('Transcript did not complete a test bundle.');
     }
-    const recoveryReply = await invokeCli(options.runnerPath, runDirectory);
+    const recoveryReply = await invokeCli(options.runnerPath, runDirectory, deadline - Date.now());
     const recoveryDiagnostics = validateAgainstSchema(recoveryReply, options.replySchema);
     if (recoveryDiagnostics.length > 0) throw new Error('Recovery CLI reply schema invalid.');
     const normalizedRecovery = normalizeReply(recoveryReply, runDirectory);
     if (canonicalStringify(normalizedRecovery) !== canonicalStringify(replies.at(-1))) {
       throw new Error('Recovery CLI did not reproduce the terminal reply.');
+    }
+    const recoveredBundleBytes = await readRunFile(runDirectory, normalizedRecovery.bundle_path);
+    const recoveredBundle = JSON.parse(recoveredBundleBytes.toString('utf8'));
+    if (validateAgainstSchema(recoveredBundle, options.bundleSchema).length > 0
+      || validateUniqueStableIds(recoveredBundle).length > 0
+      || semanticDigest(recoveredBundle) !== recoveryReply.bundle_digest
+      || sha256(recoveredBundleBytes) !== sha256(finalBundleBytes)) {
+      throw new Error('Recovery CLI changed or invalidated the final bundle.');
     }
     return {
       replies,
@@ -195,9 +248,13 @@ async function replayOnce(options) {
 /**
  * Verify retained capture bytes by replaying the exact Agent submissions twice
  * against the evaluated installed-shape bundle.
- * @param {{transcriptBytes:any,expected:any,candidateRoot:string,runnerPath:string,replySchemaPath:string,bundleSchemaPath:string,taskScope:string}} options
+ * @param {{transcriptBytes:any,expected:any,candidateRoot:string,runnerPath:string,replySchemaPath:string,bundleSchemaPath:string,taskContract:any,sourceContract:any}} options
  */
 export async function verifyCaptureTranscript(options) {
+  if (!options.transcriptBytes || typeof options.transcriptBytes.byteLength !== 'number'
+    || options.transcriptBytes.byteLength > MAX_TRANSCRIPT_BYTES) {
+    throw new Error('Capture transcript exceeds the fixed size limit.');
+  }
   let transcript;
   try {
     transcript = JSON.parse(new TextDecoder().decode(options.transcriptBytes));
@@ -224,8 +281,12 @@ export async function verifyCaptureTranscript(options) {
     readFile(options.replySchemaPath, 'utf8').then(JSON.parse),
     readFile(options.bundleSchemaPath, 'utf8').then(JSON.parse)
   ]);
-  const first = await replayOnce({ transcript, runnerPath: options.runnerPath, replySchema, bundleSchema, taskScope: options.taskScope });
-  const second = await replayOnce({ transcript, runnerPath: options.runnerPath, replySchema, bundleSchema, taskScope: options.taskScope });
+  const replayOptions = {
+    transcript, runnerPath: options.runnerPath, replySchema, bundleSchema,
+    taskContract: options.taskContract, sourceContract: options.sourceContract
+  };
+  const first = await replayOnce(replayOptions);
+  const second = await replayOnce(replayOptions);
   if (canonicalStringify(first.replies) !== canonicalStringify(second.replies)
     || first.bundle_sha256 !== second.bundle_sha256
     || first.semantic_bundle_digest !== second.semantic_bundle_digest) {

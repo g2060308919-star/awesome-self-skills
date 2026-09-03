@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 
 import { validateReleaseCorpus } from './release-corpus.mjs';
 import { verifyCaptureTranscript } from './replay-capture.mjs';
+import { materializeCandidateRuntime } from './candidate-runtime.mjs';
 import {
   deriveCandidateBinding,
   reconcileCandidateBindings,
@@ -36,7 +37,10 @@ const POLICY_KEYS = Object.freeze([
   'required_case_count',
   'strata'
 ]);
-const CASE_KEYS = Object.freeze(['case_id', 'stratum', 'source_sha256', 'task_sha256', 'task_scope']);
+const CASE_KEYS = Object.freeze([
+  'case_id', 'stratum', 'source_sha256', 'task_sha256', 'task_scope',
+  'source_id', 'repository', 'commit', 'source_path'
+]);
 const CANDIDATE_KEYS = Object.freeze([
   'valid', 'clean', 'repository_revision', 'artifact_digests'
 ]);
@@ -83,6 +87,7 @@ const LEDGER_CAPTURE_KEYS = Object.freeze([
 const SHA256 = /^[a-f0-9]{64}$/u;
 const REVISION = /^[a-f0-9]{40}$/u;
 const DEFAULT_REPOSITORY_ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
+const MAX_RETAINED_ARTIFACT_BYTES = 64 * 1024 * 1024;
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function isRecord(value) {
@@ -178,7 +183,11 @@ export function evaluateSingleSystemRelease(input) {
       || !RELEASE_STRATA.includes(caseValue.stratum)
       || !isDigest(caseValue.source_sha256)
       || !isDigest(caseValue.task_sha256)
-      || !isNonblankString(caseValue.task_scope)) {
+      || !isNonblankString(caseValue.task_scope)
+      || !isNonblankString(caseValue.source_id)
+      || !isNonblankString(caseValue.repository)
+      || typeof caseValue.commit !== 'string' || !REVISION.test(caseValue.commit)
+      || !isNonblankString(caseValue.source_path)) {
       fail('CORPUS_CASE_INVALID', path, 'Corpus cases must use the closed source-bound contract.');
       continue;
     }
@@ -339,7 +348,8 @@ function canonicalCaptureEvidence(captures) {
  */
 async function verifyRuntimeRevision(repositoryRoot, runtimeRevision, finalRevision) {
   await execFileAsync('git', ['merge-base', '--is-ancestor', runtimeRevision, finalRevision], {
-    cwd: repositoryRoot, encoding: 'utf8'
+    cwd: repositoryRoot, encoding: 'utf8', timeout: 30_000,
+    env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
   });
   await execFileAsync('git', [
     'diff', '--quiet', runtimeRevision, finalRevision, '--',
@@ -347,7 +357,10 @@ async function verifyRuntimeRevision(repositoryRoot, runtimeRevision, finalRevis
     'skill/generate-test-cases/SKILL.md',
     'skill/generate-test-cases/references',
     'skill/generate-test-cases/scripts'
-  ], { cwd: repositoryRoot, encoding: 'utf8' });
+  ], {
+    cwd: repositoryRoot, encoding: 'utf8', timeout: 30_000,
+    env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+  });
 }
 
 /**
@@ -356,7 +369,7 @@ async function verifyRuntimeRevision(repositoryRoot, runtimeRevision, finalRevis
  * @param {any} candidateBinding
  * @param {Set<string>} physicalPaths
  */
-async function readBoundArtifact(repositoryRoot, descriptor, candidateBinding, physicalPaths) {
+async function readBoundArtifact(repositoryRoot, descriptor, candidateBinding, physicalPaths, maxBytes = MAX_RETAINED_ARTIFACT_BYTES) {
   if (!hasExactKeys(descriptor, DESCRIPTOR_KEYS)
     || !isSafeRepositoryPath(descriptor.repository_path)
     || !isDigest(descriptor.sha256)) {
@@ -365,11 +378,12 @@ async function readBoundArtifact(repositoryRoot, descriptor, candidateBinding, p
   const rootReal = await realpath(repositoryRoot);
   const filename = path.resolve(repositoryRoot, descriptor.repository_path);
   const entry = await lstat(filename);
-  if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
+  if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1 || entry.size > maxBytes) {
     throw new Error('Retained artifact must be a regular singly linked file.');
   }
   const filenameReal = await realpath(filename);
-  if (!isInside(rootReal, filenameReal) || physicalPaths.has(filenameReal)) {
+  const expectedReal = path.resolve(rootReal, descriptor.repository_path);
+  if (!isInside(rootReal, filenameReal) || filenameReal !== expectedReal || physicalPaths.has(filenameReal)) {
     throw new Error('Retained artifact escaped or reused its physical path.');
   }
   physicalPaths.add(filenameReal);
@@ -539,11 +553,24 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
   /** @type {any[]} */
   const verifiedCaptures = [];
   const corpusIndex = new Map(corpusCases.map((/** @type {any} */ caseValue) => [caseValue.case_id, caseValue]));
-  const runnerPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/test-compiler.mjs');
-  const replySchemaPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/reply.schema.json');
-  const bundleSchemaPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/test-bundle.schema.json');
+  let candidateRuntime = null;
+  try {
+    if (!initialBinding.final_candidate_sha) throw new Error('Candidate revision is unavailable.');
+    candidateRuntime = await materializeCandidateRuntime(repositoryRoot, initialBinding.final_candidate_sha);
+  } catch (error) {
+    loadIssues.push({
+      code: 'CANDIDATE_RUNTIME_INVALID', path: '/candidate',
+      message: `Cannot materialize the frozen candidate runtime: ${/** @type {any} */ (error).message ?? 'unknown error'}`,
+      severity: 'fail'
+    });
+  }
   const runtimeRevisionChecks = new Map();
-  for (const [index, record] of (Array.isArray(ledger.captures) ? ledger.captures : []).entries()) {
+  const ledgerCaptures = Array.isArray(ledger.captures) ? ledger.captures : [];
+  if (ledgerCaptures.length > 90) loadIssues.push({
+    code: 'CAPTURE_LEDGER_TOO_LARGE', path: '/capture_ledger/file/captures',
+    message: 'Capture ledger cannot contain more than the required 90 records.', severity: 'fail'
+  });
+  for (const [index, record] of ledgerCaptures.slice(0, 90).entries()) {
     const recordPath = `/capture_ledger/file/captures/${index}`;
     if (!hasExactKeys(record, LEDGER_CAPTURE_KEYS)
       || !isArtifactDigests(record.artifact_digests)
@@ -557,6 +584,7 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
     const caseValue = corpusIndex.get(record.case_id);
     try {
       if (!caseValue) throw new Error('Capture case is not present in the verified corpus.');
+      if (!candidateRuntime) throw new Error('Frozen candidate runtime is unavailable.');
       if (!initialBinding.final_candidate_sha) throw new Error('Candidate revision is unavailable.');
       if (!runtimeRevisionChecks.has(record.runtime_revision)) {
         runtimeRevisionChecks.set(record.runtime_revision, verifyRuntimeRevision(
@@ -565,16 +593,26 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
       }
       await runtimeRevisionChecks.get(record.runtime_revision);
       const transcriptBytes = await readBoundArtifact(
-        repositoryRoot, record.transcript, initialBinding, physicalPaths
+        repositoryRoot, record.transcript, initialBinding, physicalPaths, 16 * 1024 * 1024
       );
       const replay = await verifyCaptureTranscript({
         transcriptBytes,
         expected: record,
         candidateRoot: repositoryRoot,
-        runnerPath,
-        replySchemaPath,
-        bundleSchemaPath,
-        taskScope: caseValue.task_scope
+        runnerPath: candidateRuntime.runnerPath,
+        replySchemaPath: candidateRuntime.replySchemaPath,
+        bundleSchemaPath: candidateRuntime.bundleSchemaPath,
+        taskContract: {
+          scope: caseValue.task_scope,
+          task_sha256: caseValue.task_sha256,
+          source_path: caseValue.source_path
+        },
+        sourceContract: {
+          source_id: caseValue.source_id,
+          repository: caseValue.repository,
+          commit: caseValue.commit,
+          source_sha256: caseValue.source_sha256
+        }
       });
       verifiedCaptures.push({
         capture_id: record.capture_id,
@@ -601,6 +639,8 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
       });
     }
   }
+
+  if (candidateRuntime) await candidateRuntime.cleanup();
 
   const finalBinding = await deriveCandidateBinding(absoluteManifest, manifestDigest, repositoryRoot);
   const reconciledBinding = reconcileCandidateBindings(initialBinding, finalBinding);

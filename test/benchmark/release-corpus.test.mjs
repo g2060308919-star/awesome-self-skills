@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,4 +42,46 @@ test('release corpus fails when retained source bytes do not match the catalog',
 
   assert.equal(report.status, 'invalid');
   assert.equal(report.issues.some((issue) => issue.code === 'CORPUS_DIGEST_MISMATCH'), true);
+});
+
+test('release corpus rejects duplicate PRD content under different case IDs and paths', async (/** @type {any} */ context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-release-corpus-duplicate-'));
+  context.after(async () => rm(root, { recursive: true, force: true }));
+  const corpusRoot = path.join(root, 'benchmark/public-pilot/v1');
+  await cp(path.dirname(catalogPath), corpusRoot, { recursive: true });
+  const localCatalogPath = path.join(corpusRoot, 'catalog.json');
+  const catalog = JSON.parse(await readFile(localCatalogPath, 'utf8'));
+  const first = catalog.items[0];
+  const second = catalog.items[1];
+  const duplicatePath = 'cases/pf-tr-02/source/duplicate-prd.md';
+  await cp(path.join(corpusRoot, first.source.path), path.join(corpusRoot, duplicatePath));
+  second.source = { ...first.source, source_id: second.source.source_id, path: duplicatePath };
+  second.repository = first.repository;
+  second.commit = first.commit;
+  second.license.upstream_url = first.license.upstream_url;
+  const provenancePath = path.join(corpusRoot, second.provenance.path);
+  const provenance = JSON.parse(await readFile(provenancePath, 'utf8'));
+  Object.assign(provenance, {
+    repository: first.repository,
+    commit: first.commit,
+    source_url: first.source.upstream_url,
+    source_sha256: first.source.sha256,
+    content_digest: first.source.sha256,
+    license_url: first.license.upstream_url
+  });
+  const provenanceBytes = `${JSON.stringify(provenance, null, 2)}\n`;
+  await writeFile(provenancePath, provenanceBytes);
+  second.provenance.sha256 = createHash('sha256').update(provenanceBytes).digest('hex');
+  const taskPath = path.join(corpusRoot, second.task.path);
+  const task = JSON.parse(await readFile(taskPath, 'utf8'));
+  task.source_paths = [duplicatePath];
+  const taskBytes = `${JSON.stringify(task, null, 2)}\n`;
+  await writeFile(taskPath, taskBytes);
+  second.task.sha256 = createHash('sha256').update(taskBytes).digest('hex');
+  await writeFile(localCatalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
+
+  const report = await validateReleaseCorpus(localCatalogPath, root);
+
+  assert.equal(report.status, 'invalid');
+  assert.equal(report.issues.some((issue) => issue.code === 'CORPUS_SOURCE_DUPLICATE'), true);
 });

@@ -944,7 +944,10 @@ function pathsOverlap(left, right) {
 /** @param {string} candidateRoot @param {string[]} args @returns {Promise<string>} */
 async function gitOutput(candidateRoot, args) {
   const { stdout } = /** @type {any} */ (await execFileAsync(
-    'git', args, { cwd: candidateRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+    'git', args, {
+      cwd: candidateRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+      timeout: 30_000, env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+    }
   ));
   return stdout;
 }

@@ -38,6 +38,9 @@ async function genuineTranscript() {
   const sourceBytes = revision.source_pack.sources[0].content;
   const sourceDigest = sha256(sourceBytes);
   revision.source_pack.sources[0].content_digest = sourceDigest;
+  revision.source_pack.sources[0].version = '1'.repeat(40);
+  revision.source_pack.sources[0].authority = 'public-repository:example/project';
+  revision.source_pack.source_policy.rules[0].authority = 'public-repository:example/project';
   for (const locator of revision.source_pack.locators) locator.content_digest = sourceDigest;
   const capture = {
     capture_id: 'capture-genuine-1', case_id: 'case-genuine', system: 'generate-test-cases',
@@ -55,16 +58,25 @@ async function genuineTranscript() {
     }))
   };
   await rm(run.runDirectory, { recursive: true, force: true });
-  return { capture, transcript };
+  return {
+    capture,
+    transcript,
+    sourceContract: {
+      source_id: revision.source_pack.sources[0].source_id,
+      repository: 'example/project',
+      commit: '1'.repeat(40),
+      source_sha256: sourceDigest
+    }
+  };
 }
 
 test('capture verifier reproduces retained submissions, replies, final bundle, and recovery', async () => {
-  const { capture, transcript } = await genuineTranscript();
+  const { capture, transcript, sourceContract } = await genuineTranscript();
   const transcriptBytes = new TextEncoder().encode(`${JSON.stringify(transcript)}\n`);
 
   const result = await verifyCaptureTranscript({
     transcriptBytes, expected: capture, candidateRoot: repositoryRoot, runnerPath,
-    replySchemaPath, bundleSchemaPath, taskScope: '*'
+    replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
   });
 
   assert.equal(result.transcript_sha256, sha256(transcriptBytes));
@@ -73,15 +85,38 @@ test('capture verifier reproduces retained submissions, replies, final bundle, a
 });
 
 test('capture verifier rejects a recorded reply that the runner cannot reproduce', async () => {
-  const { capture, transcript } = await genuineTranscript();
+  const { capture, transcript, sourceContract } = await genuineTranscript();
   /** @type {any} */ (transcript.events.at(-1)).reply.bundle_digest = '0'.repeat(64);
 
   await assert.rejects(
     verifyCaptureTranscript({
       transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
       expected: capture, candidateRoot: repositoryRoot, runnerPath,
-      replySchemaPath, bundleSchemaPath, taskScope: '*'
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
     }),
     /Recorded runner reply mismatch/u
+  );
+});
+
+test('capture verifier rejects a matching PRD used only as a decoy source', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const primary = transcript.events[0].artifact.sources[0];
+  primary.content = 'Synthetic requirements unrelated to the retained PRD.';
+  primary.content_digest = sha256(primary.content);
+  transcript.events[0].artifact.sources.push({
+    source_id: sourceContract.source_id,
+    kind: 'prd', version: sourceContract.commit,
+    status: 'effective', authority: `public-repository:${sourceContract.repository}`,
+    content: 'Frozen journey requirements.', content_digest: sourceContract.source_sha256,
+    scope: '*'
+  });
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /not exactly bound/u
   );
 });

@@ -146,6 +146,7 @@ export async function validateReleaseCorpus(catalogPath, repositoryRoot, candida
   const cases = [];
   const byStratum = Object.fromEntries(RELEASE_CORPUS_STRATA.map((stratum) => [stratum, 0]));
   const caseIds = new Set();
+  const sourceDigests = new Set();
 
   for (const [index, item] of (Array.isArray(catalog?.items) ? catalog.items : []).entries()) {
     if (item?.status !== 'pilot-admitted') continue;
@@ -162,6 +163,9 @@ export async function validateReleaseCorpus(catalogPath, repositoryRoot, candida
       continue;
     }
     caseIds.add(item.pilot_id);
+    if (sourceDigests.has(item.source.sha256)) {
+      issue('CORPUS_SOURCE_DUPLICATE', `${itemPath}/source/sha256`, 'Every admitted case must contain distinct PRD bytes.');
+    } else if (isDigest(item.source.sha256)) sourceDigests.add(item.source.sha256);
     /** @type {Array<[string, any]>} */
     const descriptors = [
       ['source', item.source],
@@ -215,7 +219,11 @@ export async function validateReleaseCorpus(catalogPath, repositoryRoot, candida
       stratum: item.stratum,
       source_sha256: item.source.sha256,
       task_sha256: item.task.sha256,
-      task_scope: item.task.scope
+      task_scope: item.task.scope,
+      source_id: item.source.source_id,
+      repository: item.repository,
+      commit: item.commit,
+      source_path: item.source.path
     });
     byStratum[item.stratum] += 1;
   }

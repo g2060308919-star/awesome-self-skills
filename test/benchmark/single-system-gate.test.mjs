@@ -42,7 +42,11 @@ function passingInput() {
         stratum,
         source_sha256: sourceSha256,
         task_sha256: taskSha256,
-        task_scope: `scope-${caseId}`
+        task_scope: `scope-${caseId}`,
+        source_id: `source-${caseId}`,
+        repository: `example/project-${caseId}`,
+        commit: `${(stratumIndex + 1).toString(16)}`.repeat(40),
+        source_path: `cases/${caseId}/source/prd.md`
       });
       for (let repeat = 1; repeat <= 3; repeat += 1) {
         captures.push({
