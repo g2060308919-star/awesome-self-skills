@@ -1,6 +1,6 @@
 # Public-source machine pilot v1
 
-This directory is a reproducible intake pilot for `generate-test-cases`. It is useful for checking source packaging, task binding, machine review, adjudication, defect normalization, and comparator readiness. It is not the formal release benchmark.
+This directory is a reproducible intake pilot for `generate-test-cases`. It is useful for checking source packaging, task binding, machine review, adjudication, defect normalization, and the retained 30-PRD corpus. It is not independently release-eligible.
 
 The invariant boundary is:
 
@@ -55,12 +55,12 @@ Do not repair a failing digest by editing only the declaration. Replace or inten
 
 A public issue URL is only a lead. It becomes countable only after immutable issue bytes are retained, the issue is shown to be a historical defect, it is deduplicated globally, and it is bound to a final-admitted valid case in the same product and stratum scope. The v1 ledger deliberately contains no countable defects and the validator rejects declarations that try to bypass a retained snapshot.
 
-## Comparator and capture boundary
+## Comparator history
 
-`generate-test-cases` is content-addressed to the current Skill, compiler, schema manifest, repository revision, model identity, and three-run recipe. `long-prompt`, `test-case-designer`, and `technique-router` remain `unresolved` because no authoritative licensed implementation identity was supplied or established. Similarly named public projects are not substitutes.
+The retained comparator registry records the superseded four-system research design. `long-prompt`, `test-case-designer`, and `technique-router` remain honestly unresolved because no authoritative licensed implementation identity was supplied or established. They are no longer release prerequisites under [ADR-001](../../../docs/decisions/ADR-001-single-system-release-gate.md).
 
-No captures were invented. Captures remain closed until all four identities are fully frozen. When that prerequisite is met, genuine independent executions must still preserve exact input, model, implementation, recipe, repeat, raw-output, and extraction provenance.
+No captures were invented. The current release gate consumes only genuine `generate-test-cases` captures retained under `benchmark/release/v1`; it does not reinterpret these synthetic pilot fixtures as release evidence.
 
-## Why release is still blocked
+## Current release boundary
 
-The formal benchmark additionally requires genuine captured runs, two complete independent external-human expert annotation sets, third-party disagreement adjudication, countable historical defects, and a clean offline score against every frozen gate. Machine intake reviews cannot satisfy those requirements. Run `npm run benchmark` to inspect the separate formal gate; the honest expected result remains `insufficient_evidence`.
+Run `npm run benchmark` to inspect the single-system release gate. Until 90 genuine target captures are retained and bound to one clean candidate, the honest result remains `insufficient_evidence`. Machine intake reviews remain machine reviews and are not relabeled as human evidence.

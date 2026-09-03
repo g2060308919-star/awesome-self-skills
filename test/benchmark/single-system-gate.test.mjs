@@ -203,3 +203,15 @@ test('single-system release CLI emits one JSON line and rejects any argument cou
     assert.equal(report.issues[0].code, 'RELEASE_ARGUMENTS_INVALID');
   }
 });
+
+test('npm benchmark is the single-system release gate and exposes no expert metrics', async () => {
+  const result = await execFileAsync('npm', ['run', 'benchmark', '--silent'], { cwd: repositoryRoot });
+  const report = JSON.parse(result.stdout);
+
+  assert.equal(result.stderr, '');
+  assert.equal(report.policy_id, 'generate-test-cases-single-system-public-prd-v1');
+  assert.equal(report.system, 'generate-test-cases');
+  assert.equal('metrics' in report, false);
+  assert.equal('comparators' in report, false);
+  assert.equal('experts' in report, false);
+});
