@@ -10,7 +10,13 @@ Only an answerable, open/fresh, and unsuppressed compiler root is eligible for a
 
 ## Present one convergent set
 
-For each returned root issue show the missing rule or capability, scope, affected critical/high/medium/low counts, and a short answer form. Ask every current fresh root in the returned reply. Technical or environmental blockers that a user answer cannot resolve remain Blocked without becoming business questions.
+The runner's IDs are protocol bindings, not user language. Never show `root_issue_id`, `question_id`, obligation IDs, Fact IDs, Claim IDs, digests, or raw enum codes in a normal clarification. Retain them privately and copy them unchanged into the next artifact. Show them only when the user explicitly requests an audit or when reporting a protocol failure.
+
+For each returned root issue show a numbered business title, the concrete missing rule or capability in the source's product language, its scope, why it is being asked, and what remains blocked without an answer. Spell risk counts out as `Critical: N, High: N, Medium: N, Low: N`; never present an unlabeled tuple such as `0/10/2/0`. End with a short answer form. Ask every current fresh root in the returned reply. Technical or environmental blockers that a user answer cannot resolve remain Blocked without becoming business questions.
+
+One displayed question must request one independently answerable business decision. If a compiler root describes several independent decisions, preserve the root binding but present separate clearly labeled subquestions and require an answer for each before creating one Decision Record. Do not compress role, state, timing, interface, and exception decisions into one vague paragraph.
+
+Separate the presentation into business-rule gaps, execution-preparation gaps, scope exclusions, and source or evidence gaps. These headings are display-only; they never change the compiler's true classification. Use direct prompts such as “退款失败后订单应处于什么状态？” instead of asking the user to define an abstract “observation capability” when the missing material can be named concretely.
 
 Offer these answer natures:
 

@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { stableId } from '../../src/canonical.mjs';
+import { validateSourceIntegrity } from '../../src/decision-record.mjs';
 import { E2_TARGETS, validateEvidenceGraph } from '../../src/evidence.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const digestA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const sourceContent = 'Rule formula';
+const digestA = createHash('sha256').update(sourceContent, 'utf8').digest('hex');
 const sourcePackSchema = JSON.parse(await readFile(path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/source-pack.schema.json'), 'utf8'));
 const evidenceClaimsSchema = JSON.parse(await readFile(path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/evidence-claims.schema.json'), 'utf8'));
 
@@ -39,17 +42,191 @@ async function fixture(relativePath) {
 /** @param {'verified' | 'machine-extracted' | 'uncertain'} [integrity] @param {string} [kind] @returns {any} */
 function sourcePack(integrity = 'verified', kind = 'prd') {
   return {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
-    sources: [{ source_id: 'source_prd', kind, version: '1', status: 'effective', authority: 'owner', content: 'Rule', content_digest: digestA, scope: 'checkout' }],
+    sources: [{ source_id: 'source_prd', kind, version: '1', status: 'effective', authority: 'owner', content: sourceContent, content_digest: digestA, scope: 'checkout' }],
+    source_reviews: [{
+      source_id: 'source_prd', content_digest: digestA,
+      spans: [
+        {
+          span_id: 'span_rule', start: 0, end: 4,
+          classification: integrity === 'uncertain' ? 'uncertain'
+            : kind === 'production-behavior' ? 'non_normative' : 'normative',
+          rationale: kind === 'production-behavior' ? 'Diagnostic context only.' : 'Supplied rule text.'
+        },
+        {
+          span_id: 'span_context', start: 5, end: 12,
+          classification: 'non_normative', rationale: 'Unclaimed fixture context.'
+        }
+      ]
+    }],
     locators: [
       { locator_id: 'locator_rule', source_id: 'source_prd', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: digestA, extraction_integrity: integrity },
-      { locator_id: 'locator_formula', source_id: 'source_prd', type: 'text-range', text_range: { start: 5, end: 9 }, content_digest: digestA, extraction_integrity: integrity }
+      { locator_id: 'locator_formula', source_id: 'source_prd', type: 'text-range', text_range: { start: 5, end: 12 }, content_digest: digestA, extraction_integrity: integrity }
     ],
     source_policy: { rules: [{ rule_id: 'rule_prd', source_ids: ['source_prd'], scope: 'checkout', authority: 'owner', status: 'effective' }] },
     decision_records: [], clarification_events: [], execution_events: []
   };
 }
+
+test('locator integrity is bound to one nonempty region of the immutable source version', () => {
+  /** @type {Array<{name:string, code:string, mutate:(pack:any)=>void}>} */
+  const cases = [
+    {
+      name: 'out-of-range text locator', code: 'LOCATOR_RANGE_OUT_OF_BOUNDS',
+      mutate(pack) { pack.locators[0].text_range.end = sourceContent.length + 1; }
+    },
+    {
+      name: 'empty text locator', code: 'LOCATOR_RANGE_INVALID',
+      mutate(pack) { pack.locators[0].text_range.end = pack.locators[0].text_range.start; }
+    },
+    {
+      name: 'locator bound to another source version', code: 'LOCATOR_CONTENT_DIGEST_MISMATCH',
+      mutate(pack) { pack.locators[0].content_digest = 'b'.repeat(64); }
+    }
+  ];
+
+  for (const item of cases) {
+    const pack = sourcePack();
+    item.mutate(pack);
+    const diagnostics = validateSourceIntegrity(pack);
+    assert.equal(
+      diagnostics.some((diagnostic) => diagnostic.code === item.code),
+      true,
+      item.name
+    );
+  }
+});
+
+test('source content digest is recomputed from the exact UTF-8 body', () => {
+  const pack = sourcePack();
+  pack.sources[0].content = `${sourceContent} changed`;
+
+  const diagnostics = validateSourceIntegrity(pack);
+
+  assert.equal(
+    diagnostics.some((item) => item.code === 'SOURCE_CONTENT_DIGEST_MISMATCH'),
+    true
+  );
+  assert.equal(
+    diagnostics.find((item) => item.code === 'SOURCE_CONTENT_DIGEST_MISMATCH')?.path,
+    '/sources/0/content_digest'
+  );
+});
+
+test('source review accounts for every non-whitespace character exactly once', () => {
+  const missing = sourcePack();
+  missing.source_reviews = [];
+  assert.equal(validateSourceIntegrity(missing).some(
+    (item) => item.code === 'SOURCE_REVIEW_MISSING'
+  ), true);
+
+  const uncovered = sourcePack();
+  uncovered.sources[0].content = `${sourceContent} tail`;
+  uncovered.sources[0].content_digest = createHash('sha256')
+    .update(uncovered.sources[0].content, 'utf8').digest('hex');
+  uncovered.locators.forEach((/** @type {any} */ locator) => {
+    locator.content_digest = uncovered.sources[0].content_digest;
+  });
+  uncovered.source_reviews[0].content_digest = uncovered.sources[0].content_digest;
+  assert.equal(validateSourceIntegrity(uncovered).some(
+    (item) => item.code === 'SOURCE_REVIEW_COVERAGE_GAP'
+  ), true);
+
+  const overlapping = sourcePack();
+  overlapping.source_reviews[0].spans.push({
+    span_id: 'span_overlap', start: 3, end: 6,
+    classification: 'non_normative', rationale: 'Overlapping context.'
+  });
+  assert.equal(validateSourceIntegrity(overlapping).some(
+    (item) => item.code === 'SOURCE_REVIEW_SPAN_OVERLAP'
+  ), true);
+
+  assert.deepEqual(validateSourceIntegrity(sourcePack()), []);
+});
+
+test('source review rationale must contain a non-whitespace explanation', () => {
+  const pack = sourcePack();
+  pack.source_reviews[0].spans[0].rationale = ' \n\t ';
+
+  assert.equal(validateSourceIntegrity(pack).some(
+    (item) => item.code === 'SOURCE_REVIEW_RATIONALE_INVALID'
+      && item.path === '/source_reviews/0/spans/0/rationale'
+  ), true);
+});
+
+test('every normative or uncertain source span is represented by a direct Claim locator', () => {
+  const unclaimed = sourcePack();
+  unclaimed.source_reviews[0].spans = [
+    { span_id: 'span_context', start: 0, end: 5, classification: 'non_normative', rationale: 'Context only.' },
+    { span_id: 'span_formula', start: 5, end: 12, classification: 'normative', rationale: 'Explicit formula.' }
+  ];
+
+  const result = validateEvidenceGraph(unclaimed, artifact([direct()]));
+
+  assert.equal(result.diagnostics.some(
+    (item) => item.code === 'SOURCE_REVIEW_SPAN_UNCLAIMED'
+      && item.path === '/source_reviews/0/spans/1'
+  ), true);
+
+  const partiallyClaimed = sourcePack();
+  partiallyClaimed.source_reviews[0].spans = [{
+    span_id: 'span_too_broad', start: 0, end: 12,
+    classification: 'normative', rationale: 'The whole source is claimed.'
+  }];
+  const partialResult = validateEvidenceGraph(partiallyClaimed, artifact([direct()]));
+  assert.equal(partialResult.diagnostics.some(
+    (item) => item.code === 'SOURCE_REVIEW_SPAN_UNCLAIMED'
+  ), true, 'one overlapping locator cannot stand in for unclaimed substantive text');
+});
+
+test('source review coverage indexes direct locator ranges instead of rescanning every Claim per span', { timeout: 15_000 }, () => {
+  const count = 6_000;
+  const content = 'x '.repeat(count);
+  const contentDigest = createHash('sha256').update(content, 'utf8').digest('hex');
+  const locators = [];
+  const spans = [];
+  const claims = [];
+  for (let index = 0; index < count; index += 1) {
+    const locatorId = `locator_${index}`;
+    locators.push({
+      locator_id: locatorId, source_id: 'source_large', type: 'text-range',
+      text_range: { start: index * 2, end: index * 2 + 1 },
+      content_digest: contentDigest, extraction_integrity: 'verified'
+    });
+    spans.push({
+      span_id: `span_${index}`, start: index * 2, end: index * 2 + 1,
+      classification: 'normative', rationale: 'Explicit source requirement.'
+    });
+    claims.push({
+      claim_id: `claim_${index}`, claim_form: 'direct', level: 'E3', kind: 'requirement',
+      scope: 'large', value: `value_${index}`, source_locator_ids: [locatorId],
+      source_id: 'source_large'
+    });
+  }
+  const pack = {
+    schema_version: '2.1.0', source_revision: 0,
+    run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'large',
+    sources: [{
+      source_id: 'source_large', kind: 'prd', version: '1', status: 'effective',
+      authority: 'owner', content, content_digest: contentDigest, scope: 'large'
+    }],
+    source_reviews: [{ source_id: 'source_large', content_digest: contentDigest, spans }],
+    locators,
+    source_policy: { rules: [{
+      rule_id: 'rule_large', source_ids: ['source_large'], scope: 'large',
+      authority: 'owner', status: 'effective'
+    }] },
+    decision_records: [], clarification_events: [], execution_events: []
+  };
+
+  const startedAt = Date.now();
+  const result = validateEvidenceGraph(pack, artifact(claims));
+  const elapsed = Date.now() - startedAt;
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.ok(elapsed < 1_000, `source review coverage took ${elapsed}ms`);
+});
 
 /** @param {Record<string, unknown>} overrides */
 function direct(overrides = {}) {
@@ -70,7 +247,7 @@ function derived(overrides = {}) {
 
 /** @param {Array<Record<string, unknown>>} claims @returns {any} */
 function artifact(claims) {
-  return { schema_version: '2.0.0', source_revision: 0, claims, fact_ledger: [] };
+  return { schema_version: '2.1.0', source_revision: 0, claims, fact_ledger: [] };
 }
 
 /** @param {unknown} pack @param {unknown} claims */
@@ -253,7 +430,9 @@ test('fact ledger diagnoses raw claims that failed evidence acceptance', () => {
 
 test('evidence blocks uncertain extraction and diagnostic current behavior from E3', () => {
   const uncertain = validateEvidenceGraph(sourcePack('uncertain'), artifact([direct()]));
-  assert.deepEqual(uncertain.diagnostics.map((item) => item.code), ['E3_EXTRACTION_UNCERTAIN']);
+  assert.deepEqual(uncertain.diagnostics.map((item) => item.code), [
+    'E3_EXTRACTION_UNCERTAIN', 'SOURCE_REVIEW_SPAN_UNCLAIMED'
+  ]);
   assert.equal(uncertain.claimsById.has('claim_root'), false);
 
   const diagnostic = validateEvidenceGraph(sourcePack('verified', 'production-behavior'), artifact([direct({ kind: 'diagnostic' })]));
@@ -275,12 +454,17 @@ test('evidence freezes the exact derivation target matrix', () => {
 
 test('evidence accepts only E2 derivations whose submitted value can be recomputed', async () => {
   const valid = await fixture('micro/evidence-valid.json');
-  const accepted = validateEvidenceGraph(sourcePack(), valid);
+  const pack = sourcePack();
+  pack.source_reviews[0].spans[0].classification = 'non_normative';
+  pack.source_reviews[0].spans[0].rationale = 'Unclaimed fixture context.';
+  pack.source_reviews[0].spans[1].classification = 'normative';
+  pack.source_reviews[0].spans[1].rationale = 'Formula rule supplied by the source.';
+  const accepted = validateEvidenceGraph(pack, valid);
   assert.deepEqual(accepted.diagnostics, []);
   assert.equal(accepted.claimsById.has('claim_total'), true);
 
   valid.claims[1].value = '999.00';
-  const tampered = validateEvidenceGraph(sourcePack(), valid);
+  const tampered = validateEvidenceGraph(pack, valid);
   assert.equal(tampered.diagnostics.some((item) => item.code === 'E2_VALUE_MISMATCH'), true);
   assert.equal(tampered.claimsById.has('claim_total'), false);
 });

@@ -111,6 +111,42 @@ function someArray(values, predicate) {
   return /** @type {boolean} */ (Reflect.apply(NATIVE_ARRAY_SOME, values, [predicate]));
 }
 
+/**
+ * Project a business-readable subject from accepted requirement facts. Stable
+ * IDs remain available in the audit fields but never become the primary label.
+ * @param {Record<string, unknown>|undefined} obligation
+ * @param {Map<string, Set<string>>} factIdsByObligation
+ * @param {Map<string, Record<string, unknown>>} primaryClaimByFactId
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ */
+function obligationBusinessSubject(obligation, factIdsByObligation, primaryClaimByFactId, claimsById) {
+  /** @type {string[]} */
+  const values = [];
+  /** @type {Set<string>} */
+  const seen = new Set();
+  const obligationId = String(obligation?.obligation_id ?? '');
+  const factIds = sortArray([...(factIdsByObligation.get(obligationId) ?? new Set())], compareCodePoints);
+  for (let index = 0; index < factIds.length; index += 1) {
+    const value = String(primaryClaimByFactId.get(factIds[index])?.value ?? '').trim();
+    if (value.length > 0 && !seen.has(value)) {
+      seen.add(value);
+      pushArray(values, value);
+    }
+  }
+  if (values.length === 0) {
+    const claimIds = sortArray(strings(obligation?.source_claim_ids), compareCodePoints);
+    for (let index = 0; index < claimIds.length; index += 1) {
+      const value = String(claimsById.get(claimIds[index])?.value ?? '').trim();
+      if (value.length > 0 && !seen.has(value)) {
+        seen.add(value);
+        pushArray(values, value);
+      }
+    }
+  }
+  if (values.length > 0) return joinArray(values, '; ');
+  return `Requirement in ${String(obligation?.scope ?? 'unknown scope')}`;
+}
+
 export class BundleReconciliationError extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
   constructor(diagnostics) {
@@ -398,8 +434,8 @@ function normalizeContext(submittedContext) {
     ...diagnostics, diagnostic('schema', 'CONTEXT_INVALID', '/', 'Task 10 context must be a closed own-data record')
   ]);
   requireClosed(submittedContext, CONTEXT_KEYS, '', diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
-  if (submittedContext.schema_version !== '2.0.0') pushArray(diagnostics, diagnostic(
-    'schema', 'SCHEMA_VERSION_INVALID', '/schema_version', 'Task 10 requires schema version 2.0.0'
+  if (submittedContext.schema_version !== '2.1.0') pushArray(diagnostics, diagnostic(
+    'schema', 'SCHEMA_VERSION_INVALID', '/schema_version', 'Task 10 requires schema version 2.1.0'
   ));
   if (!Number.isSafeInteger(submittedContext.source_revision) || Number(submittedContext.source_revision) < 0) pushArray(diagnostics, diagnostic(
     'schema', 'SOURCE_REVISION_INVALID', '/source_revision', 'source revision must be a nonnegative safe integer'
@@ -447,6 +483,28 @@ function normalizeContext(submittedContext) {
     limits,
     expertLimits
   };
+}
+
+/**
+ * Add the delivery-only origin label after the Agent-writable Case Draft has
+ * passed its closed schema. This keeps provenance authoritative while making
+ * example, derived, assumed, and normative values explicit to test operators.
+ * @param {Record<string, unknown>} caseDraft
+ * @param {Map<string, Record<string, unknown>>} claimsById
+ */
+function projectCaseDataOrigins(caseDraft, claimsById) {
+  const projected = structuredClone(caseDraft);
+  for (const datum of records(projected.data)) {
+    const provenance = isRecord(datum.provenance) ? datum.provenance : {};
+    const claim = claimsById.get(String(provenance.ref ?? ''));
+    let origin = 'source_description';
+    if (claim?.claim_form === 'derived') origin = 'derived';
+    else if (claim?.kind === 'example') origin = 'example';
+    else if (claim?.level === 'E1' || claim?.kind === 'assumption') origin = 'temporary_assumption';
+    else if (claim?.kind === 'requirement') origin = 'requirement';
+    datum.value_origin = origin;
+  }
+  return projected;
 }
 
 /** @param {Record<string, unknown>} caseDraft */
@@ -1848,6 +1906,7 @@ function buildBundleTrusted(context) {
   }
   const allFactsById = new Map();
   const factsById = new Map();
+  const primaryClaimByFactId = new Map();
   /** @type {Record<string, unknown>[]} */
   const facts = [];
   for (const fact of allFacts) {
@@ -1861,6 +1920,7 @@ function buildBundleTrusted(context) {
       'reference', 'REQUIREMENT_FACT_CLAIM_UNKNOWN', `/evidence_claims/fact_ledger/${pointerPart(factId)}`, 'fact ledger references must exist in accepted evidence'
     ));
     const owningClaim = claimsById.get(String(fact.claim_id ?? ''));
+    if (owningClaim) primaryClaimByFactId.set(factId, owningClaim);
     if (fact.status !== 'diagnostic' && (owningClaim?.kind === 'requirement' || owningClaim?.kind === 'assumption')) {
       pushArray(facts, fact);
       factsById.set(factId, fact);
@@ -2093,7 +2153,7 @@ function buildBundleTrusted(context) {
     throw new BundleReconciliationError(diagnostics);
   }
   pushArray(diagnostics, .../** @type {Diagnostic[]} */ (validateAgainstSchema({
-    schema_version: '2.0.0', source_revision: normalized.sourceRevision,
+    schema_version: '2.1.0', source_revision: normalized.sourceRevision,
     cases: executableCaseInput,
     obligation_dispositions: [], exploratory_candidates: []
   }, caseDraftsSchema)));
@@ -2112,7 +2172,7 @@ function buildBundleTrusted(context) {
         caseDraft, lane, obligationsById, routesByFact, factsById,
         factIdsByObligation, pointsById, evidenceGraph, diagnostics
       );
-      pushArray(lane === 'grounded' ? grounded : conditional, structuredClone(caseDraft));
+      pushArray(lane === 'grounded' ? grounded : conditional, projectCaseDataOrigins(caseDraft, claimsById));
     } else if (!(finalLanes.size === 1 && finalLanes.has('blocked'))) pushArray(diagnostics, diagnostic(
       'traceability', 'CASE_DISPOSITION_MISMATCH', `/classification/${lane}/${pointerPart(caseId)}`, 'one Case cannot cross final executable and blocked dispositions'
     ));
@@ -2231,7 +2291,11 @@ function buildBundleTrusted(context) {
     pushArray(blocked, {
       obligation_id: obligationId,
       root_issue_id: String(root.root_issue_id ?? ''),
+      subject: obligationBusinessSubject(
+        obligation, factIdsByObligation, primaryClaimByFactId, claimsById
+      ),
       reason,
+      scope: String(obligation?.scope ?? ''),
       recovery: {
         missing_type: missingType,
         required_material: joinArray(sortArray([...semanticRefs], compareCodePoints), ', '),
@@ -2296,6 +2360,8 @@ function buildBundleTrusted(context) {
       ));
     }
   }
+  /** @type {any[]} */
+  const terminalNotApplicable = [];
   for (const route of factRoutes) if (route.route_type === 'not_applicable') {
     const factId = String(route.fact_id ?? '');
     const targetId = String(route.not_applicable_claim_id ?? '');
@@ -2306,7 +2372,7 @@ function buildBundleTrusted(context) {
     ));
     const fact = factsById.get(factId);
     const factRoots = fact ? [String(fact.claim_id ?? ''), ...strings(fact.source_claim_ids)] : [];
-    const primaryFactClaim = fact ? claimsById.get(String(fact.claim_id ?? '')) : undefined;
+    const primaryFactClaim = primaryClaimByFactId.get(factId);
     if (target && (!primaryFactClaim || typeof target.scope !== 'string'
       || typeof primaryFactClaim.scope !== 'string' || !scopeContains(target.scope, primaryFactClaim.scope))) {
       pushArray(diagnostics, diagnostic(
@@ -2318,6 +2384,12 @@ function buildBundleTrusted(context) {
       'traceability', 'NOT_APPLICABLE_ROUTE_TARGET_RELATED', `/fact_routes/${pointerPart(factId)}/not_applicable_claim_id`,
       'terminal NotApplicable exclusion must be independent of every routed fact evidence root'
     ));
+    pushArray(terminalNotApplicable, {
+      subject_kind: 'requirement_fact', fact_id: factId,
+      subject: String(primaryFactClaim?.value ?? `Requirement in ${String(target?.scope ?? 'unknown scope')}`),
+      exclusion_claim_id: targetId, scope: String(target?.scope ?? ''),
+      support_review: 'supported', reason: String(target?.value ?? '')
+    });
   }
   for (const point of points) {
     const id = String(point.obligation_id);
@@ -2329,12 +2401,25 @@ function buildBundleTrusted(context) {
       'coverage', 'NOT_APPLICABLE_DISPOSITION_MISSING', `/formal/${pointerPart(id)}`, 'NotApplicable formal Test Point requires its verified exclusion record'
     ));
   }
-  const notApplicable = sortArray(mapArray([...naById.values()], (item) => ({
+  const formalNotApplicable = mapArray([...naById.values()], (item) => ({
+    subject_kind: 'formal_test_point',
     obligation_id: String(item.obligation_id),
+    subject: obligationBusinessSubject(
+      obligationsById.get(String(item.obligation_id)), factIdsByObligation,
+      primaryClaimByFactId, claimsById
+    ),
     exclusion_claim_id: String(item.exclusion_claim_id),
     scope: String(item.scope),
-    support_review: String(item.support_review)
-  })), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
+    support_review: String(item.support_review),
+    reason: String(claimsById.get(String(item.exclusion_claim_id))?.value ?? '')
+  }));
+  const notApplicable = sortArray(
+    [...formalNotApplicable, ...terminalNotApplicable],
+    (left, right) => compareCodePoints(
+      `${left.subject_kind}:${left.obligation_id ?? left.fact_id}`,
+      `${right.subject_kind}:${right.obligation_id ?? right.fact_id}`
+    )
+  );
 
   const exploratoryIds = strings(delivery.exploratory);
   const exploratoryInput = records(normalized.classification.exploratory);
@@ -2476,7 +2561,7 @@ function buildBundleTrusted(context) {
 
   if (diagnostics.length > 0) throw new BundleReconciliationError(diagnostics);
   const bundle = {
-    schema_version: '2.0.0',
+    schema_version: '2.1.0',
     source_revision: normalized.sourceRevision,
     grounded: sortArray(grounded, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
     conditional: sortArray(conditional, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
@@ -2492,7 +2577,7 @@ function buildBundleTrusted(context) {
     quality: {
       delivery_status: deliveryStatus,
       compiler_version: normalized.compilerVersion,
-      schema_version: '2.0.0',
+      schema_version: '2.1.0',
       lineage: normalized.lineage,
       limits: normalized.limits
     }

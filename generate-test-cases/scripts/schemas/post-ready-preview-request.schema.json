@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "post-ready-preview-request.schema.json",
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "item_ref": {
+      "type": "object", "required": ["item_kind", "item_id", "item_semantic_digest"],
+      "properties": {
+        "item_kind": { "enum": ["case", "formal_test_point", "exploratory"] },
+        "item_id": { "type": "string", "minLength": 1 }, "item_semantic_digest": { "$ref": "#/$defs/sha256" }
+      }, "additionalProperties": false
+    },
+    "business_rule": {
+      "type": "object", "required": ["kind", "text"],
+      "properties": { "kind": { "const": "supplement_business_rule" }, "text": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "reopen": {
+      "type": "object", "required": ["kind", "root_issue_ids"],
+      "properties": { "kind": { "const": "reopen_root_issues" }, "root_issue_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true } },
+      "additionalProperties": false
+    },
+    "reanalysis": {
+      "type": "object", "required": ["kind", "source_locator_ids", "reason"],
+      "properties": { "kind": { "const": "request_reanalysis" }, "source_locator_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "reason": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "disposition": {
+      "type": "object", "required": ["kind", "disposition", "reason_code", "reason"],
+      "properties": {
+        "kind": { "const": "change_execution_disposition" }, "disposition": { "enum": ["execute", "do_not_execute"] },
+        "reason_code": { "type": "string", "minLength": 1 }, "reason": { "type": "string", "minLength": 1 }
+      }, "additionalProperties": false
+    },
+    "change": { "oneOf": [{ "$ref": "#/$defs/business_rule" }, { "$ref": "#/$defs/reopen" }, { "$ref": "#/$defs/reanalysis" }, { "$ref": "#/$defs/disposition" }] }
+  },
+  "oneOf": [
+    {
+      "type": "object", "required": ["operation", "request_instance_id", "expected_preview_epoch", "run_instance_id", "bound_source_revision", "bound_bundle_digest", "bound_plan_digest", "bound_confirmation_semantic_digest", "candidate_item_refs", "verbatim_user_request", "proposed_change"],
+      "properties": {
+        "operation": { "const": "open_preview" },
+        "request_instance_id": { "type": "string", "minLength": 1 }, "expected_preview_epoch": { "type": "integer", "minimum": 0 },
+        "run_instance_id": { "type": "string", "minLength": 1 }, "bound_source_revision": { "type": "integer", "minimum": 0 },
+        "bound_bundle_digest": { "$ref": "#/$defs/sha256" }, "bound_plan_digest": { "$ref": "#/$defs/sha256" }, "bound_confirmation_semantic_digest": { "$ref": "#/$defs/sha256" },
+        "candidate_item_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/item_ref" } },
+        "verbatim_user_request": { "type": "string", "minLength": 1 }, "proposed_change": { "$ref": "#/$defs/change" }
+      }, "additionalProperties": false
+    },
+    {
+      "type": "object", "required": ["operation", "request_instance_id", "expected_preview_epoch", "run_instance_id", "bound_source_revision", "bound_bundle_digest", "bound_plan_digest", "bound_confirmation_semantic_digest", "candidate_item_refs", "verbatim_user_request", "proposed_change", "replaces_presentation_id"],
+      "properties": {
+        "operation": { "const": "replace_preview" },
+        "request_instance_id": { "type": "string", "minLength": 1 }, "expected_preview_epoch": { "type": "integer", "minimum": 0 },
+        "run_instance_id": { "type": "string", "minLength": 1 }, "bound_source_revision": { "type": "integer", "minimum": 0 },
+        "bound_bundle_digest": { "$ref": "#/$defs/sha256" }, "bound_plan_digest": { "$ref": "#/$defs/sha256" }, "bound_confirmation_semantic_digest": { "$ref": "#/$defs/sha256" },
+        "candidate_item_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/item_ref" } },
+        "verbatim_user_request": { "type": "string", "minLength": 1 }, "proposed_change": { "$ref": "#/$defs/change" },
+        "replaces_presentation_id": { "type": "string", "minLength": 1 }
+      }, "additionalProperties": false
+    },
+    {
+      "type": "object", "required": ["operation", "request_instance_id", "expected_preview_epoch", "run_instance_id", "bound_source_revision", "bound_bundle_digest", "bound_plan_digest", "bound_confirmation_semantic_digest", "cancels_presentation_id"],
+      "properties": {
+        "operation": { "const": "cancel_preview" },
+        "request_instance_id": { "type": "string", "minLength": 1 }, "expected_preview_epoch": { "type": "integer", "minimum": 0 },
+        "run_instance_id": { "type": "string", "minLength": 1 }, "bound_source_revision": { "type": "integer", "minimum": 0 },
+        "bound_bundle_digest": { "$ref": "#/$defs/sha256" }, "bound_plan_digest": { "$ref": "#/$defs/sha256" }, "bound_confirmation_semantic_digest": { "$ref": "#/$defs/sha256" },
+        "cancels_presentation_id": { "type": "string", "minLength": 1 }
+      }, "additionalProperties": false
+    }
+  ]
+}

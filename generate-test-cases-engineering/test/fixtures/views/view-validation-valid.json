@@ -23,7 +23,7 @@
     { "fact_id": "fact_model", "claim_id": "claim_model_parent", "status": "active", "source_claim_ids": ["claim_model_parent"] }
   ],
   "artifact": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 0,
     "views": [
       {

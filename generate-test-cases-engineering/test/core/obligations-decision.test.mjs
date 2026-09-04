@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { compile as compileDecision } from '../../src/obligations/decision.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
@@ -30,8 +31,8 @@ async function decisionFixture() {
 }
 
 function oracleSourcePack() {
-  return {
-    schema_version: '2.0.0', source_revision: 0,
+  return completeSourcePack({
+    schema_version: '2.1.0', source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
     sources: [{
       source_id: 'source_oracle', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
@@ -51,12 +52,12 @@ function oracleSourcePack() {
       rule_id: 'rule_oracle_source', source_ids: ['source_oracle'], scope: ' * ', authority: 'owner', status: 'effective'
     }] },
     decision_records: [], clarification_events: [], execution_events: []
-  };
+  }, oracleEvidenceClaims());
 }
 
 function oracleEvidenceClaims() {
   return {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     claims: [
       {
         claim_id: 'claim_total_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
@@ -231,7 +232,7 @@ test('decision obligations hand-count each explicit valid rule once with priorit
   assert.equal(actual.length, 3);
   assert.deepEqual(actual, expectedDecisionSeeds);
   const obligationsArtifact = {
-    schema_version: '2.0.0', source_revision: 11,
+    schema_version: '2.1.0', source_revision: 11,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };
@@ -264,7 +265,7 @@ test('decision obligations accept Task 3 expected-value Oracles through source a
     ['claim_total', 'model_total_rule']
   );
   const obligationsArtifact = {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

@@ -13,6 +13,7 @@ Produce evidence-grounded manual functional test Cases through the bundled deter
 - Read `references/behavior-views.md` when routing accepted facts, supplying `obligation_inputs`, and checking formal Test Point coverage; read it before writing `behavior_views`.
 - Read `references/clarification-policy.md` when handling `need_user_answers`, interpreting answers, delivering now, or reopening suppressed root issues.
 - Read `references/case-writing-policy.md` when constructing `case_drafts`, Oracles, Testability profiles, support reviews, or user-facing Case wording; read it before writing `case_drafts`.
+- Read `references/execution-closure-policy.md` before writing or handling any execution decision, pause/resume, final confirmation, `runner_case_ids`, or post-ready change request.
 
 Read the requested `scripts/schemas/<schema_ref>` before writing an artifact. Do not preload every reference or schema.
 
@@ -21,6 +22,8 @@ Read the requested `scripts/schemas/<schema_ref>` before writing an artifact. Do
 Try every supplied path, attachment, and inline source. If no requirement content is readable, ask once for an accessible PRD, module description, or pasted requirement text. If content remains unavailable, end with `INPUT_UNAVAILABLE`; do not create an empty or generic normal bundle.
 
 If any requirement content is readable, continue. Record partial extraction gaps and uncertain regions instead of asking for every missing input before analysis. Never fill a product fact from generic domain knowledge.
+
+Freeze the requested product, module, role, client, version, region, and environment scope before extracting facts. Do not broaden or narrow that scope merely because later analysis discovers more material. If the user's original request did not state a dimension, record it as unspecified rather than choosing one; a later material scope change requires `NEW_RUN_REQUIRED`.
 
 ## Run the private workflow
 
@@ -42,9 +45,10 @@ Create private run directory
 -> call private runner
 -> handle need_artifact or need_revision
 -> on need_user_answers, present one merged batch
--> append Decision Records or clarification control events and increment source_revision
+-> append presentation-bound Decision Records, clarification controls, or execution events and increment source_revision once
 -> call runner again
--> on finished, present generated Markdown and canonical JSON paths
+-> after execution_closure, show the complete final_confirmation plan
+-> on finished, present generated Markdown and canonical JSON paths without starting tests
 ```
 
 Complete the full workflow analysis before interrupting the user:
@@ -74,6 +78,8 @@ Use these fixed staging names:
 
 Any other requested stage is `PIPELINE_PROTOCOL_ERROR`; write no artifact and never invent a process surface.
 
+For `source_pack`, recompute each Source SHA-256 and add one exhaustive `source_reviews` entry whose ordered spans account for every non-whitespace part of that Source as normative, non-normative, or uncertain. For `case_drafts`, keep distinct business outcomes in distinct Cases and never submit compiler-owned `value_origin` or final IDs. Follow the loaded evidence and Case-writing policies for the exact semantic rules.
+
 ### Handle `need_revision`
 
 Group diagnostics by normalized stage, code, path, and root cause. Repair only the returned artifact and keep its `source_revision` unchanged. Re-run the compiler after each repair.
@@ -84,13 +90,21 @@ Reset the repair counter only when the stage or normalized root cause materially
 
 ### Handle `need_user_answers`
 
-Confirm that A–G is complete. Present every returned blocker as one merged, risk-ordered clarification set. Ask once per stable root issue, show its scope and affected risk counts, and offer final, temporary, unknown, or deferred handling.
+Read the closure policy and branch on the closed `purpose` instead of treating all questions as blockers:
 
-Apply the exact answer and control-event rules in `references/clarification-policy.md`. Append one immutable Source Pack revision, increment `source_revision` exactly once for the answer group, and call the runner again. Never modify an accepted revision.
+- `semantic_clarification`: present every returned blocker as one merged, risk-ordered set using the business-readable rules in the clarification policy. Ask once per stable root, label scope and each risk count, and offer only the returned options. Keep compiler identifiers in memory for the append; do not make the user interpret them.
+- `execution_closure`: present every pending Case, formal Test Point, and Exploratory item by readable title. Record exactly one explicit Execute, DoNotExecute, or pause result for each answered item. Only a Grounded Case may be Execute. Preserve unanswered items as pending.
+- `final_confirmation`: show the complete plan the compiler returned, including every item, disposition, and DoNotExecute reason. Append `confirm_execution_plan` only when the answer binds that exact prompt, source revision, plan digest, and plan-change head. A request to modify the plan appends a disposition event instead and requires a newly rendered confirmation page.
+
+For `entry_context=post_ready_change`, accept only the latest compiler-owned presentation and group. The first natural-language modification request is not itself a decision: write a bound `staging/post-ready-preview-request.json` using the latest `preview_control`, re-invoke the runner, and only append a real event or Decision Record after the user confirms that preview. Replace and cancel use fresh compiler-issued request IDs; never replay an older epoch.
+
+Apply the exact semantic-answer rules in `references/clarification-policy.md` and all disposition/event rules in `references/execution-closure-policy.md`. Copy compiler IDs, item digests, change heads, group IDs, `next_event_seq`, and run identity exactly. Append one immutable Source Pack revision per user reply, increment `source_revision` exactly once for the whole accepted group, and call the runner again. Never modify an accepted revision. Ambiguous phrases such as “these” or “use the recommendation” write no record until the target set is unique.
 
 ### Handle `finished`
 
-Return the generated `markdown_path` and canonical `bundle_path`, plus the reported source revision and digest. Do not ask for another confirmation. Never edit final JSON, rewrite Markdown, add a Case, improve a classification, or recompute coverage after `finished`.
+Return the real `markdown_path` and canonical `bundle_path`, source revision, bundle/plan digest, separate Case/Test Point/Exploratory counts, and the short modification hint. Lead with a business-readable summary and keep internal IDs and digests only in an audit section or behind the file links. Describe coverage as declared-scope accounting, not complete product-behavior coverage. State that the confirmed `runner_case_ids` contains only Grounded + Execute Cases, that the Markdown worksheet is blank until a downstream operator records results, and that this Skill does not automatically start E2E tests. Do not ask for another confirmation or repeat the full item list.
+
+Never edit final JSON, rewrite Markdown, add a Case, improve a classification, or recompute coverage after `finished`. If the user later asks to supplement a rule, reopen an issue, reanalyze a locator, or change a disposition, use the bound post-ready preview flow above. Original source or material scope changes require `NEW_RUN_REQUIRED`.
 
 ### Handle `fatal`
 
@@ -99,9 +113,11 @@ Report the compiler diagnostics and the last valid checkpoint, if one exists. Do
 ## Preserve adapter boundaries
 
 - Generate only artifacts requested by the runner.
+- Copy the compiler-issued `run_instance_id` from the first `need_artifact` reply into every Source Pack revision; never invent or replace it.
 - Clarification answers, `request_delivery`, `reopen_root_issues`, and supplements for unresolved business facts must append to the same run. These are source revisions, not new run identities.
 - If the original PRD, a supplementary source, or the material task scope changes, return `NEW_RUN_REQUIRED`, preserve the old run, and create or use a sibling private run only for an actual user source or scope change. Never silently repurpose the old run.
 - Keep normal workflow replies on exit code 0; treat a nonzero process exit as inability to form a JSON reply.
 - Keep user-visible content limited to the requested final files, a merged clarification set, `INPUT_UNAVAILABLE`, `PIPELINE_NO_PROGRESS`, or fatal diagnostics.
 - Never weaken evidence, invent an Oracle, hide a formal Test Point in Exploratory, or remove a Blocked item to improve coverage.
 - Never publish or document an alternate process entry point.
+- Never invoke an E2E Runner, browser automation, API automation, or any downstream executor. This Skill ends after it generates and confirms the execution list.

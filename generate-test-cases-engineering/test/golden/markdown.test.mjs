@@ -119,7 +119,7 @@ test('renderer uses captured array traversal intrinsics after snapshot validatio
       configurable: true,
       get() { reads += 1; return descriptor?.value; }
     });
-    assert.equal(renderMarkdown(bundle).startsWith('# Test Case Bundle\n'), true);
+    assert.equal(renderMarkdown(bundle).startsWith('# Manual Functional Test Plan\n'), true);
   } finally {
     if (descriptor) Object.defineProperty(Array.prototype, 'entries', descriptor);
   }

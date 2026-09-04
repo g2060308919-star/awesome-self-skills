@@ -7,6 +7,7 @@ import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 import { completeJourneyRevision } from '../helpers/run-journey.mjs';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const dimensions = [
@@ -270,24 +271,24 @@ function revisionFromRules(rules, options = {}) {
     return { obligation_id: id, status: 'case_candidate', case_ids: [`case_${rule.key}`] };
   });
   return {
-    schema_version: '2.0.0', source_revision: sourceRevision, compiler_version: '0.1.0',
+    schema_version: '2.1.0', source_revision: sourceRevision, compiler_version: '0.1.0',
     lineage: { source_digest: digestB, case_draft_digest: digestC },
-    source_pack: {
-      schema_version: '2.0.0', source_revision: sourceRevision,
+    source_pack: completeSourcePack({
+      schema_version: '2.1.0', source_revision: sourceRevision,
       run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: '*',
       sources, locators, source_policy: { rules: policyRules },
       decision_records: decisions, clarification_events: [], execution_events: []
-    },
+    }, { claims }),
     evidence_claims: {
-      schema_version: '2.0.0', source_revision: sourceRevision, claims, fact_ledger: facts
+      schema_version: '2.1.0', source_revision: sourceRevision, claims, fact_ledger: facts
     },
     behavior_views: {
-      schema_version: '2.0.0', source_revision: sourceRevision, views,
+      schema_version: '2.1.0', source_revision: sourceRevision, views,
       interaction_matrix: interaction.matrix, interaction_candidates: interaction.candidates,
       obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
-      schema_version: '2.0.0', source_revision: sourceRevision, cases,
+      schema_version: '2.1.0', source_revision: sourceRevision, cases,
       obligation_dispositions: dispositions, exploratory_candidates: []
     },
     clarification: {
@@ -586,7 +587,7 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   assert.equal(first.pending_root_issues.length, 1);
   assert.equal(first.pending_root_issues[0].root_issue_id, sourceConflictRootId);
   assert.equal(first.pending_root_issues[0].scope, 'checkout.payment');
-  assert.equal(first.pending_root_issues[0].question, 'Clarification required for source-conflict in checkout.payment.');
+  assert.equal(first.pending_root_issues[0].question, 'Which authoritative source rule applies to checkout.payment?');
   assert.equal(first.pending_root_issues[0].root_issue_key, canonicalStringify({
     missing_type: 'source-conflict',
     rule_ids: policy.conflicts[0].rule_ids,
@@ -1260,7 +1261,7 @@ test('source-conflict aliases come only from the compiler-owned structural bridg
   ]);
   const external = output.find((/** @type {any} */ item) => item.root_issue_id === 'root_source_policy');
   assert.equal(external.scope, 'checkout');
-  assert.equal(external.question, 'Clarification required for source-conflict in checkout.');
+  assert.equal(external.question, 'Which authoritative source rule applies to checkout?');
   assert.equal(output.find((/** @type {any} */ item) => item.root_issue_id === 'root_forged').missing_type, 'oracle');
 });
 

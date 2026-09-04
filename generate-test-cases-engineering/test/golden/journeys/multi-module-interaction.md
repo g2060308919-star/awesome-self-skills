@@ -1,11 +1,93 @@
-# Test Case Bundle
+# Manual Functional Test Plan
 
-- Schema version: <code>1.0.0</code>
-- Source revision: <code>0</code>
+## Delivery Overview
 
-## Grounded Cases
+- Generated, not executed. This plan contains no test results or defect verdicts.
+- Readiness: Executable subset ready
+- Requirement accounting: 1/1
+- Formal Test Points covered: 1/1
+- Grounded executable coverage: 1/1
+- Execute Cases: 1
+- Do not execute Cases: 0
+- Blocked formal Test Points: 0
+- NotApplicable exclusions: 0
 
-### <code>case\_1c8a196253a78e34</code> — Verify checkout accepted
+## Execution Overview
+
+| Case | Title | Scope | Risk | Role | Decision |
+| --- | --- | --- | --- | --- | --- |
+| TC-001 | Verify checkout accepted | checkout | High | tester | Execute |
+
+## Cases to Execute
+
+### TC-001 — Verify checkout accepted
+
+- Scope: checkout
+- Risk: High
+- Role: tester
+- Evidence status: Grounded
+- Execution decision: Execute
+
+#### Preconditions
+
+1. checkout is ready (reachable from: revision start)
+
+#### Test Data
+
+- scenario input = <code>checkout</code> — Origin: Requirement
+
+#### Steps and Expected Results
+
+1. Exercise checkout
+   - Expected: checkout accepted
+   - Observe: tester via UI → result
+   - Oracle: state equals <code>checkout accepted</code>
+
+#### Post-state and Cleanup
+
+- Post-state: checkout accepted
+- Cleanup: none — The scenario is isolated.
+
+## Cases Not Selected
+
+_None._
+
+## Business Rule Gaps
+
+_None._
+
+## Execution Preparation Gaps
+
+_None._
+
+## Source and Evidence Gaps
+
+_None._
+
+## Scope Exclusions (NotApplicable)
+
+_None._
+
+## Exploratory Risks
+
+_None._
+
+## Manual Execution Worksheet
+
+Generated, not executed. Record results downstream and bind each record to the delivered bundle digest + stable Case ID listed in the Audit Appendix.
+
+| Case | Title | Scope | Risk | Role | Result | Defect | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TC-001 | Verify checkout accepted | checkout | High | tester | Not recorded | — | — |
+
+## Audit Appendix
+
+- Schema version: <code>2.1.0</code>
+- Source revision: <code>1</code>
+
+### Grounded Cases
+
+#### <code>case\_1c8a196253a78e34</code> — Verify checkout accepted
 
 - Scope: <code>checkout</code>
 - Risk: <code>high</code>
@@ -14,15 +96,15 @@
 - Formal Test Points: <code>obligation\_7ad4b46aba188b77</code>
 - Evidence references: <code>claim\_checkout</code>
 
-#### Preconditions
+##### Preconditions
 
 1. checkout is ready (reachable from: revision start; evidence: <code>claim\_checkout</code>)
 
-#### Test Data
+##### Test Data
 
-- scenario input = <code>checkout</code> (evidence: <code>claim\_checkout</code>)
+- scenario input = <code>checkout</code> (origin: requirement; evidence: <code>claim\_checkout</code>)
 
-#### Steps and Oracles
+##### Steps and Oracles
 
 1. <code>step\_checkout</code> — Exercise checkout (evidence: <code>claim\_checkout</code>)
    - <code>expectation\_f0d1ffa72c24afa5</code>: checkout accepted
@@ -30,26 +112,26 @@
      - Oracle: state equals <code>checkout accepted</code>
      - Evidence: <code>claim\_checkout</code>
 
-#### Post-state and Cleanup
+##### Post-state and Cleanup
 
 - Post-state: checkout accepted (evidence: <code>claim\_checkout</code>)
 - Cleanup: none — The scenario is isolated. (evidence: <code>claim\_checkout</code>)
 
-## Conditional Cases
+### Conditional Cases
 
 _None._
 
-## Blocked Formal Test Points
+### Blocked Formal Test Points
 
 _None._
 
-## Exploratory Cases
+### Exploratory Cases
 
 _None._
 
-## Coverage
+### Coverage
 
-### Requirement Fact Ledger
+#### Requirement Fact Ledger
 
 Accounted: 1/1
 
@@ -57,7 +139,7 @@ Accounted: 1/1
 | --- | --- |
 | <code>fact\_checkout</code> | <code>covered</code> |
 
-### Formal Test Point Ledger
+#### Formal Test Point Ledger
 
 Covered: 1/1 declared
 
@@ -65,7 +147,7 @@ Covered: 1/1 declared
 | --- | --- |
 | <code>obligation\_7ad4b46aba188b77</code> | <code>grounded</code> |
 
-### Grounded Executable Ledger
+#### Grounded Executable Ledger
 
 Grounded: 1/1
 
@@ -73,21 +155,40 @@ Grounded: 1/1
 | --- | --- |
 | <code>obligation\_7ad4b46aba188b77</code> | <code>case\_1c8a196253a78e34</code> |
 
-### Expert Recall Ledger
+#### Expert Recall Ledger
 
 Status: <code>benchmark\_only</code>
 - Expert recall is benchmark-only.
 
-### NotApplicable (excluded from the coverage numerator)
+#### NotApplicable (excluded from the coverage numerator)
 
 _None._
 
-## Quality
+### Execution Plan
+
+- Status: <code>ready</code>
+- Plan digest: <code>89c5ac8341b4fef4a5584fdb96dd45b2804a772c6178277f63319571953b71a4</code>
+- Semantic result digest: <code>5b823cb50a17d731fe480efd35d60adbd009b6944194e232cdb7b2d56c3753b6</code>
+- Execute Cases: 1
+- DoNotExecute Cases: 0
+- DoNotExecute formal Test Points: 0
+- DoNotExecute Exploratory items: 0
+- Applicable Test Point execution coverage: full 1, partial 0, none 0
+- Runner Case IDs: <code>case\_1c8a196253a78e34</code>
+
+| Kind | ID | Title | True status | Execution disposition | Reason code |
+| --- | --- | --- | --- | --- | --- |
+| <code>case</code> | <code>case\_1c8a196253a78e34</code> | Verify checkout accepted | <code>grounded</code> | <code>execute</code> | <code>selected\_for\_run</code> |
+
+### Quality
 
 - Delivery status: <code>executable\_subset\_ready</code>
-- Compiler version: <code>0.1.0</code>
-- Schema version: <code>1.0.0</code>
-- Source lineage digest: <code>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</code>
-- Case-draft lineage digest: <code>cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc</code>
+- Compiler version: <code>0.3.0</code>
+- Schema version: <code>2.1.0</code>
+- Semantic source digest: <code>b60dd857cefef1a4535518269ac8fafefc4678b1220d7de175fc0d3b35c278b4</code>
+- Evidence semantic digest: <code>e3527c27508cd29aa58b4dd36790ef77a140291578e143007df03ce040118f02</code>
+- Behavior Views semantic digest: <code>c1f060d3127800f98544a65dc3b17b7b97f74f6296590c9dff1cc9c6669fa3ee</code>
+- Test Obligations semantic digest: <code>d106b9d85500b26b2c068771ccdf706b2eb00ed1b6da05988afdec3aef5666b5</code>
+- Case Drafts semantic digest: <code>05dd15b6082404581b7487c4937f3a7a6d645d5c159bd4f73a45334d6539c865</code>
 - Limits:
   - Compilation is limited to the supplied revision.

@@ -7,8 +7,8 @@ import { canonicalStringify, digest } from '../src/canonical.mjs';
 const schemaDirectory = 'skill/generate-test-cases/scripts/schemas';
 const manifestPath = 'skill/generate-test-cases/scripts/schema-manifest.json';
 const runnerPath = 'skill/generate-test-cases/scripts/test-compiler.mjs';
-const schemaVersion = '2.0.0';
-const compilerVersion = '0.2.0';
+const schemaVersion = '2.1.0';
+const compilerVersion = '0.3.0';
 const argumentsList = process.argv.slice(2);
 if (argumentsList.length > 1 || (argumentsList.length === 1 && argumentsList[0] !== '--check')) {
   throw new Error('usage: node build/build.mjs [--check]');

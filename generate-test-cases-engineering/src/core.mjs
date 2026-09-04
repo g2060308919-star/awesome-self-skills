@@ -1428,6 +1428,24 @@ function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   return { ...classification, blocked };
 }
 
+/** @param {string} missingTypeValue @param {string} scope */
+function clarificationQuestion(missingTypeValue, scope) {
+  const type = String(missingTypeValue);
+  const businessScope = String(scope);
+  if (type === 'testability' || type === 'capability' || type === 'resource_limit'
+    || type === 'control' || type === 'observer') {
+    return `What verified test setup, control, or observation capability is available for ${businessScope}?`;
+  }
+  if (type === 'source-conflict' || type === 'fact-conflict' || type === 'evidence'
+    || type === 'extraction' || type === 'authority') {
+    return `Which authoritative source rule applies to ${businessScope}?`;
+  }
+  if (type === 'exclusion' || type === 'invalid-exclusion') {
+    return `What authoritative scope-exclusion rule applies to ${businessScope}?`;
+  }
+  return `What authoritative product rule or expected result resolves the ${type} gap in ${businessScope}?`;
+}
+
 /** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>} caseDrafts */
 function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
@@ -1449,7 +1467,7 @@ function blockedDescriptors(classification, obligations, caseDrafts) {
       risk: String(item.risk), reason,
       evidence_refs: sortArray(compilerIssue?.evidence_refs ?? strings(item.evidence_refs), compareCodePoints),
       answerable: compilerIssue?.answerable ?? !technical,
-      question: `Clarification required for ${type} in ${scope}.`
+      question: clarificationQuestion(type, scope)
     };
   }), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
 }
@@ -1626,7 +1644,7 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
         source_ids: sortArray(strings(conflict.source_ids), compareCodePoints)
       });
       item.scope = String(conflict.scope);
-      item.question = `Clarification required for source-conflict in ${item.scope}.`;
+      item.question = clarificationQuestion('source-conflict', String(item.scope));
     }
     const existing = mapGet(grouped, externalId);
     if (!existing) mapSet(grouped, externalId, item);
@@ -1985,7 +2003,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         /** @type {Record<string, unknown>} */ (input.case_drafts)
       );
       bundle = buildBundle({
-        schema_version: '2.0.0', source_revision: sourceRevision,
+        schema_version: '2.1.0', source_revision: sourceRevision,
         compiler_version: input.compiler_version, lineage: input.lineage,
         evidence_claims: input.evidence_claims, obligations_artifact: obligations,
         classification: bundleClassification, clarification,

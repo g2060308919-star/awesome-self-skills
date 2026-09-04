@@ -268,7 +268,7 @@ test('behavior view validation excludes disjoint views before fact routing and f
     claims: [{ claim_id: 'claim_global', level: 'E3', kind: 'requirement', scope: '*' }],
     facts: [{ fact_id: 'fact_global', claim_id: 'claim_global', status: 'active', source_claim_ids: ['claim_global'] }],
     artifact: {
-      schema_version: '2.0.0', source_revision: 0,
+      schema_version: '2.1.0', source_revision: 0,
       views: [simpleFlowView('view_shipping', 'shipping', 'claim_global')],
       interaction_matrix: [],
       obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{
@@ -310,7 +310,7 @@ test('behavior view scope gate accepts broad, narrow, and universal overlap and 
     claims: [{ claim_id: 'claim_global', level: 'E3', kind: 'requirement', scope: '*' }],
     facts: [],
     artifact: {
-      schema_version: '2.0.0', source_revision: 0,
+      schema_version: '2.1.0', source_revision: 0,
       views: [
         simpleFlowView('view_broad', 'checkout', 'claim_global'),
         simpleFlowView('view_narrow', 'checkout.payment.capture', 'claim_global'),

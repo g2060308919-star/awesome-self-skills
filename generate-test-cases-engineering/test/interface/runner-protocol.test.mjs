@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -121,15 +122,45 @@ test('installed runner accepts the requested source pack after an initial empty 
   }
 });
 
+test('installed runner rejects locator selectors that do not match their source-version binding', async () => {
+  for (const scenario of ['locator-digest', 'locator-range']) {
+    const runDirectory = await mkdtemp(path.join(os.tmpdir(), `test-compiler-${scenario}-`));
+    try {
+      const revision = JSON.parse(await readFile(groundedRevisionPath, 'utf8'));
+      await bindRunInstance(runDirectory, revision.source_pack);
+      if (scenario === 'locator-digest') revision.source_pack.locators[0].content_digest = 'f'.repeat(64);
+      if (scenario === 'locator-range') revision.source_pack.locators[0].text_range.end = 999;
+      await mkdir(path.join(runDirectory, 'staging'));
+      await writeFile(
+        path.join(runDirectory, 'staging/source-pack.json'),
+        `${JSON.stringify(revision.source_pack)}\n`, 'utf8'
+      );
+
+      const advanced = await runCompiler(runDirectory);
+      const reply = parseSingleJsonValue(advanced.stdout);
+      assert.equal(advanced.code, 0, advanced.stderr);
+      assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+      assert.equal(reply.stage, 'source_pack');
+      assert.equal(reply.diagnostics.some((/** @type {any} */ item) => item.code === ({
+        'locator-digest': 'LOCATOR_CONTENT_DIGEST_MISMATCH',
+        'locator-range': 'LOCATOR_RANGE_OUT_OF_BOUNDS'
+      })[scenario]), true, JSON.stringify(reply));
+      await assert.rejects(readFile(path.join(runDirectory, 'accepted/r000/source-pack.json')));
+    } finally {
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
 test('installed runner rejects an empty responsibility view without accepting or deriving it', async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'test-compiler-empty-view-'));
   const behaviorViews = JSON.parse(await readFile(integrationFixturePath, 'utf8'));
   behaviorViews.source_revision = 0;
   const view = behaviorViews.views[0];
   view.elements = [];
-  const sourceDigest = 'd'.repeat(64);
+  const sourceDigest = '8b3b0f135f46063311dae5777d88238f613a136aaec61cbcc5df4910620500da';
   const sourcePack = {
-    schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
+    schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
       authority: 'owner', content: 'Integration contract requirements',
@@ -147,7 +178,7 @@ test('installed runner rejects an empty responsibility view without accepting or
     decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     claims: view.source_claim_ids.map((/** @type {string} */ claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
@@ -158,6 +189,7 @@ test('installed runner rejects an empty responsibility view without accepting or
       status: 'active', source_claim_ids: [claimId]
     }))
   };
+  completeSourcePack(sourcePack, evidenceClaims);
   try {
     await bindRunInstance(runDirectory, sourcePack);
     await mkdir(path.join(runDirectory, 'staging'));

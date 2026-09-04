@@ -63,7 +63,7 @@ test('full journey: installed-shape runner accepts the complete all-E3 artifact 
     ]);
     assert.equal(run.reply.status, 'finished');
     assert.equal(run.bundle.grounded.length, 1);
-    assert.match(run.markdown, /^# Test Case Bundle\n/u);
+    assert.match(run.markdown, /^# Manual Functional Test Plan\n/u);
   } finally {
     await rm(run.runDirectory, { recursive: true, force: true });
   }

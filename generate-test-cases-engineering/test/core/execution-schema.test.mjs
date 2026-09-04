@@ -74,7 +74,7 @@ test('run instance and current pointer schemas reject mixed state', async () => 
   const runInstance = await schema('run-instance.schema.json');
   const current = await schema('current-pointer.schema.json');
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '2.0.0', run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc',
+    schema_version: '2.1.0', run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc',
     created_at: '2026-09-03T00:00:00.000Z'
   }, runInstance), []);
   assert.deepEqual(validateAgainstSchema({
@@ -117,9 +117,9 @@ test('source pack v2 requires run identity and three append-only event collectio
   const contract = await schema('source-pack.schema.json');
   /** @type {any} */
   const artifact = {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
-    sources: [], locators: [], source_policy: { rules: [] }, decision_records: [],
+    sources: [], locators: [], source_reviews: [], source_policy: { rules: [] }, decision_records: [],
     clarification_events: [], execution_events: []
   };
   assert.deepEqual(validateAgainstSchema(artifact, contract), []);
@@ -130,9 +130,9 @@ test('source pack v2 requires run identity and three append-only event collectio
 test('source pack uses closed decisions for supersession and version-bound Exploratory adoption', async () => {
   const contract = await schema('source-pack.schema.json');
   const base = {
-    schema_version: '2.0.0', source_revision: 1,
+    schema_version: '2.1.0', source_revision: 1,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
-    sources: [], locators: [], source_policy: { rules: [] }, clarification_events: [], execution_events: []
+    sources: [], locators: [], source_reviews: [], source_policy: { rules: [] }, clarification_events: [], execution_events: []
   };
   const answer = {
     decision_id: 'decision_final', question_id: 'question_a', root_issue_ids: ['root_a'],
@@ -158,13 +158,13 @@ test('source pack uses closed decisions for supersession and version-bound Explo
   }, contract), []);
 });
 
-test('all artifact schemas use protocol version 2.0.0', async () => {
+test('all artifact schemas use protocol version 2.1.0', async () => {
   for (const name of [
     'source-pack.schema.json', 'evidence-claims.schema.json', 'behavior-views.schema.json',
     'test-obligations.schema.json', 'case-drafts.schema.json', 'checkpoint.schema.json',
     'test-bundle.schema.json'
   ]) {
     const contract = await schema(name);
-    assert.equal(contract.properties?.schema_version?.const, '2.0.0', name);
+    assert.equal(contract.properties?.schema_version?.const, '2.1.0', name);
   }
 });

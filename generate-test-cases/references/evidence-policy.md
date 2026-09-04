@@ -2,6 +2,8 @@
 
 Use this policy while creating Source Packs and Evidence Claims. The bundled schemas define the exact closed record shapes; this file defines the semantic choices.
 
+An execution decision is not evidence. Execute, DoNotExecute, pause, resume, final-plan confirmation, presentation data, and post-ready preview requests never receive E1/E2/E3, never supply an Oracle, never upgrade support review or Testability, and never create NotApplicable. Only a separately authorized business Decision Record may add business truth, and it must pass the normal evidence pipeline after recompilation.
+
 ## Preserve source identity and scope
 
 Record each source's kind, version, status, authority, content digest, and applicable scope. Treat historical defects and production behavior as diagnostic signals unless an effective source explicitly makes them normative.
@@ -11,6 +13,12 @@ Treat a user-supplied current PRD or module description as `effective` for this 
 Scope strings are compiler identities, not prose summaries. Choose one canonical slash-delimited path for the run, then reuse it verbatim for `run_scope` and every in-scope Source, Source Policy rule, Claim, Fact, and Behavior View; use child paths only for a deliberate narrower scope. Never paraphrase the same scope between stages. `*` is universal only when the corresponding source and claim are also universal—it cannot broaden a previously accepted narrow scope.
 
 Create a typed locator for every relied-on text range, table cell, or page region. Preserve table coordinates and page/region summaries. Mark extraction as `verified`, `machine-extracted`, or `uncertain`. An uncertain extraction cannot directly support E3; verify the original region or keep the affected fact Blocked.
+
+Compute each source `content_digest` as SHA-256 while collecting the authoritative source, before trusting or staging the Source Pack. Copy that same digest into every locator `content_digest` so the selector is bound to that immutable source version. The compiler can verify this binding and selector bounds, but it cannot authenticate a digest that the Adapter fabricated from the same untrusted artifact. For a text range, use a nonempty `[start, end)` interval wholly inside the stored normalized content. Never use a placeholder digest or an offset from a different normalization of the text.
+
+Create exactly one closed `source_reviews` entry for every Source. Copy the Source's recomputed `content_digest`, then partition every non-whitespace part of the stored content into ordered, non-overlapping `[start, end)` spans classified as `normative`, `non_normative`, or `uncertain`. Give every span a non-whitespace rationale explaining that classification. Whitespace alone may remain between spans; substantive text may not. A summary, selected quotation, generated heading, or list of extracted Claims is not proof that all source text was reviewed.
+
+For every `normative` or `uncertain` review span, the union of accepted direct-Claim text-range locators for the same immutable Source must cover every non-whitespace character. One partial overlap cannot stand in for the rest of a paragraph; split broad passages into atomic review spans and direct Claims. Use `non_normative` only after actually reviewing the span and determining that it does not state or qualify product behavior; it is not a discard bucket for difficult requirements. An `uncertain` span remains visible through accepted evidence and cannot be silently omitted. Recompute span offsets and the digest whenever normalized content changes instead of carrying selectors across versions.
 
 Build Source Policy from explicit authority and scope. A newer date or more official-looking document does not silently supersede another source. Accept supersession only when a source declares it or an authorized task-scoped decision resolves it. Limit unresolved conflicts to their intersecting scope.
 

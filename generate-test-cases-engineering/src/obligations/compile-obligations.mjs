@@ -774,7 +774,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
     isObject(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []
   ));
   diagnostics.push(.../** @type {Diagnostic[]} */ (validateAgainstSchema({
-    schema_version: '2.0.0',
+    schema_version: '2.1.0',
     source_revision: 0,
     obligations: submittedObligations,
     fact_routes: [],
@@ -2213,7 +2213,7 @@ export function compileObligations(evidenceGraph, behaviorViews) {
   );
 
   const compiled = {
-    schema_version: '2.0.0',
+    schema_version: '2.1.0',
     source_revision: typeof artifact.source_revision === 'number' ? artifact.source_revision : -1,
     obligations,
     fact_routes: factRoutes,

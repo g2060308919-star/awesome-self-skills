@@ -634,6 +634,71 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
 
   for (const claimId of rawClaims.keys()) validateIteratively(claimId);
 
+  /** @type {Map<string, Array<{start:number,end:number}>>} */
+  const directRangesBySource = new Map();
+  for (const claim of acceptedClaims.values()) {
+    if (claim.claim_form !== 'direct' || typeof claim.source_id !== 'string') continue;
+    for (const locatorId of stringArray(claim.source_locator_ids)) {
+      const locator = locators.get(locatorId);
+      if (!locator || locator.source_id !== claim.source_id || locator.type !== 'text-range'
+        || !isObject(locator.text_range)) continue;
+      const start = locator.text_range.start;
+      const end = locator.text_range.end;
+      if (typeof start !== 'number' || typeof end !== 'number') continue;
+      const ranges = directRangesBySource.get(claim.source_id) ?? [];
+      ranges.push({ start, end });
+      directRangesBySource.set(claim.source_id, ranges);
+    }
+  }
+  for (const [sourceId, ranges] of directRangesBySource) {
+    ranges.sort((left, right) => left.start - right.start || left.end - right.end);
+    /** @type {Array<{start:number,end:number}>} */
+    const merged = [];
+    for (const range of ranges) {
+      const previous = merged[merged.length - 1];
+      if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+      else merged.push({ ...range });
+    }
+    directRangesBySource.set(sourceId, merged);
+  }
+
+  objectArray(pack.source_reviews).forEach((review, reviewIndex) => {
+    if (typeof review.source_id !== 'string') return;
+    const reviewSourceId = review.source_id;
+    const ranges = directRangesBySource.get(reviewSourceId) ?? [];
+    objectArray(review.spans).forEach((span, spanIndex) => {
+      if (span.classification !== 'normative' && span.classification !== 'uncertain') return;
+      if (typeof span.start !== 'number' || typeof span.end !== 'number') return;
+      const content = String(sources.get(reviewSourceId)?.content ?? '');
+      let cursor = span.start;
+      let represented = true;
+      let lower = 0;
+      let upper = ranges.length;
+      while (lower < upper) {
+        const middle = lower + Math.floor((upper - lower) / 2);
+        if (ranges[middle].end <= span.start) lower = middle + 1;
+        else upper = middle;
+      }
+      for (let rangeIndex = lower; rangeIndex < ranges.length; rangeIndex += 1) {
+        const range = ranges[rangeIndex];
+        if (range.start >= span.end) break;
+        const nextStart = Math.max(span.start, range.start);
+        if (nextStart > cursor && content.slice(cursor, Math.min(nextStart, span.end)).trim().length > 0) {
+          represented = false;
+          break;
+        }
+        cursor = Math.max(cursor, Math.min(span.end, range.end));
+        if (cursor >= span.end) break;
+      }
+      if (represented && cursor < span.end && content.slice(cursor, span.end).trim().length > 0) represented = false;
+      if (!represented) diagnostics.push(diagnostic(
+        'traceability', 'SOURCE_REVIEW_SPAN_UNCLAIMED',
+        `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+        `${span.classification} source text must be represented by an accepted direct Claim locator`
+      ));
+    });
+  });
+
   factLedger.forEach((entry, entryIndex) => {
     if (typeof entry.claim_id === 'string') {
       if (!rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic(

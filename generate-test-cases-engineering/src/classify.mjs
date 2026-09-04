@@ -489,7 +489,7 @@ function validateClosedShape(context, diagnostics) {
     diagnostics.push(diagnostic('classification', 'CONTEXT_INVALID', '/', 'classification context collections have invalid types'));
     return;
   }
-  if (obligations.schema_version !== '2.0.0' || drafts.schema_version !== '2.0.0'
+  if (obligations.schema_version !== '2.1.0' || drafts.schema_version !== '2.1.0'
     || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
     diagnostics.push(diagnostic('classification', 'SOURCE_REVISION_MISMATCH', '/', 'all classification inputs must share source_revision'));
   }
@@ -966,7 +966,14 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     if (!isNonblank(datum.name) || !isNonblank(datum.value) || !isRecord(datum.provenance)
       || !isCanonicalString(isRecord(datum.provenance) ? datum.provenance.ref : null)
       || !['evidence', 'derivation'].includes(String(isRecord(datum.provenance) ? datum.provenance.type : ''))) reasons.add('CASE_GATE_INVALID');
-    if (isRecord(datum.provenance) && isCanonicalString(datum.provenance.ref)) evidenceRoots.add(datum.provenance.ref);
+    if (isRecord(datum.provenance) && isCanonicalString(datum.provenance.ref)) {
+      evidenceRoots.add(datum.provenance.ref);
+      const referencedClaim = evidence.get(datum.provenance.ref)?.claim;
+      const expectedType = referencedClaim?.claim_form === 'derived' ? 'derivation' : 'evidence';
+      if (referencedClaim && datum.provenance.type !== expectedType) {
+        reasons.add('CASE_DATA_PROVENANCE_TYPE_MISMATCH');
+      }
+    }
     applyReview(datum.support_review, reasons);
   }
 
@@ -977,6 +984,8 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const expectationIds = new Set();
   /** @type {Array<{expectationId: string, evidenceRef: string, kind:string, closesObligationId:string, oracleEvidenceRefs:string[],oracleEvidenceValid:boolean}>} */
   const expectationsForOwnership = [];
+  /** @type {Set<string>} */
+  const formalOutcomeSignatures = new Set();
   /** @type {Array<{observer: string, target: string}>} */
   const requiredObservers = [];
   for (const [stepIndex, step] of steps.entries()) {
@@ -1038,8 +1047,19 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         || (oracle.tolerance !== undefined && toleranceValid) || (oracle.window !== undefined && windowValid);
       if (!oracle || !expectedField || !isNonblank(oracle[expectedField]) || !comparisonValid
         || !toleranceValid || !windowValid || !withinBounded) reasons.add('ORACLE_INVALID');
+      else if (expectation.kind === 'obligation-oracle' && expectationFieldsValid) {
+        formalOutcomeSignatures.add(oracleSemanticId(step, expectation));
+      }
       applyReview(expectation.support_review, reasons);
     }
+  }
+  if (formalOutcomeSignatures.size > 1) {
+    diagnostics.push(diagnostic(
+      'classification', 'CASE_OUTCOME_NOT_ATOMIC',
+      `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/steps`,
+      'one Case may close multiple Test Points only when they share one independently diagnosable observed outcome'
+    ));
+    reasons.add('CASE_OUTCOME_NOT_ATOMIC');
   }
   for (const step of steps) {
     for (const expectation of objectArray(step.expectations) ?? []) {

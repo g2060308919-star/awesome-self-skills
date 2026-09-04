@@ -133,6 +133,23 @@ test('v1 run input is preserved and rejected with explicit migration and new-run
   }
 });
 
+test('v2.0 run input is preserved and rejected after the source-review schema upgrade', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'execution-v2-migration-'));
+  try {
+    const revision = buildJourney('all-e3');
+    revision.source_pack.schema_version = '2.0.0';
+    await stage(runDirectory, 'source_pack', revision.source_pack);
+    const reply = await advanceStrict(runDirectory);
+    assert.equal(reply.status, 'fatal');
+    assert.deepEqual(reply.diagnostics.map((/** @type {any} */ item) => item.code), [
+      'RUN_MIGRATION_REQUIRED', 'NEW_RUN_REQUIRED'
+    ]);
+    assert.equal(await exists(path.join(runDirectory, 'accepted/r000/source-pack.json')), false);
+  } finally {
+    await rm(runDirectory, { recursive: true, force: true });
+  }
+});
+
 test('post-ready preview is private, version-bound, cancellable, and cannot revive after cancel', async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'post-ready-preview-runner-'));
   try {

@@ -264,14 +264,14 @@ export function classificationContext(options = {}) {
       conflicts: options.conflicts ?? []
     },
     obligations: {
-      schema_version: '2.0.0',
+      schema_version: '2.1.0',
       source_revision: sourceRevision,
       obligations,
       fact_routes: [{ fact_id: IDS.fact, route_type: 'obligations', obligation_ids: [IDS.obligation] }],
       interaction_routes: []
     },
     caseDrafts: {
-      schema_version: '2.0.0',
+      schema_version: '2.1.0',
       source_revision: sourceRevision,
       cases,
       obligation_dispositions: dispositions,

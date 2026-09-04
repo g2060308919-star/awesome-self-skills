@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "presentation.schema.json",
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "item_ref": {
+      "type": "object",
+      "required": ["item_kind", "item_id", "title", "item_semantic_digest", "item_semantic_change_head_seq"],
+      "properties": {
+        "item_kind": { "enum": ["case", "formal_test_point", "exploratory"] },
+        "item_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "item_semantic_digest": { "$ref": "#/$defs/sha256" },
+        "item_semantic_change_head_seq": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "option": {
+      "type": "object", "required": ["option_code", "label", "meaning"],
+      "properties": {
+        "option_code": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "meaning": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "proposed_change": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "object", "required": ["kind", "text"], "properties": { "kind": { "const": "supplement_business_rule" }, "text": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "root_issue_ids"], "properties": { "kind": { "const": "reopen_root_issues" }, "root_issue_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "source_locator_ids", "reason"], "properties": { "kind": { "const": "request_reanalysis" }, "source_locator_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "reason": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "disposition", "reason_code", "reason"], "properties": { "kind": { "const": "change_execution_disposition" }, "disposition": { "enum": ["execute", "do_not_execute"] }, "reason_code": { "type": "string", "minLength": 1 }, "reason": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+      ]
+    },
+    "group": {
+      "type": "object",
+      "required": ["group_id", "question_id", "question", "item_refs", "allowed_options", "answer_example", "proposed_change"],
+      "properties": {
+        "group_id": { "type": "string", "minLength": 1 },
+        "question_id": { "type": "string", "minLength": 1 },
+        "question": { "type": "string", "minLength": 1 },
+        "item_refs": { "type": "array", "items": { "$ref": "#/$defs/item_ref" } },
+        "allowed_options": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/option" } },
+        "answer_example": { "type": "string", "minLength": 1 },
+        "proposed_change": { "$ref": "#/$defs/proposed_change" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["presentation_id", "purpose", "entry_context", "post_ready_control", "run_instance_id", "source_revision", "plan_digest", "plan_change_head_seq", "groups"],
+  "properties": {
+    "presentation_id": { "type": "string", "minLength": 1 },
+    "purpose": { "enum": ["semantic_clarification", "execution_closure", "final_confirmation"] },
+    "entry_context": { "enum": ["active_analysis", "post_ready_change"] },
+    "post_ready_control": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "object", "required": ["preview_epoch", "originating_request_instance_id"], "properties": { "preview_epoch": { "type": "integer", "minimum": 1 }, "originating_request_instance_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+      ]
+    },
+    "run_instance_id": { "type": "string", "minLength": 1 },
+    "source_revision": { "type": "integer", "minimum": 0 },
+    "plan_digest": { "$ref": "#/$defs/sha256" },
+    "plan_change_head_seq": { "type": "integer", "minimum": 0 },
+    "groups": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/group" } }
+  },
+  "additionalProperties": false
+}

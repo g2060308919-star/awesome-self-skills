@@ -8,12 +8,13 @@ import { compileObligationInputs } from '../../src/obligations/compile-obligatio
 import {
   buildJourney, completeJourneyRevision, runInstalledRevision
 } from '../helpers/run-journey.mjs';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const dimensions = [
   'shared-entity', 'role', 'client', 'interface-event',
   'time', 'concurrency', 'side-effect'
 ];
-const sourceDigest = 'd'.repeat(64);
+const sourceDigest = 'b8508cbfecd25121e8a7ffd1835e57ec7198ba0a7fe756545ab8a84660f2feec';
 
 function emptyObligationInputs() {
   return {
@@ -36,8 +37,8 @@ function fourViewRevision() {
     'claim_integration', 'claim_invariant', 'claim_idempotency'
   ];
   return {
-    source_pack: {
-      schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
+    source_pack: completeSourcePack({
+      schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
       sources: [{
         source_id: 'source_prd', kind: 'prd', version: '1', status: 'effective',
         authority: 'owner', content: 'Four view responsibilities.',
@@ -53,9 +54,11 @@ function fourViewRevision() {
         authority: 'owner', status: 'effective'
       }] },
       decision_records: [], clarification_events: [], execution_events: []
-    },
+    }, { claims: claimIds.map((claimId) => ({
+      claim_id: claimId, claim_form: 'direct', source_locator_ids: ['locator_prd']
+    })) }),
     evidence_claims: {
-      schema_version: '2.0.0', source_revision: 0,
+      schema_version: '2.1.0', source_revision: 0,
       claims: claimIds.map((claimId) => ({
         claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
         scope: 'checkout', value: claimId, source_locator_ids: ['locator_prd'],
@@ -67,7 +70,7 @@ function fourViewRevision() {
       }))
     },
     behavior_views: {
-      schema_version: '2.0.0', source_revision: 0,
+      schema_version: '2.1.0', source_revision: 0,
       views: [
         {
           view_id: 'view_input', type: 'input-domain', scope: 'checkout',
@@ -446,7 +449,7 @@ test('installed obligation input rejects malformed nonempty reserved arrays inst
 
 test('obligation input compiler ignores the removed hidden fifth input', () => {
   const artifact = {
-    schema_version: '2.0.0', source_revision: 7, views: [], interaction_matrix: [],
+    schema_version: '2.1.0', source_revision: 7, views: [], interaction_matrix: [],
     interaction_candidates: [], obligation_inputs: emptyObligationInputs()
   };
   const clean = compileObligationInputs({}, artifact);

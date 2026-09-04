@@ -9,6 +9,7 @@ import { advanceStrict } from '../../src/advance-strict.mjs';
 import { stableId } from '../../src/canonical.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
@@ -117,7 +118,7 @@ function makeAnswerableConflict(revision) {
   revision.source_pack.sources.push({
     source_id: 'source_old', kind: 'formal-rule', version: '0', status: 'effective',
     authority: 'owner', content: 'checkout rejected',
-    content_digest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    content_digest: '8e326c5917f32d5b88099c533c75f37410af7e8dc896faaca1e5b57dffd77eff',
     scope: 'checkout'
   });
   revision.source_pack.source_policy.rules.push({
@@ -143,6 +144,7 @@ function makeAnswerableConflict(revision) {
     claim_id: 'claim_checkout',
     invalidation_condition: 'A final rule replaces this temporary decision.'
   };
+  completeSourcePack(revision.source_pack, revision.evidence_claims);
   return revision;
 }
 
@@ -277,9 +279,9 @@ test('real runner fails closed when an integration view omits responsibility-spe
   behaviorViews.source_revision = 0;
   const view = behaviorViews.views[0];
   const claimIds = [...new Set(view.source_claim_ids)];
-  const sourceDigest = 'd'.repeat(64);
+  const sourceDigest = '8b3b0f135f46063311dae5777d88238f613a136aaec61cbcc5df4910620500da';
   const sourcePack = {
-    schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
+    schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
       authority: 'owner', content: 'Integration contract requirements',
@@ -297,7 +299,7 @@ test('real runner fails closed when an integration view omits responsibility-spe
     decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     claims: claimIds.map((claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],
@@ -308,6 +310,7 @@ test('real runner fails closed when an integration view omits responsibility-spe
       status: 'active', source_claim_ids: [claimId]
     }))
   };
+  completeSourcePack(sourcePack, evidenceClaims);
   try {
     await stage(runDirectory, 'source_pack', sourcePack);
     assert.equal((await advance(runDirectory)).stage, 'evidence_claims');

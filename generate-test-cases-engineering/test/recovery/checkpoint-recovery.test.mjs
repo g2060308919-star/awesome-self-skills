@@ -13,6 +13,7 @@ import { advanceStrict } from '../../src/advance-strict.mjs';
 import { digest } from '../../src/canonical.mjs';
 import { acquireRunLock, STAGE_FILES } from '../../src/run-store.mjs';
 import { buildJourney, setSourceRevision } from '../helpers/run-journey.mjs';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
@@ -411,6 +412,7 @@ test('promotion never deletes a staging file replaced after validation', async (
   const runDirectory = await temporaryRun();
   const revision = await revisionFixture();
   revision.source_pack.sources[0].content = 'x'.repeat(32 * 1024 * 1024);
+  completeSourcePack(revision.source_pack, revision.evidence_claims);
   try {
     await stage(runDirectory, 'source_pack', revision.source_pack);
     const child = spawn(process.execPath, ['--input-type=module', '-e', `
@@ -468,6 +470,7 @@ test('separate processes coordinate one run and return the same idempotent resul
   const runDirectory = await temporaryRun();
   const revision = await revisionFixture();
   revision.source_pack.sources[0].content = 'x'.repeat(32 * 1024 * 1024);
+  completeSourcePack(revision.source_pack, revision.evidence_claims);
   const startPath = path.join(runDirectory, 'start');
   try {
     await stage(runDirectory, 'source_pack', revision.source_pack);

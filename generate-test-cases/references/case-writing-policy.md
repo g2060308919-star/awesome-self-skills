@@ -1,6 +1,12 @@
 # Case Writing Policy
 
-Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls compiler finalization, not whether candidate drafts may be submitted.
+Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls entry into execution closure, not finalization and not whether candidate drafts may be submitted.
+
+A Case is the atomic execution unit. Execution closure may select the whole Case, exclude the whole Case, or pause; it cannot partially execute selected steps, split responsibilities after classification, or generate automation. A distinct executable responsibility must pass through normal evidence, Test Point, Oracle, and Case generation before it can become its own Case.
+
+Keep one independently diagnosable business outcome per Case unless the outcomes are an indivisible transaction with the same setup, action path, and failure meaning. A shared precondition is not enough to merge unrelated assertions. When one failure could leave the tester unable to tell which business rule failed, split the Case before submission.
+
+The compiler rejects a Case whose obligation-closing expectations carry more than one distinct typed outcome signature. Split different expected values, states, events, side effects, observation targets, or business outcomes into separate Case candidates even when their setup or trigger is shared. Auxiliary observations may remain only when they support the same atomic outcome and do not conceal a second formal responsibility.
 
 Confirm the runner requested the schema-validated `case_drafts` stage with `case-drafts.schema.json` before writing. Reject any other stage/schema pairing and never write compiler-derived coverage, verification, or obligations as a fifth Agent artifact.
 
@@ -46,6 +52,14 @@ Never write “works”, “correct”, “normal”, or “successful” as the
 - the accepted evidence or replayable E2 derivation.
 
 An expected business outcome must not come from a boundary technique, generic practice, model consensus, or an observation target alone.
+
+“Same as baseline”, “unchanged from before”, or similar shorthand is not an executable Oracle unless the Case also names the baseline version or state, the exact compared fields, and the expected values or permitted differences. Otherwise keep the obligation Blocked and request the missing baseline material.
+
+Treat an example as a test-data candidate, not as an authoritative boundary or exhaustive enumeration. Label it as an example in the Case. Only a sourced constraint or a legal E2 derivation may establish a boundary, partition, or closed set.
+
+When an assertion is derived or assumed, make that status explicit in the human wording and trace it to its E2 derivation or E1 temporary assumption; never present it as a directly confirmed rule.
+
+Do not submit `value_origin` in `case_drafts`; it is compiler-owned final-delivery metadata derived from each data item's accepted Claim. Set `provenance.type = derivation` only when `provenance.ref` names an accepted `claim_form = derived` Claim; use `evidence` for direct or Decision Record Claims. The compiler rejects a mismatched pair and derives the final label from the Claim form rather than trusting the submitted type. In the final Case, read `value_origin` literally: `requirement` is a directly required value, `source_description` is merely source-described, `example` is illustrative rather than exhaustive, `derived` is a replayable E2 construction, and `temporary_assumption` is valid only under its E1 invalidation condition. Never relabel an example, derived value, or temporary assumption as a confirmed requirement.
 
 ## Prove Testability separately
 

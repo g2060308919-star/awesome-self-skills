@@ -219,15 +219,17 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
     const obligation = obligationById.get(id);
     items.push({
       item_kind: 'formal_test_point', item_id: id,
-      title: String(obligation?.title ?? entry.recovery?.question ?? id),
+      title: String(entry.subject ?? obligation?.title ?? entry.recovery?.question ?? id),
       semantic_status: 'blocked', related_obligation_ids: [id], semantic: entry
     });
   }
-  for (const entry of records(semanticBundle?.coverage?.not_applicable)) {
+  for (const entry of records(semanticBundle?.coverage?.not_applicable).filter(
+    (candidate) => candidate.subject_kind !== 'requirement_fact'
+  )) {
     const id = String(entry.obligation_id ?? '');
     const obligation = obligationById.get(id);
     items.push({
-      item_kind: 'formal_test_point', item_id: id, title: String(obligation?.title ?? id),
+      item_kind: 'formal_test_point', item_id: id, title: String(entry.subject ?? obligation?.title ?? id),
       semantic_status: 'not_applicable', related_obligation_ids: [id], semantic: entry
     });
   }
@@ -265,7 +267,7 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
     });
     else if (item.semantic_status === 'not_applicable') Object.assign(item, {
       execution_disposition: 'do_not_execute', reason_code: 'not_applicable',
-      reason: 'Excluded by supported scope evidence.',
+      reason: String(item.semantic.reason ?? 'Excluded by supported scope evidence.'),
       basis: { origin: 'derived_not_applicable', exclusion_claim_id: String(item.semantic.exclusion_claim_id ?? '') }
     });
     else Object.assign(item, {

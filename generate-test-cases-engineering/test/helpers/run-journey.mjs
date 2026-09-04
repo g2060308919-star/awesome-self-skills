@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
+import { completeSourcePack } from './source-pack.mjs';
 
 export const JOURNEY_NAMES = Object.freeze([
   'all-e3',
@@ -45,9 +47,11 @@ const dimensions = Object.freeze([
   'shared-entity', 'role', 'client', 'interface-event',
   'time', 'concurrency', 'side-effect'
 ]);
-const baseContentDigest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const alternateContentDigest = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-const revisedContentDigest = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
+/** @param {string} value */
+const contentDigest = (value) => createHash('sha256').update(value, 'utf8').digest('hex');
+const baseContentDigest = contentDigest('Frozen journey requirements.');
+const alternateContentDigest = contentDigest('Shipping confirmation is shown.');
+const revisedContentDigest = contentDigest('Payments settle in two days.');
 
 /** @param {string} name @returns {Promise<any>} */
 export async function loadJourneySpec(name) {
@@ -354,16 +358,22 @@ export function revisionFromRules(rules, options = {}) {
     authority: 'owner', content: 'Frozen journey requirements.',
     content_digest: baseContentDigest, scope: '*'
   };
-  const sources = [baseSource, ...(options.extraSources ?? [])];
+  const sources = [baseSource, ...(options.extraSources ?? [])].map((source) => ({
+    ...source, content_digest: contentDigest(source.content)
+  }));
+  const sourceDigestById = new Map(sources.map((source) => [source.source_id, source.content_digest]));
   const locators = rules.map((rule, index) => ({
     locator_id: rule.locatorId,
     source_id: rule.sourceId ?? 'source_prd',
     type: 'text-range',
     text_range: { start: index, end: index + 1 },
-    content_digest: rule.digest ?? baseContentDigest,
+    content_digest: sourceDigestById.get(rule.sourceId ?? 'source_prd') ?? rule.digest ?? baseContentDigest,
     extraction_integrity: 'verified'
   }));
-  locators.push(...(options.extraLocators ?? []));
+  locators.push(...(options.extraLocators ?? []).map((locator) => ({
+    ...locator,
+    content_digest: sourceDigestById.get(locator.source_id) ?? locator.content_digest
+  })));
   const policyRules = [{
     rule_id: 'policy_prd', source_ids: ['source_prd'], scope: '*',
     authority: 'owner', status: 'effective'
@@ -399,29 +409,29 @@ export function revisionFromRules(rules, options = {}) {
     return { obligation_id: id, status: 'case_candidate', case_ids: [`case_${rule.key}`] };
   });
   return {
-    schema_version: '2.0.0',
+    schema_version: '2.1.0',
     source_revision: sourceRevision,
-    compiler_version: '0.2.0',
+    compiler_version: '0.3.0',
     lineage: { source_digest: alternateContentDigest, case_draft_digest: revisedContentDigest },
-    source_pack: {
-      schema_version: '2.0.0', source_revision: sourceRevision,
+    source_pack: completeSourcePack({
+      schema_version: '2.1.0', source_revision: sourceRevision,
       run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: '*',
       sources, locators, source_policy: { rules: policyRules },
       decision_records: decisions, clarification_events: [], execution_events: []
-    },
+    }, { claims }),
     evidence_claims: {
-      schema_version: '2.0.0', source_revision: sourceRevision,
+      schema_version: '2.1.0', source_revision: sourceRevision,
       claims, fact_ledger: facts
     },
     behavior_views: {
-      schema_version: '2.0.0', source_revision: sourceRevision,
+      schema_version: '2.1.0', source_revision: sourceRevision,
       views: rules.map(behaviorView),
       interaction_matrix: interaction.matrix,
       interaction_candidates: interaction.candidates,
       obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
-      schema_version: '2.0.0', source_revision: sourceRevision,
+      schema_version: '2.1.0', source_revision: sourceRevision,
       cases, obligation_dispositions: dispositions, exploratory_candidates: []
     },
     clarification: {
@@ -451,7 +461,7 @@ function notApplicableRevision() {
     extraClaims: [exclusion],
     extraLocators: [{
       locator_id: 'locator_exclusion', source_id: 'source_prd', type: 'text-range',
-      text_range: { start: 100, end: 101 }, content_digest: baseContentDigest,
+      text_range: { start: 0, end: 1 }, content_digest: baseContentDigest,
       extraction_integrity: 'verified'
     }]
   });
@@ -516,7 +526,7 @@ export function addExploratory(input) {
   const next = structuredClone(input);
   next.source_pack.locators.push({
     locator_id: 'locator_latency', source_id: 'source_prd', type: 'text-range',
-    text_range: { start: 200, end: 201 }, content_digest: baseContentDigest,
+    text_range: { start: 0, end: 1 }, content_digest: baseContentDigest,
     extraction_integrity: 'verified'
   });
   next.evidence_claims.claims.push({

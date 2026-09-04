@@ -23,6 +23,8 @@ Try every supplied path, attachment, and inline source. If no requirement conten
 
 If any requirement content is readable, continue. Record partial extraction gaps and uncertain regions instead of asking for every missing input before analysis. Never fill a product fact from generic domain knowledge.
 
+Freeze the requested product, module, role, client, version, region, and environment scope before extracting facts. Do not broaden or narrow that scope merely because later analysis discovers more material. If the user's original request did not state a dimension, record it as unspecified rather than choosing one; a later material scope change requires `NEW_RUN_REQUIRED`.
+
 ## Run the private workflow
 
 Resolve `<skill-dir>` to the directory containing this file. Freeze the run identity as a canonical absolute path inside a persistent private directory owned by the current task. Never place a run in the Skill installation directory or an OS temporary directory. A spelling that contains `..` and resolves to the same canonical path identifies the same canonical run.
@@ -76,6 +78,8 @@ Use these fixed staging names:
 
 Any other requested stage is `PIPELINE_PROTOCOL_ERROR`; write no artifact and never invent a process surface.
 
+For `source_pack`, recompute each Source SHA-256 and add one exhaustive `source_reviews` entry whose ordered spans account for every non-whitespace part of that Source as normative, non-normative, or uncertain. For `case_drafts`, keep distinct business outcomes in distinct Cases and never submit compiler-owned `value_origin` or final IDs. Follow the loaded evidence and Case-writing policies for the exact semantic rules.
+
 ### Handle `need_revision`
 
 Group diagnostics by normalized stage, code, path, and root cause. Repair only the returned artifact and keep its `source_revision` unchanged. Re-run the compiler after each repair.
@@ -88,7 +92,7 @@ Reset the repair counter only when the stage or normalized root cause materially
 
 Read the closure policy and branch on the closed `purpose` instead of treating all questions as blockers:
 
-- `semantic_clarification`: present every returned blocker as one merged, risk-ordered set. Ask once per stable root, show scope and risk counts, and offer only the returned options.
+- `semantic_clarification`: present every returned blocker as one merged, risk-ordered set using the business-readable rules in the clarification policy. Ask once per stable root, label scope and each risk count, and offer only the returned options. Keep compiler identifiers in memory for the append; do not make the user interpret them.
 - `execution_closure`: present every pending Case, formal Test Point, and Exploratory item by readable title. Record exactly one explicit Execute, DoNotExecute, or pause result for each answered item. Only a Grounded Case may be Execute. Preserve unanswered items as pending.
 - `final_confirmation`: show the complete plan the compiler returned, including every item, disposition, and DoNotExecute reason. Append `confirm_execution_plan` only when the answer binds that exact prompt, source revision, plan digest, and plan-change head. A request to modify the plan appends a disposition event instead and requires a newly rendered confirmation page.
 
@@ -98,7 +102,7 @@ Apply the exact semantic-answer rules in `references/clarification-policy.md` an
 
 ### Handle `finished`
 
-Return the real `markdown_path` and canonical `bundle_path`, source revision, bundle/plan digest, separate Case/Test Point/Exploratory counts, and the short modification hint. State that the confirmed `runner_case_ids` contains only Grounded + Execute Cases and that this Skill does not automatically start E2E tests. Do not ask for another confirmation or repeat the full item list.
+Return the real `markdown_path` and canonical `bundle_path`, source revision, bundle/plan digest, separate Case/Test Point/Exploratory counts, and the short modification hint. Lead with a business-readable summary and keep internal IDs and digests only in an audit section or behind the file links. Describe coverage as declared-scope accounting, not complete product-behavior coverage. State that the confirmed `runner_case_ids` contains only Grounded + Execute Cases, that the Markdown worksheet is blank until a downstream operator records results, and that this Skill does not automatically start E2E tests. Do not ask for another confirmation or repeat the full item list.
 
 Never edit final JSON, rewrite Markdown, add a Case, improve a classification, or recompute coverage after `finished`. If the user later asks to supplement a rule, reopen an issue, reanalyze a locator, or change a disposition, use the bound post-ready preview flow above. Original source or material scope changes require `NEW_RUN_REQUIRED`.
 

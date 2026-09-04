@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { compile as compileFlow } from '../../src/obligations/flow.mjs';
 import { registerObligationStrategy } from '../../src/obligations/registry.mjs';
@@ -53,7 +54,7 @@ function evidenceGraphFor(artifact) {
 function acceptedFlowEvidence(artifact) {
   const view = artifact.views[0];
   const sourcePack = {
-    schema_version: '2.0.0', source_revision: artifact.source_revision,
+    schema_version: '2.1.0', source_revision: artifact.source_revision,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_flow', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
@@ -87,8 +88,9 @@ function acceptedFlowEvidence(artifact) {
     });
   }
   const evidenceClaims = {
-    schema_version: '2.0.0', source_revision: artifact.source_revision, claims, fact_ledger: []
+    schema_version: '2.1.0', source_revision: artifact.source_revision, claims, fact_ledger: []
   };
+  completeSourcePack(sourcePack, evidenceClaims);
   assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
   assert.deepEqual(validateUniqueStableIds(sourcePack), []);
   assert.deepEqual(validateAgainstSchema(evidenceClaims, evidenceClaimsSchema), []);
@@ -212,7 +214,7 @@ test('flow obligations hand-count every explicit edge, terminal, sourced excepti
   assert.equal(actual.length, 9);
   assert.deepEqual(actual, expectedFlowSeeds);
   const obligationsArtifact = {
-    schema_version: '2.0.0', source_revision: 4,
+    schema_version: '2.1.0', source_revision: 4,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

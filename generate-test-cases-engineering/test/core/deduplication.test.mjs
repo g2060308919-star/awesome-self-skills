@@ -42,7 +42,7 @@ function fixtureClassificationContext(cases, extraClaims = []) {
     },
     obligations,
     caseDrafts: {
-      schema_version: '2.0.0', source_revision: coverageFixture.source_revision,
+      schema_version: '2.1.0', source_revision: coverageFixture.source_revision,
       cases,
       obligation_dispositions: [{
         obligation_id: 'obligation_grounded', status: 'case_candidate',
@@ -283,7 +283,9 @@ test('same-signature Cases never silently discard single-valued evidence or prov
       (draft, claimId) => { draft.cleanup.no_cleanup_evidence_ref = claimId; }]
   ];
   for (const [name, claimId, keepExisting, mutate] of fields) await t.test(name, () => {
-    const alternate = acceptedClaim(claimId, 'E3', { kind: 'description' });
+    const alternate = name === 'data provenance'
+      ? acceptedClaim(claimId, 'E2', { parent_claim_ids: ['claim_grounded'] })
+      : acceptedClaim(claimId, 'E3', { kind: 'description' });
     const first = structuredClone(coverageFixture.classification.grounded[0]);
     const second = structuredClone(first);
     second.case_id = `case_${claimId}`;

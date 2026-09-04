@@ -1,6 +1,6 @@
 {
   "source_pack": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 0,
     "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
     "run_scope": "checkout",
@@ -12,7 +12,7 @@
         "status": "effective",
         "authority": "owner",
         "content": "A ready cart can be submitted and accepted.",
-        "content_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
         "scope": "checkout"
       }
     ],
@@ -22,11 +22,26 @@
         "source_id": "source_prd",
         "type": "text-range",
         "text_range": { "start": 0, "end": 43 },
-        "content_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
         "extraction_integrity": "verified"
       }
-    ],
-    "source_policy": {
+  ],
+  "source_reviews": [
+    {
+      "source_id": "source_prd",
+      "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
+      "spans": [
+        {
+          "span_id": "review_source_prd_001",
+          "start": 0,
+          "end": 43,
+          "classification": "normative",
+          "rationale": "Covered by the direct checkout Claim."
+        }
+      ]
+    }
+  ],
+  "source_policy": {
       "rules": [
         {
           "rule_id": "policy_prd",
@@ -41,7 +56,7 @@
     "clarification_events": [], "execution_events": []
   },
   "evidence_claims": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 0,
     "claims": [
       {
@@ -65,7 +80,7 @@
     ]
   },
   "behavior_views": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 0,
     "views": [
       {
@@ -100,7 +115,7 @@
     "interaction_candidates": []
   },
   "case_drafts": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 0,
     "cases": [
       {

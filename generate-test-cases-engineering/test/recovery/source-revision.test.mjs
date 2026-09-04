@@ -7,11 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { advanceStrict } from '../../src/advance-strict.mjs';
 import { stableId } from '../../src/canonical.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixturePath = path.join(repositoryRoot, 'test/fixtures/recovery/grounded-revision.json');
-const digestB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-const digestC = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
 
 /** @returns {Promise<any>} */
 async function revisionFixture() {
@@ -53,11 +52,11 @@ function decision(sequence = 1) {
   };
 }
 
-/** @param {string} kind @param {string} sourceId @param {string} contentDigest */
-function additionalSource(kind, sourceId, contentDigest) {
+/** @param {string} kind @param {string} sourceId */
+function additionalSource(kind, sourceId) {
   return {
     source_id: sourceId, kind, version: '1', status: 'effective', authority: 'owner',
-    content: `${kind} content`, content_digest: contentDigest, scope: 'checkout'
+    content: `${kind} content`, content_digest: '0'.repeat(64), scope: 'checkout'
   };
 }
 
@@ -91,7 +90,7 @@ function makeAnswerableConflict(revision) {
   revision.source_pack.sources.push({
     source_id: 'source_old', kind: 'formal-rule', version: '0', status: 'effective',
     authority: 'owner', content: 'checkout rejected',
-    content_digest: 'b'.repeat(64), scope: 'checkout'
+    content_digest: '8e326c5917f32d5b88099c533c75f37410af7e8dc896faaca1e5b57dffd77eff', scope: 'checkout'
   });
   revision.source_pack.source_policy.rules.push({
     rule_id: 'policy_old', source_ids: ['source_old'], scope: 'checkout',
@@ -117,6 +116,7 @@ function makeAnswerableConflict(revision) {
     claim_id: 'claim_checkout',
     invalidation_condition: 'A final rule replaces this temporary decision.'
   };
+  completeSourcePack(revision.source_pack, revision.evidence_claims);
   return revision;
 }
 
@@ -167,26 +167,26 @@ const sourceMutations = [
   {
     name: 'primary PRD digest',
     seed(pack) {},
-    mutate(pack) { pack.sources[0].content_digest = digestB; }
+    mutate(pack) { pack.sources[0].content += ' changed'; }
   },
   {
     name: 'acceptance criteria digest',
-    seed(pack) { pack.sources.push(additionalSource('acceptance-criteria', 'source_acceptance', digestB)); },
-    mutate(pack) { pack.sources[1].content_digest = digestC; }
+    seed(pack) { pack.sources.push(additionalSource('acceptance-criteria', 'source_acceptance')); },
+    mutate(pack) { pack.sources[1].content += ' changed'; }
   },
   {
     name: 'interface contract digest',
-    seed(pack) { pack.sources.push(additionalSource('interface-contract', 'source_contract', digestB)); },
-    mutate(pack) { pack.sources[1].content_digest = digestC; }
+    seed(pack) { pack.sources.push(additionalSource('interface-contract', 'source_contract')); },
+    mutate(pack) { pack.sources[1].content += ' changed'; }
   },
   {
     name: 'added supplementary source',
     seed(pack) {},
-    mutate(pack) { pack.sources.push(additionalSource('review-record', 'source_review', digestB)); }
+    mutate(pack) { pack.sources.push(additionalSource('review-record', 'source_review')); }
   },
   {
     name: 'removed supplementary source',
-    seed(pack) { pack.sources.push(additionalSource('review-record', 'source_review', digestB)); },
+    seed(pack) { pack.sources.push(additionalSource('review-record', 'source_review')); },
     mutate(pack) { pack.sources.pop(); }
   }
 ];
@@ -195,12 +195,14 @@ for (const mutation of sourceMutations) {
     const runDirectory = await temporaryRun();
     const fixture = await revisionFixture();
     mutation.seed(fixture.source_pack);
+    completeSourcePack(fixture.source_pack, fixture.evidence_claims);
     try {
       await acceptInitialSource(runDirectory, fixture.source_pack);
       const next = structuredClone(fixture.source_pack);
       next.source_revision = 1;
       next.decision_records.push(decision());
       mutation.mutate(next);
+      completeSourcePack(next, fixture.evidence_claims);
       await stageSource(runDirectory, next);
       const first = /** @type {any} */ (await advanceStrict(runDirectory));
       const second = /** @type {any} */ (await advanceStrict(runDirectory));

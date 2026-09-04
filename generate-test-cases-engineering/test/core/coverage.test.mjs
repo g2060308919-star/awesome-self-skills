@@ -177,10 +177,22 @@ test('coverage builds four independent ledgers with hand-counted denominators', 
     status: 'benchmark_only',
     limits: ['Expert recall requires hidden benchmark labels.']
   });
-  assert.deepEqual(bundle.coverage.not_applicable, [{
-    obligation_id: 'obligation_na', exclusion_claim_id: 'claim_exclusion',
-    scope: 'checkout/legacy', support_review: 'supported'
-  }]);
+  assert.deepEqual(bundle.coverage.not_applicable, [
+    {
+      subject_kind: 'formal_test_point',
+      obligation_id: 'obligation_na', exclusion_claim_id: 'claim_exclusion',
+      scope: 'checkout/legacy', support_review: 'supported',
+      subject: 'Legacy checkout is represented in the formal model.',
+      reason: 'Legacy checkout is excluded from this delivery scope.'
+    },
+    {
+      subject_kind: 'requirement_fact', fact_id: 'fact_na',
+      exclusion_claim_id: 'claim_exclusion', scope: 'checkout/legacy',
+      support_review: 'supported',
+      subject: 'Legacy checkout is represented in the formal model.',
+      reason: 'Legacy checkout is excluded from this delivery scope.'
+    }
+  ]);
   assert.equal(bundle.exploratory.length, 1);
   assert.equal(bundle.coverage.formal.total, 3, 'NotApplicable remains declared formal inventory while Exploratory stays outside');
   assert.equal(Object.hasOwn(bundle, 'execution_plan'), false, 'Task 10 output remains pre-execution-closure');
@@ -188,6 +200,25 @@ test('coverage builds four independent ledgers with hand-counted denominators', 
     (item) => item.path === '/execution_plan' && item.code === 'REQUIRED_FIELD_MISSING'
   ), true, 'only the ready core projection is a final v2 test bundle');
   assert.equal(canonicalStringify(bundle), canonicalStringify(buildBundle(context())));
+});
+
+test('compiler projects explicit test-data origins without making them Agent-writable', () => {
+  const derivedBundle = buildBundle(context());
+  assert.equal(derivedBundle.grounded[0].data[0].value_origin, 'derived');
+
+  const exampleInput = context();
+  const exampleClaimIndex = exampleInput.evidence_claims.claims.findIndex(
+    (/** @type {any} */ item) => item.claim_id === 'claim_data'
+  );
+  exampleInput.evidence_claims.claims[exampleClaimIndex] = {
+    claim_id: 'claim_data', claim_form: 'direct', level: 'E3', kind: 'example',
+    scope: 'checkout', value: '100.00', source_locator_ids: ['locator_checkout'], source_id: 'source_prd'
+  };
+  exampleInput.classification.grounded[0].data[0].provenance.type = 'evidence';
+  const exampleBundle = buildBundle(exampleInput);
+  assert.equal(exampleBundle.grounded[0].data[0].value_origin, 'example');
+
+  assert.equal(Object.hasOwn(context().classification.grounded[0].data[0], 'value_origin'), false);
 });
 
 test('a routed resource gap keeps requirement coverage blocked beside an executable sibling', () => {
@@ -867,8 +898,11 @@ test('NotApplicable accepts the real Task 8 shape where a normative fact routes 
 
   const bundle = buildBundle(input);
   assert.deepEqual(bundle.coverage.not_applicable, [{
+    subject_kind: 'formal_test_point',
     obligation_id: 'obligation_na', exclusion_claim_id: 'claim_exclusion',
-    scope: 'checkout/legacy', support_review: 'supported'
+    scope: 'checkout/legacy', support_review: 'supported',
+    subject: 'Legacy checkout is represented in the formal model.',
+    reason: 'Legacy checkout is excluded from this delivery scope.'
   }]);
   assert.deepEqual(bundle.coverage.requirements.entries.find((/** @type {any} */ item) => item.fact_id === 'fact_na'), {
     fact_id: 'fact_na', status: 'not_applicable'
@@ -892,7 +926,13 @@ test('terminal NotApplicable fact routes form a requirement-only ledger independ
   terminalOnly.clarification.semantic_snapshot.delivery_sections.coverage.formal_denominator = 2;
   const terminalBundle = buildBundle(terminalOnly);
   assert.equal(terminalBundle.coverage.formal.total, 2);
-  assert.deepEqual(terminalBundle.coverage.not_applicable, []);
+  assert.deepEqual(terminalBundle.coverage.not_applicable, [{
+    subject_kind: 'requirement_fact', fact_id: 'fact_na',
+    exclusion_claim_id: 'claim_exclusion', scope: 'checkout/legacy',
+    support_review: 'supported',
+    subject: 'Legacy checkout is represented in the formal model.',
+    reason: 'Legacy checkout is excluded from this delivery scope.'
+  }]);
   assert.deepEqual(terminalBundle.coverage.requirements.entries.find(
     (/** @type {any} */ item) => item.fact_id === 'fact_na'
   ), { fact_id: 'fact_na', status: 'not_applicable' });
@@ -1806,7 +1846,7 @@ test('NotApplicable route reconciliation is indexed instead of rescanning every 
         }
         return Reflect.apply(nativeFilter, this, [callback, thisArg]);
       };
-      assert.equal(buildBundle(input).coverage.not_applicable.length, size);
+      assert.equal(buildBundle(input).coverage.not_applicable.length, size * 2);
     } finally {
       Array.prototype.filter = nativeFilter;
     }

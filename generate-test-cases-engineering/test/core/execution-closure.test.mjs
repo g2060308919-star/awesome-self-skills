@@ -22,7 +22,7 @@ function caseEntry(status = 'grounded') {
 function base(status = 'grounded') {
   return {
     semanticBundle: {
-      schema_version: '2.0.0', source_revision: 0,
+      schema_version: '2.1.0', source_revision: 0,
       grounded: status === 'grounded' ? [caseEntry()] : [],
       conditional: status === 'conditional' ? [caseEntry('conditional')] : [],
       blocked: status === 'blocked' ? [{
@@ -38,7 +38,7 @@ function base(status = 'grounded') {
     obligations: [{ obligation_id: 'tp_a', title: 'Save', scope: 'checkout', risk: 'high' }],
     evidenceClaims: { claims: [{ claim_id: 'claim_a', level: status === 'conditional' ? 'E1' : 'E3', kind: 'requirement', scope: 'checkout', value: 'Save.' }] },
     sourcePack: {
-      schema_version: '2.0.0', source_revision: 0, run_instance_id: runId,
+      schema_version: '2.1.0', source_revision: 0, run_instance_id: runId,
       run_scope: 'checkout', sources: [{ source_id: 'source_a', content_digest: runDigest }],
       decision_records: [], clarification_events: [], execution_events: []
     },

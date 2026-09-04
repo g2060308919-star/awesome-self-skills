@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest } from './canonical.mjs';
 import { evaluateRevision } from './core.mjs';
-import { scopeContains } from './decision-record.mjs';
+import { scopeContains, validateSourceIntegrity } from './decision-record.mjs';
 import { validateEvidenceGraph } from './evidence.mjs';
 import {
   compileObligations, ObligationCompilationError
@@ -142,11 +142,11 @@ function migrationRequired() {
     status: 'fatal', diagnostics: [
       {
         category: 'reference', code: 'RUN_MIGRATION_REQUIRED',
-        message: 'Schema v1 runs cannot resume under the v2 execution-closure protocol.'
+        message: 'Older-schema runs cannot resume under the v2.1 protocol.'
       },
       {
         category: 'traceability', code: 'NEW_RUN_REQUIRED',
-        message: 'Create a new v2 run; the prior run remains preserved and read-only.'
+        message: 'Create a new v2.1 run; the prior run remains preserved and read-only.'
       }
     ]
   };
@@ -490,8 +490,8 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests, r
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests }),
     source_revision: sourceRevision, stage,
-    compiler_version: embeddedCompilerVersion ?? '0.2.0',
-    schema_version: embeddedSchemaVersion ?? '2.0.0',
+    compiler_version: embeddedCompilerVersion ?? '0.3.0',
+    schema_version: embeddedSchemaVersion ?? '2.1.0',
     run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests,
     audit_lineage: structuredClone(acceptedDigests),
@@ -692,7 +692,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
     ));
     const sourcePack = /** @type {Record<string, unknown>} */ (sourceArtifact.value);
-    if (sourcePack.schema_version !== '2.0.0') return migrationRequired();
+    if (sourcePack.schema_version !== '2.1.0') return migrationRequired();
     if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack belongs to a different run instance.'
     );
@@ -708,6 +708,9 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
     );
     if (sourceDiagnostics.length > 0) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack failed deterministic schema validation.'
+    );
+    if (validateSourceIntegrity(sourcePack).length > 0) return fatalReply(
+      'RUN_INTEGRITY_ERROR', 'Accepted Source Pack failed source-content integrity validation.'
     );
     if (sourceRevision === 0 && initialClarificationHistoryDiagnostics(sourcePack).length > 0) {
       return fatalReply(
@@ -942,7 +945,8 @@ async function advanceStrictExclusive(runDirectory) {
       if (candidateRevision !== expectedRevision) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'Source revisions must begin at r000 and advance by exactly one.'
       );
-      if (candidateRecord?.schema_version === '1.0.0') return migrationRequired();
+      if (typeof candidateRecord?.schema_version === 'string'
+        && candidateRecord.schema_version !== '2.1.0') return migrationRequired();
       const diagnostics = sourceCandidate.parseDiagnostics.length > 0
         ? sourceCandidate.parseDiagnostics
         : stableDiagnostics(validateAgainstSchema(
@@ -973,6 +977,11 @@ async function advanceStrictExclusive(runDirectory) {
       if (identityDiagnostics.length > 0) return revisionReply(
         runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
         identityDiagnostics
+      );
+      const sourceIntegrityDiagnostics = validateSourceIntegrity(sourceCandidate.value);
+      if (sourceIntegrityDiagnostics.length > 0) return revisionReply(
+        runDirectory, 'source_pack', candidateRevision, sourceCandidate.value,
+        sourceIntegrityDiagnostics
       );
       const initialControlDiagnostics = candidateRevision === 0 && candidateRecord
         ? initialClarificationHistoryDiagnostics(candidateRecord) : [];
@@ -1149,7 +1158,9 @@ async function advanceStrictExclusive(runDirectory) {
       sourcePack, registry.schemas.get(STAGE_SCHEMA.source_pack)
     );
     const acceptedSourcePolicy = resolveSourcePolicy(sourcePack);
-    if (acceptedSourceDiagnostics.length > 0 || acceptedSourcePolicy.diagnostics.length > 0) return fatalReply(
+    const acceptedSourceIntegrity = validateSourceIntegrity(sourcePack);
+    if (acceptedSourceDiagnostics.length > 0 || acceptedSourceIntegrity.length > 0
+      || acceptedSourcePolicy.diagnostics.length > 0) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack failed deterministic integrity validation.'
     );
     /** @type {Record<string, unknown>} */

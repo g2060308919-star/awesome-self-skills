@@ -392,6 +392,23 @@ test('optional Case source claims are restricted to the linked formal evidence c
   assert.match(result.blocked[0].reason, /CASE_SOURCE_CLAIM_OUTSIDE_CLOSURE/u);
 });
 
+test('Case data provenance type must agree with the accepted Claim form', () => {
+  const derivedAsEvidence = classificationContext();
+  derivedAsEvidence.caseDrafts.cases[0].data[0].provenance.type = 'evidence';
+
+  const directAsDerivation = classificationContext();
+  const directClaim = acceptedClaim('claim_data', 'E3', {
+    kind: 'requirement', value: '100.00'
+  });
+  directAsDerivation.evidence.claimsById.set(directClaim.claim_id, directClaim);
+
+  for (const candidate of [derivedAsEvidence, directAsDerivation]) {
+    const result = classifyCaseDrafts(candidate);
+    assert.equal(result.grounded.length + result.conditional.length, 0);
+    assert.match(result.blocked[0].reason, /CASE_DATA_PROVENANCE_TYPE_MISMATCH/u);
+  }
+});
+
 test('Conditional fails closed when the singleton assumption field would hide multiple downgrade roots', () => {
   const context = classificationContext({
     claims: [
@@ -513,6 +530,43 @@ test('each linked obligation maps every required Oracle to a concrete expectatio
   const complete = classifyCaseDrafts(makeContext(completeDraft));
   assert.equal(complete.grounded.length, 1);
   assert.deepEqual(complete.diagnostics, []);
+});
+
+test('one Case cannot combine independently diagnosable observed outcomes', () => {
+  const secondObligationId = 'obligation_2222222222222222';
+  const secondObligation = baseObligation({
+    obligation_id: secondObligationId,
+    view_element_refs: ['view_checkout#edge_second']
+  });
+  const draft = baseCase({ obligation_ids: [IDS.obligation, secondObligationId] });
+  draft.steps[0].expectations.push({
+    ...clone(draft.steps[0].expectations[0]),
+    expectation_id: 'expectation_audit_result',
+    observation_target: 'audit-result',
+    oracle: { type: 'state', expected_state: 'audited', comparison: 'equals' },
+    closes_obligation_id: secondObligationId
+  });
+  draft.testability_profile.observers.push({
+    observer: 'tester', observation_target: 'audit-result', status: 'verified',
+    provenance_ref: 'claim_oracle'
+  });
+  refreshExecutionSignature(draft);
+  const context = classificationContext({
+    obligations: [baseObligation(), secondObligation],
+    cases: [draft],
+    dispositions: [
+      { obligation_id: IDS.obligation, status: 'case_candidate', case_ids: [draft.case_id] },
+      { obligation_id: secondObligationId, status: 'case_candidate', case_ids: [draft.case_id] }
+    ]
+  });
+  context.obligations.fact_routes[0].obligation_ids.push(secondObligationId);
+
+  const result = classifyCaseDrafts(context);
+
+  assert.equal(result.grounded.length + result.conditional.length, 0);
+  assert.equal(result.diagnostics.some(
+    (item) => item.code === 'CASE_OUTCOME_NOT_ATOMIC'
+  ), true);
 });
 
 test('distinct obligations require a complete one-to-one matching to distinct concrete expectations', () => {

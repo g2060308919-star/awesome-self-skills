@@ -8,6 +8,7 @@ import { advanceStrict } from '../../src/advance-strict.mjs';
 import { stableId } from '../../src/canonical.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { buildJourney } from '../helpers/run-journey.mjs';
+import { completeSourcePack } from '../helpers/source-pack.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixturePath = path.join(
@@ -77,7 +78,7 @@ function makeAnswerableConflict(revision) {
   revision.source_pack.sources.push({
     source_id: 'source_old', kind: 'formal-rule', version: '0', status: 'effective',
     authority: 'owner', content: 'checkout rejected',
-    content_digest: 'b'.repeat(64), scope: 'checkout'
+    content_digest: '8e326c5917f32d5b88099c533c75f37410af7e8dc896faaca1e5b57dffd77eff', scope: 'checkout'
   });
   revision.source_pack.source_policy.rules.push({
     rule_id: 'policy_old', source_ids: ['source_old'], scope: 'checkout',
@@ -103,6 +104,7 @@ function makeAnswerableConflict(revision) {
     claim_id: 'claim_checkout',
     invalidation_condition: 'A final rule replaces this temporary decision.'
   };
+  completeSourcePack(revision.source_pack, revision.evidence_claims);
   return revision;
 }
 

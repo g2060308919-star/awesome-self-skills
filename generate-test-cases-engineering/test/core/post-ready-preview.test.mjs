@@ -22,7 +22,7 @@ function initial() {
 }
 
 function openRequest(state = initial()) {
-  const control = nextPreviewControl(ready, state, '0.2.0');
+  const control = nextPreviewControl(ready, state, '0.3.0');
   return {
     operation: 'open_preview', request_instance_id: control.next_request_instance_id,
     expected_preview_epoch: control.expected_preview_epoch,
@@ -43,7 +43,7 @@ function openRequest(state = initial()) {
 
 test('open preview creates a bound post-ready presentation without changing ready state', () => {
   const request = openRequest();
-  const result = processPreviewRequest({ request, state: initial(), ready, compilerVersion: '0.2.0' });
+  const result = processPreviewRequest({ request, state: initial(), ready, compilerVersion: '0.3.0' });
   assert.equal(result.kind, 'preview');
   assert.equal(result.state.preview_epoch, 1);
   assert.equal(result.state.preview_state, 'active');
@@ -56,21 +56,21 @@ test('open preview creates a bound post-ready presentation without changing read
 
 test('exact crash replay returns cached result but same request id with changed content is rejected', () => {
   const request = openRequest();
-  const first = processPreviewRequest({ request, state: initial(), ready, compilerVersion: '0.2.0' });
-  const replay = processPreviewRequest({ request, state: first.state, ready, compilerVersion: '0.2.0' });
+  const first = processPreviewRequest({ request, state: initial(), ready, compilerVersion: '0.3.0' });
+  const replay = processPreviewRequest({ request, state: first.state, ready, compilerVersion: '0.3.0' });
   assert.equal(replay.kind, 'preview');
   assert.deepEqual(replay.presentation, first.presentation);
   const changed = structuredClone(request);
   changed.verbatim_user_request = 'Changed replay';
-  const rejected = processPreviewRequest({ request: changed, state: first.state, ready, compilerVersion: '0.2.0' });
+  const rejected = processPreviewRequest({ request: changed, state: first.state, ready, compilerVersion: '0.3.0' });
   assert.equal(rejected.kind, 'rejected');
   assert.equal(rejected.diagnostics[0].code, 'PREVIEW_REQUEST_REPLAY_INVALID');
 });
 
 test('replace invalidates the old presentation and cancel cannot be replayed to revive it', () => {
   const firstRequest = openRequest();
-  const first = processPreviewRequest({ request: firstRequest, state: initial(), ready, compilerVersion: '0.2.0' });
-  const replaceControl = nextPreviewControl(ready, first.state, '0.2.0');
+  const first = processPreviewRequest({ request: firstRequest, state: initial(), ready, compilerVersion: '0.3.0' });
+  const replaceControl = nextPreviewControl(ready, first.state, '0.3.0');
   const replacementRequest = {
     ...openRequest(first.state), operation: 'replace_preview',
     request_instance_id: replaceControl.next_request_instance_id,
@@ -78,15 +78,15 @@ test('replace invalidates the old presentation and cancel cannot be replayed to 
     replaces_presentation_id: first.presentation.presentation_id,
     verbatim_user_request: 'Actually keep it in the run.'
   };
-  const replacement = processPreviewRequest({ request: replacementRequest, state: first.state, ready, compilerVersion: '0.2.0' });
+  const replacement = processPreviewRequest({ request: replacementRequest, state: first.state, ready, compilerVersion: '0.3.0' });
   assert.equal(replacement.kind, 'preview');
   assert.notEqual(replacement.presentation.presentation_id, first.presentation.presentation_id);
   const replacedReplay = processPreviewRequest({
-    request: firstRequest, state: replacement.state, ready, compilerVersion: '0.2.0'
+    request: firstRequest, state: replacement.state, ready, compilerVersion: '0.3.0'
   });
   assert.equal(replacedReplay.kind, 'rejected');
 
-  const cancelControl = nextPreviewControl(ready, replacement.state, '0.2.0');
+  const cancelControl = nextPreviewControl(ready, replacement.state, '0.3.0');
   const cancel = {
     operation: 'cancel_preview', request_instance_id: cancelControl.next_request_instance_id,
     expected_preview_epoch: cancelControl.expected_preview_epoch,
@@ -95,16 +95,16 @@ test('replace invalidates the old presentation and cancel cannot be replayed to 
     bound_confirmation_semantic_digest: ready.confirmation_semantic_digest,
     cancels_presentation_id: replacement.presentation.presentation_id
   };
-  const closed = processPreviewRequest({ request: cancel, state: replacement.state, ready, compilerVersion: '0.2.0' });
+  const closed = processPreviewRequest({ request: cancel, state: replacement.state, ready, compilerVersion: '0.3.0' });
   assert.equal(closed.kind, 'cancelled');
   assert.equal(closed.state.preview_state, 'closed');
   assert.equal(closed.state.active_preview_presentation, null);
-  const staleReplay = processPreviewRequest({ request: firstRequest, state: closed.state, ready, compilerVersion: '0.2.0' });
+  const staleReplay = processPreviewRequest({ request: firstRequest, state: closed.state, ready, compilerVersion: '0.3.0' });
   assert.equal(staleReplay.kind, 'rejected');
 
   const reopenedRequest = openRequest(closed.state);
   const reopened = processPreviewRequest({
-    request: reopenedRequest, state: closed.state, ready, compilerVersion: '0.2.0'
+    request: reopenedRequest, state: closed.state, ready, compilerVersion: '0.3.0'
   });
   assert.equal(reopened.kind, 'preview');
   assert.equal(reopened.state.preview_epoch, closed.state.preview_epoch + 1);
@@ -113,7 +113,7 @@ test('replace invalidates the old presentation and cancel cannot be replayed to 
 test('candidate semantic digest and all ready bindings are fail-closed', () => {
   const request = openRequest();
   request.candidate_item_refs[0].item_semantic_digest = digest('wrong');
-  const result = processPreviewRequest({ request, state: initial(), ready, compilerVersion: '0.2.0' });
+  const result = processPreviewRequest({ request, state: initial(), ready, compilerVersion: '0.3.0' });
   assert.equal(result.kind, 'rejected');
   assert.equal(result.diagnostics[0].code, 'PREVIEW_BINDING_INVALID');
   assert.deepEqual(result.state, initial());

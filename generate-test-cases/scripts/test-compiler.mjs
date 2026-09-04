@@ -353,7 +353,7 @@ var behavior_views_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
   properties: {
-    schema_version: { const: "1.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     views: { type: "array", items: { type: "object", required: ["view_id", "type", "scope", "source_claim_ids", "elements", "relations"], properties: {
       view_id: { type: "string", minLength: 1 },
@@ -418,7 +418,7 @@ var case_drafts_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
   properties: {
-    schema_version: { const: "1.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     cases: {
       type: "array",
@@ -480,7 +480,7 @@ var evidence_claims_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "claims", "fact_ledger"],
   properties: {
-    schema_version: { const: "1.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     claims: {
       type: "array",
@@ -607,10 +607,11 @@ var source_pack_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "source-pack.schema.json",
   type: "object",
-  required: ["schema_version", "source_revision", "run_scope", "sources", "locators", "source_policy", "decision_records", "clarification_events"],
+  required: ["schema_version", "source_revision", "run_instance_id", "run_scope", "sources", "locators", "source_reviews", "source_policy", "decision_records", "clarification_events", "execution_events"],
   properties: {
-    schema_version: { const: "1.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
+    run_instance_id: { type: "string", pattern: "^RUN-[0-9a-fA-F-]{36}$" },
     run_scope: { type: "string", minLength: 1 },
     sources: { type: "array", items: { type: "object", required: ["source_id", "kind", "version", "status", "authority", "content", "content_digest"], properties: { source_id: { type: "string", minLength: 1 }, kind: { enum: ["prd", "acceptance-criteria", "interaction-spec", "interface-contract", "formal-rule", "review-record", "historical-defect", "production-behavior", "decision-record"] }, version: { type: "string", minLength: 1 }, status: { enum: ["draft", "approved", "effective", "superseded", "reference"] }, authority: { type: "string", minLength: 1 }, title: { type: "string" }, content: { type: "string" }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, scope: { type: "string" } }, additionalProperties: false } },
     locators: { type: "array", items: { oneOf: [
@@ -618,14 +619,28 @@ var source_pack_schema_default = {
       { type: "object", required: ["locator_id", "source_id", "type", "table_cell", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "table-cell" }, table_cell: { type: "object", required: ["sheet", "cell"], properties: { sheet: { type: "string", minLength: 1 }, cell: { type: "string", minLength: 1 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false },
       { type: "object", required: ["locator_id", "source_id", "type", "page_region", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "page-region" }, page_region: { type: "object", required: ["page", "region"], properties: { page: { type: "integer", minimum: 1 }, region: { type: "string", minLength: 1 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false }
     ] } },
+    source_reviews: { type: "array", items: { type: "object", required: ["source_id", "content_digest", "spans"], properties: { source_id: { type: "string", minLength: 1 }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, spans: { type: "array", items: { type: "object", required: ["span_id", "start", "end", "classification", "rationale"], properties: { span_id: { type: "string", minLength: 1 }, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 }, classification: { enum: ["normative", "non_normative", "uncertain"] }, rationale: { type: "string", minLength: 1, pattern: "\\S" } }, additionalProperties: false } } }, additionalProperties: false } },
     source_policy: { type: "object", required: ["rules"], properties: { rules: { type: "array", items: { type: "object", required: ["rule_id", "source_ids", "scope", "authority", "status"], properties: { rule_id: { type: "string", minLength: 1 }, source_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, supersedes: { type: "array", items: { type: "string" }, uniqueItems: true }, scope: { type: "string", minLength: 1 }, authority: { type: "string", minLength: 1 }, status: { enum: ["effective", "superseded", "reference"] } }, additionalProperties: false } } }, additionalProperties: false },
-    decision_records: { type: "array", items: { type: "object", required: ["decision_id", "question_id", "root_issue_ids", "affected_obligation_ids", "clarification_event_seq", "confirmer", "confirmed_at", "question", "answer", "disposition", "authority_scope", "effective_scope", "evidence_ref", "evidence_level"], properties: { decision_id: { type: "string", minLength: 1 }, question_id: { type: "string", minLength: 1 }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, affected_obligation_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, clarification_event_seq: { type: "integer", minimum: 1 }, confirmer: { type: "string", minLength: 1 }, confirmed_at: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 }, answer: { type: "string" }, disposition: { enum: ["final", "temporary", "unknown", "deferred"] }, authority_scope: { type: "string", minLength: 1 }, effective_scope: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, evidence_level: { enum: ["E1", "E3"] } }, additionalProperties: false } },
-    clarification_events: { type: "array", items: { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "root_issue_ids"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { enum: ["request_delivery", "reopen_root_issues"] }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false } }
+    decision_records: { type: "array", items: { oneOf: [
+      { type: "object", required: ["decision_id", "question_id", "presentation_id", "decision_group_ids", "root_issue_ids", "affected_obligation_ids", "clarification_event_seq", "confirmer", "confirmed_at", "question", "answer", "disposition", "authority_scope", "effective_scope", "evidence_ref", "evidence_level"], properties: { decision_id: { type: "string", minLength: 1 }, question_id: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, affected_obligation_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, clarification_event_seq: { type: "integer", minimum: 1 }, confirmer: { type: "string", minLength: 1 }, confirmed_at: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 }, answer: { type: "string" }, disposition: { enum: ["final", "temporary", "unknown", "deferred"] }, authority_scope: { type: "string", minLength: 1 }, effective_scope: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, evidence_level: { enum: ["E1", "E3"] }, supersedes_decision_ids: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false },
+      { type: "object", required: ["decision_id", "decision_type", "clarification_event_seq", "confirmer", "confirmed_at", "presentation_id", "decision_group_ids", "exploratory_id", "item_semantic_digest", "item_semantic_change_head_seq", "business_rule", "expected_result", "authority_scope", "effective_scope", "evidence_ref", "evidence_level"], properties: { decision_id: { type: "string", minLength: 1 }, decision_type: { const: "exploratory_adoption" }, clarification_event_seq: { type: "integer", minimum: 1 }, confirmer: { type: "string", minLength: 1 }, confirmed_at: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, exploratory_id: { type: "string", minLength: 1 }, item_semantic_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, item_semantic_change_head_seq: { type: "integer", minimum: 0 }, business_rule: { type: "string", minLength: 1 }, expected_result: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, effective_scope: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, evidence_level: { const: "E3" } }, additionalProperties: false }
+    ] } },
+    clarification_events: { type: "array", items: { oneOf: [
+      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "root_issue_ids"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { enum: ["request_delivery", "reopen_root_issues"] }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false },
+      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "source_locator_ids", "affected_items", "reason"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "request_reanalysis" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, source_locator_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, affected_items: { type: "array", minItems: 1, items: { type: "object", required: ["item_kind", "item_id", "item_semantic_digest", "item_semantic_change_head_seq"], properties: { item_kind: { enum: ["case", "formal_test_point", "exploratory"] }, item_id: { type: "string", minLength: 1 }, item_semantic_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, item_semantic_change_head_seq: { type: "integer", minimum: 0 } }, additionalProperties: false } }, reason: { type: "string", minLength: 1 } }, additionalProperties: false }
+    ] } },
+    execution_events: { type: "array", items: { oneOf: [
+      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "presented_plan_digest", "presented_presentation_id", "decision_group_ids", "decisions"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "set_dispositions" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_plan_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, decisions: { type: "array", minItems: 1, items: { type: "object", required: ["item_kind", "item_id", "item_semantic_digest", "item_semantic_change_head_seq", "execution_disposition", "reason_code", "reason"], properties: { item_kind: { enum: ["case", "formal_test_point", "exploratory"] }, item_id: { type: "string", minLength: 1 }, item_semantic_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, item_semantic_change_head_seq: { type: "integer", minimum: 0 }, execution_disposition: { enum: ["execute", "do_not_execute"] }, reason_code: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1 } }, additionalProperties: false } } }, additionalProperties: false },
+      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "presented_presentation_id", "presented_plan_digest", "pending_item_refs", "resume_target", "reason"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "pause_execution_closure" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_presentation_id: { type: "string", minLength: 1 }, presented_plan_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, pending_item_refs: { type: "array", items: { type: "object", required: ["item_kind", "item_id"], properties: { item_kind: { enum: ["case", "formal_test_point", "exploratory"] }, item_id: { type: "string", minLength: 1 } }, additionalProperties: false } }, resume_target: { enum: ["execution_closure", "final_confirmation"] }, reason: { enum: ["no_information_gain", "unknown", "user_requested"] } }, additionalProperties: false },
+      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "pause_event_id"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "resume_execution_closure" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, pause_event_id: { type: "string", minLength: 1 } }, additionalProperties: false },
+      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "presented_prompt_id", "presented_plan_digest", "presented_plan_change_head_seq", "presented_source_revision"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "confirm_execution_plan" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_prompt_id: { type: "string", minLength: 1 }, presented_plan_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_plan_change_head_seq: { type: "integer", minimum: 0 }, presented_source_revision: { type: "integer", minimum: 0 } }, additionalProperties: false }
+    ] } }
   },
   additionalProperties: false
 };
 
 // src/decision-record.mjs
+import { createHash as createHash2 } from "node:crypto";
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -645,6 +660,143 @@ function scopeContains(container, candidate) {
   if (left.length === 0 || right.length === 0) return false;
   return left === "*" || left === right || right.startsWith(`${left}.`) || right.startsWith(`${left}/`);
 }
+function validateSourceIntegrity(sourcePack) {
+  const pack = isObject(sourcePack) ? sourcePack : {};
+  const sources = objectArray(pack.sources);
+  const locators = objectArray(pack.locators);
+  const reviews = objectArray(pack.source_reviews);
+  const sourceById = new Map(sources.flatMap((source) => typeof source.source_id === "string" ? [[source.source_id, source]] : []));
+  const diagnostics = [];
+  sources.forEach((source, index) => {
+    if (typeof source.content !== "string" || typeof source.content_digest !== "string") return;
+    const actualDigest = createHash2("sha256").update(source.content, "utf8").digest("hex");
+    if (source.content_digest !== actualDigest) diagnostics.push(diagnostic(
+      "SOURCE_CONTENT_DIGEST_MISMATCH",
+      `/sources/${index}/content_digest`,
+      "source content_digest must equal the SHA-256 of the exact UTF-8 source content"
+    ));
+  });
+  const reviewIndexesBySource = /* @__PURE__ */ new Map();
+  reviews.forEach((review, reviewIndex) => {
+    if (typeof review.source_id !== "string") return;
+    const indexes = reviewIndexesBySource.get(review.source_id) ?? [];
+    indexes.push(reviewIndex);
+    reviewIndexesBySource.set(review.source_id, indexes);
+    const source = sourceById.get(review.source_id);
+    if (!source) {
+      diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_SOURCE_DANGLING",
+        `/source_reviews/${reviewIndex}/source_id`,
+        "source review must reference an existing source"
+      ));
+      return;
+    }
+    if (review.content_digest !== source.content_digest) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_CONTENT_DIGEST_MISMATCH",
+      `/source_reviews/${reviewIndex}/content_digest`,
+      "source review must bind the exact immutable source version"
+    ));
+    if (typeof source.content !== "string") return;
+    const sourceContent = source.content;
+    const validSpans = [];
+    const seenSpanIds = /* @__PURE__ */ new Set();
+    objectArray(review.spans).forEach((span, spanIndex) => {
+      if (typeof span.span_id === "string") {
+        if (seenSpanIds.has(span.span_id)) diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_SPAN_ID_DUPLICATE",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}/span_id`,
+          "source review span IDs must be unique within one source"
+        ));
+        seenSpanIds.add(span.span_id);
+      }
+      const start = span.start;
+      const end = span.end;
+      if (typeof span.rationale !== "string" || span.rationale.trim().length === 0) {
+        diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_RATIONALE_INVALID",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}/rationale`,
+          "source review rationale must contain a non-whitespace explanation"
+        ));
+      }
+      if (typeof start !== "number" || typeof end !== "number" || end <= start) {
+        diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_SPAN_RANGE_INVALID",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+          "source review span end must be greater than start"
+        ));
+      } else if (start < 0 || end > sourceContent.length) {
+        diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_SPAN_RANGE_OUT_OF_BOUNDS",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+          "source review span must fall within the exact source content"
+        ));
+      } else validSpans.push({ start, end, spanIndex });
+    });
+    let cursor = 0;
+    for (const span of validSpans) {
+      if (span.start < cursor) diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_SPAN_OVERLAP",
+        `/source_reviews/${reviewIndex}/spans/${span.spanIndex}`,
+        "source review spans must be ordered and non-overlapping"
+      ));
+      const gapEnd = Math.max(cursor, span.start);
+      if (/\S/u.test(sourceContent.slice(cursor, gapEnd))) diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_COVERAGE_GAP",
+        `/source_reviews/${reviewIndex}/spans/${span.spanIndex}`,
+        "source review spans must account for every non-whitespace source character"
+      ));
+      cursor = Math.max(cursor, span.end);
+    }
+    if (/\S/u.test(sourceContent.slice(cursor))) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_COVERAGE_GAP",
+      `/source_reviews/${reviewIndex}/spans`,
+      "source review spans must account for every non-whitespace source character"
+    ));
+  });
+  sources.forEach((source, sourceIndex) => {
+    if (typeof source.source_id !== "string") return;
+    const reviewIndexes = reviewIndexesBySource.get(source.source_id) ?? [];
+    if (reviewIndexes.length === 0) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_MISSING",
+      `/sources/${sourceIndex}`,
+      "every source must have one exhaustive source review"
+    ));
+    if (reviewIndexes.length > 1) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_DUPLICATE",
+      `/source_reviews/${reviewIndexes[1]}`,
+      "every source must have exactly one source review"
+    ));
+  });
+  locators.forEach((locator, index) => {
+    const source = typeof locator.source_id === "string" ? sourceById.get(locator.source_id) : void 0;
+    if (!source) return;
+    if (typeof locator.content_digest !== "string" || locator.content_digest !== source.content_digest) {
+      diagnostics.push(diagnostic(
+        "LOCATOR_CONTENT_DIGEST_MISMATCH",
+        `/locators/${index}/content_digest`,
+        "locator content_digest must bind the exact immutable source version"
+      ));
+    }
+    if (locator.type === "text-range" && isObject(locator.text_range) && typeof source.content === "string") {
+      const start = locator.text_range.start;
+      const end = locator.text_range.end;
+      if (typeof start === "number" && typeof end === "number" && end <= start) {
+        diagnostics.push(diagnostic(
+          "LOCATOR_RANGE_INVALID",
+          `/locators/${index}/text_range`,
+          "text-range end must be greater than start"
+        ));
+      } else if (typeof start === "number" && typeof end === "number" && (start < 0 || end > source.content.length)) {
+        diagnostics.push(diagnostic(
+          "LOCATOR_RANGE_OUT_OF_BOUNDS",
+          `/locators/${index}/text_range`,
+          "text-range must fall within the exact source content"
+        ));
+      }
+    }
+  });
+  return diagnostics;
+}
 function validateDecisionRecords(sourcePack) {
   const pack = isObject(sourcePack) ? sourcePack : {};
   const sources = objectArray(pack.sources);
@@ -663,6 +815,7 @@ function validateDecisionRecords(sourcePack) {
         `/locators/${index}/source_id`,
         `locator references unknown source "${typeof locator.source_id === "string" ? locator.source_id : ""}"`
       ));
+      return;
     }
   });
   const decisionsById = /* @__PURE__ */ new Map();
@@ -741,7 +894,7 @@ var ROOT_STATUSES = /* @__PURE__ */ new Set([
 ]);
 var STOP_REASONS = /* @__PURE__ */ new Set(["converged", "user_requested_delivery", "no_information_gain"]);
 var DECISION_DISPOSITIONS = /* @__PURE__ */ new Set(["final", "temporary", "unknown", "deferred"]);
-var CONTROL_TYPES = /* @__PURE__ */ new Set(["request_delivery", "reopen_root_issues"]);
+var CONTROL_TYPES = /* @__PURE__ */ new Set(["request_delivery", "reopen_root_issues", "request_reanalysis"]);
 var DELIVERY_STATUSES = /* @__PURE__ */ new Set([
   "no_applicable_formal_test_points",
   "no_deterministic_cases",
@@ -1488,15 +1641,59 @@ function validateRootPartition(ledger, dispositionById, semantics, diagnostics, 
 }
 function normalizeAppendBatch(value, path4, diagnostics) {
   const batch = record(value, path4, diagnostics);
-  checkKeys(batch, ["decision_records", "clarification_events"], path4, diagnostics);
+  checkKeys(batch, ["decision_records", "clarification_events", "execution_events"], path4, diagnostics);
   const decisions = [];
   const decisionIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(batch.decision_records, `${path4}/decision_records`, diagnostics))) {
     const itemPath = `${path4}/decision_records/${index}`;
     const item = record(raw, itemPath, diagnostics);
+    if (item.decision_type === "exploratory_adoption") {
+      checkKeys(item, [
+        "decision_id",
+        "decision_type",
+        "clarification_event_seq",
+        "confirmer",
+        "confirmed_at",
+        "presentation_id",
+        "decision_group_ids",
+        "exploratory_id",
+        "item_semantic_digest",
+        "item_semantic_change_head_seq",
+        "business_rule",
+        "expected_result",
+        "authority_scope",
+        "effective_scope",
+        "evidence_ref",
+        "evidence_level"
+      ], itemPath, diagnostics);
+      const decisionId2 = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
+      if (decisionIds.has(decisionId2)) arrayPush(diagnostics, diagnostic2("reference", "DECISION_ID_DUPLICATE", `${itemPath}/decision_id`, "append Decision Record IDs must be unique"));
+      decisionIds.add(decisionId2);
+      arrayPush(decisions, {
+        decision_id: decisionId2,
+        decision_type: "exploratory_adoption",
+        clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
+        confirmer: canonicalString(item.confirmer, `${itemPath}/confirmer`, diagnostics),
+        confirmed_at: canonicalString(item.confirmed_at, `${itemPath}/confirmed_at`, diagnostics),
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false),
+        exploratory_id: canonicalString(item.exploratory_id, `${itemPath}/exploratory_id`, diagnostics),
+        item_semantic_digest: canonicalString(item.item_semantic_digest, `${itemPath}/item_semantic_digest`, diagnostics),
+        item_semantic_change_head_seq: integer(item.item_semantic_change_head_seq, `${itemPath}/item_semantic_change_head_seq`, diagnostics, 0),
+        business_rule: canonicalString(item.business_rule, `${itemPath}/business_rule`, diagnostics),
+        expected_result: canonicalString(item.expected_result, `${itemPath}/expected_result`, diagnostics),
+        authority_scope: canonicalString(item.authority_scope, `${itemPath}/authority_scope`, diagnostics),
+        effective_scope: canonicalString(item.effective_scope, `${itemPath}/effective_scope`, diagnostics),
+        evidence_ref: canonicalString(item.evidence_ref, `${itemPath}/evidence_ref`, diagnostics),
+        evidence_level: enumeration(item.evidence_level, /* @__PURE__ */ new Set(["E3"]), `${itemPath}/evidence_level`, diagnostics)
+      });
+      continue;
+    }
     checkKeys(item, [
       "decision_id",
       "question_id",
+      "presentation_id",
+      "decision_group_ids",
       "root_issue_ids",
       "affected_obligation_ids",
       "clarification_event_seq",
@@ -1508,7 +1705,8 @@ function normalizeAppendBatch(value, path4, diagnostics) {
       "authority_scope",
       "effective_scope",
       "evidence_ref",
-      "evidence_level"
+      "evidence_level",
+      "supersedes_decision_ids"
     ], itemPath, diagnostics);
     const decisionId = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
     if (decisionIds.has(decisionId)) arrayPush(diagnostics, diagnostic2("reference", "DECISION_ID_DUPLICATE", `${itemPath}/decision_id`, "append Decision Record IDs must be unique"));
@@ -1521,6 +1719,10 @@ function normalizeAppendBatch(value, path4, diagnostics) {
     arrayPush(decisions, {
       decision_id: decisionId,
       question_id: canonicalString(item.question_id, `${itemPath}/question_id`, diagnostics),
+      ...item.presentation_id === void 0 ? {} : {
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false)
+      },
       root_issue_ids: stringSet(item.root_issue_ids, `${itemPath}/root_issue_ids`, diagnostics, true),
       affected_obligation_ids: stringSet(item.affected_obligation_ids, `${itemPath}/affected_obligation_ids`, diagnostics),
       clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
@@ -1532,7 +1734,10 @@ function normalizeAppendBatch(value, path4, diagnostics) {
       authority_scope: canonicalString(item.authority_scope, `${itemPath}/authority_scope`, diagnostics),
       effective_scope: canonicalString(item.effective_scope, `${itemPath}/effective_scope`, diagnostics),
       evidence_ref: canonicalString(item.evidence_ref, `${itemPath}/evidence_ref`, diagnostics),
-      evidence_level: evidenceLevel2
+      evidence_level: evidenceLevel2,
+      ...item.supersedes_decision_ids === void 0 ? {} : {
+        supersedes_decision_ids: stringSet(item.supersedes_decision_ids, `${itemPath}/supersedes_decision_ids`, diagnostics, true)
+      }
     });
   }
   const events = [];
@@ -1540,16 +1745,33 @@ function normalizeAppendBatch(value, path4, diagnostics) {
   for (const [index, raw] of arrayEntries(array(batch.clarification_events, `${path4}/clarification_events`, diagnostics))) {
     const itemPath = `${path4}/clarification_events/${index}`;
     const item = record(raw, itemPath, diagnostics);
-    checkKeys(item, ["event_id", "clarification_event_seq", "type", "actor", "event_at", "root_issue_ids"], itemPath, diagnostics);
+    const eventType = enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics);
+    checkKeys(item, eventType === "request_reanalysis" ? ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "source_locator_ids", "affected_items", "reason"] : ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "root_issue_ids"], itemPath, diagnostics);
     const eventId = canonicalString(item.event_id, `${itemPath}/event_id`, diagnostics);
     if (eventIds.has(eventId)) arrayPush(diagnostics, diagnostic2("reference", "CONTROL_EVENT_ID_DUPLICATE", `${itemPath}/event_id`, "append control event IDs must be unique"));
     eventIds.add(eventId);
-    arrayPush(events, {
+    const common = {
       event_id: eventId,
       clarification_event_seq: integer(item.clarification_event_seq, `${itemPath}/clarification_event_seq`, diagnostics, 1),
-      type: enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics),
+      type: eventType,
       actor: canonicalString(item.actor, `${itemPath}/actor`, diagnostics),
-      event_at: canonicalString(item.event_at, `${itemPath}/event_at`, diagnostics),
+      event_at: canonicalString(item.event_at, `${itemPath}/event_at`, diagnostics)
+    };
+    arrayPush(events, eventType === "request_reanalysis" ? {
+      ...common,
+      ...item.presentation_id === void 0 ? {} : {
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false)
+      },
+      source_locator_ids: stringSet(item.source_locator_ids, `${itemPath}/source_locator_ids`, diagnostics, false),
+      affected_items: array(item.affected_items, `${itemPath}/affected_items`, diagnostics),
+      reason: canonicalString(item.reason, `${itemPath}/reason`, diagnostics)
+    } : {
+      ...common,
+      ...item.presentation_id === void 0 ? {} : {
+        presentation_id: canonicalString(item.presentation_id, `${itemPath}/presentation_id`, diagnostics),
+        decision_group_ids: stringSet(item.decision_group_ids, `${itemPath}/decision_group_ids`, diagnostics, false)
+      },
       root_issue_ids: stringSet(item.root_issue_ids, `${itemPath}/root_issue_ids`, diagnostics, true)
     });
   }
@@ -1617,6 +1839,7 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
   const pending = new Set(prior.last_pending_root_issue_ids);
   const decidedRoots = /* @__PURE__ */ new Set();
   for (const [index, item] of arrayEntries(batch.decision_records)) {
+    if (item.decision_type === "exploratory_adoption") continue;
     const expectedQuestionId = stableId("question", { root_issue_ids: arraySort([...item.root_issue_ids], compareCodePoints2) });
     if (item.question_id !== expectedQuestionId) arrayPush(diagnostics, diagnostic2(
       "traceability",
@@ -3149,6 +3372,67 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
     }];
   });
   for (const claimId of rawClaims.keys()) validateIteratively(claimId);
+  const directRangesBySource = /* @__PURE__ */ new Map();
+  for (const claim of acceptedClaims2.values()) {
+    if (claim.claim_form !== "direct" || typeof claim.source_id !== "string") continue;
+    for (const locatorId of stringArray2(claim.source_locator_ids)) {
+      const locator = locators.get(locatorId);
+      if (!locator || locator.source_id !== claim.source_id || locator.type !== "text-range" || !isObject3(locator.text_range)) continue;
+      const start = locator.text_range.start;
+      const end = locator.text_range.end;
+      if (typeof start !== "number" || typeof end !== "number") continue;
+      const ranges = directRangesBySource.get(claim.source_id) ?? [];
+      ranges.push({ start, end });
+      directRangesBySource.set(claim.source_id, ranges);
+    }
+  }
+  for (const [sourceId, ranges] of directRangesBySource) {
+    ranges.sort((left, right) => left.start - right.start || left.end - right.end);
+    const merged = [];
+    for (const range of ranges) {
+      const previous = merged[merged.length - 1];
+      if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+      else merged.push({ ...range });
+    }
+    directRangesBySource.set(sourceId, merged);
+  }
+  objectArray3(pack.source_reviews).forEach((review, reviewIndex) => {
+    if (typeof review.source_id !== "string") return;
+    const reviewSourceId = review.source_id;
+    const ranges = directRangesBySource.get(reviewSourceId) ?? [];
+    objectArray3(review.spans).forEach((span, spanIndex) => {
+      if (span.classification !== "normative" && span.classification !== "uncertain") return;
+      if (typeof span.start !== "number" || typeof span.end !== "number") return;
+      const content = String(sources.get(reviewSourceId)?.content ?? "");
+      let cursor = span.start;
+      let represented = true;
+      let lower = 0;
+      let upper = ranges.length;
+      while (lower < upper) {
+        const middle = lower + Math.floor((upper - lower) / 2);
+        if (ranges[middle].end <= span.start) lower = middle + 1;
+        else upper = middle;
+      }
+      for (let rangeIndex = lower; rangeIndex < ranges.length; rangeIndex += 1) {
+        const range = ranges[rangeIndex];
+        if (range.start >= span.end) break;
+        const nextStart = Math.max(span.start, range.start);
+        if (nextStart > cursor && content.slice(cursor, Math.min(nextStart, span.end)).trim().length > 0) {
+          represented = false;
+          break;
+        }
+        cursor = Math.max(cursor, Math.min(span.end, range.end));
+        if (cursor >= span.end) break;
+      }
+      if (represented && cursor < span.end && content.slice(cursor, span.end).trim().length > 0) represented = false;
+      if (!represented) diagnostics.push(diagnostic4(
+        "traceability",
+        "SOURCE_REVIEW_SPAN_UNCLAIMED",
+        `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+        `${span.classification} source text must be represented by an accepted direct Claim locator`
+      ));
+    });
+  });
   factLedger2.forEach((entry, entryIndex) => {
     if (typeof entry.claim_id === "string") {
       if (!rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic4(
@@ -3657,7 +3941,7 @@ function validateClosedShape(context, diagnostics) {
     diagnostics.push(diagnostic5("classification", "CONTEXT_INVALID", "/", "classification context collections have invalid types"));
     return;
   }
-  if (obligations.schema_version !== "1.0.0" || drafts.schema_version !== "1.0.0" || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
+  if (obligations.schema_version !== "2.1.0" || drafts.schema_version !== "2.1.0" || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
     diagnostics.push(diagnostic5("classification", "SOURCE_REVISION_MISMATCH", "/", "all classification inputs must share source_revision"));
   }
   for (const [claimId, claim] of NATIVE_MAP_ENTRIES.call(evidence.claimsById)) {
@@ -4066,13 +4350,21 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const data = objectArray4(draft.data) ?? [];
   for (const datum of data) {
     if (!isNonblank(datum.name) || !isNonblank(datum.value) || !isRecord2(datum.provenance) || !isCanonicalString(isRecord2(datum.provenance) ? datum.provenance.ref : null) || !["evidence", "derivation"].includes(String(isRecord2(datum.provenance) ? datum.provenance.type : ""))) reasons.add("CASE_GATE_INVALID");
-    if (isRecord2(datum.provenance) && isCanonicalString(datum.provenance.ref)) evidenceRoots.add(datum.provenance.ref);
+    if (isRecord2(datum.provenance) && isCanonicalString(datum.provenance.ref)) {
+      evidenceRoots.add(datum.provenance.ref);
+      const referencedClaim = evidence.get(datum.provenance.ref)?.claim;
+      const expectedType = referencedClaim?.claim_form === "derived" ? "derivation" : "evidence";
+      if (referencedClaim && datum.provenance.type !== expectedType) {
+        reasons.add("CASE_DATA_PROVENANCE_TYPE_MISMATCH");
+      }
+    }
     applyReview(datum.support_review, reasons);
   }
   const steps = objectArray4(draft.steps) ?? [];
   const stepIds = /* @__PURE__ */ new Set();
   const expectationIds = /* @__PURE__ */ new Set();
   const expectationsForOwnership = [];
+  const formalOutcomeSignatures = /* @__PURE__ */ new Set();
   const requiredObservers = [];
   for (const [stepIndex, step] of steps.entries()) {
     if (!isCanonicalString(step.step_id) || stepIds.has(step.step_id)) {
@@ -4148,8 +4440,20 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       const windowValid = !oracle || oracle.window === void 0 || isNonblank(oracle.window);
       const withinBounded = !oracle || oracle.comparison !== "within" || oracle.tolerance !== void 0 && toleranceValid || oracle.window !== void 0 && windowValid;
       if (!oracle || !expectedField || !isNonblank(oracle[expectedField]) || !comparisonValid || !toleranceValid || !windowValid || !withinBounded) reasons.add("ORACLE_INVALID");
+      else if (expectation.kind === "obligation-oracle" && expectationFieldsValid) {
+        formalOutcomeSignatures.add(oracleSemanticId(step, expectation));
+      }
       applyReview(expectation.support_review, reasons);
     }
+  }
+  if (formalOutcomeSignatures.size > 1) {
+    diagnostics.push(diagnostic5(
+      "classification",
+      "CASE_OUTCOME_NOT_ATOMIC",
+      `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/steps`,
+      "one Case may close multiple Test Points only when they share one independently diagnosable observed outcome"
+    ));
+    reasons.add("CASE_OUTCOME_NOT_ATOMIC");
   }
   for (const step of steps) {
     for (const expectation of objectArray4(step.expectations) ?? []) {
@@ -5316,11 +5620,83 @@ function classifyCaseDrafts(submittedContext) {
 var test_bundle_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "test-bundle.schema.json",
+  $defs: {
+    sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+    string_set: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true },
+    ready_basis: { oneOf: [
+      { type: "object", required: ["origin"], properties: { origin: { const: "default_grounded_recommendation" } }, additionalProperties: false },
+      { type: "object", required: ["origin", "exclusion_claim_semantic_digest"], properties: { origin: { const: "derived_not_applicable" }, exclusion_claim_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false },
+      { type: "object", required: ["origin", "execution_decision_semantic_digest"], properties: { origin: { const: "user_execution_decision" }, execution_decision_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }
+    ] },
+    ready_item: {
+      type: "object",
+      required: ["item_kind", "item_id", "title", "semantic_status", "item_semantic_digest", "related_obligation_ids", "execution_disposition", "reason_code", "reason", "basis"],
+      properties: {
+        item_kind: { enum: ["case", "formal_test_point", "exploratory"] },
+        item_id: { type: "string", minLength: 1 },
+        title: { type: "string", minLength: 1 },
+        semantic_status: { enum: ["grounded", "conditional", "blocked", "not_applicable", "exploratory"] },
+        item_semantic_digest: { $ref: "#/$defs/sha256" },
+        related_obligation_ids: { $ref: "#/$defs/string_set" },
+        execution_disposition: { enum: ["execute", "do_not_execute"] },
+        reason_code: { type: "string", minLength: 1 },
+        reason: { type: "string", minLength: 1 },
+        basis: { $ref: "#/$defs/ready_basis" }
+      },
+      additionalProperties: false
+    },
+    tp_execution_coverage: {
+      type: "object",
+      required: ["obligation_id", "related_grounded_case_ids", "execute_case_ids", "status"],
+      properties: { obligation_id: { type: "string", minLength: 1 }, related_grounded_case_ids: { $ref: "#/$defs/string_set" }, execute_case_ids: { $ref: "#/$defs/string_set" }, status: { enum: ["full", "partial", "none"] } },
+      additionalProperties: false
+    },
+    execution_summary: {
+      type: "object",
+      required: ["case_count", "formal_test_point_count", "applicable_formal_test_point_count", "not_applicable_formal_test_point_count", "full_test_point_count", "partial_test_point_count", "none_test_point_count", "exploratory_count", "execute_case_count", "do_not_execute_case_count", "do_not_execute_formal_test_point_count", "do_not_execute_exploratory_count", "pending_case_count", "pending_formal_test_point_count", "pending_exploratory_count"],
+      properties: {
+        case_count: { type: "integer", minimum: 0 },
+        formal_test_point_count: { type: "integer", minimum: 0 },
+        applicable_formal_test_point_count: { type: "integer", minimum: 0 },
+        not_applicable_formal_test_point_count: { type: "integer", minimum: 0 },
+        full_test_point_count: { type: "integer", minimum: 0 },
+        partial_test_point_count: { type: "integer", minimum: 0 },
+        none_test_point_count: { type: "integer", minimum: 0 },
+        exploratory_count: { type: "integer", minimum: 0 },
+        execute_case_count: { type: "integer", minimum: 0 },
+        do_not_execute_case_count: { type: "integer", minimum: 0 },
+        do_not_execute_formal_test_point_count: { type: "integer", minimum: 0 },
+        do_not_execute_exploratory_count: { type: "integer", minimum: 0 },
+        pending_case_count: { type: "integer", minimum: 0 },
+        pending_formal_test_point_count: { type: "integer", minimum: 0 },
+        pending_exploratory_count: { type: "integer", minimum: 0 }
+      },
+      additionalProperties: false
+    },
+    ready_execution_plan: {
+      type: "object",
+      required: ["status", "semantic_source_digest", "plan_digest", "semantic_result_digest", "items", "runner_case_ids", "promoted_exploratory", "test_point_execution_coverage", "summary", "confirmation"],
+      properties: {
+        status: { const: "ready" },
+        semantic_source_digest: { $ref: "#/$defs/sha256" },
+        plan_digest: { $ref: "#/$defs/sha256" },
+        semantic_result_digest: { $ref: "#/$defs/sha256" },
+        items: { type: "array", items: { $ref: "#/$defs/ready_item" } },
+        runner_case_ids: { $ref: "#/$defs/string_set" },
+        promoted_exploratory: { type: "array", items: { type: "object", required: ["exploratory_id", "adoption_decision_semantic_digest", "obligation_ids", "case_ids"], properties: { exploratory_id: { type: "string", minLength: 1 }, adoption_decision_semantic_digest: { $ref: "#/$defs/sha256" }, obligation_ids: { $ref: "#/$defs/string_set" }, case_ids: { $ref: "#/$defs/string_set" } }, additionalProperties: false } },
+        test_point_execution_coverage: { type: "array", items: { $ref: "#/$defs/tp_execution_coverage" } },
+        summary: { $ref: "#/$defs/execution_summary" },
+        confirmation: { type: "object", required: ["confirmed", "confirmed_plan_digest", "actor", "authority_scope", "confirmation_semantic_digest"], properties: { confirmed: { const: true }, confirmed_plan_digest: { $ref: "#/$defs/sha256" }, actor: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, confirmation_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }
+      },
+      additionalProperties: false
+    }
+  },
   type: "object",
-  required: ["schema_version", "source_revision", "grounded", "conditional", "blocked", "exploratory", "coverage", "quality"],
+  required: ["schema_version", "source_revision", "grounded", "conditional", "blocked", "exploratory", "coverage", "quality", "execution_plan"],
   properties: {
-    schema_version: { const: "1.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
+    execution_plan: { $ref: "#/$defs/ready_execution_plan" },
     grounded: {
       type: "array",
       items: {
@@ -5336,10 +5712,10 @@ var test_bundle_schema_default = {
           obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
           preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
+          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "value_origin", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, support_review: { const: "supported" } }, additionalProperties: false } },
+          ] }, value_origin: { enum: ["requirement", "source_description", "example", "derived", "temporary_assumption"] }, support_review: { const: "supported" } }, additionalProperties: false } },
           steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -5372,10 +5748,10 @@ var test_bundle_schema_default = {
           obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
           preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
+          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "value_origin", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
+          ] }, value_origin: { enum: ["requirement", "source_description", "example", "derived", "temporary_assumption"] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
           steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -5394,16 +5770,19 @@ var test_bundle_schema_default = {
         additionalProperties: false
       }
     },
-    blocked: { type: "array", items: { type: "object", required: ["obligation_id", "root_issue_id", "reason", "recovery", "risk"], properties: { obligation_id: { type: "string", minLength: 1 }, root_issue_id: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, recovery: { type: "object", required: ["missing_type", "required_material", "question"], properties: { missing_type: { type: "string", minLength: 1 }, required_material: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 } }, additionalProperties: false } }, additionalProperties: false } },
+    blocked: { type: "array", items: { type: "object", required: ["obligation_id", "root_issue_id", "subject", "reason", "scope", "recovery", "risk"], properties: { obligation_id: { type: "string", minLength: 1 }, root_issue_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, reason: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, recovery: { type: "object", required: ["missing_type", "required_material", "question"], properties: { missing_type: { type: "string", minLength: 1 }, required_material: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 } }, additionalProperties: false } }, additionalProperties: false } },
     exploratory: { type: "array", items: { type: "object", required: ["exploratory_id", "title", "scope", "risk", "reason"], properties: { exploratory_id: { type: "string", minLength: 1 }, title: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, reason: { type: "string", minLength: 1 } }, additionalProperties: false } },
     coverage: { type: "object", required: ["requirements", "formal", "executable", "expert_recall", "not_applicable"], properties: {
       requirements: { type: "object", required: ["total", "accounted", "entries"], properties: { total: { type: "integer", minimum: 0 }, accounted: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["fact_id", "status"], properties: { fact_id: { type: "string", minLength: 1 }, status: { enum: ["covered", "blocked", "not_applicable"] } }, additionalProperties: false } } }, additionalProperties: false },
       formal: { type: "object", required: ["total", "covered", "entries"], properties: { total: { type: "integer", minimum: 0 }, covered: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["obligation_id", "status"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { enum: ["grounded", "conditional", "blocked", "not_applicable"] } }, additionalProperties: false } } }, additionalProperties: false },
       executable: { type: "object", required: ["total", "grounded", "entries"], properties: { total: { type: "integer", minimum: 0 }, grounded: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["obligation_id", "case_id"], properties: { obligation_id: { type: "string", minLength: 1 }, case_id: { type: "string", minLength: 1 } }, additionalProperties: false } } }, additionalProperties: false },
       expert_recall: { type: "object", required: ["status", "limits"], properties: { status: { const: "benchmark_only" }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false },
-      not_applicable: { type: "array", items: { type: "object", required: ["obligation_id", "exclusion_claim_id", "scope", "support_review"], properties: { obligation_id: { type: "string", minLength: 1 }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false } }
+      not_applicable: { type: "array", items: { oneOf: [
+        { type: "object", required: ["subject_kind", "obligation_id", "subject", "exclusion_claim_id", "scope", "support_review", "reason"], properties: { subject_kind: { const: "formal_test_point" }, obligation_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" }, reason: { type: "string", pattern: "\\S" } }, additionalProperties: false },
+        { type: "object", required: ["subject_kind", "fact_id", "subject", "exclusion_claim_id", "scope", "support_review", "reason"], properties: { subject_kind: { const: "requirement_fact" }, fact_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" }, reason: { type: "string", pattern: "\\S" } }, additionalProperties: false }
+      ] } }
     }, additionalProperties: false },
-    quality: { type: "object", required: ["delivery_status", "compiler_version", "schema_version", "lineage", "limits"], properties: { delivery_status: { enum: ["no_applicable_formal_test_points", "no_deterministic_cases", "critical_gaps", "executable_subset_ready"] }, compiler_version: { type: "string", minLength: 1 }, schema_version: { const: "1.0.0" }, lineage: { type: "object", required: ["source_digest", "case_draft_digest"], properties: { source_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, case_draft_digest: { type: "string", pattern: "^[a-f0-9]{64}$" } }, additionalProperties: false }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false }
+    quality: { type: "object", required: ["delivery_status", "compiler_version", "schema_version", "lineage", "limits"], properties: { delivery_status: { enum: ["no_applicable_formal_test_points", "no_deterministic_cases", "critical_gaps", "executable_subset_ready"] }, compiler_version: { type: "string", minLength: 1 }, schema_version: { const: "2.1.0" }, lineage: { type: "object", required: ["semantic_source_digest", "evidence_semantic_digest", "behavior_views_semantic_digest", "test_obligations_semantic_digest", "case_drafts_semantic_digest"], properties: { semantic_source_digest: { $ref: "#/$defs/sha256" }, evidence_semantic_digest: { $ref: "#/$defs/sha256" }, behavior_views_semantic_digest: { $ref: "#/$defs/sha256" }, test_obligations_semantic_digest: { $ref: "#/$defs/sha256" }, case_drafts_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false }
   },
   additionalProperties: false
 };
@@ -5415,7 +5794,7 @@ var test_obligations_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   properties: {
-    schema_version: { const: "1.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     obligations: {
       type: "array",
@@ -5560,6 +5939,8 @@ var STABLE_ID_COLLECTIONS = Object.freeze([
 var supportedKeywords = /* @__PURE__ */ new Set([
   "$schema",
   "$id",
+  "$defs",
+  "$ref",
   "type",
   "required",
   "properties",
@@ -5662,7 +6043,7 @@ function assertSupportedSchema(schema) {
   }
   for (const [key, value] of Object.entries(schema)) {
     if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
-    if (key === "$schema" || key === "$id" || key === "pattern") {
+    if (key === "$schema" || key === "$id" || key === "pattern" || key === "$ref") {
       if (typeof value !== "string") throw new Error(`Schema ${key} must be a string.`);
       if (key === "pattern") {
         try {
@@ -5671,6 +6052,10 @@ function assertSupportedSchema(schema) {
           throw new Error("Schema pattern must be a valid regular expression.");
         }
       }
+      if (key === "$ref" && !value.startsWith("#/$defs/")) throw new Error("Schema $ref must be a local $defs reference.");
+    } else if (key === "$defs") {
+      if (!isSchemaObject(value)) throw new Error("Schema $defs must be an object.");
+      for (const child of Object.values(value)) assertSupportedSchema(child);
     } else if (key === "type") {
       const types = Array.isArray(value) ? value : [value];
       if (!types.length || someArray(types, (item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
@@ -5705,12 +6090,28 @@ function validateAgainstSchema(value, schema) {
     value,
     /** @type {Record<string, unknown>} */
     schema,
-    ""
+    "",
+    /** @type {Record<string, unknown>} */
+    schema
   );
 }
-function validate(value, schema, path4) {
+function resolveReference(root, reference) {
+  const segments = reference.slice(2).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"));
+  let current = root;
+  for (const segment of segments) {
+    if (!isSchemaObject(current) || !Object.hasOwn(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
+    current = current[segment];
+  }
+  if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
+  return current;
+}
+function validate(value, schema, path4, root) {
   const diagnostics = [];
   const pointer = path4 || "/";
+  if (typeof schema.$ref === "string") pushArray(
+    diagnostics,
+    ...validate(value, resolveReference(root, schema.$ref), path4, root)
+  );
   if (schema.type && !matchesType(value, schema.type)) {
     return [diagnostic6("TYPE_MISMATCH", pointer, `must be ${Array.isArray(schema.type) ? joinArray2(schema.type, " or ") : schema.type}`)];
   }
@@ -5743,7 +6144,8 @@ function validate(value, schema, path4) {
         item,
         /** @type {Record<string, unknown>} */
         schema.items,
-        `${path4}/${index}`
+        `${path4}/${index}`,
+        root
       )));
     }
   }
@@ -5771,36 +6173,43 @@ function validate(value, schema, path4) {
           object[key],
           /** @type {Record<string, unknown>} */
           schema.additionalProperties,
-          childPointer(path4, key)
+          childPointer(path4, key),
+          root
         ));
       }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path4, key)));
+      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path4, key), root));
     }
   }
   if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(
     value,
     /** @type {Record<string, unknown>} */
     child,
-    path4
+    path4,
+    root
   ));
   if (Array.isArray(schema.oneOf)) {
     const variants = mapArray2(schema.oneOf, (child) => (
       /** @type {Record<string, unknown>} */
       child
     ));
-    const matching = filterArray2(variants, (child) => validate(value, child, path4).length === 0);
+    const matching = filterArray2(variants, (child) => validate(value, child, path4, root).length === 0);
     if (matching.length !== 1) {
-      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child));
-      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path4));
+      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child, root));
+      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path4, root));
       else pushArray(diagnostics, diagnostic6("ONE_OF_MISMATCH", pointer, "must match exactly one schema variant"));
     }
   }
   return diagnostics;
 }
-function matchesDiscriminator(value, schema) {
+function matchesDiscriminator(value, schema, root) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (typeof schema.$ref === "string") return matchesDiscriminator(
+    value,
+    resolveReference(root, schema.$ref),
+    root
+  );
   const properties = schema.properties;
   if (!isSchemaObject(properties)) return false;
   const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, "const") ? [[key, candidate]] : []);
@@ -6023,6 +6432,31 @@ function someArray2(values, predicate) {
     /** @type {boolean} */
     Reflect.apply(NATIVE_ARRAY_SOME3, values, [predicate])
   );
+}
+function obligationBusinessSubject(obligation, factIdsByObligation, primaryClaimByFactId, claimsById) {
+  const values = [];
+  const seen = /* @__PURE__ */ new Set();
+  const obligationId = String(obligation?.obligation_id ?? "");
+  const factIds = sortArray2([...factIdsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set()], compareCodePoints4);
+  for (let index = 0; index < factIds.length; index += 1) {
+    const value = String(primaryClaimByFactId.get(factIds[index])?.value ?? "").trim();
+    if (value.length > 0 && !seen.has(value)) {
+      seen.add(value);
+      pushArray2(values, value);
+    }
+  }
+  if (values.length === 0) {
+    const claimIds = sortArray2(strings(obligation?.source_claim_ids), compareCodePoints4);
+    for (let index = 0; index < claimIds.length; index += 1) {
+      const value = String(claimsById.get(claimIds[index])?.value ?? "").trim();
+      if (value.length > 0 && !seen.has(value)) {
+        seen.add(value);
+        pushArray2(values, value);
+      }
+    }
+  }
+  if (values.length > 0) return joinArray3(values, "; ");
+  return `Requirement in ${String(obligation?.scope ?? "unknown scope")}`;
 }
 var BundleReconciliationError = class extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
@@ -6298,11 +6732,11 @@ function normalizeContext(submittedContext) {
     diagnostic7("schema", "CONTEXT_INVALID", "/", "Task 10 context must be a closed own-data record")
   ]);
   requireClosed(submittedContext, CONTEXT_KEYS, "", diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
-  if (submittedContext.schema_version !== "1.0.0") pushArray2(diagnostics, diagnostic7(
+  if (submittedContext.schema_version !== "2.1.0") pushArray2(diagnostics, diagnostic7(
     "schema",
     "SCHEMA_VERSION_INVALID",
     "/schema_version",
-    "Task 10 requires schema version 1.0.0"
+    "Task 10 requires schema version 2.1.0"
   ));
   if (!Number.isSafeInteger(submittedContext.source_revision) || Number(submittedContext.source_revision) < 0) pushArray2(diagnostics, diagnostic7(
     "schema",
@@ -6362,6 +6796,20 @@ function normalizeContext(submittedContext) {
     limits,
     expertLimits
   };
+}
+function projectCaseDataOrigins(caseDraft, claimsById) {
+  const projected = structuredClone(caseDraft);
+  for (const datum of records(projected.data)) {
+    const provenance = isRecord3(datum.provenance) ? datum.provenance : {};
+    const claim = claimsById.get(String(provenance.ref ?? ""));
+    let origin = "source_description";
+    if (claim?.claim_form === "derived") origin = "derived";
+    else if (claim?.kind === "example") origin = "example";
+    else if (claim?.level === "E1" || claim?.kind === "assumption") origin = "temporary_assumption";
+    else if (claim?.kind === "requirement") origin = "requirement";
+    datum.value_origin = origin;
+  }
+  return projected;
 }
 function caseExpectations(caseDraft) {
   const expectations = [];
@@ -7487,6 +7935,7 @@ function buildBundleTrusted(context) {
   }
   const allFactsById = /* @__PURE__ */ new Map();
   const factsById = /* @__PURE__ */ new Map();
+  const primaryClaimByFactId = /* @__PURE__ */ new Map();
   const facts = [];
   for (const fact of allFacts) {
     const factId = String(fact.fact_id ?? "");
@@ -7505,6 +7954,7 @@ function buildBundleTrusted(context) {
       "fact ledger references must exist in accepted evidence"
     ));
     const owningClaim = claimsById.get(String(fact.claim_id ?? ""));
+    if (owningClaim) primaryClaimByFactId.set(factId, owningClaim);
     if (fact.status !== "diagnostic" && (owningClaim?.kind === "requirement" || owningClaim?.kind === "assumption")) {
       pushArray2(facts, fact);
       factsById.set(factId, fact);
@@ -7769,7 +8219,7 @@ function buildBundleTrusted(context) {
   }
   pushArray2(diagnostics, .../** @type {Diagnostic[]} */
   validateAgainstSchema({
-    schema_version: "1.0.0",
+    schema_version: "2.1.0",
     source_revision: normalized.sourceRevision,
     cases: executableCaseInput,
     obligation_dispositions: [],
@@ -7797,7 +8247,7 @@ function buildBundleTrusted(context) {
         evidenceGraph,
         diagnostics
       );
-      pushArray2(lane === "grounded" ? grounded : conditional, structuredClone(caseDraft));
+      pushArray2(lane === "grounded" ? grounded : conditional, projectCaseDataOrigins(caseDraft, claimsById));
     } else if (!(finalLanes.size === 1 && finalLanes.has("blocked"))) pushArray2(diagnostics, diagnostic7(
       "traceability",
       "CASE_DISPOSITION_MISMATCH",
@@ -7917,17 +8367,17 @@ function buildBundleTrusted(context) {
     }
     const currentCandidates = rootLedger.currentByObligationReason.get(obligationId)?.get(reason) ?? [];
     const retainedCandidates = rootLedger.retainedByObligationReason.get(obligationId)?.get(reason) ?? [];
-    const candidates = currentCandidates.length > 0 ? currentCandidates : retainedCandidates;
-    if (candidates.length !== 1) {
+    const candidates2 = currentCandidates.length > 0 ? currentCandidates : retainedCandidates;
+    if (candidates2.length !== 1) {
       pushArray2(diagnostics, diagnostic7(
         "traceability",
         "BLOCKED_ROOT_TRACE_INVALID",
         `/blocked/${pointerPart3(obligationId)}`,
-        `Blocked formal Test Point requires exactly one root issue; found ${candidates.length}`
+        `Blocked formal Test Point requires exactly one root issue; found ${candidates2.length}`
       ));
       continue;
     }
-    const root = candidates[0];
+    const root = candidates2[0];
     if (task8Blocker && task8Blocker.root_issue_id !== root.root_issue_id) pushArray2(diagnostics, diagnostic7(
       "traceability",
       "BLOCKED_ROOT_ID_MISMATCH",
@@ -7947,7 +8397,14 @@ function buildBundleTrusted(context) {
     pushArray2(blocked, {
       obligation_id: obligationId,
       root_issue_id: String(root.root_issue_id ?? ""),
+      subject: obligationBusinessSubject(
+        obligation,
+        factIdsByObligation,
+        primaryClaimByFactId,
+        claimsById
+      ),
       reason,
+      scope: String(obligation?.scope ?? ""),
       recovery: {
         missing_type: missingType2,
         required_material: joinArray3(sortArray2([...semanticRefs2], compareCodePoints4), ", "),
@@ -8027,6 +8484,7 @@ function buildBundleTrusted(context) {
       ));
     }
   }
+  const terminalNotApplicable = [];
   for (const route of factRoutes) if (route.route_type === "not_applicable") {
     const factId = String(route.fact_id ?? "");
     const targetId = String(route.not_applicable_claim_id ?? "");
@@ -8039,7 +8497,7 @@ function buildBundleTrusted(context) {
     ));
     const fact = factsById.get(factId);
     const factRoots = fact ? [String(fact.claim_id ?? ""), ...strings(fact.source_claim_ids)] : [];
-    const primaryFactClaim = fact ? claimsById.get(String(fact.claim_id ?? "")) : void 0;
+    const primaryFactClaim = primaryClaimByFactId.get(factId);
     if (target && (!primaryFactClaim || typeof target.scope !== "string" || typeof primaryFactClaim.scope !== "string" || !scopeContains(target.scope, primaryFactClaim.scope))) {
       pushArray2(diagnostics, diagnostic7(
         "traceability",
@@ -8054,6 +8512,15 @@ function buildBundleTrusted(context) {
       `/fact_routes/${pointerPart3(factId)}/not_applicable_claim_id`,
       "terminal NotApplicable exclusion must be independent of every routed fact evidence root"
     ));
+    pushArray2(terminalNotApplicable, {
+      subject_kind: "requirement_fact",
+      fact_id: factId,
+      subject: String(primaryFactClaim?.value ?? `Requirement in ${String(target?.scope ?? "unknown scope")}`),
+      exclusion_claim_id: targetId,
+      scope: String(target?.scope ?? ""),
+      support_review: "supported",
+      reason: String(target?.value ?? "")
+    });
   }
   for (const point of points) {
     const id = String(point.obligation_id);
@@ -8070,12 +8537,27 @@ function buildBundleTrusted(context) {
       "NotApplicable formal Test Point requires its verified exclusion record"
     ));
   }
-  const notApplicable = sortArray2(mapArray3([...naById.values()], (item) => ({
+  const formalNotApplicable = mapArray3([...naById.values()], (item) => ({
+    subject_kind: "formal_test_point",
     obligation_id: String(item.obligation_id),
+    subject: obligationBusinessSubject(
+      obligationsById.get(String(item.obligation_id)),
+      factIdsByObligation,
+      primaryClaimByFactId,
+      claimsById
+    ),
     exclusion_claim_id: String(item.exclusion_claim_id),
     scope: String(item.scope),
-    support_review: String(item.support_review)
-  })), (left, right) => compareCodePoints4(left.obligation_id, right.obligation_id));
+    support_review: String(item.support_review),
+    reason: String(claimsById.get(String(item.exclusion_claim_id))?.value ?? "")
+  }));
+  const notApplicable = sortArray2(
+    [...formalNotApplicable, ...terminalNotApplicable],
+    (left, right) => compareCodePoints4(
+      `${left.subject_kind}:${left.obligation_id ?? left.fact_id}`,
+      `${right.subject_kind}:${right.obligation_id ?? right.fact_id}`
+    )
+  );
   const exploratoryIds = strings(delivery.exploratory);
   const exploratoryInput = records(normalized.classification.exploratory);
   const allFormalRoots = /* @__PURE__ */ new Set();
@@ -8215,7 +8697,7 @@ function buildBundleTrusted(context) {
   ));
   if (diagnostics.length > 0) throw new BundleReconciliationError(diagnostics);
   const bundle = {
-    schema_version: "1.0.0",
+    schema_version: "2.1.0",
     source_revision: normalized.sourceRevision,
     grounded: sortArray2(grounded, (left, right) => compareCodePoints4(String(left.case_id), String(right.case_id))),
     conditional: sortArray2(conditional, (left, right) => compareCodePoints4(String(left.case_id), String(right.case_id))),
@@ -8231,15 +8713,28 @@ function buildBundleTrusted(context) {
     quality: {
       delivery_status: deliveryStatus,
       compiler_version: normalized.compilerVersion,
-      schema_version: "1.0.0",
+      schema_version: "2.1.0",
       lineage: normalized.lineage,
       limits: normalized.limits
     }
   };
   const canonicalBundle = JSON.parse(canonicalStringify(bundle));
+  const intermediateSchema = (
+    /** @type {any} */
+    structuredClone(test_bundle_schema_default)
+  );
+  intermediateSchema.required = [];
+  for (const key of test_bundle_schema_default.required) {
+    if (key !== "execution_plan") pushArray2(intermediateSchema.required, key);
+  }
+  delete intermediateSchema.properties.execution_plan;
+  intermediateSchema.properties.quality.properties.lineage = {
+    type: "object",
+    additionalProperties: true
+  };
   const outputDiagnostics = [
     .../** @type {Diagnostic[]} */
-    validateAgainstSchema(canonicalBundle, test_bundle_schema_default),
+    validateAgainstSchema(canonicalBundle, intermediateSchema),
     .../** @type {Diagnostic[]} */
     validateUniqueStableIds(canonicalBundle)
   ];
@@ -8255,6 +8750,1081 @@ function buildBundle(context) {
       diagnostic7("schema", "INPUT_NORMALIZATION_FAILED", "/", "Task 10 input could not be safely normalized")
     ]);
   }
+}
+
+// src/execution-events.mjs
+function diagnostic8(code2, path4, message) {
+  return { category: "classification", code: code2, path: path4, message };
+}
+function records2(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+}
+function strings2(value) {
+  return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string"))].sort() : [];
+}
+function itemKey(item) {
+  return `${item.item_kind}\0${item.item_id}`;
+}
+function sortedItemRefs(items) {
+  return records2(items).map((item) => ({
+    item_kind: String(item.item_kind ?? ""),
+    item_id: String(item.item_id ?? ""),
+    title: String(item.title ?? ""),
+    item_semantic_digest: String(item.item_semantic_digest ?? ""),
+    item_semantic_change_head_seq: Number(item.item_semantic_change_head_seq ?? 0)
+  })).sort((left, right) => itemKey(left).localeCompare(itemKey(right), "en"));
+}
+function createPresentationSnapshot(input) {
+  const postReadyControl = input.entryContext === "post_ready_change" ? input.postReadyControl : null;
+  const groups = records2(input.groups).map((group) => {
+    const itemRefs = sortedItemRefs(group.items);
+    const options = records2(group.allowedOptions).map((option) => ({
+      option_code: String(option.option_code ?? ""),
+      label: String(option.label ?? ""),
+      meaning: String(option.meaning ?? "")
+    })).sort((left, right) => left.option_code.localeCompare(right.option_code, "en"));
+    const signature = {
+      run_instance_id: input.runInstanceId,
+      purpose: input.purpose,
+      entry_context: input.entryContext,
+      post_ready_control: postReadyControl,
+      source_revision: input.sourceRevision,
+      plan_digest: input.planDigest,
+      plan_change_head_seq: input.planChangeHeadSeq,
+      question: group.question,
+      item_refs: itemRefs,
+      allowed_options: options,
+      answer_example: group.answerExample,
+      proposed_change: group.proposedChange ?? null
+    };
+    return {
+      group_id: `GROUP-${digest(signature).slice(0, 24)}`,
+      question_id: `QUESTION-${digest({ ...signature, kind: "question" }).slice(0, 24)}`,
+      question: String(group.question ?? ""),
+      item_refs: itemRefs,
+      allowed_options: options,
+      answer_example: String(group.answerExample ?? ""),
+      proposed_change: group.proposedChange ?? null
+    };
+  }).sort((left, right) => left.group_id.localeCompare(right.group_id, "en"));
+  const base = {
+    purpose: input.purpose,
+    entry_context: input.entryContext,
+    post_ready_control: postReadyControl,
+    run_instance_id: input.runInstanceId,
+    source_revision: input.sourceRevision,
+    plan_digest: input.planDigest,
+    plan_change_head_seq: input.planChangeHeadSeq,
+    groups
+  };
+  return {
+    presentation_id: `PRESENTATION-${digest(base).slice(0, 24)}`,
+    ...base
+  };
+}
+function workflowEvents(sourcePack) {
+  const output = [];
+  let invalidCollectionOrder = false;
+  for (const [collection, values] of [
+    ["decision_records", sourcePack?.decision_records],
+    ["clarification_events", sourcePack?.clarification_events],
+    ["execution_events", sourcePack?.execution_events]
+  ]) {
+    let prior = 0;
+    for (let index = 0; index < records2(values).length; index += 1) {
+      const event = records2(values)[index];
+      const seq = Number(event.clarification_event_seq);
+      output.push({ collection, index, seq, event });
+      if (!Number.isSafeInteger(seq) || seq <= prior) invalidCollectionOrder = true;
+      prior = seq;
+    }
+  }
+  return { events: output.sort((left, right) => left.seq - right.seq), invalidCollectionOrder };
+}
+function allPresentedItems(presentation) {
+  const byKey = /* @__PURE__ */ new Map();
+  for (const group of records2(presentation?.groups)) for (const item of records2(group.item_refs)) {
+    byKey.set(itemKey(item), { item, group });
+  }
+  return byKey;
+}
+function validPresentedRecord(record2, input, diagnostics, path4, optionCode, itemRefs = []) {
+  const shown = input.currentPresentation;
+  const groups = records2(shown?.groups);
+  const groupIds = new Set(groups.map((group) => group.group_id));
+  const selectedIds = Array.isArray(record2.decision_group_ids) ? record2.decision_group_ids : [];
+  let valid = Boolean(shown) && record2.presentation_id === shown.presentation_id && selectedIds.length > 0 && selectedIds.every((id) => groupIds.has(id));
+  const selectedGroups = groups.filter((group) => selectedIds.includes(group.group_id));
+  if (optionCode && !selectedGroups.every((group) => records2(group.allowed_options).some((option) => option.option_code === optionCode))) valid = false;
+  const presented = new Set(selectedGroups.flatMap((group) => records2(group.item_refs).map(itemKey)));
+  if (itemRefs.some((ref) => !presented.has(itemKey(ref)))) valid = false;
+  if (!valid) diagnostics.push(diagnostic8(
+    "PRESENTATION_BINDING_INVALID",
+    path4,
+    "User records must bind the current displayed presentation, groups, items, and allowed option."
+  ));
+  return valid;
+}
+function selectedProposedChange(record2, input) {
+  if (input.currentPresentation?.entry_context !== "post_ready_change") return null;
+  const selectedIds = Array.isArray(record2.decision_group_ids) ? record2.decision_group_ids.filter((id) => typeof id === "string") : [];
+  const selected = records2(input.currentPresentation?.groups).filter(
+    (group) => selectedIds.includes(group.group_id)
+  );
+  if (selected.length === 0) return void 0;
+  const proposals = selected.map((group) => group.proposed_change);
+  return proposals.every((proposal) => canonicalStringify(proposal) === canonicalStringify(proposals[0])) ? proposals[0] : void 0;
+}
+function validateProposedChange(valid, diagnostics, path4) {
+  if (!valid) diagnostics.push(diagnostic8(
+    "POST_READY_PROPOSED_CHANGE_MISMATCH",
+    path4,
+    "The applied record must exactly implement the proposed change shown in the current preview."
+  ));
+  return valid;
+}
+function eventBindingValid(event, input, diagnostics, path4) {
+  let valid = true;
+  if (event.run_instance_id !== input.runInstanceId || event.run_identity_digest !== input.runIdentityDigest) {
+    diagnostics.push(diagnostic8("RUN_INTEGRITY_ERROR", path4, "Execution event run identity does not match this run."));
+    valid = false;
+  }
+  if (typeof event.authority_scope !== "string" || !scopeContains(event.authority_scope, input.executionScope ?? "checkout")) {
+    diagnostics.push(diagnostic8("EXECUTION_AUTHORITY_INVALID", `${path4}/authority_scope`, "Actor authority must contain the execution scope."));
+    valid = false;
+  }
+  return valid;
+}
+var DNE_REASONS_BY_STATUS = Object.freeze({
+  grounded: /* @__PURE__ */ new Set(["user_deferred", "scope_excluded_for_run", "other_explicit"]),
+  conditional: /* @__PURE__ */ new Set(["temporary_rule_unconfirmed", "authority_missing", "user_deferred", "scope_excluded_for_run", "other_explicit"]),
+  blocked: /* @__PURE__ */ new Set(["business_rule_missing", "authority_missing", "capability_unavailable", "user_deferred", "scope_excluded_for_run", "other_explicit"]),
+  exploratory: /* @__PURE__ */ new Set(["risk_not_adopted", "user_deferred", "scope_excluded_for_run", "other_explicit"])
+});
+function validateSetEvent(event, input, itemsByKey, diagnostics, path4) {
+  let valid = eventBindingValid(event, input, diagnostics, path4);
+  const presentation = input.currentPresentation;
+  if (!presentation || event.presented_presentation_id !== presentation.presentation_id || event.presented_plan_digest !== input.planDigest) {
+    diagnostics.push(diagnostic8("PRESENTATION_BINDING_INVALID", path4, "Execution decision must bind the current presented plan."));
+    return false;
+  }
+  const groupIds = new Set(records2(presentation.groups).map((group) => group.group_id));
+  if (!Array.isArray(event.decision_group_ids) || event.decision_group_ids.length === 0 || event.decision_group_ids.some((id) => !groupIds.has(id))) {
+    diagnostics.push(diagnostic8("PRESENTATION_GROUP_INVALID", `${path4}/decision_group_ids`, "Decision group must be one of the displayed groups."));
+    valid = false;
+  }
+  const presented = allPresentedItems(presentation);
+  const seen = /* @__PURE__ */ new Set();
+  for (let index = 0; index < records2(event.decisions).length; index += 1) {
+    const decision = records2(event.decisions)[index];
+    const key = itemKey(decision);
+    const decisionPath = `${path4}/decisions/${index}`;
+    if (seen.has(key)) {
+      diagnostics.push(diagnostic8("EXECUTION_BATCH_DUPLICATE", decisionPath, "One append batch cannot modify an item twice."));
+      valid = false;
+    }
+    seen.add(key);
+    const current = itemsByKey.get(key);
+    const shown = presented.get(key)?.item;
+    if (!current || !shown || shown.item_semantic_digest !== current.item_semantic_digest || shown.item_semantic_change_head_seq !== current.item_semantic_change_head_seq || decision.item_semantic_digest !== current.item_semantic_digest || decision.item_semantic_change_head_seq !== current.item_semantic_change_head_seq) {
+      diagnostics.push(diagnostic8("PRESENTED_ITEM_VERSION_INVALID", decisionPath, "Decision must bind the current displayed item digest and change head."));
+      valid = false;
+      continue;
+    }
+    const group = presented.get(key).group;
+    const postReadyChange = presentation.entry_context === "post_ready_change" ? group.proposed_change : null;
+    const optionValid = postReadyChange?.kind === "change_execution_disposition" ? records2(group.allowed_options).some((option) => option.option_code === "apply") && decision.execution_disposition === postReadyChange.disposition && decision.reason_code === postReadyChange.reason_code && decision.reason === postReadyChange.reason : records2(group.allowed_options).some((option) => option.option_code === decision.execution_disposition);
+    if (!event.decision_group_ids.includes(group.group_id) || !optionValid) {
+      diagnostics.push(diagnostic8("PRESENTATION_OPTION_INVALID", decisionPath, "Decision option must be allowed by the displayed group."));
+      valid = false;
+    }
+    if (decision.execution_disposition === "execute" && (current.item_kind !== "case" || current.semantic_status !== "grounded" || decision.reason_code !== "selected_for_run")) {
+      diagnostics.push(diagnostic8("EXECUTION_STATUS_INVALID", decisionPath, "Only a Grounded Case may be Execute."));
+      valid = false;
+    }
+    if (decision.execution_disposition === "do_not_execute" && (typeof decision.reason !== "string" || decision.reason.trim().length === 0 || decision.reason_code === "not_applicable")) {
+      diagnostics.push(diagnostic8("EXECUTION_REASON_INVALID", decisionPath, "User DoNotExecute requires a nonempty non-NotApplicable reason."));
+      valid = false;
+    }
+    const statusReasons = DNE_REASONS_BY_STATUS[
+      /** @type {keyof typeof DNE_REASONS_BY_STATUS} */
+      current.semantic_status
+    ];
+    if (decision.execution_disposition === "do_not_execute" && !statusReasons?.has(decision.reason_code)) {
+      diagnostics.push(diagnostic8(
+        "EXECUTION_REASON_STATUS_MISMATCH",
+        `${decisionPath}/reason_code`,
+        "DoNotExecute reason code does not match the item semantic status."
+      ));
+      valid = false;
+    }
+  }
+  return valid;
+}
+function validPause(event, input, diagnostics, path4) {
+  let valid = eventBindingValid(event, input, diagnostics, path4);
+  if (!input.currentPresentation || event.presented_presentation_id !== input.currentPresentation.presentation_id || event.presented_plan_digest !== input.planDigest) {
+    diagnostics.push(diagnostic8("PRESENTATION_BINDING_INVALID", path4, "Pause must bind the current presentation and plan."));
+    valid = false;
+  }
+  const expectedPending = [...allPresentedItems(input.currentPresentation).values()].map((entry) => entry.item).filter((item) => input.itemsByKey?.get(itemKey(item))?.execution_disposition === "pending").map(itemKey).sort();
+  const submittedPending = records2(event.pending_item_refs).map(itemKey).sort();
+  if (canonicalStringify(submittedPending) !== canonicalStringify(expectedPending)) {
+    diagnostics.push(diagnostic8(
+      "PAUSE_PENDING_SET_INVALID",
+      `${path4}/pending_item_refs`,
+      "Pause must bind the exact pending item set displayed by the current presentation."
+    ));
+    valid = false;
+  }
+  const expectedTarget = input.currentPresentation?.purpose === "final_confirmation" ? "final_confirmation" : "execution_closure";
+  if (event.resume_target !== expectedTarget) {
+    diagnostics.push(diagnostic8(
+      "PAUSE_RESUME_TARGET_INVALID",
+      `${path4}/resume_target`,
+      "Pause resume target must match the displayed workflow purpose."
+    ));
+    valid = false;
+  }
+  return valid;
+}
+function validConfirmation(event, input, diagnostics, path4) {
+  let valid = eventBindingValid(event, input, diagnostics, path4);
+  const shown = input.currentPresentation;
+  if (!shown || shown.purpose !== "final_confirmation" || event.presented_prompt_id !== shown.presentation_id) {
+    diagnostics.push(diagnostic8("CONFIRMATION_PRESENTATION_INVALID", path4, "Confirmation must bind the latest final-confirmation presentation."));
+    valid = false;
+  }
+  if (event.presented_plan_digest !== input.planDigest || event.presented_plan_change_head_seq !== input.planChangeHeadSeq || event.presented_source_revision !== input.sourceRevision) {
+    diagnostics.push(diagnostic8("CONFIRMATION_VERSION_INVALID", path4, "Confirmation must bind the current revision, plan digest, and change head."));
+    valid = false;
+  }
+  return valid;
+}
+function validReanalysis(event, input, itemsByKey, diagnostics, path4) {
+  const optionCode = input.currentPresentation?.entry_context === "post_ready_change" ? "apply" : "request_reanalysis";
+  let valid = validPresentedRecord(event, input, diagnostics, path4, optionCode, records2(event.affected_items));
+  const proposed = selectedProposedChange(event, input);
+  if (proposed && !validateProposedChange(
+    proposed.kind === "request_reanalysis" && canonicalStringify(strings2(event.source_locator_ids)) === canonicalStringify(strings2(proposed.source_locator_ids)) && event.reason === proposed.reason,
+    diagnostics,
+    path4
+  )) valid = false;
+  const locatorIds = new Set(records2(input.sourcePack?.locators).map((locator) => locator.locator_id));
+  if (!Array.isArray(event.source_locator_ids) || event.source_locator_ids.length === 0 || event.source_locator_ids.some((id) => !locatorIds.has(id))) {
+    diagnostics.push(diagnostic8(
+      "REANALYSIS_LOCATOR_INVALID",
+      `${path4}/source_locator_ids`,
+      "Reanalysis must name existing locators from the immutable source set."
+    ));
+    valid = false;
+  }
+  const seen = /* @__PURE__ */ new Set();
+  for (let index = 0; index < records2(event.affected_items).length; index += 1) {
+    const ref = records2(event.affected_items)[index];
+    const key = itemKey(ref);
+    const current = itemsByKey.get(key);
+    if (seen.has(key) || !current || ref.item_semantic_digest !== current.item_semantic_digest || ref.item_semantic_change_head_seq !== current.item_semantic_change_head_seq) {
+      diagnostics.push(diagnostic8(
+        "REANALYSIS_ITEM_VERSION_INVALID",
+        `${path4}/affected_items/${index}`,
+        "Reanalysis must bind each current item version exactly once."
+      ));
+      valid = false;
+    }
+    seen.add(key);
+  }
+  return valid;
+}
+function validExploratoryAdoption(decision, input, itemsByKey, diagnostics, path4) {
+  let valid = validPresentedRecord(
+    decision,
+    input,
+    diagnostics,
+    path4,
+    input.currentPresentation?.entry_context === "post_ready_change" ? "apply" : "adopt",
+    [{ item_kind: "exploratory", item_id: decision.exploratory_id }]
+  );
+  const shown = input.currentPresentation;
+  const proposed = selectedProposedChange(decision, input);
+  if (proposed && !validateProposedChange(
+    proposed.kind === "supplement_business_rule" && decision.business_rule === proposed.text,
+    diagnostics,
+    path4
+  )) valid = false;
+  const key = `exploratory\0${decision.exploratory_id}`;
+  const item = itemsByKey.get(key);
+  const presented = shown ? allPresentedItems(shown).get(key) : null;
+  const groupIds = new Set(records2(shown?.groups).map((group) => group.group_id));
+  if (!shown || decision.presentation_id !== shown.presentation_id || !Array.isArray(decision.decision_group_ids) || decision.decision_group_ids.length === 0 || decision.decision_group_ids.some((id) => !groupIds.has(id))) valid = false;
+  if (!item || item.semantic_status !== "exploratory" || !presented || !decision.decision_group_ids.includes(presented.group.group_id) || decision.item_semantic_digest !== item.item_semantic_digest || decision.item_semantic_change_head_seq !== item.item_semantic_change_head_seq) {
+    diagnostics.push(diagnostic8("ADOPTION_ITEM_VERSION_INVALID", path4, "Exploratory adoption must bind the current displayed risk version."));
+    valid = false;
+  }
+  const locatorIds = new Set(records2(input.sourcePack?.locators).map((locator) => locator.locator_id));
+  if (!locatorIds.has(decision.evidence_ref) || decision.evidence_level !== "E3" || !scopeContains(decision.authority_scope, decision.effective_scope)) {
+    diagnostics.push(diagnostic8("ADOPTION_AUTHORITY_INVALID", path4, "Exploratory adoption requires an E3 locator and authority covering its effective scope."));
+    valid = false;
+  }
+  return valid;
+}
+function validDecisionSupersession(decision, sourcePack, diagnostics, path4) {
+  if (decision.disposition !== "final") return true;
+  const prior = records2(sourcePack?.decision_records).filter((candidate) => candidate.clarification_event_seq < decision.clarification_event_seq);
+  const decisionRoots = Array.isArray(decision.root_issue_ids) ? decision.root_issue_ids : [];
+  const temporaryForRoots = prior.filter((candidate) => candidate.disposition === "temporary" && (Array.isArray(candidate.root_issue_ids) ? candidate.root_issue_ids : []).some((root) => decisionRoots.includes(root)));
+  const supplied = Array.isArray(decision.supersedes_decision_ids) ? decision.supersedes_decision_ids : [];
+  let valid = true;
+  for (const id of supplied) {
+    const target = prior.find((candidate) => candidate.decision_id === id);
+    if (!target || target.disposition !== "temporary") {
+      diagnostics.push(diagnostic8("DECISION_SUPERSESSION_INVALID", `${path4}/supersedes_decision_ids`, "A final Decision may supersede only a retained temporary Decision."));
+      valid = false;
+    }
+  }
+  if (temporaryForRoots.some((candidate) => !supplied.includes(candidate.decision_id))) {
+    diagnostics.push(diagnostic8("DECISION_SUPERSESSION_REQUIRED", `${path4}/supersedes_decision_ids`, "A final Decision for a temporary root must explicitly append its supersession link."));
+    valid = false;
+  }
+  return valid;
+}
+function replayWorkflowHistory(input) {
+  const diagnostics = [];
+  const items = structuredClone(records2(input.items));
+  const itemsByKey = new Map(items.map((entry) => [itemKey(entry), entry]));
+  const history = workflowEvents(input.sourcePack ?? {});
+  const events = history.events;
+  if (history.invalidCollectionOrder || events.some((entry, index) => entry.seq !== index + 1)) diagnostics.push(diagnostic8(
+    "WORKFLOW_EVENT_SEQUENCE_INVALID",
+    "/",
+    "All workflow records must share one continuous globally unique sequence beginning at one."
+  ));
+  const eventDigest = digest(events.map((entry) => ({
+    collection: entry.collection,
+    content: entry.event
+  })));
+  let planChangeHeadSeq = Number(input.planChangeHeadSeq ?? 0);
+  const originalPlanChangeHeadSeq = planChangeHeadSeq;
+  let activePause = input.priorActivePause ? structuredClone(input.priorActivePause) : null;
+  const resumedPauseIds = /* @__PURE__ */ new Set();
+  let confirmation = input.priorConfirmation ? structuredClone(input.priorConfirmation) : null;
+  let executionValid = diagnostics.length === 0;
+  const batchSubjects = /* @__PURE__ */ new Set();
+  let batchHasPlanMutation = false;
+  let batchHasConfirmation = false;
+  for (const entry of events) {
+    if (entry.seq <= Number(input.priorWorkflowEventHeadSeq ?? 0)) continue;
+    let subjects = [];
+    if (entry.collection === "execution_events" && entry.event.type === "set_dispositions") {
+      subjects = records2(entry.event.decisions).map((decision) => `item:${itemKey(decision)}`);
+      batchHasPlanMutation = true;
+    } else if (entry.collection === "clarification_events" && entry.event.type === "request_reanalysis") {
+      subjects = records2(entry.event.affected_items).map((ref) => `item:${itemKey(ref)}`);
+      batchHasPlanMutation = true;
+    } else if (entry.collection === "decision_records" && entry.event.decision_type === "exploratory_adoption") {
+      subjects = [`item:exploratory\0${entry.event.exploratory_id}`];
+      batchHasPlanMutation = true;
+    } else if (entry.collection === "decision_records") {
+      subjects = (Array.isArray(entry.event.root_issue_ids) ? entry.event.root_issue_ids : []).map((root) => `root:${root}`);
+      batchHasPlanMutation = true;
+    } else if (entry.collection === "clarification_events") {
+      subjects = (Array.isArray(entry.event.root_issue_ids) ? entry.event.root_issue_ids : []).map((root) => `root:${root}`);
+      batchHasPlanMutation = true;
+    } else if (entry.collection === "execution_events" && entry.event.type === "confirm_execution_plan") {
+      batchHasConfirmation = true;
+    }
+    for (const subject of subjects) {
+      if (batchSubjects.has(subject)) {
+        diagnostics.push(diagnostic8(
+          "WORKFLOW_BATCH_SUBJECT_DUPLICATE",
+          "/",
+          "One append batch cannot modify the same business decision object more than once."
+        ));
+        executionValid = false;
+      }
+      batchSubjects.add(subject);
+    }
+  }
+  if (batchHasPlanMutation && batchHasConfirmation) {
+    diagnostics.push(diagnostic8(
+      "CONFIRMATION_BATCH_CONFLICT",
+      "/",
+      "A plan-changing reply must be recompiled and displayed before it can be confirmed."
+    ));
+    executionValid = false;
+  }
+  for (const entry of events) {
+    if (entry.seq <= Number(input.priorWorkflowEventHeadSeq ?? 0)) continue;
+    if (entry.collection === "clarification_events" && entry.event.type === "request_reanalysis") {
+      const beforeDiagnostics = diagnostics.length;
+      if (!validReanalysis(entry.event, input, itemsByKey, diagnostics, `/clarification_events/${entry.index}`) || diagnostics.length !== beforeDiagnostics) {
+        executionValid = false;
+        continue;
+      }
+      planChangeHeadSeq = Math.max(planChangeHeadSeq, entry.seq);
+      confirmation = null;
+      continue;
+    }
+    if (entry.collection === "clarification_events" && entry.event.type === "reopen_root_issues") {
+      if (!validPresentedRecord(
+        entry.event,
+        input,
+        diagnostics,
+        `/clarification_events/${entry.index}`,
+        input.currentPresentation?.entry_context === "post_ready_change" ? "apply" : "reopen_root_issues"
+      )) {
+        executionValid = false;
+        continue;
+      }
+      const proposed = selectedProposedChange(entry.event, input);
+      if (proposed && !validateProposedChange(
+        proposed.kind === "reopen_root_issues" && canonicalStringify(strings2(entry.event.root_issue_ids)) === canonicalStringify(strings2(proposed.root_issue_ids)),
+        diagnostics,
+        `/clarification_events/${entry.index}`
+      )) {
+        executionValid = false;
+        continue;
+      }
+      planChangeHeadSeq = Math.max(planChangeHeadSeq, entry.seq);
+      confirmation = null;
+      continue;
+    }
+    if (entry.collection === "clarification_events" && entry.event.type === "request_delivery") {
+      if (!validPresentedRecord(
+        entry.event,
+        input,
+        diagnostics,
+        `/clarification_events/${entry.index}`,
+        "request_delivery"
+      )) executionValid = false;
+      else {
+        planChangeHeadSeq = Math.max(planChangeHeadSeq, entry.seq);
+        confirmation = null;
+      }
+      continue;
+    }
+    if (entry.collection === "decision_records") {
+      if (entry.event.decision_type === "exploratory_adoption") {
+        if (!validExploratoryAdoption(
+          entry.event,
+          input,
+          itemsByKey,
+          diagnostics,
+          `/decision_records/${entry.index}`
+        )) {
+          executionValid = false;
+          continue;
+        }
+        planChangeHeadSeq = Math.max(planChangeHeadSeq, entry.seq);
+        confirmation = null;
+      } else if (["final", "temporary", "unknown", "deferred"].includes(entry.event.disposition)) {
+        const selectedItems = (Array.isArray(entry.event.affected_obligation_ids) ? entry.event.affected_obligation_ids : []).map((itemId) => ({ item_kind: "formal_test_point", item_id: itemId }));
+        if (!validPresentedRecord(
+          entry.event,
+          input,
+          diagnostics,
+          `/decision_records/${entry.index}`,
+          input.currentPresentation?.entry_context === "post_ready_change" ? "apply" : entry.event.disposition,
+          selectedItems
+        ) || !validDecisionSupersession(
+          entry.event,
+          input.sourcePack,
+          diagnostics,
+          `/decision_records/${entry.index}`
+        )) {
+          executionValid = false;
+          continue;
+        }
+        const proposed = selectedProposedChange(entry.event, input);
+        if (proposed && !validateProposedChange(
+          proposed.kind === "supplement_business_rule" && entry.event.answer === proposed.text,
+          diagnostics,
+          `/decision_records/${entry.index}`
+        )) {
+          executionValid = false;
+          continue;
+        }
+        planChangeHeadSeq = Math.max(planChangeHeadSeq, entry.seq);
+        confirmation = null;
+      }
+      continue;
+    }
+    if (entry.collection !== "execution_events") continue;
+    const path4 = `/execution_events/${entry.index}`;
+    if (entry.event.type === "set_dispositions") {
+      const beforeDiagnostics = diagnostics.length;
+      const valid = validateSetEvent(entry.event, input, itemsByKey, diagnostics, path4);
+      if (!valid || diagnostics.length !== beforeDiagnostics) {
+        executionValid = false;
+        continue;
+      }
+      let changed = false;
+      for (const decision of records2(entry.event.decisions)) {
+        const current = itemsByKey.get(itemKey(decision));
+        if (current.execution_disposition !== decision.execution_disposition || current.reason_code !== decision.reason_code || current.reason !== decision.reason || current.basis?.execution_event_id !== entry.event.event_id) changed = true;
+        Object.assign(current, {
+          execution_disposition: decision.execution_disposition,
+          reason_code: decision.reason_code,
+          reason: decision.reason,
+          basis: { origin: "user_execution_decision", execution_event_id: entry.event.event_id }
+        });
+      }
+      if (changed) {
+        planChangeHeadSeq = Math.max(planChangeHeadSeq, entry.seq);
+        confirmation = null;
+      }
+    } else if (entry.event.type === "pause_execution_closure") {
+      if (validPause(entry.event, { ...input, itemsByKey }, diagnostics, path4) && !activePause) activePause = entry.event;
+      else {
+        diagnostics.push(diagnostic8("PAUSE_EVENT_INVALID", path4, "Only one current valid pause may be active."));
+        executionValid = false;
+      }
+    } else if (entry.event.type === "resume_execution_closure") {
+      if (!eventBindingValid(entry.event, input, diagnostics, path4) || !activePause || activePause.event_id !== entry.event.pause_event_id || resumedPauseIds.has(entry.event.pause_event_id)) {
+        diagnostics.push(diagnostic8("PAUSE_RESUME_INVALID", path4, "Resume must reference the one current unmatched pause."));
+        executionValid = false;
+      } else {
+        resumedPauseIds.add(entry.event.pause_event_id);
+        activePause = null;
+      }
+    } else if (entry.event.type === "confirm_execution_plan") {
+      if (validConfirmation(entry.event, { ...input, planChangeHeadSeq }, diagnostics, path4)) confirmation = {
+        confirmation_event_id: entry.event.event_id,
+        confirmation_event_seq: entry.seq,
+        presented_source_revision: entry.event.presented_source_revision,
+        presented_prompt_id: entry.event.presented_prompt_id,
+        confirmed_plan_digest: entry.event.presented_plan_digest,
+        confirmed_plan_change_head_seq: entry.event.presented_plan_change_head_seq,
+        actor: entry.event.actor,
+        confirmed_at: entry.event.event_at,
+        authority_scope: entry.event.authority_scope
+      };
+      else executionValid = false;
+    } else {
+      diagnostics.push(diagnostic8("EXECUTION_EVENT_TYPE_INVALID", path4, "Unknown execution event type."));
+      executionValid = false;
+    }
+  }
+  if (!executionValid) {
+    for (let index = 0; index < items.length; index += 1) items[index] = structuredClone(input.items[index]);
+    confirmation = null;
+    planChangeHeadSeq = originalPlanChangeHeadSeq;
+    activePause = input.priorActivePause ? structuredClone(input.priorActivePause) : null;
+  }
+  return {
+    items,
+    workflow_event_head_seq: events.length ? events[events.length - 1].seq : 0,
+    workflow_event_log_digest: eventDigest,
+    plan_change_head_seq: planChangeHeadSeq,
+    active_pause: activePause ? structuredClone(activePause) : null,
+    confirmation,
+    diagnostics
+  };
+}
+
+// src/execution-plan.mjs
+var REASON_CODES = /* @__PURE__ */ new Set([
+  "selected_for_run",
+  "not_applicable",
+  "user_deferred",
+  "temporary_rule_unconfirmed",
+  "business_rule_missing",
+  "authority_missing",
+  "capability_unavailable",
+  "risk_not_adopted",
+  "scope_excluded_for_run",
+  "other_explicit"
+]);
+function diagnostic9(code2, path4, message) {
+  return { category: "classification", code: code2, path: path4, message };
+}
+function records3(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+}
+function strings3(value) {
+  return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string"))].sort() : [];
+}
+function normalizeSemantic(value) {
+  if (Array.isArray(value)) return value.map(normalizeSemantic);
+  if (!value || typeof value !== "object") return value;
+  const result = {};
+  for (const [key, child] of Object.entries(value)) {
+    if ([
+      "run_instance_id",
+      "source_revision",
+      "event_id",
+      "clarification_event_seq",
+      "event_at",
+      "confirmed_at",
+      "presentation_id",
+      "prompt_id",
+      "group_id",
+      "question_id",
+      "item_semantic_change_head_seq",
+      "plan_change_head_seq"
+    ].includes(key)) continue;
+    result[key] = normalizeSemantic(child);
+  }
+  return result;
+}
+function maximumEventSequence(sourcePack) {
+  let maximum = 0;
+  for (const field of ["decision_records", "clarification_events", "execution_events"]) {
+    for (const item of records3(sourcePack?.[field])) {
+      if (Number.isSafeInteger(item.clarification_event_seq)) maximum = Math.max(maximum, item.clarification_event_seq);
+    }
+  }
+  return maximum;
+}
+function claimClosure(claimIds, evidenceClaims) {
+  const byId = new Map(records3(evidenceClaims?.claims).map((claim) => [String(claim.claim_id ?? ""), claim]));
+  return strings3(claimIds).flatMap((claimId) => byId.has(claimId) ? [{ claim_id: claimId, semantic: normalizeSemantic(byId.get(claimId)) }] : []);
+}
+function itemDigest(item, evidenceClaims) {
+  const evidenceRefs = item.item_kind === "case" ? [...strings3(item.semantic.evidence_refs), ...strings3(item.semantic.source_claim_ids)] : item.semantic_status === "not_applicable" ? [String(item.semantic.exclusion_claim_id ?? "")] : strings3(item.semantic.source_claim_ids);
+  return digest({
+    item_kind: item.item_kind,
+    item_id: item.item_id,
+    title: item.title,
+    semantic_status: item.semantic_status,
+    semantic: normalizeSemantic(item.semantic),
+    claims: claimClosure(evidenceRefs, evidenceClaims)
+  });
+}
+function basisSemantic(item, sourcePack, evidenceClaims) {
+  if (!item.basis) return null;
+  if (item.basis.origin === "default_grounded_recommendation") return item.basis;
+  if (item.basis.origin === "derived_not_applicable") {
+    return {
+      origin: item.basis.origin,
+      exclusion_claim_semantic_digest: digest(claimClosure([item.basis.exclusion_claim_id], evidenceClaims))
+    };
+  }
+  if (item.basis.origin === "user_execution_decision") {
+    const event = records3(sourcePack?.execution_events).find((candidate) => candidate.event_id === item.basis.execution_event_id);
+    const decision = records3(event?.decisions).find((candidate) => candidate.item_kind === item.item_kind && candidate.item_id === item.item_id);
+    return { origin: item.basis.origin, execution_decision_semantic_digest: digest(normalizeSemantic({
+      actor: event?.actor,
+      authority_scope: event?.authority_scope,
+      decision
+    })) };
+  }
+  return item.basis;
+}
+function itemKey2(item) {
+  return `${item.item_kind}\0${item.item_id}`;
+}
+function adoptionDecisionSemantic(decision) {
+  return {
+    action: "adopt_exploratory",
+    exploratory_id: String(decision?.exploratory_id ?? ""),
+    business_rule: String(decision?.business_rule ?? "").normalize("NFC").trim(),
+    expected_result: String(decision?.expected_result ?? "").normalize("NFC").trim(),
+    confirmer: String(decision?.confirmer ?? "").normalize("NFC").trim(),
+    authority_scope: String(decision?.authority_scope ?? "").normalize("NFC").trim(),
+    effective_scope: String(decision?.effective_scope ?? "").normalize("NFC").trim(),
+    evidence_level: decision?.evidence_level
+  };
+}
+function promotionSemantic(promotion, sourcePack) {
+  const decision = records3(sourcePack?.decision_records).find(
+    (candidate) => candidate.decision_id === promotion.adoption_decision_id
+  );
+  return {
+    exploratory_id: promotion.exploratory_id,
+    adoption_decision_semantic_digest: promotion.adoption_decision_semantic_digest ?? digest(adoptionDecisionSemantic(decision)),
+    obligation_ids: strings3(promotion.obligation_ids),
+    case_ids: strings3(promotion.case_ids)
+  };
+}
+function derivePromotions(semanticBundle, obligations, evidenceClaims, sourcePack, priorWorkflowState) {
+  const promotions = records3(priorWorkflowState?.promoted_exploratory).map((item) => structuredClone(item));
+  const promotedIds = new Set(promotions.map((item) => String(item.exploratory_id ?? "")));
+  const priorItems = records3(priorWorkflowState?.execution_plan?.items ?? priorWorkflowState?.plan?.items);
+  const knownExploratory = /* @__PURE__ */ new Set([
+    ...records3(semanticBundle?.exploratory).map((item) => String(item.exploratory_id ?? "")),
+    ...priorItems.filter((item) => item.item_kind === "exploratory").map((item) => String(item.item_id ?? ""))
+  ]);
+  const claims = records3(evidenceClaims?.claims);
+  const formalIds = new Set(records3(semanticBundle?.coverage?.formal?.entries).map((entry) => String(entry.obligation_id ?? "")));
+  const cases = [...records3(semanticBundle?.grounded), ...records3(semanticBundle?.conditional)];
+  const adoptions = records3(sourcePack?.decision_records).filter((decision) => decision.decision_type === "exploratory_adoption").sort((left, right) => Number(left.clarification_event_seq ?? 0) - Number(right.clarification_event_seq ?? 0));
+  for (const adoption of adoptions) {
+    const exploratoryId = String(adoption.exploratory_id ?? "");
+    if (!knownExploratory.has(exploratoryId) || promotedIds.has(exploratoryId)) continue;
+    const adoptionClaimIds = new Set(claims.filter((claim) => claim.decision_id === adoption.decision_id && claim.level === "E3").map((claim) => String(claim.claim_id ?? "")));
+    const obligationIds = records3(obligations).filter((obligation) => formalIds.has(String(obligation.obligation_id ?? "")) && strings3(obligation.source_claim_ids).some((claimId) => adoptionClaimIds.has(claimId))).map((obligation) => String(obligation.obligation_id)).sort();
+    if (obligationIds.length === 0) continue;
+    const obligationSet = new Set(obligationIds);
+    const caseIds = cases.filter((entry) => strings3(entry.obligation_ids).some((obligationId) => obligationSet.has(obligationId))).map((entry) => String(entry.case_id ?? "")).filter(Boolean).sort();
+    promotions.push({
+      exploratory_id: exploratoryId,
+      adoption_decision_id: String(adoption.decision_id ?? ""),
+      obligation_ids: obligationIds,
+      case_ids: [...new Set(caseIds)]
+    });
+    promotedIds.add(exploratoryId);
+  }
+  return promotions;
+}
+function legalDisposition(item, sourcePack, evidenceClaims, diagnostics, index) {
+  const path4 = `/execution_plan/items/${index}`;
+  if (item.execution_disposition === "pending") {
+    if (item.reason_code !== null || item.reason !== null || item.basis !== null) diagnostics.push(diagnostic9(
+      "PENDING_METADATA_INVALID",
+      path4,
+      "Pending items cannot carry a reason or basis."
+    ));
+    return;
+  }
+  if (!REASON_CODES.has(item.reason_code) || typeof item.reason !== "string" || item.reason.trim().length === 0 || !item.basis) diagnostics.push(diagnostic9(
+    "EXECUTION_REASON_INVALID",
+    path4,
+    "A non-pending item requires a legal reason, explanation, and basis."
+  ));
+  if (item.execution_disposition === "execute" && (item.item_kind !== "case" || item.semantic_status !== "grounded" || item.reason_code !== "selected_for_run")) diagnostics.push(diagnostic9(
+    "EXECUTION_STATUS_INVALID",
+    path4,
+    "Only a Grounded Case can be Execute."
+  ));
+  const exclusion = item.semantic_status === "not_applicable";
+  const isDerived = item.basis?.origin === "derived_not_applicable";
+  if (exclusion !== (item.execution_disposition === "do_not_execute" && item.reason_code === "not_applicable" && isDerived)) diagnostics.push(diagnostic9(
+    "NOT_APPLICABLE_EXECUTION_INVARIANT",
+    path4,
+    "NotApplicable must use only its derived DoNotExecute basis and vice versa."
+  ));
+  if (isDerived && claimClosure([item.basis.exclusion_claim_id], evidenceClaims).length !== 1) diagnostics.push(diagnostic9(
+    "NOT_APPLICABLE_EXCLUSION_INVALID",
+    `${path4}/basis/exclusion_claim_id`,
+    "The exclusion claim must resolve to accepted evidence."
+  ));
+  if (item.basis?.origin === "user_execution_decision") {
+    const event = records3(sourcePack?.execution_events).find((candidate) => candidate.event_id === item.basis.execution_event_id);
+    if (!event) diagnostics.push(diagnostic9(
+      "EXECUTION_EVENT_MISSING",
+      `${path4}/basis/execution_event_id`,
+      "A user execution decision must reference its retained event."
+    ));
+  }
+}
+function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPlan, sourcePack, promotions, diagnostics) {
+  const obligationById = new Map(records3(obligations).map((item) => [String(item.obligation_id ?? ""), item]));
+  const items = [];
+  const addCase = (entry, semanticStatus) => items.push({
+    item_kind: "case",
+    item_id: String(entry.case_id ?? ""),
+    title: String(entry.title ?? entry.case_id ?? ""),
+    semantic_status: semanticStatus,
+    related_obligation_ids: strings3(entry.obligation_ids),
+    semantic: entry
+  });
+  for (const entry of records3(semanticBundle?.grounded)) addCase(entry, "grounded");
+  for (const entry of records3(semanticBundle?.conditional)) addCase(entry, "conditional");
+  for (const entry of records3(semanticBundle?.blocked)) {
+    const id = String(entry.obligation_id ?? "");
+    const obligation = obligationById.get(id);
+    items.push({
+      item_kind: "formal_test_point",
+      item_id: id,
+      title: String(entry.subject ?? obligation?.title ?? entry.recovery?.question ?? id),
+      semantic_status: "blocked",
+      related_obligation_ids: [id],
+      semantic: entry
+    });
+  }
+  for (const entry of records3(semanticBundle?.coverage?.not_applicable).filter(
+    (candidate) => candidate.subject_kind !== "requirement_fact"
+  )) {
+    const id = String(entry.obligation_id ?? "");
+    const obligation = obligationById.get(id);
+    items.push({
+      item_kind: "formal_test_point",
+      item_id: id,
+      title: String(entry.subject ?? obligation?.title ?? id),
+      semantic_status: "not_applicable",
+      related_obligation_ids: [id],
+      semantic: entry
+    });
+  }
+  const promotedIds = new Set(records3(promotions).map((item) => String(item.exploratory_id ?? "")));
+  for (const entry of records3(semanticBundle?.exploratory).filter(
+    (candidate) => !promotedIds.has(String(candidate.exploratory_id ?? ""))
+  )) items.push({
+    item_kind: "exploratory",
+    item_id: String(entry.exploratory_id ?? ""),
+    title: String(entry.title ?? entry.exploratory_id ?? ""),
+    semantic_status: "exploratory",
+    related_obligation_ids: [],
+    semantic: entry
+  });
+  items.sort((left, right) => itemKey2(left).localeCompare(itemKey2(right), "en"));
+  const seen = /* @__PURE__ */ new Set();
+  const priorByKey = new Map(records3(priorPlan?.items).map((item) => [itemKey2(item), item]));
+  const eventHead = maximumEventSequence(sourcePack);
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const key = itemKey2(item);
+    if (!item.item_id || seen.has(key)) diagnostics.push(diagnostic9(
+      "EXECUTION_ITEM_DUPLICATE",
+      `/execution_plan/items/${index}`,
+      "Each decision item identity must be nonempty and unique."
+    ));
+    seen.add(key);
+    item.item_semantic_digest = itemDigest(item, evidenceClaims);
+    const prior = priorByKey.get(key);
+    item.item_semantic_change_head_seq = prior && prior.item_semantic_digest === item.item_semantic_digest ? Number(prior.item_semantic_change_head_seq ?? 0) : prior ? eventHead : 0;
+    if (prior && prior.item_semantic_digest === item.item_semantic_digest && prior.execution_disposition !== "pending") Object.assign(item, {
+      execution_disposition: prior.execution_disposition,
+      reason_code: prior.reason_code,
+      reason: prior.reason,
+      basis: structuredClone(prior.basis)
+    });
+    else if (item.semantic_status === "grounded") Object.assign(item, {
+      execution_disposition: "execute",
+      reason_code: "selected_for_run",
+      reason: "Selected for this run.",
+      basis: { origin: "default_grounded_recommendation" }
+    });
+    else if (item.semantic_status === "not_applicable") Object.assign(item, {
+      execution_disposition: "do_not_execute",
+      reason_code: "not_applicable",
+      reason: String(item.semantic.reason ?? "Excluded by supported scope evidence."),
+      basis: { origin: "derived_not_applicable", exclusion_claim_id: String(item.semantic.exclusion_claim_id ?? "") }
+    });
+    else Object.assign(item, {
+      execution_disposition: "pending",
+      reason_code: null,
+      reason: null,
+      basis: null
+    });
+    delete item.semantic;
+  }
+  return items;
+}
+function buildCoverage(semanticBundle, items, diagnostics) {
+  const formal = records3(semanticBundle?.coverage?.formal?.entries);
+  if (Number(semanticBundle?.coverage?.formal?.total) !== formal.length) diagnostics.push(diagnostic9(
+    "FORMAL_COUNT_MISMATCH",
+    "/coverage/formal/total",
+    "Formal total must equal its complete entry ledger."
+  ));
+  const formalIds = /* @__PURE__ */ new Set();
+  for (const entry of formal) {
+    const id = String(entry.obligation_id ?? "");
+    if (!id || formalIds.has(id)) diagnostics.push(diagnostic9(
+      "FORMAL_INVENTORY_INVALID",
+      "/coverage/formal/entries",
+      "Formal Test Point identities must be unique."
+    ));
+    formalIds.add(id);
+  }
+  const runnerIds = items.filter((item) => item.item_kind === "case" && item.semantic_status === "grounded" && item.execution_disposition === "execute").map((item) => item.item_id).sort();
+  const coverage = formal.filter((entry) => entry.status !== "not_applicable").map((entry) => {
+    const obligationId = String(entry.obligation_id);
+    const related = items.filter((item) => item.item_kind === "case" && item.semantic_status === "grounded" && item.related_obligation_ids.includes(obligationId)).map((item) => item.item_id).sort();
+    const execute = related.filter((caseId) => runnerIds.includes(caseId));
+    const status = related.length > 0 && execute.length === related.length ? "full" : execute.length > 0 ? "partial" : "none";
+    return { obligation_id: obligationId, related_grounded_case_ids: related, execute_case_ids: execute, status };
+  }).sort((left, right) => left.obligation_id.localeCompare(right.obligation_id, "en"));
+  return { runnerIds, coverage, formal };
+}
+function buildSummary(items, formal, tpCoverage) {
+  const count = (predicate) => items.filter(predicate).length;
+  return {
+    case_count: count((item) => item.item_kind === "case"),
+    formal_test_point_count: formal.length,
+    applicable_formal_test_point_count: formal.filter((item) => item.status !== "not_applicable").length,
+    not_applicable_formal_test_point_count: formal.filter((item) => item.status === "not_applicable").length,
+    full_test_point_count: tpCoverage.filter((item) => item.status === "full").length,
+    partial_test_point_count: tpCoverage.filter((item) => item.status === "partial").length,
+    none_test_point_count: tpCoverage.filter((item) => item.status === "none").length,
+    exploratory_count: count((item) => item.item_kind === "exploratory"),
+    execute_case_count: count((item) => item.item_kind === "case" && item.execution_disposition === "execute"),
+    do_not_execute_case_count: count((item) => item.item_kind === "case" && item.execution_disposition === "do_not_execute"),
+    do_not_execute_formal_test_point_count: count((item) => item.item_kind === "formal_test_point" && item.execution_disposition === "do_not_execute"),
+    do_not_execute_exploratory_count: count((item) => item.item_kind === "exploratory" && item.execution_disposition === "do_not_execute"),
+    pending_case_count: count((item) => item.item_kind === "case" && item.execution_disposition === "pending"),
+    pending_formal_test_point_count: count((item) => item.item_kind === "formal_test_point" && item.execution_disposition === "pending"),
+    pending_exploratory_count: count((item) => item.item_kind === "exploratory" && item.execution_disposition === "pending")
+  };
+}
+function semanticSourceDigest(sourcePack) {
+  return digest(normalizeSemantic({
+    sources: records3(sourcePack?.sources),
+    run_scope: sourcePack?.run_scope,
+    decisions: records3(sourcePack?.decision_records).filter((item) => item.disposition === "final" || item.disposition === "temporary")
+  }));
+}
+function compileExecutionPlan(input) {
+  const diagnostics = [];
+  const semanticBundle = input?.semanticBundle ?? {};
+  const sourcePack = input?.sourcePack ?? {};
+  const promotions = derivePromotions(
+    semanticBundle,
+    input?.obligations,
+    input?.evidenceClaims,
+    sourcePack,
+    input?.priorWorkflowState
+  );
+  const items = buildInitialItems(
+    semanticBundle,
+    input?.obligations,
+    input?.evidenceClaims,
+    input?.priorWorkflowState?.execution_plan ?? input?.priorWorkflowState?.plan,
+    sourcePack,
+    promotions,
+    diagnostics
+  );
+  const semanticSource = semanticSourceDigest(sourcePack);
+  const priorPlan = input?.priorWorkflowState?.execution_plan ?? input?.priorWorkflowState?.plan;
+  const baseCoverage = buildCoverage(semanticBundle, items, diagnostics);
+  const baseProjection = {
+    semantic_source_digest: semanticSource,
+    items: items.map((item) => ({ ...item, basis: basisSemantic(item, sourcePack, input?.evidenceClaims) })),
+    promoted_exploratory: promotions.map((item) => promotionSemantic(item, sourcePack)),
+    test_point_execution_coverage: baseCoverage.coverage
+  };
+  const basePlanDigest = priorPlan?.plan_digest ?? digest(baseProjection);
+  const replay = replayWorkflowHistory({
+    sourcePack,
+    items,
+    priorState: input?.priorWorkflowState,
+    currentPresentation: input?.priorWorkflowState?.presentation_snapshot ?? null,
+    runInstanceId: sourcePack.run_instance_id,
+    runIdentityDigest: input?.runIdentityDigest,
+    executionScope: sourcePack.run_scope,
+    sourceRevision: input?.priorWorkflowState?.presentation_snapshot?.source_revision ?? Math.max(0, Number(sourcePack.source_revision ?? 0) - 1),
+    planDigest: basePlanDigest,
+    planChangeHeadSeq: Number(priorPlan?.plan_change_head_seq ?? 0),
+    priorWorkflowEventHeadSeq: Number(input?.priorWorkflowState?.workflow_event_head_seq ?? 0),
+    priorConfirmation: input?.priorWorkflowState?.confirmation ?? priorPlan?.confirmation ?? null,
+    priorActivePause: input?.priorWorkflowState?.active_pause ?? null
+  });
+  diagnostics.push(...replay.diagnostics);
+  const currentItems = replay.items;
+  currentItems.forEach((item, index) => legalDisposition(item, sourcePack, input?.evidenceClaims, diagnostics, index));
+  const { runnerIds, coverage, formal } = buildCoverage(semanticBundle, currentItems, diagnostics);
+  const summary = buildSummary(currentItems, formal, coverage);
+  const semanticProjection = {
+    semantic_source_digest: semanticSource,
+    items: currentItems.map((item) => ({
+      ...item,
+      basis: basisSemantic(item, sourcePack, input?.evidenceClaims)
+    })),
+    promoted_exploratory: promotions.map((item) => promotionSemantic(item, sourcePack)),
+    test_point_execution_coverage: coverage
+  };
+  const planDigest = digest(semanticProjection);
+  const pending = summary.pending_case_count + summary.pending_formal_test_point_count + summary.pending_exploratory_count;
+  const planChangeHead = replay.plan_change_head_seq;
+  const confirmation = replay.confirmation;
+  const ready = pending === 0 && confirmation && confirmation.confirmed_plan_digest === planDigest && confirmation.confirmed_plan_change_head_seq === planChangeHead;
+  const plan = {
+    status: replay.active_pause ? "paused" : pending > 0 ? "decision_required" : ready ? "ready" : "awaiting_confirmation",
+    resume_target: replay.active_pause?.resume_target ?? null,
+    run_identity_digest: String(input?.runIdentityDigest ?? ""),
+    semantic_source_digest: semanticSource,
+    plan_digest: planDigest,
+    plan_change_head_seq: planChangeHead,
+    items: currentItems,
+    runner_case_ids: runnerIds,
+    promoted_exploratory: promotions,
+    test_point_execution_coverage: coverage,
+    summary,
+    confirmation
+  };
+  const purpose = pending > 0 ? "execution_closure" : "final_confirmation";
+  const pendingItems = currentItems.filter((item) => item.execution_disposition === "pending");
+  const visibleItems = purpose === "execution_closure" ? pendingItems : currentItems;
+  const executionOptions = [
+    { option_code: "do_not_execute", label: "Do not execute", meaning: "Keep the true status and exclude this item from the run." },
+    ...pendingItems.some((item) => item.item_kind === "formal_test_point") ? [
+      { option_code: "final", label: "Provide final rule", meaning: "Supply an authoritative business answer and recompile." },
+      { option_code: "temporary", label: "Provide temporary rule", meaning: "Supply a provisional business answer without upgrading evidence." },
+      { option_code: "reopen_root_issues", label: "Reopen issue", meaning: "Reopen a previously handled business issue and recompile." }
+    ] : [],
+    { option_code: "request_reanalysis", label: "Reanalyze source", meaning: "Re-read existing source locators without adding business truth." },
+    ...pendingItems.some((item) => item.item_kind === "exploratory") ? [{
+      option_code: "adopt",
+      label: "Adopt risk",
+      meaning: "Confirm a business rule and recompile this exploratory risk through the formal pipeline."
+    }] : [],
+    { option_code: "pause", label: "Pause", meaning: "Save the pending plan for later." }
+  ];
+  const presentation = ready ? null : createPresentationSnapshot({
+    purpose,
+    entryContext: "active_analysis",
+    runInstanceId: sourcePack.run_instance_id,
+    sourceRevision: Number(sourcePack.source_revision ?? 0),
+    planDigest,
+    planChangeHeadSeq: planChangeHead,
+    groups: [{
+      question: purpose === "execution_closure" ? "Choose Execute, DoNotExecute, or pause for every pending item." : "Confirm, modify, or pause the complete execution plan.",
+      items: visibleItems,
+      allowedOptions: purpose === "execution_closure" ? executionOptions : [
+        { option_code: "confirm", label: "Confirm", meaning: "Confirm this displayed plan." },
+        { option_code: "modify", label: "Modify", meaning: "Change one or more execution choices." },
+        { option_code: "pause", label: "Pause", meaning: "Save before confirmation." }
+      ],
+      answerExample: purpose === "execution_closure" ? "Do not execute the named item because the business rule is missing." : "Confirm the displayed plan."
+    }]
+  });
+  return {
+    kind: ready ? "ready" : "analysis_only",
+    plan: JSON.parse(canonicalStringify(plan)),
+    presentation,
+    workflow_event_head_seq: replay.workflow_event_head_seq,
+    workflow_event_log_digest: replay.workflow_event_log_digest,
+    diagnostics
+  };
+}
+function projectReadyExecutionPlan(plan, sourcePack, evidenceClaims) {
+  if (plan?.status !== "ready" || !plan.confirmation) throw new Error("Execution plan is not ready.");
+  const items = records3(plan.items).map((item) => {
+    const projected = {
+      item_kind: item.item_kind,
+      item_id: item.item_id,
+      title: item.title,
+      semantic_status: item.semantic_status,
+      item_semantic_digest: item.item_semantic_digest,
+      related_obligation_ids: strings3(item.related_obligation_ids),
+      execution_disposition: item.execution_disposition,
+      reason_code: item.reason_code,
+      reason: item.reason,
+      basis: basisSemantic(item, sourcePack, evidenceClaims)
+    };
+    return projected;
+  });
+  const confirmationSemantic = {
+    action: "confirm_plan",
+    actor: String(plan.confirmation.actor).normalize("NFC").trim(),
+    authority_scope: String(plan.confirmation.authority_scope).normalize("NFC").trim(),
+    confirmed_plan_digest: plan.plan_digest
+  };
+  return {
+    status: "ready",
+    semantic_source_digest: plan.semantic_source_digest,
+    plan_digest: plan.plan_digest,
+    semantic_result_digest: "0".repeat(64),
+    items,
+    runner_case_ids: strings3(plan.runner_case_ids),
+    promoted_exploratory: records3(plan.promoted_exploratory).map((item) => promotionSemantic(item, sourcePack)),
+    test_point_execution_coverage: structuredClone(plan.test_point_execution_coverage),
+    summary: structuredClone(plan.summary),
+    confirmation: {
+      confirmed: true,
+      confirmed_plan_digest: plan.plan_digest,
+      actor: confirmationSemantic.actor,
+      authority_scope: confirmationSemantic.authority_scope,
+      confirmation_semantic_digest: digest(confirmationSemantic)
+    }
+  };
+}
+function semanticResultDigest(bundle) {
+  const projection = normalizeSemantic(structuredClone(bundle));
+  if (projection?.execution_plan) delete projection.execution_plan.semantic_result_digest;
+  return digest(projection);
 }
 
 // src/views/interaction-matrix.mjs
@@ -8302,7 +9872,7 @@ function normalizedStrings(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((item) => typeof item === "string" && item.trim().length > 0))].sort(compareCodePoints5);
 }
-function diagnostic8(category, code2, path4, message) {
+function diagnostic10(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function sortDiagnostics(diagnostics) {
@@ -8360,7 +9930,7 @@ function formalViewIdentityDiagnostics(view) {
   const diagnostics = [];
   if (view.type === "state") {
     const stateNames = elements.flatMap((element) => element.kind === "state" && typeof element.state === "string" ? [element.state] : []);
-    for (const stateName of duplicateStrings(stateNames)) diagnostics.push(diagnostic8(
+    for (const stateName of duplicateStrings(stateNames)) diagnostics.push(diagnostic10(
       "schema",
       "STATE_NAME_DUPLICATE",
       `${viewPath}/state_names/${escapePointerSegment2(stateName)}`,
@@ -8371,7 +9941,7 @@ function formalViewIdentityDiagnostics(view) {
     if (element.kind !== "input-domain") continue;
     const elementId = typeof element.element_id === "string" ? element.element_id : "";
     const classIds = objectArray5(element.classes).flatMap((item) => typeof item.class_id === "string" ? [item.class_id] : []);
-    for (const classId of duplicateStrings(classIds)) diagnostics.push(diagnostic8(
+    for (const classId of duplicateStrings(classIds)) diagnostics.push(diagnostic10(
       "schema",
       "INPUT_CLASS_ID_DUPLICATE",
       `${viewPath}/elements/${escapePointerSegment2(elementId)}/classes/${escapePointerSegment2(classId)}`,
@@ -8425,7 +9995,7 @@ function auditInteractionMatrix(artifact) {
   const matrix = objectArray5(input.interaction_matrix);
   const submittedCandidates = objectArray5(input.interaction_candidates);
   const diagnostics = [];
-  if (matrix.length === 0) diagnostics.push(diagnostic8(
+  if (matrix.length === 0) diagnostics.push(diagnostic10(
     "coverage",
     "INTERACTION_AUDIT_EMPTY",
     "/interaction_matrix",
@@ -8445,15 +10015,15 @@ function auditInteractionMatrix(artifact) {
     const path4 = cellPath(modulesForCell, dimension);
     let valid = true;
     if (modulesForCell.length !== rawModuleCount || modulesForCell.length === 0) {
-      diagnostics.push(diagnostic8("schema", "INTERACTION_MODULE_SET_INVALID", `${path4}/module_ids`, "module_ids must contain unique nonblank module IDs"));
+      diagnostics.push(diagnostic10("schema", "INTERACTION_MODULE_SET_INVALID", `${path4}/module_ids`, "module_ids must contain unique nonblank module IDs"));
       valid = false;
     }
     if (!DIMENSION_SET.has(dimension)) {
-      diagnostics.push(diagnostic8("schema", "INTERACTION_DIMENSION_INVALID", `${path4}/dimension`, "dimension is not in the fixed interaction matrix"));
+      diagnostics.push(diagnostic10("schema", "INTERACTION_DIMENSION_INVALID", `${path4}/dimension`, "dimension is not in the fixed interaction matrix"));
       valid = false;
     }
     if (!CELL_STATUSES.has(status)) {
-      diagnostics.push(diagnostic8("schema", "INTERACTION_STATUS_INVALID", `${path4}/status`, "status must be checked-no-signal or candidate"));
+      diagnostics.push(diagnostic10("schema", "INTERACTION_STATUS_INVALID", `${path4}/status`, "status must be checked-no-signal or candidate"));
       valid = false;
     }
     if (valid) cells.push({ record: record2, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
@@ -8474,7 +10044,7 @@ function auditInteractionMatrix(artifact) {
     const expectedModuleCount = modules.length === 1 ? 1 : 2;
     const path4 = cellPath(cell.modules, cell.dimension);
     if (cell.modules.length !== expectedModuleCount || !expectedCells.has(cell.key)) {
-      diagnostics.push(diagnostic8(
+      diagnostics.push(diagnostic10(
         "coverage",
         "INTERACTION_CELL_EXTRA",
         path4,
@@ -8485,7 +10055,7 @@ function auditInteractionMatrix(artifact) {
     const matches = cellsByKey.get(cell.key) ?? [];
     matches.push(cell);
     cellsByKey.set(cell.key, matches);
-    if (matches.length > 1) diagnostics.push(diagnostic8(
+    if (matches.length > 1) diagnostics.push(diagnostic10(
       "coverage",
       "INTERACTION_CELL_DUPLICATE",
       path4,
@@ -8494,7 +10064,7 @@ function auditInteractionMatrix(artifact) {
   }
   for (const [key, expected] of [...expectedCells.entries()].sort(([left], [right]) => compareCodePoints5(left, right))) {
     if (cellsByKey.has(key)) continue;
-    diagnostics.push(diagnostic8(
+    diagnostics.push(diagnostic10(
       "coverage",
       "INTERACTION_CELL_MISSING",
       cellPath(expected.modules, expected.dimension),
@@ -8513,14 +10083,14 @@ function auditInteractionMatrix(artifact) {
   }
   for (const [candidateId, count] of [...candidateIdCounts.entries()].sort(([left], [right]) => compareCodePoints5(left, right))) {
     if (candidateId.length === 0 || count < 2) continue;
-    diagnostics.push(diagnostic8(
+    diagnostics.push(diagnostic10(
       "schema",
       "INTERACTION_CANDIDATE_ID_INVALID",
       `/interaction_candidates/${escapePointerSegment2(candidateId)}/candidate_id`,
       "candidate_id must be nonblank and unique"
     ));
   }
-  const candidates = [];
+  const candidates2 = [];
   const orderedCandidates = [...submittedCandidates].sort((left, right) => compareCodePoints5(
     `${candidateSemanticKey(left)}\0${String(left.candidate_id ?? "")}`,
     `${candidateSemanticKey(right)}\0${String(right.candidate_id ?? "")}`
@@ -8533,11 +10103,11 @@ function auditInteractionMatrix(artifact) {
     const dimension = typeof candidate.dimension === "string" ? candidate.dimension : "";
     let valid = true;
     if (candidateId.length === 0) {
-      diagnostics.push(diagnostic8("schema", "INTERACTION_CANDIDATE_ID_INVALID", `${path4}/candidate_id`, "candidate_id must be nonblank and unique"));
+      diagnostics.push(diagnostic10("schema", "INTERACTION_CANDIDATE_ID_INVALID", `${path4}/candidate_id`, "candidate_id must be nonblank and unique"));
       valid = false;
     } else if ((candidateIdCounts.get(candidateId) ?? 0) > 1) valid = false;
     if ((candidateSemanticCounts.get(candidateSemanticKey(candidate)) ?? 0) > 1) {
-      diagnostics.push(diagnostic8(
+      diagnostics.push(diagnostic10(
         "traceability",
         "INTERACTION_CANDIDATE_SUBJECT_DUPLICATE",
         path4,
@@ -8546,38 +10116,38 @@ function auditInteractionMatrix(artifact) {
       valid = false;
     }
     if (modulesForCandidate.length !== rawModuleCount || modulesForCandidate.length === 0 || !DIMENSION_SET.has(dimension)) {
-      diagnostics.push(diagnostic8("reference", "INTERACTION_CANDIDATE_CELL_INVALID", path4, "candidate must name one valid audit cell"));
+      diagnostics.push(diagnostic10("reference", "INTERACTION_CANDIDATE_CELL_INVALID", path4, "candidate must name one valid audit cell"));
       valid = false;
     }
     const sourceClaimIds = normalizedStrings(candidate.source_claim_ids);
     const semanticSubjectRefs = normalizedSemanticRefs(candidate.semantic_subject_refs);
     if (sourceClaimIds.length === 0) {
-      diagnostics.push(diagnostic8("classification", "INTERACTION_CANDIDATE_EVIDENCE_REQUIRED", `${path4}/source_claim_ids`, "every interaction candidate requires nonempty provenance evidence"));
+      diagnostics.push(diagnostic10("classification", "INTERACTION_CANDIDATE_EVIDENCE_REQUIRED", `${path4}/source_claim_ids`, "every interaction candidate requires nonempty provenance evidence"));
       valid = false;
     }
     if (semanticSubjectRefs.length === 0 || semanticSubjectRefs.length !== (Array.isArray(candidate.semantic_subject_refs) ? candidate.semantic_subject_refs.length : 0)) {
-      diagnostics.push(diagnostic8("classification", "INTERACTION_CANDIDATE_SUBJECT_REQUIRED", `${path4}/semantic_subject_refs`, "every interaction candidate requires nonempty unique semantic subject references"));
+      diagnostics.push(diagnostic10("classification", "INTERACTION_CANDIDATE_SUBJECT_REQUIRED", `${path4}/semantic_subject_refs`, "every interaction candidate requires nonempty unique semantic subject references"));
       valid = false;
     }
     if (valid) {
       const normalized = { ...candidate, module_ids: modulesForCandidate };
       normalized.source_claim_ids = sourceClaimIds;
       normalized.semantic_subject_refs = objectArray5(candidate.semantic_subject_refs).sort((left, right) => compareCodePoints5(JSON.stringify(left), JSON.stringify(right)));
-      candidates.push(normalized);
+      candidates2.push(normalized);
     }
   }
-  candidates.sort((left, right) => compareCodePoints5(
+  candidates2.sort((left, right) => compareCodePoints5(
     /** @type {string} */
     left.candidate_id,
     /** @type {string} */
     right.candidate_id
   ));
-  return { candidates, diagnostics: sortDiagnostics(diagnostics) };
+  return { candidates: candidates2, diagnostics: sortDiagnostics(diagnostics) };
 }
 function isFormalInteractionEvidence(claim) {
   return claim.level === "E3" && claim.kind === "requirement" || claim.level === "E1" && claim.kind === "assumption" || claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
 }
-function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeledClaims, claimsById) {
+function reconcileInteractionMatrix(artifact, candidates2, viewsById, viewModeledClaims, claimsById) {
   const input = isObject4(artifact) ? artifact : {};
   const submittedViews = objectArray5(input.views);
   const cells = objectArray5(input.interaction_matrix).map((record2) => ({
@@ -8595,7 +10165,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
   const acceptedByCell = /* @__PURE__ */ new Map();
   const acceptedCandidates = [];
   const diagnostics = [];
-  for (const candidate of candidates) {
+  for (const candidate of candidates2) {
     const path4 = candidatePath(candidate);
     const candidateId = String(candidate.candidate_id ?? "");
     const modules = normalizedStrings(candidate.module_ids);
@@ -8606,7 +10176,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
     const expectedField = disposition === "formal-view" ? "formal_view_id" : disposition === "exploratory" ? "exploratory_id" : null;
     const dispositionExact = disposition === "blocker" ? destinationFields.length === 0 && isObject4(candidate.issue_intent) : destinationFields.length === 1 && expectedField !== null && destinationFields[0] === expectedField;
     if (!dispositionExact) {
-      diagnostics.push(diagnostic8(
+      diagnostics.push(diagnostic10(
         "classification",
         "CANDIDATE_DISPOSITION_NOT_EXACT",
         path4,
@@ -8619,7 +10189,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
       const matchingSubmittedViews = submittedViews.filter((view) => view.view_id === viewId);
       const formalView = viewsById.get(viewId);
       if (matchingSubmittedViews.length === 0) {
-        diagnostics.push(diagnostic8(
+        diagnostics.push(diagnostic10(
           "reference",
           "FORMAL_INTERACTION_VIEW_DANGLING",
           `${path4}/formal_view_id`,
@@ -8627,7 +10197,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
         ));
         valid = false;
       } else if (matchingSubmittedViews.length !== 1) {
-        diagnostics.push(diagnostic8(
+        diagnostics.push(diagnostic10(
           "reference",
           "FORMAL_INTERACTION_VIEW_AMBIGUOUS",
           `${path4}/formal_view_id`,
@@ -8637,7 +10207,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
       } else {
         const submittedView = matchingSubmittedViews[0];
         if (typeof submittedView.type !== "string" || !FORMAL_VIEW_TYPES.has(submittedView.type)) {
-          diagnostics.push(diagnostic8(
+          diagnostics.push(diagnostic10(
             "classification",
             "FORMAL_INTERACTION_VIEW_TYPE_INVALID",
             `${path4}/formal_view_id`,
@@ -8645,7 +10215,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
           ));
           valid = false;
         } else if (objectArray5(submittedView.elements).length + objectArray5(submittedView.relations).length === 0) {
-          diagnostics.push(diagnostic8(
+          diagnostics.push(diagnostic10(
             "traceability",
             "FORMAL_INTERACTION_VIEW_EMPTY",
             `${path4}/formal_view_id`,
@@ -8653,7 +10223,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
           ));
           valid = false;
         } else if (formalViewIdentityDiagnostics(submittedView).length > 0 || !formalViewStructureValid(submittedView) || !formalView) {
-          diagnostics.push(diagnostic8(
+          diagnostics.push(diagnostic10(
             "traceability",
             "FORMAL_INTERACTION_VIEW_INVALID",
             `${path4}/formal_view_id`,
@@ -8667,7 +10237,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
             const claim = claimsById.get(claimId);
             const claimPath = `${path4}/source_claim_ids/${escapePointerSegment2(claimId)}`;
             if (!claim) {
-              diagnostics.push(diagnostic8(
+              diagnostics.push(diagnostic10(
                 "reference",
                 "SOURCE_CLAIM_DANGLING",
                 claimPath,
@@ -8675,7 +10245,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
               ));
               valid = false;
             } else if (!isFormalInteractionEvidence(claim)) {
-              diagnostics.push(diagnostic8(
+              diagnostics.push(diagnostic10(
                 "classification",
                 "FORMAL_CANDIDATE_EVIDENCE_INVALID",
                 claimPath,
@@ -8684,7 +10254,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
               valid = false;
             } else {
               if (targetScope.length > 0 && (typeof claim.scope !== "string" || !scopeContains(claim.scope, targetScope))) {
-                diagnostics.push(diagnostic8(
+                diagnostics.push(diagnostic10(
                   "classification",
                   "FORMAL_CANDIDATE_SCOPE_MISMATCH",
                   claimPath,
@@ -8693,7 +10263,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
                 valid = false;
               }
               if (!modeledClaims.has(claimId)) {
-                diagnostics.push(diagnostic8(
+                diagnostics.push(diagnostic10(
                   "traceability",
                   "FORMAL_CANDIDATE_CLAIM_UNMODELED",
                   claimPath,
@@ -8709,7 +10279,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
     const key = cellKey(modules, dimension);
     const matchingCells = cellsByKey.get(key) ?? [];
     if (matchingCells.length === 0) {
-      diagnostics.push(diagnostic8(
+      diagnostics.push(diagnostic10(
         "traceability",
         "INTERACTION_CANDIDATE_WITHOUT_CELL",
         path4,
@@ -8718,7 +10288,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
       valid = false;
     } else {
       if (matchingCells.every((cell) => cell.status === "checked-no-signal")) {
-        diagnostics.push(diagnostic8(
+        diagnostics.push(diagnostic10(
           "classification",
           "INTERACTION_CANDIDATE_ON_NO_SIGNAL",
           path4,
@@ -8727,7 +10297,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
         valid = false;
       }
       if (matchingCells.length !== 1) {
-        diagnostics.push(diagnostic8(
+        diagnostics.push(diagnostic10(
           "traceability",
           "INTERACTION_CANDIDATE_CELL_AMBIGUOUS",
           path4,
@@ -8746,7 +10316,7 @@ function reconcileInteractionMatrix(artifact, candidates, viewsById, viewModeled
     const candidateCells = matchingCells.filter((cell) => cell.status === "candidate");
     if (candidateCells.length === 0 || (acceptedByCell.get(key) ?? []).length > 0) continue;
     const sample = candidateCells[0];
-    diagnostics.push(diagnostic8(
+    diagnostics.push(diagnostic10(
       "traceability",
       "INTERACTION_CANDIDATE_MISSING",
       cellPath(sample.modules, sample.dimension),
@@ -8789,7 +10359,7 @@ function compareCodePoints6(left, right) {
   }
   return leftPoints.length - rightPoints.length;
 }
-function diagnostic9(category, code2, path4, message) {
+function diagnostic11(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function sortDiagnostics2(diagnostics) {
@@ -8809,7 +10379,7 @@ function factLedger(evidenceGraph) {
   if (evidenceGraph.factsById instanceof Map) return [...evidenceGraph.factsById.values()].filter(isObject5);
   return objectArray6(evidenceGraph.factLedger ?? evidenceGraph.fact_ledger);
 }
-function claimClosure(claimsById, seeds) {
+function claimClosure2(claimsById, seeds) {
   const closure = /* @__PURE__ */ new Set();
   const pending = [...seeds];
   while (pending.length > 0) {
@@ -8875,13 +10445,13 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       const claim = claimsById.get(claimId);
       const claimPath = `${path4}/source_claim_ids/${escapePointerSegment3(claimId || String(index))}`;
       if (!claim) {
-        diagnostics.push(diagnostic9("reference", "SOURCE_CLAIM_DANGLING", claimPath, `source claim "${claimId}" is not in the accepted evidence graph`));
+        diagnostics.push(diagnostic11("reference", "SOURCE_CLAIM_DANGLING", claimPath, `source claim "${claimId}" is not in the accepted evidence graph`));
         valid = false;
       } else if (!isBehaviorSourceClaim(claim)) {
-        diagnostics.push(diagnostic9("classification", "SOURCE_CLAIM_NOT_BEHAVIOR_EVIDENCE", claimPath, `source claim "${claimId}" cannot support a formal behavior element`));
+        diagnostics.push(diagnostic11("classification", "SOURCE_CLAIM_NOT_BEHAVIOR_EVIDENCE", claimPath, `source claim "${claimId}" cannot support a formal behavior element`));
         valid = false;
       } else if (typeof claim.scope === "string" && !scopeContains(claim.scope, viewScope)) {
-        diagnostics.push(diagnostic9("classification", "SOURCE_CLAIM_SCOPE_MISMATCH", claimPath, `source claim "${claimId}" does not cover view scope "${viewScope}"`));
+        diagnostics.push(diagnostic11("classification", "SOURCE_CLAIM_SCOPE_MISMATCH", claimPath, `source claim "${claimId}" does not cover view scope "${viewScope}"`));
         valid = false;
       } else acceptedIds.push(claimId);
     });
@@ -8889,21 +10459,21 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       const claim = claimsById.get(claimId);
       const claimPath = `${path4}/model_refs/${escapePointerSegment3(claimId || String(index))}`;
       if (!claim) {
-        diagnostics.push(diagnostic9("reference", "MODEL_REF_DANGLING", claimPath, `model ref "${claimId}" is not in the accepted evidence graph`));
+        diagnostics.push(diagnostic11("reference", "MODEL_REF_DANGLING", claimPath, `model ref "${claimId}" is not in the accepted evidence graph`));
         valid = false;
       } else if (!isE2ModelElement(claim)) {
-        diagnostics.push(diagnostic9("classification", "MODEL_REF_NOT_E2_MODEL_ELEMENT", claimPath, `model ref "${claimId}" is not an accepted E2 model element`));
+        diagnostics.push(diagnostic11("classification", "MODEL_REF_NOT_E2_MODEL_ELEMENT", claimPath, `model ref "${claimId}" is not an accepted E2 model element`));
         valid = false;
       } else if (typeof claim.scope === "string" && !scopeContains(claim.scope, viewScope)) {
-        diagnostics.push(diagnostic9("classification", "MODEL_REF_SCOPE_MISMATCH", claimPath, `model ref "${claimId}" does not cover view scope "${viewScope}"`));
+        diagnostics.push(diagnostic11("classification", "MODEL_REF_SCOPE_MISMATCH", claimPath, `model ref "${claimId}" does not cover view scope "${viewScope}"`));
         valid = false;
       } else acceptedIds.push(claimId);
     });
     if (acceptedIds.length === 0) {
-      diagnostics.push(diagnostic9("traceability", supportCode, path4, "every modeled item requires an accepted Source Claim or E2 model element"));
+      diagnostics.push(diagnostic11("traceability", supportCode, path4, "every modeled item requires an accepted Source Claim or E2 model element"));
       valid = false;
     }
-    return { valid, claimIds: claimClosure(claimsById, acceptedIds) };
+    return { valid, claimIds: claimClosure2(claimsById, acceptedIds) };
   }
   views.forEach((view, viewIndex) => {
     const viewId = typeof view.view_id === "string" ? view.view_id : "";
@@ -8912,11 +10482,11 @@ function validateBehaviorViews(evidenceGraph, artifact) {
     const scope = typeof view.scope === "string" ? view.scope : "";
     let valid = viewId.length > 0 && scope.length > 0;
     if (!VIEW_TYPES.has(type)) {
-      diagnostics.push(diagnostic9("classification", "VIEW_TYPE_UNSUPPORTED", `${path4}/type`, `view type "${type}" is outside the closed behavior-view set`));
+      diagnostics.push(diagnostic11("classification", "VIEW_TYPE_UNSUPPORTED", `${path4}/type`, `view type "${type}" is outside the closed behavior-view set`));
       valid = false;
     }
     if (runScope !== null && scope.length > 0 && !scopesOverlap(runScope, scope)) {
-      diagnostics.push(diagnostic9(
+      diagnostics.push(diagnostic11(
         "classification",
         "VIEW_SCOPE_DISJOINT",
         `${path4}/scope`,
@@ -8928,13 +10498,13 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       const claim = claimsById.get(claimId);
       const claimPath = `${path4}/source_claim_ids/${escapePointerSegment3(claimId || String(claimIndex))}`;
       if (!claim) {
-        diagnostics.push(diagnostic9("reference", "SOURCE_CLAIM_DANGLING", claimPath, `source claim "${claimId}" is not in the accepted evidence graph`));
+        diagnostics.push(diagnostic11("reference", "SOURCE_CLAIM_DANGLING", claimPath, `source claim "${claimId}" is not in the accepted evidence graph`));
         valid = false;
       } else if (!isBehaviorSourceClaim(claim) && !isE2ModelElement(claim)) {
-        diagnostics.push(diagnostic9("classification", "VIEW_SOURCE_CLAIM_INVALID", claimPath, `source claim "${claimId}" cannot support a formal behavior view`));
+        diagnostics.push(diagnostic11("classification", "VIEW_SOURCE_CLAIM_INVALID", claimPath, `source claim "${claimId}" cannot support a formal behavior view`));
         valid = false;
       } else if (typeof claim.scope === "string" && !scopeContains(claim.scope, scope)) {
-        diagnostics.push(diagnostic9("classification", "SOURCE_CLAIM_SCOPE_MISMATCH", claimPath, `source claim "${claimId}" does not cover view scope "${scope}"`));
+        diagnostics.push(diagnostic11("classification", "SOURCE_CLAIM_SCOPE_MISMATCH", claimPath, `source claim "${claimId}" does not cover view scope "${scope}"`));
         valid = false;
       }
     }
@@ -8946,7 +10516,7 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       const elementId = typeof element.element_id === "string" ? element.element_id : "";
       const elementPath = `${path4}/elements/${escapePointerSegment3(elementId || String(elementIndex))}`;
       if (elementId.length === 0 || elementIds.has(elementId)) {
-        diagnostics.push(diagnostic9("schema", "VIEW_ELEMENT_ID_INVALID", `${elementPath}/element_id`, "element_id must be nonblank and unique inside its view"));
+        diagnostics.push(diagnostic11("schema", "VIEW_ELEMENT_ID_INVALID", `${elementPath}/element_id`, "element_id must be nonblank and unique inside its view"));
         valid = false;
       }
       elementIds.add(elementId);
@@ -8956,7 +10526,7 @@ function validateBehaviorViews(evidenceGraph, artifact) {
         /** @type {keyof typeof VIEW_ELEMENT_KINDS} */
         type
       ].includes(kind)) {
-        diagnostics.push(diagnostic9("classification", "VIEW_ELEMENT_KIND_MISMATCH", `${elementPath}/kind`, `element kind "${kind}" is not legal in a ${type} view`));
+        diagnostics.push(diagnostic11("classification", "VIEW_ELEMENT_KIND_MISMATCH", `${elementPath}/kind`, `element kind "${kind}" is not legal in a ${type} view`));
         valid = false;
       }
       const support = validateSupport(element, elementPath, scope, "VIEW_ELEMENT_SUPPORT_REQUIRED");
@@ -8965,7 +10535,7 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       if (kind === "input-domain") {
         const classIds = objectArray6(element.classes).flatMap((item) => typeof item.class_id === "string" ? [item.class_id] : []);
         for (const classId of duplicateStrings2(classIds)) {
-          diagnostics.push(diagnostic9(
+          diagnostics.push(diagnostic11(
             "schema",
             "INPUT_CLASS_ID_DUPLICATE",
             `${elementPath}/classes/${escapePointerSegment3(classId)}`,
@@ -8982,10 +10552,10 @@ function validateBehaviorViews(evidenceGraph, artifact) {
         for (const field of ["from_element_id", "to_element_id"]) {
           const endpoint = element[field];
           if (typeof endpoint !== "string" || !elementIds.has(endpoint)) {
-            diagnostics.push(diagnostic9("reference", "FLOW_EDGE_ENDPOINT_DANGLING", `${elementPath}/${field}`, `flow edge endpoint "${String(endpoint)}" is not in its view`));
+            diagnostics.push(diagnostic11("reference", "FLOW_EDGE_ENDPOINT_DANGLING", `${elementPath}/${field}`, `flow edge endpoint "${String(endpoint)}" is not in its view`));
             valid = false;
           } else if (elementKinds.get(endpoint) !== "flow-node") {
-            diagnostics.push(diagnostic9("reference", "FLOW_EDGE_ENDPOINT_TYPE_INVALID", `${elementPath}/${field}`, `flow edge endpoint "${endpoint}" must reference a flow-node`));
+            diagnostics.push(diagnostic11("reference", "FLOW_EDGE_ENDPOINT_TYPE_INVALID", `${elementPath}/${field}`, `flow edge endpoint "${endpoint}" must reference a flow-node`));
             valid = false;
           }
         }
@@ -8995,7 +10565,7 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       const stateNames = elements.flatMap((element) => element.kind === "state" && typeof element.state === "string" ? [element.state] : []);
       const declaredStates = new Set(stateNames);
       for (const stateName of duplicateStrings2(stateNames)) {
-        diagnostics.push(diagnostic9(
+        diagnostics.push(diagnostic11(
           "schema",
           "STATE_NAME_DUPLICATE",
           `${path4}/state_names/${escapePointerSegment3(stateName)}`,
@@ -9010,7 +10580,7 @@ function validateBehaviorViews(evidenceGraph, artifact) {
         for (const field of ["from_state", "to_state"]) {
           const state = element[field];
           if (typeof state !== "string" || !declaredStates.has(state)) {
-            diagnostics.push(diagnostic9("reference", "STATE_TRANSITION_STATE_DANGLING", `${elementPath}/${field}`, `transition state "${String(state)}" is not declared by this view`));
+            diagnostics.push(diagnostic11("reference", "STATE_TRANSITION_STATE_DANGLING", `${elementPath}/${field}`, `transition state "${String(state)}" is not declared by this view`));
             valid = false;
           }
         }
@@ -9025,12 +10595,12 @@ function validateBehaviorViews(evidenceGraph, artifact) {
       for (const field of ["from_element_id", "to_element_id"]) {
         const endpoint = relation[field];
         if (typeof endpoint !== "string" || !elementIds.has(endpoint)) {
-          diagnostics.push(diagnostic9("reference", "VIEW_RELATION_ENDPOINT_DANGLING", `${relationPath}/${field}`, `relation endpoint "${String(endpoint)}" is not in its view`));
+          diagnostics.push(diagnostic11("reference", "VIEW_RELATION_ENDPOINT_DANGLING", `${relationPath}/${field}`, `relation endpoint "${String(endpoint)}" is not in its view`));
           valid = false;
         } else {
           const expectedKind = relationEndpointKind2(type);
           if (expectedKind !== null && elementKinds.get(endpoint) !== expectedKind) {
-            diagnostics.push(diagnostic9("reference", "VIEW_RELATION_ENDPOINT_TYPE_INVALID", `${relationPath}/${field}`, `relation endpoint "${endpoint}" must reference a ${expectedKind}`));
+            diagnostics.push(diagnostic11("reference", "VIEW_RELATION_ENDPOINT_TYPE_INVALID", `${relationPath}/${field}`, `relation endpoint "${endpoint}" must reference a ${expectedKind}`));
             valid = false;
           }
         }
@@ -9105,8 +10675,8 @@ function compareCodePoints7(left, right) {
   return leftPoints.length - rightPoints.length;
 }
 function sortedStrings(value, unique = false) {
-  const strings3 = Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
-  return (unique ? [...new Set(strings3)] : [...strings3]).sort(compareCodePoints7);
+  const strings5 = Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  return (unique ? [...new Set(strings5)] : [...strings5]).sort(compareCodePoints7);
 }
 function claimsByIdFrom(context) {
   if (!isObject6(context)) return /* @__PURE__ */ new Map();
@@ -9566,12 +11136,12 @@ function denseUniqueStrings(value, label, nonempty = false) {
       throw new TypeError(`${label} must contain unpadded strings`);
     }
   }
-  const strings3 = (
+  const strings5 = (
     /** @type {string[]} */
     value
   );
-  if (new Set(strings3).size !== strings3.length) throw new TypeError(`${label} must not contain duplicates`);
-  return sortedStrings(strings3);
+  if (new Set(strings5).size !== strings5.length) throw new TypeError(`${label} must not contain duplicates`);
+  return sortedStrings(strings5);
 }
 function assertExactKeys(object, keys, label) {
   const actual = Object.keys(object).sort();
@@ -10032,7 +11602,7 @@ var CUSTOM_KINDS = /* @__PURE__ */ new Map([
   ["integration-contract", "integration"],
   ["cross-module-interaction", "interaction"]
 ]);
-function diagnostic10(code2, path4, message, category = "classification") {
+function diagnostic12(code2, path4, message, category = "classification") {
   return { category, code: code2, path: path4, message };
 }
 function pointerPart4(value) {
@@ -10145,7 +11715,7 @@ function publicContext(view, submitted, contextIndex, diagnostics) {
     const selector = isObject6(binding.selector) ? binding.selector : {};
     const selectorSignature = canonicalStringify(selector);
     if (seen.has(selectorSignature)) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic12(
         "OBLIGATION_BINDING_DUPLICATE",
         `${bindingPath}/selector`,
         `view "${viewId}" has more than one binding for the same selector`
@@ -10159,7 +11729,7 @@ function publicContext(view, submitted, contextIndex, diagnostics) {
     if (element && view.type === "timing" && element.kind === "timing-rule" && TIMING_SPECIALS.has(kind)) allowedOptional = true;
     if (element && view.type === "integration" && element.kind === "integration-contract" && INTEGRATION_SPECIALS.has(kind)) allowedOptional = true;
     if (!required.has(selectorSignature) && !allowedOptional) {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic12(
         "OBLIGATION_SELECTOR_UNKNOWN",
         `${bindingPath}/selector`,
         `selector does not identify a responsibility in view "${viewId}"`,
@@ -10171,7 +11741,7 @@ function publicContext(view, submitted, contextIndex, diagnostics) {
       const signalClaimId = String(selector.signal_claim_id ?? "");
       const sourceClaimIds = sortedStrings(binding.source_claim_ids, true);
       if (!signalClaimId || !sourceClaimIds.includes(signalClaimId)) {
-        diagnostics.push(diagnostic10(
+        diagnostics.push(diagnostic12(
           "OBLIGATION_SIGNAL_CLAIM_REQUIRED",
           `${bindingPath}/selector/signal_claim_id`,
           "signal responsibilities must include their accepted signal claim in source_claim_ids",
@@ -10203,7 +11773,7 @@ function publicContext(view, submitted, contextIndex, diagnostics) {
     });
   }
   for (const [signature, selector] of required) {
-    if (!seen.has(signature)) diagnostics.push(diagnostic10(
+    if (!seen.has(signature)) diagnostics.push(diagnostic12(
       "OBLIGATION_BINDING_MISSING",
       `${path4}/bindings`,
       `view "${viewId}" is missing the required ${String(selector.kind)} binding`
@@ -10340,7 +11910,7 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
       const seenSideEffects = /* @__PURE__ */ new Set();
       for (const [index, sideEffect] of objectArray7(element.side_effects).entries()) {
         const signature = canonicalStringify({ kind: sideEffect.kind, target: sideEffect.target });
-        if (seenSideEffects.has(signature)) diagnostics.push(diagnostic10(
+        if (seenSideEffects.has(signature)) diagnostics.push(diagnostic12(
           "OBLIGATION_SIDE_EFFECT_DUPLICATE",
           `/views/${pointerPart4(String(view.view_id))}/elements/${pointerPart4(String(element.element_id))}/side_effects/${index}`,
           "integration side effects must be unique by (kind, target)"
@@ -10352,20 +11922,20 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
   const contextsById = /* @__PURE__ */ new Map();
   for (const [index, context] of objectArray7(inputs.view_contexts).entries()) {
     const viewId = String(context.view_id ?? "");
-    if (contextsById.has(viewId)) diagnostics.push(diagnostic10(
+    if (contextsById.has(viewId)) diagnostics.push(diagnostic12(
       "OBLIGATION_VIEW_CONTEXT_DUPLICATE",
       `/obligation_inputs/view_contexts/${index}/view_id`,
       `view "${viewId}" has more than one obligation context`
     ));
     else contextsById.set(viewId, { context, index });
     const view = viewsById.get(viewId);
-    if (!view) diagnostics.push(diagnostic10(
+    if (!view) diagnostics.push(diagnostic12(
       "OBLIGATION_VIEW_CONTEXT_UNKNOWN",
       `/obligation_inputs/view_contexts/${index}/view_id`,
       `obligation context references unknown view "${viewId}"`,
       "reference"
     ));
-    else if (!TARGET_VIEW_TYPES.has(String(view.type))) diagnostics.push(diagnostic10(
+    else if (!TARGET_VIEW_TYPES.has(String(view.type))) diagnostics.push(diagnostic12(
       "OBLIGATION_VIEW_CONTEXT_TYPE_FORBIDDEN",
       `/obligation_inputs/view_contexts/${index}/view_id`,
       "flow, decision, and state contexts are compiler-derived and cannot be submitted"
@@ -10384,7 +11954,7 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
       diagnostics
     ));
     else {
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic12(
         "OBLIGATION_VIEW_CONTEXT_MISSING",
         "/obligation_inputs/view_contexts",
         `responsibility view "${viewId}" requires exactly one view context`
@@ -10392,7 +11962,7 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
     }
   }
   for (const field of ["terminal_fact_routes", "custom_responsibilities", "combination_requests"]) {
-    if (!isDenseObjectArray(inputs[field])) diagnostics.push(diagnostic10(
+    if (!isDenseObjectArray(inputs[field])) diagnostics.push(diagnostic12(
       "OBLIGATION_RESERVED_INPUT_INVALID",
       `/obligation_inputs/${field}`,
       `${field} must be a dense array of closed objects`,
@@ -10406,7 +11976,7 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
         ...terminalRoute(route),
         path: `/obligation_inputs/terminal_fact_routes/${index}`
       }];
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic12(
         "OBLIGATION_TERMINAL_ROUTE_INVALID",
         `/obligation_inputs/terminal_fact_routes/${index}`,
         "terminal fact routes must use one closed blocked or not_applicable record",
@@ -10424,7 +11994,7 @@ function compileObligationInputs(evidenceGraph, behaviorViews) {
           path: `/obligation_inputs/custom_responsibilities/${index}`
         }];
       }
-      diagnostics.push(diagnostic10(
+      diagnostics.push(diagnostic12(
         "OBLIGATION_CUSTOM_RESPONSIBILITY_INVALID",
         `/obligation_inputs/custom_responsibilities/${index}`,
         "custom responsibilities must use the closed public semantic responsibility shape",
@@ -10621,15 +12191,15 @@ function preprocessSearch(domains, constraints) {
   };
 }
 function enumerateValidCandidates(canonicalDomains, searchDomains, constraints, maxCandidates) {
-  const candidates = [];
+  const candidates2 = [];
   const assigned = /* @__PURE__ */ new Map();
   const valueIndexes = new Array(searchDomains.length).fill(0);
   let depth = 0;
   while (depth >= 0) {
     if (depth === searchDomains.length) {
       const vector = Object.fromEntries(canonicalDomains.map(({ name }) => [name, assigned.get(name)]));
-      candidates.push(vector);
-      if (candidates.length > maxCandidates) return null;
+      candidates2.push(vector);
+      if (candidates2.length > maxCandidates) return null;
       depth -= 1;
       if (depth >= 0) {
         assigned.delete(searchDomains[depth].name);
@@ -10658,7 +12228,7 @@ function enumerateValidCandidates(canonicalDomains, searchDomains, constraints, 
     if (depth < searchDomains.length) valueIndexes[depth] = 0;
   }
   const domainNames = canonicalDomains.map(({ name }) => name);
-  return candidates.sort((left, right) => compareCodePoints7(
+  return candidates2.sort((left, right) => compareCodePoints7(
     vectorKey(left, domainNames),
     vectorKey(right, domainNames)
   ));
@@ -10672,7 +12242,7 @@ function chooseBigInt(n, k) {
   }
   return result;
 }
-function uncoveredTupleCount(candidate, candidates, selectedIndexes, domainNames, strength) {
+function uncoveredTupleCount(candidate, candidates2, selectedIndexes, domainNames, strength) {
   if (selectedIndexes.length === 0) return chooseBigInt(domainNames.length, strength);
   const allSelected = (1n << BigInt(selectedIndexes.length)) - 1n;
   const multiplicityByMask = /* @__PURE__ */ new Map();
@@ -10680,7 +12250,7 @@ function uncoveredTupleCount(candidate, candidates, selectedIndexes, domainNames
     let matchingSelected = 0n;
     for (let position = 0; position < selectedIndexes.length; position += 1) {
       const selectedIndex = selectedIndexes[position];
-      if (scalarKey(candidate[domainName]) === scalarKey(candidates[selectedIndex][domainName])) {
+      if (scalarKey(candidate[domainName]) === scalarKey(candidates2[selectedIndex][domainName])) {
         matchingSelected |= 1n << BigInt(position);
       }
     }
@@ -10775,23 +12345,23 @@ function selectTWiseVectors(parameters, strength, constraints, maxCandidates) {
     reason: "no_valid_candidates",
     max_candidates: Number(maxCandidates)
   };
-  const candidates = enumerateValidCandidates(
+  const candidates2 = enumerateValidCandidates(
     search.canonicalDomains,
     search.searchDomains,
     search.constraints,
     Number(maxCandidates)
   );
-  if (candidates === null) return {
+  if (candidates2 === null) return {
     status: "blocked",
     reason: "max_candidates_exceeded",
     max_candidates: Number(maxCandidates)
   };
-  if (candidates.length === 0) return {
+  if (candidates2.length === 0) return {
     status: "blocked",
     reason: "no_valid_candidates",
     max_candidates: Number(maxCandidates)
   };
-  const remaining = new Set(candidates.map((_, index) => index));
+  const remaining = new Set(candidates2.map((_, index) => index));
   const selectedIndexes = [];
   while (remaining.size > 0) {
     let bestIndex = -1;
@@ -10799,13 +12369,13 @@ function selectTWiseVectors(parameters, strength, constraints, maxCandidates) {
     let bestSignature = "";
     for (const index of remaining) {
       const count = uncoveredTupleCount(
-        candidates[index],
-        candidates,
+        candidates2[index],
+        candidates2,
         selectedIndexes,
         domainNames,
         Number(strength)
       );
-      const signature = vectorKey(candidates[index], domainNames);
+      const signature = vectorKey(candidates2[index], domainNames);
       if (count > bestCount || count === bestCount && (bestIndex < 0 || compareCodePoints7(signature, bestSignature) < 0)) {
         bestIndex = index;
         bestCount = count;
@@ -10819,7 +12389,7 @@ function selectTWiseVectors(parameters, strength, constraints, maxCandidates) {
   return {
     status: "selected",
     vectors: selectedIndexes.map((index) => {
-      const values = { ...candidates[index] };
+      const values = { ...candidates2[index] };
       return {
         values,
         required_oracle_refs: [...oracleRefsByVector.get(vectorKey(values, domainNames)) ?? []]
@@ -10864,10 +12434,10 @@ function isNonblankUnpadded(value) {
 }
 function isDenseUniqueStringArray(value, nonempty = false) {
   if (!Array.isArray(value) || nonempty && value.length === 0) return false;
-  const strings3 = /* @__PURE__ */ new Set();
+  const strings5 = /* @__PURE__ */ new Set();
   for (let index = 0; index < value.length; index += 1) {
-    if (!Object.hasOwn(value, index) || !isNonblankUnpadded(value[index]) || strings3.has(value[index])) return false;
-    strings3.add(value[index]);
+    if (!Object.hasOwn(value, index) || !isNonblankUnpadded(value[index]) || strings5.has(value[index])) return false;
+    strings5.add(value[index]);
   }
   return true;
 }
@@ -10875,7 +12445,7 @@ function hasExactKeys2(value, expected) {
   const actual = Object.keys(value).sort(compareCodePoints7);
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function diagnostic11(category, code2, path4, message) {
+function diagnostic13(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function pointerPart5(value) {
@@ -10904,7 +12474,7 @@ function sparseBehaviorDiagnostics(artifact) {
           if (index !== firstMissing) break;
           firstMissing += 1;
         }
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "schema",
           "BEHAVIOR_ARRAY_SPARSE",
           `${path4}/${firstMissing}`,
@@ -10944,7 +12514,7 @@ function behaviorStringDiagnostics(artifact) {
       pending.pop()
     );
     if (typeof value === "string") {
-      if (canonical && !isNonblankUnpadded(value)) diagnostics.push(diagnostic11(
+      if (canonical && !isNonblankUnpadded(value)) diagnostics.push(diagnostic13(
         "schema",
         "BEHAVIOR_STRING_INVALID",
         path4,
@@ -10977,7 +12547,7 @@ function interactionStringDiagnostics(artifact) {
     } else if (candidate.disposition === "exploratory") {
       valid = valid && isNonblankUnpadded(candidate.exploratory_id);
     }
-    if (!valid) diagnostics.push(diagnostic11(
+    if (!valid) diagnostics.push(diagnostic13(
       "schema",
       "INTERACTION_ROUTE_STRING_INVALID",
       path4,
@@ -11008,7 +12578,7 @@ function isE2ModelElement2(claim) {
   return claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
 }
 function validateEvidenceInputs(graph, diagnostics) {
-  if (!Object.hasOwn(graph, "runScope") || !isNonblankUnpadded(graph.runScope)) diagnostics.push(diagnostic11(
+  if (!Object.hasOwn(graph, "runScope") || !isNonblankUnpadded(graph.runScope)) diagnostics.push(diagnostic13(
     "schema",
     "EVIDENCE_RUN_SCOPE_INVALID",
     "/runScope",
@@ -11016,7 +12586,7 @@ function validateEvidenceInputs(graph, diagnostics) {
   ));
   const claimsById = /* @__PURE__ */ new Map();
   if (!(graph.claimsById instanceof Map)) {
-    diagnostics.push(diagnostic11(
+    diagnostics.push(diagnostic13(
       "schema",
       "EVIDENCE_CLAIMS_MAP_REQUIRED",
       "/claimsById",
@@ -11026,11 +12596,11 @@ function validateEvidenceInputs(graph, diagnostics) {
     for (const [key, claim] of graph.claimsById) {
       const path4 = `/claimsById/${String(key)}`;
       if (!isNonblankUnpadded(key) || !isObject7(claim)) {
-        diagnostics.push(diagnostic11("schema", "EVIDENCE_CLAIM_ENTRY_INVALID", path4, "accepted claim entries require a nonblank unpadded Map key and object value"));
+        diagnostics.push(diagnostic13("schema", "EVIDENCE_CLAIM_ENTRY_INVALID", path4, "accepted claim entries require a nonblank unpadded Map key and object value"));
         continue;
       }
       if (!isPlainRecord(claim)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "schema",
           "EVIDENCE_CLAIM_PROTOTYPE_INVALID",
           path4,
@@ -11042,7 +12612,7 @@ function validateEvidenceInputs(graph, diagnostics) {
       try {
         descriptors = Object.getOwnPropertyDescriptors(claim);
       } catch {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "schema",
           "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
           path4,
@@ -11052,7 +12622,7 @@ function validateEvidenceInputs(graph, diagnostics) {
       }
       const requiredDataFields = ["claim_id", "level", "kind", "scope"];
       if (requiredDataFields.some((field) => !descriptors[field] || !Object.hasOwn(descriptors[field], "value"))) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "schema",
           "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
           path4,
@@ -11065,11 +12635,11 @@ function validateEvidenceInputs(graph, diagnostics) {
       const kind = descriptors.kind.value;
       const scope = descriptors.scope.value;
       if (claimId !== key || !isNonblankUnpadded(claimId)) {
-        diagnostics.push(diagnostic11("reference", "EVIDENCE_CLAIM_KEY_MISMATCH", `${path4}/claim_id`, "claim Map key must exactly match its own claim_id"));
+        diagnostics.push(diagnostic13("reference", "EVIDENCE_CLAIM_KEY_MISMATCH", `${path4}/claim_id`, "claim Map key must exactly match its own claim_id"));
         continue;
       }
       if (!isNonblankUnpadded(level) || !isNonblankUnpadded(kind) || !isNonblankUnpadded(scope) || !CLAIM_KINDS_BY_LEVEL.get(level)?.has(kind)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "schema",
           "EVIDENCE_CLAIM_FIELDS_INVALID",
           path4,
@@ -11083,7 +12653,7 @@ function validateEvidenceInputs(graph, diagnostics) {
       if (level === "E2") {
         const e2Fields = ["derivation_kind", "derivation_target"];
         if (e2Fields.some((field) => !descriptors[field] || !Object.hasOwn(descriptors[field], "value"))) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
             path4,
@@ -11092,7 +12662,7 @@ function validateEvidenceInputs(graph, diagnostics) {
           continue;
         }
         if (!descriptors.parent_claim_ids) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "EVIDENCE_CLAIM_PARENTS_INVALID",
             `${path4}/parent_claim_ids`,
@@ -11101,7 +12671,7 @@ function validateEvidenceInputs(graph, diagnostics) {
           continue;
         }
         if (!Object.hasOwn(descriptors.parent_claim_ids, "value")) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "EVIDENCE_CLAIM_DESCRIPTOR_INVALID",
             path4,
@@ -11113,7 +12683,7 @@ function validateEvidenceInputs(graph, diagnostics) {
         derivationTarget = descriptors.derivation_target.value;
         const submittedParentClaimIds = descriptors.parent_claim_ids.value;
         if (!isDenseUniqueStringArray(submittedParentClaimIds, true)) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "EVIDENCE_CLAIM_PARENTS_INVALID",
             `${path4}/parent_claim_ids`,
@@ -11127,7 +12697,7 @@ function validateEvidenceInputs(graph, diagnostics) {
           derivationKind
         ] : void 0;
         if (typeof derivationTarget !== "string" || !allowedTargets?.includes(derivationTarget) || kind !== derivationTarget) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "EVIDENCE_CLAIM_DERIVATION_INVALID",
             path4,
@@ -11151,7 +12721,7 @@ function validateEvidenceInputs(graph, diagnostics) {
   }
   for (const [claimId, claim] of claimsById) {
     for (const parentId of stringArray5(claim.parent_claim_ids)) {
-      if (!claimsById.has(parentId)) diagnostics.push(diagnostic11(
+      if (!claimsById.has(parentId)) diagnostics.push(diagnostic13(
         "reference",
         "EVIDENCE_CLAIM_PARENT_DANGLING",
         `/claimsById/${claimId}/parent_claim_ids/${parentId}`,
@@ -11160,7 +12730,7 @@ function validateEvidenceInputs(graph, diagnostics) {
     }
   }
   const cycle = firstClaimCycle(claimsById);
-  if (cycle) diagnostics.push(diagnostic11(
+  if (cycle) diagnostics.push(diagnostic13(
     "reference",
     "EVIDENCE_CLAIM_CYCLE",
     `/claimsById/${pointerPart5(cycle.claimId)}/parent_claim_ids/${pointerPart5(cycle.parentId)}`,
@@ -11168,7 +12738,7 @@ function validateEvidenceInputs(graph, diagnostics) {
   ));
   const facts = [];
   if (!isDenseObjectArray2(graph.factLedger)) {
-    diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_LEDGER_INVALID", "/factLedger", "factLedger must be a dense object array"));
+    diagnostics.push(diagnostic13("schema", "EVIDENCE_FACT_LEDGER_INVALID", "/factLedger", "factLedger must be a dense object array"));
   } else {
     const factIds = /* @__PURE__ */ new Set();
     for (const fact of graph.factLedger) {
@@ -11176,25 +12746,25 @@ function validateEvidenceInputs(graph, diagnostics) {
       const path4 = `/factLedger/${factId || facts.length}`;
       let valid = true;
       if (!hasExactKeys2(fact, FACT_FIELDS)) {
-        diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_NOT_CLOSED", path4, "fact entries must contain exactly fact_id, claim_id, status, and source_claim_ids"));
+        diagnostics.push(diagnostic13("schema", "EVIDENCE_FACT_NOT_CLOSED", path4, "fact entries must contain exactly fact_id, claim_id, status, and source_claim_ids"));
         valid = false;
       }
       if (!isNonblankUnpadded(factId) || !isNonblankUnpadded(fact.claim_id) || !FACT_STATUSES.has(String(fact.status)) || !isDenseUniqueStringArray(fact.source_claim_ids, true)) {
-        diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_FIELDS_INVALID", path4, "fact IDs, status, and source refs must satisfy the closed fact contract"));
+        diagnostics.push(diagnostic13("schema", "EVIDENCE_FACT_FIELDS_INVALID", path4, "fact IDs, status, and source refs must satisfy the closed fact contract"));
         valid = false;
       }
       if (factIds.has(factId)) {
-        diagnostics.push(diagnostic11("schema", "EVIDENCE_FACT_ID_DUPLICATE", `/factLedger/${factId}/fact_id`, `fact_id "${factId}" must be unique`));
+        diagnostics.push(diagnostic13("schema", "EVIDENCE_FACT_ID_DUPLICATE", `/factLedger/${factId}/fact_id`, `fact_id "${factId}" must be unique`));
         valid = false;
       }
       factIds.add(factId);
       if (isNonblankUnpadded(fact.claim_id) && !claimsById.has(fact.claim_id)) {
-        diagnostics.push(diagnostic11("reference", "EVIDENCE_FACT_CLAIM_DANGLING", `${path4}/claim_id`, `fact references missing accepted claim "${fact.claim_id}"`));
+        diagnostics.push(diagnostic13("reference", "EVIDENCE_FACT_CLAIM_DANGLING", `${path4}/claim_id`, `fact references missing accepted claim "${fact.claim_id}"`));
         valid = false;
       }
       for (const claimId of stringArray5(fact.source_claim_ids)) {
         if (!claimsById.has(claimId)) {
-          diagnostics.push(diagnostic11("reference", "EVIDENCE_FACT_SOURCE_DANGLING", `${path4}/source_claim_ids/${claimId}`, `fact references missing accepted source claim "${claimId}"`));
+          diagnostics.push(diagnostic13("reference", "EVIDENCE_FACT_SOURCE_DANGLING", `${path4}/source_claim_ids/${claimId}`, `fact references missing accepted source claim "${claimId}"`));
           valid = false;
         }
       }
@@ -11432,7 +13002,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
   const path4 = `/obligationCompilation/contextsByViewId/${pointerPart5(viewId)}`;
   let valid = true;
   if (!isPlainRecord(context)) {
-    diagnostics.push(diagnostic11(
+    diagnostics.push(diagnostic13(
       "schema",
       "OBLIGATION_CONTEXT_PROTOTYPE_FORBIDDEN",
       path4,
@@ -11446,7 +13016,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
     const entries = ownEntries(context[field]);
     const fieldPath = `${path4}/${field}`;
     if (entries === null) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "schema",
         "OBLIGATION_CONTEXT_MAP_PROTOTYPE_FORBIDDEN",
         fieldPath,
@@ -11457,7 +13027,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
     }
     for (const [rawKey, entry] of entries) {
       if (!isNonblankUnpadded(rawKey) || !elementIds.has(String(rawKey))) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "OBLIGATION_CONTEXT_ELEMENT_UNKNOWN",
           `${fieldPath}/${pointerPart5(String(rawKey))}`,
@@ -11467,11 +13037,11 @@ function validateViewContext(viewId, view, context, diagnostics) {
         continue;
       }
       if (field === "riskByElementId" && !isNonblankUnpadded(entry)) {
-        diagnostics.push(diagnostic11("schema", "OBLIGATION_CONTEXT_STRINGS_INVALID", fieldPath, "context risk values must be nonblank and unpadded"));
+        diagnostics.push(diagnostic13("schema", "OBLIGATION_CONTEXT_STRINGS_INVALID", fieldPath, "context risk values must be nonblank and unpadded"));
         valid = false;
       }
       if ((field === "requiredOracleRefsByElementId" || field === "requiredCapabilitiesByElementId") && !isDenseUniqueStringArray(entry)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "schema",
           "OBLIGATION_CONTEXT_STRINGS_INVALID",
           fieldPath,
@@ -11482,7 +13052,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
       if (field === "loopMaximumsByElementId") {
         const definition = isPlainRecord(entry) ? entry : null;
         if (!definition || !hasExactKeys2(definition, ["maximum", "source_claim_ids"]) || !Number.isInteger(definition.maximum) || Number(definition.maximum) <= 1 || !isDenseUniqueStringArray(definition.source_claim_ids, true)) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "OBLIGATION_CONTEXT_LOOP_INVALID",
             fieldPath,
@@ -11493,7 +13063,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
       }
       if (field === "timingSpecialResponsibilitiesByElementId" || field === "integrationSpecialResponsibilitiesByElementId") {
         if (!isDenseObjectArray2(entry) || entry.some((item) => !hasExactKeys2(item, ["signal", "type"]) || !isNonblankUnpadded(item.signal) || !isNonblankUnpadded(item.type))) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "OBLIGATION_CONTEXT_SPECIAL_INVALID",
             fieldPath,
@@ -11504,7 +13074,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
       }
       if (field === "integrationInvariantsByElementId") {
         if (!isDenseObjectArray2(entry) || entry.some((item) => !hasExactKeys2(item, ["invariant"]) || !isNonblankUnpadded(item.invariant))) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "schema",
             "OBLIGATION_CONTEXT_INVARIANT_INVALID",
             fieldPath,
@@ -11516,7 +13086,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
     }
   }
   if (Object.hasOwn(context, "responsibilityBindings") && !isDenseObjectArray2(context.responsibilityBindings)) {
-    diagnostics.push(diagnostic11(
+    diagnostics.push(diagnostic13(
       "schema",
       "OBLIGATION_CONTEXT_BINDINGS_INVALID",
       `${path4}/responsibilityBindings`,
@@ -11530,7 +13100,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
   const submittedObligations = inputs.customObligations.flatMap((entry) => isObject7(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []);
   diagnostics.push(.../** @type {Diagnostic[]} */
   validateAgainstSchema({
-    schema_version: "1.0.0",
+    schema_version: "2.1.0",
     source_revision: 0,
     obligations: submittedObligations,
     fact_routes: [],
@@ -11552,7 +13122,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       const elementId = typeof element.element_id === "string" ? element.element_id : "";
       const ref = qualifyViewElementRef(viewId, elementId);
       if (ownerElementsByRef.has(ref)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "CUSTOM_OBLIGATION_VIEW_ELEMENT_COLLISION",
           `/views/${pointerPart5(viewId)}/elements/${pointerPart5(elementId)}`,
@@ -11567,7 +13137,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
   inputs.customObligations.forEach((entry, index) => {
     const wrapperPath = inputs.customResponsibilityPaths.get(entry) ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (!hasExactKeys2(entry, ["obligation", "owner", "responsibility_key", "semantic_key"]) || !isNonblankUnpadded(entry.semantic_key) || !isNonblankUnpadded(entry.responsibility_key) || !isObject7(entry.owner) || !isObject7(entry.obligation)) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "schema",
         "CUSTOM_OBLIGATION_WRAPPER_INVALID",
         wrapperPath,
@@ -11581,14 +13151,14 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
     const path4 = inputs.customResponsibilityPaths.get(seed) ?? wrapperPath;
     const keys = Object.keys(seed).sort(compareCodePoints7);
     if (keys.length !== OBLIGATION_FIELDS.length || keys.some((key, keyIndex) => key !== OBLIGATION_FIELDS[keyIndex])) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "schema",
         "CUSTOM_OBLIGATION_INPUT_NOT_CLOSED",
         path4,
         "custom obligation must contain exactly the frozen eight obligation fields"
       ));
     }
-    if (!/^obligation_[0-9a-f]{16}$/.test(obligationId)) diagnostics.push(diagnostic11(
+    if (!/^obligation_[0-9a-f]{16}$/.test(obligationId)) diagnostics.push(diagnostic13(
       "schema",
       "CUSTOM_OBLIGATION_ID_INVALID",
       `${path4}/obligation_id`,
@@ -11599,14 +13169,14 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       responsibility_key: entry.responsibility_key
     };
     const expectedId = stableId("obligation", identity);
-    if (obligationId !== expectedId) diagnostics.push(diagnostic11(
+    if (obligationId !== expectedId) diagnostics.push(diagnostic13(
       "classification",
       "CUSTOM_OBLIGATION_ID_MISMATCH",
       `${path4}/obligation_id`,
       `custom obligation_id must equal the stable ID of its semantic key and owner; expected "${expectedId}"`
     ));
     if (!isNonblankUnpadded(seed.scope) || !isDenseUniqueStringArray(seed.source_claim_ids, true) || !isDenseUniqueStringArray(seed.view_element_refs) || !isDenseUniqueStringArray(seed.required_oracle_refs) || !isDenseUniqueStringArray(seed.required_capabilities)) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "schema",
         "CUSTOM_OBLIGATION_STRINGS_INVALID",
         path4,
@@ -11622,7 +13192,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
     ]) {
       const claim = claimsById.get(claimId);
       if (!claim) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "CUSTOM_OBLIGATION_CLAIM_DANGLING",
           `${path4}/${field}`,
@@ -11630,7 +13200,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
         ));
         continue;
       }
-      if (!isNonblankUnpadded(claim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(claim.scope), String(seed.scope))) diagnostics.push(diagnostic11(
+      if (!isNonblankUnpadded(claim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(claim.scope), String(seed.scope))) diagnostics.push(diagnostic13(
         "classification",
         "CUSTOM_OBLIGATION_CLAIM_SCOPE_MISMATCH",
         `${path4}/${field}`,
@@ -11638,13 +13208,13 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       ));
       if (field === "source_claim_ids") {
         const acceptedSource = isOracleEvidence(claim) || claim.level === "E2" && claim.kind === "model-element" && claim.derivation_target === "model-element";
-        if (!acceptedSource) diagnostics.push(diagnostic11(
+        if (!acceptedSource) diagnostics.push(diagnostic13(
           "classification",
           "CUSTOM_OBLIGATION_SOURCE_INVALID",
           `${path4}/source_claim_ids`,
           `claim "${claimId}" is not accepted formal obligation evidence`
         ));
-      } else if (!isOracleEvidence(claim)) diagnostics.push(diagnostic11(
+      } else if (!isOracleEvidence(claim)) diagnostics.push(diagnostic13(
         "classification",
         "CUSTOM_OBLIGATION_ORACLE_INVALID",
         `${path4}/required_oracle_refs`,
@@ -11652,7 +13222,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       ));
     }
     for (const oracleId of oracleIds) {
-      if (!sourceSet.has(oracleId)) diagnostics.push(diagnostic11(
+      if (!sourceSet.has(oracleId)) diagnostics.push(diagnostic13(
         "traceability",
         "CUSTOM_OBLIGATION_ORACLE_NOT_SOURCED",
         `${path4}/required_oracle_refs`,
@@ -11665,7 +13235,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       for (const factId of stringArray5(entry.owner.fact_ids)) {
         const fact = factsById.get(factId);
         if (!fact) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "reference",
             "CUSTOM_RESPONSIBILITY_FACT_OWNER_DANGLING",
             `${path4}/owner/fact_ids/${pointerPart5(factId)}`,
@@ -11674,7 +13244,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
           continue;
         }
         const primaryClaim = claimsById.get(String(fact.claim_id));
-        if (!primaryClaim || !isNonblankUnpadded(primaryClaim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(primaryClaim.scope), String(seed.scope))) diagnostics.push(diagnostic11(
+        if (!primaryClaim || !isNonblankUnpadded(primaryClaim.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(primaryClaim.scope), String(seed.scope))) diagnostics.push(diagnostic13(
           "classification",
           "CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH",
           `${path4}/scope`,
@@ -11691,7 +13261,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       const elementId = parsedRef?.elementId ?? "";
       const ownerElement = ownerElementsByRef.get(viewElementRef);
       if (!isNonblankUnpadded(viewId) || !isNonblankUnpadded(elementId) || !ownerElement) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "CUSTOM_OBLIGATION_VIEW_ELEMENT_DANGLING",
           `${path4}/view_element_refs`,
@@ -11700,14 +13270,14 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
         continue;
       }
       const { view, roots } = ownerElement;
-      if (!isNonblankUnpadded(view.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(view.scope), String(seed.scope))) diagnostics.push(diagnostic11(
+      if (!isNonblankUnpadded(view.scope) || !isNonblankUnpadded(seed.scope) || !scopeContains(String(view.scope), String(seed.scope))) diagnostics.push(diagnostic13(
         "classification",
         "CUSTOM_OBLIGATION_OWNER_SCOPE_MISMATCH",
         `${path4}/scope`,
         `view element owner "${viewElementRef}" does not contain custom obligation scope "${String(seed.scope)}"`
       ));
       if (roots.length === 0 || roots.some((claimId) => !claimsById.has(claimId))) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "traceability",
           "CUSTOM_OBLIGATION_OWNER_EVIDENCE_INVALID",
           `${path4}/view_element_refs`,
@@ -11720,13 +13290,13 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       const modeledFacts = [...new Set([...relatedClaims].flatMap(
         (claimId) => [...factIdsByClaimId.get(claimId) ?? []]
       ))].sort(compareCodePoints7);
-      if (modeledFacts.length === 0) diagnostics.push(diagnostic11(
+      if (modeledFacts.length === 0) diagnostics.push(diagnostic13(
         "traceability",
         "CUSTOM_RESPONSIBILITY_VIEW_OWNER_UNRESOLVED",
         `${path4}/owner/view_element_refs`,
         `view element owner "${viewElementRef}" does not resolve to a modeled formal fact`
       ));
-      else if (modeledFacts.length > 1) diagnostics.push(diagnostic11(
+      else if (modeledFacts.length > 1) diagnostics.push(diagnostic13(
         "traceability",
         "CUSTOM_RESPONSIBILITY_VIEW_OWNER_AMBIGUOUS",
         `${path4}/owner/view_element_refs`,
@@ -11740,7 +13310,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
     );
     const relatedToAnySource = directionallyRelatedClaims(relations, sourceIds);
     for (const claimId of sourceIds) {
-      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic11(
+      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic13(
         "traceability",
         "CUSTOM_OBLIGATION_SOURCE_UNRELATED",
         `${path4}/source_claim_ids`,
@@ -11748,7 +13318,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       ));
     }
     for (const claimId of oracleIds) {
-      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic11(
+      if (claimsById.has(claimId) && !relatedToAnyOwner.has(claimId)) diagnostics.push(diagnostic13(
         "traceability",
         "CUSTOM_OBLIGATION_ORACLE_UNRELATED",
         `${path4}/required_oracle_refs`,
@@ -11756,7 +13326,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       ));
     }
     for (const owner of owners) {
-      if (!owner.roots.some((claimId) => relatedToAnySource.has(claimId))) diagnostics.push(diagnostic11(
+      if (!owner.roots.some((claimId) => relatedToAnySource.has(claimId))) diagnostics.push(diagnostic13(
         "traceability",
         "CUSTOM_OBLIGATION_OWNER_UNSUPPORTED",
         `${path4}/view_element_refs`,
@@ -11825,7 +13395,7 @@ function mergeSystemObligations(seeds, diagnostics) {
       return;
     }
     if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "OBLIGATION_SIGNATURE_CONFLICT",
         path4,
@@ -11846,7 +13416,7 @@ function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligatio
     const obligationId = typeof seed.obligation_id === "string" ? seed.obligation_id : "";
     const path4 = publicPaths.get(seed) ?? `/obligation_inputs/custom_responsibilities/${index}`;
     if (systemIds.has(obligationId)) {
-      if (!collisionIds.has(obligationId)) diagnostics.push(diagnostic11(
+      if (!collisionIds.has(obligationId)) diagnostics.push(diagnostic13(
         "classification",
         "CUSTOM_OBLIGATION_SYSTEM_ID_COLLISION",
         `${path4}/obligation_id`,
@@ -11856,7 +13426,7 @@ function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligatio
       return;
     }
     if (systemSignatures.has(obligationContentSignature(seed))) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "CUSTOM_OBLIGATION_SYSTEM_SEMANTIC_COLLISION",
         path4,
@@ -11870,20 +13440,20 @@ function mergeCustomObligations(seeds, ownerBySeed, publicPaths, systemObligatio
       byId.set(obligationId, obligationAccumulator(seed, owner));
       return;
     }
-    diagnostics.push(diagnostic11(
+    diagnostics.push(diagnostic13(
       "traceability",
       "CUSTOM_RESPONSIBILITY_DUPLICATE",
       path4,
       "custom responsibilities with the same type, owner, scope, and responsibility semantics must not be duplicated"
     ));
     if (existing.owner !== owner) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "CUSTOM_OBLIGATION_OWNER_CONFLICT",
         path4,
         `duplicate custom obligation ID "${obligationId}" has conflicting semantic owners`
       ));
-      if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) diagnostics.push(diagnostic11(
+      if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) diagnostics.push(diagnostic13(
         "classification",
         "OBLIGATION_SIGNATURE_CONFLICT",
         path4,
@@ -11901,11 +13471,11 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
   for (const [viewId, view] of viewsById) {
     const submittedContext = inputs.contextsByViewId.get(viewId);
     if (!isObject7(submittedContext)) {
-      diagnostics.push(diagnostic11("classification", "OBLIGATION_CONTEXT_MISSING", `/obligationCompilation/contextsByViewId/${viewId}`, `view "${viewId}" has no isolated compilation context`));
+      diagnostics.push(diagnostic13("classification", "OBLIGATION_CONTEXT_MISSING", `/obligationCompilation/contextsByViewId/${viewId}`, `view "${viewId}" has no isolated compilation context`));
       continue;
     }
     if (Object.hasOwn(submittedContext, "claimsById") || Object.hasOwn(submittedContext, "evidenceGraph")) {
-      diagnostics.push(diagnostic11("classification", "OBLIGATION_CONTEXT_EVIDENCE_OVERRIDE", `/obligationCompilation/contextsByViewId/${viewId}`, "view context cannot replace the accepted evidence graph"));
+      diagnostics.push(diagnostic13("classification", "OBLIGATION_CONTEXT_EVIDENCE_OVERRIDE", `/obligationCompilation/contextsByViewId/${viewId}`, "view context cannot replace the accepted evidence graph"));
       continue;
     }
     const allowedFields = CONTEXT_FIELDS_BY_VIEW_TYPE[
@@ -11914,7 +13484,7 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
     ];
     const submittedFields = Object.keys(submittedContext).sort(compareCodePoints7);
     if (!allowedFields || submittedFields.some((field) => !allowedFields.includes(field))) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "schema",
         "OBLIGATION_CONTEXT_NOT_CLOSED",
         `/obligationCompilation/contextsByViewId/${viewId}`,
@@ -11926,7 +13496,7 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
     try {
       seeds.push(...registry.compile(view, { ...submittedContext, claimsById }));
     } catch (error) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "OBLIGATION_STRATEGY_REJECTED",
         `/views/${viewId}`,
@@ -11935,13 +13505,13 @@ function compileViewObligations(claimsById, viewsById, inputs, diagnostics) {
     }
   }
   for (const key of inputs.contextsByViewId.keys()) {
-    if (!isNonblankUnpadded(key)) diagnostics.push(diagnostic11(
+    if (!isNonblankUnpadded(key)) diagnostics.push(diagnostic13(
       "schema",
       "OBLIGATION_CONTEXT_VIEW_KEY_INVALID",
       `/obligationCompilation/contextsByViewId/${pointerPart5(String(key))}`,
       "compilation context view keys must be nonblank and unpadded"
     ));
-    else if (!viewsById.has(key)) diagnostics.push(diagnostic11(
+    else if (!viewsById.has(key)) diagnostics.push(diagnostic13(
       "reference",
       "OBLIGATION_CONTEXT_VIEW_UNKNOWN",
       `/obligationCompilation/contextsByViewId/${pointerPart5(key)}`,
@@ -11967,7 +13537,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     reviewsByFactId.set(factId, group);
     let valid = true;
     if (!hasExactKeys2(review, ["claim_id", "fact_id", "support_review"]) || !isNonblankUnpadded(factId) || !isNonblankUnpadded(review.claim_id) || review.support_review !== "supported") {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "NOT_APPLICABLE_REVIEW_INVALID",
         path4,
@@ -11976,13 +13546,13 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
       valid = false;
     }
     if (!factsById.has(factId)) {
-      diagnostics.push(diagnostic11("reference", "NOT_APPLICABLE_REVIEW_UNKNOWN", `${path4}/fact_id`, `NotApplicable review references unknown formal fact "${factId}"`));
+      diagnostics.push(diagnostic13("reference", "NOT_APPLICABLE_REVIEW_UNKNOWN", `${path4}/fact_id`, `NotApplicable review references unknown formal fact "${factId}"`));
       valid = false;
     }
     if (valid) validReviews.add(review);
   }
   for (const [factId, reviews] of reviewsByFactId) {
-    if (reviews.length > 1) diagnostics.push(diagnostic11(
+    if (reviews.length > 1) diagnostics.push(diagnostic13(
       "traceability",
       "NOT_APPLICABLE_REVIEW_MULTIPLE",
       inputs.notApplicableReviewPaths.get(reviews[1]) ?? inputs.notApplicableReviewPaths.get(reviews[0]) ?? "/obligation_inputs/terminal_fact_routes",
@@ -12001,33 +13571,33 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
   for (const [factId, submittedRoutes] of [...routesByFactId].sort(([left], [right]) => compareCodePoints7(left, right))) {
     const path4 = inputs.terminalFactRoutePaths.get(submittedRoutes[0]) ?? "/obligation_inputs/terminal_fact_routes";
     if (!factsById.has(factId)) {
-      diagnostics.push(diagnostic11("reference", "FACT_ROUTE_UNKNOWN", `${path4}/fact_id`, `route references unknown formal fact "${factId}"`));
+      diagnostics.push(diagnostic13("reference", "FACT_ROUTE_UNKNOWN", `${path4}/fact_id`, `route references unknown formal fact "${factId}"`));
     }
     if (submittedRoutes.length > 1) {
-      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MULTIPLE", path4, `formal fact "${factId}" has more than one explicit route`));
+      diagnostics.push(diagnostic13("traceability", "FACT_ROUTE_MULTIPLE", path4, `formal fact "${factId}" has more than one explicit route`));
     }
     const normalizedByRoute = /* @__PURE__ */ new Map();
     for (const route2 of submittedRoutes) {
       const routeType = route2.route_type;
       if (routeType === "exploratory") {
-        diagnostics.push(diagnostic11("classification", "FORMAL_FACT_EXPLORATORY_FORBIDDEN", path4, "a formal fact cannot route directly to Exploratory"));
+        diagnostics.push(diagnostic13("classification", "FORMAL_FACT_EXPLORATORY_FORBIDDEN", path4, "a formal fact cannot route directly to Exploratory"));
         continue;
       }
       if (routeType === "blocked") {
         if (!hasExactKeys2(route2, ["fact_id", "issue_intent", "route_type"]) || !isObject7(route2.issue_intent)) {
-          diagnostics.push(diagnostic11("classification", "FACT_BLOCKED_ROUTE_INVALID", path4, "Blocked route must contain one closed typed issue_intent"));
+          diagnostics.push(diagnostic13("classification", "FACT_BLOCKED_ROUTE_INVALID", path4, "Blocked route must contain one closed typed issue_intent"));
           continue;
         }
         const intent = route2.issue_intent;
         if (!hasExactKeys2(intent, ["answerable", "evidence_refs", "missing_type", "reasons", "risk", "scope"]) || !isNonblankUnpadded(intent.missing_type) || !isNonblankUnpadded(intent.scope) || typeof intent.answerable !== "boolean" || !["critical", "high", "medium", "low"].includes(String(intent.risk)) || !isDenseUniqueStringArray(intent.reasons) || !isDenseUniqueStringArray(intent.evidence_refs)) {
-          diagnostics.push(diagnostic11("classification", "FACT_BLOCKED_INTENT_INVALID", `${path4}/issue_intent`, "Blocked fact intent must satisfy the closed typed issue contract"));
+          diagnostics.push(diagnostic13("classification", "FACT_BLOCKED_INTENT_INVALID", `${path4}/issue_intent`, "Blocked fact intent must satisfy the closed typed issue contract"));
           continue;
         }
         const fact2 = factsById.get(factId);
         const primaryClaim2 = fact2 ? claimsById.get(String(fact2.claim_id)) : void 0;
         let valid = Boolean(fact2 && primaryClaim2);
         if (primaryClaim2 && (!isNonblankUnpadded(primaryClaim2.scope) || !scopeContains(String(intent.scope), String(primaryClaim2.scope)))) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "classification",
             "TERMINAL_ISSUE_SCOPE_MISMATCH",
             `${path4}/issue_intent/scope`,
@@ -12040,7 +13610,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
           const evidenceClaim = claimsById.get(evidenceId);
           const evidencePath = `${path4}/issue_intent/evidence_refs/${pointerPart5(evidenceId)}`;
           if (!evidenceClaim) {
-            diagnostics.push(diagnostic11(
+            diagnostics.push(diagnostic13(
               "reference",
               "TERMINAL_ISSUE_EVIDENCE_DANGLING",
               evidencePath,
@@ -12050,7 +13620,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
             continue;
           }
           if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) {
-            diagnostics.push(diagnostic11(
+            diagnostics.push(diagnostic13(
               "classification",
               "TERMINAL_ISSUE_EVIDENCE_SCOPE_MISMATCH",
               evidencePath,
@@ -12063,7 +13633,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
             evidenceId,
             root
           ))) {
-            diagnostics.push(diagnostic11(
+            diagnostics.push(diagnostic13(
               "traceability",
               "TERMINAL_ISSUE_EVIDENCE_UNRELATED",
               evidencePath,
@@ -12127,13 +13697,13 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
         notApplicableFactIds.add(factId);
         const claimId = typeof route2.not_applicable_claim_id === "string" ? route2.not_applicable_claim_id : "";
         if (!hasExactKeys2(route2, ["fact_id", "not_applicable_claim_id", "route_type"]) || !isNonblankUnpadded(claimId)) {
-          diagnostics.push(diagnostic11("classification", "FACT_NOT_APPLICABLE_ROUTE_INVALID", path4, "NotApplicable route must contain one nonblank unpadded exclusion claim ID"));
+          diagnostics.push(diagnostic13("classification", "FACT_NOT_APPLICABLE_ROUTE_INVALID", path4, "NotApplicable route must contain one nonblank unpadded exclusion claim ID"));
           continue;
         }
         normalizedByRoute.set(route2, { route: { fact_id: factId, route_type: "not_applicable", not_applicable_claim_id: claimId } });
         continue;
       }
-      diagnostics.push(diagnostic11("classification", "FACT_ROUTE_TYPE_INVALID", `${path4}/route_type`, "explicit fact route must be Blocked or NotApplicable"));
+      diagnostics.push(diagnostic13("classification", "FACT_ROUTE_TYPE_INVALID", `${path4}/route_type`, "explicit fact route must be Blocked or NotApplicable"));
     }
     if (submittedRoutes.length !== 1 || !factsById.has(factId)) continue;
     const route = submittedRoutes[0];
@@ -12145,7 +13715,7 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     }
     const reviews = reviewsByFactId.get(factId) ?? [];
     if (reviews.length === 0) {
-      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISSING", path4, `formal fact "${factId}" has no supported NotApplicable review`));
+      diagnostics.push(diagnostic13("traceability", "NOT_APPLICABLE_REVIEW_MISSING", path4, `formal fact "${factId}" has no supported NotApplicable review`));
       continue;
     }
     if (reviews.length !== 1 || !validReviews.has(reviews[0])) continue;
@@ -12157,15 +13727,15 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
     const exclusionId = String(normalizedRoute.not_applicable_claim_id);
     const exclusion = claimsById.get(exclusionId);
     if (!exclusion) {
-      diagnostics.push(diagnostic11("reference", "NOT_APPLICABLE_CLAIM_DANGLING", `${path4}/not_applicable_claim_id`, `NotApplicable route references unknown claim "${exclusionId}"`));
+      diagnostics.push(diagnostic13("reference", "NOT_APPLICABLE_CLAIM_DANGLING", `${path4}/not_applicable_claim_id`, `NotApplicable route references unknown claim "${exclusionId}"`));
       continue;
     }
     if (review.claim_id !== exclusionId) {
-      diagnostics.push(diagnostic11("traceability", "NOT_APPLICABLE_REVIEW_MISMATCH", `${path4}/exclusion_claim_id`, "NotApplicable review must name the route exclusion claim"));
+      diagnostics.push(diagnostic13("traceability", "NOT_APPLICABLE_REVIEW_MISMATCH", `${path4}/exclusion_claim_id`, "NotApplicable review must name the route exclusion claim"));
       continue;
     }
     if (exclusion.level !== "E3" && exclusion.level !== "E2") {
-      diagnostics.push(diagnostic11("classification", "NOT_APPLICABLE_CLAIM_LEVEL_INVALID", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion requires accepted E3 or E2 evidence"));
+      diagnostics.push(diagnostic13("classification", "NOT_APPLICABLE_CLAIM_LEVEL_INVALID", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion requires accepted E3 or E2 evidence"));
       continue;
     }
     const fact = (
@@ -12178,18 +13748,18 @@ function terminalFactRoutes(inputs, factsById, claimsById, relations, diagnostic
       exclusionId,
       claimId
     ))) {
-      diagnostics.push(diagnostic11("classification", "NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion must be independent from the fact claim and its sources"));
+      diagnostics.push(diagnostic13("classification", "NOT_APPLICABLE_CLAIM_NOT_INDEPENDENT", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion must be independent from the fact claim and its sources"));
       continue;
     }
     const primaryClaim = claimsById.get(String(fact.claim_id));
     if (!primaryClaim || !isNonblankUnpadded(exclusion.scope) || !isNonblankUnpadded(primaryClaim.scope) || !scopeContains(String(exclusion.scope), String(primaryClaim.scope))) {
-      diagnostics.push(diagnostic11("classification", "NOT_APPLICABLE_SCOPE_MISMATCH", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion scope must cover the primary fact scope"));
+      diagnostics.push(diagnostic13("classification", "NOT_APPLICABLE_SCOPE_MISMATCH", `${path4}/not_applicable_claim_id`, "NotApplicable exclusion scope must cover the primary fact scope"));
       continue;
     }
     routes.set(factId, normalized);
   }
   for (const factId of [...reviewsByFactId.keys()].sort(compareCodePoints7)) {
-    if (factsById.has(factId) && !notApplicableFactIds.has(factId)) diagnostics.push(diagnostic11(
+    if (factsById.has(factId) && !notApplicableFactIds.has(factId)) diagnostics.push(diagnostic13(
       "traceability",
       "NOT_APPLICABLE_REVIEW_ORPHAN",
       inputs.notApplicableReviewPaths.get((reviewsByFactId.get(factId) ?? [])[0]) ?? "/obligation_inputs/terminal_fact_routes",
@@ -12253,7 +13823,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
     const qualifiedElementRefs = publicElementRefs.map((ref) => qualifyViewElementRef(String(ref.view_id ?? ""), String(ref.element_id ?? ""))).sort(compareCodePoints7);
     let valid = true;
     if (!view) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "reference",
         "TWISE_OWNER_VIEW_UNKNOWN",
         `${path4}/owner/view_id`,
@@ -12266,7 +13836,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
     const selectedElements = [];
     for (const [refIndex, ref] of publicElementRefs.entries()) {
       if (ref.view_id !== viewId || !elementsById.has(String(ref.element_id ?? ""))) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "TWISE_OWNER_ELEMENT_UNKNOWN",
           `${path4}/owner/view_element_refs/${refIndex}`,
@@ -12291,7 +13861,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
     for (const [factIndex, factId] of factIds.entries()) {
       const fact = factsById.get(factId);
       if (!fact) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "TWISE_OWNER_FACT_UNKNOWN",
           `${path4}/owner/fact_ids/${factIndex}`,
@@ -12302,7 +13872,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
       }
       const modeledViews = modeledViewsByFactId.get(factId);
       if (!modeledViews?.has(viewId)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "traceability",
           "TWISE_OWNER_FACT_NOT_MODELED",
           `${path4}/owner/fact_ids/${factIndex}`,
@@ -12315,7 +13885,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
       ownerRoots.push(...factRoots);
       const primaryClaim = claimsById.get(String(fact.claim_id));
       if (!primaryClaim || !scopeContains(String(primaryClaim.scope ?? ""), scope)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "classification",
           "TWISE_OWNER_SCOPE_MISMATCH",
           `${path4}/owner/fact_ids/${factIndex}`,
@@ -12330,7 +13900,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
           (factRoot) => claimsDirectionallyRelated(relations, root, factRoot)
         ));
       })) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "traceability",
           "TWISE_OWNER_FACT_AMBIGUOUS",
           `${path4}/owner/fact_ids/${factIndex}`,
@@ -12343,7 +13913,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
       if (!ownerFacts.some(({ roots }) => element.roots.some((elementRoot) => roots.some(
         (factRoot) => claimsDirectionallyRelated(relations, elementRoot, factRoot)
       )))) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "traceability",
           "TWISE_OWNER_ELEMENT_NOT_MODELED",
           `${path4}/owner/view_element_refs/${element.index}`,
@@ -12353,7 +13923,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
       }
     }
     if (!view || !scopeContains(String(view.scope ?? ""), scope)) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "TWISE_OWNER_SCOPE_MISMATCH",
         `${path4}/scope`,
@@ -12365,12 +13935,12 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
     const validateClaim = (claimId, claimPath, options = {}) => {
       const claim = claimsById.get(claimId);
       if (!claim) {
-        diagnostics.push(diagnostic11("reference", "TWISE_EVIDENCE_DANGLING", claimPath, `unknown accepted evidence "${claimId}"`));
+        diagnostics.push(diagnostic13("reference", "TWISE_EVIDENCE_DANGLING", claimPath, `unknown accepted evidence "${claimId}"`));
         valid = false;
         return false;
       }
       if (options.oracle && (!isSupportedCombinationEvidence(claim) || !isOracleEvidence(claim))) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "classification",
           "TWISE_ORACLE_EVIDENCE_INVALID",
           claimPath,
@@ -12380,7 +13950,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         return false;
       }
       if (claim.kind === "diagnostic" || options.strong && !isSupportedCombinationEvidence(claim)) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "classification",
           "TWISE_EVIDENCE_LEVEL_INVALID",
           claimPath,
@@ -12390,13 +13960,13 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         return false;
       }
       if (!scopeContains(String(claim.scope ?? ""), scope)) {
-        diagnostics.push(diagnostic11("classification", "TWISE_EVIDENCE_SCOPE_MISMATCH", claimPath, "combination evidence must cover the request scope"));
+        diagnostics.push(diagnostic13("classification", "TWISE_EVIDENCE_SCOPE_MISMATCH", claimPath, "combination evidence must cover the request scope"));
         valid = false;
         return false;
       }
       const roots = options.roots ?? canonicalOwnerRoots;
       if (!options.skipRelation && !roots.some((root) => claimsDirectionallyRelated(relations, claimId, root))) {
-        diagnostics.push(diagnostic11("traceability", "TWISE_EVIDENCE_UNRELATED", claimPath, "combination evidence must connect directionally to its semantic target"));
+        diagnostics.push(diagnostic13("traceability", "TWISE_EVIDENCE_UNRELATED", claimPath, "combination evidence must connect directionally to its semantic target"));
         valid = false;
         return false;
       }
@@ -12409,7 +13979,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
     for (const [parameterIndex, parameter] of parameters.entries()) {
       const parameterId = String(parameter.parameter_id ?? "");
       if (parameterIds.has(parameterId)) {
-        diagnostics.push(diagnostic11("classification", "TWISE_PARAMETER_DUPLICATE", `${path4}/parameters/${parameterIndex}/parameter_id`, `duplicate parameter "${parameterId}"`));
+        diagnostics.push(diagnostic13("classification", "TWISE_PARAMETER_DUPLICATE", `${path4}/parameters/${parameterIndex}/parameter_id`, `duplicate parameter "${parameterId}"`));
         valid = false;
       }
       parameterIds.add(parameterId);
@@ -12419,7 +13989,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         const valueId = String(value.value_id ?? "");
         const claimId = String(value.evidence_claim_id ?? "");
         if (claimsByValue.has(valueId)) {
-          diagnostics.push(diagnostic11("classification", "TWISE_VALUE_DUPLICATE", `${path4}/parameters/${parameterIndex}/values/${valueIndex}/value_id`, `duplicate value "${valueId}"`));
+          diagnostics.push(diagnostic13("classification", "TWISE_VALUE_DUPLICATE", `${path4}/parameters/${parameterIndex}/values/${valueIndex}/value_id`, `duplicate value "${valueId}"`));
           valid = false;
         }
         validateClaim(claimId, `${path4}/parameters/${parameterIndex}/values/${valueIndex}/evidence_claim_id`);
@@ -12467,7 +14037,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
           (targetId) => forbidProofClosesTarget(claimId, targetId)
         );
         if (evidenceValid && !closesTuple) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "traceability",
             "TWISE_EVIDENCE_UNRELATED",
             `${path4}/constraints/${constraintIndex}/evidence_refs/${refIndex}`,
@@ -12478,7 +14048,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
       }
       for (const [assignmentIndex, targetId] of assignedRoots.entries()) {
         if (!targetId || evidenceRefs.some((claimId) => !forbidProofClosesTarget(claimId, targetId))) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "traceability",
             "TWISE_FORBID_TARGET_UNCLOSED",
             `${path4}/constraints/${constraintIndex}/assignments/${assignmentIndex}`,
@@ -12502,7 +14072,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
           { strong: true, oracle: true }
         );
         if (forbidEvidenceRefs.has(claimId)) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "classification",
             "TWISE_ORACLE_FORBID_CONFLICT",
             `${path4}/vector_oracles/${mappingIndex}/required_oracle_refs/${refIndex}`,
@@ -12522,7 +14092,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         oracle_mappings: selectorOracleMappings
       }, request.strength, selectorConstraints, TWISE_POLICY.max_candidates);
     } catch (error) {
-      diagnostics.push(diagnostic11(
+      diagnostics.push(diagnostic13(
         "classification",
         "TWISE_REQUEST_INVALID",
         path4,
@@ -12540,7 +14110,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
     };
     if (selection.status === "blocked") {
       if (selection.reason !== "max_candidates_exceeded") {
-        diagnostics.push(diagnostic11("classification", "TWISE_NO_VALID_CANDIDATES", path4, "combination constraints leave no valid candidate"));
+        diagnostics.push(diagnostic13("classification", "TWISE_NO_VALID_CANDIDATES", path4, "combination constraints leave no valid candidate"));
         continue;
       }
       const semanticRefs2 = [canonicalStringify({
@@ -12649,7 +14219,7 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
     const customObligationIds = customObligationIdsByFactId.get(factId);
     const combinationObligationIds = combinationObligationIdsByFactId.get(factId);
     if (terminal && (viewIds || customObligationIds || combinationObligationIds)) {
-      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MULTIPLE", `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
+      diagnostics.push(diagnostic13("traceability", "FACT_ROUTE_MULTIPLE", `/fact_routes/${factId}`, `formal fact "${factId}" is both modeled and terminally routed`));
       continue;
     }
     if (terminal) {
@@ -12658,7 +14228,7 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
       continue;
     }
     if (!viewIds && !customObligationIds && !combinationObligationIds) {
-      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_MISSING", `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
+      diagnostics.push(diagnostic13("traceability", "FACT_ROUTE_MISSING", `/fact_routes/${factId}`, `formal fact "${factId}" has no explicit route`));
       continue;
     }
     const claimIds = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
@@ -12677,14 +14247,14 @@ function reconcileFactRoutes(facts, obligations, viewRoutes, terminalRoutes, cus
       }
     }
     if (obligationIds.size === 0) {
-      diagnostics.push(diagnostic11("traceability", "FACT_ROUTE_OBLIGATION_MISSING", `/fact_routes/${factId}`, `modeled fact "${factId}" produced no formal obligation`));
+      diagnostics.push(diagnostic13("traceability", "FACT_ROUTE_OBLIGATION_MISSING", `/fact_routes/${factId}`, `modeled fact "${factId}" produced no formal obligation`));
       continue;
     }
     routes.push({ fact_id: factId, route_type: "obligations", obligation_ids: [...obligationIds].sort(compareCodePoints7) });
   }
   return routes.sort((left, right) => compareCodePoints7(String(left.fact_id), String(right.fact_id)));
 }
-function validateInteractionSubjects(candidates, factsById, viewsById, claimsById, relations, diagnostics) {
+function validateInteractionSubjects(candidates2, factsById, viewsById, claimsById, relations, diagnostics) {
   const ownerByViewElement = /* @__PURE__ */ new Map();
   for (const [viewId, view] of viewsById) {
     for (const element of objectArray8(view.elements)) ownerByViewElement.set(
@@ -12692,7 +14262,7 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
       { view, element }
     );
   }
-  for (const candidate of candidates) {
+  for (const candidate of candidates2) {
     const candidateId = String(candidate.candidate_id ?? "");
     const path4 = `/interaction_candidates/${pointerPart5(candidateId)}`;
     const sourceIds = stringArray5(candidate.source_claim_ids);
@@ -12705,19 +14275,19 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
       let ownerScope = "";
       if (ref.kind === "fact") {
         const fact = factsById.get(String(ref.fact_id ?? ""));
-        if (!fact) diagnostics.push(diagnostic11("reference", "INTERACTION_SUBJECT_FACT_DANGLING", refPath, "interaction semantic fact reference is unknown"));
+        if (!fact) diagnostics.push(diagnostic13("reference", "INTERACTION_SUBJECT_FACT_DANGLING", refPath, "interaction semantic fact reference is unknown"));
         else {
           roots = [String(fact.claim_id), ...stringArray5(fact.source_claim_ids)];
           ownerScope = String(claimsById.get(String(fact.claim_id))?.scope ?? "");
         }
       } else if (ref.kind === "view-element" || ref.kind === "integration-surface") {
         const owner = ownerByViewElement.get(qualifyViewElementRef(String(ref.view_id ?? ""), String(ref.element_id ?? "")));
-        if (!owner) diagnostics.push(diagnostic11("reference", "INTERACTION_SUBJECT_VIEW_ELEMENT_DANGLING", refPath, "interaction semantic view element reference is unknown"));
+        if (!owner) diagnostics.push(diagnostic13("reference", "INTERACTION_SUBJECT_VIEW_ELEMENT_DANGLING", refPath, "interaction semantic view element reference is unknown"));
         else {
           roots = elementEvidenceRefs(owner.element);
           ownerScope = String(owner.view.scope ?? "");
           if (ref.kind === "integration-surface") {
-            if (owner.view.type !== "integration" || owner.element.kind !== "integration-contract") diagnostics.push(diagnostic11(
+            if (owner.view.type !== "integration" || owner.element.kind !== "integration-contract") diagnostics.push(diagnostic13(
               "classification",
               "INTERACTION_SUBJECT_SURFACE_OWNER_INVALID",
               refPath,
@@ -12725,13 +14295,13 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
             ));
             else if (ref.surface === "side-effect") {
               const matches = objectArray8(owner.element.side_effects).filter((item) => item.kind === ref.side_effect_kind && item.target === ref.target);
-              if (matches.length !== 1) diagnostics.push(diagnostic11(
+              if (matches.length !== 1) diagnostics.push(diagnostic13(
                 "reference",
                 "INTERACTION_SUBJECT_SIDE_EFFECT_NOT_UNIQUE",
                 refPath,
                 "integration side-effect subject must resolve uniquely by (side_effect_kind, target)"
               ));
-            } else if (!["request", "response", "persistence", "event", "callback", "compensation"].includes(String(ref.surface))) diagnostics.push(diagnostic11(
+            } else if (!["request", "response", "persistence", "event", "callback", "compensation"].includes(String(ref.surface))) diagnostics.push(diagnostic13(
               "classification",
               "INTERACTION_SUBJECT_SURFACE_INVALID",
               refPath,
@@ -12741,14 +14311,14 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
         }
       } else if (ref.kind === "model-element") {
         const claim = claimsById.get(String(ref.model_ref ?? ""));
-        if (!claim) diagnostics.push(diagnostic11("reference", "INTERACTION_SUBJECT_MODEL_DANGLING", refPath, "interaction model reference is unknown"));
-        else if (!isE2ModelElement2(claim)) diagnostics.push(diagnostic11("classification", "INTERACTION_SUBJECT_MODEL_INVALID", refPath, "interaction model reference must be an accepted E2 model element"));
+        if (!claim) diagnostics.push(diagnostic13("reference", "INTERACTION_SUBJECT_MODEL_DANGLING", refPath, "interaction model reference is unknown"));
+        else if (!isE2ModelElement2(claim)) diagnostics.push(diagnostic13("classification", "INTERACTION_SUBJECT_MODEL_INVALID", refPath, "interaction model reference must be an accepted E2 model element"));
         else {
           roots = [String(ref.model_ref)];
           ownerScope = String(claim.scope ?? "");
         }
       }
-      if (ownerScope && !stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, ownerScope) || scopeContains(ownerScope, moduleId))) diagnostics.push(diagnostic11(
+      if (ownerScope && !stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, ownerScope) || scopeContains(ownerScope, moduleId))) diagnostics.push(diagnostic13(
         "classification",
         "INTERACTION_SUBJECT_MODULE_MISMATCH",
         refPath,
@@ -12762,7 +14332,7 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
       const claim = claimsById.get(claimId);
       const claimPath = `${path4}/source_claim_ids/${pointerPart5(claimId)}`;
       if (!claim) {
-        diagnostics.push(diagnostic11(
+        diagnostics.push(diagnostic13(
           "reference",
           "INTERACTION_SOURCE_CLAIM_DANGLING",
           claimPath,
@@ -12770,20 +14340,20 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
         ));
         continue;
       }
-      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, String(claim.scope)) || scopeContains(String(claim.scope), moduleId))) diagnostics.push(diagnostic11(
+      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, String(claim.scope)) || scopeContains(String(claim.scope), moduleId))) diagnostics.push(diagnostic13(
         "classification",
         "INTERACTION_SOURCE_SCOPE_MISMATCH",
         claimPath,
         "interaction provenance scope must overlap a candidate module"
       ));
-      if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, claimId, root))) diagnostics.push(diagnostic11(
+      if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, claimId, root))) diagnostics.push(diagnostic13(
         "traceability",
         "INTERACTION_SOURCE_EVIDENCE_UNRELATED",
         claimPath,
         "every interaction provenance claim must connect directionally to its semantic subject"
       ));
     }
-    for (const group of subjectRootGroups) if (!group.roots.some((root) => sourceIds.some((claimId) => claimsById.has(claimId) && claimsDirectionallyRelated(relations, claimId, root)))) diagnostics.push(diagnostic11(
+    for (const group of subjectRootGroups) if (!group.roots.some((root) => sourceIds.some((claimId) => claimsById.has(claimId) && claimsDirectionallyRelated(relations, claimId, root)))) diagnostics.push(diagnostic13(
       "traceability",
       "INTERACTION_SUBJECT_EVIDENCE_UNRELATED",
       group.path,
@@ -12792,13 +14362,13 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
     const intent = isObject7(candidate.issue_intent) ? candidate.issue_intent : null;
     if (candidate.disposition === "blocker" && intent) {
       const issueScope = String(intent.scope ?? "");
-      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, issueScope) || scopeContains(issueScope, moduleId))) diagnostics.push(diagnostic11(
+      if (!stringArray5(candidate.module_ids).some((moduleId) => scopeContains(moduleId, issueScope) || scopeContains(issueScope, moduleId))) diagnostics.push(diagnostic13(
         "classification",
         "INTERACTION_ISSUE_SCOPE_MISMATCH",
         `${path4}/issue_intent/scope`,
         "interaction issue scope must overlap a candidate module"
       ));
-      for (const subject of subjectScopes) if (!scopeContains(issueScope, subject.scope)) diagnostics.push(diagnostic11(
+      for (const subject of subjectScopes) if (!scopeContains(issueScope, subject.scope)) diagnostics.push(diagnostic13(
         "classification",
         "INTERACTION_ISSUE_SCOPE_MISMATCH",
         subject.path,
@@ -12808,7 +14378,7 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
         const evidenceClaim = claimsById.get(evidenceId);
         const evidencePath = `${path4}/issue_intent/evidence_refs/${pointerPart5(evidenceId)}`;
         if (!evidenceClaim) {
-          diagnostics.push(diagnostic11(
+          diagnostics.push(diagnostic13(
             "reference",
             "INTERACTION_ISSUE_EVIDENCE_DANGLING",
             evidencePath,
@@ -12816,13 +14386,13 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
           ));
           continue;
         }
-        if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) diagnostics.push(diagnostic11(
+        if (!scopeContains(String(evidenceClaim.scope), String(intent.scope))) diagnostics.push(diagnostic13(
           "classification",
           "INTERACTION_ISSUE_EVIDENCE_SCOPE_MISMATCH",
           evidencePath,
           "interaction issue evidence scope must cover the issue scope"
         ));
-        if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, evidenceId, root))) diagnostics.push(diagnostic11(
+        if (![...subjectRoots].some((root) => claimsDirectionallyRelated(relations, evidenceId, root))) diagnostics.push(diagnostic13(
           "traceability",
           "INTERACTION_ISSUE_EVIDENCE_UNRELATED",
           evidencePath,
@@ -12832,10 +14402,10 @@ function validateInteractionSubjects(candidates, factsById, viewsById, claimsByI
     }
   }
 }
-function reconcileInteractionRoutes(candidates) {
+function reconcileInteractionRoutes(candidates2) {
   const routes = [];
   const gaps = [];
-  for (const candidate of candidates) {
+  for (const candidate of candidates2) {
     if (candidate.disposition === "formal-view") {
       routes.push({ candidate_id: candidate.candidate_id, route_type: "formal-view", formal_view_id: candidate.formal_view_id });
       continue;
@@ -12901,7 +14471,7 @@ function validateRouteIdentity(expected, routes, expectedField, routeField, labe
   const counts = /* @__PURE__ */ new Map();
   for (const route of routes) {
     const routeId = isNonblankUnpadded(route[routeField]) ? String(route[routeField]) : "";
-    if (!expectedIds.has(routeId)) diagnostics.push(diagnostic11(
+    if (!expectedIds.has(routeId)) diagnostics.push(diagnostic13(
       "reference",
       `${label}_ROUTE_IDENTITY_UNKNOWN`,
       `/${routeField}/${pointerPart5(routeId || "invalid")}`,
@@ -12911,7 +14481,7 @@ function validateRouteIdentity(expected, routes, expectedField, routeField, labe
   }
   for (const expectedId of [...expectedIds].sort(compareCodePoints7)) {
     const count = counts.get(expectedId) ?? 0;
-    if (count !== 1) diagnostics.push(diagnostic11(
+    if (count !== 1) diagnostics.push(diagnostic13(
       "traceability",
       `${label}_ROUTE_IDENTITY_NOT_EXACT`,
       `/${routeField}/${pointerPart5(expectedId)}`,
@@ -12959,7 +14529,7 @@ function compileObligations(evidenceGraph, behaviorViews) {
     sourceRevision: compiledInputs.sourceRevision
   };
   diagnostics.push(...compiledInputs.diagnostics);
-  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic11(
+  if (inputs.sourceRevision !== artifact.source_revision) diagnostics.push(diagnostic13(
     "reference",
     "OBLIGATION_SOURCE_REVISION_MISMATCH",
     "/obligationCompilation/sourceRevision",
@@ -13056,7 +14626,7 @@ function compileObligations(evidenceGraph, behaviorViews) {
     diagnostics
   );
   const compiled = {
-    schema_version: "1.0.0",
+    schema_version: "2.1.0",
     source_revision: typeof artifact.source_revision === "number" ? artifact.source_revision : -1,
     obligations,
     fact_routes: factRoutes,
@@ -13348,9 +14918,11 @@ function oracleText(oracle) {
   if (Object.hasOwn(oracle, "window")) append(parts, `window ${code(oracle.window)}`);
   return joinArray4(parts, " ");
 }
-function renderCase(caseEntry, conditional) {
+function renderCase(caseEntry, conditional, headingLevel = 3) {
+  const caseHeading = "#".repeat(headingLevel);
+  const detailHeading = "#".repeat(headingLevel + 1);
   const lines = [
-    `### ${code(caseEntry.case_id)} \u2014 ${inline(caseEntry.title)}`,
+    `${caseHeading} ${code(caseEntry.case_id)} \u2014 ${inline(caseEntry.title)}`,
     "",
     `- Scope: ${code(caseEntry.scope)}`,
     `- Risk: ${code(caseEntry.risk)}`,
@@ -13363,17 +14935,17 @@ function renderCase(caseEntry, conditional) {
     lines,
     `- Temporary assumption: ${code(caseEntry.temporary_assumption.claim_id)}; invalid when ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
   );
-  append(lines, "", "#### Preconditions", "");
+  append(lines, "", `${detailHeading} Preconditions`, "");
   for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
     const item = caseEntry.preconditions[index];
     append(lines, `${index + 1}. ${inline(item.condition)} (reachable from: ${inline(item.reachable_from)}; evidence: ${code(item.evidence_ref)})`);
   }
-  append(lines, "", "#### Test Data", "");
+  append(lines, "", `${detailHeading} Test Data`, "");
   for (let dataIndex = 0; dataIndex < caseEntry.data.length; dataIndex += 1) {
     const item = caseEntry.data[dataIndex];
-    append(lines, `- ${inline(item.name)} = ${code(item.value)} (${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
+    append(lines, `- ${inline(item.name)} = ${code(item.value)} (origin: ${inline(item.value_origin)}; ${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
   }
-  append(lines, "", "#### Steps and Oracles", "");
+  append(lines, "", `${detailHeading} Steps and Oracles`, "");
   for (let index = 0; index < caseEntry.steps.length; index += 1) {
     const step = caseEntry.steps[index];
     append(lines, `${index + 1}. ${code(step.step_id)} \u2014 ${inline(step.action)} (evidence: ${code(step.action_evidence_ref)})`);
@@ -13388,7 +14960,7 @@ function renderCase(caseEntry, conditional) {
       );
     }
   }
-  append(lines, "", "#### Post-state and Cleanup", "");
+  append(lines, "", `${detailHeading} Post-state and Cleanup`, "");
   append(lines, `- Post-state: ${inline(caseEntry.post_state.state)} (evidence: ${code(caseEntry.post_state.evidence_ref)})`);
   if (caseEntry.cleanup.required) {
     const cleanupSteps = [];
@@ -13402,8 +14974,8 @@ function renderCase(caseEntry, conditional) {
   );
   return lines;
 }
-function renderCaseLane(title, cases, conditional) {
-  const lines = [`## ${title}`, ""];
+function renderCaseLane(title, cases, conditional, headingLevel = 2) {
+  const lines = [`${"#".repeat(headingLevel)} ${title}`, ""];
   if (cases.length === 0) {
     append(lines, "_None._");
     return lines;
@@ -13411,7 +14983,7 @@ function renderCaseLane(title, cases, conditional) {
   for (let index = 0; index < cases.length; index += 1) {
     const item = cases[index];
     if (index > 0) append(lines, "");
-    appendArray(lines, renderCase(item, conditional));
+    appendArray(lines, renderCase(item, conditional, headingLevel + 1));
   }
   return lines;
 }
@@ -13426,6 +14998,209 @@ function table(headers, rows) {
     append(output, `| ${joinArray4(rows[index], " | ")} |`);
   }
   return output;
+}
+var RISK_ORDER = Object.freeze({ critical: 0, high: 1, medium: 2, low: 3 });
+function titleCase(value) {
+  const text = String(value).replaceAll("_", " ").replaceAll("-", " ");
+  return text.length === 0 ? "" : `${text[0].toUpperCase()}${text.slice(1)}`;
+}
+function businessGapCategory(missingType2) {
+  const value = String(missingType2);
+  if (value === "testability" || value === "capability" || value === "resource_limit" || value === "control" || value === "observer") return "execution";
+  if (value === "source-conflict" || value === "fact-conflict" || value === "evidence" || value === "extraction" || value === "authority" || value === "exclusion" || value === "invalid-exclusion") return "evidence";
+  return "business";
+}
+function businessGapCause(category) {
+  if (category === "execution") return "Required test setup or observation capability is unavailable or unverified.";
+  if (category === "evidence") return "Source evidence is missing, ambiguous, conflicting, or lacks the required authority.";
+  return "A required product rule or expected outcome is unresolved.";
+}
+function businessGapRequiredInput(category) {
+  if (category === "execution") return "Verified test setup, control, or observation capability.";
+  if (category === "evidence") return "Authoritative source evidence that resolves the ambiguity or conflict.";
+  return "An authoritative product rule or expected result.";
+}
+function groupedScopes(members) {
+  const scopes = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let index = 0; index < members.length; index += 1) {
+    const scope = String(members[index].scope);
+    if (!seen.has(scope)) {
+      seen.add(scope);
+      append(scopes, inline(scope));
+    }
+  }
+  return scopes;
+}
+function highestRisk(members) {
+  let selected = "low";
+  let selectedOrder = RISK_ORDER.low;
+  for (let index = 0; index < members.length; index += 1) {
+    const candidate = String(members[index].risk);
+    const candidateOrder = RISK_ORDER[candidate] ?? 99;
+    if (candidateOrder < selectedOrder) {
+      selected = candidate;
+      selectedOrder = candidateOrder;
+    }
+  }
+  return selected;
+}
+function appendBusinessGapSection(lines, blocked, planByItemKey, category, heading, nextGapNumber) {
+  append(lines, "", `## ${heading}`, "");
+  const grouped = /* @__PURE__ */ new Map();
+  const groups = [];
+  for (let index = 0; index < blocked.length; index += 1) {
+    const item = blocked[index];
+    if (businessGapCategory(item.recovery.missing_type) !== category) continue;
+    const rootId = String(item.root_issue_id);
+    let members = grouped.get(rootId);
+    if (!members) {
+      members = [];
+      grouped.set(rootId, members);
+      append(groups, members);
+    }
+    append(members, item);
+  }
+  let count = 0;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const members = groups[groupIndex];
+    const item = members[0];
+    const scopes = groupedScopes(members);
+    const gapNumber = nextGapNumber;
+    nextGapNumber += 1;
+    count += 1;
+    append(
+      lines,
+      `### Gap-${String(gapNumber).padStart(3, "0")} \u2014 ${inline(item.recovery.question)}`,
+      "",
+      `- ${scopes.length === 1 ? "Scope" : "Scopes"}: ${joinArray4(scopes, "; ")}`,
+      `- Risk: ${titleCase(highestRisk(members))}`,
+      `- Cause: ${businessGapCause(category)}`,
+      members.length === 1 ? "- Impact: one formal Test Point cannot become an executable Case." : `- Impact: ${members.length} formal Test Points cannot become executable Cases.`,
+      `- Required input: ${businessGapRequiredInput(category)}`,
+      `- Next action: ${inline(item.recovery.question)}`,
+      "- Affected Test Points and execution decisions:"
+    );
+    for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
+      const member = members[memberIndex];
+      const planItem = planByItemKey.get(`formal_test_point\0${String(member.obligation_id)}`);
+      append(
+        lines,
+        `  - ${inline(member.subject)} \u2014 Scope: ${inline(member.scope)}; Risk: ${titleCase(member.risk)}`
+      );
+      if (planItem?.execution_disposition === "do_not_execute" && typeof planItem.reason === "string") append(
+        lines,
+        `    - Do not execute reason: ${inline(planItem.reason)}`
+      );
+    }
+    append(
+      lines,
+      ""
+    );
+  }
+  if (count === 0) append(lines, "_None._");
+  else if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
+  return nextGapNumber;
+}
+function compareBusinessCases(left, right) {
+  const leftDisposition = left.planItem?.execution_disposition === "execute" ? 0 : 1;
+  const rightDisposition = right.planItem?.execution_disposition === "execute" ? 0 : 1;
+  return leftDisposition - rightDisposition || compareCodePoints8(String(left.caseEntry.scope), String(right.caseEntry.scope)) || (RISK_ORDER[String(left.caseEntry.risk)] ?? 99) - (RISK_ORDER[String(right.caseEntry.risk)] ?? 99) || compareCodePoints8(String(left.caseEntry.role.value), String(right.caseEntry.role.value)) || compareCodePoints8(String(left.caseEntry.title), String(right.caseEntry.title)) || compareCodePoints8(String(left.caseEntry.case_id), String(right.caseEntry.case_id));
+}
+function businessCaseInventory(snapshot) {
+  const planByCaseId = /* @__PURE__ */ new Map();
+  for (let index = 0; index < snapshot.execution_plan.items.length; index += 1) {
+    const item = snapshot.execution_plan.items[index];
+    if (item.item_kind === "case") planByCaseId.set(item.item_id, item);
+  }
+  const inventory = [];
+  for (let index = 0; index < snapshot.grounded.length; index += 1) append(inventory, {
+    caseEntry: snapshot.grounded[index],
+    semanticStatus: "grounded",
+    planItem: planByCaseId.get(snapshot.grounded[index].case_id)
+  });
+  for (let index = 0; index < snapshot.conditional.length; index += 1) append(inventory, {
+    caseEntry: snapshot.conditional[index],
+    semanticStatus: "conditional",
+    planItem: planByCaseId.get(snapshot.conditional[index].case_id)
+  });
+  Reflect.apply(NATIVE_ARRAY_SORT4, inventory, [compareBusinessCases]);
+  const displayByCaseId = /* @__PURE__ */ new Map();
+  for (let index = 0; index < inventory.length; index += 1) {
+    displayByCaseId.set(inventory[index].caseEntry.case_id, `TC-${String(index + 1).padStart(3, "0")}`);
+  }
+  return { inventory, displayByCaseId };
+}
+function renderBusinessCase(item, displayId) {
+  const caseEntry = item.caseEntry;
+  const disposition = item.planItem?.execution_disposition === "execute" ? "Execute" : "Do not execute";
+  const lines = [
+    `### ${displayId} \u2014 ${inline(caseEntry.title)}`,
+    "",
+    `- Scope: ${inline(caseEntry.scope)}`,
+    `- Risk: ${titleCase(caseEntry.risk)}`,
+    `- Role: ${inline(caseEntry.role.value)}`,
+    `- Evidence status: ${titleCase(item.semanticStatus)}`,
+    `- Execution decision: ${disposition}`
+  ];
+  if (item.semanticStatus === "conditional") append(
+    lines,
+    `- Temporary assumption: valid only until ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
+  );
+  if (disposition === "Do not execute" && typeof item.planItem?.reason === "string") append(
+    lines,
+    `- Do not execute reason: ${inline(item.planItem.reason)}`
+  );
+  append(lines, "", "#### Preconditions", "");
+  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
+    const precondition = caseEntry.preconditions[index];
+    append(lines, `${index + 1}. ${inline(precondition.condition)} (reachable from: ${inline(precondition.reachable_from)})`);
+  }
+  append(lines, "", "#### Test Data", "");
+  for (let index = 0; index < caseEntry.data.length; index += 1) {
+    const datum = caseEntry.data[index];
+    append(lines, `- ${inline(datum.name)} = ${code(datum.value)} \u2014 Origin: ${titleCase(datum.value_origin)}`);
+  }
+  append(lines, "", "#### Steps and Expected Results", "");
+  for (let stepIndex = 0; stepIndex < caseEntry.steps.length; stepIndex += 1) {
+    const step = caseEntry.steps[stepIndex];
+    append(lines, `${stepIndex + 1}. ${inline(step.action)}`);
+    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
+      const expectation = step.expectations[expectationIndex];
+      append(
+        lines,
+        `   - Expected: ${inline(expectation.business_assertion)}`,
+        `   - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} \u2192 ${inline(expectation.observation_target)}`,
+        `   - Oracle: ${oracleText(expectation.oracle)}`
+      );
+    }
+  }
+  append(lines, "", "#### Post-state and Cleanup", "");
+  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)}`);
+  if (caseEntry.cleanup.required) {
+    const cleanupSteps = [];
+    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) append(
+      cleanupSteps,
+      inline(caseEntry.cleanup.steps[index])
+    );
+    append(lines, `- Cleanup: ${joinArray4(cleanupSteps, "; ")}`);
+  } else append(lines, `- Cleanup: none \u2014 ${inline(caseEntry.cleanup.no_cleanup_reason)}`);
+  return lines;
+}
+function renderBusinessCaseLane(title, items, displayByCaseId) {
+  const lines = [`## ${title}`, ""];
+  if (items.length === 0) {
+    append(lines, "_None._");
+    return lines;
+  }
+  for (let index = 0; index < items.length; index += 1) {
+    if (index > 0) append(lines, "");
+    appendArray(lines, renderBusinessCase(
+      items[index],
+      String(displayByCaseId.get(items[index].caseEntry.case_id))
+    ));
+  }
+  return lines;
 }
 function renderMarkdownTrusted(bundle) {
   const captured = snapshotBundle(bundle);
@@ -13446,25 +15221,151 @@ function renderMarkdownTrusted(bundle) {
     validateUniqueStableIds(snapshot)
   );
   if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
+  const business = businessCaseInventory(snapshot);
+  const runnerIds = new Set(snapshot.execution_plan.runner_case_ids);
+  const executeCases = [];
+  const notSelectedCases = [];
+  for (let index = 0; index < business.inventory.length; index += 1) {
+    const item = business.inventory[index];
+    if (runnerIds.has(item.caseEntry.case_id)) append(executeCases, item);
+    else append(notSelectedCases, item);
+  }
+  const coverage = snapshot.coverage;
+  const plan = snapshot.execution_plan;
+  const planByItemKey = /* @__PURE__ */ new Map();
+  for (let index = 0; index < plan.items.length; index += 1) {
+    const item = plan.items[index];
+    planByItemKey.set(`${String(item.item_kind)}\0${String(item.item_id)}`, item);
+  }
   const lines = [
-    "# Test Case Bundle",
+    "# Manual Functional Test Plan",
+    "",
+    "## Delivery Overview",
+    "",
+    "- Generated, not executed. This plan contains no test results or defect verdicts.",
+    `- Readiness: ${titleCase(snapshot.quality.delivery_status)}`,
+    `- Requirement accounting: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
+    `- Formal Test Points covered: ${coverage.formal.covered}/${coverage.formal.total}`,
+    `- Grounded executable coverage: ${coverage.executable.grounded}/${coverage.executable.total}`,
+    `- Execute Cases: ${plan.summary.execute_case_count}`,
+    `- Do not execute Cases: ${plan.summary.do_not_execute_case_count}`,
+    `- Blocked formal Test Points: ${snapshot.blocked.length}`,
+    `- NotApplicable exclusions: ${coverage.not_applicable.length}`,
+    "",
+    "## Execution Overview",
+    ""
+  ];
+  const overviewRows = [];
+  for (let index = 0; index < business.inventory.length; index += 1) {
+    const item = business.inventory[index];
+    append(overviewRows, [
+      String(business.displayByCaseId.get(item.caseEntry.case_id)),
+      inline(item.caseEntry.title),
+      inline(item.caseEntry.scope),
+      titleCase(item.caseEntry.risk),
+      inline(item.caseEntry.role.value),
+      item.planItem?.execution_disposition === "execute" ? "Execute" : "Do not execute"
+    ]);
+  }
+  appendArray(lines, table(["Case", "Title", "Scope", "Risk", "Role", "Decision"], overviewRows));
+  append(lines, "");
+  appendArray(lines, renderBusinessCaseLane("Cases to Execute", executeCases, business.displayByCaseId));
+  append(lines, "");
+  appendArray(lines, renderBusinessCaseLane("Cases Not Selected", notSelectedCases, business.displayByCaseId));
+  let nextGapNumber = 1;
+  nextGapNumber = appendBusinessGapSection(
+    lines,
+    snapshot.blocked,
+    planByItemKey,
+    "business",
+    "Business Rule Gaps",
+    nextGapNumber
+  );
+  nextGapNumber = appendBusinessGapSection(
+    lines,
+    snapshot.blocked,
+    planByItemKey,
+    "execution",
+    "Execution Preparation Gaps",
+    nextGapNumber
+  );
+  appendBusinessGapSection(
+    lines,
+    snapshot.blocked,
+    planByItemKey,
+    "evidence",
+    "Source and Evidence Gaps",
+    nextGapNumber
+  );
+  append(lines, "", "## Scope Exclusions (NotApplicable)", "");
+  if (coverage.not_applicable.length === 0) append(lines, "_None._");
+  for (let index = 0; index < coverage.not_applicable.length; index += 1) {
+    const item = coverage.not_applicable[index];
+    append(
+      lines,
+      `- ${item.subject_kind === "requirement_fact" ? "Requirement fact" : "Formal Test Point"} \u201C${inline(item.subject)}\u201D in ${inline(item.scope)}: ${inline(item.reason)}`
+    );
+  }
+  append(lines, "", "## Exploratory Risks", "");
+  if (snapshot.exploratory.length === 0) append(lines, "_None._");
+  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
+    const item = snapshot.exploratory[index];
+    const planItem = planByItemKey.get(`exploratory\0${String(item.exploratory_id)}`);
+    append(
+      lines,
+      `- ${inline(item.title)} \u2014 Scope: ${inline(item.scope)}; Risk: ${titleCase(item.risk)}; Status: exploratory only and outside formal coverage.`
+    );
+    if (planItem?.execution_disposition === "do_not_execute" && typeof planItem.reason === "string") append(
+      lines,
+      `  - Do not execute reason: ${inline(planItem.reason)}`
+    );
+  }
+  append(lines, "", "## Manual Execution Worksheet", "");
+  append(
+    lines,
+    "Generated, not executed. Record results downstream and bind each record to the delivered bundle digest + stable Case ID listed in the Audit Appendix.",
+    ""
+  );
+  const worksheetRows = [];
+  for (let index = 0; index < executeCases.length; index += 1) {
+    const item = executeCases[index];
+    append(worksheetRows, [
+      String(business.displayByCaseId.get(item.caseEntry.case_id)),
+      inline(item.caseEntry.title),
+      inline(item.caseEntry.scope),
+      titleCase(item.caseEntry.risk),
+      inline(item.caseEntry.role.value),
+      "Not recorded",
+      "\u2014",
+      "\u2014"
+    ]);
+  }
+  appendArray(lines, table(
+    ["Case", "Title", "Scope", "Risk", "Role", "Result", "Defect", "Notes"],
+    worksheetRows
+  ));
+  append(
+    lines,
+    "",
+    "## Audit Appendix",
     "",
     `- Schema version: ${code(snapshot.schema_version)}`,
     `- Source revision: ${code(snapshot.source_revision)}`,
     ""
-  ];
-  appendArray(lines, renderCaseLane("Grounded Cases", snapshot.grounded, false));
+  );
+  appendArray(lines, renderCaseLane("Grounded Cases", snapshot.grounded, false, 3));
   append(lines, "");
-  appendArray(lines, renderCaseLane("Conditional Cases", snapshot.conditional, true));
-  append(lines, "", "## Blocked Formal Test Points", "");
+  appendArray(lines, renderCaseLane("Conditional Cases", snapshot.conditional, true, 3));
+  append(lines, "", "### Blocked Formal Test Points", "");
   if (snapshot.blocked.length === 0) append(lines, "_None._");
   for (let index = 0; index < snapshot.blocked.length; index += 1) {
     const item = snapshot.blocked[index];
     append(
       lines,
-      `### ${code(item.obligation_id)}`,
+      `#### ${code(item.obligation_id)}`,
       "",
       `- Root issue: ${code(item.root_issue_id)}`,
+      `- Scope: ${code(item.scope)}`,
       `- Risk: ${code(item.risk)}`,
       `- Reason: ${code(item.reason)}`,
       `- Missing type: ${code(item.recovery.missing_type)}`,
@@ -13474,13 +15375,13 @@ function renderMarkdownTrusted(bundle) {
     );
   }
   if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  append(lines, "", "## Exploratory Cases", "");
+  append(lines, "", "### Exploratory Cases", "");
   if (snapshot.exploratory.length === 0) append(lines, "_None._");
   for (let index = 0; index < snapshot.exploratory.length; index += 1) {
     const item = snapshot.exploratory[index];
     append(
       lines,
-      `### ${code(item.exploratory_id)} \u2014 ${inline(item.title)}`,
+      `#### ${code(item.exploratory_id)} \u2014 ${inline(item.title)}`,
       "",
       `- Scope: ${code(item.scope)}`,
       `- Risk: ${code(item.risk)}`,
@@ -13489,7 +15390,6 @@ function renderMarkdownTrusted(bundle) {
     );
   }
   if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  const coverage = snapshot.coverage;
   const requirementRows = [];
   for (let index = 0; index < coverage.requirements.entries.length; index += 1) {
     const item = coverage.requirements.entries[index];
@@ -13508,47 +15408,84 @@ function renderMarkdownTrusted(bundle) {
   append(
     lines,
     "",
-    "## Coverage",
+    "### Coverage",
     "",
-    "### Requirement Fact Ledger",
+    "#### Requirement Fact Ledger",
     "",
     `Accounted: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
     ""
   );
   appendArray(lines, table(["Fact", "Status"], requirementRows));
-  append(lines, "", "### Formal Test Point Ledger", "", `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, "");
+  append(lines, "", "#### Formal Test Point Ledger", "", `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, "");
   appendArray(lines, table(["Test Point", "Disposition"], formalRows));
-  append(lines, "", "### Grounded Executable Ledger", "", `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, "");
+  append(lines, "", "#### Grounded Executable Ledger", "", `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, "");
   appendArray(lines, table(["Test Point", "Case"], executableRows));
-  append(lines, "", "### Expert Recall Ledger", "", `Status: ${code(coverage.expert_recall.status)}`);
+  append(lines, "", "#### Expert Recall Ledger", "", `Status: ${code(coverage.expert_recall.status)}`);
   for (let index = 0; index < coverage.expert_recall.limits.length; index += 1) {
     append(lines, `- ${inline(coverage.expert_recall.limits[index])}`);
   }
-  append(lines, "", "### NotApplicable (excluded from the coverage numerator)", "");
+  append(lines, "", "#### NotApplicable (excluded from the coverage numerator)", "");
   if (coverage.not_applicable.length === 0) append(lines, "_None._");
   else {
     const notApplicableRows = [];
     for (let index = 0; index < coverage.not_applicable.length; index += 1) {
       const item = coverage.not_applicable[index];
       append(notApplicableRows, [
-        code(item.obligation_id),
+        code(item.subject_kind),
+        code(item.obligation_id ?? item.fact_id),
         code(item.exclusion_claim_id),
         code(item.scope),
-        code(item.support_review)
+        code(item.support_review),
+        inline(item.reason)
       ]);
     }
-    appendArray(lines, table(["Test Point", "Exclusion evidence", "Scope", "Review"], notApplicableRows));
+    appendArray(lines, table(["Subject kind", "Subject", "Exclusion evidence", "Scope", "Review", "Reason"], notApplicableRows));
+  }
+  const planRows = [];
+  for (let index = 0; index < plan.items.length; index += 1) {
+    const item = plan.items[index];
+    append(planRows, [
+      code(item.item_kind),
+      code(item.item_id),
+      inline(item.title),
+      code(item.semantic_status),
+      code(item.execution_disposition),
+      code(item.reason_code)
+    ]);
   }
   append(
     lines,
     "",
-    "## Quality",
+    "### Execution Plan",
+    "",
+    `- Status: ${code(plan.status)}`,
+    `- Plan digest: ${code(plan.plan_digest)}`,
+    `- Semantic result digest: ${code(plan.semantic_result_digest)}`,
+    `- Execute Cases: ${plan.summary.execute_case_count}`,
+    `- DoNotExecute Cases: ${plan.summary.do_not_execute_case_count}`,
+    `- DoNotExecute formal Test Points: ${plan.summary.do_not_execute_formal_test_point_count}`,
+    `- DoNotExecute Exploratory items: ${plan.summary.do_not_execute_exploratory_count}`,
+    `- Applicable Test Point execution coverage: full ${plan.summary.full_test_point_count}, partial ${plan.summary.partial_test_point_count}, none ${plan.summary.none_test_point_count}`,
+    `- Runner Case IDs: ${codeList(plan.runner_case_ids)}`,
+    ""
+  );
+  appendArray(lines, table(
+    ["Kind", "ID", "Title", "True status", "Execution disposition", "Reason code"],
+    planRows
+  ));
+  append(
+    lines,
+    "",
+    "### Quality",
     "",
     `- Delivery status: ${code(snapshot.quality.delivery_status)}`,
     `- Compiler version: ${code(snapshot.quality.compiler_version)}`,
     `- Schema version: ${code(snapshot.quality.schema_version)}`,
-    `- Source lineage digest: ${code(snapshot.quality.lineage.source_digest)}`,
-    `- Case-draft lineage digest: ${code(snapshot.quality.lineage.case_draft_digest)}`,
+    `- Semantic source digest: ${code(snapshot.quality.lineage.semantic_source_digest)}`,
+    `- Evidence semantic digest: ${code(snapshot.quality.lineage.evidence_semantic_digest)}`,
+    `- Behavior Views semantic digest: ${code(snapshot.quality.lineage.behavior_views_semantic_digest)}`,
+    `- Test Obligations semantic digest: ${code(snapshot.quality.lineage.test_obligations_semantic_digest)}`,
+    `- Case Drafts semantic digest: ${code(snapshot.quality.lineage.case_drafts_semantic_digest)}`,
     "- Limits:"
   );
   for (let index = 0; index < snapshot.quality.limits.length; index += 1) {
@@ -13581,6 +15518,7 @@ var INPUT_KEYS = Object.freeze([
 var OPTIONS_KEYS = Object.freeze([
   "systemLineage",
   "clarificationState",
+  "workflowState",
   "interactionPolicy",
   "limits"
 ]);
@@ -13947,7 +15885,7 @@ function intrinsicIntegrityDiagnostic() {
     if (globalArrayDescriptor && NATIVE_HAS_OWN3(globalArrayDescriptor, "value") && globalArrayDescriptor.value === NATIVE_ARRAY && globalSetDescriptor && NATIVE_HAS_OWN3(globalSetDescriptor, "value") && globalSetDescriptor.value === NATIVE_SET && globalMapDescriptor && NATIVE_HAS_OWN3(globalMapDescriptor, "value") && globalMapDescriptor.value === NATIVE_MAP && globalStringDescriptor && NATIVE_HAS_OWN3(globalStringDescriptor, "value") && globalStringDescriptor.value === NATIVE_STRING && globalNumberDescriptor && NATIVE_HAS_OWN3(globalNumberDescriptor, "value") && globalNumberDescriptor.value === NATIVE_NUMBER && globalObjectDescriptor && NATIVE_HAS_OWN3(globalObjectDescriptor, "value") && globalObjectDescriptor.value === NATIVE_OBJECT && globalSymbolDescriptor && NATIVE_HAS_OWN3(globalSymbolDescriptor, "value") && globalSymbolDescriptor.value === NATIVE_SYMBOL && iteratorDescriptor && NATIVE_HAS_OWN3(iteratorDescriptor, "value") && iteratorDescriptor.value === NATIVE_ARRAY_ITERATOR && sortDescriptor && NATIVE_HAS_OWN3(sortDescriptor, "value") && sortDescriptor.value === NATIVE_ARRAY_SORT5 && joinDescriptor && NATIVE_HAS_OWN3(joinDescriptor, "value") && joinDescriptor.value === NATIVE_ARRAY_JOIN5 && zeroDescriptor === void 0 && arrayConstructorDescriptor && NATIVE_HAS_OWN3(arrayConstructorDescriptor, "value") && arrayConstructorDescriptor.value === NATIVE_ARRAY && arraySpeciesDescriptor && NATIVE_HAS_OWN3(arraySpeciesDescriptor, "get") && arraySpeciesDescriptor.get === NATIVE_ARRAY_SPECIES_GET && setIteratorDescriptor && NATIVE_HAS_OWN3(setIteratorDescriptor, "value") && setIteratorDescriptor.value === NATIVE_SET_ITERATOR && setAddDescriptor && NATIVE_HAS_OWN3(setAddDescriptor, "value") && setAddDescriptor.value === NATIVE_SET_ADD && setHasDescriptor && NATIVE_HAS_OWN3(setHasDescriptor, "value") && setHasDescriptor.value === NATIVE_SET_HAS && setDeleteDescriptor && NATIVE_HAS_OWN3(setDeleteDescriptor, "value") && setDeleteDescriptor.value === NATIVE_SET_DELETE && setForEachDescriptor && NATIVE_HAS_OWN3(setForEachDescriptor, "value") && setForEachDescriptor.value === NATIVE_SET_FOR_EACH && mapIteratorDescriptor && NATIVE_HAS_OWN3(mapIteratorDescriptor, "value") && mapIteratorDescriptor.value === NATIVE_MAP_ITERATOR && mapGetDescriptor && NATIVE_HAS_OWN3(mapGetDescriptor, "value") && mapGetDescriptor.value === NATIVE_MAP_GET && mapSetDescriptor && NATIVE_HAS_OWN3(mapSetDescriptor, "value") && mapSetDescriptor.value === NATIVE_MAP_SET2 && mapHasDescriptor && NATIVE_HAS_OWN3(mapHasDescriptor, "value") && mapHasDescriptor.value === NATIVE_MAP_HAS && mapDeleteDescriptor && NATIVE_HAS_OWN3(mapDeleteDescriptor, "value") && mapDeleteDescriptor.value === NATIVE_MAP_DELETE && mapForEachDescriptor && NATIVE_HAS_OWN3(mapForEachDescriptor, "value") && mapForEachDescriptor.value === NATIVE_MAP_FOR_EACH && mapSizeDescriptor && NATIVE_HAS_OWN3(mapSizeDescriptor, "get") && mapSizeDescriptor.get === NATIVE_MAP_SIZE_GET && regexpTestDescriptor && NATIVE_HAS_OWN3(regexpTestDescriptor, "value") && regexpTestDescriptor.value === NATIVE_REGEXP_TEST && regexpExecDescriptor && NATIVE_HAS_OWN3(regexpExecDescriptor, "value") && regexpExecDescriptor.value === NATIVE_REGEXP_EXEC && stringIteratorDescriptor && NATIVE_HAS_OWN3(stringIteratorDescriptor, "value") && stringIteratorDescriptor.value === NATIVE_STRING_ITERATOR && stringTrimDescriptor && NATIVE_HAS_OWN3(stringTrimDescriptor, "value") && stringTrimDescriptor.value === NATIVE_STRING_TRIM && stringIncludesDescriptor && NATIVE_HAS_OWN3(stringIncludesDescriptor, "value") && stringIncludesDescriptor.value === NATIVE_STRING_INCLUDES && stringSplitDescriptor && NATIVE_HAS_OWN3(stringSplitDescriptor, "value") && stringSplitDescriptor.value === NATIVE_STRING_SPLIT && stringSymbolSplitDescriptor === void 0) return null;
   } catch {
   }
-  return diagnostic12(
+  return diagnostic14(
     "schema",
     "CORE_INTRINSIC_INVALID",
     "/intrinsics",
@@ -13979,7 +15917,7 @@ function compareCodePoints9(left, right) {
   }
   return leftIndex < left.length ? 1 : rightIndex < right.length ? -1 : 0;
 }
-function diagnostic12(category, code2, path4, message) {
+function diagnostic14(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function diagnosticArray(value) {
@@ -14004,7 +15942,7 @@ function finalizeDiagnostics4(diagnostics) {
   const ordered = sortArray3(mapValuesArray(unique), (left, right) => compareCodePoints9(left.category, right.category) || compareCodePoints9(left.code, right.code) || compareCodePoints9(left.path, right.path) || compareCodePoints9(left.related_id ?? "", right.related_id ?? "") || compareCodePoints9(left.message, right.message));
   if (!overflow) return ordered;
   const retained = sliceArray3(ordered, 0, DIAGNOSTIC_LIMIT4 - 1);
-  pushArray3(retained, diagnostic12(
+  pushArray3(retained, diagnostic14(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
     "/",
@@ -14026,7 +15964,7 @@ function requireClosed2(value, expected, path4, diagnostics) {
   const actualKeys = NATIVE_OBJECT_KEYS(value);
   for (let index = 0; index < actualKeys.length; index += 1) {
     const key = actualKeys[index];
-    if (!setHas(allowed, key)) pushArray3(diagnostics, diagnostic12(
+    if (!setHas(allowed, key)) pushArray3(diagnostics, diagnostic14(
       "schema",
       "CORE_PROPERTY_UNKNOWN",
       `${path4}/${key}`,
@@ -14035,7 +15973,7 @@ function requireClosed2(value, expected, path4, diagnostics) {
   }
   for (let index = 0; index < expected.length; index += 1) {
     const key = expected[index];
-    if (!NATIVE_HAS_OWN3(value, key)) pushArray3(diagnostics, diagnostic12(
+    if (!NATIVE_HAS_OWN3(value, key)) pushArray3(diagnostics, diagnostic14(
       "schema",
       "CORE_PROPERTY_MISSING",
       `${path4}/${key}`,
@@ -14043,13 +15981,13 @@ function requireClosed2(value, expected, path4, diagnostics) {
     ));
   }
 }
-function strings2(value) {
+function strings4(value) {
   return NATIVE_ARRAY_IS_ARRAY5(value) ? (
     /** @type {string[]} */
     filterArray4(value, (item) => typeof item === "string")
   ) : [];
 }
-function records2(value) {
+function records4(value) {
   return NATIVE_ARRAY_IS_ARRAY5(value) ? (
     /** @type {Record<string, unknown>[]} */
     filterArray4(value, isRecord4)
@@ -14083,7 +16021,7 @@ function snapshotOwnData(submitted, rootPath) {
       continue;
     }
     if (!source || typeof source !== "object") {
-      pushArray3(diagnostics, diagnostic12(
+      pushArray3(diagnostics, diagnostic14(
         "schema",
         "CORE_VALUE_INVALID",
         frame.path || "/",
@@ -14107,7 +16045,7 @@ function snapshotOwnData(submitted, rootPath) {
       keys = NATIVE_REFLECT_OWN_KEYS5(descriptors);
       array2 = NATIVE_ARRAY_IS_ARRAY5(source);
     } catch {
-      pushArray3(diagnostics, diagnostic12(
+      pushArray3(diagnostics, diagnostic14(
         "schema",
         "CORE_INPUT_UNREADABLE",
         frame.path || "/",
@@ -14117,7 +16055,7 @@ function snapshotOwnData(submitted, rootPath) {
       continue;
     }
     if (array2 ? prototype !== NATIVE_ARRAY_PROTOTYPE : prototype !== NATIVE_OBJECT_PROTOTYPE && prototype !== null) {
-      pushArray3(diagnostics, diagnostic12(
+      pushArray3(diagnostics, diagnostic14(
         "schema",
         "CORE_PROTOTYPE_INVALID",
         frame.path || "/",
@@ -14129,7 +16067,7 @@ function snapshotOwnData(submitted, rootPath) {
     const stringKeys = [];
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index];
-      if (typeof key === "symbol") pushArray3(diagnostics, diagnostic12(
+      if (typeof key === "symbol") pushArray3(diagnostics, diagnostic14(
         "schema",
         "CORE_SYMBOL_PROPERTY_INVALID",
         frame.path || "/",
@@ -14150,7 +16088,7 @@ function snapshotOwnData(submitted, rootPath) {
           pushArray3(numericKeys, key);
         } else {
           malformed = true;
-          pushArray3(diagnostics, diagnostic12(
+          pushArray3(diagnostics, diagnostic14(
             "schema",
             "CORE_ARRAY_PROPERTY_INVALID",
             `${frame.path}/${pointerPart7(key)}`,
@@ -14174,7 +16112,7 @@ function snapshotOwnData(submitted, rootPath) {
       }
       if (firstHole >= 0) {
         malformed = true;
-        pushArray3(diagnostics, diagnostic12(
+        pushArray3(diagnostics, diagnostic14(
           "schema",
           "CORE_ARRAY_HOLE",
           `${frame.path}/${firstHole}`,
@@ -14192,7 +16130,7 @@ function snapshotOwnData(submitted, rootPath) {
         const key = numericKeys[index];
         const descriptor = descriptors[key];
         if (!descriptor || !NATIVE_HAS_OWN3(descriptor, "value") || descriptor.enumerable !== true) {
-          pushArray3(diagnostics, diagnostic12(
+          pushArray3(diagnostics, diagnostic14(
             "schema",
             "CORE_DATA_PROPERTY_INVALID",
             `${frame.path}/${key}`,
@@ -14222,7 +16160,7 @@ function snapshotOwnData(submitted, rootPath) {
       const key = stringKeys[keyIndex];
       const descriptor = descriptors[key];
       if (!descriptor || !NATIVE_HAS_OWN3(descriptor, "value") || descriptor.enumerable !== true) {
-        pushArray3(diagnostics, diagnostic12(
+        pushArray3(diagnostics, diagnostic14(
           "schema",
           "CORE_DATA_PROPERTY_INVALID",
           `${frame.path}/${pointerPart7(key)}`,
@@ -14251,7 +16189,7 @@ function normalizeInput(submitted) {
   const captured = snapshotOwnData(submitted, "");
   appendArray2(diagnostics, captured.diagnostics);
   const input = captured.snapshot;
-  if (!isRecord4(input)) return { input: null, diagnostics: [diagnostic12(
+  if (!isRecord4(input)) return { input: null, diagnostics: [diagnostic14(
     "schema",
     "CORE_INPUT_INVALID",
     "/",
@@ -14260,7 +16198,7 @@ function normalizeInput(submitted) {
   requireClosed2(input, INPUT_KEYS, "", diagnostics);
   const sourcePack = isRecord4(input.source_pack) ? input.source_pack : null;
   const sourceRevision = sourcePack && typeof sourcePack.source_revision === "number" ? sourcePack.source_revision : 0 / 0;
-  if (!numberIsSafeInteger(sourceRevision) || sourceRevision < 0) pushArray3(diagnostics, diagnostic12(
+  if (!numberIsSafeInteger(sourceRevision) || sourceRevision < 0) pushArray3(diagnostics, diagnostic14(
     "schema",
     "CORE_SOURCE_REVISION_INVALID",
     "/source_pack/source_revision",
@@ -14273,7 +16211,7 @@ function normalizeOptions(submitted) {
   const captured = snapshotOwnData(submitted, "/options");
   appendArray2(diagnostics, captured.diagnostics);
   const options = captured.snapshot;
-  if (!isRecord4(options)) return { options: null, diagnostics: [diagnostic12(
+  if (!isRecord4(options)) return { options: null, diagnostics: [diagnostic14(
     "schema",
     "CORE_OPTIONS_INVALID",
     "/options",
@@ -14281,7 +16219,7 @@ function normalizeOptions(submitted) {
   )] };
   requireClosed2(options, OPTIONS_KEYS, "/options", diagnostics);
   const systemLineage = isRecord4(options.systemLineage) ? options.systemLineage : null;
-  if (!systemLineage) pushArray3(diagnostics, diagnostic12(
+  if (!systemLineage) pushArray3(diagnostics, diagnostic14(
     "schema",
     "CORE_SYSTEM_LINEAGE_INVALID",
     "/options/systemLineage",
@@ -14290,20 +16228,20 @@ function normalizeOptions(submitted) {
   else {
     requireClosed2(systemLineage, SYSTEM_LINEAGE_KEYS, "/options/systemLineage", diagnostics);
     if (typeof systemLineage.compiler_version !== "string" || systemLineage.compiler_version.trim().length === 0 || systemLineage.compiler_version !== systemLineage.compiler_version.trim()) {
-      pushArray3(diagnostics, diagnostic12(
+      pushArray3(diagnostics, diagnostic14(
         "schema",
         "CORE_COMPILER_VERSION_INVALID",
         "/options/systemLineage/compiler_version",
         "compiler version must be nonblank and unpadded"
       ));
     }
-    if (!isRecord4(systemLineage.lineage)) pushArray3(diagnostics, diagnostic12(
+    if (!isRecord4(systemLineage.lineage)) pushArray3(diagnostics, diagnostic14(
       "schema",
       "CORE_LINEAGE_INVALID",
       "/options/systemLineage/lineage",
       "lineage must be an own-data record"
     ));
-    if (!NATIVE_ARRAY_IS_ARRAY5(systemLineage.expert_recall_limits)) pushArray3(diagnostics, diagnostic12(
+    if (!NATIVE_ARRAY_IS_ARRAY5(systemLineage.expert_recall_limits)) pushArray3(diagnostics, diagnostic14(
       "schema",
       "CORE_LIMITS_INVALID",
       "/options/systemLineage/expert_recall_limits",
@@ -14311,14 +16249,20 @@ function normalizeOptions(submitted) {
     ));
   }
   const clarification = isRecord4(options.clarificationState) ? options.clarificationState : null;
-  if (!clarification) pushArray3(diagnostics, diagnostic12(
+  if (!clarification) pushArray3(diagnostics, diagnostic14(
     "schema",
     "CORE_CLARIFICATION_INVALID",
     "/options/clarificationState",
     "clarification state must be a closed record"
   ));
   else requireClosed2(clarification, CLARIFICATION_KEYS2, "/options/clarificationState", diagnostics);
-  if (!NATIVE_ARRAY_IS_ARRAY5(options.limits)) pushArray3(diagnostics, diagnostic12(
+  if (options.workflowState !== null && options.workflowState !== void 0 && !isRecord4(options.workflowState)) pushArray3(diagnostics, diagnostic14(
+    "schema",
+    "CORE_WORKFLOW_STATE_INVALID",
+    "/options/workflowState",
+    "workflow state must be a closed record or null"
+  ));
+  if (!NATIVE_ARRAY_IS_ARRAY5(options.limits)) pushArray3(diagnostics, diagnostic14(
     "schema",
     "CORE_LIMITS_INVALID",
     "/options/limits",
@@ -14326,7 +16270,7 @@ function normalizeOptions(submitted) {
   ));
   const submittedPolicy = options.interactionPolicy;
   const interactionPolicy = typeof submittedPolicy === "string" ? submittedPolicy : "";
-  if (!setHas(POLICIES2, interactionPolicy)) pushArray3(diagnostics, diagnostic12(
+  if (!setHas(POLICIES2, interactionPolicy)) pushArray3(diagnostics, diagnostic14(
     "classification",
     "INTERACTION_POLICY_INVALID",
     "/options/interactionPolicy",
@@ -14371,7 +16315,7 @@ function validateArtifactSchemas(input) {
   for (let index = 0; index < namedArtifacts.length; index += 1) {
     const name = namedArtifacts[index][0];
     const artifact = namedArtifacts[index][1];
-    if (!isRecord4(artifact) || artifact.source_revision !== revision) pushArray3(diagnostics, diagnostic12(
+    if (!isRecord4(artifact) || artifact.source_revision !== revision) pushArray3(diagnostics, diagnostic14(
       "traceability",
       "CORE_SOURCE_REVISION_MISMATCH",
       `/${name}/source_revision`,
@@ -14391,7 +16335,7 @@ function evidenceContext(input, claimsById, conflicts) {
   );
   return {
     claimsById,
-    factLedger: NATIVE_STRUCTURED_CLONE(records2(evidenceClaims.fact_ledger)),
+    factLedger: NATIVE_STRUCTURED_CLONE(records4(evidenceClaims.fact_ledger)),
     conflicts: NATIVE_STRUCTURED_CLONE(conflicts),
     runScope: String(sourcePack.run_scope)
   };
@@ -14403,7 +16347,7 @@ function conflictIdentity(conflict) {
   return typeof conflict.conflict_id === "string" ? conflict.conflict_id : typeof conflict.root_issue_id === "string" ? conflict.root_issue_id : canonicalStringify(conflict);
 }
 function prepareConflictRelations(claimsById, sourcePack, conflicts) {
-  const locatorSourceById = makeMap(mapArray4(records2(sourcePack.locators), (item) => [
+  const locatorSourceById = makeMap(mapArray4(records4(sourcePack.locators), (item) => [
     String(item.locator_id),
     String(item.source_id)
   ]));
@@ -14413,7 +16357,7 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
     const conflict = conflicts[index];
     const identity = conflictIdentity(conflict);
     mapSet(conflictByIdentity, identity, conflict);
-    const sourceIds = makeSet(strings2(conflict.source_ids));
+    const sourceIds = makeSet(strings4(conflict.source_ids));
     forEachSet(sourceIds, (sourceId) => {
       const bucket = mapGet(conflictIdsBySource, sourceId);
       if (bucket) pushArray3(bucket, identity);
@@ -14429,10 +16373,10 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
   for (let index = 0; index < claimIds.length; index += 1) {
     const claimId = claimIds[index];
     const claim = mapGet(claimsById, claimId) ?? {};
-    const candidates = makeSet();
+    const candidates2 = makeSet();
     const directSourceIds = makeSet();
     if (typeof claim.source_id === "string") setAdd(directSourceIds, claim.source_id);
-    const locatorIds = strings2(claim.source_locator_ids);
+    const locatorIds = strings4(claim.source_locator_ids);
     for (let locatorIndex = 0; locatorIndex < locatorIds.length; locatorIndex += 1) {
       const sourceId = mapGet(locatorSourceById, locatorIds[locatorIndex]);
       if (sourceId !== void 0) setAdd(directSourceIds, sourceId);
@@ -14440,11 +16384,11 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
     forEachSet(directSourceIds, (sourceId) => {
       const identities = mapGet(conflictIdsBySource, sourceId) ?? [];
       for (let identityIndex = 0; identityIndex < identities.length; identityIndex += 1) {
-        setAdd(candidates, identities[identityIndex]);
+        setAdd(candidates2, identities[identityIndex]);
       }
     });
-    mapSet(directCandidateIdsByClaim, claimId, candidates);
-    const parents = makeSet(strings2(claim.parent_claim_ids));
+    mapSet(directCandidateIdsByClaim, claimId, candidates2);
+    const parents = makeSet(strings4(claim.parent_claim_ids));
     const parentIds = sortArray3(setValuesArray(parents), compareCodePoints9);
     mapSet(parentsByClaim, claimId, parentIds);
     let indegree = 0;
@@ -14575,7 +16519,7 @@ function makeConflictSelectionCache() {
 }
 function conflictSelectionForCase(caseDraft, relations, allowedConflictIds, cache) {
   const relatedSets = makeSet();
-  const refs = strings2(caseDraft.evidence_refs);
+  const refs = strings4(caseDraft.evidence_refs);
   for (let index = 0; index < refs.length; index += 1) {
     const related = mapGet(relations.candidateIdsByClaim, refs[index]);
     if (related) setAdd(relatedSets, related);
@@ -14650,16 +16594,16 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
     setAdd(allowedConflictIds, conflictIdentity(conflicts[index]));
   }
   const executable = mapArray4(
-    records2(classification.grounded),
+    records4(classification.grounded),
     (item) => ({ lane: "grounded", item })
   );
   appendArray2(executable, mapArray4(
-    records2(classification.conditional),
+    records4(classification.conditional),
     (item) => ({ lane: "conditional", item })
   ));
   const casesByObligation = makeMap();
   for (let index = 0; index < executable.length; index += 1) {
-    const linkedIds = strings2(executable[index].item.obligation_ids);
+    const linkedIds = strings4(executable[index].item.obligation_ids);
     for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) {
       const obligationId = linkedIds[obligationIndex];
       const bucket = mapGet(casesByObligation, obligationId);
@@ -14668,7 +16612,7 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
     }
   }
   const obligationsById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
-  const blockedByObligation = makeMap(mapArray4(records2(classification.blocked), (item) => [
+  const blockedByObligation = makeMap(mapArray4(records4(classification.blocked), (item) => [
     String(item.obligation_id),
     NATIVE_STRUCTURED_CLONE(item)
   ]));
@@ -14687,14 +16631,14 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
       selectionCache
     );
     pushArray3(selections, selection);
-    if (selection.count > 1) pushArray3(ambiguityDiagnostics, diagnostic12(
+    if (selection.count > 1) pushArray3(ambiguityDiagnostics, diagnostic14(
       "classification",
       "CORE_SOURCE_CONFLICT_AMBIGUOUS",
       `/cases/${pointerPart7(String(caseDraft.case_id ?? "unknown"))}/evidence_refs`,
       "one executable Case cannot select more than one canonical source conflict"
     ));
     if (selection.identity === null) continue;
-    const linkedIds = strings2(caseDraft.obligation_ids);
+    const linkedIds = strings4(caseDraft.obligation_ids);
     for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) {
       const obligationId = linkedIds[obligationIndex];
       const identities = mapGet(conflictIdsByObligation, obligationId) ?? makeSet();
@@ -14704,7 +16648,7 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
   }
   forEachMap(conflictIdsByObligation, (identities, obligationId) => {
     if (setValuesArray(identities).length <= 1) return;
-    pushArray3(ambiguityDiagnostics, diagnostic12(
+    pushArray3(ambiguityDiagnostics, diagnostic14(
       "classification",
       "CORE_SOURCE_CONFLICT_AMBIGUOUS",
       `/obligations/${pointerPart7(obligationId)}`,
@@ -14723,7 +16667,7 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
     const reasons = makeSet(existing ? splitCommas(String(existing.reason)) : []);
     setAdd(reasons, reason);
     setDelete(reasons, "");
-    const refs = makeSet(existing ? strings2(existing.evidence_refs) : []);
+    const refs = makeSet(existing ? strings4(existing.evidence_refs) : []);
     for (let index = 0; index < evidenceRefs.length; index += 1) setAdd(refs, evidenceRefs[index]);
     const orderedReasons = sortArray3(setValuesArray(reasons), compareCodePoints9);
     mapSet(blockedByObligation, obligationId, {
@@ -14745,11 +16689,11 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
     const conflict = selections[index].conflict;
     if (!conflict) continue;
     setAdd(invalidCases, index);
-    const linkedIds = strings2(caseDraft.obligation_ids);
+    const linkedIds = strings4(caseDraft.obligation_ids);
     for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) block(
       linkedIds[obligationIndex],
       "UNRESOLVED_CONFLICT",
-      strings2(caseDraft.evidence_refs),
+      strings4(caseDraft.evidence_refs),
       typeof conflict.root_issue_id === "string" ? conflict.root_issue_id : null
     );
   }
@@ -14762,11 +16706,11 @@ function applyLocalConflictBlocks(classification, obligations, claimsById, sourc
       if (setHas(invalidCases, caseIndex)) continue;
       setAdd(invalidCases, caseIndex);
       const caseDraft = executable[caseIndex].item;
-      const linkedIds = strings2(caseDraft.obligation_ids);
+      const linkedIds = strings4(caseDraft.obligation_ids);
       for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) block(
         linkedIds[obligationIndex],
         "CASE_SHARES_BLOCKED_OBLIGATION",
-        strings2(caseDraft.evidence_refs),
+        strings4(caseDraft.evidence_refs),
         null
       );
     }
@@ -14788,9 +16732,9 @@ function missingType(reason) {
 function semanticRefs(obligation, reason) {
   const refs = makeSet();
   const groups = [
-    strings2(obligation.source_claim_ids),
-    strings2(obligation.required_oracle_refs),
-    strings2(obligation.view_element_refs)
+    strings4(obligation.source_claim_ids),
+    strings4(obligation.required_oracle_refs),
+    strings4(obligation.view_element_refs)
   ];
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
     const values = groups[groupIndex];
@@ -14802,11 +16746,11 @@ function semanticRefs(obligation, reason) {
 }
 function blockerInputsByObligation(caseDrafts) {
   const byObligation = makeMap();
-  const dispositions = records2(caseDrafts.obligation_dispositions);
+  const dispositions = records4(caseDrafts.obligation_dispositions);
   for (let index = 0; index < dispositions.length; index += 1) {
     const disposition = dispositions[index];
     if (disposition.status !== "blocker" || !isRecord4(disposition.issue_intent) || !isRecord4(disposition.subject)) continue;
-    const ids = strings2(disposition.affected_obligation_ids);
+    const ids = strings4(disposition.affected_obligation_ids);
     for (let idIndex = 0; idIndex < ids.length; idIndex += 1) mapSet(byObligation, ids[idIndex], {
       intent: disposition.issue_intent,
       subject: disposition.subject
@@ -14817,33 +16761,33 @@ function blockerInputsByObligation(caseDrafts) {
 function normalizedBlockerSubject2(subject) {
   if (subject.kind === "facts") return {
     kind: "facts",
-    fact_ids: sortArray3(strings2(subject.fact_ids), compareCodePoints9)
+    fact_ids: sortArray3(strings4(subject.fact_ids), compareCodePoints9)
   };
   if (subject.kind === "view-elements") return {
     kind: "view-elements",
-    view_element_refs: sortArray3(mapArray4(records2(subject.view_element_refs), (ref) => ({
+    view_element_refs: sortArray3(mapArray4(records4(subject.view_element_refs), (ref) => ({
       view_id: String(ref.view_id),
       element_id: String(ref.element_id)
     })), (left, right) => compareCodePoints9(canonicalStringify(left), canonicalStringify(right)))
   };
   if (subject.kind === "capabilities") return {
     kind: "capabilities",
-    capabilities: sortArray3(strings2(subject.capabilities), compareCodePoints9)
+    capabilities: sortArray3(strings4(subject.capabilities), compareCodePoints9)
   };
   return {
     kind: "evidence-conflict",
-    claim_refs: sortArray3(strings2(subject.claim_refs), compareCodePoints9)
+    claim_refs: sortArray3(strings4(subject.claim_refs), compareCodePoints9)
   };
 }
 function compilerIssueDescriptor(obligation, submitted) {
   if (obligation.kind === "requirement-gap" && isRecord4(obligation.gap_issue)) {
     return {
       missing_type: String(obligation.gap_issue.missing_type),
-      semantic_refs: strings2(obligation.gap_issue.semantic_refs),
+      semantic_refs: strings4(obligation.gap_issue.semantic_refs),
       scope: String(obligation.gap_issue.scope),
       answerable: obligation.gap_issue.answerable === true,
-      reasons: strings2(obligation.gap_issue.reasons),
-      evidence_refs: strings2(obligation.gap_issue.evidence_refs)
+      reasons: strings4(obligation.gap_issue.reasons),
+      evidence_refs: strings4(obligation.gap_issue.evidence_refs)
     };
   }
   if (submitted && isRecord4(submitted.intent) && isRecord4(submitted.subject)) return {
@@ -14851,15 +16795,15 @@ function compilerIssueDescriptor(obligation, submitted) {
     semantic_refs: [canonicalStringify(normalizedBlockerSubject2(submitted.subject))],
     scope: String(submitted.intent.scope),
     answerable: submitted.intent.answerable === true,
-    reasons: strings2(submitted.intent.reasons),
-    evidence_refs: strings2(submitted.intent.evidence_refs)
+    reasons: strings4(submitted.intent.reasons),
+    evidence_refs: strings4(submitted.intent.evidence_refs)
   };
   return null;
 }
 function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
-  const blocked = mapArray4(records2(classification.blocked), (item) => {
+  const blocked = mapArray4(records4(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const compilerIssue = compilerIssueDescriptor(
       obligation,
@@ -14878,10 +16822,24 @@ function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   });
   return { ...classification, blocked };
 }
+function clarificationQuestion(missingTypeValue, scope) {
+  const type = String(missingTypeValue);
+  const businessScope = String(scope);
+  if (type === "testability" || type === "capability" || type === "resource_limit" || type === "control" || type === "observer") {
+    return `What verified test setup, control, or observation capability is available for ${businessScope}?`;
+  }
+  if (type === "source-conflict" || type === "fact-conflict" || type === "evidence" || type === "extraction" || type === "authority") {
+    return `Which authoritative source rule applies to ${businessScope}?`;
+  }
+  if (type === "exclusion" || type === "invalid-exclusion") {
+    return `What authoritative scope-exclusion rule applies to ${businessScope}?`;
+  }
+  return `What authoritative product rule or expected result resolves the ${type} gap in ${businessScope}?`;
+}
 function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
-  return sortArray3(mapArray4(records2(classification.blocked), (item) => {
+  return sortArray3(mapArray4(records4(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const reason = String(item.reason);
     const compilerIssue = compilerIssueDescriptor(
@@ -14898,9 +16856,9 @@ function blockedDescriptors(classification, obligations, caseDrafts) {
       scope,
       risk: String(item.risk),
       reason,
-      evidence_refs: sortArray3(compilerIssue?.evidence_refs ?? strings2(item.evidence_refs), compareCodePoints9),
+      evidence_refs: sortArray3(compilerIssue?.evidence_refs ?? strings4(item.evidence_refs), compareCodePoints9),
       answerable: compilerIssue?.answerable ?? !technical,
-      question: `Clarification required for ${type} in ${scope}.`
+      question: clarificationQuestion(type, scope)
     };
   }), (left, right) => compareCodePoints9(left.obligation_id, right.obligation_id));
 }
@@ -14910,8 +16868,8 @@ function buildSourceConflictBridge(classification, obligations, relations, confl
   for (let index = 0; index < conflicts.length; index += 1) {
     setAdd(allowedConflictIds, conflictIdentity(conflicts[index]));
   }
-  const executable = sliceArray3(records2(classification.grounded), 0);
-  appendArray2(executable, records2(classification.conditional));
+  const executable = sliceArray3(records4(classification.grounded), 0);
+  appendArray2(executable, records4(classification.conditional));
   const bridge = makeMap();
   const ambiguous = makeSet();
   const selectionCache = makeConflictSelectionCache();
@@ -14925,7 +16883,7 @@ function buildSourceConflictBridge(classification, obligations, relations, confl
     );
     if (selection.count !== 1 || !selection.conflict) continue;
     const conflict = selection.conflict;
-    const linkedIds = strings2(caseDraft.obligation_ids);
+    const linkedIds = strings4(caseDraft.obligation_ids);
     for (let obligationIndex = 0; obligationIndex < linkedIds.length; obligationIndex += 1) {
       const obligationId = linkedIds[obligationIndex];
       const obligation = mapGet(obligationById, obligationId);
@@ -14968,14 +16926,14 @@ function bridgeMatchesRoot(root, bridgeEntry) {
     semantic_refs: bridgeEntry.semantic_refs,
     scope: bridgeEntry.internal_scope
   };
-  if (root.root_issue_key !== canonicalStringify(signature) || canonicalStringify(strings2(root.semantic_refs)) !== canonicalStringify(bridgeEntry.semantic_refs) || canonicalStringify(sortArray3(strings2(root.affected_obligation_ids), compareCodePoints9)) !== canonicalStringify(bridgeEntry.affected_obligation_ids)) return false;
-  const reasons = makeSet(strings2(root.reasons));
+  if (root.root_issue_key !== canonicalStringify(signature) || canonicalStringify(strings4(root.semantic_refs)) !== canonicalStringify(bridgeEntry.semantic_refs) || canonicalStringify(sortArray3(strings4(root.affected_obligation_ids), compareCodePoints9)) !== canonicalStringify(bridgeEntry.affected_obligation_ids)) return false;
+  const reasons = makeSet(strings4(root.reasons));
   return setHas(reasons, "UNRESOLVED_CONFLICT");
 }
 function translateClarificationAppend(clarificationInput, sourceConflictBridge) {
   const output = NATIVE_STRUCTURED_CLONE(clarificationInput);
   if (!isRecord4(output.prior_state) || !isRecord4(output.append_batch)) return output;
-  const priorById = makeMap(mapArray4(records2(output.prior_state.root_snapshot_ledger), (item) => [
+  const priorById = makeMap(mapArray4(records4(output.prior_state.root_snapshot_ledger), (item) => [
     String(item.root_issue_id),
     item
   ]));
@@ -14992,7 +16950,7 @@ function translateClarificationAppend(clarificationInput, sourceConflictBridge) 
   function translateRootIds(rootIds) {
     const translated = makeSet();
     let changed = false;
-    const submittedRootIds = strings2(rootIds);
+    const submittedRootIds = strings4(rootIds);
     for (let index = 0; index < submittedRootIds.length; index += 1) {
       const rootId = submittedRootIds[index];
       const internal = mapGet(internalBySourceRoot, rootId);
@@ -15005,17 +16963,17 @@ function translateClarificationAppend(clarificationInput, sourceConflictBridge) 
     }
     return { ids: sortArray3(setValuesArray(translated), compareCodePoints9), changed };
   }
-  const decisions = records2(output.append_batch.decision_records);
+  const decisions = records4(output.append_batch.decision_records);
   for (let index = 0; index < decisions.length; index += 1) {
     const decision = decisions[index];
-    const externalRootIds = sortArray3(strings2(decision.root_issue_ids), compareCodePoints9);
+    const externalRootIds = sortArray3(strings4(decision.root_issue_ids), compareCodePoints9);
     const expectedExternalQuestionId = stableId("question", { root_issue_ids: externalRootIds });
     const submittedQuestionId = decision.question_id;
     const translated = translateRootIds(decision.root_issue_ids);
     decision.root_issue_ids = translated.ids;
     if (translated.changed) decision.question_id = submittedQuestionId === expectedExternalQuestionId ? stableId("question", { root_issue_ids: decision.root_issue_ids }) : "";
   }
-  const events = records2(output.append_batch.clarification_events);
+  const events = records4(output.append_batch.clarification_events);
   for (let index = 0; index < events.length; index += 1) {
     events[index].root_issue_ids = translateRootIds(events[index].root_issue_ids).ids;
   }
@@ -15024,7 +16982,7 @@ function translateClarificationAppend(clarificationInput, sourceConflictBridge) 
 function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
   void conflicts;
   const grouped = makeMap();
-  const pendingRoots = records2(pending);
+  const pendingRoots = records4(pending);
   for (let pendingIndex = 0; pendingIndex < pendingRoots.length; pendingIndex += 1) {
     const submitted = pendingRoots[pendingIndex];
     const item = NATIVE_STRUCTURED_CLONE(submitted);
@@ -15036,24 +16994,24 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
       item.root_issue_id = externalId;
       item.root_issue_key = canonicalStringify({
         missing_type: "source-conflict",
-        rule_ids: sortArray3(strings2(conflict.rule_ids), compareCodePoints9),
+        rule_ids: sortArray3(strings4(conflict.rule_ids), compareCodePoints9),
         scope: String(conflict.scope),
-        source_ids: sortArray3(strings2(conflict.source_ids), compareCodePoints9)
+        source_ids: sortArray3(strings4(conflict.source_ids), compareCodePoints9)
       });
       item.scope = String(conflict.scope);
-      item.question = `Clarification required for source-conflict in ${item.scope}.`;
+      item.question = clarificationQuestion("source-conflict", String(item.scope));
     }
     const existing = mapGet(grouped, externalId);
     if (!existing) mapSet(grouped, externalId, item);
     else {
       existing.affected_obligation_ids = unionSortedStrings(
-        strings2(existing.affected_obligation_ids),
-        strings2(item.affected_obligation_ids)
+        strings4(existing.affected_obligation_ids),
+        strings4(item.affected_obligation_ids)
       );
-      existing.reasons = unionSortedStrings(strings2(existing.reasons), strings2(item.reasons));
+      existing.reasons = unionSortedStrings(strings4(existing.reasons), strings4(item.reasons));
       existing.evidence_refs = unionSortedStrings(
-        strings2(existing.evidence_refs),
-        strings2(item.evidence_refs)
+        strings4(existing.evidence_refs),
+        strings4(item.evidence_refs)
       );
       const itemRiskCounts = isRecord4(item.risk_counts) ? item.risk_counts : {};
       const risks = ["critical", "high", "medium", "low"];
@@ -15072,7 +17030,7 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
       const difference = toNumber(rightRisk[risk] ?? 0) - toNumber(leftRisk[risk] ?? 0);
       if (difference !== 0) return difference;
     }
-    const countDifference = strings2(right.affected_obligation_ids).length - strings2(left.affected_obligation_ids).length;
+    const countDifference = strings4(right.affected_obligation_ids).length - strings4(left.affected_obligation_ids).length;
     return countDifference || compareCodePoints9(String(left.root_issue_id), String(right.root_issue_id));
   });
   const rootIssueIds = sortArray3(
@@ -15083,6 +17041,56 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
   for (let index = 0; index < output.length; index += 1) output[index].batch_id = batchId;
   return output;
 }
+function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, clarificationState) {
+  const pointById = makeMap(mapArray4(
+    records4(semantic.formal_test_points),
+    (point) => [String(point.obligation_id), point]
+  ));
+  const planDigest = digest({
+    purpose: "semantic_clarification",
+    semantic_snapshot: semantic,
+    roots: mapArray4(pendingRoots, (root) => ({
+      root_issue_key: root.root_issue_key,
+      affected_obligation_ids: sortArray3(strings4(root.affected_obligation_ids), compareCodePoints9)
+    }))
+  });
+  const changeHead = toNumber(clarificationState.clarification_event_seq);
+  return createPresentationSnapshot({
+    purpose: "semantic_clarification",
+    entryContext: "active_analysis",
+    runInstanceId: String(sourcePack.run_instance_id),
+    sourceRevision: toNumber(sourcePack.source_revision),
+    planDigest,
+    planChangeHeadSeq: changeHead,
+    groups: mapArray4(pendingRoots, (root) => ({
+      question: String(root.question),
+      items: mapArray4(strings4(root.affected_obligation_ids), (obligationId) => {
+        const point = mapGet(pointById, obligationId) ?? {};
+        return {
+          item_kind: "formal_test_point",
+          item_id: obligationId,
+          title: `Formal Test Point ${obligationId}`,
+          item_semantic_digest: digest({
+            obligation_id: obligationId,
+            evidence_level: point.evidence_level,
+            classification: point.classification,
+            blocked_reason: point.blocked_reason,
+            root_issue_key: root.root_issue_key
+          }),
+          item_semantic_change_head_seq: changeHead
+        };
+      }),
+      allowedOptions: [
+        { option_code: "final", label: "Final answer", meaning: "Apply an authoritative final business answer." },
+        { option_code: "temporary", label: "Temporary answer", meaning: "Record a provisional answer without upgrading evidence." },
+        { option_code: "unknown", label: "Unknown", meaning: "Record that the answer is currently unknown." },
+        { option_code: "deferred", label: "Defer", meaning: "Leave this issue unresolved for later." },
+        { option_code: "request_delivery", label: "Continue to execution closure", meaning: "Keep the true Blocked status and decide its run disposition." }
+      ],
+      answerExample: `Answer ${String(root.root_issue_id)} with a final, temporary, unknown, deferred, or delivery decision.`
+    }))
+  });
+}
 function evidenceLevel(obligation, cases, claimsById, lane, notApplicable) {
   if (lane === "blocked") return "E0";
   if (lane === "conditional") return "E1";
@@ -15091,14 +17099,14 @@ function evidenceLevel(obligation, cases, claimsById, lane, notApplicable) {
     return claim?.level === "E2" ? "E2" : "E3";
   }
   const refs = makeSet();
-  const initialRefs = [strings2(obligation.source_claim_ids), strings2(obligation.required_oracle_refs)];
+  const initialRefs = [strings4(obligation.source_claim_ids), strings4(obligation.required_oracle_refs)];
   for (let groupIndex = 0; groupIndex < initialRefs.length; groupIndex += 1) {
     for (let index = 0; index < initialRefs[groupIndex].length; index += 1) {
       setAdd(refs, initialRefs[groupIndex][index]);
     }
   }
   for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) {
-    const evidenceRefs = strings2(cases[caseIndex].evidence_refs);
+    const evidenceRefs = strings4(cases[caseIndex].evidence_refs);
     for (let refIndex = 0; refIndex < evidenceRefs.length; refIndex += 1) {
       setAdd(refs, evidenceRefs[refIndex]);
     }
@@ -15111,10 +17119,10 @@ function evidenceLevel(obligation, cases, claimsById, lane, notApplicable) {
 }
 function semanticSnapshot(classification, obligations, claimsById) {
   const disposition = makeMap();
-  const groundedCases = records2(classification.grounded);
+  const groundedCases = records4(classification.grounded);
   for (let caseIndex = 0; caseIndex < groundedCases.length; caseIndex += 1) {
     const item = groundedCases[caseIndex];
-    const ids2 = strings2(item.obligation_ids);
+    const ids2 = strings4(item.obligation_ids);
     for (let idIndex = 0; idIndex < ids2.length; idIndex += 1) {
       const id = ids2[idIndex];
       const existing = mapGet(disposition, id) ?? { lane: "grounded", reason: null, cases: [] };
@@ -15122,10 +17130,10 @@ function semanticSnapshot(classification, obligations, claimsById) {
       mapSet(disposition, id, existing);
     }
   }
-  const conditionalCases = records2(classification.conditional);
+  const conditionalCases = records4(classification.conditional);
   for (let caseIndex = 0; caseIndex < conditionalCases.length; caseIndex += 1) {
     const item = conditionalCases[caseIndex];
-    const ids2 = strings2(item.obligation_ids);
+    const ids2 = strings4(item.obligation_ids);
     for (let idIndex = 0; idIndex < ids2.length; idIndex += 1) {
       const id = ids2[idIndex];
       const existing = mapGet(disposition, id) ?? { lane: "conditional", reason: null, cases: [] };
@@ -15133,7 +17141,7 @@ function semanticSnapshot(classification, obligations, claimsById) {
       mapSet(disposition, id, existing);
     }
   }
-  const blockedItems = records2(classification.blocked);
+  const blockedItems = records4(classification.blocked);
   for (let index = 0; index < blockedItems.length; index += 1) mapSet(
     disposition,
     String(blockedItems[index].obligation_id),
@@ -15143,7 +17151,7 @@ function semanticSnapshot(classification, obligations, claimsById) {
       cases: []
     }
   );
-  const notApplicableItems = records2(classification.not_applicable);
+  const notApplicableItems = records4(classification.not_applicable);
   for (let index = 0; index < notApplicableItems.length; index += 1) mapSet(
     disposition,
     String(notApplicableItems[index].obligation_id),
@@ -15185,7 +17193,7 @@ function semanticSnapshot(classification, obligations, claimsById) {
       conditional,
       blocked,
       exploratory: sortArray3(mapArray4(
-        records2(classification.exploratory),
+        records4(classification.exploratory),
         (item) => String(item.exploratory_id)
       ), compareCodePoints9),
       coverage: { formal_denominator: points.length },
@@ -15240,6 +17248,10 @@ function evaluateRevisionCaptured(submittedInput, options) {
     }
   );
   const interactionPolicy = String(trustedOptions.interactionPolicy);
+  const sourcePack = (
+    /** @type {Record<string, unknown>} */
+    input.source_pack
+  );
   try {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired("schema", sourceRevision, schemaDiagnostics);
@@ -15249,7 +17261,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     const evidence = validateEvidenceGraph(input.source_pack, input.evidence_claims);
     const evidenceDiagnostics = diagnosticArray(evidence.diagnostics);
     if (evidenceDiagnostics.length > 0) return revisionRequired("evidence_claims", sourceRevision, evidenceDiagnostics);
-    const graph = evidenceContext(input, evidence.claimsById, records2(sourcePolicy.conflicts));
+    const graph = evidenceContext(input, evidence.claimsById, records4(sourcePolicy.conflicts));
     let obligations;
     try {
       obligations = compileObligations(graph, input.behavior_views);
@@ -15282,7 +17294,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     );
     unresolvedSourcePack.decision_records = [];
     const unresolvedPolicy = resolveSourcePolicy(unresolvedSourcePack);
-    const potentialConflicts = records2(unresolvedPolicy.conflicts);
+    const potentialConflicts = records4(unresolvedPolicy.conflicts);
     const conflictRelations = prepareConflictRelations(
       graph.claimsById,
       /** @type {Record<string, unknown>} */
@@ -15291,13 +17303,13 @@ function evaluateRevisionCaptured(submittedInput, options) {
     );
     const sourceConflictBridge = buildSourceConflictBridge(
       classification,
-      records2(obligations.obligations),
+      records4(obligations.obligations),
       conflictRelations,
       potentialConflicts
     );
     classification = applyLocalConflictBlocks(
       classification,
-      records2(obligations.obligations),
+      records4(obligations.obligations),
       graph.claimsById,
       /** @type {Record<string, unknown>} */
       input.source_pack,
@@ -15311,7 +17323,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     );
     const semantics = semanticSnapshot(
       classification,
-      records2(obligations.obligations),
+      records4(obligations.obligations),
       graph.claimsById
     );
     const clarificationInput = (
@@ -15327,7 +17339,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         source_revision: sourceRevision,
         blocked_obligations: blockedDescriptors(
           classification,
-          records2(obligations.obligations),
+          records4(obligations.obligations),
           /** @type {Record<string, unknown>} */
           input.case_drafts
         ),
@@ -15343,28 +17355,54 @@ function evaluateRevisionCaptured(submittedInput, options) {
       sourceRevision,
       diagnosticArray(clarification.diagnostics)
     );
-    if (clarification.action === "need_user_answers") return {
-      status: "need_user_answers",
-      source_revision: sourceRevision,
-      pending_root_issues: externalizePendingRoots(
+    if (clarification.action === "need_user_answers") {
+      const pendingRootIssues = externalizePendingRoots(
         clarification.pending_root_issues,
         graph.conflicts,
         sourceConflictBridge
-      ),
-      clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
-      semantic_snapshot: NATIVE_STRUCTURED_CLONE(clarification.semantic_snapshot),
-      diagnostics: []
-    };
+      );
+      const presentation = semanticClarificationPresentation(
+        pendingRootIssues,
+        clarification.semantic_snapshot,
+        sourcePack,
+        clarification.state
+      );
+      return {
+        status: "need_user_answers",
+        purpose: "semantic_clarification",
+        entry_context: "active_analysis",
+        source_revision: sourceRevision,
+        pending_root_issues: pendingRootIssues,
+        presentation,
+        next_event_seq: toNumber(clarification.state.clarification_event_seq) + 1,
+        workflow_state: {
+          execution_plan: null,
+          presentation_snapshot: presentation,
+          workflow_event_head_seq: toNumber(clarification.state.clarification_event_seq),
+          workflow_event_log_digest: digest({
+            decision_records: sourcePack.decision_records,
+            clarification_events: sourcePack.clarification_events,
+            execution_events: sourcePack.execution_events
+          }),
+          confirmation: null,
+          active_pause: null,
+          promoted_exploratory: []
+        },
+        clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
+        semantic_snapshot: NATIVE_STRUCTURED_CLONE(clarification.semantic_snapshot),
+        diagnostics: []
+      };
+    }
     let bundle;
     try {
       const bundleClassification = bindBlockedRootIdentity(
         classification,
-        records2(obligations.obligations),
+        records4(obligations.obligations),
         /** @type {Record<string, unknown>} */
         input.case_drafts
       );
       bundle = buildBundle({
-        schema_version: "1.0.0",
+        schema_version: "2.1.0",
         source_revision: sourceRevision,
         compiler_version: input.compiler_version,
         lineage: input.lineage,
@@ -15383,6 +17421,103 @@ function evaluateRevisionCaptured(submittedInput, options) {
       );
       throw error;
     }
+    const execution = compileExecutionPlan({
+      semanticBundle: bundle,
+      obligations: records4(obligations.obligations),
+      evidenceClaims: input.evidence_claims,
+      sourcePack,
+      runIdentityDigest: digest({
+        sources: records4(sourcePack.sources).map((source) => ({
+          source_id: source.source_id,
+          content_digest: source.content_digest
+        })),
+        run_scope: sourcePack.run_scope
+      }),
+      // Clarification state already proves that events through its accepted
+      // sequence belong to history. This fallback is required for the first
+      // execution-closure compilation of a run, before a workflow checkpoint
+      // exists; otherwise accepted business decisions are incorrectly replayed
+      // as fresh UI actions against a presentation that did not exist yet.
+      priorWorkflowState: trustedOptions.workflowState ?? {
+        workflow_event_head_seq: toNumber(
+          /** @type {Record<string, unknown>} */
+          translatedClarification.prior_state.clarification_event_seq
+        )
+      }
+    });
+    if (execution.diagnostics.length > 0) return revisionRequired(
+      "execution_plan",
+      sourceRevision,
+      diagnosticArray(execution.diagnostics)
+    );
+    const promotedExploratoryIds = new Set(mapArray4(
+      records4(execution.plan.promoted_exploratory),
+      (promotion) => String(promotion.exploratory_id)
+    ));
+    if (promotedExploratoryIds.size > 0) bundle = {
+      ...bundle,
+      exploratory: records4(bundle.exploratory).filter(
+        (candidate) => !promotedExploratoryIds.has(String(candidate.exploratory_id))
+      )
+    };
+    if (execution.kind !== "ready") {
+      const presentation = (
+        /** @type {any} */
+        execution.presentation
+      );
+      const workflowState = {
+        execution_plan: execution.plan,
+        presentation_snapshot: presentation,
+        workflow_event_head_seq: execution.workflow_event_head_seq,
+        workflow_event_log_digest: execution.workflow_event_log_digest,
+        confirmation: execution.plan.confirmation,
+        active_pause: execution.plan.status === "paused" ? {
+          resume_target: execution.plan.resume_target
+        } : null,
+        promoted_exploratory: execution.plan.promoted_exploratory
+      };
+      if (interactionPolicy === "record_only") return {
+        kind: "analysis_only",
+        source_revision: sourceRevision,
+        semantic_sections: bundle,
+        execution_plan_snapshot: execution.plan,
+        presentation_snapshot: presentation,
+        workflow_state: workflowState,
+        diagnostics: []
+      };
+      return {
+        status: "need_user_answers",
+        source_revision: sourceRevision,
+        purpose: presentation.purpose,
+        entry_context: presentation.entry_context,
+        execution_plan: execution.plan,
+        presentation,
+        next_event_seq: execution.workflow_event_head_seq + 1,
+        workflow_state: workflowState,
+        clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
+        diagnostics: []
+      };
+    }
+    const readyPlan = projectReadyExecutionPlan(
+      execution.plan,
+      sourcePack,
+      input.evidence_claims
+    );
+    bundle = {
+      ...bundle,
+      execution_plan: readyPlan,
+      quality: {
+        ...bundle.quality,
+        lineage: {
+          semantic_source_digest: execution.plan.semantic_source_digest,
+          evidence_semantic_digest: digest(normalizeSemantic(input.evidence_claims)),
+          behavior_views_semantic_digest: digest(normalizeSemantic(input.behavior_views)),
+          test_obligations_semantic_digest: digest(normalizeSemantic(obligations)),
+          case_drafts_semantic_digest: digest(normalizeSemantic(input.case_drafts))
+        }
+      }
+    };
+    bundle.execution_plan.semantic_result_digest = semanticResultDigest(bundle);
     let markdown;
     try {
       markdown = renderMarkdown(bundle);
@@ -15402,10 +17537,19 @@ function evaluateRevisionCaptured(submittedInput, options) {
       markdown,
       markdown_digest: digest(markdown),
       clarification_state: NATIVE_STRUCTURED_CLONE(clarification.state),
+      workflow_state: {
+        execution_plan: execution.plan,
+        presentation_snapshot: null,
+        workflow_event_head_seq: execution.workflow_event_head_seq,
+        workflow_event_log_digest: execution.workflow_event_log_digest,
+        confirmation: execution.plan.confirmation,
+        active_pause: null,
+        promoted_exploratory: execution.plan.promoted_exploratory
+      },
       diagnostics: []
     };
   } catch {
-    return revisionRequired("core", sourceRevision, [diagnostic12(
+    return revisionRequired("core", sourceRevision, [diagnostic14(
       "classification",
       "CORE_EVALUATION_FAILED",
       "/",
@@ -15434,6 +17578,7 @@ function evaluateRevision(submittedInput, options) {
 // src/run-store.mjs
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { ChildProcess, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
@@ -15444,7 +17589,7 @@ var STAGE_FILES = Object.freeze({
   case_drafts: "case-drafts.json"
 });
 var CONTROLLED_DIRECTORIES = Object.freeze(["accepted", "staging", "derived", "output"]);
-var CONTROLLED_FILES = Object.freeze(["checkpoint.json"]);
+var CONTROLLED_FILES = Object.freeze(["checkpoint.json", "run-instance.json"]);
 var REVISION_DIRECTORY = /^r([0-9]+)$/u;
 var TEMPORARY_FILE = /^\..+\.tmp-([0-9]+)-[0-9]+$/u;
 var RUN_LOCK_RESIDUE_DIRECTORY = /^\.compiler-advance\.lock\.(?:release|stale)-[0-9]+-[0-9]+(?:\.cleanup-[0-9]+-[0-9]+)*$/u;
@@ -15533,6 +17678,8 @@ var NATIVE_SET_TIMEOUT = setTimeout;
 var NATIVE_CLEAR_TIMEOUT = clearTimeout;
 var NATIVE_DATE = Date;
 var NATIVE_DATE_NOW = Date.now;
+var NATIVE_DATE_TO_ISO_STRING = Date.prototype.toISOString;
+var NATIVE_RANDOM_UUID = randomUUID;
 var NATIVE_MATH = Math;
 var NATIVE_PROCESS = process;
 var NATIVE_PROCESS_KILL = process.kill;
@@ -17188,6 +19335,28 @@ async function prepareRunStore(runDirectory) {
   }
   return canonicalRoot;
 }
+async function ensureRunInstance(runDirectory) {
+  const target = pathJoin(runDirectory, "run-instance.json");
+  const existing = await readJsonIfPresent(runDirectory, target);
+  if (existing) {
+    const value2 = existing.value;
+    if (!value2 || typeof value2 !== "object" || value2.schema_version !== "2.1.0" || typeof value2.run_instance_id !== "string" || !/^RUN-[0-9a-f-]{36}$/u.test(value2.run_instance_id) || typeof value2.created_at !== "string") throw new RunStoreIntegrityError(
+      "Immutable run-instance.json is invalid."
+    );
+    return value2;
+  }
+  const value = {
+    schema_version: "2.1.0",
+    run_instance_id: `RUN-${NATIVE_RANDOM_UUID()}`,
+    created_at: NATIVE_REFLECT_APPLY3(
+      NATIVE_DATE_TO_ISO_STRING,
+      new NATIVE_DATE(currentTimeMilliseconds()),
+      []
+    )
+  };
+  await atomicWriteJson(runDirectory, target, value);
+  return value;
+}
 async function recoverStagingClaims(runDirectory) {
   const directory = pathJoin(runDirectory, "staging");
   let entries;
@@ -17236,25 +19405,54 @@ async function recoverStagingClaims(runDirectory) {
       } else append2(unresolvedClaims, claimName);
     }
     if (unresolvedClaims.length === 0) continue;
-    const canonical = stagingPath(runDirectory, typedStage);
-    const firstClaim = pathJoin(directory, unresolvedClaims[0]);
-    const firstText = await readText(runDirectory, firstClaim);
+    const canonical2 = stagingPath(runDirectory, typedStage);
+    const firstClaim2 = pathJoin(directory, unresolvedClaims[0]);
+    const firstText2 = await readText(runDirectory, firstClaim2);
     for (let index = 1; index < unresolvedClaims.length; index += 1) {
-      if (await readText(runDirectory, pathJoin(directory, unresolvedClaims[index])) !== firstText) {
+      if (await readText(runDirectory, pathJoin(directory, unresolvedClaims[index])) !== firstText2) {
         throw new RunStoreIntegrityError("Conflicting staging promotion claims require manual revision.");
       }
     }
-    const canonicalText = await readTextIfPresent(runDirectory, canonical);
-    if (canonicalText !== null && canonicalText !== firstText) throw new RunStoreIntegrityError(
+    const canonicalText2 = await readTextIfPresent(runDirectory, canonical2);
+    if (canonicalText2 !== null && canonicalText2 !== firstText2) throw new RunStoreIntegrityError(
       "Recovered staging claim conflicts with the current staging artifact."
     );
-    if (canonicalText === null) {
-      await rename(firstClaim, canonical);
+    if (canonicalText2 === null) {
+      await rename(firstClaim2, canonical2);
       await syncDirectory(directory);
-    } else await removeFileDurably(runDirectory, firstClaim);
+    } else await removeFileDurably(runDirectory, firstClaim2);
     for (let index = 1; index < unresolvedClaims.length; index += 1) {
       await removeFileDurably(runDirectory, pathJoin(directory, unresolvedClaims[index]));
     }
+  }
+  const previewPrefix = ".post-ready-preview-request.json.claim-";
+  const previewClaims = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (direntIsFile(entry) && stringStartsWith(entry.name, previewPrefix)) {
+      append2(previewClaims, entry.name);
+    }
+  }
+  NATIVE_REFLECT_APPLY3(NATIVE_ARRAY_SORT6, previewClaims, []);
+  if (previewClaims.length === 0) return;
+  const canonical = postReadyPreviewRequestPath(runDirectory);
+  const firstClaim = pathJoin(directory, previewClaims[0]);
+  const firstText = await readText(runDirectory, firstClaim);
+  for (let index = 1; index < previewClaims.length; index += 1) {
+    if (await readText(runDirectory, pathJoin(directory, previewClaims[index])) !== firstText) {
+      throw new RunStoreIntegrityError("Conflicting post-ready preview claims require manual revision.");
+    }
+  }
+  const canonicalText = await readTextIfPresent(runDirectory, canonical);
+  if (canonicalText !== null && canonicalText !== firstText) throw new RunStoreIntegrityError(
+    "Recovered post-ready preview claim conflicts with the current private request."
+  );
+  if (canonicalText === null) {
+    await rename(firstClaim, canonical);
+    await syncDirectory(directory);
+  } else await removeFileDurably(runDirectory, firstClaim);
+  for (let index = 1; index < previewClaims.length; index += 1) {
+    await removeFileDurably(runDirectory, pathJoin(directory, previewClaims[index]));
   }
 }
 async function cleanupTemporaryFiles(runDirectory) {
@@ -17360,6 +19558,22 @@ async function readJsonIfPresent(runDirectory, filePath) {
 }
 function stagingPath(runDirectory, stage) {
   return pathJoin(runDirectory, "staging", STAGE_FILES[stage]);
+}
+function postReadyPreviewRequestPath(runDirectory) {
+  return pathJoin(runDirectory, "staging", "post-ready-preview-request.json");
+}
+async function discardPostReadyPreviewRequest(runDirectory, snapshot) {
+  const source = postReadyPreviewRequestPath(runDirectory);
+  const directory = pathDirname(source);
+  const claim = pathJoin(directory, `.post-ready-preview-request.json.claim-${NATIVE_PROCESS_PID}-${++temporarySequence}`);
+  await rename(source, claim);
+  await syncDirectory(directory);
+  const claimedText = await readText(runDirectory, claim);
+  if (claimedText !== snapshot.text) {
+    if (await readTextIfPresent(runDirectory, source) === null) await rename(claim, source);
+    throw new RunStoreIntegrityError("Post-ready preview request changed after validation.");
+  }
+  await removeFileDurably(runDirectory, claim);
 }
 function acceptedPath(runDirectory, sourceRevision, stage) {
   return pathJoin(runDirectory, "accepted", revisionName(sourceRevision), STAGE_FILES[stage]);
@@ -17475,6 +19689,195 @@ async function writeFinalOutput(runDirectory, sourceRevision, bundle, markdown) 
   await atomicWriteText(runDirectory, paths.markdown, markdown);
   return paths;
 }
+async function readCurrentState(runDirectory) {
+  const current = await readJsonIfPresent(runDirectory, outputPaths(runDirectory, 0).current);
+  return current ? current.value : null;
+}
+async function writeReadyCurrent(runDirectory, pointer) {
+  await atomicWriteJson(runDirectory, outputPaths(runDirectory, 0).current, {
+    status: "ready",
+    run_instance_id: pointer.run_instance_id,
+    source_revision: pointer.source_revision,
+    bundle_path: pointer.bundle_path,
+    bundle_digest: pointer.bundle_digest,
+    plan_digest: pointer.plan_digest
+  });
+}
+async function writeNonReadyCurrent(runDirectory, runInstanceId, activeSourceRevision) {
+  const prior = await readCurrentState(runDirectory);
+  const previousReadyRevision = prior?.status === "ready" ? prior.source_revision : prior?.status === "stale" ? prior.previous_ready_revision : null;
+  await atomicWriteJson(runDirectory, outputPaths(runDirectory, 0).current, {
+    status: "stale",
+    run_instance_id: runInstanceId,
+    active_source_revision: activeSourceRevision,
+    reason: "higher_revision_not_ready",
+    previous_ready_revision: previousReadyRevision ?? null
+  });
+}
+
+// src/post-ready-preview.mjs
+function diagnostic15(code2, path4, message) {
+  return { category: "classification", code: code2, path: path4, message };
+}
+function records5(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+}
+function requestDigest(request) {
+  return digest(request);
+}
+function nextPreviewControl(ready, state, compilerVersion) {
+  const expectedPreviewEpoch = Number(state?.preview_epoch ?? 0);
+  return {
+    expected_preview_epoch: expectedPreviewEpoch,
+    next_request_instance_id: `PREVIEW-${digest({
+      run_instance_id: ready.run_instance_id,
+      source_revision: ready.source_revision,
+      bundle_digest: ready.bundle_digest,
+      plan_digest: ready.plan_digest,
+      confirmation_semantic_digest: ready.confirmation_semantic_digest,
+      preview_epoch: expectedPreviewEpoch,
+      compiler_version: compilerVersion
+    }).slice(0, 32)}`
+  };
+}
+function bindingsValid(request, ready, control) {
+  return request.request_instance_id === control.next_request_instance_id && request.expected_preview_epoch === control.expected_preview_epoch && request.run_instance_id === ready.run_instance_id && request.bound_source_revision === ready.source_revision && request.bound_bundle_digest === ready.bundle_digest && request.bound_plan_digest === ready.plan_digest && request.bound_confirmation_semantic_digest === ready.confirmation_semantic_digest;
+}
+function candidates(request, ready) {
+  const byKey = new Map(records5(ready.items).map((item) => [`${item.item_kind}\0${item.item_id}`, item]));
+  const refs = records5(request.candidate_item_refs);
+  if (refs.length === 0) return null;
+  const output = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const ref of refs) {
+    const key = `${ref.item_kind}\0${ref.item_id}`;
+    const item = byKey.get(key);
+    if (seen.has(key) || !item || item.item_semantic_digest !== ref.item_semantic_digest) return null;
+    seen.add(key);
+    output.push(item);
+  }
+  return output.sort((left, right) => `${left.item_kind}\0${left.item_id}`.localeCompare(`${right.item_kind}\0${right.item_id}`, "en"));
+}
+function rejected(state, code2, message) {
+  return { kind: "rejected", state: structuredClone(state), presentation: null, ready_unchanged: true, diagnostics: [diagnostic15(code2, "/", message)] };
+}
+function processPreviewRequest({ request, state, ready, compilerVersion }) {
+  const requestHash = requestDigest(request);
+  const last = state?.last_preview_request;
+  if (last?.request_instance_id === request?.request_instance_id) {
+    if (last.request_digest === requestHash && state.preview_epoch === last.result_epoch && state.preview_state === last.result_state) return {
+      kind: last.result_kind,
+      state: structuredClone(state),
+      presentation: last.cached_presentation ? structuredClone(last.cached_presentation) : null,
+      ready_unchanged: true,
+      diagnostics: []
+    };
+    return rejected(state, "PREVIEW_REQUEST_REPLAY_INVALID", "A preview request ID cannot be reused with changed content or after its result generation advanced.");
+  }
+  const control = nextPreviewControl(ready, state, compilerVersion);
+  if (!bindingsValid(request, ready, control)) return rejected(
+    state,
+    "PREVIEW_BINDING_INVALID",
+    `Preview request does not bind the current ready result and compiler-issued epoch: ${canonicalStringify({
+      expected_request_instance_id: control.next_request_instance_id,
+      received_request_instance_id: request?.request_instance_id,
+      expected_preview_epoch: control.expected_preview_epoch,
+      received_preview_epoch: request?.expected_preview_epoch,
+      expected_source_revision: ready.source_revision,
+      received_source_revision: request?.bound_source_revision,
+      expected_run_instance_id: ready.run_instance_id,
+      received_run_instance_id: request?.run_instance_id,
+      expected_bundle_digest: ready.bundle_digest,
+      received_bundle_digest: request?.bound_bundle_digest,
+      expected_plan_digest: ready.plan_digest,
+      received_plan_digest: request?.bound_plan_digest,
+      expected_confirmation_semantic_digest: ready.confirmation_semantic_digest,
+      received_confirmation_semantic_digest: request?.bound_confirmation_semantic_digest,
+      compiler_version: compilerVersion
+    })}`
+  );
+  if (request.operation === "cancel_preview") {
+    if (state.preview_state !== "active" || request.cancels_presentation_id !== state.active_preview_presentation?.presentation_id) return rejected(
+      state,
+      "PREVIEW_STATE_INVALID",
+      "Cancel must bind the one active post-ready presentation."
+    );
+    const next2 = {
+      ...structuredClone(state),
+      preview_epoch: state.preview_epoch + 1,
+      preview_state: "closed",
+      active_preview_presentation: null
+    };
+    next2.last_preview_request = {
+      request_instance_id: request.request_instance_id,
+      request_digest: requestHash,
+      result_epoch: next2.preview_epoch,
+      result_state: next2.preview_state,
+      result_kind: "cancelled",
+      cached_presentation: null
+    };
+    return { kind: "cancelled", state: next2, presentation: null, ready_unchanged: true, diagnostics: [] };
+  }
+  const selected = candidates(request, ready);
+  if (!selected) return rejected(
+    state,
+    "PREVIEW_BINDING_INVALID",
+    "Every preview candidate must uniquely match a current ready-plan item and semantic digest."
+  );
+  if (request.operation === "open_preview") {
+    if (!["idle", "closed", "consumed"].includes(state.preview_state) || state.active_preview_presentation) return rejected(
+      state,
+      "PREVIEW_STATE_INVALID",
+      "Open preview requires an idle, closed, or consumed generation."
+    );
+  } else if (request.operation === "replace_preview") {
+    if (state.preview_state !== "active" || request.replaces_presentation_id !== state.active_preview_presentation?.presentation_id) return rejected(
+      state,
+      "PREVIEW_STATE_INVALID",
+      "Replacement must bind the one active post-ready presentation."
+    );
+  } else return rejected(state, "PREVIEW_OPERATION_INVALID", "Unknown preview operation.");
+  const nextEpoch = state.preview_epoch + 1;
+  const purpose = request.proposed_change?.kind === "change_execution_disposition" ? "execution_closure" : "semantic_clarification";
+  const presentation = createPresentationSnapshot({
+    purpose,
+    entryContext: "post_ready_change",
+    postReadyControl: {
+      preview_epoch: nextEpoch,
+      originating_request_instance_id: request.request_instance_id
+    },
+    runInstanceId: ready.run_instance_id,
+    sourceRevision: ready.source_revision,
+    planDigest: ready.plan_digest,
+    planChangeHeadSeq: Number(ready.plan_change_head_seq ?? 0),
+    groups: [{
+      question: `Review this proposed change before applying it: ${request.verbatim_user_request}`,
+      items: selected,
+      allowedOptions: [
+        { option_code: "apply", label: "Apply", meaning: "Append the proposed change and recompile." },
+        { option_code: "modify", label: "Modify", meaning: "Replace this preview without changing the ready result." },
+        { option_code: "cancel", label: "Cancel", meaning: "Close the preview and retain the ready result." }
+      ],
+      answerExample: `Apply ${canonicalStringify(request.proposed_change)}`,
+      proposedChange: structuredClone(request.proposed_change)
+    }]
+  });
+  const next = {
+    ...structuredClone(state),
+    preview_epoch: nextEpoch,
+    preview_state: "active",
+    active_preview_presentation: presentation
+  };
+  next.last_preview_request = {
+    request_instance_id: request.request_instance_id,
+    request_digest: requestHash,
+    result_epoch: next.preview_epoch,
+    result_state: next.preview_state,
+    result_kind: "preview",
+    cached_presentation: presentation
+  };
+  return { kind: "preview", state: next, presentation, ready_unchanged: true, diagnostics: [] };
+}
 
 // src/schema-registry.mjs
 import { readFile } from "node:fs/promises";
@@ -17572,9 +19975,9 @@ var schemaDirectory = path3.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "f0a544b75e70fe4166d915cf0ff76bf26efc9ec88b4e7358fa3767b0a3087519" : void 0;
-var embeddedSchemaVersion = true ? "1.0.0" : void 0;
-var embeddedCompilerVersion = true ? "0.1.0" : void 0;
+var embeddedManifestDigest = true ? "849392f2387bb804b06121fa4ed9a7e990408daa33a0a0c9b2a320f1d722a6fa" : void 0;
+var embeddedSchemaVersion = true ? "2.1.0" : void 0;
+var embeddedCompilerVersion = true ? "0.3.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
@@ -17626,12 +20029,12 @@ function pathIsAbsolute2(value) {
 function pathResolve2(value) {
   return NATIVE_REFLECT_APPLY4(NATIVE_PATH_RESOLVE2, path3, [value]);
 }
-function artifactRequest(sourceRevision, stage) {
+function artifactRequest(sourceRevision, stage, runInstanceId) {
   return {
     status: "need_artifact",
     stage,
     schema_ref: STAGE_SCHEMA[stage],
-    scope: { source_revision: sourceRevision },
+    scope: { source_revision: sourceRevision, run_instance_id: runInstanceId },
     diagnostics: []
   };
 }
@@ -17650,6 +20053,23 @@ function newRunRequired(message) {
         category: "traceability",
         code: "NEW_RUN_REQUIRED",
         message: "Original sources or task scope changed; create a new run."
+      }
+    ]
+  };
+}
+function migrationRequired() {
+  return {
+    status: "fatal",
+    diagnostics: [
+      {
+        category: "reference",
+        code: "RUN_MIGRATION_REQUIRED",
+        message: "Older-schema runs cannot resume under the v2.1 protocol."
+      },
+      {
+        category: "traceability",
+        code: "NEW_RUN_REQUIRED",
+        message: "Create a new v2.1 run; the prior run remains preserved and read-only."
       }
     ]
   };
@@ -17715,9 +20135,9 @@ async function stagedArtifact(runDirectory, stage, sourceRevision) {
     };
   }
 }
-function maximumEventSequence(sourcePack) {
+function maximumEventSequence2(sourcePack) {
   let maximum = 0;
-  for (const field of ["decision_records", "clarification_events"]) {
+  for (const field of ["decision_records", "clarification_events", "execution_events"]) {
     const values = arrayIsArray(sourcePack[field]) ? sourcePack[field] : [];
     for (let index = 0; index < values.length; index += 1) {
       const sequence = values[index]?.clarification_event_seq;
@@ -17737,7 +20157,8 @@ function historySequenceIntegrity(sourcePack) {
   const sequences = [];
   for (const [field, identityField] of [
     ["decision_records", "decision_id"],
-    ["clarification_events", "event_id"]
+    ["clarification_events", "event_id"],
+    ["execution_events", "event_id"]
   ]) {
     const values = arrayIsArray(sourcePack[field]) ? sourcePack[field] : [];
     const identities = /* @__PURE__ */ new Set();
@@ -17807,20 +20228,23 @@ function sourceRevisionIntegrity(prior, next) {
   const nextDecisions = arrayIsArray(next.decision_records) ? next.decision_records : [];
   const priorEvents = arrayIsArray(prior.clarification_events) ? prior.clarification_events : [];
   const nextEvents = arrayIsArray(next.clarification_events) ? next.clarification_events : [];
-  if (!isExactPrefix(priorDecisions, nextDecisions) || !isExactPrefix(priorEvents, nextEvents)) {
+  const priorExecution = arrayIsArray(prior.execution_events) ? prior.execution_events : [];
+  const nextExecution = arrayIsArray(next.execution_events) ? next.execution_events : [];
+  if (!isExactPrefix(priorDecisions, nextDecisions) || !isExactPrefix(priorEvents, nextEvents) || !isExactPrefix(priorExecution, nextExecution)) {
     return fatalReply("RUN_INTEGRITY_ERROR", "Decision and clarification histories are append-only and order-preserving.");
   }
   const historyIntegrity = historySequenceIntegrity(next);
   if (historyIntegrity) return historyIntegrity;
   const added = [
     ...nextDecisions.slice(priorDecisions.length),
-    ...nextEvents.slice(priorEvents.length)
+    ...nextEvents.slice(priorEvents.length),
+    ...nextExecution.slice(priorExecution.length)
   ];
   if (added.length === 0) return fatalReply(
     "RUN_INTEGRITY_ERROR",
     "A higher source revision must contain one nonempty append batch."
   );
-  const priorMaximum = maximumEventSequence(prior);
+  const priorMaximum = maximumEventSequence2(prior);
   const sequences = added.map((item) => item?.clarification_event_seq);
   const unique = new Set(sequences);
   if (unique.size !== sequences.length || sequences.some((item) => !Number.isSafeInteger(item) || item <= priorMaximum)) return fatalReply(
@@ -17951,22 +20375,76 @@ function appendBatch(previous, current) {
     clarification_events: structuredClone(events.slice(previousEvents.length))
   };
 }
-function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2) {
+function clarificationAppendInput(previousState, previousSource, sourcePack) {
+  const append3 = appendBatch(previousSource, sourcePack);
+  const priorState = structuredClone(previousState);
+  if (append3.decision_records.length === 0 && append3.clarification_events.length === 0) {
+    priorState.source_revision = sourcePack.source_revision;
+    priorState.clarification_event_seq = maximumEventSequence2(sourcePack);
+    if (priorState.clarification_stop) {
+      priorState.clarification_stop.source_revision = sourcePack.source_revision;
+    }
+  }
+  return { prior_state: priorState, append_batch: append3 };
+}
+function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2, runInstanceId, workflowState = null, priorCheckpoint = null) {
+  const presentation = workflowState?.presentation_snapshot ?? null;
+  const plan = workflowState?.execution_plan ?? null;
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests2 }),
     source_revision: sourceRevision,
     stage,
-    compiler_version: embeddedCompilerVersion ?? "0.1.0",
-    schema_version: embeddedSchemaVersion ?? "1.0.0",
+    compiler_version: embeddedCompilerVersion ?? "0.3.0",
+    schema_version: embeddedSchemaVersion ?? "2.1.0",
+    run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests2,
-    clarification_event_seq: state && Number.isSafeInteger(state.clarification_event_seq) ? state.clarification_event_seq : maximumEventSequence(sourcePack),
+    audit_lineage: structuredClone(acceptedDigests2),
+    clarification_event_seq: state && Number.isSafeInteger(state.clarification_event_seq) ? state.clarification_event_seq : maximumEventSequence2(sourcePack),
     asked_root_issue_ids: state && arrayIsArray(state.asked_root_issue_ids) ? state.asked_root_issue_ids : [],
     root_issue_dispositions: state && arrayIsArray(state.root_issue_dispositions) ? state.root_issue_dispositions.map((item) => ({
       root_issue_id: item.root_issue_id,
       status: item.status
     })) : [],
     last_question_set_digest: state && typeof state.last_question_set_digest === "string" ? state.last_question_set_digest : "",
-    clarification_stop: state?.clarification_stop ?? null
+    clarification_stop: state?.clarification_stop ?? null,
+    workflow_event_head_seq: Number(workflowState?.workflow_event_head_seq ?? maximumEventSequence2(sourcePack)),
+    workflow_event_log_digest: typeof workflowState?.workflow_event_log_digest === "string" ? workflowState.workflow_event_log_digest : digest([]),
+    execution_plan_snapshot: plan ? structuredClone(plan) : null,
+    presentation_snapshot: presentation ? structuredClone(presentation) : null,
+    presentation_snapshot_digest: presentation ? digest(presentation) : null,
+    confirmation: workflowState?.confirmation ? structuredClone(workflowState.confirmation) : null,
+    preview_epoch: Number(priorCheckpoint?.preview_epoch ?? 0),
+    preview_state: priorCheckpoint?.preview_state ?? "idle",
+    active_preview_presentation: priorCheckpoint?.active_preview_presentation ?? null,
+    last_preview_request: priorCheckpoint?.last_preview_request ?? null,
+    internal_result_kind: null
+  };
+}
+function finishedReply(result, checkpointValue, current, markdownPath, noticeCode = null) {
+  const summary = result.bundle.execution_plan.summary;
+  return {
+    ...current,
+    status: "finished",
+    markdown_path: markdownPath,
+    semantic_result_digest: result.bundle.execution_plan.semantic_result_digest,
+    execute_case_count: summary.execute_case_count,
+    do_not_execute_case_count: summary.do_not_execute_case_count,
+    do_not_execute_formal_test_point_count: summary.do_not_execute_formal_test_point_count,
+    do_not_execute_exploratory_count: summary.do_not_execute_exploratory_count,
+    applicable_test_point_coverage: {
+      full: summary.full_test_point_count,
+      partial: summary.partial_test_point_count,
+      none: summary.none_test_point_count
+    },
+    modification_hint: "This Skill does not start E2E execution. You may later supplement rules, reopen issues, request reanalysis, or change this run disposition.",
+    preview_control: nextPreviewControl({
+      run_instance_id: checkpointValue.run_instance_id,
+      source_revision: result.source_revision,
+      bundle_digest: result.bundle_digest,
+      plan_digest: result.bundle.execution_plan.plan_digest,
+      confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
+    }, checkpointValue, String(checkpointValue.compiler_version)),
+    ...noticeCode ? { notice_code: noticeCode } : {}
   };
 }
 async function acceptedDigests(runDirectory, sourceRevision) {
@@ -17987,7 +20465,7 @@ async function acceptedDigests(runDirectory, sourceRevision) {
   if (obligations) values.test_obligations = obligations.digest;
   return values;
 }
-function evaluateAdapterRevision(artifacts, clarification, registry) {
+function evaluateAdapterRevision(artifacts, clarification, registry, workflowState = null) {
   const sourcePack = artifacts.source_pack;
   const caseDrafts = artifacts.case_drafts;
   return (
@@ -18002,6 +20480,7 @@ function evaluateAdapterRevision(artifacts, clarification, registry) {
         expert_recall_limits: ["Expert recall is benchmark-only."]
       },
       clarificationState: clarification,
+      workflowState,
       interactionPolicy: "pause_for_clarification",
       limits: ["Compilation is limited to the accepted immutable revision."]
     })
@@ -18014,6 +20493,18 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
     "The prior accepted source revision is unavailable."
   );
   const appended = appendBatch(prior.source_pack, sourcePack);
+  if (prior.workflow_state?.presentation_snapshot?.entry_context === "post_ready_change") {
+    const previousExecutionEvents = arrayIsArray(prior.source_pack.execution_events) ? prior.source_pack.execution_events : [];
+    const currentExecutionEvents = arrayIsArray(sourcePack.execution_events) ? sourcePack.execution_events : [];
+    const appendedExecutionMutations = currentExecutionEvents.slice(previousExecutionEvents.length).filter((event) => event?.type === "set_dispositions");
+    const appliedRecordCount = appended.decision_records.length + appended.clarification_events.length + appendedExecutionMutations.length;
+    if (appliedRecordCount === 0) return { kind: "need_revision", diagnostics: [{
+      category: "classification",
+      code: "POST_READY_PREVIEW_APPLICATION_REQUIRED",
+      path: "/source_revision",
+      message: "A higher revision created from an active preview must append the bound proposed change."
+    }] };
+  }
   if (!prior.complete) {
     const diagnostics = [];
     if (appended.decision_records.length > 0) diagnostics.push({
@@ -18042,31 +20533,26 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
     prior.artifacts[stage],
     source_revision: sourceRevision
   };
-  const clarification = { prior_state: prior.state, append_batch: appended };
+  const clarification = clarificationAppendInput(
+    prior.state,
+    prior.source_pack,
+    sourcePack
+  );
   const caseDrafts = priorArtifacts.case_drafts;
   const result = evaluateAdapterRevision({
     source_pack: sourcePack,
     evidence_claims: priorArtifacts.evidence_claims,
     behavior_views: priorArtifacts.behavior_views,
     case_drafts: caseDrafts
-  }, clarification, registry);
+  }, clarification, registry, prior.workflow_state ?? null);
   if (result.status === "finished" || result.status === "need_user_answers") return null;
   if (result.status !== "need_revision") return fatalReply(
     "RUNNER_PROTOCOL_VIOLATION",
     "Pure revision evaluation returned an unrecognized clarification result."
   );
-  const route = mapInternalRevision(result);
-  if (route.kind === "fatal") return fatalReply(
-    route.code,
-    "Pure revision diagnostics have no unique Agent-writable artifact owner."
-  );
-  if (route.stage !== "source_pack") return fatalReply(
-    "RUN_INTEGRITY_ERROR",
-    "Prior accepted artifacts cannot be reused to validate this source revision."
-  );
   return { kind: "need_revision", diagnostics: result.diagnostics };
 }
-async function acceptedRunIntegrity(runDirectory, revisions, registry) {
+async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstance) {
   if (revisions.length === 0) return { kind: "accepted_context", active: null };
   for (let index = 0; index < revisions.length; index += 1) {
     if (revisions[index] !== index) return fatalReply(
@@ -18092,6 +20578,11 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       /** @type {Record<string, unknown>} */
       sourceArtifact.value
     );
+    if (sourcePack.schema_version !== "2.1.0") return migrationRequired();
+    if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "Accepted Source Pack belongs to a different run instance."
+    );
     if (sourcePack.source_revision !== sourceRevision) return fatalReply(
       "RUN_INTEGRITY_ERROR",
       "Accepted Source Pack revision does not match its revision directory."
@@ -18105,6 +20596,10 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
     if (sourceDiagnostics.length > 0) return fatalReply(
       "RUN_INTEGRITY_ERROR",
       "Accepted Source Pack failed deterministic schema validation."
+    );
+    if (validateSourceIntegrity(sourcePack).length > 0) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "Accepted Source Pack failed source-content integrity validation."
     );
     if (sourceRevision === 0 && initialClarificationHistoryDiagnostics(sourcePack).length > 0) {
       return fatalReply(
@@ -18174,16 +20669,14 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       } else caseDrafts = record2;
     }
     const clarificationInput = sourceRevision === 0 ? {
-      prior_state: initialClarificationState(0, maximumEventSequence(sourcePack)),
+      prior_state: initialClarificationState(0, maximumEventSequence2(sourcePack)),
       append_batch: { decision_records: [], clarification_events: [] }
-    } : {
-      prior_state: previousState,
-      append_batch: appendBatch(
-        /** @type {Record<string, unknown>} */
-        previousSource,
-        sourcePack
-      )
-    };
+    } : clarificationAppendInput(
+      previousState,
+      /** @type {Record<string, unknown>} */
+      previousSource,
+      sourcePack
+    );
     if (caseDrafts) {
       const artifacts = {
         source_pack: sourcePack,
@@ -18197,7 +20690,12 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         ),
         case_drafts: caseDrafts
       };
-      const replay = evaluateAdapterRevision(artifacts, clarificationInput, registry);
+      const replay = evaluateAdapterRevision(
+        artifacts,
+        clarificationInput,
+        registry,
+        active?.workflow_state ?? null
+      );
       if (replay.status !== "finished" && replay.status !== "need_user_answers" || !replay.clarification_state || typeof replay.clarification_state !== "object") return fatalReply(
         "RUN_INTEGRITY_ERROR",
         "Accepted complete revision failed deterministic semantic replay."
@@ -18221,7 +20719,8 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
         artifacts,
         state,
         clarification_input: clarificationInput,
-        result: replay
+        result: replay,
+        workflow_state: replay.workflow_state ?? active?.workflow_state ?? null
       };
     } else {
       previousState = null;
@@ -18229,7 +20728,8 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry) {
       active = {
         complete: false,
         source_pack: sourcePack,
-        clarification_input: clarificationInput
+        clarification_input: clarificationInput,
+        workflow_state: active?.workflow_state ?? null
       };
     }
     previousSource = sourcePack;
@@ -18263,22 +20763,80 @@ async function advanceStrictExclusive(runDirectory) {
       try {
         if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
         runDirectory = await guardedAwait2(() => prepareRunStore(runDirectory));
+        const runInstance = await guardedAwait2(() => ensureRunInstance(runDirectory));
         await guardedAwait2(() => recoverStagingClaims(runDirectory));
         await guardedAwait2(() => cleanupTemporaryFiles(runDirectory));
         let revisions = await guardedAwait2(() => acceptedSourceRevisions(runDirectory));
         const acceptedAudit = await guardedAwait2(
-          () => acceptedRunIntegrity(runDirectory, revisions, registry)
+          () => acceptedRunIntegrity(runDirectory, revisions, registry, runInstance)
         );
         if ("status" in acceptedAudit) return acceptedAudit;
         const acceptedContext = (
           /** @type {any} */
           acceptedAudit
         );
+        let recoveryCheckpointArtifact = null;
+        try {
+          recoveryCheckpointArtifact = await guardedAwait2(() => readJsonIfPresent(
+            runDirectory,
+            path3.join(runDirectory, "checkpoint.json")
+          ));
+        } catch {
+          recoveryCheckpointArtifact = null;
+        }
+        const recoveryCheckpoint = (
+          /** @type {any} */
+          recoveryCheckpointArtifact?.value ?? null
+        );
+        if (acceptedContext.active && recoveryCheckpoint && recoveryCheckpoint.run_instance_id === runInstance.run_instance_id && recoveryCheckpoint.source_revision === acceptedContext.active.source_pack.source_revision && (recoveryCheckpoint.active_preview_presentation || recoveryCheckpoint.presentation_snapshot)) {
+          acceptedContext.active.workflow_state = {
+            ...acceptedContext.active.workflow_state ?? {},
+            presentation_snapshot: recoveryCheckpoint.active_preview_presentation ?? recoveryCheckpoint.presentation_snapshot
+          };
+        }
+        if (acceptedContext.active) {
+          const activeRevision = Number(acceptedContext.active.source_pack.source_revision);
+          const activeIsReady = acceptedContext.active.complete && acceptedContext.active.result?.status === "finished";
+          const currentState = (
+            /** @type {any} */
+            await guardedAwait2(() => readCurrentState(runDirectory))
+          );
+          if (currentState?.status === "ready" && (currentState.source_revision < activeRevision || !activeIsReady)) {
+            await guardedAwait2(() => writeNonReadyCurrent(
+              runDirectory,
+              runInstance.run_instance_id,
+              activeRevision
+            ));
+          }
+        }
         let sourceCandidate = await guardedAwait2(() => stagedArtifact(
           runDirectory,
           "source_pack",
           revisions.length === 0 ? 0 : revisions[revisions.length - 1] + 1
         ));
+        const previewRequestPath = postReadyPreviewRequestPath(runDirectory);
+        const previewRequestText = await guardedAwait2(() => readTextIfPresent(
+          runDirectory,
+          previewRequestPath
+        ));
+        let previewCandidate = null;
+        if (previewRequestText !== null) {
+          try {
+            const value = JSON.parse(previewRequestText);
+            previewCandidate = { text: previewRequestText, value, digest: digest(value) };
+          } catch {
+            return revisionReply(runDirectory, "source_pack", revisions.at(-1) ?? 0, previewRequestText, [{
+              category: "schema",
+              code: "PREVIEW_REQUEST_JSON_INVALID",
+              path: "/",
+              message: "Private post-ready preview request is not valid JSON."
+            }]);
+          }
+        }
+        if (sourceCandidate && previewCandidate) return fatalReply(
+          "RUN_INTEGRITY_ERROR",
+          "A source revision and post-ready preview request cannot be staged together."
+        );
         if (sourceCandidate) {
           const candidateRecord = sourceCandidate.value && typeof sourceCandidate.value === "object" ? (
             /** @type {Record<string, unknown>} */
@@ -18320,6 +20878,7 @@ async function advanceStrictExclusive(runDirectory) {
             "RUN_INTEGRITY_ERROR",
             "Source revisions must begin at r000 and advance by exactly one."
           );
+          if (typeof candidateRecord?.schema_version === "string" && candidateRecord.schema_version !== "2.1.0") return migrationRequired();
           const diagnostics = sourceCandidate.parseDiagnostics.length > 0 ? sourceCandidate.parseDiagnostics : stableDiagnostics(validateAgainstSchema(
             sourceCandidate.value,
             registry.schemas.get(STAGE_SCHEMA.source_pack)
@@ -18332,6 +20891,10 @@ async function advanceStrictExclusive(runDirectory) {
             diagnostics
           );
           if (candidateRecord) {
+            if (candidateRecord.run_instance_id !== runInstance.run_instance_id) return fatalReply(
+              "RUN_INTEGRITY_ERROR",
+              "Staged Source Pack belongs to a different run instance."
+            );
             const transition = revisions.length === 0 ? historySequenceIntegrity(candidateRecord) : sourceRevisionIntegrity(
               /** @type {Record<string, unknown>} */
               (await guardedAwait2(() => readJson(
@@ -18355,6 +20918,14 @@ async function advanceStrictExclusive(runDirectory) {
             candidateRevision,
             sourceCandidate.value,
             identityDiagnostics
+          );
+          const sourceIntegrityDiagnostics = validateSourceIntegrity(sourceCandidate.value);
+          if (sourceIntegrityDiagnostics.length > 0) return revisionReply(
+            runDirectory,
+            "source_pack",
+            candidateRevision,
+            sourceCandidate.value,
+            sourceIntegrityDiagnostics
           );
           const initialControlDiagnostics = candidateRevision === 0 && candidateRecord ? initialClarificationHistoryDiagnostics(candidateRecord) : [];
           if (initialControlDiagnostics.length > 0) return revisionReply(
@@ -18396,42 +20967,182 @@ async function advanceStrictExclusive(runDirectory) {
             sourceCandidate.value,
             sourceCandidate
           ));
+          await guardedAwait2(() => writeNonReadyCurrent(
+            runDirectory,
+            runInstance.run_instance_id,
+            candidateRevision
+          ));
+          const priorActiveContext = acceptedContext.active;
           acceptedContext.active = {
             complete: false,
             source_pack: (
               /** @type {Record<string, unknown>} */
               sourceCandidate.value
             ),
+            workflow_state: priorActiveContext?.workflow_state ?? null,
             clarification_input: candidateRevision === 0 ? {
               prior_state: initialClarificationState(
                 0,
-                maximumEventSequence(
+                maximumEventSequence2(
                   /** @type {Record<string, unknown>} */
                   sourceCandidate.value
                 )
               ),
               append_batch: { decision_records: [], clarification_events: [] }
-            } : {
-              prior_state: acceptedContext.active.state,
-              append_batch: appendBatch(
-                acceptedContext.active.source_pack,
-                /** @type {Record<string, unknown>} */
-                sourceCandidate.value
-              )
-            }
+            } : clarificationAppendInput(
+              priorActiveContext.state,
+              priorActiveContext.source_pack,
+              /** @type {Record<string, unknown>} */
+              sourceCandidate.value
+            )
           };
           const sourceDigests = await guardedAwait2(() => acceptedDigests(runDirectory, candidateRevision));
-          await guardedAwait2(() => writeCheckpoint(runDirectory, checkpoint(
+          const sourceCheckpoint = checkpoint(
             candidateRevision,
             "source_pack",
             /** @type {Record<string, unknown>} */
             sourceCandidate.value,
             null,
-            sourceDigests
-          )));
+            sourceDigests,
+            runInstance.run_instance_id,
+            priorActiveContext?.workflow_state ?? null,
+            recoveryCheckpoint
+          );
+          if (recoveryCheckpoint?.preview_state === "active") {
+            sourceCheckpoint.preview_epoch = Number(recoveryCheckpoint.preview_epoch ?? 0) + 1;
+            sourceCheckpoint.preview_state = "consumed";
+            sourceCheckpoint.active_preview_presentation = null;
+          }
+          await guardedAwait2(() => writeCheckpoint(runDirectory, sourceCheckpoint));
           revisions = await guardedAwait2(() => acceptedSourceRevisions(runDirectory));
         }
-        if (revisions.length === 0) return artifactRequest(0, "source_pack");
+        if (previewCandidate) {
+          const active = acceptedContext.active;
+          if (!active?.complete || active.result?.status !== "finished") return revisionReply(
+            runDirectory,
+            "source_pack",
+            revisions.at(-1) ?? 0,
+            previewCandidate.value,
+            [{
+              category: "classification",
+              code: "POST_READY_PREVIEW_NOT_READY",
+              path: "/",
+              message: "A post-ready preview requires the current highest accepted revision to be ready."
+            }]
+          );
+          const previewDiagnostics = artifactDiagnostics(
+            previewCandidate.value,
+            registry.schemas.get("post-ready-preview-request.schema.json")
+          );
+          if (previewDiagnostics.length > 0) return revisionReply(
+            runDirectory,
+            "source_pack",
+            revisions.at(-1) ?? 0,
+            previewCandidate.value,
+            previewDiagnostics
+          );
+          const currentState = (
+            /** @type {any} */
+            await guardedAwait2(() => readCurrentState(runDirectory))
+          );
+          const result2 = active.result;
+          if (!currentState || currentState.status !== "ready" || currentState.source_revision !== result2.source_revision || currentState.bundle_digest !== result2.bundle_digest || currentState.plan_digest !== result2.bundle.execution_plan.plan_digest) return fatalReply(
+            "RUN_INTEGRITY_ERROR",
+            "The ready pointer does not match the highest accepted ready revision."
+          );
+          const storedCheckpoint = (
+            /** @type {any} */
+            (await guardedAwait2(() => readJsonIfPresent(
+              runDirectory,
+              path3.join(runDirectory, "checkpoint.json")
+            )))?.value ?? {}
+          );
+          const processed = processPreviewRequest({
+            request: previewCandidate.value,
+            state: storedCheckpoint,
+            ready: {
+              run_instance_id: runInstance.run_instance_id,
+              source_revision: result2.source_revision,
+              bundle_digest: result2.bundle_digest,
+              plan_digest: result2.bundle.execution_plan.plan_digest,
+              plan_change_head_seq: result2.workflow_state.execution_plan.plan_change_head_seq,
+              confirmation_semantic_digest: result2.bundle.execution_plan.confirmation.confirmation_semantic_digest,
+              items: result2.bundle.execution_plan.items
+            },
+            compilerVersion: registry.compilerVersion
+          });
+          if (processed.kind === "rejected") return revisionReply(
+            runDirectory,
+            "source_pack",
+            result2.source_revision,
+            previewCandidate.value,
+            processed.diagnostics
+          );
+          const updatedCheckpoint = {
+            ...storedCheckpoint,
+            preview_epoch: processed.state.preview_epoch,
+            preview_state: processed.state.preview_state,
+            active_preview_presentation: processed.state.active_preview_presentation,
+            last_preview_request: processed.state.last_preview_request,
+            presentation_snapshot: processed.presentation,
+            presentation_snapshot_digest: processed.presentation ? digest(processed.presentation) : null
+          };
+          await guardedAwait2(() => writeCheckpoint(runDirectory, updatedCheckpoint));
+          await guardedAwait2(() => discardPostReadyPreviewRequest(runDirectory, previewCandidate));
+          if (processed.kind === "cancelled") return finishedReply(
+            result2,
+            updatedCheckpoint,
+            currentState,
+            outputPaths(runDirectory, result2.source_revision).markdown,
+            "POST_READY_CHANGE_CANCELLED"
+          );
+          const groups = processed.presentation.groups.map((group) => ({
+            question_id: group.question_id,
+            presentation_id: processed.presentation.presentation_id,
+            group_id: group.group_id,
+            question: group.question,
+            affected_items: group.item_refs.map((item) => ({
+              item_kind: item.item_kind,
+              item_id: item.item_id,
+              title: item.title
+            })),
+            counts_by_kind: group.item_refs.reduce((counts, item) => {
+              counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
+              return counts;
+            }, { case: 0, formal_test_point: 0, exploratory: 0 }),
+            risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+            options: group.allowed_options,
+            answer_example: group.answer_example
+          }));
+          return {
+            status: "need_user_answers",
+            purpose: processed.presentation.purpose,
+            entry_context: "post_ready_change",
+            run_instance_id: runInstance.run_instance_id,
+            run_identity_digest: result2.workflow_state.execution_plan.run_identity_digest,
+            source_revision: result2.source_revision,
+            next_event_seq: Number(updatedCheckpoint.workflow_event_head_seq ?? 0) + 1,
+            presentation_id: processed.presentation.presentation_id,
+            presentation_digest: digest(processed.presentation),
+            execution_plan: result2.bundle.execution_plan,
+            ready_binding: {
+              bundle_digest: result2.bundle_digest,
+              plan_digest: result2.bundle.execution_plan.plan_digest,
+              confirmation_semantic_digest: result2.bundle.execution_plan.confirmation.confirmation_semantic_digest
+            },
+            proposed_change: previewCandidate.value.proposed_change,
+            groups,
+            preview_control: nextPreviewControl({
+              run_instance_id: runInstance.run_instance_id,
+              source_revision: result2.source_revision,
+              bundle_digest: result2.bundle_digest,
+              plan_digest: result2.bundle.execution_plan.plan_digest,
+              confirmation_semantic_digest: result2.bundle.execution_plan.confirmation.confirmation_semantic_digest
+            }, updatedCheckpoint, registry.compilerVersion),
+            diagnostics: []
+          };
+        }
+        if (revisions.length === 0) return artifactRequest(0, "source_pack", runInstance.run_instance_id);
         const sourceRevision = revisions[revisions.length - 1];
         const sourceAccepted = await guardedAwait2(() => readJson(
           runDirectory,
@@ -18446,7 +21157,8 @@ async function advanceStrictExclusive(runDirectory) {
           registry.schemas.get(STAGE_SCHEMA.source_pack)
         );
         const acceptedSourcePolicy = resolveSourcePolicy(sourcePack);
-        if (acceptedSourceDiagnostics.length > 0 || acceptedSourcePolicy.diagnostics.length > 0) return fatalReply(
+        const acceptedSourceIntegrity = validateSourceIntegrity(sourcePack);
+        if (acceptedSourceDiagnostics.length > 0 || acceptedSourceIntegrity.length > 0 || acceptedSourcePolicy.diagnostics.length > 0) return fatalReply(
           "RUN_INTEGRITY_ERROR",
           "Accepted Source Pack failed deterministic integrity validation."
         );
@@ -18481,7 +21193,7 @@ async function advanceStrictExclusive(runDirectory) {
             candidate = null;
           }
           if (!artifact) {
-            if (!candidate) return artifactRequest(sourceRevision, typedStage);
+            if (!candidate) return artifactRequest(sourceRevision, typedStage, runInstance.run_instance_id);
             const diagnostics2 = candidate.parseDiagnostics.length > 0 ? candidate.parseDiagnostics : artifactDiagnostics(candidate.value, registry.schemas.get(STAGE_SCHEMA[typedStage]));
             if (diagnostics2.length > 0) return revisionReply(
               runDirectory,
@@ -18564,7 +21276,10 @@ async function advanceStrictExclusive(runDirectory) {
               typedStage,
               sourcePack,
               null,
-              digests2
+              digests2,
+              runInstance.run_instance_id,
+              acceptedContext.active?.workflow_state ?? null,
+              recoveryCheckpoint
             )));
           }
           const diagnostics = artifactDiagnostics(
@@ -18619,7 +21334,7 @@ async function advanceStrictExclusive(runDirectory) {
         let caseFromStaging = false;
         if (!caseArtifact) {
           const candidate = caseCandidate;
-          if (!candidate) return artifactRequest(sourceRevision, "case_drafts");
+          if (!candidate) return artifactRequest(sourceRevision, "case_drafts", runInstance.run_instance_id);
           const diagnostics = candidate.parseDiagnostics.length > 0 ? candidate.parseDiagnostics : artifactDiagnostics(candidate.value, registry.schemas.get(STAGE_SCHEMA.case_drafts));
           if (diagnostics.length > 0) return revisionReply(
             runDirectory,
@@ -18682,7 +21397,8 @@ async function advanceStrictExclusive(runDirectory) {
         const result = !caseFromStaging && activeContext.complete ? activeContext.result : evaluateAdapterRevision(
           evaluationArtifacts,
           activeContext.clarification_input,
-          registry
+          registry,
+          activeContext.workflow_state ?? null
         );
         if (result.status === "need_revision") {
           if (!caseFromStaging) return fatalReply(
@@ -18692,7 +21408,7 @@ async function advanceStrictExclusive(runDirectory) {
           const route = mapInternalRevision(result);
           if (route.kind === "fatal") return fatalReply(
             route.code,
-            "Pure revision diagnostics have no unique Agent-writable artifact owner."
+            `Pure revision diagnostics have no unique Agent-writable artifact owner: ${canonicalStringify(result.diagnostics)}`
           );
           const stage = (
             /** @type {keyof typeof STAGE_SCHEMA} */
@@ -18730,17 +21446,97 @@ async function advanceStrictExclusive(runDirectory) {
         ));
         const digests = await guardedAwait2(() => acceptedDigests(runDirectory, sourceRevision));
         if (result.status === "need_user_answers") {
-          await guardedAwait2(() => writeCheckpoint(runDirectory, checkpoint(
+          const workflowState = (
+            /** @type {Record<string,unknown>|null} */
+            result.workflow_state ?? null
+          );
+          const checkpointValue2 = checkpoint(
             sourceRevision,
             "verification",
             sourcePack,
             clarificationState,
-            digests
-          )));
+            digests,
+            runInstance.run_instance_id,
+            workflowState,
+            recoveryCheckpoint
+          );
+          await guardedAwait2(() => writeCheckpoint(runDirectory, checkpointValue2));
+          await guardedAwait2(() => writeNonReadyCurrent(
+            runDirectory,
+            runInstance.run_instance_id,
+            sourceRevision
+          ));
+          if (result.purpose === "execution_closure" || result.purpose === "final_confirmation") {
+            const plan = result.execution_plan;
+            const groups = result.presentation.groups.map((group) => ({
+              question_id: group.question_id,
+              presentation_id: result.presentation.presentation_id,
+              group_id: group.group_id,
+              question: group.question,
+              affected_items: group.item_refs.map((item) => ({
+                item_kind: item.item_kind,
+                item_id: item.item_id,
+                title: item.title
+              })),
+              counts_by_kind: group.item_refs.reduce((counts, item) => {
+                counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
+                return counts;
+              }, { case: 0, formal_test_point: 0, exploratory: 0 }),
+              risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+              options: group.allowed_options,
+              answer_example: group.answer_example
+            }));
+            return {
+              status: "need_user_answers",
+              purpose: result.purpose,
+              entry_context: result.entry_context,
+              run_instance_id: runInstance.run_instance_id,
+              source_revision: sourceRevision,
+              next_event_seq: result.next_event_seq,
+              presentation_id: result.presentation.presentation_id,
+              presentation_digest: digest(result.presentation),
+              execution_plan: plan,
+              groups,
+              ...result.purpose === "execution_closure" ? {
+                pending_items: plan.items.filter((item) => item.execution_disposition === "pending"),
+                resume_hint: plan.status === "paused" ? `Resume run ${runInstance.run_instance_id} at ${plan.resume_target}.` : null
+              } : {
+                prompt_id: result.presentation.presentation_id,
+                execute_summary: { case_ids: plan.runner_case_ids },
+                do_not_execute_summary: plan.items.filter((item) => item.execution_disposition === "do_not_execute").map((item) => ({ item_kind: item.item_kind, item_id: item.item_id, title: item.title })),
+                critical_high_do_not_execute: [],
+                pending_count: 0
+              },
+              diagnostics: []
+            };
+          }
           return {
             status: "need_user_answers",
+            purpose: "semantic_clarification",
+            entry_context: "active_analysis",
+            run_instance_id: runInstance.run_instance_id,
             source_revision: sourceRevision,
-            stage: "clarification",
+            next_event_seq: result.next_event_seq,
+            presentation_id: result.presentation.presentation_id,
+            presentation_digest: digest(result.presentation),
+            groups: result.presentation.groups.map((group) => ({
+              question_id: group.question_id,
+              presentation_id: result.presentation.presentation_id,
+              group_id: group.group_id,
+              question: group.question,
+              affected_items: group.item_refs.map((item) => ({
+                item_kind: item.item_kind,
+                item_id: item.item_id,
+                title: item.title
+              })),
+              counts_by_kind: group.item_refs.reduce((counts, item) => {
+                counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
+                return counts;
+              }, { case: 0, formal_test_point: 0, exploratory: 0 }),
+              risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+              options: group.allowed_options,
+              answer_example: group.answer_example
+            })),
             diagnostics: [],
             blockers: result.pending_root_issues.map((item) => ({
               root_issue_id: item.root_issue_id,
@@ -18766,25 +21562,38 @@ async function advanceStrictExclusive(runDirectory) {
           result.markdown
         ));
         digests.test_bundle = result.bundle_digest;
-        await guardedAwait2(() => writeCheckpoint(runDirectory, checkpoint(
+        const priorCheckpointArtifact = recoveryCheckpointArtifact;
+        const priorCheckpoint = (
+          /** @type {Record<string,unknown>|null} */
+          priorCheckpointArtifact?.value ?? null
+        );
+        const checkpointValue = checkpoint(
           sourceRevision,
           "finished",
           sourcePack,
           clarificationState,
-          digests
-        )));
+          digests,
+          runInstance.run_instance_id,
+          result.workflow_state ?? null,
+          priorCheckpoint
+        );
+        if (priorCheckpoint?.preview_state === "active") {
+          checkpointValue.preview_epoch = Number(priorCheckpoint.preview_epoch ?? 0) + 1;
+          checkpointValue.preview_state = "consumed";
+          checkpointValue.active_preview_presentation = null;
+          checkpointValue.presentation_snapshot = null;
+          checkpointValue.presentation_snapshot_digest = null;
+        }
+        await guardedAwait2(() => writeCheckpoint(runDirectory, checkpointValue));
         const current = {
+          run_instance_id: runInstance.run_instance_id,
           source_revision: sourceRevision,
           bundle_path: paths.bundle,
           bundle_digest: result.bundle_digest,
-          markdown_path: paths.markdown
+          plan_digest: result.bundle.execution_plan.plan_digest
         };
-        await guardedAwait2(() => atomicWriteJson(
-          runDirectory,
-          outputPaths(runDirectory, sourceRevision).current,
-          current
-        ));
-        return { status: "finished", ...current };
+        await guardedAwait2(() => writeReadyCurrent(runDirectory, current));
+        return finishedReply(result, checkpointValue, current, paths.markdown);
       } finally {
         await baseGuardedAwait(releaseRunLock());
       }
@@ -18842,7 +21651,7 @@ function fatalReply2(code2, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-    const compilerVersion = true ? "0.1.0" : "0.1.0";
+    const compilerVersion = true ? "0.3.0" : "0.3.0";
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1 ? fatalReply2(
       "RUNNER_ARGUMENTS_INVALID",

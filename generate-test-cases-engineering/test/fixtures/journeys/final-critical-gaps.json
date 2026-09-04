@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "2.1.0",
   "source_revision": 4,
   "compiler_version": "0.1.0",
   "lineage": {
@@ -7,7 +7,7 @@
     "case_draft_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
   "evidence_claims": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 4,
     "claims": [
       {
@@ -201,7 +201,7 @@
     ]
   },
   "obligations_artifact": {
-    "schema_version": "2.0.0",
+    "schema_version": "2.1.0",
     "source_revision": 4,
     "obligations": [
       {

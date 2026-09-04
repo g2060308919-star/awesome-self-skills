@@ -107,7 +107,7 @@
   "properties": {
     "input_digest": { "$ref": "#/$defs/sha256" }, "source_revision": { "type": "integer", "minimum": 0 },
     "stage": { "enum": ["source_pack", "evidence_claims", "behavior_views", "test_obligations", "case_drafts", "verification", "final_bundle", "finished"] },
-    "compiler_version": { "type": "string", "minLength": 1 }, "schema_version": { "const": "2.0.0" },
+    "compiler_version": { "type": "string", "minLength": 1 }, "schema_version": { "const": "2.1.0" },
     "run_instance_id": { "type": "string", "minLength": 1 }, "accepted_artifact_digests": { "$ref": "#/$defs/digest_map" },
     "audit_lineage": { "$ref": "#/$defs/digest_map" }, "clarification_event_seq": { "type": "integer", "minimum": 0 },
     "asked_root_issue_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },

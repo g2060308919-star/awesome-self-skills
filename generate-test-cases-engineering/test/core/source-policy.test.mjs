@@ -278,7 +278,7 @@ test('source policy handles a reversed 5000-rule supersedes chain without recurs
     scope: 'checkout', authority: 'owner', status: 'effective'
   }));
   const sourcePack = {
-    schema_version: '2.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout', sources, locators: [],
+    schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout', sources, locators: [],
     source_policy: { rules: [...rules].reverse() }, decision_records: [], clarification_events: [], execution_events: []
   };
 

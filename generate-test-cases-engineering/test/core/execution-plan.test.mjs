@@ -21,7 +21,7 @@ function caseEntry(caseId, status, obligationIds) {
 /** @returns {any} */
 function semanticBundle() {
   return {
-    schema_version: '2.0.0', source_revision: 0,
+    schema_version: '2.1.0', source_revision: 0,
     grounded: [caseEntry('case_a', 'grounded', ['tp_a', 'tp_shared'])],
     conditional: [
       caseEntry('case_b', 'conditional', ['tp_b']),
@@ -40,7 +40,10 @@ function semanticBundle() {
         { obligation_id: 'tp_blocked', status: 'blocked' },
         { obligation_id: 'tp_na', status: 'not_applicable' }
       ] },
-      not_applicable: [{ obligation_id: 'tp_na', exclusion_claim_id: 'claim_exclusion', scope: 'checkout', support_review: 'supported' }]
+      not_applicable: [
+        { subject_kind: 'formal_test_point', obligation_id: 'tp_na', exclusion_claim_id: 'claim_exclusion', scope: 'checkout', support_review: 'supported', reason: 'Guests excluded.' },
+        { subject_kind: 'requirement_fact', fact_id: 'fact_na', exclusion_claim_id: 'claim_exclusion', scope: 'checkout', support_review: 'supported', reason: 'Guests excluded.' }
+      ]
     }
   };
 }
@@ -84,6 +87,7 @@ test('decision inventory has one item per Case and only case-less Blocked or Not
   ]);
   assert.deepEqual(result.plan.items.find((/** @type {any} */ item) => item.item_id === 'case_a').related_obligation_ids, ['tp_a', 'tp_shared']);
   assert.equal(result.plan.items.filter((/** @type {any} */ item) => item.item_id === 'tp_b').length, 0);
+  assert.equal(result.plan.items.some((/** @type {any} */ item) => item.item_id === 'fact_na'), false);
 });
 
 test('defaults keep truth separate from execution and force non-grounded choices pending', () => {
@@ -97,6 +101,7 @@ test('defaults keep truth separate from execution and force non-grounded choices
     byId.get('tp_na').semantic_status, byId.get('tp_na').execution_disposition,
     byId.get('tp_na').reason_code, byId.get('tp_na').basis.origin
   ], ['not_applicable', 'do_not_execute', 'not_applicable', 'derived_not_applicable']);
+  assert.equal(byId.get('tp_na').reason, 'Guests excluded.');
   for (const id of ['case_b', 'case_c', 'tp_blocked', 'exp_a']) {
     assert.equal(byId.get(id).execution_disposition, 'pending', id);
     assert.equal(byId.get(id).reason_code, null, id);

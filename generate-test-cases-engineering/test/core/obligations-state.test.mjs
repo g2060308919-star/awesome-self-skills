@@ -102,7 +102,7 @@ test('state obligations hand-count every explicit valid transition once, includi
   assert.equal(actual.length, 3);
   assert.deepEqual(actual, expectedStateSeeds);
   const obligationsArtifact = {
-    schema_version: '2.0.0', source_revision: 7,
+    schema_version: '2.1.0', source_revision: 7,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

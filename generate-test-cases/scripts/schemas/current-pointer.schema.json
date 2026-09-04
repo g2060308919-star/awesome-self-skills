@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "current-pointer.schema.json",
+  "oneOf": [
+    {
+      "type": "object", "required": ["status", "run_instance_id", "source_revision", "bundle_path", "bundle_digest", "plan_digest"],
+      "properties": {
+        "status": { "const": "ready" }, "run_instance_id": { "type": "string", "minLength": 1 },
+        "source_revision": { "type": "integer", "minimum": 0 }, "bundle_path": { "type": "string", "minLength": 1 },
+        "bundle_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "plan_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object", "required": ["status", "run_instance_id", "active_source_revision", "reason", "previous_ready_revision"],
+      "properties": {
+        "status": { "const": "stale" }, "run_instance_id": { "type": "string", "minLength": 1 },
+        "active_source_revision": { "type": "integer", "minimum": 0 }, "reason": { "const": "higher_revision_not_ready" },
+        "previous_ready_revision": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

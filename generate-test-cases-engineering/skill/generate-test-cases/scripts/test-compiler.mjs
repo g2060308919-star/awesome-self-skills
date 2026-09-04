@@ -353,7 +353,7 @@ var behavior_views_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
   properties: {
-    schema_version: { const: "2.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     views: { type: "array", items: { type: "object", required: ["view_id", "type", "scope", "source_claim_ids", "elements", "relations"], properties: {
       view_id: { type: "string", minLength: 1 },
@@ -418,7 +418,7 @@ var case_drafts_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
   properties: {
-    schema_version: { const: "2.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     cases: {
       type: "array",
@@ -480,7 +480,7 @@ var evidence_claims_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "claims", "fact_ledger"],
   properties: {
-    schema_version: { const: "2.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     claims: {
       type: "array",
@@ -607,9 +607,9 @@ var source_pack_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "source-pack.schema.json",
   type: "object",
-  required: ["schema_version", "source_revision", "run_instance_id", "run_scope", "sources", "locators", "source_policy", "decision_records", "clarification_events", "execution_events"],
+  required: ["schema_version", "source_revision", "run_instance_id", "run_scope", "sources", "locators", "source_reviews", "source_policy", "decision_records", "clarification_events", "execution_events"],
   properties: {
-    schema_version: { const: "2.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     run_instance_id: { type: "string", pattern: "^RUN-[0-9a-fA-F-]{36}$" },
     run_scope: { type: "string", minLength: 1 },
@@ -619,6 +619,7 @@ var source_pack_schema_default = {
       { type: "object", required: ["locator_id", "source_id", "type", "table_cell", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "table-cell" }, table_cell: { type: "object", required: ["sheet", "cell"], properties: { sheet: { type: "string", minLength: 1 }, cell: { type: "string", minLength: 1 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false },
       { type: "object", required: ["locator_id", "source_id", "type", "page_region", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "page-region" }, page_region: { type: "object", required: ["page", "region"], properties: { page: { type: "integer", minimum: 1 }, region: { type: "string", minLength: 1 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false }
     ] } },
+    source_reviews: { type: "array", items: { type: "object", required: ["source_id", "content_digest", "spans"], properties: { source_id: { type: "string", minLength: 1 }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, spans: { type: "array", items: { type: "object", required: ["span_id", "start", "end", "classification", "rationale"], properties: { span_id: { type: "string", minLength: 1 }, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 }, classification: { enum: ["normative", "non_normative", "uncertain"] }, rationale: { type: "string", minLength: 1, pattern: "\\S" } }, additionalProperties: false } } }, additionalProperties: false } },
     source_policy: { type: "object", required: ["rules"], properties: { rules: { type: "array", items: { type: "object", required: ["rule_id", "source_ids", "scope", "authority", "status"], properties: { rule_id: { type: "string", minLength: 1 }, source_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, supersedes: { type: "array", items: { type: "string" }, uniqueItems: true }, scope: { type: "string", minLength: 1 }, authority: { type: "string", minLength: 1 }, status: { enum: ["effective", "superseded", "reference"] } }, additionalProperties: false } } }, additionalProperties: false },
     decision_records: { type: "array", items: { oneOf: [
       { type: "object", required: ["decision_id", "question_id", "presentation_id", "decision_group_ids", "root_issue_ids", "affected_obligation_ids", "clarification_event_seq", "confirmer", "confirmed_at", "question", "answer", "disposition", "authority_scope", "effective_scope", "evidence_ref", "evidence_level"], properties: { decision_id: { type: "string", minLength: 1 }, question_id: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, affected_obligation_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, clarification_event_seq: { type: "integer", minimum: 1 }, confirmer: { type: "string", minLength: 1 }, confirmed_at: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 }, answer: { type: "string" }, disposition: { enum: ["final", "temporary", "unknown", "deferred"] }, authority_scope: { type: "string", minLength: 1 }, effective_scope: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, evidence_level: { enum: ["E1", "E3"] }, supersedes_decision_ids: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false },
@@ -639,6 +640,7 @@ var source_pack_schema_default = {
 };
 
 // src/decision-record.mjs
+import { createHash as createHash2 } from "node:crypto";
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -658,6 +660,143 @@ function scopeContains(container, candidate) {
   if (left.length === 0 || right.length === 0) return false;
   return left === "*" || left === right || right.startsWith(`${left}.`) || right.startsWith(`${left}/`);
 }
+function validateSourceIntegrity(sourcePack) {
+  const pack = isObject(sourcePack) ? sourcePack : {};
+  const sources = objectArray(pack.sources);
+  const locators = objectArray(pack.locators);
+  const reviews = objectArray(pack.source_reviews);
+  const sourceById = new Map(sources.flatMap((source) => typeof source.source_id === "string" ? [[source.source_id, source]] : []));
+  const diagnostics = [];
+  sources.forEach((source, index) => {
+    if (typeof source.content !== "string" || typeof source.content_digest !== "string") return;
+    const actualDigest = createHash2("sha256").update(source.content, "utf8").digest("hex");
+    if (source.content_digest !== actualDigest) diagnostics.push(diagnostic(
+      "SOURCE_CONTENT_DIGEST_MISMATCH",
+      `/sources/${index}/content_digest`,
+      "source content_digest must equal the SHA-256 of the exact UTF-8 source content"
+    ));
+  });
+  const reviewIndexesBySource = /* @__PURE__ */ new Map();
+  reviews.forEach((review, reviewIndex) => {
+    if (typeof review.source_id !== "string") return;
+    const indexes = reviewIndexesBySource.get(review.source_id) ?? [];
+    indexes.push(reviewIndex);
+    reviewIndexesBySource.set(review.source_id, indexes);
+    const source = sourceById.get(review.source_id);
+    if (!source) {
+      diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_SOURCE_DANGLING",
+        `/source_reviews/${reviewIndex}/source_id`,
+        "source review must reference an existing source"
+      ));
+      return;
+    }
+    if (review.content_digest !== source.content_digest) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_CONTENT_DIGEST_MISMATCH",
+      `/source_reviews/${reviewIndex}/content_digest`,
+      "source review must bind the exact immutable source version"
+    ));
+    if (typeof source.content !== "string") return;
+    const sourceContent = source.content;
+    const validSpans = [];
+    const seenSpanIds = /* @__PURE__ */ new Set();
+    objectArray(review.spans).forEach((span, spanIndex) => {
+      if (typeof span.span_id === "string") {
+        if (seenSpanIds.has(span.span_id)) diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_SPAN_ID_DUPLICATE",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}/span_id`,
+          "source review span IDs must be unique within one source"
+        ));
+        seenSpanIds.add(span.span_id);
+      }
+      const start = span.start;
+      const end = span.end;
+      if (typeof span.rationale !== "string" || span.rationale.trim().length === 0) {
+        diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_RATIONALE_INVALID",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}/rationale`,
+          "source review rationale must contain a non-whitespace explanation"
+        ));
+      }
+      if (typeof start !== "number" || typeof end !== "number" || end <= start) {
+        diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_SPAN_RANGE_INVALID",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+          "source review span end must be greater than start"
+        ));
+      } else if (start < 0 || end > sourceContent.length) {
+        diagnostics.push(diagnostic(
+          "SOURCE_REVIEW_SPAN_RANGE_OUT_OF_BOUNDS",
+          `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+          "source review span must fall within the exact source content"
+        ));
+      } else validSpans.push({ start, end, spanIndex });
+    });
+    let cursor = 0;
+    for (const span of validSpans) {
+      if (span.start < cursor) diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_SPAN_OVERLAP",
+        `/source_reviews/${reviewIndex}/spans/${span.spanIndex}`,
+        "source review spans must be ordered and non-overlapping"
+      ));
+      const gapEnd = Math.max(cursor, span.start);
+      if (/\S/u.test(sourceContent.slice(cursor, gapEnd))) diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_COVERAGE_GAP",
+        `/source_reviews/${reviewIndex}/spans/${span.spanIndex}`,
+        "source review spans must account for every non-whitespace source character"
+      ));
+      cursor = Math.max(cursor, span.end);
+    }
+    if (/\S/u.test(sourceContent.slice(cursor))) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_COVERAGE_GAP",
+      `/source_reviews/${reviewIndex}/spans`,
+      "source review spans must account for every non-whitespace source character"
+    ));
+  });
+  sources.forEach((source, sourceIndex) => {
+    if (typeof source.source_id !== "string") return;
+    const reviewIndexes = reviewIndexesBySource.get(source.source_id) ?? [];
+    if (reviewIndexes.length === 0) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_MISSING",
+      `/sources/${sourceIndex}`,
+      "every source must have one exhaustive source review"
+    ));
+    if (reviewIndexes.length > 1) diagnostics.push(diagnostic(
+      "SOURCE_REVIEW_DUPLICATE",
+      `/source_reviews/${reviewIndexes[1]}`,
+      "every source must have exactly one source review"
+    ));
+  });
+  locators.forEach((locator, index) => {
+    const source = typeof locator.source_id === "string" ? sourceById.get(locator.source_id) : void 0;
+    if (!source) return;
+    if (typeof locator.content_digest !== "string" || locator.content_digest !== source.content_digest) {
+      diagnostics.push(diagnostic(
+        "LOCATOR_CONTENT_DIGEST_MISMATCH",
+        `/locators/${index}/content_digest`,
+        "locator content_digest must bind the exact immutable source version"
+      ));
+    }
+    if (locator.type === "text-range" && isObject(locator.text_range) && typeof source.content === "string") {
+      const start = locator.text_range.start;
+      const end = locator.text_range.end;
+      if (typeof start === "number" && typeof end === "number" && end <= start) {
+        diagnostics.push(diagnostic(
+          "LOCATOR_RANGE_INVALID",
+          `/locators/${index}/text_range`,
+          "text-range end must be greater than start"
+        ));
+      } else if (typeof start === "number" && typeof end === "number" && (start < 0 || end > source.content.length)) {
+        diagnostics.push(diagnostic(
+          "LOCATOR_RANGE_OUT_OF_BOUNDS",
+          `/locators/${index}/text_range`,
+          "text-range must fall within the exact source content"
+        ));
+      }
+    }
+  });
+  return diagnostics;
+}
 function validateDecisionRecords(sourcePack) {
   const pack = isObject(sourcePack) ? sourcePack : {};
   const sources = objectArray(pack.sources);
@@ -676,6 +815,7 @@ function validateDecisionRecords(sourcePack) {
         `/locators/${index}/source_id`,
         `locator references unknown source "${typeof locator.source_id === "string" ? locator.source_id : ""}"`
       ));
+      return;
     }
   });
   const decisionsById = /* @__PURE__ */ new Map();
@@ -3232,6 +3372,67 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
     }];
   });
   for (const claimId of rawClaims.keys()) validateIteratively(claimId);
+  const directRangesBySource = /* @__PURE__ */ new Map();
+  for (const claim of acceptedClaims2.values()) {
+    if (claim.claim_form !== "direct" || typeof claim.source_id !== "string") continue;
+    for (const locatorId of stringArray2(claim.source_locator_ids)) {
+      const locator = locators.get(locatorId);
+      if (!locator || locator.source_id !== claim.source_id || locator.type !== "text-range" || !isObject3(locator.text_range)) continue;
+      const start = locator.text_range.start;
+      const end = locator.text_range.end;
+      if (typeof start !== "number" || typeof end !== "number") continue;
+      const ranges = directRangesBySource.get(claim.source_id) ?? [];
+      ranges.push({ start, end });
+      directRangesBySource.set(claim.source_id, ranges);
+    }
+  }
+  for (const [sourceId, ranges] of directRangesBySource) {
+    ranges.sort((left, right) => left.start - right.start || left.end - right.end);
+    const merged = [];
+    for (const range of ranges) {
+      const previous = merged[merged.length - 1];
+      if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+      else merged.push({ ...range });
+    }
+    directRangesBySource.set(sourceId, merged);
+  }
+  objectArray3(pack.source_reviews).forEach((review, reviewIndex) => {
+    if (typeof review.source_id !== "string") return;
+    const reviewSourceId = review.source_id;
+    const ranges = directRangesBySource.get(reviewSourceId) ?? [];
+    objectArray3(review.spans).forEach((span, spanIndex) => {
+      if (span.classification !== "normative" && span.classification !== "uncertain") return;
+      if (typeof span.start !== "number" || typeof span.end !== "number") return;
+      const content = String(sources.get(reviewSourceId)?.content ?? "");
+      let cursor = span.start;
+      let represented = true;
+      let lower = 0;
+      let upper = ranges.length;
+      while (lower < upper) {
+        const middle = lower + Math.floor((upper - lower) / 2);
+        if (ranges[middle].end <= span.start) lower = middle + 1;
+        else upper = middle;
+      }
+      for (let rangeIndex = lower; rangeIndex < ranges.length; rangeIndex += 1) {
+        const range = ranges[rangeIndex];
+        if (range.start >= span.end) break;
+        const nextStart = Math.max(span.start, range.start);
+        if (nextStart > cursor && content.slice(cursor, Math.min(nextStart, span.end)).trim().length > 0) {
+          represented = false;
+          break;
+        }
+        cursor = Math.max(cursor, Math.min(span.end, range.end));
+        if (cursor >= span.end) break;
+      }
+      if (represented && cursor < span.end && content.slice(cursor, span.end).trim().length > 0) represented = false;
+      if (!represented) diagnostics.push(diagnostic4(
+        "traceability",
+        "SOURCE_REVIEW_SPAN_UNCLAIMED",
+        `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
+        `${span.classification} source text must be represented by an accepted direct Claim locator`
+      ));
+    });
+  });
   factLedger2.forEach((entry, entryIndex) => {
     if (typeof entry.claim_id === "string") {
       if (!rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic4(
@@ -3740,7 +3941,7 @@ function validateClosedShape(context, diagnostics) {
     diagnostics.push(diagnostic5("classification", "CONTEXT_INVALID", "/", "classification context collections have invalid types"));
     return;
   }
-  if (obligations.schema_version !== "2.0.0" || drafts.schema_version !== "2.0.0" || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
+  if (obligations.schema_version !== "2.1.0" || drafts.schema_version !== "2.1.0" || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
     diagnostics.push(diagnostic5("classification", "SOURCE_REVISION_MISMATCH", "/", "all classification inputs must share source_revision"));
   }
   for (const [claimId, claim] of NATIVE_MAP_ENTRIES.call(evidence.claimsById)) {
@@ -4149,13 +4350,21 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const data = objectArray4(draft.data) ?? [];
   for (const datum of data) {
     if (!isNonblank(datum.name) || !isNonblank(datum.value) || !isRecord2(datum.provenance) || !isCanonicalString(isRecord2(datum.provenance) ? datum.provenance.ref : null) || !["evidence", "derivation"].includes(String(isRecord2(datum.provenance) ? datum.provenance.type : ""))) reasons.add("CASE_GATE_INVALID");
-    if (isRecord2(datum.provenance) && isCanonicalString(datum.provenance.ref)) evidenceRoots.add(datum.provenance.ref);
+    if (isRecord2(datum.provenance) && isCanonicalString(datum.provenance.ref)) {
+      evidenceRoots.add(datum.provenance.ref);
+      const referencedClaim = evidence.get(datum.provenance.ref)?.claim;
+      const expectedType = referencedClaim?.claim_form === "derived" ? "derivation" : "evidence";
+      if (referencedClaim && datum.provenance.type !== expectedType) {
+        reasons.add("CASE_DATA_PROVENANCE_TYPE_MISMATCH");
+      }
+    }
     applyReview(datum.support_review, reasons);
   }
   const steps = objectArray4(draft.steps) ?? [];
   const stepIds = /* @__PURE__ */ new Set();
   const expectationIds = /* @__PURE__ */ new Set();
   const expectationsForOwnership = [];
+  const formalOutcomeSignatures = /* @__PURE__ */ new Set();
   const requiredObservers = [];
   for (const [stepIndex, step] of steps.entries()) {
     if (!isCanonicalString(step.step_id) || stepIds.has(step.step_id)) {
@@ -4231,8 +4440,20 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       const windowValid = !oracle || oracle.window === void 0 || isNonblank(oracle.window);
       const withinBounded = !oracle || oracle.comparison !== "within" || oracle.tolerance !== void 0 && toleranceValid || oracle.window !== void 0 && windowValid;
       if (!oracle || !expectedField || !isNonblank(oracle[expectedField]) || !comparisonValid || !toleranceValid || !windowValid || !withinBounded) reasons.add("ORACLE_INVALID");
+      else if (expectation.kind === "obligation-oracle" && expectationFieldsValid) {
+        formalOutcomeSignatures.add(oracleSemanticId(step, expectation));
+      }
       applyReview(expectation.support_review, reasons);
     }
+  }
+  if (formalOutcomeSignatures.size > 1) {
+    diagnostics.push(diagnostic5(
+      "classification",
+      "CASE_OUTCOME_NOT_ATOMIC",
+      `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/steps`,
+      "one Case may close multiple Test Points only when they share one independently diagnosable observed outcome"
+    ));
+    reasons.add("CASE_OUTCOME_NOT_ATOMIC");
   }
   for (const step of steps) {
     for (const expectation of objectArray4(step.expectations) ?? []) {
@@ -5473,7 +5694,7 @@ var test_bundle_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "grounded", "conditional", "blocked", "exploratory", "coverage", "quality", "execution_plan"],
   properties: {
-    schema_version: { const: "2.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     execution_plan: { $ref: "#/$defs/ready_execution_plan" },
     grounded: {
@@ -5491,10 +5712,10 @@ var test_bundle_schema_default = {
           obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
           preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
+          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "value_origin", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, support_review: { const: "supported" } }, additionalProperties: false } },
+          ] }, value_origin: { enum: ["requirement", "source_description", "example", "derived", "temporary_assumption"] }, support_review: { const: "supported" } }, additionalProperties: false } },
           steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -5527,10 +5748,10 @@ var test_bundle_schema_default = {
           obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
           source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
           preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
+          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "value_origin", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
             { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
             { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
+          ] }, value_origin: { enum: ["requirement", "source_description", "example", "derived", "temporary_assumption"] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
           steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
           testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
             capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
@@ -5549,16 +5770,19 @@ var test_bundle_schema_default = {
         additionalProperties: false
       }
     },
-    blocked: { type: "array", items: { type: "object", required: ["obligation_id", "root_issue_id", "reason", "recovery", "risk"], properties: { obligation_id: { type: "string", minLength: 1 }, root_issue_id: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, recovery: { type: "object", required: ["missing_type", "required_material", "question"], properties: { missing_type: { type: "string", minLength: 1 }, required_material: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 } }, additionalProperties: false } }, additionalProperties: false } },
+    blocked: { type: "array", items: { type: "object", required: ["obligation_id", "root_issue_id", "subject", "reason", "scope", "recovery", "risk"], properties: { obligation_id: { type: "string", minLength: 1 }, root_issue_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, reason: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, recovery: { type: "object", required: ["missing_type", "required_material", "question"], properties: { missing_type: { type: "string", minLength: 1 }, required_material: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 } }, additionalProperties: false } }, additionalProperties: false } },
     exploratory: { type: "array", items: { type: "object", required: ["exploratory_id", "title", "scope", "risk", "reason"], properties: { exploratory_id: { type: "string", minLength: 1 }, title: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, reason: { type: "string", minLength: 1 } }, additionalProperties: false } },
     coverage: { type: "object", required: ["requirements", "formal", "executable", "expert_recall", "not_applicable"], properties: {
       requirements: { type: "object", required: ["total", "accounted", "entries"], properties: { total: { type: "integer", minimum: 0 }, accounted: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["fact_id", "status"], properties: { fact_id: { type: "string", minLength: 1 }, status: { enum: ["covered", "blocked", "not_applicable"] } }, additionalProperties: false } } }, additionalProperties: false },
       formal: { type: "object", required: ["total", "covered", "entries"], properties: { total: { type: "integer", minimum: 0 }, covered: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["obligation_id", "status"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { enum: ["grounded", "conditional", "blocked", "not_applicable"] } }, additionalProperties: false } } }, additionalProperties: false },
       executable: { type: "object", required: ["total", "grounded", "entries"], properties: { total: { type: "integer", minimum: 0 }, grounded: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["obligation_id", "case_id"], properties: { obligation_id: { type: "string", minLength: 1 }, case_id: { type: "string", minLength: 1 } }, additionalProperties: false } } }, additionalProperties: false },
       expert_recall: { type: "object", required: ["status", "limits"], properties: { status: { const: "benchmark_only" }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false },
-      not_applicable: { type: "array", items: { type: "object", required: ["obligation_id", "exclusion_claim_id", "scope", "support_review"], properties: { obligation_id: { type: "string", minLength: 1 }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false } }
+      not_applicable: { type: "array", items: { oneOf: [
+        { type: "object", required: ["subject_kind", "obligation_id", "subject", "exclusion_claim_id", "scope", "support_review", "reason"], properties: { subject_kind: { const: "formal_test_point" }, obligation_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" }, reason: { type: "string", pattern: "\\S" } }, additionalProperties: false },
+        { type: "object", required: ["subject_kind", "fact_id", "subject", "exclusion_claim_id", "scope", "support_review", "reason"], properties: { subject_kind: { const: "requirement_fact" }, fact_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" }, reason: { type: "string", pattern: "\\S" } }, additionalProperties: false }
+      ] } }
     }, additionalProperties: false },
-    quality: { type: "object", required: ["delivery_status", "compiler_version", "schema_version", "lineage", "limits"], properties: { delivery_status: { enum: ["no_applicable_formal_test_points", "no_deterministic_cases", "critical_gaps", "executable_subset_ready"] }, compiler_version: { type: "string", minLength: 1 }, schema_version: { const: "2.0.0" }, lineage: { type: "object", required: ["semantic_source_digest", "evidence_semantic_digest", "behavior_views_semantic_digest", "test_obligations_semantic_digest", "case_drafts_semantic_digest"], properties: { semantic_source_digest: { $ref: "#/$defs/sha256" }, evidence_semantic_digest: { $ref: "#/$defs/sha256" }, behavior_views_semantic_digest: { $ref: "#/$defs/sha256" }, test_obligations_semantic_digest: { $ref: "#/$defs/sha256" }, case_drafts_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false }
+    quality: { type: "object", required: ["delivery_status", "compiler_version", "schema_version", "lineage", "limits"], properties: { delivery_status: { enum: ["no_applicable_formal_test_points", "no_deterministic_cases", "critical_gaps", "executable_subset_ready"] }, compiler_version: { type: "string", minLength: 1 }, schema_version: { const: "2.1.0" }, lineage: { type: "object", required: ["semantic_source_digest", "evidence_semantic_digest", "behavior_views_semantic_digest", "test_obligations_semantic_digest", "case_drafts_semantic_digest"], properties: { semantic_source_digest: { $ref: "#/$defs/sha256" }, evidence_semantic_digest: { $ref: "#/$defs/sha256" }, behavior_views_semantic_digest: { $ref: "#/$defs/sha256" }, test_obligations_semantic_digest: { $ref: "#/$defs/sha256" }, case_drafts_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false }
   },
   additionalProperties: false
 };
@@ -5570,7 +5794,7 @@ var test_obligations_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   properties: {
-    schema_version: { const: "2.0.0" },
+    schema_version: { const: "2.1.0" },
     source_revision: { type: "integer", minimum: 0 },
     obligations: {
       type: "array",
@@ -6209,6 +6433,31 @@ function someArray2(values, predicate) {
     Reflect.apply(NATIVE_ARRAY_SOME3, values, [predicate])
   );
 }
+function obligationBusinessSubject(obligation, factIdsByObligation, primaryClaimByFactId, claimsById) {
+  const values = [];
+  const seen = /* @__PURE__ */ new Set();
+  const obligationId = String(obligation?.obligation_id ?? "");
+  const factIds = sortArray2([...factIdsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set()], compareCodePoints4);
+  for (let index = 0; index < factIds.length; index += 1) {
+    const value = String(primaryClaimByFactId.get(factIds[index])?.value ?? "").trim();
+    if (value.length > 0 && !seen.has(value)) {
+      seen.add(value);
+      pushArray2(values, value);
+    }
+  }
+  if (values.length === 0) {
+    const claimIds = sortArray2(strings(obligation?.source_claim_ids), compareCodePoints4);
+    for (let index = 0; index < claimIds.length; index += 1) {
+      const value = String(claimsById.get(claimIds[index])?.value ?? "").trim();
+      if (value.length > 0 && !seen.has(value)) {
+        seen.add(value);
+        pushArray2(values, value);
+      }
+    }
+  }
+  if (values.length > 0) return joinArray3(values, "; ");
+  return `Requirement in ${String(obligation?.scope ?? "unknown scope")}`;
+}
 var BundleReconciliationError = class extends TypeError {
   /** @param {Diagnostic[]} diagnostics */
   constructor(diagnostics) {
@@ -6483,11 +6732,11 @@ function normalizeContext(submittedContext) {
     diagnostic7("schema", "CONTEXT_INVALID", "/", "Task 10 context must be a closed own-data record")
   ]);
   requireClosed(submittedContext, CONTEXT_KEYS, "", diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
-  if (submittedContext.schema_version !== "2.0.0") pushArray2(diagnostics, diagnostic7(
+  if (submittedContext.schema_version !== "2.1.0") pushArray2(diagnostics, diagnostic7(
     "schema",
     "SCHEMA_VERSION_INVALID",
     "/schema_version",
-    "Task 10 requires schema version 2.0.0"
+    "Task 10 requires schema version 2.1.0"
   ));
   if (!Number.isSafeInteger(submittedContext.source_revision) || Number(submittedContext.source_revision) < 0) pushArray2(diagnostics, diagnostic7(
     "schema",
@@ -6547,6 +6796,20 @@ function normalizeContext(submittedContext) {
     limits,
     expertLimits
   };
+}
+function projectCaseDataOrigins(caseDraft, claimsById) {
+  const projected = structuredClone(caseDraft);
+  for (const datum of records(projected.data)) {
+    const provenance = isRecord3(datum.provenance) ? datum.provenance : {};
+    const claim = claimsById.get(String(provenance.ref ?? ""));
+    let origin = "source_description";
+    if (claim?.claim_form === "derived") origin = "derived";
+    else if (claim?.kind === "example") origin = "example";
+    else if (claim?.level === "E1" || claim?.kind === "assumption") origin = "temporary_assumption";
+    else if (claim?.kind === "requirement") origin = "requirement";
+    datum.value_origin = origin;
+  }
+  return projected;
 }
 function caseExpectations(caseDraft) {
   const expectations = [];
@@ -7672,6 +7935,7 @@ function buildBundleTrusted(context) {
   }
   const allFactsById = /* @__PURE__ */ new Map();
   const factsById = /* @__PURE__ */ new Map();
+  const primaryClaimByFactId = /* @__PURE__ */ new Map();
   const facts = [];
   for (const fact of allFacts) {
     const factId = String(fact.fact_id ?? "");
@@ -7690,6 +7954,7 @@ function buildBundleTrusted(context) {
       "fact ledger references must exist in accepted evidence"
     ));
     const owningClaim = claimsById.get(String(fact.claim_id ?? ""));
+    if (owningClaim) primaryClaimByFactId.set(factId, owningClaim);
     if (fact.status !== "diagnostic" && (owningClaim?.kind === "requirement" || owningClaim?.kind === "assumption")) {
       pushArray2(facts, fact);
       factsById.set(factId, fact);
@@ -7954,7 +8219,7 @@ function buildBundleTrusted(context) {
   }
   pushArray2(diagnostics, .../** @type {Diagnostic[]} */
   validateAgainstSchema({
-    schema_version: "2.0.0",
+    schema_version: "2.1.0",
     source_revision: normalized.sourceRevision,
     cases: executableCaseInput,
     obligation_dispositions: [],
@@ -7982,7 +8247,7 @@ function buildBundleTrusted(context) {
         evidenceGraph,
         diagnostics
       );
-      pushArray2(lane === "grounded" ? grounded : conditional, structuredClone(caseDraft));
+      pushArray2(lane === "grounded" ? grounded : conditional, projectCaseDataOrigins(caseDraft, claimsById));
     } else if (!(finalLanes.size === 1 && finalLanes.has("blocked"))) pushArray2(diagnostics, diagnostic7(
       "traceability",
       "CASE_DISPOSITION_MISMATCH",
@@ -8132,7 +8397,14 @@ function buildBundleTrusted(context) {
     pushArray2(blocked, {
       obligation_id: obligationId,
       root_issue_id: String(root.root_issue_id ?? ""),
+      subject: obligationBusinessSubject(
+        obligation,
+        factIdsByObligation,
+        primaryClaimByFactId,
+        claimsById
+      ),
       reason,
+      scope: String(obligation?.scope ?? ""),
       recovery: {
         missing_type: missingType2,
         required_material: joinArray3(sortArray2([...semanticRefs2], compareCodePoints4), ", "),
@@ -8212,6 +8484,7 @@ function buildBundleTrusted(context) {
       ));
     }
   }
+  const terminalNotApplicable = [];
   for (const route of factRoutes) if (route.route_type === "not_applicable") {
     const factId = String(route.fact_id ?? "");
     const targetId = String(route.not_applicable_claim_id ?? "");
@@ -8224,7 +8497,7 @@ function buildBundleTrusted(context) {
     ));
     const fact = factsById.get(factId);
     const factRoots = fact ? [String(fact.claim_id ?? ""), ...strings(fact.source_claim_ids)] : [];
-    const primaryFactClaim = fact ? claimsById.get(String(fact.claim_id ?? "")) : void 0;
+    const primaryFactClaim = primaryClaimByFactId.get(factId);
     if (target && (!primaryFactClaim || typeof target.scope !== "string" || typeof primaryFactClaim.scope !== "string" || !scopeContains(target.scope, primaryFactClaim.scope))) {
       pushArray2(diagnostics, diagnostic7(
         "traceability",
@@ -8239,6 +8512,15 @@ function buildBundleTrusted(context) {
       `/fact_routes/${pointerPart3(factId)}/not_applicable_claim_id`,
       "terminal NotApplicable exclusion must be independent of every routed fact evidence root"
     ));
+    pushArray2(terminalNotApplicable, {
+      subject_kind: "requirement_fact",
+      fact_id: factId,
+      subject: String(primaryFactClaim?.value ?? `Requirement in ${String(target?.scope ?? "unknown scope")}`),
+      exclusion_claim_id: targetId,
+      scope: String(target?.scope ?? ""),
+      support_review: "supported",
+      reason: String(target?.value ?? "")
+    });
   }
   for (const point of points) {
     const id = String(point.obligation_id);
@@ -8255,12 +8537,27 @@ function buildBundleTrusted(context) {
       "NotApplicable formal Test Point requires its verified exclusion record"
     ));
   }
-  const notApplicable = sortArray2(mapArray3([...naById.values()], (item) => ({
+  const formalNotApplicable = mapArray3([...naById.values()], (item) => ({
+    subject_kind: "formal_test_point",
     obligation_id: String(item.obligation_id),
+    subject: obligationBusinessSubject(
+      obligationsById.get(String(item.obligation_id)),
+      factIdsByObligation,
+      primaryClaimByFactId,
+      claimsById
+    ),
     exclusion_claim_id: String(item.exclusion_claim_id),
     scope: String(item.scope),
-    support_review: String(item.support_review)
-  })), (left, right) => compareCodePoints4(left.obligation_id, right.obligation_id));
+    support_review: String(item.support_review),
+    reason: String(claimsById.get(String(item.exclusion_claim_id))?.value ?? "")
+  }));
+  const notApplicable = sortArray2(
+    [...formalNotApplicable, ...terminalNotApplicable],
+    (left, right) => compareCodePoints4(
+      `${left.subject_kind}:${left.obligation_id ?? left.fact_id}`,
+      `${right.subject_kind}:${right.obligation_id ?? right.fact_id}`
+    )
+  );
   const exploratoryIds = strings(delivery.exploratory);
   const exploratoryInput = records(normalized.classification.exploratory);
   const allFormalRoots = /* @__PURE__ */ new Set();
@@ -8400,7 +8697,7 @@ function buildBundleTrusted(context) {
   ));
   if (diagnostics.length > 0) throw new BundleReconciliationError(diagnostics);
   const bundle = {
-    schema_version: "2.0.0",
+    schema_version: "2.1.0",
     source_revision: normalized.sourceRevision,
     grounded: sortArray2(grounded, (left, right) => compareCodePoints4(String(left.case_id), String(right.case_id))),
     conditional: sortArray2(conditional, (left, right) => compareCodePoints4(String(left.case_id), String(right.case_id))),
@@ -8416,7 +8713,7 @@ function buildBundleTrusted(context) {
     quality: {
       delivery_status: deliveryStatus,
       compiler_version: normalized.compilerVersion,
-      schema_version: "2.0.0",
+      schema_version: "2.1.0",
       lineage: normalized.lineage,
       limits: normalized.limits
     }
@@ -9230,19 +9527,21 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
     items.push({
       item_kind: "formal_test_point",
       item_id: id,
-      title: String(obligation?.title ?? entry.recovery?.question ?? id),
+      title: String(entry.subject ?? obligation?.title ?? entry.recovery?.question ?? id),
       semantic_status: "blocked",
       related_obligation_ids: [id],
       semantic: entry
     });
   }
-  for (const entry of records3(semanticBundle?.coverage?.not_applicable)) {
+  for (const entry of records3(semanticBundle?.coverage?.not_applicable).filter(
+    (candidate) => candidate.subject_kind !== "requirement_fact"
+  )) {
     const id = String(entry.obligation_id ?? "");
     const obligation = obligationById.get(id);
     items.push({
       item_kind: "formal_test_point",
       item_id: id,
-      title: String(obligation?.title ?? id),
+      title: String(entry.subject ?? obligation?.title ?? id),
       semantic_status: "not_applicable",
       related_obligation_ids: [id],
       semantic: entry
@@ -9290,7 +9589,7 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
     else if (item.semantic_status === "not_applicable") Object.assign(item, {
       execution_disposition: "do_not_execute",
       reason_code: "not_applicable",
-      reason: "Excluded by supported scope evidence.",
+      reason: String(item.semantic.reason ?? "Excluded by supported scope evidence."),
       basis: { origin: "derived_not_applicable", exclusion_claim_id: String(item.semantic.exclusion_claim_id ?? "") }
     });
     else Object.assign(item, {
@@ -12801,7 +13100,7 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
   const submittedObligations = inputs.customObligations.flatMap((entry) => isObject7(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []);
   diagnostics.push(.../** @type {Diagnostic[]} */
   validateAgainstSchema({
-    schema_version: "2.0.0",
+    schema_version: "2.1.0",
     source_revision: 0,
     obligations: submittedObligations,
     fact_routes: [],
@@ -14327,7 +14626,7 @@ function compileObligations(evidenceGraph, behaviorViews) {
     diagnostics
   );
   const compiled = {
-    schema_version: "2.0.0",
+    schema_version: "2.1.0",
     source_revision: typeof artifact.source_revision === "number" ? artifact.source_revision : -1,
     obligations,
     fact_routes: factRoutes,
@@ -14619,9 +14918,11 @@ function oracleText(oracle) {
   if (Object.hasOwn(oracle, "window")) append(parts, `window ${code(oracle.window)}`);
   return joinArray4(parts, " ");
 }
-function renderCase(caseEntry, conditional) {
+function renderCase(caseEntry, conditional, headingLevel = 3) {
+  const caseHeading = "#".repeat(headingLevel);
+  const detailHeading = "#".repeat(headingLevel + 1);
   const lines = [
-    `### ${code(caseEntry.case_id)} \u2014 ${inline(caseEntry.title)}`,
+    `${caseHeading} ${code(caseEntry.case_id)} \u2014 ${inline(caseEntry.title)}`,
     "",
     `- Scope: ${code(caseEntry.scope)}`,
     `- Risk: ${code(caseEntry.risk)}`,
@@ -14634,17 +14935,17 @@ function renderCase(caseEntry, conditional) {
     lines,
     `- Temporary assumption: ${code(caseEntry.temporary_assumption.claim_id)}; invalid when ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
   );
-  append(lines, "", "#### Preconditions", "");
+  append(lines, "", `${detailHeading} Preconditions`, "");
   for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
     const item = caseEntry.preconditions[index];
     append(lines, `${index + 1}. ${inline(item.condition)} (reachable from: ${inline(item.reachable_from)}; evidence: ${code(item.evidence_ref)})`);
   }
-  append(lines, "", "#### Test Data", "");
+  append(lines, "", `${detailHeading} Test Data`, "");
   for (let dataIndex = 0; dataIndex < caseEntry.data.length; dataIndex += 1) {
     const item = caseEntry.data[dataIndex];
-    append(lines, `- ${inline(item.name)} = ${code(item.value)} (${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
+    append(lines, `- ${inline(item.name)} = ${code(item.value)} (origin: ${inline(item.value_origin)}; ${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
   }
-  append(lines, "", "#### Steps and Oracles", "");
+  append(lines, "", `${detailHeading} Steps and Oracles`, "");
   for (let index = 0; index < caseEntry.steps.length; index += 1) {
     const step = caseEntry.steps[index];
     append(lines, `${index + 1}. ${code(step.step_id)} \u2014 ${inline(step.action)} (evidence: ${code(step.action_evidence_ref)})`);
@@ -14659,7 +14960,7 @@ function renderCase(caseEntry, conditional) {
       );
     }
   }
-  append(lines, "", "#### Post-state and Cleanup", "");
+  append(lines, "", `${detailHeading} Post-state and Cleanup`, "");
   append(lines, `- Post-state: ${inline(caseEntry.post_state.state)} (evidence: ${code(caseEntry.post_state.evidence_ref)})`);
   if (caseEntry.cleanup.required) {
     const cleanupSteps = [];
@@ -14673,8 +14974,8 @@ function renderCase(caseEntry, conditional) {
   );
   return lines;
 }
-function renderCaseLane(title, cases, conditional) {
-  const lines = [`## ${title}`, ""];
+function renderCaseLane(title, cases, conditional, headingLevel = 2) {
+  const lines = [`${"#".repeat(headingLevel)} ${title}`, ""];
   if (cases.length === 0) {
     append(lines, "_None._");
     return lines;
@@ -14682,7 +14983,7 @@ function renderCaseLane(title, cases, conditional) {
   for (let index = 0; index < cases.length; index += 1) {
     const item = cases[index];
     if (index > 0) append(lines, "");
-    appendArray(lines, renderCase(item, conditional));
+    appendArray(lines, renderCase(item, conditional, headingLevel + 1));
   }
   return lines;
 }
@@ -14697,6 +14998,209 @@ function table(headers, rows) {
     append(output, `| ${joinArray4(rows[index], " | ")} |`);
   }
   return output;
+}
+var RISK_ORDER = Object.freeze({ critical: 0, high: 1, medium: 2, low: 3 });
+function titleCase(value) {
+  const text = String(value).replaceAll("_", " ").replaceAll("-", " ");
+  return text.length === 0 ? "" : `${text[0].toUpperCase()}${text.slice(1)}`;
+}
+function businessGapCategory(missingType2) {
+  const value = String(missingType2);
+  if (value === "testability" || value === "capability" || value === "resource_limit" || value === "control" || value === "observer") return "execution";
+  if (value === "source-conflict" || value === "fact-conflict" || value === "evidence" || value === "extraction" || value === "authority" || value === "exclusion" || value === "invalid-exclusion") return "evidence";
+  return "business";
+}
+function businessGapCause(category) {
+  if (category === "execution") return "Required test setup or observation capability is unavailable or unverified.";
+  if (category === "evidence") return "Source evidence is missing, ambiguous, conflicting, or lacks the required authority.";
+  return "A required product rule or expected outcome is unresolved.";
+}
+function businessGapRequiredInput(category) {
+  if (category === "execution") return "Verified test setup, control, or observation capability.";
+  if (category === "evidence") return "Authoritative source evidence that resolves the ambiguity or conflict.";
+  return "An authoritative product rule or expected result.";
+}
+function groupedScopes(members) {
+  const scopes = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let index = 0; index < members.length; index += 1) {
+    const scope = String(members[index].scope);
+    if (!seen.has(scope)) {
+      seen.add(scope);
+      append(scopes, inline(scope));
+    }
+  }
+  return scopes;
+}
+function highestRisk(members) {
+  let selected = "low";
+  let selectedOrder = RISK_ORDER.low;
+  for (let index = 0; index < members.length; index += 1) {
+    const candidate = String(members[index].risk);
+    const candidateOrder = RISK_ORDER[candidate] ?? 99;
+    if (candidateOrder < selectedOrder) {
+      selected = candidate;
+      selectedOrder = candidateOrder;
+    }
+  }
+  return selected;
+}
+function appendBusinessGapSection(lines, blocked, planByItemKey, category, heading, nextGapNumber) {
+  append(lines, "", `## ${heading}`, "");
+  const grouped = /* @__PURE__ */ new Map();
+  const groups = [];
+  for (let index = 0; index < blocked.length; index += 1) {
+    const item = blocked[index];
+    if (businessGapCategory(item.recovery.missing_type) !== category) continue;
+    const rootId = String(item.root_issue_id);
+    let members = grouped.get(rootId);
+    if (!members) {
+      members = [];
+      grouped.set(rootId, members);
+      append(groups, members);
+    }
+    append(members, item);
+  }
+  let count = 0;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const members = groups[groupIndex];
+    const item = members[0];
+    const scopes = groupedScopes(members);
+    const gapNumber = nextGapNumber;
+    nextGapNumber += 1;
+    count += 1;
+    append(
+      lines,
+      `### Gap-${String(gapNumber).padStart(3, "0")} \u2014 ${inline(item.recovery.question)}`,
+      "",
+      `- ${scopes.length === 1 ? "Scope" : "Scopes"}: ${joinArray4(scopes, "; ")}`,
+      `- Risk: ${titleCase(highestRisk(members))}`,
+      `- Cause: ${businessGapCause(category)}`,
+      members.length === 1 ? "- Impact: one formal Test Point cannot become an executable Case." : `- Impact: ${members.length} formal Test Points cannot become executable Cases.`,
+      `- Required input: ${businessGapRequiredInput(category)}`,
+      `- Next action: ${inline(item.recovery.question)}`,
+      "- Affected Test Points and execution decisions:"
+    );
+    for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
+      const member = members[memberIndex];
+      const planItem = planByItemKey.get(`formal_test_point\0${String(member.obligation_id)}`);
+      append(
+        lines,
+        `  - ${inline(member.subject)} \u2014 Scope: ${inline(member.scope)}; Risk: ${titleCase(member.risk)}`
+      );
+      if (planItem?.execution_disposition === "do_not_execute" && typeof planItem.reason === "string") append(
+        lines,
+        `    - Do not execute reason: ${inline(planItem.reason)}`
+      );
+    }
+    append(
+      lines,
+      ""
+    );
+  }
+  if (count === 0) append(lines, "_None._");
+  else if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
+  return nextGapNumber;
+}
+function compareBusinessCases(left, right) {
+  const leftDisposition = left.planItem?.execution_disposition === "execute" ? 0 : 1;
+  const rightDisposition = right.planItem?.execution_disposition === "execute" ? 0 : 1;
+  return leftDisposition - rightDisposition || compareCodePoints8(String(left.caseEntry.scope), String(right.caseEntry.scope)) || (RISK_ORDER[String(left.caseEntry.risk)] ?? 99) - (RISK_ORDER[String(right.caseEntry.risk)] ?? 99) || compareCodePoints8(String(left.caseEntry.role.value), String(right.caseEntry.role.value)) || compareCodePoints8(String(left.caseEntry.title), String(right.caseEntry.title)) || compareCodePoints8(String(left.caseEntry.case_id), String(right.caseEntry.case_id));
+}
+function businessCaseInventory(snapshot) {
+  const planByCaseId = /* @__PURE__ */ new Map();
+  for (let index = 0; index < snapshot.execution_plan.items.length; index += 1) {
+    const item = snapshot.execution_plan.items[index];
+    if (item.item_kind === "case") planByCaseId.set(item.item_id, item);
+  }
+  const inventory = [];
+  for (let index = 0; index < snapshot.grounded.length; index += 1) append(inventory, {
+    caseEntry: snapshot.grounded[index],
+    semanticStatus: "grounded",
+    planItem: planByCaseId.get(snapshot.grounded[index].case_id)
+  });
+  for (let index = 0; index < snapshot.conditional.length; index += 1) append(inventory, {
+    caseEntry: snapshot.conditional[index],
+    semanticStatus: "conditional",
+    planItem: planByCaseId.get(snapshot.conditional[index].case_id)
+  });
+  Reflect.apply(NATIVE_ARRAY_SORT4, inventory, [compareBusinessCases]);
+  const displayByCaseId = /* @__PURE__ */ new Map();
+  for (let index = 0; index < inventory.length; index += 1) {
+    displayByCaseId.set(inventory[index].caseEntry.case_id, `TC-${String(index + 1).padStart(3, "0")}`);
+  }
+  return { inventory, displayByCaseId };
+}
+function renderBusinessCase(item, displayId) {
+  const caseEntry = item.caseEntry;
+  const disposition = item.planItem?.execution_disposition === "execute" ? "Execute" : "Do not execute";
+  const lines = [
+    `### ${displayId} \u2014 ${inline(caseEntry.title)}`,
+    "",
+    `- Scope: ${inline(caseEntry.scope)}`,
+    `- Risk: ${titleCase(caseEntry.risk)}`,
+    `- Role: ${inline(caseEntry.role.value)}`,
+    `- Evidence status: ${titleCase(item.semanticStatus)}`,
+    `- Execution decision: ${disposition}`
+  ];
+  if (item.semanticStatus === "conditional") append(
+    lines,
+    `- Temporary assumption: valid only until ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
+  );
+  if (disposition === "Do not execute" && typeof item.planItem?.reason === "string") append(
+    lines,
+    `- Do not execute reason: ${inline(item.planItem.reason)}`
+  );
+  append(lines, "", "#### Preconditions", "");
+  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
+    const precondition = caseEntry.preconditions[index];
+    append(lines, `${index + 1}. ${inline(precondition.condition)} (reachable from: ${inline(precondition.reachable_from)})`);
+  }
+  append(lines, "", "#### Test Data", "");
+  for (let index = 0; index < caseEntry.data.length; index += 1) {
+    const datum = caseEntry.data[index];
+    append(lines, `- ${inline(datum.name)} = ${code(datum.value)} \u2014 Origin: ${titleCase(datum.value_origin)}`);
+  }
+  append(lines, "", "#### Steps and Expected Results", "");
+  for (let stepIndex = 0; stepIndex < caseEntry.steps.length; stepIndex += 1) {
+    const step = caseEntry.steps[stepIndex];
+    append(lines, `${stepIndex + 1}. ${inline(step.action)}`);
+    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
+      const expectation = step.expectations[expectationIndex];
+      append(
+        lines,
+        `   - Expected: ${inline(expectation.business_assertion)}`,
+        `   - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} \u2192 ${inline(expectation.observation_target)}`,
+        `   - Oracle: ${oracleText(expectation.oracle)}`
+      );
+    }
+  }
+  append(lines, "", "#### Post-state and Cleanup", "");
+  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)}`);
+  if (caseEntry.cleanup.required) {
+    const cleanupSteps = [];
+    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) append(
+      cleanupSteps,
+      inline(caseEntry.cleanup.steps[index])
+    );
+    append(lines, `- Cleanup: ${joinArray4(cleanupSteps, "; ")}`);
+  } else append(lines, `- Cleanup: none \u2014 ${inline(caseEntry.cleanup.no_cleanup_reason)}`);
+  return lines;
+}
+function renderBusinessCaseLane(title, items, displayByCaseId) {
+  const lines = [`## ${title}`, ""];
+  if (items.length === 0) {
+    append(lines, "_None._");
+    return lines;
+  }
+  for (let index = 0; index < items.length; index += 1) {
+    if (index > 0) append(lines, "");
+    appendArray(lines, renderBusinessCase(
+      items[index],
+      String(displayByCaseId.get(items[index].caseEntry.case_id))
+    ));
+  }
+  return lines;
 }
 function renderMarkdownTrusted(bundle) {
   const captured = snapshotBundle(bundle);
@@ -14717,25 +15221,151 @@ function renderMarkdownTrusted(bundle) {
     validateUniqueStableIds(snapshot)
   );
   if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
+  const business = businessCaseInventory(snapshot);
+  const runnerIds = new Set(snapshot.execution_plan.runner_case_ids);
+  const executeCases = [];
+  const notSelectedCases = [];
+  for (let index = 0; index < business.inventory.length; index += 1) {
+    const item = business.inventory[index];
+    if (runnerIds.has(item.caseEntry.case_id)) append(executeCases, item);
+    else append(notSelectedCases, item);
+  }
+  const coverage = snapshot.coverage;
+  const plan = snapshot.execution_plan;
+  const planByItemKey = /* @__PURE__ */ new Map();
+  for (let index = 0; index < plan.items.length; index += 1) {
+    const item = plan.items[index];
+    planByItemKey.set(`${String(item.item_kind)}\0${String(item.item_id)}`, item);
+  }
   const lines = [
-    "# Test Case Bundle",
+    "# Manual Functional Test Plan",
+    "",
+    "## Delivery Overview",
+    "",
+    "- Generated, not executed. This plan contains no test results or defect verdicts.",
+    `- Readiness: ${titleCase(snapshot.quality.delivery_status)}`,
+    `- Requirement accounting: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
+    `- Formal Test Points covered: ${coverage.formal.covered}/${coverage.formal.total}`,
+    `- Grounded executable coverage: ${coverage.executable.grounded}/${coverage.executable.total}`,
+    `- Execute Cases: ${plan.summary.execute_case_count}`,
+    `- Do not execute Cases: ${plan.summary.do_not_execute_case_count}`,
+    `- Blocked formal Test Points: ${snapshot.blocked.length}`,
+    `- NotApplicable exclusions: ${coverage.not_applicable.length}`,
+    "",
+    "## Execution Overview",
+    ""
+  ];
+  const overviewRows = [];
+  for (let index = 0; index < business.inventory.length; index += 1) {
+    const item = business.inventory[index];
+    append(overviewRows, [
+      String(business.displayByCaseId.get(item.caseEntry.case_id)),
+      inline(item.caseEntry.title),
+      inline(item.caseEntry.scope),
+      titleCase(item.caseEntry.risk),
+      inline(item.caseEntry.role.value),
+      item.planItem?.execution_disposition === "execute" ? "Execute" : "Do not execute"
+    ]);
+  }
+  appendArray(lines, table(["Case", "Title", "Scope", "Risk", "Role", "Decision"], overviewRows));
+  append(lines, "");
+  appendArray(lines, renderBusinessCaseLane("Cases to Execute", executeCases, business.displayByCaseId));
+  append(lines, "");
+  appendArray(lines, renderBusinessCaseLane("Cases Not Selected", notSelectedCases, business.displayByCaseId));
+  let nextGapNumber = 1;
+  nextGapNumber = appendBusinessGapSection(
+    lines,
+    snapshot.blocked,
+    planByItemKey,
+    "business",
+    "Business Rule Gaps",
+    nextGapNumber
+  );
+  nextGapNumber = appendBusinessGapSection(
+    lines,
+    snapshot.blocked,
+    planByItemKey,
+    "execution",
+    "Execution Preparation Gaps",
+    nextGapNumber
+  );
+  appendBusinessGapSection(
+    lines,
+    snapshot.blocked,
+    planByItemKey,
+    "evidence",
+    "Source and Evidence Gaps",
+    nextGapNumber
+  );
+  append(lines, "", "## Scope Exclusions (NotApplicable)", "");
+  if (coverage.not_applicable.length === 0) append(lines, "_None._");
+  for (let index = 0; index < coverage.not_applicable.length; index += 1) {
+    const item = coverage.not_applicable[index];
+    append(
+      lines,
+      `- ${item.subject_kind === "requirement_fact" ? "Requirement fact" : "Formal Test Point"} \u201C${inline(item.subject)}\u201D in ${inline(item.scope)}: ${inline(item.reason)}`
+    );
+  }
+  append(lines, "", "## Exploratory Risks", "");
+  if (snapshot.exploratory.length === 0) append(lines, "_None._");
+  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
+    const item = snapshot.exploratory[index];
+    const planItem = planByItemKey.get(`exploratory\0${String(item.exploratory_id)}`);
+    append(
+      lines,
+      `- ${inline(item.title)} \u2014 Scope: ${inline(item.scope)}; Risk: ${titleCase(item.risk)}; Status: exploratory only and outside formal coverage.`
+    );
+    if (planItem?.execution_disposition === "do_not_execute" && typeof planItem.reason === "string") append(
+      lines,
+      `  - Do not execute reason: ${inline(planItem.reason)}`
+    );
+  }
+  append(lines, "", "## Manual Execution Worksheet", "");
+  append(
+    lines,
+    "Generated, not executed. Record results downstream and bind each record to the delivered bundle digest + stable Case ID listed in the Audit Appendix.",
+    ""
+  );
+  const worksheetRows = [];
+  for (let index = 0; index < executeCases.length; index += 1) {
+    const item = executeCases[index];
+    append(worksheetRows, [
+      String(business.displayByCaseId.get(item.caseEntry.case_id)),
+      inline(item.caseEntry.title),
+      inline(item.caseEntry.scope),
+      titleCase(item.caseEntry.risk),
+      inline(item.caseEntry.role.value),
+      "Not recorded",
+      "\u2014",
+      "\u2014"
+    ]);
+  }
+  appendArray(lines, table(
+    ["Case", "Title", "Scope", "Risk", "Role", "Result", "Defect", "Notes"],
+    worksheetRows
+  ));
+  append(
+    lines,
+    "",
+    "## Audit Appendix",
     "",
     `- Schema version: ${code(snapshot.schema_version)}`,
     `- Source revision: ${code(snapshot.source_revision)}`,
     ""
-  ];
-  appendArray(lines, renderCaseLane("Grounded Cases", snapshot.grounded, false));
+  );
+  appendArray(lines, renderCaseLane("Grounded Cases", snapshot.grounded, false, 3));
   append(lines, "");
-  appendArray(lines, renderCaseLane("Conditional Cases", snapshot.conditional, true));
-  append(lines, "", "## Blocked Formal Test Points", "");
+  appendArray(lines, renderCaseLane("Conditional Cases", snapshot.conditional, true, 3));
+  append(lines, "", "### Blocked Formal Test Points", "");
   if (snapshot.blocked.length === 0) append(lines, "_None._");
   for (let index = 0; index < snapshot.blocked.length; index += 1) {
     const item = snapshot.blocked[index];
     append(
       lines,
-      `### ${code(item.obligation_id)}`,
+      `#### ${code(item.obligation_id)}`,
       "",
       `- Root issue: ${code(item.root_issue_id)}`,
+      `- Scope: ${code(item.scope)}`,
       `- Risk: ${code(item.risk)}`,
       `- Reason: ${code(item.reason)}`,
       `- Missing type: ${code(item.recovery.missing_type)}`,
@@ -14745,13 +15375,13 @@ function renderMarkdownTrusted(bundle) {
     );
   }
   if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  append(lines, "", "## Exploratory Cases", "");
+  append(lines, "", "### Exploratory Cases", "");
   if (snapshot.exploratory.length === 0) append(lines, "_None._");
   for (let index = 0; index < snapshot.exploratory.length; index += 1) {
     const item = snapshot.exploratory[index];
     append(
       lines,
-      `### ${code(item.exploratory_id)} \u2014 ${inline(item.title)}`,
+      `#### ${code(item.exploratory_id)} \u2014 ${inline(item.title)}`,
       "",
       `- Scope: ${code(item.scope)}`,
       `- Risk: ${code(item.risk)}`,
@@ -14760,7 +15390,6 @@ function renderMarkdownTrusted(bundle) {
     );
   }
   if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  const coverage = snapshot.coverage;
   const requirementRows = [];
   for (let index = 0; index < coverage.requirements.entries.length; index += 1) {
     const item = coverage.requirements.entries[index];
@@ -14779,38 +15408,39 @@ function renderMarkdownTrusted(bundle) {
   append(
     lines,
     "",
-    "## Coverage",
+    "### Coverage",
     "",
-    "### Requirement Fact Ledger",
+    "#### Requirement Fact Ledger",
     "",
     `Accounted: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
     ""
   );
   appendArray(lines, table(["Fact", "Status"], requirementRows));
-  append(lines, "", "### Formal Test Point Ledger", "", `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, "");
+  append(lines, "", "#### Formal Test Point Ledger", "", `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, "");
   appendArray(lines, table(["Test Point", "Disposition"], formalRows));
-  append(lines, "", "### Grounded Executable Ledger", "", `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, "");
+  append(lines, "", "#### Grounded Executable Ledger", "", `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, "");
   appendArray(lines, table(["Test Point", "Case"], executableRows));
-  append(lines, "", "### Expert Recall Ledger", "", `Status: ${code(coverage.expert_recall.status)}`);
+  append(lines, "", "#### Expert Recall Ledger", "", `Status: ${code(coverage.expert_recall.status)}`);
   for (let index = 0; index < coverage.expert_recall.limits.length; index += 1) {
     append(lines, `- ${inline(coverage.expert_recall.limits[index])}`);
   }
-  append(lines, "", "### NotApplicable (excluded from the coverage numerator)", "");
+  append(lines, "", "#### NotApplicable (excluded from the coverage numerator)", "");
   if (coverage.not_applicable.length === 0) append(lines, "_None._");
   else {
     const notApplicableRows = [];
     for (let index = 0; index < coverage.not_applicable.length; index += 1) {
       const item = coverage.not_applicable[index];
       append(notApplicableRows, [
-        code(item.obligation_id),
+        code(item.subject_kind),
+        code(item.obligation_id ?? item.fact_id),
         code(item.exclusion_claim_id),
         code(item.scope),
-        code(item.support_review)
+        code(item.support_review),
+        inline(item.reason)
       ]);
     }
-    appendArray(lines, table(["Test Point", "Exclusion evidence", "Scope", "Review"], notApplicableRows));
+    appendArray(lines, table(["Subject kind", "Subject", "Exclusion evidence", "Scope", "Review", "Reason"], notApplicableRows));
   }
-  const plan = snapshot.execution_plan;
   const planRows = [];
   for (let index = 0; index < plan.items.length; index += 1) {
     const item = plan.items[index];
@@ -14826,7 +15456,7 @@ function renderMarkdownTrusted(bundle) {
   append(
     lines,
     "",
-    "## Execution Plan",
+    "### Execution Plan",
     "",
     `- Status: ${code(plan.status)}`,
     `- Plan digest: ${code(plan.plan_digest)}`,
@@ -14846,7 +15476,7 @@ function renderMarkdownTrusted(bundle) {
   append(
     lines,
     "",
-    "## Quality",
+    "### Quality",
     "",
     `- Delivery status: ${code(snapshot.quality.delivery_status)}`,
     `- Compiler version: ${code(snapshot.quality.compiler_version)}`,
@@ -16192,6 +16822,20 @@ function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   });
   return { ...classification, blocked };
 }
+function clarificationQuestion(missingTypeValue, scope) {
+  const type = String(missingTypeValue);
+  const businessScope = String(scope);
+  if (type === "testability" || type === "capability" || type === "resource_limit" || type === "control" || type === "observer") {
+    return `What verified test setup, control, or observation capability is available for ${businessScope}?`;
+  }
+  if (type === "source-conflict" || type === "fact-conflict" || type === "evidence" || type === "extraction" || type === "authority") {
+    return `Which authoritative source rule applies to ${businessScope}?`;
+  }
+  if (type === "exclusion" || type === "invalid-exclusion") {
+    return `What authoritative scope-exclusion rule applies to ${businessScope}?`;
+  }
+  return `What authoritative product rule or expected result resolves the ${type} gap in ${businessScope}?`;
+}
 function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
@@ -16214,7 +16858,7 @@ function blockedDescriptors(classification, obligations, caseDrafts) {
       reason,
       evidence_refs: sortArray3(compilerIssue?.evidence_refs ?? strings4(item.evidence_refs), compareCodePoints9),
       answerable: compilerIssue?.answerable ?? !technical,
-      question: `Clarification required for ${type} in ${scope}.`
+      question: clarificationQuestion(type, scope)
     };
   }), (left, right) => compareCodePoints9(left.obligation_id, right.obligation_id));
 }
@@ -16355,7 +16999,7 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
         source_ids: sortArray3(strings4(conflict.source_ids), compareCodePoints9)
       });
       item.scope = String(conflict.scope);
-      item.question = `Clarification required for source-conflict in ${item.scope}.`;
+      item.question = clarificationQuestion("source-conflict", String(item.scope));
     }
     const existing = mapGet(grouped, externalId);
     if (!existing) mapSet(grouped, externalId, item);
@@ -16758,7 +17402,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         input.case_drafts
       );
       bundle = buildBundle({
-        schema_version: "2.0.0",
+        schema_version: "2.1.0",
         source_revision: sourceRevision,
         compiler_version: input.compiler_version,
         lineage: input.lineage,
@@ -18696,13 +19340,13 @@ async function ensureRunInstance(runDirectory) {
   const existing = await readJsonIfPresent(runDirectory, target);
   if (existing) {
     const value2 = existing.value;
-    if (!value2 || typeof value2 !== "object" || value2.schema_version !== "2.0.0" || typeof value2.run_instance_id !== "string" || !/^RUN-[0-9a-f-]{36}$/u.test(value2.run_instance_id) || typeof value2.created_at !== "string") throw new RunStoreIntegrityError(
+    if (!value2 || typeof value2 !== "object" || value2.schema_version !== "2.1.0" || typeof value2.run_instance_id !== "string" || !/^RUN-[0-9a-f-]{36}$/u.test(value2.run_instance_id) || typeof value2.created_at !== "string") throw new RunStoreIntegrityError(
       "Immutable run-instance.json is invalid."
     );
     return value2;
   }
   const value = {
-    schema_version: "2.0.0",
+    schema_version: "2.1.0",
     run_instance_id: `RUN-${NATIVE_RANDOM_UUID()}`,
     created_at: NATIVE_REFLECT_APPLY3(
       NATIVE_DATE_TO_ISO_STRING,
@@ -19331,9 +19975,9 @@ var schemaDirectory = path3.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "4b79e92e823e4bd572e01848c3b93859dcde4765029b2ae6ce63571910defcc6" : void 0;
-var embeddedSchemaVersion = true ? "2.0.0" : void 0;
-var embeddedCompilerVersion = true ? "0.2.0" : void 0;
+var embeddedManifestDigest = true ? "849392f2387bb804b06121fa4ed9a7e990408daa33a0a0c9b2a320f1d722a6fa" : void 0;
+var embeddedSchemaVersion = true ? "2.1.0" : void 0;
+var embeddedCompilerVersion = true ? "0.3.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
@@ -19420,12 +20064,12 @@ function migrationRequired() {
       {
         category: "reference",
         code: "RUN_MIGRATION_REQUIRED",
-        message: "Schema v1 runs cannot resume under the v2 execution-closure protocol."
+        message: "Older-schema runs cannot resume under the v2.1 protocol."
       },
       {
         category: "traceability",
         code: "NEW_RUN_REQUIRED",
-        message: "Create a new v2 run; the prior run remains preserved and read-only."
+        message: "Create a new v2.1 run; the prior run remains preserved and read-only."
       }
     ]
   };
@@ -19750,8 +20394,8 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2, 
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests2 }),
     source_revision: sourceRevision,
     stage,
-    compiler_version: embeddedCompilerVersion ?? "0.2.0",
-    schema_version: embeddedSchemaVersion ?? "2.0.0",
+    compiler_version: embeddedCompilerVersion ?? "0.3.0",
+    schema_version: embeddedSchemaVersion ?? "2.1.0",
     run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests2,
     audit_lineage: structuredClone(acceptedDigests2),
@@ -19934,7 +20578,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
       /** @type {Record<string, unknown>} */
       sourceArtifact.value
     );
-    if (sourcePack.schema_version !== "2.0.0") return migrationRequired();
+    if (sourcePack.schema_version !== "2.1.0") return migrationRequired();
     if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
       "RUN_INTEGRITY_ERROR",
       "Accepted Source Pack belongs to a different run instance."
@@ -19952,6 +20596,10 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
     if (sourceDiagnostics.length > 0) return fatalReply(
       "RUN_INTEGRITY_ERROR",
       "Accepted Source Pack failed deterministic schema validation."
+    );
+    if (validateSourceIntegrity(sourcePack).length > 0) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "Accepted Source Pack failed source-content integrity validation."
     );
     if (sourceRevision === 0 && initialClarificationHistoryDiagnostics(sourcePack).length > 0) {
       return fatalReply(
@@ -20230,7 +20878,7 @@ async function advanceStrictExclusive(runDirectory) {
             "RUN_INTEGRITY_ERROR",
             "Source revisions must begin at r000 and advance by exactly one."
           );
-          if (candidateRecord?.schema_version === "1.0.0") return migrationRequired();
+          if (typeof candidateRecord?.schema_version === "string" && candidateRecord.schema_version !== "2.1.0") return migrationRequired();
           const diagnostics = sourceCandidate.parseDiagnostics.length > 0 ? sourceCandidate.parseDiagnostics : stableDiagnostics(validateAgainstSchema(
             sourceCandidate.value,
             registry.schemas.get(STAGE_SCHEMA.source_pack)
@@ -20270,6 +20918,14 @@ async function advanceStrictExclusive(runDirectory) {
             candidateRevision,
             sourceCandidate.value,
             identityDiagnostics
+          );
+          const sourceIntegrityDiagnostics = validateSourceIntegrity(sourceCandidate.value);
+          if (sourceIntegrityDiagnostics.length > 0) return revisionReply(
+            runDirectory,
+            "source_pack",
+            candidateRevision,
+            sourceCandidate.value,
+            sourceIntegrityDiagnostics
           );
           const initialControlDiagnostics = candidateRevision === 0 && candidateRecord ? initialClarificationHistoryDiagnostics(candidateRecord) : [];
           if (initialControlDiagnostics.length > 0) return revisionReply(
@@ -20501,7 +21157,8 @@ async function advanceStrictExclusive(runDirectory) {
           registry.schemas.get(STAGE_SCHEMA.source_pack)
         );
         const acceptedSourcePolicy = resolveSourcePolicy(sourcePack);
-        if (acceptedSourceDiagnostics.length > 0 || acceptedSourcePolicy.diagnostics.length > 0) return fatalReply(
+        const acceptedSourceIntegrity = validateSourceIntegrity(sourcePack);
+        if (acceptedSourceDiagnostics.length > 0 || acceptedSourceIntegrity.length > 0 || acceptedSourcePolicy.diagnostics.length > 0) return fatalReply(
           "RUN_INTEGRITY_ERROR",
           "Accepted Source Pack failed deterministic integrity validation."
         );
@@ -20994,7 +21651,7 @@ function fatalReply2(code2, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-    const compilerVersion = true ? "0.2.0" : "0.2.0";
+    const compilerVersion = true ? "0.3.0" : "0.3.0";
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1 ? fatalReply2(
       "RUNNER_ARGUMENTS_INVALID",

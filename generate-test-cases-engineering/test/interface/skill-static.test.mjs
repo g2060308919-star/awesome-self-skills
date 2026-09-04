@@ -389,6 +389,35 @@ test('progressive references close reply routing and durable append boundaries',
   );
 });
 
+test('skill presents business-readable clarification and manual delivery without leaking audit identifiers', async () => {
+  const skill = await text('SKILL.md');
+  const clarification = await text('references/clarification-policy.md');
+  const cases = await text('references/case-writing-policy.md');
+  const evidence = await text('references/evidence-policy.md');
+  const execution = await text('references/execution-closure-policy.md');
+
+  assert.match(skill, /freeze the requested product, module, role, client, version, region, and environment scope before extracting facts/iu);
+  assert.match(skill, /do not broaden or narrow that scope merely because later analysis discovers more material/iu);
+  assert.match(skill, /declared-scope accounting[\s\S]*not complete product-behavior coverage/iu);
+  assert.match(skill, /business-readable summary[\s\S]*internal IDs[\s\S]*only in an audit section/iu);
+
+  assert.match(clarification, /never show `root_issue_id`, `question_id`, obligation IDs, Fact IDs, Claim IDs, digests, or raw enum codes/iu);
+  assert.match(clarification, /Critical: N, High: N, Medium: N, Low: N/iu);
+  assert.match(clarification, /one independently answerable business decision/iu);
+  assert.match(clarification, /why it is being asked[\s\S]*what remains blocked/iu);
+  assert.match(clarification, /business-rule gaps[\s\S]*execution-preparation gaps[\s\S]*scope exclusions[\s\S]*source or evidence gaps/iu);
+
+  assert.match(cases, /one independently diagnosable business outcome/iu);
+  assert.match(cases, /same as baseline[\s\S]*not an executable Oracle/iu);
+  assert.match(cases, /example[\s\S]*test-data candidate[\s\S]*authoritative boundary/iu);
+  assert.match(cases, /derived or assumed[\s\S]*never present it as a directly confirmed rule/iu);
+  assert.match(evidence, /SHA-256[\s\S]*locator `content_digest`[\s\S]*cannot authenticate a digest/iu);
+  assert.match(evidence, /`source_reviews`[\s\S]*every non-whitespace[\s\S]*normative[\s\S]*uncertain/iu);
+  assert.match(cases, /`value_origin`[\s\S]*compiler-owned[\s\S]*example[\s\S]*derived[\s\S]*temporary assumption/iu);
+  assert.match(execution, /Manual Execution Worksheet[\s\S]*blank[\s\S]*bundle digest[\s\S]*stable Case ID/iu);
+  assert.match(execution, /execution result[\s\S]*defect[\s\S]*downstream[\s\S]*never[\s\S]*canonical JSON/iu);
+});
+
 test('installed artifact excludes development surfaces model calls and network dependencies', async () => {
   const files = await installedFiles();
   for (const file of files) {
