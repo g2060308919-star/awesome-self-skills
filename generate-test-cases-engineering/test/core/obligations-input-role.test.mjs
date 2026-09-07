@@ -44,7 +44,7 @@ function acceptedView(artifact, extraClaims = []) {
     ...extraClaims.map(({ claim_id: claimId }) => claimId)
   ])];
   const sourcePack = {
-    schema_version: '2.1.0', source_revision: artifact.source_revision,
+    schema_version: '3.0.0', source_revision: artifact.source_revision,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_task6', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
@@ -60,7 +60,7 @@ function acceptedView(artifact, extraClaims = []) {
     decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '2.1.0', source_revision: artifact.source_revision,
+    schema_version: '3.0.0', source_revision: artifact.source_revision,
     claims: claimIds.map((claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement', scope: view.scope,
       value: claimId, source_locator_ids: ['locator_task6'], source_id: 'source_task6'
@@ -179,7 +179,7 @@ test('input role obligations hand-count two explicit classes plus inclusive lowe
   assert.equal(actual.some((seed) => seed.source_claim_ids.some((id) => id.includes('generic'))), false);
   assert.equal(JSON.stringify(view), before);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '2.1.0', source_revision: 6,
+    schema_version: '3.0.0', source_revision: 6,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);
@@ -199,7 +199,7 @@ test('input role obligations preserve every sourced role-permission combination 
   ]);
   assert.equal(actual.every((seed) => seed.required_oracle_refs.every((id) => !id.includes('generic-denial'))), true);
   assert.deepEqual(validateAgainstSchema({
-    schema_version: '2.1.0', source_revision: 6,
+    schema_version: '3.0.0', source_revision: 6,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   }, obligationsSchema), []);

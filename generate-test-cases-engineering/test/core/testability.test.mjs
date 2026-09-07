@@ -22,7 +22,7 @@ test('every key expectation requires all frozen Oracle and observation fields', 
     ['observer', (expectation) => { expectation.observer = ''; }],
     ['observation_surface', (expectation) => { expectation.observation_surface = '   '; }],
     ['observation_target', (expectation) => { delete expectation.observation_target; }],
-    ['expected result', (expectation) => { expectation.oracle.expected_state = ''; }],
+    ['expected result', (expectation) => { expectation.oracle.expected_state = ''; expectation.oracle.assertion.operand.value = ''; }],
     ['comparison', (expectation) => { delete expectation.oracle.comparison; }],
     ['evidence reference', (expectation) => { expectation.evidence_ref = ''; }],
     ['support review', (expectation) => { delete expectation.support_review; }]
@@ -30,7 +30,12 @@ test('every key expectation requires all frozen Oracle and observation fields', 
   for (const [name, mutate] of mutations) {
     const context = classificationContext();
     mutate(context.caseDrafts.cases[0].steps[0].expectations[0]);
-    assert.match(blockedReason(context), /EXPECTATION_GATE_INVALID|ORACLE_INVALID|SUPPORT_REVIEW_MISSING/u, name);
+    if (['observer', 'observation_target', 'comparison'].includes(name)) {
+      const result = classifyCaseDrafts(context);
+      assert.equal(result.grounded.length + result.conditional.length + result.blocked.length, 0);
+      assert.ok(result.diagnostics.some(item => item.code === (name === 'comparison'
+        ? 'ORACLE_OPERATOR_MISMATCH' : 'TESTABILITY_REFERENCE_MISMATCH')), name);
+    } else assert.match(blockedReason(context), /EXPECTATION_GATE_INVALID|ORACLE_INVALID|SUPPORT_REVIEW_MISSING/u, name);
   }
 });
 
@@ -38,7 +43,13 @@ test('Oracle tolerance and window bounds are valid for every comparison and requ
   /** @param {(oracle: any) => void} mutate */
   const classifyOracle = (mutate) => {
     const context = classificationContext();
-    mutate(context.caseDrafts.cases[0].steps[0].expectations[0].oracle);
+    const oracle = context.caseDrafts.cases[0].steps[0].expectations[0].oracle;
+    mutate(oracle);
+    oracle.assertion.operator = oracle.comparison;
+    if (oracle.comparison === 'within') {
+      oracle.assertion.operand = { type: 'number', value: 1 };
+      oracle.expected_state = '1';
+    }
     return classifyCaseDrafts(context);
   };
   /** @type {Array<(oracle: any) => void>} */
@@ -74,6 +85,7 @@ test('preceding actions and independently located expectations must resolve exac
   const duplicate = classificationContext();
   duplicate.caseDrafts.cases[0].steps.push({
     step_id: 'step_confirm',
+    operation_id: duplicate.caseDrafts.cases[0].scenario.operation_id,
     action: 'Confirm checkout',
     action_evidence_ref: 'claim_action',
     support_review: 'supported',
@@ -94,6 +106,7 @@ test('an expectation must point to its containing action rather than any future 
   const draft = context.caseDrafts.cases[0];
   draft.steps.push({
     step_id: 'step_confirm',
+    operation_id: draft.scenario.operation_id,
     action: 'Confirm checkout',
     action_evidence_ref: 'claim_action',
     support_review: 'supported',
@@ -123,10 +136,12 @@ test('observation_target never substitutes for an independently provided tester 
     capability: 'order status', status: 'verified', provenance_ref: 'claim_capability'
   });
 
-  assert.match(blockedReason(context), /OBSERVER_MISSING/u);
+  const result = classifyCaseDrafts(context);
+  assert.equal(result.blocked.length, 0, 'an unresolvable reference is an adapter repair, not an environmental question');
+  assert.ok(result.diagnostics.some(item => item.code === 'TESTABILITY_REFERENCE_MISMATCH'));
 });
 
-test('missing or empty observer, control, capability, and required capability all block with a root reason', () => {
+test('undeclared resources require adapter repair while declared resource gate failures retain blocker reasons', () => {
   /** @type {Array<[string, (draft: any) => void, RegExp]>} */
   const mutations = [
     ['observer', (draft) => { draft.testability_profile.observers = []; }, /OBSERVER_MISSING/u],
@@ -143,7 +158,11 @@ test('missing or empty observer, control, capability, and required capability al
   for (const [name, mutate, expected] of mutations) {
     const context = classificationContext();
     mutate(context.caseDrafts.cases[0]);
-    assert.match(blockedReason(context), expected, name);
+    if (['observer', 'capability', 'required capability'].includes(name)) {
+      const result = classifyCaseDrafts(context);
+      assert.equal(result.grounded.length + result.conditional.length + result.blocked.length, 0);
+      assert.ok(result.diagnostics.some(item => item.code === 'TESTABILITY_REFERENCE_MISMATCH'), name);
+    } else assert.match(blockedReason(context), expected, name);
   }
 });
 
@@ -250,10 +269,6 @@ test('all required Case fields remain enforced at the classifier seam', () => {
       draft.evidence_refs = draft.evidence_refs.filter((/** @type {string} */ ref) => ref !== 'claim_action');
     },
     (draft) => { draft.post_state.state = ''; },
-    (draft) => {
-      delete draft.cleanup;
-      draft.evidence_refs = draft.evidence_refs.filter((/** @type {string} */ ref) => ref !== 'claim_cleanup');
-    }
   ];
   for (const mutate of mutations) {
     const context = classificationContext();
@@ -261,6 +276,12 @@ test('all required Case fields remain enforced at the classifier seam', () => {
     refreshExecutionSignature(context.caseDrafts.cases[0]);
     assert.match(blockedReason(context), /CASE_GATE_INVALID|FORMAL_ORACLE_MISSING/u);
   }
+  const noCleanup = classificationContext();
+  delete noCleanup.caseDrafts.cases[0].cleanup;
+  const noCleanupResult = classifyCaseDrafts(noCleanup);
+  assert.equal(noCleanupResult.grounded.length + noCleanupResult.conditional.length, 0);
+  assert.ok(noCleanupResult.diagnostics.some(item =>
+    item.code === 'TYPE_MISMATCH' && item.path.endsWith('/cleanup/resolved_effects')));
   const noEvidenceSummary = classificationContext();
   noEvidenceSummary.caseDrafts.cases[0].evidence_refs = [];
   assert.equal(classifyCaseDrafts(noEvidenceSummary).diagnostics.some((item) =>

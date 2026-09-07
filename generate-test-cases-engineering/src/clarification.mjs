@@ -1,5 +1,7 @@
 import { canonicalStringify, digest, stableId } from './canonical.mjs';
 import { normalizeScope } from './decision-record.mjs';
+import sourcePackSchema from '../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
+import { validateAgainstSchema } from './schema-validator.mjs';
 
 const POLICIES = new Set(['pause_for_clarification', 'record_only']);
 const RISKS = new Set(['critical', 'high', 'medium', 'low']);
@@ -354,12 +356,12 @@ function enumeration(value, allowed, path, diagnostics) {
 function normalizeSemanticSnapshot(value, path, diagnostics) {
   const snapshot = record(value, path, diagnostics);
   checkKeys(snapshot, ['formal_test_points', 'coverage_denominator', 'delivery_sections'], path, diagnostics);
-  /** @type {Array<{obligation_id:string,evidence_level:string,classification:string,blocked_reason:string|null}>} */
+  /** @type {Array<{obligation_id:string,evidence_level:string,classification:string,blocked_reason:string|null,root_issue_ids?:string[]}>} */
   const points = [];
   const pointIds = new Set();
   for (const [index, raw] of arrayEntries(array(snapshot.formal_test_points, `${path}/formal_test_points`, diagnostics))) {
     const point = record(raw, `${path}/formal_test_points/${index}`, diagnostics);
-    checkKeys(point, ['obligation_id', 'evidence_level', 'classification', 'blocked_reason'], `${path}/formal_test_points/${index}`, diagnostics);
+    checkKeys(point, ['obligation_id', 'evidence_level', 'classification', 'blocked_reason', 'root_issue_ids'], `${path}/formal_test_points/${index}`, diagnostics);
     const obligationId = canonicalString(point.obligation_id, `${path}/formal_test_points/${index}/obligation_id`, diagnostics);
     const evidenceLevel = enumeration(point.evidence_level, EVIDENCE_LEVELS, `${path}/formal_test_points/${index}/evidence_level`, diagnostics);
     const classification = enumeration(point.classification, CLASSIFICATIONS, `${path}/formal_test_points/${index}/classification`, diagnostics);
@@ -371,11 +373,16 @@ function normalizeSemanticSnapshot(value, path, diagnostics) {
     if (classification !== 'blocked' && point.blocked_reason !== null) arrayPush(diagnostics, diagnostic(
       'classification', 'BLOCKED_REASON_UNEXPECTED', `${path}/formal_test_points/${index}/blocked_reason`, 'non-Blocked formal Test Point cannot carry a blocked reason'
     ));
+    if (classification !== 'blocked' && point.root_issue_ids !== undefined) arrayPush(diagnostics, diagnostic(
+      'classification', 'BLOCKED_DEPENDENCIES_UNEXPECTED', `${path}/formal_test_points/${index}/root_issue_ids`,
+      'only Blocked formal Test Points may carry root dependencies'
+    ));
     if (pointIds.has(obligationId)) arrayPush(diagnostics, diagnostic(
       'reference', 'FORMAL_TEST_POINT_DUPLICATE', `${path}/formal_test_points/${index}/obligation_id`, 'formal Test Point IDs must be unique'
     ));
     pointIds.add(obligationId);
-    arrayPush(points, { obligation_id: obligationId, evidence_level: evidenceLevel, classification, blocked_reason: blockedReason });
+    arrayPush(points, { obligation_id: obligationId, evidence_level: evidenceLevel, classification, blocked_reason: blockedReason,
+      ...(point.root_issue_ids !== undefined ? { root_issue_ids: stringSet(point.root_issue_ids, `${path}/formal_test_points/${index}/root_issue_ids`, diagnostics, true) } : {}) });
   }
   arraySort(points, (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
   const denominator = integer(snapshot.coverage_denominator, `${path}/coverage_denominator`, diagnostics, 0);
@@ -443,10 +450,11 @@ function normalizeBlocked(value, path, diagnostics) {
       'schema', 'BOOLEAN_INVALID', `${currentPath}/answerable`, 'answerable must be boolean'
     ));
     const question = canonicalString(item.question, `${currentPath}/question`, diagnostics);
-    if (obligationIds.has(obligationId)) arrayPush(diagnostics, diagnostic(
-      'reference', 'BLOCKED_OBLIGATION_DUPLICATE', `${currentPath}/obligation_id`, 'Blocked formal obligation IDs must be unique'
+    const pair = canonicalStringify({ obligationId, missingType, semanticRefs, scope });
+    if (obligationIds.has(pair)) arrayPush(diagnostics, diagnostic(
+      'reference', 'BLOCKED_OBLIGATION_DUPLICATE', `${currentPath}/obligation_id`, 'Blocked obligation and root dependency pairs must be unique'
     ));
-    obligationIds.add(obligationId);
+    obligationIds.add(pair);
     arrayPush(output, {
       obligation_id: obligationId, missing_type: missingType, semantic_refs: semanticRefs,
       scope, risk, reason, evidence_refs: evidenceRefs, answerable: item.answerable === true, question
@@ -669,8 +677,8 @@ function isRetainedGateStatus(status) {
 }
 
 /**
- * A Blocked formal Test Point has exactly one active root owner. Current roots
- * take precedence over retained suppressed/reopened historical roots.
+ * A Blocked formal Test Point retains its exact dependency set across current
+ * resources and independently suppressed/reopened historical gates.
  * @param {ReturnType<typeof normalizeRootLedger>} ledger
  * @param {Map<string,string>} dispositionById
  * @param {ReturnType<typeof normalizeSemanticSnapshot>|null} semantics
@@ -685,7 +693,7 @@ function validateRootPartition(ledger, dispositionById, semantics, diagnostics, 
   const retainedOwners = new Map();
   for (const root of ledger) {
     const status = dispositionById.get(root.root_issue_id);
-    const retained = !root.current && (isRetainedGateStatus(status) || status === 'open');
+    const retained = !root.current && (isRetainedGateStatus(status) || (status === 'open' && root.answerable));
     if (!root.current && !retained) continue;
     const index = root.current ? currentOwners : retainedOwners;
     for (const obligationId of root.affected_obligation_ids) {
@@ -698,14 +706,47 @@ function validateRootPartition(ledger, dispositionById, semantics, diagnostics, 
     if (point.classification !== 'blocked') continue;
     const active = currentOwners.get(point.obligation_id) ?? [];
     const retained = retainedOwners.get(point.obligation_id) ?? [];
-    if (active.length !== 1 && (active.length !== 0 || retained.length !== 1)) arrayPush(
+    const actual = arraySort(arrayMap([...active, ...retained], (root) => root.root_issue_id), compareCodePoints);
+    const exact = point.root_issue_ids ? canonicalStringify(actual) === canonicalStringify(point.root_issue_ids)
+      : actual.length === 1;
+    if (!exact) arrayPush(
       diagnostics,
       diagnostic(
         'traceability', 'PRIOR_ROOT_PARTITION_INVALID', `${path}/root_snapshot_ledger`,
-        'Blocked formal Test Points must form a complete nonoverlapping partition across active or retained gated roots'
+        'Blocked formal Test Points must retain their exact complete active or retained gated root dependency set'
       )
     );
   }
+}
+
+/** Project the complete relation after current descriptors have been checked.
+ * @param {any} semantics @param {any[]} ledger @param {Map<string, any>} dispositions */
+function projectRootDependencies(semantics, ledger, dispositions) {
+  const byObligation = new Map();
+  for (const root of ledger) {
+    const status = dispositions.get(root.root_issue_id);
+    if (!root.current && !isRetainedGateStatus(status) && !(status === 'open' && root.answerable)) continue;
+    for (const id of root.affected_obligation_ids) {
+      const ids = byObligation.get(id) ?? [];
+      arrayPush(ids, root.root_issue_id);
+      byObligation.set(id, ids);
+    }
+  }
+  for (const point of semantics.formal_test_points) if (point.classification === 'blocked') {
+    const ids = arraySort(byObligation.get(point.obligation_id) ?? [], compareCodePoints);
+    if (point.root_issue_ids !== undefined || ids.length > 1) point.root_issue_ids = ids;
+  }
+  const points = new Map(arrayMap(semantics.formal_test_points, (point) => [point.obligation_id, point]));
+  for (const root of ledger) {
+    const status = dispositions.get(root.root_issue_id);
+    if (root.current || (!isRetainedGateStatus(status) && !(status === 'open' && root.answerable))) continue;
+    // Reasons summarize current affected Test Point tuples, not exclusive causes
+    // of this resource. Retained gates keep identity/evidence/associations while
+    // their summary follows the delivered tuples after partial restoration.
+    root.reasons = arraySort([...new Set(arrayFilter(arrayMap(root.affected_obligation_ids,
+      (id) => points.get(id)?.blocked_reason), (reason) => typeof reason === 'string'))], compareCodePoints);
+  }
+  return semantics;
 }
 
 /** @param {unknown} value @param {string} path @param {Diagnostic[]} diagnostics */
@@ -841,8 +882,8 @@ function strictlyIncreasing(entries, key) {
   return true;
 }
 
-/** @param {ReturnType<typeof normalizePriorState>} prior @param {ReturnType<typeof normalizeAppendBatch>} batch @param {number} sourceRevision @param {ReturnType<typeof normalizeSemanticSnapshot>} semantics @param {Diagnostic[]} diagnostics */
-function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
+/** @param {ReturnType<typeof normalizePriorState>} prior @param {ReturnType<typeof normalizeAppendBatch>} batch @param {number} sourceRevision @param {ReturnType<typeof normalizeSemanticSnapshot>} semantics @param {Diagnostic[]} diagnostics @param {boolean} generationRepair */
+function validateHistory(prior, batch, sourceRevision, semantics, diagnostics, generationRepair) {
   if (!strictlyIncreasing(batch.decision_records, 'clarification_event_seq')) arrayPush(diagnostics, diagnostic(
     'classification', 'CLARIFICATION_EVENT_SEQUENCE_NONMONOTONE', '/append_batch/decision_records', 'Decision Record append order must be strictly monotonic'
   ));
@@ -867,12 +908,16 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
     ));
   }
   if (combined.length === 0) {
-    if (sourceRevision !== prior.source_revision) arrayPush(diagnostics, diagnostic(
+    if (sourceRevision !== prior.source_revision + (generationRepair ? 1 : 0)) arrayPush(diagnostics, diagnostic(
       'classification', 'APPEND_REVISION_INVALID', '/source_revision',
       'an empty append batch must replay the exact prior immutable source revision'
     ));
   } else if (sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic(
     'classification', 'APPEND_REVISION_INVALID', '/source_revision', 'one append batch must create exactly the next immutable source revision'
+  ));
+  if (generationRepair && combined.length > 0) arrayPush(diagnostics, diagnostic(
+    'classification', 'ARTIFACT_REPAIR_INVALID', '/append_batch',
+    'generation repair must not fabricate or append a business clarification event'
   ));
   const formalIds = new Set(arrayMap(semantics.formal_test_points, (point) => point.obligation_id));
   const pending = new Set(prior.last_pending_root_issue_ids);
@@ -1112,9 +1157,10 @@ function invalidDecision(policy, diagnostics, sourceRevision = 0) {
  * participate in the ID.
  * @param {unknown} submittedContext
  * @param {string} interactionPolicy
+ * @param {unknown} [repairRecord] Compiler-supplied closed repair record; never a bypass flag.
  * @returns {any}
  */
-export function evaluateClarification(submittedContext, interactionPolicy) {
+export function evaluateClarification(submittedContext, interactionPolicy, repairRecord = null) {
   /** @type {Diagnostic[]} */
   const diagnostics = [];
   if (!POLICIES.has(interactionPolicy)) arrayPush(diagnostics, diagnostic(
@@ -1132,8 +1178,27 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     const batch = normalizeAppendBatch(context.append_batch, '/append_batch', diagnostics);
     const semantics = normalizeSemanticSnapshot(context.semantic_snapshot, '/semantic_snapshot', diagnostics);
     validatePriorState(prior, diagnostics);
-    const combined = validateHistory(prior, batch, sourceRevision, semantics, diagnostics);
+    const generationRepair = repairRecord !== null;
+    if (generationRepair) {
+      const repairValidation = validateAgainstSchema(repairRecord, sourcePackSchema.properties.artifact_repairs.items);
+      const repair = /** @type {Record<string, unknown>} */ (repairRecord);
+      if (repairValidation.length > 0 || repair?.base_source_revision !== prior.source_revision
+        || sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic(
+        'classification', 'ARTIFACT_REPAIR_INVALID', '/source_revision',
+        'generation repair requires a closed record bound to exactly the next source revision'
+      ));
+    }
+    const combined = validateHistory(prior, batch, sourceRevision, semantics, diagnostics, generationRepair);
     const roots = buildRootIssues(blocked, sourceRevision, diagnostics);
+    for (const point of semantics.formal_test_points) {
+      const currentIds = arraySort(arrayMap(arrayFilter(roots,
+        (root) => new Set(root.affected_obligation_ids).has(point.obligation_id)), (root) => root.root_issue_id), compareCodePoints);
+      if ((point.root_issue_ids !== undefined && canonicalStringify(currentIds) !== canonicalStringify(point.root_issue_ids))
+        || (point.root_issue_ids === undefined && currentIds.length > 1)) arrayPush(diagnostics, diagnostic(
+        'traceability', 'BLOCKED_DEPENDENCY_SET_MISMATCH', '/semantic_snapshot/formal_test_points',
+        'current dependency IDs must exactly match compiler blocker descriptors'
+      ));
+    }
     const pointById = new Map(arrayMap(semantics.formal_test_points, (point) => [point.obligation_id, point]));
     const descriptorIds = new Set(arrayMap(blocked, (item) => item.obligation_id));
     const priorDispositionById = new Map(arrayMap(
@@ -1207,6 +1272,7 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
       const replaySemantics = replayBlockedObligationIds.size > 0
         ? projectBlockedSemantics(semantics, prior.semantic_snapshot, replayBlockedObligationIds, diagnostics)
         : semantics;
+      projectRootDependencies(replaySemantics, replayLedger, priorDispositionById);
       if (canonicalStringify(replaySemantics) !== canonicalStringify(prior.semantic_snapshot)) arrayPush(
         diagnostics,
         diagnostic(
@@ -1371,6 +1437,7 @@ export function evaluateClarification(submittedContext, interactionPolicy) {
     const dispositionOutput = arrayMap([...dispositions], ([root_issue_id, status]) => ({ root_issue_id, status }));
     arraySort(dispositionOutput, (left, right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
     const nextLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics);
+    projectRootDependencies(deliveredSemantics, nextLedger, dispositions);
     validateRootPartition(nextLedger, dispositions, deliveredSemantics, diagnostics, '/state');
     if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics, sourceRevision);
     const state = {

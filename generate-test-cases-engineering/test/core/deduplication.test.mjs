@@ -42,7 +42,7 @@ function fixtureClassificationContext(cases, extraClaims = []) {
     },
     obligations,
     caseDrafts: {
-      schema_version: '2.1.0', source_revision: coverageFixture.source_revision,
+      schema_version: '3.0.0', source_revision: coverageFixture.source_revision,
       cases,
       obligation_dispositions: [{
         obligation_id: 'obligation_grounded', status: 'case_candidate',
@@ -536,6 +536,7 @@ test('same-signature cleanup action order remains an ordered semantic conflict',
   const first = baseCase();
   const second = baseCase({ case_id: 'case_2222222222222222' });
   for (const draft of [first, second]) draft.cleanup = {
+    resolved_effects: [],
     required: true,
     steps: ['Release checkout lock', 'Restore checkout fixture'],
     evidence_ref: 'claim_cleanup',
@@ -675,6 +676,7 @@ test('blocked propagation visits the obligation-to-Case graph linearly while pre
   });
   invalid.steps[0].expectations[0].closes_obligation_id = obligations[size - 1].obligation_id;
   invalid.steps[0].expectations[0].oracle.expected_state = '';
+  invalid.steps[0].expectations[0].oracle.assertion.operand.value = '';
   cases.push(invalid);
   const dispositions = obligations.map((obligation, obligationIndex) => ({
     obligation_id: obligation.obligation_id,

@@ -13,6 +13,11 @@ function sha256(content) {
  * @param {any} [evidenceClaims]
  */
 export function completeSourcePack(sourcePack, evidenceClaims = { claims: [] }) {
+  sourcePack.source_assets ??= [];
+  for (const fact of evidenceClaims.fact_ledger ?? []) {
+    fact.required_view_kinds ??= [];
+    fact.view_review_basis ??= 'Fixture author reviewed the declared behavior model.';
+  }
   const directLocatorIds = new Set();
   for (const claim of evidenceClaims.claims ?? []) {
     if (claim?.claim_form !== 'direct') continue;
@@ -53,7 +58,8 @@ export function completeSourcePack(sourcePack, evidenceClaims = { claims: [] }) 
       spans.push({
         span_id: `review_${source.source_id}_${String(spans.length + 1).padStart(3, '0')}`,
         start, end, classification: normative ? 'normative' : 'non_normative',
-        rationale: normative ? 'Covered by a direct Claim locator.' : 'Reviewed test-fixture context.'
+        rationale: normative ? 'Covered by a direct Claim locator.' : 'Reviewed test-fixture context.',
+        review_basis: { reviewer: 'fixture-author', method: 'fixture inspection', evidence: content.slice(start, end) }
       });
     }
     sourcePack.source_reviews.push({ source_id: source.source_id, content_digest: contentDigest, spans });

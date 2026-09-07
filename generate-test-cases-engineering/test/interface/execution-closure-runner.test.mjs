@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { advanceStrict } from '../../src/advance-strict.mjs';
+import { digest } from '../../src/canonical.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { buildJourney, setSourceRevision } from '../helpers/run-journey.mjs';
@@ -133,11 +134,11 @@ test('v1 run input is preserved and rejected with explicit migration and new-run
   }
 });
 
-test('v2.0 run input is preserved and rejected after the source-review schema upgrade', async () => {
+for (const version of ['2.0.0', '2.1.0']) test(`${version} run input is preserved and rejected after the semantic schema upgrade`, async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'execution-v2-migration-'));
   try {
     const revision = buildJourney('all-e3');
-    revision.source_pack.schema_version = '2.0.0';
+    revision.source_pack.schema_version = version;
     await stage(runDirectory, 'source_pack', revision.source_pack);
     const reply = await advanceStrict(runDirectory);
     assert.equal(reply.status, 'fatal');
@@ -182,8 +183,23 @@ test('post-ready preview is private, version-bound, cancellable, and cannot revi
     const preview = await advanceStrict(runDirectory);
     assert.equal(preview.status, 'need_user_answers', JSON.stringify(preview));
     assert.equal(preview.entry_context, 'post_ready_change');
+    // This decision responsibility compiles as medium; the Case draft's high
+    // rating is not the deduplicated formal Test Point risk projection.
+    assert.deepEqual(preview.groups[0].risk_counts, { critical: 0, high: 0, medium: 1, low: 0 });
     assert.equal(preview.execution_plan.status, 'ready');
     assert.equal(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'), readyCurrent);
+
+    await rm(path.join(runDirectory, 'checkpoint.json'));
+    assert.deepEqual(await advanceStrict(runDirectory), preview, 'active preview survives checkpoint loss');
+    await rm(path.join(runDirectory, 'output/current.json'));
+    assert.deepEqual(await advanceStrict(runDirectory), preview, 'active preview reconstructs a missing derived current pointer');
+    assert.equal(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'), readyCurrent);
+    const higherTombstone = JSON.stringify({ status: 'stale', run_instance_id: finished.run_instance_id,
+      active_source_revision: 2, previous_ready_revision: 1, reason: 'higher_revision_not_ready' });
+    await writeFile(path.join(runDirectory, 'output/current.json'), higherTombstone);
+    assert.equal((await advanceStrict(runDirectory)).status, 'fatal', 'preview cannot overwrite a higher tombstone');
+    assert.equal(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'), higherTombstone);
+    await writeFile(path.join(runDirectory, 'output/current.json'), readyCurrent);
 
     const cancel = {
       operation: 'cancel_preview',
@@ -202,15 +218,67 @@ test('post-ready preview is private, version-bound, cancellable, and cannot revi
     assert.equal(cancelled.notice_code, 'POST_READY_CHANGE_CANCELLED');
     assert.equal(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'), readyCurrent);
 
+    await rm(path.join(runDirectory, 'checkpoint.json'));
+
     await writeFile(path.join(runDirectory, 'staging/post-ready-preview-request.json'), `${JSON.stringify(request)}\n`);
     const replay = await advanceStrict(runDirectory);
     assert.equal(replay.status, 'need_revision');
     assert.equal(['PREVIEW_REQUEST_REPLAY_INVALID', 'PREVIEW_BINDING_INVALID'].includes(
       replay.diagnostics[0].code
     ), true);
+    await rm(path.join(runDirectory, 'staging/post-ready-preview-request.json'));
+    const historyPath = path.join(runDirectory, 'derived/r001/post-ready-preview-history.json');
+    const historyText = await readFile(historyPath, 'utf8');
+    const history = JSON.parse(historyText);
+    assert.equal(history.length, 2, 'idempotent resume must not append another request');
+    await writeFile(historyPath, JSON.stringify([...history].reverse()));
+    assert.equal((await advanceStrict(runDirectory)).status, 'fatal', 'reordered preview history is invalid');
+    await writeFile(historyPath, historyText);
+    const resumed = await advanceStrict(runDirectory);
+    assert.equal(resumed.status, 'finished');
+    assert.equal(resumed.preview_control.expected_preview_epoch, 2);
+    await rm(historyPath);
+    const missing = await advanceStrict(runDirectory);
+    assert.equal(missing.status, 'fatal', 'checkpoint evidence of a lost history cannot reset the preview epoch');
+    assert.equal(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'), readyCurrent);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
+});
+
+test('accepted Case repair invalidates an old ready confirmation even when semantics are unchanged', async () => {
+  const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'ready-case-repair-'));
+  try {
+    const { confirmed, finished } = await createReadyRun(runDirectory);
+    const priorSource = JSON.parse(await readFile(path.join(runDirectory, 'accepted/r001/source-pack.json'), 'utf8'));
+    const priorCase = JSON.parse(await readFile(path.join(runDirectory, 'accepted/r001/case-drafts.json'), 'utf8'));
+    const oldCurrent = await readFile(path.join(runDirectory, 'output/current.json'), 'utf8');
+    const source = { ...priorSource, source_revision: 2, artifact_repairs: [{
+      repair_seq: 1, base_source_revision: 1, stage: 'case_drafts',
+      accepted_artifact_digest: digest(priorCase), reason: 'Recheck the extracted scenario.'
+    }] };
+    await stage(runDirectory, 'source_pack', source);
+    assert.equal((await advanceStrict(runDirectory)).stage, 'case_drafts');
+    await stage(runDirectory, 'case_drafts', { ...priorCase, source_revision: 2 });
+    const shown = await advanceStrict(runDirectory);
+    assert.equal(shown.purpose, 'final_confirmation', JSON.stringify(shown));
+    assert.equal(shown.execution_plan.confirmation, null);
+    assert.equal(await exists(path.join(runDirectory, 'output/r002/test-bundle.json')), false);
+    await rm(path.join(runDirectory, 'checkpoint.json'));
+    await writeFile(path.join(runDirectory, 'output/current.json'), oldCurrent);
+    assert.deepEqual(await advanceStrict(runDirectory), shown);
+    assert.equal(JSON.parse(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8')).status, 'stale');
+    const forged = { ...source, source_revision: 3, execution_events: [...source.execution_events, {
+      ...confirmed.source_pack.execution_events[0], event_id: 'replayed-old-confirmation',
+      clarification_event_seq: shown.next_event_seq
+    }] };
+    await stage(runDirectory, 'source_pack', forged);
+    const rejected = await advanceStrict(runDirectory);
+    assert.equal(rejected.status, 'need_revision', JSON.stringify(rejected));
+    assert.ok(rejected.diagnostics.some((/** @type {any} */ item) => /CONFIRMATION|PRESENTATION/.test(item.code)));
+    assert.equal(await exists(path.join(runDirectory, 'output/r003/test-bundle.json')), false);
+    assert.equal(JSON.parse(await readFile(finished.bundle_path, 'utf8')).execution_plan.status, 'ready');
+  } finally { await rm(runDirectory, { recursive: true, force: true }); }
 });
 
 test('applying a post-ready execution change stales current and requires a newly displayed confirmation', async () => {
@@ -290,6 +358,9 @@ test('applying a post-ready execution change stales current and requires a newly
     assert.equal(current.active_source_revision, 2);
     const checkpoint = JSON.parse(await readFile(path.join(runDirectory, 'checkpoint.json'), 'utf8'));
     assert.equal(checkpoint.preview_state, 'consumed');
+    // The preview binding must survive loss of its disposable checkpoint.
+    await rm(path.join(runDirectory, 'checkpoint.json'));
+    assert.deepEqual(await advanceStrict(runDirectory), awaiting);
   } finally {
     await rm(runDirectory, { recursive: true, force: true });
   }
@@ -342,13 +413,14 @@ test('recovery reconciles an old ready pointer behind a higher accepted non-read
     });
     await stage(runDirectory, 'source_pack', higher.source_pack);
     const next = await advanceStrict(runDirectory);
-    assert.equal(next.status, 'need_artifact', JSON.stringify(next));
-    assert.equal(next.stage, 'evidence_claims');
+    assert.equal(next.status, 'need_user_answers', JSON.stringify(next));
+    assert.equal(next.purpose, 'final_confirmation');
 
     // Simulate a crash boundary that left an obsolete ready pointer behind.
     await writeFile(path.join(runDirectory, 'output/current.json'), oldReady);
     const recovered = await advanceStrict(runDirectory);
-    assert.equal(recovered.status, 'need_artifact');
+    assert.equal(recovered.status, 'need_user_answers', JSON.stringify(recovered));
+    assert.equal(recovered.purpose, 'final_confirmation');
     const current = JSON.parse(await readFile(path.join(runDirectory, 'output/current.json'), 'utf8'));
     assert.equal(current.status, 'stale');
     assert.equal(current.active_source_revision, 2);

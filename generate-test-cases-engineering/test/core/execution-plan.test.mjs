@@ -21,7 +21,7 @@ function caseEntry(caseId, status, obligationIds) {
 /** @returns {any} */
 function semanticBundle() {
   return {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     grounded: [caseEntry('case_a', 'grounded', ['tp_a', 'tp_shared'])],
     conditional: [
       caseEntry('case_b', 'conditional', ['tp_b']),

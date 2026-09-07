@@ -22,6 +22,29 @@ function baseContext() {
   return structuredClone(fixture);
 }
 
+test('generation repair is an exact closed next-revision transition, never a boolean replay bypass', () => {
+  const initial = evaluateClarification(baseContext(), 'record_only');
+  assert.equal(initial.diagnostics.length, 0);
+  const context = baseContext();
+  context.prior_state = initial.state;
+  context.source_revision = initial.state.source_revision + 1;
+  const repair = {
+    repair_seq: 1, base_source_revision: initial.state.source_revision,
+    stage: 'case_drafts', accepted_artifact_digest: 'a'.repeat(64), reason: 'Repair generated bindings.'
+  };
+  assert.ok(evaluateClarification(context, 'record_only').diagnostics.some((/** @type {any} */ item) => item.code === 'APPEND_REVISION_INVALID'));
+  const corrected = evaluateClarification(context, 'record_only', repair);
+  assert.deepEqual(corrected.diagnostics, []);
+  for (const invalid of [true, { ...repair, extra: true }, { ...repair, base_source_revision: 99 }]) {
+    assert.ok(evaluateClarification(context, 'record_only', invalid).diagnostics.some((/** @type {any} */ item) => item.code === 'ARTIFACT_REPAIR_INVALID'));
+  }
+  assert.ok(evaluateClarification({ ...context, source_revision: context.source_revision + 1 }, 'record_only', repair)
+    .diagnostics.some((/** @type {any} */ item) => item.code === 'ARTIFACT_REPAIR_INVALID'));
+  const replay = { ...context, prior_state: corrected.state };
+  assert.deepEqual(evaluateClarification(replay, 'record_only').diagnostics, []);
+  assert.ok(evaluateClarification(replay, 'record_only', repair).diagnostics.some((/** @type {any} */ item) => item.code === 'ARTIFACT_REPAIR_INVALID'));
+});
+
 /** @param {string[]} values */
 function sortedIds(values) {
   return [...values].sort((left, right) => {
@@ -94,6 +117,89 @@ function setCurrent(context, descriptors, points = descriptors.map((item) =>
   context.semantic_snapshot = semanticSnapshot(points);
   return context;
 }
+
+test('shared resource dependencies preserve exact overlap and remove restored technical roots independently', () => {
+  const x = blocker({ missing_type: 'testability', semantic_refs: ['capability:X'], answerable: false, reason: 'CAPABILITY_UNKNOWN' });
+  const y = blocker({ missing_type: 'testability', semantic_refs: ['capability:Y'], answerable: false, reason: 'CAPABILITY_UNKNOWN' });
+  const bx = { ...x, obligation_id: 'obligation_second', semantic_refs: [...x.semantic_refs], evidence_refs: [...x.evidence_refs] };
+  const initial = baseContext();
+  setCurrent(initial, [x, y, bx], [
+    formalPoint(x.obligation_id, 'blocked', 'E0', x.reason),
+    formalPoint(bx.obligation_id, 'blocked', 'E0', x.reason)
+  ]);
+  const ledger = rootLedger([x, y, bx]);
+  for (const point of initial.semantic_snapshot.formal_test_points) point.root_issue_ids = ledger
+    .filter((root) => root.affected_obligation_ids.includes(point.obligation_id)).map((root) => root.root_issue_id).sort();
+  const first = evaluateClarification(initial, 'pause_for_clarification');
+  assert.deepEqual(first.diagnostics, []);
+  assert.equal(first.root_issues.length, 2);
+  assert.equal(first.semantic_snapshot.coverage_denominator, 2);
+  assert.ok(first.root_issues.every((/** @type {any} */ root) => root.answerable === false));
+  for (const mutation of ['missing', 'foreign', 'duplicate']) {
+    const tampered = structuredClone(initial);
+    const ids = tampered.semantic_snapshot.formal_test_points[0].root_issue_ids;
+    if (mutation === 'missing') ids.pop();
+    if (mutation === 'foreign') ids.push('root_foreign');
+    if (mutation === 'duplicate') ids.push(ids[0]);
+    assert.equal(evaluateClarification(tampered, 'pause_for_clarification').action, 'need_revision', mutation);
+  }
+  const recovered = baseContext();
+  recovered.source_revision = 1;
+  recovered.prior_state = first.state;
+  recovered.append_batch.clarification_events = [{
+    event_id: 'event-restored-resource', clarification_event_seq: 1, type: 'request_reanalysis',
+    actor: 'fixture owner', event_at: '2026-09-05T00:00:00Z', source_locator_ids: ['locator_verified_fixture'],
+    affected_items: [], reason: 'Verified fixture X is now available; recompile testability.'
+  }];
+  setCurrent(recovered, [y], [
+    formalPoint(y.obligation_id, 'blocked', 'E0', y.reason),
+    formalPoint(bx.obligation_id, 'grounded', 'E3', null)
+  ]);
+  const yId = rootLedger([y])[0].root_issue_id;
+  recovered.semantic_snapshot.formal_test_points.find((/** @type {any} */ point) => point.obligation_id === y.obligation_id).root_issue_ids = [yId];
+  const restored = evaluateClarification(recovered, 'pause_for_clarification');
+  assert.deepEqual(restored.diagnostics, []);
+  assert.deepEqual(restored.semantic_snapshot.delivery_sections.grounded, [bx.obligation_id]);
+  assert.deepEqual(restored.semantic_snapshot.formal_test_points.find((/** @type {any} */ point) => point.obligation_id === y.obligation_id).root_issue_ids, [yId]);
+
+  // A retained suppression is a separate gate even when another root remains current.
+  const suppressed = evaluateClarification(initial, 'record_only');
+  recovered.prior_state = suppressed.state;
+  const gated = evaluateClarification(recovered, 'pause_for_clarification');
+  assert.deepEqual(gated.diagnostics, []);
+  assert.deepEqual(gated.semantic_snapshot.delivery_sections.blocked, [x.obligation_id, bx.obligation_id].sort());
+  assert.equal(gated.semantic_snapshot.formal_test_points.find((/** @type {any} */ point) => point.obligation_id === x.obligation_id).root_issue_ids.length, 2);
+});
+
+test('mixed resource reasons remain exact after retained-gate restoration and immutable replay', () => {
+  const combined = 'CAPABILITY_UNAVAILABLE,CAPABILITY_UNKNOWN';
+  const ax = blocker({ missing_type: 'testability', semantic_refs: ['capability:X'], answerable: false, reason: combined });
+  const ay = { ...structuredClone(ax), semantic_refs: ['capability:Y'] };
+  const bx = { ...structuredClone(ax), obligation_id: 'obligation_second', reason: 'CAPABILITY_UNKNOWN' };
+  const initial = baseContext();
+  setCurrent(initial, [ax, ay, bx], [formalPoint(ax.obligation_id, 'blocked', 'E0', combined), formalPoint(bx.obligation_id, 'blocked', 'E0', bx.reason)]);
+  const ledger = rootLedger([ax, ay, bx]);
+  for (const point of initial.semantic_snapshot.formal_test_points) point.root_issue_ids = ledger.filter((root) => root.affected_obligation_ids.includes(point.obligation_id)).map((root) => root.root_issue_id).sort();
+  const first = evaluateClarification(initial, 'record_only');
+  assert.deepEqual(first.diagnostics, []);
+  const next = baseContext();
+  next.source_revision = 1;
+  next.prior_state = first.state;
+  next.append_batch.clarification_events = [{ event_id: 'restore-X', clarification_event_seq: 1,
+    type: 'request_reanalysis', actor: 'fixture owner', event_at: '2026-09-05T00:00:00Z',
+    source_locator_ids: ['locator_verified_fixture'], affected_items: [], reason: 'Fixture X restored.' }];
+  const y = { ...ay, reason: 'CAPABILITY_UNAVAILABLE' };
+  setCurrent(next, [y], [formalPoint(ax.obligation_id, 'blocked', 'E0', y.reason), formalPoint(bx.obligation_id, 'grounded', 'E3', null)]);
+  next.semantic_snapshot.formal_test_points.find((/** @type {any} */ p) => p.obligation_id === ax.obligation_id).root_issue_ids = [rootLedger([y])[0].root_issue_id];
+  const restored = evaluateClarification(next, 'pause_for_clarification');
+  assert.deepEqual(restored.diagnostics, []);
+  const replay = structuredClone(next);
+  replay.prior_state = restored.state;
+  replay.append_batch = { decision_records: [], clarification_events: [], execution_events: [] };
+  const repeated = evaluateClarification(replay, 'pause_for_clarification');
+  assert.deepEqual(repeated.diagnostics, []);
+  assert.deepEqual(repeated.semantic_snapshot, restored.semantic_snapshot);
+});
 
 /** @param {any[]} descriptors */
 function rootLedger(descriptors) {

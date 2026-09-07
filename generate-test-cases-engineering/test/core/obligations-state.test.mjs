@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { stableId } from '../../src/canonical.mjs';
 import { compile as compileState } from '../../src/obligations/state.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../../src/schema-validator.mjs';
 import { auditInteractionMatrix } from '../../src/views/interaction-matrix.mjs';
@@ -92,6 +93,19 @@ const expectedStateSeeds = [
   }
 ];
 
+const stateModel = (await stateFixture()).views[0];
+for (const seed of expectedStateSeeds) {
+  const element = stateModel.elements.find((/** @type {any} */ value) => value.kind === 'transition' && seed.view_element_refs.includes(stateModel.view_id + '#' + value.element_id));
+  Object.assign(seed, {
+    primary_operation_refs: [stateModel.view_id + '#' + element.element_id],
+    scenario_partition_ref: stableId('partition', {
+      kind: 'state', scope: seed.scope, responsibility: 'transition',
+      from: { kind: 'state', state: element.from_state }, event: element.event,
+      condition: element.condition, transition_order: element.transition_order
+    })
+  });
+}
+
 test('state obligations hand-count every explicit valid transition once, including a sourced self-transition', async () => {
   const artifact = await stateFixture();
   const graph = evidenceGraphFor(artifact);
@@ -102,7 +116,7 @@ test('state obligations hand-count every explicit valid transition once, includi
   assert.equal(actual.length, 3);
   assert.deepEqual(actual, expectedStateSeeds);
   const obligationsArtifact = {
-    schema_version: '2.1.0', source_revision: 7,
+    schema_version: '3.0.0', source_revision: 7,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

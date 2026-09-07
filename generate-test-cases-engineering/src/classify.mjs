@@ -1,6 +1,9 @@
 import { canonicalStringify, stableId } from './canonical.mjs';
 import { scopeContains } from './decision-record.mjs';
 import { E2_TARGETS } from './evidence.mjs';
+import { capabilityLabel, resolveObserver } from './testability-links.mjs';
+import { validateCaseSemantics, heuristicSchema, caseScenarioReferenceErrors } from './case-semantics.mjs';
+import { validateAgainstSchema } from './schema-validator.mjs';
 
 /** @typedef {{category: string, code: string, path: string, message: string}} Diagnostic */
 /** @typedef {{obligation_id: string, root_issue_id: string, reason: string, risk: string, evidence_refs: string[]}} BlockedCase */
@@ -33,29 +36,29 @@ const KEYS = Object.freeze({
   evidence: ['claimsById', 'factLedger', 'conflicts'],
   obligationsArtifact: ['schema_version', 'source_revision', 'obligations', 'fact_routes', 'interaction_routes'],
   caseDraftsArtifact: ['schema_version', 'source_revision', 'cases', 'obligation_dispositions', 'exploratory_candidates'],
-  obligation: ['obligation_id', 'kind', 'caseable', 'risk', 'scope', 'source_claim_ids', 'view_element_refs', 'required_oracle_refs', 'required_capabilities', 'combination_vector'],
+  obligation: ['obligation_id', 'kind', 'caseable', 'risk', 'scope', 'source_claim_ids', 'view_element_refs', 'primary_operation_refs', 'scenario_partition_ref', 'required_oracle_refs', 'required_capabilities', 'combination_vector'],
   combinationVector: ['policy_id', 'strength', 'owner', 'assignments', 'forbid_evidence_refs'],
   combinationOwner: ['view_id', 'fact_ids', 'view_element_refs'],
   combinationElementRef: ['view_id', 'element_id'],
   combinationAssignment: ['parameter_id', 'value_id', 'evidence_claim_id'],
   gapObligation: ['obligation_id', 'kind', 'caseable', 'risk', 'scope', 'source_claim_ids', 'view_element_refs', 'required_oracle_refs', 'required_capabilities', 'gap_issue'],
   gapIssue: ['root_issue_id', 'root_issue_key', 'missing_type', 'semantic_refs', 'scope', 'answerable', 'reasons', 'evidence_refs'],
-  fact: ['fact_id', 'claim_id', 'status', 'source_claim_ids'],
+  fact: ['fact_id', 'claim_id', 'status', 'source_claim_ids', 'required_view_kinds', 'view_review_basis'],
   conflict: ['conflict_id', 'root_issue_id', 'scope', 'rule_ids', 'source_ids'],
-  caseDraft: ['case_id', 'title', 'scope', 'risk', 'role', 'fact_ids', 'obligation_ids', 'source_claim_ids', 'preconditions', 'data', 'steps', 'testability_profile', 'post_state', 'cleanup', 'evidence_refs', 'temporary_assumption', 'execution_signature'],
+  caseDraft: ['case_id', 'title', 'scope', 'risk', 'scenario', 'risk_basis', 'execution_effects', 'role', 'fact_ids', 'obligation_ids', 'source_claim_ids', 'preconditions', 'data', 'steps', 'testability_profile', 'post_state', 'cleanup', 'evidence_refs', 'temporary_assumption', 'execution_signature'],
   role: ['value', 'evidence_ref', 'support_review'],
-  precondition: ['condition', 'reachable_from', 'source_claim_ids', 'evidence_ref', 'support_review'],
-  data: ['name', 'value', 'provenance', 'support_review'],
+  precondition: ['condition', 'reachable_from', 'setup', 'source_claim_ids', 'evidence_ref', 'support_review'],
+  data: ['name', 'value', 'partition_id', 'provenance', 'support_review'],
   provenance: ['type', 'ref'],
-  step: ['step_id', 'action', 'action_evidence_ref', 'support_review', 'expectations'],
-  expectation: ['kind', 'expectation_id', 'business_assertion', 'preceding_action_id', 'observer', 'observation_surface', 'observation_target', 'oracle', 'evidence_ref', 'oracle_evidence_refs', 'closes_obligation_id', 'support_review'],
-  oracle: ['type', 'expected_value', 'expected_state', 'expected_event', 'expected_side_effect', 'comparison', 'tolerance', 'window'],
-  profile: ['capabilities', 'observers', 'controls'],
-  capability: ['capability', 'status', 'provenance_ref'],
-  observer: ['observer', 'observation_target', 'status', 'provenance_ref'],
+  step: ['step_id', 'action', 'operation_id', 'action_evidence_ref', 'support_review', 'expectations'],
+  expectation: ['kind', 'expectation_id', 'business_assertion', 'preceding_action_id', 'observer', 'observer_ref', 'target_ref', 'observation_surface', 'observation_target', 'oracle', 'evidence_ref', 'oracle_evidence_refs', 'closes_obligation_id', 'support_review'],
+  oracle: ['type', 'assertion', 'expected_value', 'expected_state', 'expected_event', 'expected_side_effect', 'comparison', 'tolerance', 'window'],
+  profile: ['capabilities', 'observers', 'controls', 'setup_resources'],
+  capability: ['capability', 'capability_id', 'status', 'provenance_ref'],
+  observer: ['observer', 'observer_id', 'target_id', 'subject_ref', 'surface_id', 'observation_target', 'status', 'provenance_ref'],
   control: ['control', 'status', 'provenance_ref'],
   postState: ['state', 'evidence_ref', 'support_review'],
-  cleanup: ['required', 'steps', 'evidence_ref', 'no_cleanup_reason', 'no_cleanup_evidence_ref', 'support_review'],
+  cleanup: ['required', 'resolved_effects', 'steps', 'evidence_ref', 'no_cleanup_reason', 'no_cleanup_evidence_ref', 'support_review'],
   temporaryAssumption: ['claim_id', 'invalidation_condition'],
   execution: ['role', 'precondition_state', 'data_partition', 'action_path', 'oracle_refs'],
   exploratory: ['exploratory_id', 'title', 'scope', 'risk', 'source_claim_ids']
@@ -394,7 +397,8 @@ function canonicalSetProjection(entries) {
 function derivePreconditionState(draft) {
   return canonicalSetProjection((objectArray(draft.preconditions) ?? []).map((item) => ({
     condition: normalizeSemanticString(item.condition),
-    reachable_from: normalizeSemanticString(item.reachable_from)
+    reachable_from: normalizeSemanticString(item.reachable_from),
+    ...(item.setup === undefined ? {} : {setup:item.setup})
   })));
 }
 
@@ -402,7 +406,8 @@ function derivePreconditionState(draft) {
 function deriveDataPartition(draft) {
   return canonicalSetProjection((objectArray(draft.data) ?? []).map((item) => ({
     name: normalizeSemanticString(item.name),
-    value: normalizeSemanticString(item.value)
+    value: normalizeSemanticString(item.value),
+    ...(draft.scenario === undefined ? {} : {scenario:draft.scenario})
   })));
 }
 
@@ -413,11 +418,12 @@ function oracleSemanticId(step, expectation) {
   const expectedField = ORACLE_FIELDS[/** @type {keyof typeof ORACLE_FIELDS} */ (type)];
   return stableId('oracle', {
     action: normalizeSemanticString(step.action),
-    observer: normalizeSemanticString(expectation.observer),
-    observation_surface: normalizeSemanticString(expectation.observation_surface),
-    observation_target: normalizeSemanticString(expectation.observation_target),
+    observer: normalizeSemanticString(expectation.observer_ref ?? expectation.observer),
+    observation_surface: isRecord(oracle.assertion) ? oracle.assertion.surface : normalizeSemanticString(expectation.observation_surface),
+    observation_target: normalizeSemanticString(expectation.target_ref ?? expectation.observation_target),
     oracle: {
       type,
+      ...(oracle.assertion === undefined ? {} : {assertion:oracle.assertion}),
       ...(expectedField ? { [expectedField]: normalizeSemanticString(oracle[expectedField]) } : {}),
       comparison: normalizeSemanticString(oracle.comparison),
       ...(oracle.tolerance === undefined ? {} : { tolerance: oracle.tolerance }),
@@ -489,7 +495,7 @@ function validateClosedShape(context, diagnostics) {
     diagnostics.push(diagnostic('classification', 'CONTEXT_INVALID', '/', 'classification context collections have invalid types'));
     return;
   }
-  if (obligations.schema_version !== '2.1.0' || drafts.schema_version !== '2.1.0'
+  if (obligations.schema_version !== '3.0.0' || drafts.schema_version !== '3.0.0'
     || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
     diagnostics.push(diagnostic('classification', 'SOURCE_REVISION_MISMATCH', '/', 'all classification inputs must share source_revision'));
   }
@@ -521,6 +527,10 @@ function validateClosedShape(context, diagnostics) {
   obligations.obligations.forEach((obligation, index) => {
     checkKeys(obligation, obligation?.kind === 'requirement-gap' ? KEYS.gapObligation : KEYS.obligation, `/obligations/obligations/${index}`, diagnostics);
     if (!isRecord(obligation)) return;
+    if (obligation.caseable === true) {
+      if (stringArray(obligation.primary_operation_refs,true) === null) diagnostics.push(diagnostic('schema','CASE_OPERATION_METADATA_INVALID',`/obligations/obligations/${index}/primary_operation_refs`,'Caseable Test Points require canonical unique compiler primary operation references'));
+      checkCanonical(obligation.scenario_partition_ref,`/obligations/obligations/${index}/scenario_partition_ref`,diagnostics);
+    }
     if (obligation.kind === 'requirement-gap' && isRecord(obligation.gap_issue)) checkKeys(
       obligation.gap_issue, KEYS.gapIssue, `/obligations/obligations/${index}/gap_issue`, diagnostics
     );
@@ -563,6 +573,7 @@ function validateClosedShape(context, diagnostics) {
     const base = `/caseDrafts/cases/${caseIndex}`;
     checkKeys(draft, KEYS.caseDraft, base, diagnostics);
     if (!isRecord(draft)) return;
+    for (const error of validateCaseSemantics(draft)) diagnostics.push({...error,path:`${base}${error.path}`});
     for (const [field, value] of [['case_id', draft.case_id], ['scope', draft.scope]]) checkCanonical(value, `${base}/${field}`, diagnostics);
     if (isRecord(draft.role)) checkKeys(draft.role, KEYS.role, `${base}/role`, diagnostics);
     objectArray(draft.preconditions)?.forEach((item, index) => checkKeys(item, KEYS.precondition, `${base}/preconditions/${index}`, diagnostics));
@@ -613,7 +624,11 @@ function validateClosedShape(context, diagnostics) {
       }
     }
   });
-  drafts.exploratory_candidates.forEach((candidate, index) => checkKeys(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics));
+  drafts.exploratory_candidates.forEach((candidate, index) => {
+    if (candidate?.origin === 'heuristic') {
+      for (const error of validateAgainstSchema(candidate,heuristicSchema)) diagnostics.push({...error,path:`/caseDrafts/exploratory_candidates/${index}${error.path}`});
+    } else checkKeys(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics);
+  });
 }
 
 /** @typedef {{claim: Record<string, unknown>, rank: number, reasons: string[], parents: string[], children: string[]}} ClaimAssessment */
@@ -897,6 +912,10 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const formalEvidenceRoots = new Set();
   const downgradeRoots = new Set();
   const gate = { rank: 2 };
+  for (const error of caseScenarioReferenceErrors(draft,obligations)) diagnostics.push({...error,path:`/caseDrafts/cases/${pointerPart(String(draft.case_id))}${error.path}`});
+  for (const resource of objectArray(isRecord(draft.testability_profile) ? draft.testability_profile.setup_resources : []) ?? []) {
+    if (isCanonicalString(resource.evidence_ref)) evidenceRoots.add(resource.evidence_ref);
+  }
   const requiredFieldsValid = isCanonicalString(draft.case_id) && isNonblank(draft.title) && isCanonicalString(draft.scope)
     && RISKS.has(/** @type {string} */ (draft.risk)) && isRecord(draft.role)
     && (stringArray(draft.fact_ids, true) !== null) && (stringArray(draft.obligation_ids, true) !== null)
@@ -986,7 +1005,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const expectationsForOwnership = [];
   /** @type {Set<string>} */
   const formalOutcomeSignatures = new Set();
-  /** @type {Array<{observer: string, target: string}>} */
+  /** @type {Record<string, unknown>[]} */
   const requiredObservers = [];
   for (const [stepIndex, step] of steps.entries()) {
     if (!isCanonicalString(step.step_id) || stepIds.has(step.step_id)) {
@@ -1035,7 +1054,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         });
       }
       if (expectationFieldsValid && expectationLocatable) {
-        requiredObservers.push({ observer: String(expectation.observer), target: String(expectation.observation_target) });
+        requiredObservers.push(expectation);
       }
       const oracle = isRecord(expectation.oracle) ? expectation.oracle : null;
       const expectedField = oracle ? ORACLE_FIELDS[/** @type {keyof typeof ORACLE_FIELDS} */ (oracle.type)] : null;
@@ -1081,7 +1100,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const providedCapabilities = new Set();
   for (const capability of capabilities) {
     if (!isCanonicalString(capability.capability) || !CAPABILITY_STATUSES.has(/** @type {string} */ (capability.status))) reasons.add('CAPABILITY_MISSING');
-    else providedCapabilities.add(capability.capability);
+    else providedCapabilities.add(typeof capability.capability_id === 'string' ? capability.capability_id : capabilityLabel(capability.capability));
     applyCapabilityStatus(capability.status, gate, reasons);
     if (isCanonicalString(capability.provenance_ref)) {
       evidenceRoots.add(capability.provenance_ref);
@@ -1107,9 +1126,19 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     }
     else reasons.add('CAPABILITY_PROVENANCE_MISSING');
   }
-  for (const required of requiredCapabilities) if (!providedCapabilities.has(required)) reasons.add('REQUIRED_CAPABILITY_MISSING');
+  for (const required of requiredCapabilities) if (!providedCapabilities.has(required) && !providedCapabilities.has(capabilityLabel(required))) {
+    reasons.add('REQUIRED_CAPABILITY_MISSING');
+    diagnostics.push(diagnostic('reference', 'TESTABILITY_REFERENCE_MISMATCH',
+      `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/testability_profile/capabilities`,
+      'a required capability must resolve to a declared capability ID; repair the adapter reference before asking about availability'));
+  }
   for (const required of requiredObservers) {
-    if (!observers.some((observer) => observer.observer === required.observer && observer.observation_target === required.target)) reasons.add('OBSERVER_MISSING');
+    if (!resolveObserver(observers, required)) {
+      reasons.add('OBSERVER_MISSING');
+      diagnostics.push(diagnostic('reference', 'TESTABILITY_REFERENCE_MISMATCH',
+        `/caseDrafts/cases/${pointerPart(String(draft.case_id))}/steps`,
+        'observer/target must resolve uniquely in the Testability profile; repair the adapter reference before asking about availability'));
+    }
   }
 
   if (isRecord(draft.post_state)) {
@@ -2040,6 +2069,10 @@ export function classifyCaseDrafts(submittedContext) {
     for (const candidate of [...exploratory].sort((left, right) =>
       compareCodePoints(String(left.exploratory_id), String(right.exploratory_id)))) {
       const candidateId = String(candidate.exploratory_id);
+      if (candidate.origin === 'heuristic') {
+        exploratoryOutput.push(structuredClone(candidate));
+        continue;
+      }
       let valid = true;
       if (!exploratoryRouteIds.has(candidateId)) {
         valid = false;

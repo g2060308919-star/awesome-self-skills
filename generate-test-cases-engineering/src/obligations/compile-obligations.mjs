@@ -9,6 +9,7 @@ import {
 } from '../views/interaction-matrix.mjs';
 import { validateBehaviorViews } from '../views/validate-views.mjs';
 import { compile as compileDecision } from './decision.mjs';
+import { ownedScenarioMetadata } from './scenario-identity.mjs';
 import { compile as compileFlow } from './flow.mjs';
 import { compile as compileInputDomain } from './input-domain.mjs';
 import { compile as compileIntegration } from './integration.mjs';
@@ -401,8 +402,15 @@ function validateEvidenceInputs(graph, diagnostics) {
       const factId = typeof fact.fact_id === 'string' ? fact.fact_id : '';
       const path = `/factLedger/${factId || facts.length}`;
       let valid = true;
-      if (!hasExactKeys(fact, FACT_FIELDS)) {
+      const audited = Object.hasOwn(fact, 'required_view_kinds') || Object.hasOwn(fact, 'view_review_basis');
+      if (!hasExactKeys(fact, audited ? [...FACT_FIELDS, 'required_view_kinds', 'view_review_basis'].sort(compareCodePoints) : FACT_FIELDS)) {
         diagnostics.push(diagnostic('schema', 'EVIDENCE_FACT_NOT_CLOSED', path, 'fact entries must contain exactly fact_id, claim_id, status, and source_claim_ids'));
+        valid = false;
+      }
+      if (audited && (!isDenseUniqueStringArray(fact.required_view_kinds, false)
+        || !stringArray(fact.required_view_kinds).every(kind => ['flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration'].includes(kind))
+        || !isNonblankUnpadded(fact.view_review_basis))) {
+        diagnostics.push(diagnostic('schema', 'EVIDENCE_FACT_VIEW_REVIEW_INVALID', path, 'fact behavior review must name required view kinds and an auditable basis'));
         valid = false;
       }
       if (!isNonblankUnpadded(factId) || !isNonblankUnpadded(fact.claim_id)
@@ -771,10 +779,10 @@ function validateViewContext(viewId, view, context, diagnostics) {
 /** @param {CompilationInputs} inputs @param {Map<string, Record<string, unknown>>} viewsById @param {Map<string, Record<string, unknown>>} factsById @param {Map<string, Record<string, unknown>>} claimsById @param {ReturnType<typeof claimRelations>} relations @param {Diagnostic[]} diagnostics */
 function validateCustomObligations(inputs, viewsById, factsById, claimsById, relations, diagnostics) {
   const submittedObligations = inputs.customObligations.flatMap((entry) => (
-    isObject(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []
+    isObject(entry.obligation) ? [{ ...entry.obligation, ...ownedScenarioMetadata(entry.obligation,entry.responsibility_key), caseable: true }] : []
   ));
   diagnostics.push(.../** @type {Diagnostic[]} */ (validateAgainstSchema({
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: 0,
     obligations: submittedObligations,
     fact_routes: [],
@@ -962,6 +970,23 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       for (const factId of modeledFacts) ownerFactIds.add(factId);
     }
 
+    if (ownerFactIds.size > 1) diagnostics.push(diagnostic(
+      'classification', 'CUSTOM_RESPONSIBILITY_NOT_ATOMIC', `${path}/owner`,
+      'one custom responsibility must resolve to one atomic formal fact; split independently verifiable facts into separate responsibilities'
+    ));
+    if (['state', 'input-domain', 'role', 'timing', 'integration'].includes(String(seed.kind))) {
+      for (const owner of owners) {
+        const related = directionallyRelatedClaims(relations, owner.roots);
+        const modeled = [...viewsById.values()].some((view) => view.type === seed.kind
+          && scopeContains(String(view.scope), String(seed.scope))
+          && objectArray(view.elements).some((element) => elementEvidenceRefs(element).some((ref) => related.has(ref))));
+        if (!modeled) diagnostics.push(diagnostic(
+          'traceability', 'CUSTOM_RESPONSIBILITY_VIEW_REQUIRED', `${path}/owner`,
+          `custom ${String(seed.kind)} responsibility supplements a dedicated ${String(seed.kind)} view for the same owner; it cannot replace its branch or boundary expansion`
+        ));
+      }
+    }
+
     const relatedToAnyOwner = directionallyRelatedClaims(
       relations, owners.flatMap((owner) => owner.roots)
     );
@@ -1009,6 +1034,8 @@ function finishObligationMerge(byId) {
     caseable: true,
     risk: entry.risk,
     scope: entry.scope,
+    primary_operation_refs: [.../** @type {Set<string>} */ (entry.primary_operation_refs)].sort(compareCodePoints),
+    scenario_partition_ref: entry.scenario_partition_ref,
     ...Object.fromEntries(OBLIGATION_SET_FIELDS.map((field) => [
       field, [.../** @type {Set<string>} */ (entry[field])].sort(compareCodePoints)
     ]))
@@ -1017,12 +1044,15 @@ function finishObligationMerge(byId) {
 
 /** @param {Record<string, unknown>} seed @param {string} [owner] */
 function obligationAccumulator(seed, owner = '') {
+  const metadata = seed.primary_operation_refs ? seed : ownedScenarioMetadata(seed,owner);
   return {
     obligation_id: seed.obligation_id,
     kind: seed.kind,
     risk: seed.risk,
     scope: seed.scope,
     owner,
+    primary_operation_refs: new Set(stringArray(metadata.primary_operation_refs)),
+    scenario_partition_ref: metadata.scenario_partition_ref,
     ...Object.fromEntries(OBLIGATION_SET_FIELDS.map((field) => [field, new Set(stringArray(seed[field]))]))
   };
 }
@@ -1051,7 +1081,7 @@ function mergeSystemObligations(seeds, diagnostics) {
       byId.set(obligationId, obligationAccumulator(seed));
       return;
     }
-    if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) {
+    if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope || existing.scenario_partition_ref !== seed.scenario_partition_ref) {
       diagnostics.push(diagnostic(
         'classification', 'OBLIGATION_SIGNATURE_CONFLICT', path,
         `duplicate obligation signature "${obligationId}" has conflicting kind, risk, or scope`
@@ -1059,6 +1089,7 @@ function mergeSystemObligations(seeds, diagnostics) {
       return;
     }
     addObligationSets(existing, seed);
+    for (const ref of stringArray(seed.primary_operation_refs)) /** @type {Set<string>} */ (existing.primary_operation_refs).add(ref);
   });
   return finishObligationMerge(byId);
 }
@@ -2212,8 +2243,9 @@ export function compileObligations(evidenceGraph, behaviorViews) {
     'candidate_id', 'candidate_id', 'INTERACTION', diagnostics
   );
 
+  for (const obligation of obligations) if (obligation.caseable === true && !obligation.primary_operation_refs) Object.assign(obligation,ownedScenarioMetadata(obligation));
   const compiled = {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: typeof artifact.source_revision === 'number' ? artifact.source_revision : -1,
     obligations,
     fact_routes: factRoutes,

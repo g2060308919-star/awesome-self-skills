@@ -296,6 +296,7 @@ test('one failed candidate makes a formal Test Point Blocked instead of also exe
   const valid = baseCase();
   const invalid = baseCase({ case_id: 'case_2222222222222222' });
   invalid.steps[0].expectations[0].oracle.expected_state = '';
+  invalid.steps[0].expectations[0].oracle.assertion.operand.value = '';
   const context = classificationContext({
     cases: [valid, invalid],
     dispositions: [{
@@ -494,7 +495,7 @@ test('each linked obligation maps every required Oracle to a concrete expectatio
   const secondObligation = baseObligation({
     obligation_id: secondObligationId,
     required_oracle_refs: [secondOracleId],
-    view_element_refs: ['view_checkout#edge_second']
+    view_element_refs: ['view_checkout#edge_submit']
   });
   const draft = baseCase({ obligation_ids: [IDS.obligation, secondObligationId] });
   draft.evidence_refs.push(secondOracleId);
@@ -543,11 +544,12 @@ test('one Case cannot combine independently diagnosable observed outcomes', () =
     ...clone(draft.steps[0].expectations[0]),
     expectation_id: 'expectation_audit_result',
     observation_target: 'audit-result',
-    oracle: { type: 'state', expected_state: 'audited', comparison: 'equals' },
+    oracle: { type: 'state', expected_state: 'audited', comparison: 'equals', assertion:{subject_ref:'order.status',surface:'UI',operator:'equals',operand:{type:'string',value:'audited'}} },
     closes_obligation_id: secondObligationId
   });
   draft.testability_profile.observers.push({
     observer: 'tester', observation_target: 'audit-result', status: 'verified',
+    subject_ref:'order.status',surface_id:'UI',
     provenance_ref: 'claim_oracle'
   });
   refreshExecutionSignature(draft);
@@ -589,7 +591,7 @@ test('distinct obligations require a complete one-to-one matching to distinct co
   const secondObligation = baseObligation({
     obligation_id: secondObligationId,
     required_oracle_refs: [secondOracleId],
-    view_element_refs: ['view_checkout#edge_second']
+    view_element_refs: ['view_checkout#edge_submit']
   });
   const unionDraft = baseCase({ obligation_ids: [IDS.obligation, secondObligationId] });
   unionDraft.steps[0].expectations[0].evidence_ref = jointOracleId;

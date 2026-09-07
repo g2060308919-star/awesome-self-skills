@@ -1,6 +1,7 @@
 import { normalizeScope, scopeContains, validateDecisionRecords } from './decision-record.mjs';
 import { stableId } from './canonical.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
+import { validateAssetClaims } from './source-audit.mjs';
 
 export const E2_TARGETS = Object.freeze({
   formula: Object.freeze(['test-data', 'expected-value']),
@@ -662,6 +663,7 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
     directRangesBySource.set(sourceId, merged);
   }
 
+  diagnostics.push(...validateAssetClaims(pack, acceptedClaims));
   objectArray(pack.source_reviews).forEach((review, reviewIndex) => {
     if (typeof review.source_id !== 'string') return;
     const reviewSourceId = review.source_id;

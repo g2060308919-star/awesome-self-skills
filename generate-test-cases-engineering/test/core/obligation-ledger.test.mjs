@@ -141,7 +141,7 @@ function customId(responsibility) {
 /** @returns {any} */
 function task3SourcePack() {
   return completeSourcePack({
-    schema_version: '2.1.0', source_revision: 7,
+    schema_version: '3.0.0', source_revision: 7,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
     sources: [{
       source_id: 'source_prd', kind: 'prd', version: '1', status: 'effective',
@@ -163,13 +163,14 @@ function task3SourcePack() {
 
 function task3DirectEvidence() {
   return {
-    schema_version: '2.1.0', source_revision: 7,
+    schema_version: '3.0.0', source_revision: 7,
     claims: [{
       claim_id: 'claim_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: 'checkout', value: 'approved', source_locator_ids: ['locator_rule'], source_id: 'source_prd'
     }],
     fact_ledger: [{
-      fact_id: 'fact_rule', claim_id: 'claim_rule', status: 'active', source_claim_ids: ['claim_rule']
+      fact_id: 'fact_rule', claim_id: 'claim_rule', status: 'active', source_claim_ids: ['claim_rule'],
+      required_view_kinds: ['decision'], view_review_basis: 'Source defines an approval decision.'
     }]
   };
 }
@@ -187,7 +188,7 @@ function task3DecisionEvidence(disposition) {
       evidence_ref: 'locator_rule', evidence_level: level
     },
     artifact: {
-      schema_version: '2.1.0', source_revision: 7,
+      schema_version: '3.0.0', source_revision: 7,
       claims: [{
         claim_id: 'claim_rule', claim_form: 'decision-record', level,
         kind: disposition === 'final' ? 'requirement' : 'assumption', scope: 'checkout',
@@ -195,7 +196,8 @@ function task3DecisionEvidence(disposition) {
         decision_id: 'decision_rule', authority: 'checkout'
       }],
       fact_ledger: [{
-        fact_id: 'fact_rule', claim_id: 'claim_rule', status: 'active', source_claim_ids: ['claim_rule']
+        fact_id: 'fact_rule', claim_id: 'claim_rule', status: 'active', source_claim_ids: ['claim_rule'],
+        required_view_kinds: ['decision'], view_review_basis: 'Confirmed approval decision.'
       }]
     }
   };
@@ -333,7 +335,7 @@ test('obligation ledger compiles an empty formal scope into the frozen artifact 
     runScope: 'empty'
   };
   const behaviorViews = {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: 0,
     views: [],
     interaction_matrix: interactionDimensions.map((dimension) => ({
@@ -343,7 +345,7 @@ test('obligation ledger compiles an empty formal scope into the frozen artifact 
   };
 
   assert.deepEqual(compileObligations(evidenceGraph, behaviorViews), {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: 0,
     obligations: [],
     fact_routes: [],
@@ -838,10 +840,9 @@ test('obligation ledger rejects custom system collisions and conflicting semanti
     required_oracle_refs: ['claim_rule', 'claim_other_owner'], required_capabilities: []
   });
   publicInputs(siblingLeak).custom_responsibilities.push(bipartiteInput);
-  const siblingResult = /** @type {any} */ (compileObligations(siblingLeak, ownerFixture.behavior_views));
-  assert.equal(siblingResult.obligations.some(
-    (/** @type {any} */ item) => item.obligation_id === customId(bipartiteInput)
-  ), true);
+  assert.throws(() => compileObligations(siblingLeak, ownerFixture.behavior_views),
+    (/** @type {unknown} */ error) => error instanceof ObligationCompilationError
+      && error.diagnostics.some((item) => item.code === 'CUSTOM_RESPONSIBILITY_NOT_ATOMIC'));
 
   const sourceOwner = graphFrom(fixture);
   const firstSourceOwner = customInput('shared-source-owner', {
@@ -1076,7 +1077,7 @@ test('obligation ledger surfaces Task 4 interaction omissions and mutually exclu
 test('obligation ledger orchestrates the closed seven-strategy registry and rejects unknown or duplicate registrations', () => {
   const viewTypes = ['flow', 'decision', 'state', 'input-domain', 'role', 'timing', 'integration'];
   const behaviorViews = {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: 11,
     views: viewTypes.map((type) => ({
       view_id: `view_${type}`,
@@ -1485,7 +1486,7 @@ test('obligation ledger memoizes one NotApplicable exclusion closure across many
   }));
   /** @type {any} */
   const behaviorViews = {
-    schema_version: '2.1.0', source_revision: 0, views: [],
+    schema_version: '3.0.0', source_revision: 0, views: [],
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['checkout'], dimension, status: 'checked-no-signal'
     })),
@@ -1530,7 +1531,7 @@ test('obligation ledger answers distinct independent NotApplicable exclusions wi
       status: 'active', source_claim_ids: ['claim_distinct_na_fact']
     }));
     const behaviorViews = {
-      schema_version: '2.1.0', source_revision: 0, views: [],
+      schema_version: '3.0.0', source_revision: 0, views: [],
       interaction_matrix: interactionDimensions.map((dimension) => ({
         module_ids: ['checkout'], dimension, status: 'checked-no-signal'
       })),
@@ -1582,7 +1583,7 @@ test('obligation ledger keeps related NotApplicable rejection deterministic unde
   }));
   /** @type {any} */
   const behaviorViews = {
-    schema_version: '2.1.0', source_revision: 0, views: [],
+    schema_version: '3.0.0', source_revision: 0, views: [],
     interaction_matrix: interactionDimensions.map((dimension) => ({
       module_ids: ['checkout'], dimension, status: 'checked-no-signal'
     })),
@@ -1630,13 +1631,13 @@ test('obligation ledger batch-checks thousands of independent custom owners with
   }));
   view.relations = [];
   behaviorViews.obligation_inputs.terminal_fact_routes = [];
-  behaviorViews.obligation_inputs.custom_responsibilities = [customInput(
-    'independent-owner-scale', {
-      kind: 'decision', risk: 'medium', scope: 'checkout', source_claim_ids: [...claimIds],
-      view_element_refs: elementIds.map((elementId) => `view_decision#${elementId}`),
+  behaviorViews.obligation_inputs.custom_responsibilities = elementIds.map((elementId, index) => customInput(
+    `independent-owner-scale-${index}`, {
+      kind: 'decision', risk: 'medium', scope: 'checkout', source_claim_ids: [claimIds[index]],
+      view_element_refs: [`view_decision#${elementId}`],
       required_oracle_refs: [], required_capabilities: []
     }
-  )];
+  ));
   const graph = {
     claimsById: new Map(claimIds.map((claimId) => [claimId, {
       claim_id: claimId, level: 'E3', kind: 'requirement', scope: 'checkout'
@@ -1748,7 +1749,7 @@ test('obligation ledger rejects sibling custom evidence that only shares a paren
   assert.equal(error.diagnostics.some((item) => item.code === 'CUSTOM_OBLIGATION_ORACLE_UNRELATED'), true);
 });
 
-test('obligation ledger accepts bipartite custom coverage across independent owners', async () => {
+test('obligation ledger rejects aggregated owners and accepts separate atomic responsibilities', async () => {
   const fixture = await ledgerFixture();
   fixture.claims.push({
     claim_id: 'claim_owner_b', level: 'E3', kind: 'requirement', scope: 'checkout', parent_claim_ids: []
@@ -1769,10 +1770,18 @@ test('obligation ledger accepts bipartite custom coverage across independent own
     required_oracle_refs: ['claim_rule', 'claim_owner_b'], required_capabilities: []
   });
   fixture.behavior_views.obligation_inputs.custom_responsibilities.push(bipartite);
-
+  assert.throws(() => compileObligations(graphFrom(fixture), fixture.behavior_views),
+    (/** @type {any} */ error) => error.diagnostics.some((/** @type {any} */ d) => d.code === 'CUSTOM_RESPONSIBILITY_NOT_ATOMIC'));
+  fixture.behavior_views.obligation_inputs.custom_responsibilities = [];
+  const atomic = ['claim_rule', 'claim_owner_b'].map((claimId, index) => customInput(`atomic-owner-${index}`, {
+    kind: 'decision', risk: 'low', scope: 'checkout', source_claim_ids: [claimId],
+    view_element_refs: [index === 0 ? 'view_decision#rule_checkout' : 'view_decision#rule_owner_b'],
+    required_oracle_refs: [claimId], required_capabilities: []
+  }));
+  fixture.behavior_views.obligation_inputs.custom_responsibilities.push(...atomic);
   const compiled = /** @type {any} */ (compileObligations(graphFrom(fixture), fixture.behavior_views));
-  assert.equal(compiled.obligations.some(
-    (/** @type {any} */ item) => item.obligation_id === customId(bipartite)
+  assert.equal(atomic.every(responsibility => compiled.obligations.some(
+    (/** @type {any} */ item) => item.obligation_id === customId(responsibility))
   ), true);
 });
 

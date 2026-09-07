@@ -60,6 +60,27 @@ var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/elements/transition_order"
 ]);
 var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
+  "/primary_operation_refs",
+  "/obligations/primary_operation_refs",
+  "/source_assets",
+  "/source_reviews",
+  "/fact_ledger/required_view_kinds",
+  "/execution_effects",
+  "/cleanup/resolved_effects",
+  "/preconditions/setup/mutation_effects",
+  "/testability_profile/setup_resources",
+  "/cases/execution_effects",
+  "/cases/cleanup/resolved_effects",
+  "/cases/preconditions/setup/mutation_effects",
+  "/cases/testability_profile/setup_resources",
+  "/grounded/execution_effects",
+  "/grounded/cleanup/resolved_effects",
+  "/grounded/preconditions/setup/mutation_effects",
+  "/grounded/testability_profile/setup_resources",
+  "/conditional/execution_effects",
+  "/conditional/cleanup/resolved_effects",
+  "/conditional/preconditions/setup/mutation_effects",
+  "/conditional/testability_profile/setup_resources",
   "/source_ids",
   "/supersedes",
   "/source_locator_ids",
@@ -215,6 +236,8 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
 var ROOT_ISSUE_ASSOCIATIONS = /* @__PURE__ */ new Set(["case_ids", "case_id", "test_point_ids", "test_point_id", "obligation_ids", "obligation_id"]);
 var EXECUTION_SIGNATURE_ASSOCIATIONS = /* @__PURE__ */ new Set(["obligation_ids", "obligation_id"]);
 var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
+  ["/source_assets", "asset_id"],
+  ["/source_reviews", "source_id"],
   ["/sources", "source_id"],
   ["/locators", "locator_id"],
   ["/source_policy/rules", "rule_id"],
@@ -353,7 +376,7 @@ var behavior_views_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
   properties: {
-    schema_version: { const: "2.1.0" },
+    schema_version: { const: "3.0.0" },
     source_revision: { type: "integer", minimum: 0 },
     views: { type: "array", items: { type: "object", required: ["view_id", "type", "scope", "source_claim_ids", "elements", "relations"], properties: {
       view_id: { type: "string", minLength: 1 },
@@ -416,59 +439,2462 @@ var case_drafts_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "case-drafts.schema.json",
   type: "object",
-  required: ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
+  required: [
+    "schema_version",
+    "source_revision",
+    "cases",
+    "obligation_dispositions",
+    "exploratory_candidates"
+  ],
   properties: {
-    schema_version: { const: "2.1.0" },
-    source_revision: { type: "integer", minimum: 0 },
+    schema_version: {
+      const: "3.0.0"
+    },
+    source_revision: {
+      type: "integer",
+      minimum: 0
+    },
     cases: {
       type: "array",
       items: {
         type: "object",
-        required: ["case_id", "title", "scope", "risk", "role", "fact_ids", "obligation_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "execution_signature"],
+        required: [
+          "case_id",
+          "title",
+          "scope",
+          "risk",
+          "role",
+          "fact_ids",
+          "obligation_ids",
+          "preconditions",
+          "data",
+          "steps",
+          "testability_profile",
+          "post_state",
+          "cleanup",
+          "evidence_refs",
+          "execution_signature",
+          "scenario",
+          "risk_basis",
+          "execution_effects"
+        ],
         properties: {
-          case_id: { type: "string", minLength: 1 },
-          title: { type: "string", minLength: 1 },
-          scope: { type: "string", minLength: 1 },
-          risk: { enum: ["critical", "high", "medium", "low"] },
-          role: { type: "object", required: ["value", "evidence_ref", "support_review"], properties: { value: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false },
-          fact_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
-          preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
-            { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
-            { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: {
-            step_id: { type: "string", minLength: 1 },
-            action: { type: "string", minLength: 1 },
-            action_evidence_ref: { type: "string", minLength: 1 },
-            support_review: { enum: ["supported", "contradicted", "uncertain"] },
-            expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } }
-          }, additionalProperties: false } },
-          testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
-            capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
-            observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
-            controls: { type: "array", minItems: 1, items: { type: "object", required: ["control", "status"], properties: { control: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } }
-          }, additionalProperties: false },
-          post_state: { type: "object", required: ["state", "evidence_ref", "support_review"], properties: { state: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false },
-          cleanup: { oneOf: [
-            { type: "object", required: ["required", "steps", "evidence_ref", "support_review"], properties: { required: { const: true }, steps: { type: "array", items: { type: "string" }, minItems: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false },
-            { type: "object", required: ["required", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"], properties: { required: { const: false }, no_cleanup_reason: { type: "string", minLength: 1 }, no_cleanup_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false }
-          ] },
-          evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          temporary_assumption: { type: "object", required: ["claim_id", "invalidation_condition"], properties: { claim_id: { type: "string", minLength: 1 }, invalidation_condition: { type: "string", minLength: 1 } }, additionalProperties: false },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
+          case_id: {
+            type: "string",
+            minLength: 1
+          },
+          title: {
+            type: "string",
+            minLength: 1
+          },
+          scope: {
+            type: "string",
+            minLength: 1
+          },
+          risk: {
+            enum: [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          role: {
+            type: "object",
+            required: [
+              "value",
+              "evidence_ref",
+              "support_review"
+            ],
+            properties: {
+              value: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                enum: [
+                  "supported",
+                  "contradicted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          fact_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          obligation_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          source_claim_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            uniqueItems: true
+          },
+          preconditions: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "condition",
+                "reachable_from",
+                "source_claim_ids",
+                "evidence_ref",
+                "support_review",
+                "setup"
+              ],
+              properties: {
+                condition: {
+                  type: "string",
+                  minLength: 1
+                },
+                reachable_from: {
+                  type: "string",
+                  minLength: 1
+                },
+                source_claim_ids: {
+                  type: "array",
+                  items: {
+                    type: "string"
+                  },
+                  minItems: 1,
+                  uniqueItems: true
+                },
+                evidence_ref: {
+                  type: "string",
+                  minLength: 1
+                },
+                support_review: {
+                  enum: [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                setup: {
+                  type: "object",
+                  properties: {
+                    resource_kind: {
+                      enum: [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    resource_ref: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    completion: {
+                      type: "object",
+                      properties: {
+                        subject_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        operator: {
+                          enum: [
+                            "equals",
+                            "contains",
+                            "matches",
+                            "within"
+                          ]
+                        },
+                        operand: {
+                          oneOf: [
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "string"
+                                },
+                                value: {
+                                  type: "string"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "number"
+                                },
+                                value: {
+                                  type: "number"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "boolean"
+                                },
+                                value: {
+                                  type: "boolean"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "null"
+                                },
+                                value: {
+                                  type: "null"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            }
+                          ]
+                        }
+                      },
+                      required: [
+                        "subject_ref",
+                        "operator",
+                        "operand"
+                      ],
+                      additionalProperties: false
+                    },
+                    mutation_effects: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      uniqueItems: true
+                    }
+                  },
+                  required: [
+                    "resource_kind",
+                    "resource_ref",
+                    "completion",
+                    "mutation_effects"
+                  ],
+                  additionalProperties: false
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          data: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "name",
+                "value",
+                "provenance",
+                "support_review",
+                "partition_id"
+              ],
+              properties: {
+                name: {
+                  type: "string",
+                  minLength: 1
+                },
+                value: {
+                  type: "string",
+                  minLength: 1
+                },
+                provenance: {
+                  oneOf: [
+                    {
+                      type: "object",
+                      required: [
+                        "type",
+                        "ref"
+                      ],
+                      properties: {
+                        type: {
+                          const: "evidence"
+                        },
+                        ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    },
+                    {
+                      type: "object",
+                      required: [
+                        "type",
+                        "ref"
+                      ],
+                      properties: {
+                        type: {
+                          const: "derivation"
+                        },
+                        ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  ]
+                },
+                support_review: {
+                  enum: [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                partition_id: {
+                  type: "string",
+                  minLength: 1
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          steps: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "step_id",
+                "action",
+                "action_evidence_ref",
+                "support_review",
+                "expectations",
+                "operation_id"
+              ],
+              properties: {
+                step_id: {
+                  type: "string",
+                  minLength: 1
+                },
+                action: {
+                  type: "string",
+                  minLength: 1
+                },
+                action_evidence_ref: {
+                  type: "string",
+                  minLength: 1
+                },
+                support_review: {
+                  enum: [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                expectations: {
+                  type: "array",
+                  minItems: 1,
+                  items: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        required: [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "closes_obligation_id",
+                          "oracle_evidence_refs"
+                        ],
+                        properties: {
+                          kind: {
+                            const: "obligation-oracle"
+                          },
+                          expectation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          business_assertion: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          preceding_action_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observer: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_surface: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_target: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle: {
+                            oneOf: [
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "value"
+                                  },
+                                  expected_value: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "state"
+                                  },
+                                  expected_state: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "event"
+                                  },
+                                  expected_event: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "side-effect"
+                                  },
+                                  expected_side_effect: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              }
+                            ]
+                          },
+                          evidence_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          support_review: {
+                            enum: [
+                              "supported",
+                              "contradicted",
+                              "uncertain"
+                            ]
+                          },
+                          closes_obligation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle_evidence_refs: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          },
+                          observer_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          target_ref: {
+                            type: "string",
+                            minLength: 1
+                          }
+                        },
+                        additionalProperties: false
+                      },
+                      {
+                        type: "object",
+                        required: [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "oracle_evidence_refs"
+                        ],
+                        properties: {
+                          kind: {
+                            const: "auxiliary"
+                          },
+                          expectation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          business_assertion: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          preceding_action_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observer: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_surface: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_target: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle: {
+                            oneOf: [
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "value"
+                                  },
+                                  expected_value: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "state"
+                                  },
+                                  expected_state: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "event"
+                                  },
+                                  expected_event: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "side-effect"
+                                  },
+                                  expected_side_effect: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              }
+                            ]
+                          },
+                          evidence_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          support_review: {
+                            enum: [
+                              "supported",
+                              "contradicted",
+                              "uncertain"
+                            ]
+                          },
+                          oracle_evidence_refs: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          },
+                          observer_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          target_ref: {
+                            type: "string",
+                            minLength: 1
+                          }
+                        },
+                        additionalProperties: false
+                      }
+                    ]
+                  }
+                },
+                operation_id: {
+                  type: "string",
+                  minLength: 1
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          testability_profile: {
+            type: "object",
+            required: [
+              "capabilities",
+              "observers",
+              "controls",
+              "setup_resources"
+            ],
+            properties: {
+              capabilities: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "capability",
+                    "status"
+                  ],
+                  properties: {
+                    capability: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    capability_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              observers: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "observer",
+                    "observation_target",
+                    "status",
+                    "subject_ref",
+                    "surface_id"
+                  ],
+                  properties: {
+                    observer: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    observation_target: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    observer_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    target_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    subject_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    surface_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              controls: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "control",
+                    "status"
+                  ],
+                  properties: {
+                    control: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              setup_resources: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  properties: {
+                    resource_id: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    kind: {
+                      enum: [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    locator: {
+                      type: "string",
+                      pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
+                    },
+                    evidence_ref: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    }
+                  },
+                  required: [
+                    "resource_id",
+                    "kind",
+                    "locator",
+                    "evidence_ref"
+                  ],
+                  additionalProperties: false
+                }
+              }
+            },
+            additionalProperties: false
+          },
+          post_state: {
+            type: "object",
+            required: [
+              "state",
+              "evidence_ref",
+              "support_review"
+            ],
+            properties: {
+              state: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                enum: [
+                  "supported",
+                  "contradicted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          cleanup: {
+            oneOf: [
+              {
+                type: "object",
+                required: [
+                  "required",
+                  "steps",
+                  "evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                properties: {
+                  required: {
+                    const: true
+                  },
+                  steps: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1
+                  },
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    enum: [
+                      "supported",
+                      "contradicted",
+                      "uncertain"
+                    ]
+                  },
+                  resolved_effects: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                required: [
+                  "required",
+                  "no_cleanup_reason",
+                  "no_cleanup_evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                properties: {
+                  required: {
+                    const: false
+                  },
+                  no_cleanup_reason: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  no_cleanup_evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    enum: [
+                      "supported",
+                      "contradicted",
+                      "uncertain"
+                    ]
+                  },
+                  resolved_effects: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              }
+            ]
+          },
+          evidence_refs: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          temporary_assumption: {
+            type: "object",
+            required: [
+              "claim_id",
+              "invalidation_condition"
+            ],
+            properties: {
+              claim_id: {
+                type: "string",
+                minLength: 1
+              },
+              invalidation_condition: {
+                type: "string",
+                minLength: 1
+              }
+            },
+            additionalProperties: false
+          },
+          execution_signature: {
+            type: "object",
+            required: [
+              "role",
+              "precondition_state",
+              "data_partition",
+              "action_path",
+              "oracle_refs"
+            ],
+            properties: {
+              role: {
+                type: "string",
+                minLength: 1
+              },
+              precondition_state: {
+                type: "string",
+                minLength: 1
+              },
+              data_partition: {
+                type: "string",
+                minLength: 1
+              },
+              action_path: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1
+              },
+              oracle_refs: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          scenario: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  operation_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  operation_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  partition_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  subject_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  intent: {
+                    const: "behavior"
+                  }
+                },
+                required: [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent"
+                ],
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                properties: {
+                  operation_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  operation_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  partition_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  subject_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  intent: {
+                    const: "compatibility"
+                  },
+                  compatibility: {
+                    type: "object",
+                    properties: {
+                      baseline_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      dimensions: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    required: [
+                      "baseline_ref",
+                      "dimensions"
+                    ],
+                    additionalProperties: false
+                  }
+                },
+                required: [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent",
+                  "compatibility"
+                ],
+                additionalProperties: false
+              }
+            ]
+          },
+          risk_basis: {
+            type: "object",
+            properties: {
+              impact: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              likelihood: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              exposure: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              }
+            },
+            required: [
+              "impact",
+              "likelihood",
+              "exposure"
+            ],
+            additionalProperties: false
+          },
+          execution_effects: {
+            type: "array",
+            items: {
+              type: "string",
+              minLength: 1,
+              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+            },
+            uniqueItems: true
+          }
         },
         additionalProperties: false
       }
     },
-    obligation_dispositions: { type: "array", items: { oneOf: [
-      { type: "object", required: ["obligation_id", "status", "case_ids"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { const: "case_candidate" }, case_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false },
-      { type: "object", required: ["status", "affected_obligation_ids", "issue_intent", "subject"], properties: { status: { const: "blocker" }, affected_obligation_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true }, issue_intent: { type: "object", required: ["missing_type", "scope", "answerable", "risk", "reasons", "evidence_refs"], properties: { missing_type: { type: "string", minLength: 1, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" }, scope: { type: "string", minLength: 1 }, answerable: { type: "boolean" }, risk: { enum: ["critical", "high", "medium", "low"] }, reasons: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true }, evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false }, subject: { oneOf: [{ type: "object", required: ["kind", "fact_ids"], properties: { kind: { const: "facts" }, fact_ids: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "view_element_refs"], properties: { kind: { const: "view-elements" }, view_element_refs: { type: "array", items: { type: "object", required: ["view_id", "element_id"], properties: { view_id: { type: "string", minLength: 1 }, element_id: { type: "string", minLength: 1 } }, additionalProperties: false }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "capabilities"], properties: { kind: { const: "capabilities" }, capabilities: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "claim_refs"], properties: { kind: { const: "evidence-conflict" }, claim_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } }, additionalProperties: false },
-      { type: "object", required: ["obligation_id", "status", "exclusion_claim_id", "scope", "support_review"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { const: "not_applicable" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false }
-    ] } },
-    exploratory_candidates: { type: "array", items: { type: "object", required: ["exploratory_id", "title", "scope", "risk", "source_claim_ids"], properties: { exploratory_id: { type: "string", minLength: 1 }, title: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false } }
+    obligation_dispositions: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "obligation_id",
+              "status",
+              "case_ids"
+            ],
+            properties: {
+              obligation_id: {
+                type: "string",
+                minLength: 1
+              },
+              status: {
+                const: "case_candidate"
+              },
+              case_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "status",
+              "affected_obligation_ids",
+              "issue_intent",
+              "subject"
+            ],
+            properties: {
+              status: {
+                const: "blocker"
+              },
+              affected_obligation_ids: {
+                type: "array",
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              issue_intent: {
+                type: "object",
+                required: [
+                  "missing_type",
+                  "scope",
+                  "answerable",
+                  "risk",
+                  "reasons",
+                  "evidence_refs"
+                ],
+                properties: {
+                  missing_type: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  },
+                  scope: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  answerable: {
+                    type: "boolean"
+                  },
+                  risk: {
+                    enum: [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  reasons: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    uniqueItems: true
+                  },
+                  evidence_refs: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              },
+              subject: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: [
+                      "kind",
+                      "fact_ids"
+                    ],
+                    properties: {
+                      kind: {
+                        const: "facts"
+                      },
+                      fact_ids: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    required: [
+                      "kind",
+                      "view_element_refs"
+                    ],
+                    properties: {
+                      kind: {
+                        const: "view-elements"
+                      },
+                      view_element_refs: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          required: [
+                            "view_id",
+                            "element_id"
+                          ],
+                          properties: {
+                            view_id: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            element_id: {
+                              type: "string",
+                              minLength: 1
+                            }
+                          },
+                          additionalProperties: false
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    required: [
+                      "kind",
+                      "capabilities"
+                    ],
+                    properties: {
+                      kind: {
+                        const: "capabilities"
+                      },
+                      capabilities: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    required: [
+                      "kind",
+                      "claim_refs"
+                    ],
+                    properties: {
+                      kind: {
+                        const: "evidence-conflict"
+                      },
+                      claim_refs: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "obligation_id",
+              "status",
+              "exclusion_claim_id",
+              "scope",
+              "support_review"
+            ],
+            properties: {
+              obligation_id: {
+                type: "string",
+                minLength: 1
+              },
+              status: {
+                const: "not_applicable"
+              },
+              exclusion_claim_id: {
+                type: "string",
+                minLength: 1
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                const: "supported"
+              }
+            },
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    exploratory_candidates: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "exploratory_id",
+              "title",
+              "scope",
+              "risk",
+              "source_claim_ids"
+            ],
+            properties: {
+              exploratory_id: {
+                type: "string",
+                minLength: 1
+              },
+              title: {
+                type: "string",
+                minLength: 1
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              source_claim_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            properties: {
+              exploratory_id: {
+                type: "string",
+                minLength: 1,
+                pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+              },
+              title: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              scope: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              origin: {
+                const: "heuristic"
+              },
+              category: {
+                enum: [
+                  "boundary",
+                  "concurrency",
+                  "failure",
+                  "degradation",
+                  "security",
+                  "usability"
+                ]
+              },
+              hypothesis: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              rationale: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              }
+            },
+            required: [
+              "exploratory_id",
+              "title",
+              "scope",
+              "risk",
+              "origin",
+              "category",
+              "hypothesis",
+              "rationale"
+            ],
+            additionalProperties: false
+          }
+        ]
+      }
+    }
   },
   additionalProperties: false
 };
@@ -478,103 +2904,335 @@ var evidence_claims_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "evidence-claims.schema.json",
   type: "object",
-  required: ["schema_version", "source_revision", "claims", "fact_ledger"],
+  required: [
+    "schema_version",
+    "source_revision",
+    "claims",
+    "fact_ledger"
+  ],
   properties: {
-    schema_version: { const: "2.1.0" },
-    source_revision: { type: "integer", minimum: 0 },
+    schema_version: {
+      const: "3.0.0"
+    },
+    source_revision: {
+      type: "integer",
+      minimum: 0
+    },
     claims: {
       type: "array",
       items: {
         oneOf: [
           {
             type: "object",
-            required: ["claim_id", "claim_form", "level", "kind", "scope", "value", "source_locator_ids", "source_id"],
+            required: [
+              "claim_id",
+              "claim_form",
+              "level",
+              "kind",
+              "scope",
+              "value",
+              "source_locator_ids",
+              "source_id"
+            ],
             properties: {
-              claim_id: { type: "string", minLength: 1 },
-              claim_form: { const: "direct" },
-              level: { const: "E3" },
-              kind: { enum: ["requirement", "description", "example", "diagnostic"] },
-              scope: { type: "string", minLength: 1 },
-              value: { type: "string", minLength: 1 },
-              source_locator_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-              source_id: { type: "string", minLength: 1 }
+              claim_id: {
+                type: "string",
+                minLength: 1
+              },
+              claim_form: {
+                const: "direct"
+              },
+              level: {
+                const: "E3"
+              },
+              kind: {
+                enum: [
+                  "requirement",
+                  "description",
+                  "example",
+                  "diagnostic"
+                ]
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              value: {
+                type: "string",
+                minLength: 1
+              },
+              source_locator_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              source_id: {
+                type: "string",
+                minLength: 1
+              }
             },
             additionalProperties: false
           },
           {
             type: "object",
-            required: ["claim_id", "claim_form", "level", "kind", "scope", "value", "source_locator_ids", "decision_id", "authority"],
+            required: [
+              "claim_id",
+              "claim_form",
+              "level",
+              "kind",
+              "scope",
+              "value",
+              "source_locator_ids",
+              "decision_id",
+              "authority"
+            ],
             properties: {
-              claim_id: { type: "string", minLength: 1 },
-              claim_form: { const: "decision-record" },
-              level: { enum: ["E1", "E3"] },
-              kind: { enum: ["requirement", "assumption"] },
-              scope: { type: "string", minLength: 1 },
-              value: { type: "string", minLength: 1 },
-              source_locator_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-              decision_id: { type: "string", minLength: 1 },
-              authority: { type: "string", minLength: 1 }
+              claim_id: {
+                type: "string",
+                minLength: 1
+              },
+              claim_form: {
+                const: "decision-record"
+              },
+              level: {
+                enum: [
+                  "E1",
+                  "E3"
+                ]
+              },
+              kind: {
+                enum: [
+                  "requirement",
+                  "assumption"
+                ]
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              value: {
+                type: "string",
+                minLength: 1
+              },
+              source_locator_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              decision_id: {
+                type: "string",
+                minLength: 1
+              },
+              authority: {
+                type: "string",
+                minLength: 1
+              }
             },
             additionalProperties: false
           },
           {
             type: "object",
-            required: ["claim_id", "claim_form", "level", "kind", "scope", "value", "source_locator_ids", "derivation_kind", "derivation_target", "parent_claim_ids", "parameters", "rule_input"],
+            required: [
+              "claim_id",
+              "claim_form",
+              "level",
+              "kind",
+              "scope",
+              "value",
+              "source_locator_ids",
+              "derivation_kind",
+              "derivation_target",
+              "parent_claim_ids",
+              "parameters",
+              "rule_input"
+            ],
             properties: {
-              claim_id: { type: "string", minLength: 1 },
-              claim_form: { const: "derived" },
-              level: { const: "E2" },
-              kind: { enum: ["test-data", "expected-value", "model-element"] },
-              scope: { type: "string", minLength: 1 },
-              value: { type: "string", minLength: 1 },
-              source_locator_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-              derivation_kind: { enum: ["formula", "decision-table-instance", "boundary-representative", "enumeration-complement", "graph-reachability"] },
-              derivation_target: { enum: ["test-data", "expected-value", "model-element"] },
-              parent_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
+              claim_id: {
+                type: "string",
+                minLength: 1
+              },
+              claim_form: {
+                const: "derived"
+              },
+              level: {
+                const: "E2"
+              },
+              kind: {
+                enum: [
+                  "test-data",
+                  "expected-value",
+                  "model-element"
+                ]
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              value: {
+                type: "string",
+                minLength: 1
+              },
+              source_locator_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              derivation_kind: {
+                enum: [
+                  "formula",
+                  "decision-table-instance",
+                  "boundary-representative",
+                  "enumeration-complement",
+                  "graph-reachability"
+                ]
+              },
+              derivation_target: {
+                enum: [
+                  "test-data",
+                  "expected-value",
+                  "model-element"
+                ]
+              },
+              parent_claim_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
               parameters: {
                 type: "object",
                 properties: {
-                  formula_id: { type: "string", minLength: 1 },
-                  table_id: { type: "string", minLength: 1 },
-                  domain_id: { type: "string", minLength: 1 },
-                  enumeration_id: { type: "string", minLength: 1 },
-                  graph_id: { type: "string", minLength: 1 },
-                  unit: { type: "string", minLength: 1 },
-                  precision: { type: "integer", minimum: 0 },
-                  rounding: { type: "string", minLength: 1 }
+                  formula_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  table_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  domain_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  enumeration_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  graph_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  unit: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  precision: {
+                    type: "integer",
+                    minimum: 0
+                  },
+                  rounding: {
+                    type: "string",
+                    minLength: 1
+                  }
                 },
                 additionalProperties: false
               },
               rule_input: {
                 type: "object",
                 properties: {
-                  formula: { type: "string", minLength: 1 },
+                  formula: {
+                    type: "string",
+                    minLength: 1
+                  },
                   inputs: {
                     type: "array",
                     items: {
                       type: "object",
-                      required: ["name", "value"],
+                      required: [
+                        "name",
+                        "value"
+                      ],
                       properties: {
-                        name: { type: "string", minLength: 1 },
-                        value: { type: ["number", "string"] },
-                        unit: { type: "string", minLength: 1 }
+                        name: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        value: {
+                          type: [
+                            "number",
+                            "string"
+                          ]
+                        },
+                        unit: {
+                          type: "string",
+                          minLength: 1
+                        }
                       },
                       additionalProperties: false
                     },
                     uniqueItems: true
                   },
-                  unit: { type: "string", minLength: 1 },
-                  precision: { type: "integer", minimum: 0 },
-                  rounding: { type: "string", minLength: 1 },
-                  conditions: { type: "array", items: { type: "string" }, uniqueItems: true },
-                  outcome: { type: "string", minLength: 1 },
-                  lower: { type: "number" },
-                  upper: { type: "number" },
-                  inclusive: { type: "boolean" },
-                  enumerated_values: { type: "array", items: { type: "string" }, uniqueItems: true },
-                  closed_world: { type: "boolean" },
-                  from: { type: "string", minLength: 1 },
-                  to: { type: "string", minLength: 1 }
+                  unit: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  precision: {
+                    type: "integer",
+                    minimum: 0
+                  },
+                  rounding: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  conditions: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    uniqueItems: true
+                  },
+                  outcome: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  lower: {
+                    type: "number"
+                  },
+                  upper: {
+                    type: "number"
+                  },
+                  inclusive: {
+                    type: "boolean"
+                  },
+                  enumerated_values: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    uniqueItems: true
+                  },
+                  closed_world: {
+                    type: "boolean"
+                  },
+                  from: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  to: {
+                    type: "string",
+                    minLength: 1
+                  }
                 },
                 additionalProperties: false
               }
@@ -588,12 +3246,59 @@ var evidence_claims_schema_default = {
       type: "array",
       items: {
         type: "object",
-        required: ["fact_id", "claim_id", "status", "source_claim_ids"],
+        required: [
+          "fact_id",
+          "claim_id",
+          "status",
+          "source_claim_ids",
+          "required_view_kinds",
+          "view_review_basis"
+        ],
         properties: {
-          fact_id: { type: "string", minLength: 1 },
-          claim_id: { type: "string", minLength: 1 },
-          status: { enum: ["active", "conflicted", "ambiguous", "diagnostic"] },
-          source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }
+          fact_id: {
+            type: "string",
+            minLength: 1
+          },
+          claim_id: {
+            type: "string",
+            minLength: 1
+          },
+          status: {
+            enum: [
+              "active",
+              "conflicted",
+              "ambiguous",
+              "diagnostic"
+            ]
+          },
+          source_claim_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          required_view_kinds: {
+            type: "array",
+            items: {
+              enum: [
+                "flow",
+                "decision",
+                "state",
+                "input-domain",
+                "role",
+                "timing",
+                "integration"
+              ]
+            },
+            uniqueItems: true
+          },
+          view_review_basis: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S"
+          }
         },
         additionalProperties: false
       }
@@ -607,40 +3312,1326 @@ var source_pack_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "source-pack.schema.json",
   type: "object",
-  required: ["schema_version", "source_revision", "run_instance_id", "run_scope", "sources", "locators", "source_reviews", "source_policy", "decision_records", "clarification_events", "execution_events"],
+  required: [
+    "schema_version",
+    "source_revision",
+    "run_instance_id",
+    "run_scope",
+    "sources",
+    "locators",
+    "source_reviews",
+    "source_policy",
+    "decision_records",
+    "clarification_events",
+    "execution_events",
+    "source_assets"
+  ],
   properties: {
-    schema_version: { const: "2.1.0" },
-    source_revision: { type: "integer", minimum: 0 },
-    run_instance_id: { type: "string", pattern: "^RUN-[0-9a-fA-F-]{36}$" },
-    run_scope: { type: "string", minLength: 1 },
-    sources: { type: "array", items: { type: "object", required: ["source_id", "kind", "version", "status", "authority", "content", "content_digest"], properties: { source_id: { type: "string", minLength: 1 }, kind: { enum: ["prd", "acceptance-criteria", "interaction-spec", "interface-contract", "formal-rule", "review-record", "historical-defect", "production-behavior", "decision-record"] }, version: { type: "string", minLength: 1 }, status: { enum: ["draft", "approved", "effective", "superseded", "reference"] }, authority: { type: "string", minLength: 1 }, title: { type: "string" }, content: { type: "string" }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, scope: { type: "string" } }, additionalProperties: false } },
-    locators: { type: "array", items: { oneOf: [
-      { type: "object", required: ["locator_id", "source_id", "type", "text_range", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "text-range" }, text_range: { type: "object", required: ["start", "end"], properties: { start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false },
-      { type: "object", required: ["locator_id", "source_id", "type", "table_cell", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "table-cell" }, table_cell: { type: "object", required: ["sheet", "cell"], properties: { sheet: { type: "string", minLength: 1 }, cell: { type: "string", minLength: 1 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false },
-      { type: "object", required: ["locator_id", "source_id", "type", "page_region", "content_digest", "extraction_integrity"], properties: { locator_id: { type: "string", minLength: 1 }, source_id: { type: "string", minLength: 1 }, type: { const: "page-region" }, page_region: { type: "object", required: ["page", "region"], properties: { page: { type: "integer", minimum: 1 }, region: { type: "string", minLength: 1 } }, additionalProperties: false }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, extraction_integrity: { enum: ["verified", "machine-extracted", "uncertain"] } }, additionalProperties: false }
-    ] } },
-    source_reviews: { type: "array", items: { type: "object", required: ["source_id", "content_digest", "spans"], properties: { source_id: { type: "string", minLength: 1 }, content_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, spans: { type: "array", items: { type: "object", required: ["span_id", "start", "end", "classification", "rationale"], properties: { span_id: { type: "string", minLength: 1 }, start: { type: "integer", minimum: 0 }, end: { type: "integer", minimum: 0 }, classification: { enum: ["normative", "non_normative", "uncertain"] }, rationale: { type: "string", minLength: 1, pattern: "\\S" } }, additionalProperties: false } } }, additionalProperties: false } },
-    source_policy: { type: "object", required: ["rules"], properties: { rules: { type: "array", items: { type: "object", required: ["rule_id", "source_ids", "scope", "authority", "status"], properties: { rule_id: { type: "string", minLength: 1 }, source_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, supersedes: { type: "array", items: { type: "string" }, uniqueItems: true }, scope: { type: "string", minLength: 1 }, authority: { type: "string", minLength: 1 }, status: { enum: ["effective", "superseded", "reference"] } }, additionalProperties: false } } }, additionalProperties: false },
-    decision_records: { type: "array", items: { oneOf: [
-      { type: "object", required: ["decision_id", "question_id", "presentation_id", "decision_group_ids", "root_issue_ids", "affected_obligation_ids", "clarification_event_seq", "confirmer", "confirmed_at", "question", "answer", "disposition", "authority_scope", "effective_scope", "evidence_ref", "evidence_level"], properties: { decision_id: { type: "string", minLength: 1 }, question_id: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, affected_obligation_ids: { type: "array", items: { type: "string" }, uniqueItems: true }, clarification_event_seq: { type: "integer", minimum: 1 }, confirmer: { type: "string", minLength: 1 }, confirmed_at: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 }, answer: { type: "string" }, disposition: { enum: ["final", "temporary", "unknown", "deferred"] }, authority_scope: { type: "string", minLength: 1 }, effective_scope: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, evidence_level: { enum: ["E1", "E3"] }, supersedes_decision_ids: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true } }, additionalProperties: false },
-      { type: "object", required: ["decision_id", "decision_type", "clarification_event_seq", "confirmer", "confirmed_at", "presentation_id", "decision_group_ids", "exploratory_id", "item_semantic_digest", "item_semantic_change_head_seq", "business_rule", "expected_result", "authority_scope", "effective_scope", "evidence_ref", "evidence_level"], properties: { decision_id: { type: "string", minLength: 1 }, decision_type: { const: "exploratory_adoption" }, clarification_event_seq: { type: "integer", minimum: 1 }, confirmer: { type: "string", minLength: 1 }, confirmed_at: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, exploratory_id: { type: "string", minLength: 1 }, item_semantic_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, item_semantic_change_head_seq: { type: "integer", minimum: 0 }, business_rule: { type: "string", minLength: 1 }, expected_result: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, effective_scope: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, evidence_level: { const: "E3" } }, additionalProperties: false }
-    ] } },
-    clarification_events: { type: "array", items: { oneOf: [
-      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "root_issue_ids"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { enum: ["request_delivery", "reopen_root_issues"] }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, root_issue_ids: { type: "array", items: { type: "string" }, uniqueItems: true } }, additionalProperties: false },
-      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "source_locator_ids", "affected_items", "reason"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "request_reanalysis" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, source_locator_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, affected_items: { type: "array", minItems: 1, items: { type: "object", required: ["item_kind", "item_id", "item_semantic_digest", "item_semantic_change_head_seq"], properties: { item_kind: { enum: ["case", "formal_test_point", "exploratory"] }, item_id: { type: "string", minLength: 1 }, item_semantic_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, item_semantic_change_head_seq: { type: "integer", minimum: 0 } }, additionalProperties: false } }, reason: { type: "string", minLength: 1 } }, additionalProperties: false }
-    ] } },
-    execution_events: { type: "array", items: { oneOf: [
-      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "presented_plan_digest", "presented_presentation_id", "decision_group_ids", "decisions"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "set_dispositions" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_plan_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_presentation_id: { type: "string", minLength: 1 }, decision_group_ids: { type: "array", minItems: 1, items: { type: "string", minLength: 1 }, uniqueItems: true }, decisions: { type: "array", minItems: 1, items: { type: "object", required: ["item_kind", "item_id", "item_semantic_digest", "item_semantic_change_head_seq", "execution_disposition", "reason_code", "reason"], properties: { item_kind: { enum: ["case", "formal_test_point", "exploratory"] }, item_id: { type: "string", minLength: 1 }, item_semantic_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, item_semantic_change_head_seq: { type: "integer", minimum: 0 }, execution_disposition: { enum: ["execute", "do_not_execute"] }, reason_code: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1 } }, additionalProperties: false } } }, additionalProperties: false },
-      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "presented_presentation_id", "presented_plan_digest", "pending_item_refs", "resume_target", "reason"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "pause_execution_closure" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_presentation_id: { type: "string", minLength: 1 }, presented_plan_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, pending_item_refs: { type: "array", items: { type: "object", required: ["item_kind", "item_id"], properties: { item_kind: { enum: ["case", "formal_test_point", "exploratory"] }, item_id: { type: "string", minLength: 1 } }, additionalProperties: false } }, resume_target: { enum: ["execution_closure", "final_confirmation"] }, reason: { enum: ["no_information_gain", "unknown", "user_requested"] } }, additionalProperties: false },
-      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "pause_event_id"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "resume_execution_closure" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, pause_event_id: { type: "string", minLength: 1 } }, additionalProperties: false },
-      { type: "object", required: ["event_id", "clarification_event_seq", "type", "actor", "event_at", "authority_scope", "run_instance_id", "run_identity_digest", "presented_prompt_id", "presented_plan_digest", "presented_plan_change_head_seq", "presented_source_revision"], properties: { event_id: { type: "string", minLength: 1 }, clarification_event_seq: { type: "integer", minimum: 1 }, type: { const: "confirm_execution_plan" }, actor: { type: "string", minLength: 1 }, event_at: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, run_instance_id: { type: "string", minLength: 1 }, run_identity_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_prompt_id: { type: "string", minLength: 1 }, presented_plan_digest: { type: "string", pattern: "^[a-f0-9]{64}$" }, presented_plan_change_head_seq: { type: "integer", minimum: 0 }, presented_source_revision: { type: "integer", minimum: 0 } }, additionalProperties: false }
-    ] } }
+    schema_version: {
+      const: "3.0.0"
+    },
+    source_revision: {
+      type: "integer",
+      minimum: 0
+    },
+    run_instance_id: {
+      type: "string",
+      pattern: "^RUN-[0-9a-fA-F-]{36}$"
+    },
+    run_scope: {
+      type: "string",
+      minLength: 1
+    },
+    sources: {
+      type: "array",
+      items: {
+        type: "object",
+        required: [
+          "source_id",
+          "kind",
+          "version",
+          "status",
+          "authority",
+          "content",
+          "content_digest"
+        ],
+        properties: {
+          source_id: {
+            type: "string",
+            minLength: 1
+          },
+          kind: {
+            enum: [
+              "prd",
+              "acceptance-criteria",
+              "interaction-spec",
+              "interface-contract",
+              "formal-rule",
+              "review-record",
+              "historical-defect",
+              "production-behavior",
+              "decision-record"
+            ]
+          },
+          version: {
+            type: "string",
+            minLength: 1
+          },
+          status: {
+            enum: [
+              "draft",
+              "approved",
+              "effective",
+              "superseded",
+              "reference"
+            ]
+          },
+          authority: {
+            type: "string",
+            minLength: 1
+          },
+          title: {
+            type: "string"
+          },
+          content: {
+            type: "string"
+          },
+          content_digest: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$"
+          },
+          scope: {
+            type: "string"
+          }
+        },
+        additionalProperties: false
+      }
+    },
+    locators: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "locator_id",
+              "source_id",
+              "type",
+              "text_range",
+              "content_digest",
+              "extraction_integrity"
+            ],
+            properties: {
+              locator_id: {
+                type: "string",
+                minLength: 1
+              },
+              source_id: {
+                type: "string",
+                minLength: 1
+              },
+              type: {
+                const: "text-range"
+              },
+              text_range: {
+                type: "object",
+                required: [
+                  "start",
+                  "end"
+                ],
+                properties: {
+                  start: {
+                    type: "integer",
+                    minimum: 0
+                  },
+                  end: {
+                    type: "integer",
+                    minimum: 0
+                  }
+                },
+                additionalProperties: false
+              },
+              content_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              extraction_integrity: {
+                enum: [
+                  "verified",
+                  "machine-extracted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "locator_id",
+              "source_id",
+              "type",
+              "table_cell",
+              "content_digest",
+              "extraction_integrity"
+            ],
+            properties: {
+              locator_id: {
+                type: "string",
+                minLength: 1
+              },
+              source_id: {
+                type: "string",
+                minLength: 1
+              },
+              type: {
+                const: "table-cell"
+              },
+              table_cell: {
+                type: "object",
+                required: [
+                  "sheet",
+                  "cell"
+                ],
+                properties: {
+                  sheet: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  cell: {
+                    type: "string",
+                    minLength: 1
+                  }
+                },
+                additionalProperties: false
+              },
+              content_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              extraction_integrity: {
+                enum: [
+                  "verified",
+                  "machine-extracted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "locator_id",
+              "source_id",
+              "type",
+              "page_region",
+              "content_digest",
+              "extraction_integrity"
+            ],
+            properties: {
+              locator_id: {
+                type: "string",
+                minLength: 1
+              },
+              source_id: {
+                type: "string",
+                minLength: 1
+              },
+              type: {
+                const: "page-region"
+              },
+              page_region: {
+                type: "object",
+                required: [
+                  "page",
+                  "region"
+                ],
+                properties: {
+                  page: {
+                    type: "integer",
+                    minimum: 1
+                  },
+                  region: {
+                    type: "string",
+                    minLength: 1
+                  }
+                },
+                additionalProperties: false
+              },
+              content_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              extraction_integrity: {
+                enum: [
+                  "verified",
+                  "machine-extracted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    source_reviews: {
+      type: "array",
+      items: {
+        type: "object",
+        required: [
+          "source_id",
+          "content_digest",
+          "spans"
+        ],
+        properties: {
+          source_id: {
+            type: "string",
+            minLength: 1
+          },
+          content_digest: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$"
+          },
+          spans: {
+            type: "array",
+            items: {
+              type: "object",
+              required: [
+                "span_id",
+                "start",
+                "end",
+                "classification",
+                "rationale",
+                "review_basis"
+              ],
+              properties: {
+                span_id: {
+                  type: "string",
+                  minLength: 1
+                },
+                start: {
+                  type: "integer",
+                  minimum: 0
+                },
+                end: {
+                  type: "integer",
+                  minimum: 0
+                },
+                classification: {
+                  enum: [
+                    "normative",
+                    "non_normative",
+                    "uncertain"
+                  ]
+                },
+                rationale: {
+                  type: "string",
+                  minLength: 1,
+                  pattern: "\\S"
+                },
+                review_basis: {
+                  type: "object",
+                  required: [
+                    "reviewer",
+                    "method",
+                    "evidence"
+                  ],
+                  properties: {
+                    reviewer: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "\\S"
+                    },
+                    method: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "\\S"
+                    },
+                    evidence: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "\\S"
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        },
+        additionalProperties: false
+      }
+    },
+    source_policy: {
+      type: "object",
+      required: [
+        "rules"
+      ],
+      properties: {
+        rules: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "rule_id",
+              "source_ids",
+              "scope",
+              "authority",
+              "status"
+            ],
+            properties: {
+              rule_id: {
+                type: "string",
+                minLength: 1
+              },
+              source_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              },
+              supersedes: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              authority: {
+                type: "string",
+                minLength: 1
+              },
+              status: {
+                enum: [
+                  "effective",
+                  "superseded",
+                  "reference"
+                ]
+              }
+            },
+            additionalProperties: false
+          }
+        }
+      },
+      additionalProperties: false
+    },
+    decision_records: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "decision_id",
+              "question_id",
+              "presentation_id",
+              "decision_group_ids",
+              "root_issue_ids",
+              "affected_obligation_ids",
+              "clarification_event_seq",
+              "confirmer",
+              "confirmed_at",
+              "question",
+              "answer",
+              "disposition",
+              "authority_scope",
+              "effective_scope",
+              "evidence_ref",
+              "evidence_level"
+            ],
+            properties: {
+              decision_id: {
+                type: "string",
+                minLength: 1
+              },
+              question_id: {
+                type: "string",
+                minLength: 1
+              },
+              presentation_id: {
+                type: "string",
+                minLength: 1
+              },
+              decision_group_ids: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              },
+              root_issue_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              },
+              affected_obligation_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              confirmer: {
+                type: "string",
+                minLength: 1
+              },
+              confirmed_at: {
+                type: "string",
+                minLength: 1
+              },
+              question: {
+                type: "string",
+                minLength: 1
+              },
+              answer: {
+                type: "string"
+              },
+              disposition: {
+                enum: [
+                  "final",
+                  "temporary",
+                  "unknown",
+                  "deferred"
+                ]
+              },
+              authority_scope: {
+                type: "string",
+                minLength: 1
+              },
+              effective_scope: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_level: {
+                enum: [
+                  "E1",
+                  "E3"
+                ]
+              },
+              supersedes_decision_ids: {
+                type: "array",
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "decision_id",
+              "decision_type",
+              "clarification_event_seq",
+              "confirmer",
+              "confirmed_at",
+              "presentation_id",
+              "decision_group_ids",
+              "exploratory_id",
+              "item_semantic_digest",
+              "item_semantic_change_head_seq",
+              "business_rule",
+              "expected_result",
+              "authority_scope",
+              "effective_scope",
+              "evidence_ref",
+              "evidence_level"
+            ],
+            properties: {
+              decision_id: {
+                type: "string",
+                minLength: 1
+              },
+              decision_type: {
+                const: "exploratory_adoption"
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              confirmer: {
+                type: "string",
+                minLength: 1
+              },
+              confirmed_at: {
+                type: "string",
+                minLength: 1
+              },
+              presentation_id: {
+                type: "string",
+                minLength: 1
+              },
+              decision_group_ids: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              },
+              exploratory_id: {
+                type: "string",
+                minLength: 1
+              },
+              item_semantic_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              item_semantic_change_head_seq: {
+                type: "integer",
+                minimum: 0
+              },
+              business_rule: {
+                type: "string",
+                minLength: 1
+              },
+              expected_result: {
+                type: "string",
+                minLength: 1
+              },
+              authority_scope: {
+                type: "string",
+                minLength: 1
+              },
+              effective_scope: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_level: {
+                const: "E3"
+              }
+            },
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    clarification_events: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "event_id",
+              "clarification_event_seq",
+              "type",
+              "actor",
+              "event_at",
+              "presentation_id",
+              "decision_group_ids",
+              "root_issue_ids"
+            ],
+            properties: {
+              event_id: {
+                type: "string",
+                minLength: 1
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              type: {
+                enum: [
+                  "request_delivery",
+                  "reopen_root_issues"
+                ]
+              },
+              actor: {
+                type: "string",
+                minLength: 1
+              },
+              event_at: {
+                type: "string",
+                minLength: 1
+              },
+              presentation_id: {
+                type: "string",
+                minLength: 1
+              },
+              decision_group_ids: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              },
+              root_issue_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "event_id",
+              "clarification_event_seq",
+              "type",
+              "actor",
+              "event_at",
+              "presentation_id",
+              "decision_group_ids",
+              "source_locator_ids",
+              "affected_items",
+              "reason"
+            ],
+            properties: {
+              event_id: {
+                type: "string",
+                minLength: 1
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              type: {
+                const: "request_reanalysis"
+              },
+              actor: {
+                type: "string",
+                minLength: 1
+              },
+              event_at: {
+                type: "string",
+                minLength: 1
+              },
+              presentation_id: {
+                type: "string",
+                minLength: 1
+              },
+              decision_group_ids: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              },
+              source_locator_ids: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              },
+              affected_items: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "item_kind",
+                    "item_id",
+                    "item_semantic_digest",
+                    "item_semantic_change_head_seq"
+                  ],
+                  properties: {
+                    item_kind: {
+                      enum: [
+                        "case",
+                        "formal_test_point",
+                        "exploratory"
+                      ]
+                    },
+                    item_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    item_semantic_digest: {
+                      type: "string",
+                      pattern: "^[a-f0-9]{64}$"
+                    },
+                    item_semantic_change_head_seq: {
+                      type: "integer",
+                      minimum: 0
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              reason: {
+                type: "string",
+                minLength: 1
+              }
+            },
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    execution_events: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "event_id",
+              "clarification_event_seq",
+              "type",
+              "actor",
+              "event_at",
+              "authority_scope",
+              "run_instance_id",
+              "run_identity_digest",
+              "presented_plan_digest",
+              "presented_presentation_id",
+              "decision_group_ids",
+              "decisions"
+            ],
+            properties: {
+              event_id: {
+                type: "string",
+                minLength: 1
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              type: {
+                const: "set_dispositions"
+              },
+              actor: {
+                type: "string",
+                minLength: 1
+              },
+              event_at: {
+                type: "string",
+                minLength: 1
+              },
+              authority_scope: {
+                type: "string",
+                minLength: 1
+              },
+              run_instance_id: {
+                type: "string",
+                minLength: 1
+              },
+              run_identity_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              presented_plan_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              presented_presentation_id: {
+                type: "string",
+                minLength: 1
+              },
+              decision_group_ids: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "string",
+                  minLength: 1
+                },
+                uniqueItems: true
+              },
+              decisions: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "item_kind",
+                    "item_id",
+                    "item_semantic_digest",
+                    "item_semantic_change_head_seq",
+                    "execution_disposition",
+                    "reason_code",
+                    "reason"
+                  ],
+                  properties: {
+                    item_kind: {
+                      enum: [
+                        "case",
+                        "formal_test_point",
+                        "exploratory"
+                      ]
+                    },
+                    item_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    item_semantic_digest: {
+                      type: "string",
+                      pattern: "^[a-f0-9]{64}$"
+                    },
+                    item_semantic_change_head_seq: {
+                      type: "integer",
+                      minimum: 0
+                    },
+                    execution_disposition: {
+                      enum: [
+                        "execute",
+                        "do_not_execute"
+                      ]
+                    },
+                    reason_code: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    reason: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "event_id",
+              "clarification_event_seq",
+              "type",
+              "actor",
+              "event_at",
+              "authority_scope",
+              "run_instance_id",
+              "run_identity_digest",
+              "presented_presentation_id",
+              "presented_plan_digest",
+              "pending_item_refs",
+              "resume_target",
+              "reason"
+            ],
+            properties: {
+              event_id: {
+                type: "string",
+                minLength: 1
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              type: {
+                const: "pause_execution_closure"
+              },
+              actor: {
+                type: "string",
+                minLength: 1
+              },
+              event_at: {
+                type: "string",
+                minLength: 1
+              },
+              authority_scope: {
+                type: "string",
+                minLength: 1
+              },
+              run_instance_id: {
+                type: "string",
+                minLength: 1
+              },
+              run_identity_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              presented_presentation_id: {
+                type: "string",
+                minLength: 1
+              },
+              presented_plan_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              pending_item_refs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: [
+                    "item_kind",
+                    "item_id"
+                  ],
+                  properties: {
+                    item_kind: {
+                      enum: [
+                        "case",
+                        "formal_test_point",
+                        "exploratory"
+                      ]
+                    },
+                    item_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              resume_target: {
+                enum: [
+                  "execution_closure",
+                  "final_confirmation"
+                ]
+              },
+              reason: {
+                enum: [
+                  "no_information_gain",
+                  "unknown",
+                  "user_requested"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "event_id",
+              "clarification_event_seq",
+              "type",
+              "actor",
+              "event_at",
+              "authority_scope",
+              "run_instance_id",
+              "run_identity_digest",
+              "pause_event_id"
+            ],
+            properties: {
+              event_id: {
+                type: "string",
+                minLength: 1
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              type: {
+                const: "resume_execution_closure"
+              },
+              actor: {
+                type: "string",
+                minLength: 1
+              },
+              event_at: {
+                type: "string",
+                minLength: 1
+              },
+              authority_scope: {
+                type: "string",
+                minLength: 1
+              },
+              run_instance_id: {
+                type: "string",
+                minLength: 1
+              },
+              run_identity_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              pause_event_id: {
+                type: "string",
+                minLength: 1
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            required: [
+              "event_id",
+              "clarification_event_seq",
+              "type",
+              "actor",
+              "event_at",
+              "authority_scope",
+              "run_instance_id",
+              "run_identity_digest",
+              "presented_prompt_id",
+              "presented_plan_digest",
+              "presented_plan_change_head_seq",
+              "presented_source_revision"
+            ],
+            properties: {
+              event_id: {
+                type: "string",
+                minLength: 1
+              },
+              clarification_event_seq: {
+                type: "integer",
+                minimum: 1
+              },
+              type: {
+                const: "confirm_execution_plan"
+              },
+              actor: {
+                type: "string",
+                minLength: 1
+              },
+              event_at: {
+                type: "string",
+                minLength: 1
+              },
+              authority_scope: {
+                type: "string",
+                minLength: 1
+              },
+              run_instance_id: {
+                type: "string",
+                minLength: 1
+              },
+              run_identity_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              presented_prompt_id: {
+                type: "string",
+                minLength: 1
+              },
+              presented_plan_digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              },
+              presented_plan_change_head_seq: {
+                type: "integer",
+                minimum: 0
+              },
+              presented_source_revision: {
+                type: "integer",
+                minimum: 0
+              }
+            },
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    source_assets: {
+      type: "array",
+      items: {
+        type: "object",
+        required: [
+          "asset_id",
+          "source_id",
+          "locator_id",
+          "uri",
+          "status",
+          "classification",
+          "review_basis"
+        ],
+        properties: {
+          asset_id: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S"
+          },
+          source_id: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S"
+          },
+          locator_id: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S"
+          },
+          uri: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S"
+          },
+          status: {
+            enum: [
+              "reviewed",
+              "unread",
+              "unavailable"
+            ]
+          },
+          classification: {
+            enum: [
+              "normative",
+              "non_normative",
+              "uncertain"
+            ]
+          },
+          review_basis: {
+            type: "object",
+            required: [
+              "reviewer",
+              "method",
+              "evidence"
+            ],
+            properties: {
+              reviewer: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              method: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              evidence: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        additionalProperties: false
+      }
+    },
+    output_language: {
+      enum: [
+        "zh-CN",
+        "en"
+      ]
+    },
+    delivery_intent: {
+      enum: [
+        "case_document",
+        "execution_plan"
+      ]
+    },
+    artifact_repairs: {
+      type: "array",
+      items: {
+        type: "object",
+        required: [
+          "repair_seq",
+          "base_source_revision",
+          "stage",
+          "accepted_artifact_digest",
+          "reason"
+        ],
+        properties: {
+          repair_seq: {
+            type: "integer",
+            minimum: 1
+          },
+          base_source_revision: {
+            type: "integer",
+            minimum: 0
+          },
+          stage: {
+            enum: [
+              "source_pack",
+              "evidence_claims",
+              "behavior_views",
+              "case_drafts"
+            ]
+          },
+          accepted_artifact_digest: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$"
+          },
+          reason: {
+            type: "string",
+            minLength: 1
+          }
+        },
+        additionalProperties: false
+      }
+    }
   },
   additionalProperties: false
 };
 
 // src/decision-record.mjs
 import { createHash as createHash2 } from "node:crypto";
+
+// src/source-audit.mjs
+function record(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function validReviewBasis(value) {
+  return record(value) && Object.keys(value).sort().join(",") === "evidence,method,reviewer" && ["reviewer", "method", "evidence"].every((key) => typeof value[key] === "string" && value[key].trim().length > 0);
+}
+function sourceAssetReferences(content) {
+  const refs = [];
+  const pattern = /!\[[^\]\n]*\](?:\([^\n]*?\)|\[[^\]\n]*\])|!\[[^\]\n]+\]|<(?:img|video|audio|object|embed)\b[^>]*>/giu;
+  for (const match of content.matchAll(pattern)) refs.push({ start: match.index, end: match.index + match[0].length });
+  return refs;
+}
+function validateSourceAssetAudit(pack) {
+  const diagnostics = [];
+  const add = (code2, path4, message) => diagnostics.push({ category: "traceability", code: code2, path: path4, message });
+  const assets = Array.isArray(pack.source_assets) ? pack.source_assets.filter(record) : [];
+  const locators = /* @__PURE__ */ new Map();
+  const sources = /* @__PURE__ */ new Map();
+  for (const locator of Array.isArray(pack.locators) ? pack.locators : []) if (record(locator)) locators.set(locator.locator_id, locator);
+  for (const source of Array.isArray(pack.sources) ? pack.sources : []) if (record(source)) sources.set(source.source_id, source);
+  const seen = /* @__PURE__ */ new Set();
+  assets.forEach((asset, index) => {
+    const path4 = `/source_assets/${index}`;
+    const locator = locators.get(asset.locator_id);
+    const source = sources.get(asset.source_id);
+    if (seen.has(asset.asset_id)) add("SOURCE_ASSET_DUPLICATE", path4, "asset identity must be unique");
+    seen.add(asset.asset_id);
+    if (!source || !locator || locator.source_id !== asset.source_id || locator.content_digest !== source.content_digest) {
+      add("SOURCE_ASSET_LOCATOR_INVALID", path4, "asset locator must bind its existing immutable source");
+    }
+    if (!validReviewBasis(asset.review_basis)) add("SOURCE_ASSET_REVIEW_BASIS_INVALID", path4, "asset review requires reviewer, method and evidence or inability evidence");
+    if (asset.status !== "reviewed") {
+      add("SOURCE_ASSET_REVIEW_REQUIRED", path4, "unread or unavailable assets require source revision after reading or resolving inability; they cannot be covered or excluded");
+    }
+  });
+  for (const [sourceId, source] of sources) {
+    for (const ref of sourceAssetReferences(String(source.content ?? ""))) {
+      const matches = assets.filter((asset) => {
+        const locator = locators.get(asset.locator_id);
+        return asset.source_id === sourceId && locator?.type === "text-range" && locator.text_range?.start === ref.start && locator.text_range?.end === ref.end;
+      });
+      if (matches.length !== 1) add("SOURCE_ASSET_UNACCOUNTED", `/sources/${sourceId}/content`, "each explicit non-text reference must have exactly one source-linked asset review");
+    }
+  }
+  return diagnostics;
+}
+function validateAssetClaims(pack, claims) {
+  return (pack.source_assets ?? []).filter(record).flatMap((asset, index) => {
+    if (asset.status !== "reviewed" || asset.classification === "non_normative") return [];
+    const claimed = [...claims.values()].some((claim) => claim.claim_form === "direct" && claim.source_id === asset.source_id && (claim.source_locator_ids ?? []).includes(asset.locator_id));
+    return claimed ? [] : [{ category: "traceability", code: "SOURCE_ASSET_UNCLAIMED", path: `/source_assets/${index}`, message: "reviewed normative asset must supply accepted direct evidence tied to its locator" }];
+  });
+}
+
+// src/decision-record.mjs
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -666,7 +4657,7 @@ function validateSourceIntegrity(sourcePack) {
   const locators = objectArray(pack.locators);
   const reviews = objectArray(pack.source_reviews);
   const sourceById = new Map(sources.flatMap((source) => typeof source.source_id === "string" ? [[source.source_id, source]] : []));
-  const diagnostics = [];
+  const diagnostics = validateSourceAssetAudit(pack);
   sources.forEach((source, index) => {
     if (typeof source.content !== "string" || typeof source.content_digest !== "string") return;
     const actualDigest = createHash2("sha256").update(source.content, "utf8").digest("hex");
@@ -701,6 +4692,11 @@ function validateSourceIntegrity(sourcePack) {
     const validSpans = [];
     const seenSpanIds = /* @__PURE__ */ new Set();
     objectArray(review.spans).forEach((span, spanIndex) => {
+      if (!validReviewBasis(span.review_basis)) diagnostics.push(diagnostic(
+        "SOURCE_REVIEW_BASIS_INVALID",
+        `/source_reviews/${reviewIndex}/spans/${spanIndex}/review_basis`,
+        "every disposition requires a reviewer, review method and review evidence"
+      ));
       if (typeof span.span_id === "string") {
         if (seenSpanIds.has(span.span_id)) diagnostics.push(diagnostic(
           "SOURCE_REVIEW_SPAN_ID_DUPLICATE",
@@ -879,6 +4875,395 @@ function validateDecisionRecords(sourcePack) {
   return { decisionsById, validFinalDecisionIds, validTemporaryDecisionIds, diagnostics };
 }
 
+// src/contracts.mjs
+var REPLY_STATUS = Object.freeze([
+  "need_artifact",
+  "need_user_answers",
+  "need_revision",
+  "finished",
+  "fatal"
+]);
+var DIAGNOSTIC_CATEGORY = Object.freeze([
+  "schema",
+  "reference",
+  "traceability",
+  "coverage",
+  "classification"
+]);
+var STABLE_ID_COLLECTIONS = Object.freeze([
+  Object.freeze({ path: Object.freeze(["sources"]), id: "source_id" }),
+  Object.freeze({ path: Object.freeze(["locators"]), id: "locator_id" }),
+  Object.freeze({ path: Object.freeze(["source_policy", "rules"]), id: "rule_id" }),
+  Object.freeze({ path: Object.freeze(["decision_records"]), id: "decision_id" }),
+  Object.freeze({ path: Object.freeze(["clarification_events"]), id: "event_id" }),
+  Object.freeze({ path: Object.freeze(["claims"]), id: "claim_id" }),
+  Object.freeze({ path: Object.freeze(["fact_ledger"]), id: "fact_id" }),
+  Object.freeze({ path: Object.freeze(["views"]), id: "view_id" }),
+  Object.freeze({ path: Object.freeze(["views", "*", "elements"]), id: "element_id", namespace: "elements" }),
+  Object.freeze({ path: Object.freeze(["views", "*", "relations"]), id: "relation_id" }),
+  Object.freeze({ path: Object.freeze(["interaction_candidates"]), id: "candidate_id" }),
+  Object.freeze({ path: Object.freeze(["obligations"]), id: "obligation_id" }),
+  Object.freeze({ path: Object.freeze(["cases"]), id: "case_id", namespace: "cases" }),
+  Object.freeze({ path: Object.freeze(["cases", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
+  Object.freeze({ path: Object.freeze(["cases", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
+  Object.freeze({ path: Object.freeze(["exploratory_candidates"]), id: "exploratory_id" }),
+  Object.freeze({ path: Object.freeze(["root_issue_dispositions"]), id: "root_issue_id" }),
+  Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id", namespace: "bundle_cases" }),
+  Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id", namespace: "bundle_cases" }),
+  Object.freeze({ path: Object.freeze(["grounded", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
+  Object.freeze({ path: Object.freeze(["conditional", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
+  Object.freeze({ path: Object.freeze(["grounded", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
+  Object.freeze({ path: Object.freeze(["conditional", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
+  Object.freeze({ path: Object.freeze(["blockers"]), id: "root_issue_id", namespace: "reply_root_issues" }),
+  Object.freeze({ path: Object.freeze(["blocked"]), id: "obligation_id" }),
+  Object.freeze({ path: Object.freeze(["exploratory"]), id: "exploratory_id" })
+]);
+
+// src/schema-validator.mjs
+var supportedKeywords = /* @__PURE__ */ new Set([
+  "$schema",
+  "$id",
+  "$defs",
+  "$ref",
+  "type",
+  "required",
+  "properties",
+  "items",
+  "enum",
+  "const",
+  "oneOf",
+  "allOf",
+  "minItems",
+  "minLength",
+  "pattern",
+  "minimum",
+  "maximum",
+  "uniqueItems",
+  "additionalProperties"
+]);
+var supportedTypes = /* @__PURE__ */ new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
+var NATIVE_ARRAY_EVERY = Array.prototype.every;
+var NATIVE_ARRAY_FILTER2 = Array.prototype.filter;
+var NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
+var NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
+var NATIVE_ARRAY_JOIN2 = Array.prototype.join;
+var NATIVE_ARRAY_MAP2 = Array.prototype.map;
+var NATIVE_ARRAY_SLICE = Array.prototype.slice;
+var NATIVE_ARRAY_SOME = Array.prototype.some;
+var NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+function everyArray(values, predicate) {
+  return (
+    /** @type {boolean} */
+    Reflect.apply(NATIVE_ARRAY_EVERY, values, [predicate])
+  );
+}
+function filterArray2(values, predicate) {
+  return (
+    /** @type {T[]} */
+    Reflect.apply(NATIVE_ARRAY_FILTER2, values, [predicate])
+  );
+}
+function flatMapArray(values, project) {
+  return (
+    /** @type {U[]} */
+    Reflect.apply(NATIVE_ARRAY_FLAT_MAP, values, [project])
+  );
+}
+function forEachArray(values, visit) {
+  Reflect.apply(NATIVE_ARRAY_FOR_EACH, values, [visit]);
+}
+function joinArray2(values, separator) {
+  return (
+    /** @type {string} */
+    Reflect.apply(NATIVE_ARRAY_JOIN2, values, [separator])
+  );
+}
+function mapArray2(values, project) {
+  return (
+    /** @type {U[]} */
+    Reflect.apply(NATIVE_ARRAY_MAP2, values, [project])
+  );
+}
+function pushArray(values, ...items) {
+  for (let index = 0; index < items.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY, Object, [
+    values,
+    String(values.length),
+    { value: items[index], writable: true, enumerable: true, configurable: true }
+  ]);
+  return values.length;
+}
+function sliceArray(values, start, end) {
+  return (
+    /** @type {T[]} */
+    Reflect.apply(NATIVE_ARRAY_SLICE, values, end === void 0 ? [start] : [start, end])
+  );
+}
+function someArray(values, predicate) {
+  return (
+    /** @type {boolean} */
+    Reflect.apply(NATIVE_ARRAY_SOME, values, [predicate])
+  );
+}
+function isSchemaObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function assertStringArray(value, keyword) {
+  if (!Array.isArray(value) || someArray(value, (item) => typeof item !== "string") || new Set(value).size !== value.length) {
+    throw new Error(`Schema ${keyword} must be an array of unique strings.`);
+  }
+}
+function diagnostic2(code2, path4, message) {
+  return { category: "schema", code: code2, path: path4, message };
+}
+function escapePointerSegment(segment) {
+  return segment.replaceAll("~", "~0").replaceAll("/", "~1");
+}
+function childPointer(path4, segment) {
+  return `${path4}/${escapePointerSegment(segment)}`;
+}
+function assertSupportedSchema(schema) {
+  if (!isSchemaObject(schema)) {
+    throw new Error("Schema must be an object.");
+  }
+  for (const [key, value] of Object.entries(schema)) {
+    if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
+    if (key === "$schema" || key === "$id" || key === "pattern" || key === "$ref") {
+      if (typeof value !== "string") throw new Error(`Schema ${key} must be a string.`);
+      if (key === "pattern") {
+        try {
+          new RegExp(value);
+        } catch {
+          throw new Error("Schema pattern must be a valid regular expression.");
+        }
+      }
+      if (key === "$ref" && !value.startsWith("#/$defs/")) throw new Error("Schema $ref must be a local $defs reference.");
+    } else if (key === "$defs") {
+      if (!isSchemaObject(value)) throw new Error("Schema $defs must be an object.");
+      for (const child of Object.values(value)) assertSupportedSchema(child);
+    } else if (key === "type") {
+      const types = Array.isArray(value) ? value : [value];
+      if (!types.length || someArray(types, (item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
+    } else if (key === "required") {
+      assertStringArray(value, "required");
+    } else if (key === "properties") {
+      if (!isSchemaObject(value)) throw new Error("Schema properties must be an object.");
+      for (const child of Object.values(value)) assertSupportedSchema(child);
+    } else if (key === "items") {
+      assertSupportedSchema(value);
+    } else if (key === "oneOf" || key === "allOf") {
+      if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
+      for (const child of value) assertSupportedSchema(child);
+    } else if (key === "enum") {
+      if (!Array.isArray(value) || value.length === 0 || new Set(mapArray2(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
+    } else if (key === "minItems" || key === "minLength") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
+    } else if (key === "minimum" || key === "maximum") {
+      if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
+    } else if (key === "uniqueItems") {
+      if (typeof value !== "boolean") throw new Error("Schema uniqueItems must be boolean.");
+    } else if (key === "additionalProperties") {
+      if (typeof value !== "boolean" && !isSchemaObject(value)) throw new Error("Schema additionalProperties must be boolean or a schema object.");
+      if (isSchemaObject(value)) assertSupportedSchema(value);
+    }
+  }
+  if (typeof schema.minimum === "number" && typeof schema.maximum === "number" && schema.minimum > schema.maximum) throw new Error("Schema minimum must not exceed maximum.");
+}
+function validateAgainstSchema(value, schema) {
+  assertSupportedSchema(schema);
+  return validate(
+    value,
+    /** @type {Record<string, unknown>} */
+    schema,
+    "",
+    /** @type {Record<string, unknown>} */
+    schema
+  );
+}
+function resolveReference(root, reference) {
+  const segments = reference.slice(2).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"));
+  let current = root;
+  for (const segment of segments) {
+    if (!isSchemaObject(current) || !Object.hasOwn(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
+    current = current[segment];
+  }
+  if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
+  return current;
+}
+function validate(value, schema, path4, root) {
+  const diagnostics = [];
+  const pointer = path4 || "/";
+  if (typeof schema.$ref === "string") pushArray(
+    diagnostics,
+    ...validate(value, resolveReference(root, schema.$ref), path4, root)
+  );
+  if (schema.type && !matchesType(value, schema.type)) {
+    return [diagnostic2("TYPE_MISMATCH", pointer, `must be ${Array.isArray(schema.type) ? joinArray2(schema.type, " or ") : schema.type}`)];
+  }
+  if (Object.hasOwn(schema, "const") && canonicalStringify(value) !== canonicalStringify(schema.const)) {
+    pushArray(diagnostics, diagnostic2("CONST_MISMATCH", pointer, "must equal the schema constant"));
+  }
+  if (Array.isArray(schema.enum) && !someArray(schema.enum, (item) => canonicalStringify(item) === canonicalStringify(value))) {
+    pushArray(diagnostics, diagnostic2("ENUM_MISMATCH", pointer, "must be one of the allowed values"));
+  }
+  if (typeof value === "string") {
+    if (typeof schema.minLength === "number" && value.length < schema.minLength) pushArray(diagnostics, diagnostic2("MIN_LENGTH", pointer, "is shorter than the minimum length"));
+    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern).test(value)) pushArray(diagnostics, diagnostic2("PATTERN_MISMATCH", pointer, "does not match the required pattern"));
+  }
+  if (typeof value === "number") {
+    if (typeof schema.minimum === "number" && value < schema.minimum) pushArray(diagnostics, diagnostic2("MINIMUM", pointer, "is below the minimum"));
+    if (typeof schema.maximum === "number" && value > schema.maximum) pushArray(diagnostics, diagnostic2("MAXIMUM", pointer, "is above the maximum"));
+  }
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) pushArray(diagnostics, diagnostic2("MIN_ITEMS", pointer, "has too few items"));
+    if (schema.uniqueItems === true) {
+      const seen = /* @__PURE__ */ new Set();
+      forEachArray(value, (item, index) => {
+        const key = canonicalStringify(item);
+        if (seen.has(key)) pushArray(diagnostics, diagnostic2("UNIQUE_ITEMS", `${path4}/${index}`, "must not contain duplicate items"));
+        seen.add(key);
+      });
+    }
+    if (schema.items && typeof schema.items === "object" && !Array.isArray(schema.items)) {
+      forEachArray(value, (item, index) => pushArray(diagnostics, ...validate(
+        item,
+        /** @type {Record<string, unknown>} */
+        schema.items,
+        `${path4}/${index}`,
+        root
+      )));
+    }
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const object = (
+      /** @type {Record<string, unknown>} */
+      value
+    );
+    const properties = schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties) ? (
+      /** @type {Record<string, Record<string, unknown>>} */
+      schema.properties
+    ) : {};
+    if (Array.isArray(schema.required)) {
+      for (const key of schema.required) {
+        if (typeof key === "string" && !Object.hasOwn(object, key)) pushArray(diagnostics, diagnostic2("REQUIRED_FIELD_MISSING", childPointer(path4, key), "required field is missing"));
+      }
+    }
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(object)) {
+        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, diagnostic2("ADDITIONAL_PROPERTY", childPointer(path4, key), "additional properties are not allowed"));
+      }
+    } else if (schema.additionalProperties && typeof schema.additionalProperties === "object" && !Array.isArray(schema.additionalProperties)) {
+      for (const key of Object.keys(object)) {
+        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, ...validate(
+          object[key],
+          /** @type {Record<string, unknown>} */
+          schema.additionalProperties,
+          childPointer(path4, key),
+          root
+        ));
+      }
+    }
+    for (const [key, childSchema] of Object.entries(properties)) {
+      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path4, key), root));
+    }
+  }
+  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(
+    value,
+    /** @type {Record<string, unknown>} */
+    child,
+    path4,
+    root
+  ));
+  if (Array.isArray(schema.oneOf)) {
+    const variants = mapArray2(schema.oneOf, (child) => (
+      /** @type {Record<string, unknown>} */
+      child
+    ));
+    const matching = filterArray2(variants, (child) => validate(value, child, path4, root).length === 0);
+    if (matching.length !== 1) {
+      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child, root));
+      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path4, root));
+      else pushArray(diagnostics, diagnostic2("ONE_OF_MISMATCH", pointer, "must match exactly one schema variant"));
+    }
+  }
+  return diagnostics;
+}
+function matchesDiscriminator(value, schema, root) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (typeof schema.$ref === "string") return matchesDiscriminator(
+    value,
+    resolveReference(root, schema.$ref),
+    root
+  );
+  const properties = schema.properties;
+  if (!isSchemaObject(properties)) return false;
+  const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, "const") ? [[key, candidate]] : []);
+  return constants.length > 0 && everyArray(constants, ([key, candidate]) => canonicalStringify(
+    /** @type {Record<string, unknown>} */
+    value[key]
+  ) === canonicalStringify(candidate.const));
+}
+function matchesType(value, type) {
+  if (Array.isArray(type)) return someArray(type, (candidate) => matchesType(value, candidate));
+  if (type === "array") return Array.isArray(value);
+  if (type === "object") return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  if (type === "integer") return typeof value === "number" && Number.isInteger(value);
+  if (type === "null") return value === null;
+  return typeof value === type;
+}
+function validateUniqueStableIds(artifact) {
+  if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) return [];
+  const object = (
+    /** @type {Record<string, unknown>} */
+    artifact
+  );
+  const diagnostics = [];
+  const seenByNamespace = /* @__PURE__ */ new Map();
+  for (
+    const { path: path4, id: id2, namespace, scopeSegments } of
+    /** @type {any[]} */
+    STABLE_ID_COLLECTIONS
+  ) {
+    for (const { items, pointer } of findCollections(object, path4)) {
+      const pointerSegments = filterArray2(pointer.split("/"), Boolean);
+      const scopedPointer = typeof scopeSegments === "number" ? `/${joinArray2(sliceArray(pointerSegments, 0, -scopeSegments), "/")}` : "";
+      const namespaceKey = `${namespace ?? joinArray2(path4, "/")}${scopedPointer}`;
+      const seen = seenByNamespace.get(namespaceKey) ?? /* @__PURE__ */ new Set();
+      seenByNamespace.set(namespaceKey, seen);
+      forEachArray(items, (item, index) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return;
+        const value = (
+          /** @type {Record<string, unknown>} */
+          item[id2]
+        );
+        if (typeof value !== "string") return;
+        if (seen.has(value)) pushArray(diagnostics, diagnostic2("DUPLICATE_STABLE_ID", `${pointer}/${index}/${id2}`, `duplicate stable ID "${value}"`));
+        seen.add(value);
+      });
+    }
+  }
+  return diagnostics;
+}
+function findCollections(value, segments, pointer = "") {
+  if (segments.length === 0) return Array.isArray(value) ? [{ items: value, pointer }] : [];
+  const [segment, ...rest] = segments;
+  if (segment === "*") {
+    if (!Array.isArray(value)) return [];
+    return flatMapArray(value, (item, index) => item && typeof item === "object" && !Array.isArray(item) ? findCollections(
+      /** @type {Record<string, unknown>} */
+      item,
+      rest,
+      `${pointer}/${index}`
+    ) : []);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, segment)) return [];
+  return findCollections(
+    /** @type {Record<string, unknown>} */
+    value[segment],
+    rest,
+    `${pointer}/${segment}`
+  );
+}
+
 // src/clarification.mjs
 var POLICIES = /* @__PURE__ */ new Set(["pause_for_clarification", "record_only"]);
 var RISKS = /* @__PURE__ */ new Set(["critical", "high", "medium", "low"]);
@@ -907,23 +5292,23 @@ var NATIVE_GET_PROTOTYPE_OF = Object.getPrototypeOf;
 var NATIVE_GET_OWN_PROPERTY_DESCRIPTORS = Object.getOwnPropertyDescriptors;
 var NATIVE_REFLECT_OWN_KEYS = Reflect.ownKeys;
 var NATIVE_REFLECT_APPLY = Reflect.apply;
-var NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+var NATIVE_DEFINE_PROPERTY2 = Object.defineProperty;
 var NATIVE_ARRAY_ENTRIES = Array.prototype.entries;
-var NATIVE_ARRAY_MAP2 = Array.prototype.map;
-var NATIVE_ARRAY_FILTER2 = Array.prototype.filter;
+var NATIVE_ARRAY_MAP3 = Array.prototype.map;
+var NATIVE_ARRAY_FILTER3 = Array.prototype.filter;
 var NATIVE_ARRAY_SORT2 = Array.prototype.sort;
-var NATIVE_ARRAY_SOME = Array.prototype.some;
+var NATIVE_ARRAY_SOME2 = Array.prototype.some;
 var NATIVE_ARRAY_PUSH = Array.prototype.push;
 var NATIVE_ARRAY_POP = Array.prototype.pop;
-var NATIVE_ARRAY_SLICE = Array.prototype.slice;
+var NATIVE_ARRAY_SLICE2 = Array.prototype.slice;
 function arrayMap(value, callback) {
-  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_MAP2, value, [callback]);
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_MAP3, value, [callback]);
 }
 function arrayFilter(value, callback) {
-  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_FILTER2, value, [callback]);
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_FILTER3, value, [callback]);
 }
 function arraySome(value, callback) {
-  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SOME, value, [callback]);
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SOME2, value, [callback]);
 }
 function arraySort(value, callback) {
   return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SORT2, value, [callback]);
@@ -938,7 +5323,7 @@ function arrayPop(value) {
   return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_POP, value, []);
 }
 function arraySlice(value, start, end) {
-  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SLICE, value, end === void 0 ? [start] : [start, end]);
+  return NATIVE_REFLECT_APPLY(NATIVE_ARRAY_SLICE2, value, end === void 0 ? [start] : [start, end]);
 }
 function compareCodePoints2(left, right) {
   const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
@@ -952,7 +5337,7 @@ function compareCodePoints2(left, right) {
 function pointerPart(segment) {
   return segment.replaceAll("~", "~0").replaceAll("/", "~1");
 }
-function diagnostic2(category, code2, path4, message) {
+function diagnostic3(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function diagnosticKey(item) {
@@ -972,7 +5357,7 @@ function finalizeDiagnostics(diagnostics) {
   const sorted = arraySort([...unique.values()], compareDiagnostics);
   if (!overflow) return sorted;
   const retained = arraySlice(sorted, 0, DIAGNOSTIC_LIMIT - 1);
-  arrayPush(retained, diagnostic2(
+  arrayPush(retained, diagnostic3(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
     "/",
@@ -1002,7 +5387,7 @@ function snapshotControlled(root) {
       continue;
     }
     if (seen.has(source)) {
-      addDiagnostic(diagnostic2("schema", "CYCLIC_INPUT_INVALID", path4 || "/", "clarification context must be acyclic"));
+      addDiagnostic(diagnostic3("schema", "CYCLIC_INPUT_INVALID", path4 || "/", "clarification context must be acyclic"));
       assign(null);
       continue;
     }
@@ -1013,13 +5398,13 @@ function snapshotControlled(root) {
       prototype = NATIVE_GET_PROTOTYPE_OF(source);
       descriptors = NATIVE_GET_OWN_PROPERTY_DESCRIPTORS(source);
     } catch {
-      addDiagnostic(diagnostic2("schema", "INPUT_DESCRIPTOR_UNREADABLE", path4 || "/", "clarification input descriptors could not be captured"));
+      addDiagnostic(diagnostic3("schema", "INPUT_DESCRIPTOR_UNREADABLE", path4 || "/", "clarification input descriptors could not be captured"));
       assign(null);
       continue;
     }
     if (NATIVE_ARRAY_IS_ARRAY(source)) {
       if (prototype !== Array.prototype) {
-        addDiagnostic(diagnostic2("schema", "ARRAY_PROTOTYPE_INVALID", path4 || "/", "controlled arrays must use Array.prototype"));
+        addDiagnostic(diagnostic3("schema", "ARRAY_PROTOTYPE_INVALID", path4 || "/", "controlled arrays must use Array.prototype"));
         assign(null);
         continue;
       }
@@ -1027,7 +5412,7 @@ function snapshotControlled(root) {
       let invalidOwnKeys = false;
       if (arraySome(keys2, (key) => typeof key === "symbol")) {
         invalidOwnKeys = true;
-        addDiagnostic(diagnostic2(
+        addDiagnostic(diagnostic3(
           "schema",
           "ARRAY_SYMBOL_PROPERTY_INVALID",
           path4 || "/",
@@ -1042,7 +5427,7 @@ function snapshotControlled(root) {
         const index = Number(key);
         if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
           invalidOwnKeys = true;
-          addDiagnostic(diagnostic2(
+          addDiagnostic(diagnostic3(
             "schema",
             "ARRAY_NAMED_PROPERTY_INVALID",
             `${path4}/${pointerPart(key)}`,
@@ -1063,7 +5448,7 @@ function snapshotControlled(root) {
         if (holesTruncated || start >= end) return;
         const available = Math.max(0, DIAGNOSTIC_LIMIT - diagnostics.length);
         const emitCount = Math.min(end - start, available);
-        for (let offset = 0; offset < emitCount; offset += 1) addDiagnostic(diagnostic2(
+        for (let offset = 0; offset < emitCount; offset += 1) addDiagnostic(diagnostic3(
           "schema",
           "ARRAY_HOLE",
           `${path4}/${start + offset}`,
@@ -1082,7 +5467,7 @@ function snapshotControlled(root) {
       const children2 = [];
       for (const index of numeric) {
         const descriptor = descriptors[String(index)];
-        if (!descriptor || !Object.hasOwn(descriptor, "value")) addDiagnostic(diagnostic2(
+        if (!descriptor || !Object.hasOwn(descriptor, "value")) addDiagnostic(diagnostic3(
           "schema",
           "ACCESSOR_NOT_ALLOWED",
           `${path4}/${index}`,
@@ -1101,12 +5486,12 @@ function snapshotControlled(root) {
       continue;
     }
     if (prototype !== Object.prototype && prototype !== null) {
-      addDiagnostic(diagnostic2("schema", "RECORD_PROTOTYPE_INVALID", path4 || "/", "controlled records must use a plain or null prototype"));
+      addDiagnostic(diagnostic3("schema", "RECORD_PROTOTYPE_INVALID", path4 || "/", "controlled records must use a plain or null prototype"));
       assign(null);
       continue;
     }
     const keys = NATIVE_REFLECT_OWN_KEYS(descriptors);
-    if (arraySome(keys, (key) => typeof key === "symbol")) addDiagnostic(diagnostic2(
+    if (arraySome(keys, (key) => typeof key === "symbol")) addDiagnostic(diagnostic3(
       "schema",
       "RECORD_SYMBOL_PROPERTY_INVALID",
       path4 || "/",
@@ -1118,7 +5503,7 @@ function snapshotControlled(root) {
     for (const key of arraySort(arrayFilter(keys, (item) => typeof item === "string"), compareCodePoints2)) {
       const descriptor = descriptors[key];
       const childPath = `${path4}/${pointerPart(key)}`;
-      if (!descriptor || !Object.hasOwn(descriptor, "value")) addDiagnostic(diagnostic2(
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) addDiagnostic(diagnostic3(
         "schema",
         "ACCESSOR_NOT_ALLOWED",
         childPath,
@@ -1129,13 +5514,13 @@ function snapshotControlled(root) {
         path: childPath,
         /** @param {unknown} value */
         assign(value) {
-          NATIVE_DEFINE_PROPERTY(target, key, { value, enumerable: true, writable: true, configurable: true });
+          NATIVE_DEFINE_PROPERTY2(target, key, { value, enumerable: true, writable: true, configurable: true });
         }
       });
     }
     for (let index = children.length - 1; index >= 0; index -= 1) arrayPush(pending, children[index]);
   }
-  if (diagnosticsTruncated) arrayPush(diagnostics, diagnostic2(
+  if (diagnosticsTruncated) arrayPush(diagnostics, diagnostic3(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
     "/",
@@ -1151,26 +5536,26 @@ function normalizeText(value) {
 }
 function checkKeys(value, allowed, path4, diagnostics) {
   const permitted = new Set(allowed);
-  for (const key of Object.keys(value)) if (!permitted.has(key)) arrayPush(diagnostics, diagnostic2(
+  for (const key of Object.keys(value)) if (!permitted.has(key)) arrayPush(diagnostics, diagnostic3(
     "schema",
     "UNKNOWN_KEY",
     `${path4}/${pointerPart(key)}`,
     "unknown controlled clarification field is not allowed"
   ));
 }
-function record(value, path4, diagnostics) {
+function record2(value, path4, diagnostics) {
   if (isRecord(value)) return value;
-  arrayPush(diagnostics, diagnostic2("schema", "RECORD_REQUIRED", path4, "controlled clarification value must be a record"));
+  arrayPush(diagnostics, diagnostic3("schema", "RECORD_REQUIRED", path4, "controlled clarification value must be a record"));
   return {};
 }
 function array(value, path4, diagnostics) {
   if (Array.isArray(value)) return value;
-  arrayPush(diagnostics, diagnostic2("schema", "ARRAY_REQUIRED", path4, "controlled clarification value must be an array"));
+  arrayPush(diagnostics, diagnostic3("schema", "ARRAY_REQUIRED", path4, "controlled clarification value must be an array"));
   return [];
 }
 function canonicalString(value, path4, diagnostics, allowEmpty = false) {
   if (typeof value !== "string" || !allowEmpty && normalizeText(value).length === 0 || value !== value.normalize("NFC") || value !== value.trim()) {
-    arrayPush(diagnostics, diagnostic2("schema", "CANONICAL_STRING_INVALID", path4, "value must be a canonical nonpadded string"));
+    arrayPush(diagnostics, diagnostic3("schema", "CANONICAL_STRING_INVALID", path4, "value must be a canonical nonpadded string"));
     return "";
   }
   return value;
@@ -1182,92 +5567,104 @@ function stringSet(value, path4, diagnostics, nonempty = false) {
   for (let index = 0; index < input.length; index += 1) {
     const item = canonicalString(input[index], `${path4}/${index}`, diagnostics);
     if (!item) continue;
-    if (seen.has(item)) arrayPush(diagnostics, diagnostic2("schema", "SET_VALUE_DUPLICATE", `${path4}/${index}`, "set-like values must be unique"));
+    if (seen.has(item)) arrayPush(diagnostics, diagnostic3("schema", "SET_VALUE_DUPLICATE", `${path4}/${index}`, "set-like values must be unique"));
     else {
       seen.add(item);
       arrayPush(output, item);
     }
   }
-  if (nonempty && output.length === 0) arrayPush(diagnostics, diagnostic2("schema", "NONEMPTY_ARRAY_REQUIRED", path4, "set-like array must not be empty"));
+  if (nonempty && output.length === 0) arrayPush(diagnostics, diagnostic3("schema", "NONEMPTY_ARRAY_REQUIRED", path4, "set-like array must not be empty"));
   return arraySort(output, compareCodePoints2);
 }
 function integer(value, path4, diagnostics, minimum) {
   if (!Number.isSafeInteger(value) || Number(value) < minimum) {
-    arrayPush(diagnostics, diagnostic2("schema", "INTEGER_INVALID", path4, `value must be an integer at least ${minimum}`));
+    arrayPush(diagnostics, diagnostic3("schema", "INTEGER_INVALID", path4, `value must be an integer at least ${minimum}`));
     return minimum;
   }
   return Number(value);
 }
 function enumeration(value, allowed, path4, diagnostics) {
   if (typeof value !== "string" || !allowed.has(value)) {
-    arrayPush(diagnostics, diagnostic2("schema", "ENUM_INVALID", path4, "value is outside the closed clarification enumeration"));
+    arrayPush(diagnostics, diagnostic3("schema", "ENUM_INVALID", path4, "value is outside the closed clarification enumeration"));
     return "";
   }
   return value;
 }
 function normalizeSemanticSnapshot(value, path4, diagnostics) {
-  const snapshot = record(value, path4, diagnostics);
+  const snapshot = record2(value, path4, diagnostics);
   checkKeys(snapshot, ["formal_test_points", "coverage_denominator", "delivery_sections"], path4, diagnostics);
   const points = [];
   const pointIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(snapshot.formal_test_points, `${path4}/formal_test_points`, diagnostics))) {
-    const point = record(raw, `${path4}/formal_test_points/${index}`, diagnostics);
-    checkKeys(point, ["obligation_id", "evidence_level", "classification", "blocked_reason"], `${path4}/formal_test_points/${index}`, diagnostics);
+    const point = record2(raw, `${path4}/formal_test_points/${index}`, diagnostics);
+    checkKeys(point, ["obligation_id", "evidence_level", "classification", "blocked_reason", "root_issue_ids"], `${path4}/formal_test_points/${index}`, diagnostics);
     const obligationId = canonicalString(point.obligation_id, `${path4}/formal_test_points/${index}/obligation_id`, diagnostics);
     const evidenceLevel2 = enumeration(point.evidence_level, EVIDENCE_LEVELS, `${path4}/formal_test_points/${index}/evidence_level`, diagnostics);
     const classification = enumeration(point.classification, CLASSIFICATIONS, `${path4}/formal_test_points/${index}/classification`, diagnostics);
     let blockedReason = null;
     if (point.blocked_reason !== null) blockedReason = canonicalString(point.blocked_reason, `${path4}/formal_test_points/${index}/blocked_reason`, diagnostics);
-    if (classification === "blocked" && !blockedReason) arrayPush(diagnostics, diagnostic2(
+    if (classification === "blocked" && !blockedReason) arrayPush(diagnostics, diagnostic3(
       "classification",
       "BLOCKED_REASON_REQUIRED",
       `${path4}/formal_test_points/${index}/blocked_reason`,
       "Blocked formal Test Point requires a reason"
     ));
-    if (classification !== "blocked" && point.blocked_reason !== null) arrayPush(diagnostics, diagnostic2(
+    if (classification !== "blocked" && point.blocked_reason !== null) arrayPush(diagnostics, diagnostic3(
       "classification",
       "BLOCKED_REASON_UNEXPECTED",
       `${path4}/formal_test_points/${index}/blocked_reason`,
       "non-Blocked formal Test Point cannot carry a blocked reason"
     ));
-    if (pointIds.has(obligationId)) arrayPush(diagnostics, diagnostic2(
+    if (classification !== "blocked" && point.root_issue_ids !== void 0) arrayPush(diagnostics, diagnostic3(
+      "classification",
+      "BLOCKED_DEPENDENCIES_UNEXPECTED",
+      `${path4}/formal_test_points/${index}/root_issue_ids`,
+      "only Blocked formal Test Points may carry root dependencies"
+    ));
+    if (pointIds.has(obligationId)) arrayPush(diagnostics, diagnostic3(
       "reference",
       "FORMAL_TEST_POINT_DUPLICATE",
       `${path4}/formal_test_points/${index}/obligation_id`,
       "formal Test Point IDs must be unique"
     ));
     pointIds.add(obligationId);
-    arrayPush(points, { obligation_id: obligationId, evidence_level: evidenceLevel2, classification, blocked_reason: blockedReason });
+    arrayPush(points, {
+      obligation_id: obligationId,
+      evidence_level: evidenceLevel2,
+      classification,
+      blocked_reason: blockedReason,
+      ...point.root_issue_ids !== void 0 ? { root_issue_ids: stringSet(point.root_issue_ids, `${path4}/formal_test_points/${index}/root_issue_ids`, diagnostics, true) } : {}
+    });
   }
   arraySort(points, (left, right) => compareCodePoints2(left.obligation_id, right.obligation_id));
   const denominator = integer(snapshot.coverage_denominator, `${path4}/coverage_denominator`, diagnostics, 0);
-  if (denominator !== points.length) arrayPush(diagnostics, diagnostic2(
+  if (denominator !== points.length) arrayPush(diagnostics, diagnostic3(
     "coverage",
     "FORMAL_DENOMINATOR_MISMATCH",
     `${path4}/coverage_denominator`,
     "formal coverage denominator must equal the formal Test Point count"
   ));
-  const delivery = record(snapshot.delivery_sections, `${path4}/delivery_sections`, diagnostics);
+  const delivery = record2(snapshot.delivery_sections, `${path4}/delivery_sections`, diagnostics);
   checkKeys(delivery, ["grounded", "conditional", "blocked", "exploratory", "coverage", "quality"], `${path4}/delivery_sections`, diagnostics);
   const grounded = stringSet(delivery.grounded, `${path4}/delivery_sections/grounded`, diagnostics);
   const conditional = stringSet(delivery.conditional, `${path4}/delivery_sections/conditional`, diagnostics);
   const blocked = stringSet(delivery.blocked, `${path4}/delivery_sections/blocked`, diagnostics);
   const exploratory = stringSet(delivery.exploratory, `${path4}/delivery_sections/exploratory`, diagnostics);
-  const coverage = record(delivery.coverage, `${path4}/delivery_sections/coverage`, diagnostics);
+  const coverage = record2(delivery.coverage, `${path4}/delivery_sections/coverage`, diagnostics);
   checkKeys(coverage, ["formal_denominator"], `${path4}/delivery_sections/coverage`, diagnostics);
   const deliveryDenominator = integer(coverage.formal_denominator, `${path4}/delivery_sections/coverage/formal_denominator`, diagnostics, 0);
-  if (deliveryDenominator !== denominator) arrayPush(diagnostics, diagnostic2(
+  if (deliveryDenominator !== denominator) arrayPush(diagnostics, diagnostic3(
     "coverage",
     "DELIVERY_DENOMINATOR_MISMATCH",
     `${path4}/delivery_sections/coverage/formal_denominator`,
     "delivery coverage denominator must match the semantic snapshot"
   ));
-  const quality = record(delivery.quality, `${path4}/delivery_sections/quality`, diagnostics);
+  const quality = record2(delivery.quality, `${path4}/delivery_sections/quality`, diagnostics);
   checkKeys(quality, ["delivery_status"], `${path4}/delivery_sections/quality`, diagnostics);
   const deliveryStatus = enumeration(quality.delivery_status, DELIVERY_STATUSES, `${path4}/delivery_sections/quality/delivery_status`, diagnostics);
   for (const [lane, submitted] of [["grounded", grounded], ["conditional", conditional], ["blocked", blocked]]) {
     const expected = arrayMap(arrayFilter(points, (point) => point.classification === lane), (point) => point.obligation_id);
-    if (canonicalStringify(submitted) !== canonicalStringify(expected)) arrayPush(diagnostics, diagnostic2(
+    if (canonicalStringify(submitted) !== canonicalStringify(expected)) arrayPush(diagnostics, diagnostic3(
       "traceability",
       "DELIVERY_LANE_MISMATCH",
       `${path4}/delivery_sections/${lane}`,
@@ -1292,7 +5689,7 @@ function normalizeBlocked(value, path4, diagnostics) {
   const obligationIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(value, path4, diagnostics))) {
     const currentPath = `${path4}/${index}`;
-    const item = record(raw, currentPath, diagnostics);
+    const item = record2(raw, currentPath, diagnostics);
     checkKeys(item, [
       "obligation_id",
       "missing_type",
@@ -1306,7 +5703,7 @@ function normalizeBlocked(value, path4, diagnostics) {
     ], currentPath, diagnostics);
     const obligationId = canonicalString(item.obligation_id, `${currentPath}/obligation_id`, diagnostics);
     const missingType2 = canonicalString(item.missing_type, `${currentPath}/missing_type`, diagnostics);
-    if (missingType2 && !/^[a-z][a-z0-9-]*$/u.test(missingType2)) arrayPush(diagnostics, diagnostic2(
+    if (missingType2 && !/^[a-z][a-z0-9-]*$/u.test(missingType2)) arrayPush(diagnostics, diagnostic3(
       "schema",
       "MISSING_TYPE_INVALID",
       `${currentPath}/missing_type`,
@@ -1315,7 +5712,7 @@ function normalizeBlocked(value, path4, diagnostics) {
     const semanticRefs2 = stringSet(item.semantic_refs, `${currentPath}/semantic_refs`, diagnostics, true);
     const rawScope = canonicalString(item.scope, `${currentPath}/scope`, diagnostics);
     const scope = rawScope ? normalizeScope(rawScope) : "";
-    if (rawScope && rawScope !== scope) arrayPush(diagnostics, diagnostic2(
+    if (rawScope && rawScope !== scope) arrayPush(diagnostics, diagnostic3(
       "schema",
       "SCOPE_CANONICAL_INVALID",
       `${currentPath}/scope`,
@@ -1324,20 +5721,21 @@ function normalizeBlocked(value, path4, diagnostics) {
     const risk = enumeration(item.risk, RISKS, `${currentPath}/risk`, diagnostics);
     const reason = canonicalString(item.reason, `${currentPath}/reason`, diagnostics);
     const evidenceRefs = stringSet(item.evidence_refs, `${currentPath}/evidence_refs`, diagnostics);
-    if (typeof item.answerable !== "boolean") arrayPush(diagnostics, diagnostic2(
+    if (typeof item.answerable !== "boolean") arrayPush(diagnostics, diagnostic3(
       "schema",
       "BOOLEAN_INVALID",
       `${currentPath}/answerable`,
       "answerable must be boolean"
     ));
     const question = canonicalString(item.question, `${currentPath}/question`, diagnostics);
-    if (obligationIds.has(obligationId)) arrayPush(diagnostics, diagnostic2(
+    const pair = canonicalStringify({ obligationId, missingType: missingType2, semanticRefs: semanticRefs2, scope });
+    if (obligationIds.has(pair)) arrayPush(diagnostics, diagnostic3(
       "reference",
       "BLOCKED_OBLIGATION_DUPLICATE",
       `${currentPath}/obligation_id`,
-      "Blocked formal obligation IDs must be unique"
+      "Blocked obligation and root dependency pairs must be unique"
     ));
-    obligationIds.add(obligationId);
+    obligationIds.add(pair);
     arrayPush(output, {
       obligation_id: obligationId,
       missing_type: missingType2,
@@ -1358,7 +5756,7 @@ function normalizeRootLedger(value, path4, diagnostics) {
   const ids = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(value, path4, diagnostics))) {
     const itemPath = `${path4}/${index}`;
-    const item = record(raw, itemPath, diagnostics);
+    const item = record2(raw, itemPath, diagnostics);
     checkKeys(item, [
       "root_issue_id",
       "root_issue_key",
@@ -1380,19 +5778,19 @@ function normalizeRootLedger(value, path4, diagnostics) {
     const expectedKey = canonicalStringify(signature);
     const rootIssueId = canonicalString(item.root_issue_id, `${itemPath}/root_issue_id`, diagnostics);
     const rootIssueKey = canonicalString(item.root_issue_key, `${itemPath}/root_issue_key`, diagnostics);
-    if (rootIssueKey !== expectedKey) arrayPush(diagnostics, diagnostic2(
+    if (rootIssueKey !== expectedKey) arrayPush(diagnostics, diagnostic3(
       "traceability",
       "ROOT_ISSUE_KEY_MISMATCH",
       `${itemPath}/root_issue_key`,
       "root snapshot key must exactly encode its normalized semantic root fields"
     ));
-    if (rootIssueId !== stableId("root", signature)) arrayPush(diagnostics, diagnostic2(
+    if (rootIssueId !== stableId("root", signature)) arrayPush(diagnostics, diagnostic3(
       "traceability",
       "ROOT_ISSUE_ID_MISMATCH",
       `${itemPath}/root_issue_id`,
       "root snapshot identity must derive from its canonical semantic key"
     ));
-    const riskRecord = record(item.risk_counts, `${itemPath}/risk_counts`, diagnostics);
+    const riskRecord = record2(item.risk_counts, `${itemPath}/risk_counts`, diagnostics);
     checkKeys(riskRecord, ["critical", "high", "medium", "low"], `${itemPath}/risk_counts`, diagnostics);
     const riskCounts = {
       critical: integer(riskRecord.critical, `${itemPath}/risk_counts/critical`, diagnostics, 0),
@@ -1400,19 +5798,19 @@ function normalizeRootLedger(value, path4, diagnostics) {
       medium: integer(riskRecord.medium, `${itemPath}/risk_counts/medium`, diagnostics, 0),
       low: integer(riskRecord.low, `${itemPath}/risk_counts/low`, diagnostics, 0)
     };
-    if (typeof item.answerable !== "boolean") arrayPush(diagnostics, diagnostic2(
+    if (typeof item.answerable !== "boolean") arrayPush(diagnostics, diagnostic3(
       "schema",
       "BOOLEAN_INVALID",
       `${itemPath}/answerable`,
       "answerable must be boolean"
     ));
-    if (typeof item.current !== "boolean") arrayPush(diagnostics, diagnostic2(
+    if (typeof item.current !== "boolean") arrayPush(diagnostics, diagnostic3(
       "schema",
       "BOOLEAN_INVALID",
       `${itemPath}/current`,
       "current must be boolean"
     ));
-    if (ids.has(rootIssueId)) arrayPush(diagnostics, diagnostic2(
+    if (ids.has(rootIssueId)) arrayPush(diagnostics, diagnostic3(
       "reference",
       "ROOT_SNAPSHOT_DUPLICATE",
       `${itemPath}/root_issue_id`,
@@ -1437,7 +5835,7 @@ function normalizeRootLedger(value, path4, diagnostics) {
   return arraySort(output, (left, right) => compareCodePoints2(left.root_issue_id, right.root_issue_id));
 }
 function normalizePriorState(value, path4, diagnostics) {
-  const prior = record(value, path4, diagnostics);
+  const prior = record2(value, path4, diagnostics);
   checkKeys(prior, [
     "source_revision",
     "clarification_event_seq",
@@ -1457,11 +5855,11 @@ function normalizePriorState(value, path4, diagnostics) {
   const dispositionIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(prior.root_issue_dispositions, `${path4}/root_issue_dispositions`, diagnostics))) {
     const itemPath = `${path4}/root_issue_dispositions/${index}`;
-    const item = record(raw, itemPath, diagnostics);
+    const item = record2(raw, itemPath, diagnostics);
     checkKeys(item, ["root_issue_id", "status"], itemPath, diagnostics);
     const rootIssueId = canonicalString(item.root_issue_id, `${itemPath}/root_issue_id`, diagnostics);
     const status = enumeration(item.status, ROOT_STATUSES, `${itemPath}/status`, diagnostics);
-    if (dispositionIds.has(rootIssueId)) arrayPush(diagnostics, diagnostic2(
+    if (dispositionIds.has(rootIssueId)) arrayPush(diagnostics, diagnostic3(
       "reference",
       "ROOT_DISPOSITION_DUPLICATE",
       `${itemPath}/root_issue_id`,
@@ -1474,7 +5872,7 @@ function normalizePriorState(value, path4, diagnostics) {
   const lastDigest = canonicalString(prior.last_question_set_digest, `${path4}/last_question_set_digest`, diagnostics, true);
   let stop = null;
   if (prior.clarification_stop !== null) {
-    const rawStop = record(prior.clarification_stop, `${path4}/clarification_stop`, diagnostics);
+    const rawStop = record2(prior.clarification_stop, `${path4}/clarification_stop`, diagnostics);
     checkKeys(rawStop, ["reason", "source_revision"], `${path4}/clarification_stop`, diagnostics);
     stop = {
       reason: enumeration(rawStop.reason, STOP_REASONS, `${path4}/clarification_stop/reason`, diagnostics),
@@ -1503,39 +5901,39 @@ function validatePriorState(prior, diagnostics) {
     arrayFilter(prior.root_issue_dispositions, (item) => item.status === "asked"),
     (item) => item.root_issue_id
   );
-  if (!sameSet(prior.last_pending_root_issue_ids, askedDispositions)) arrayPush(diagnostics, diagnostic2(
+  if (!sameSet(prior.last_pending_root_issue_ids, askedDispositions)) arrayPush(diagnostics, diagnostic3(
     "classification",
     "PRIOR_PENDING_DISPOSITION_MISMATCH",
     "/prior_state/last_pending_root_issue_ids",
     "prior pending roots must exactly equal dispositions whose status is asked"
   ));
-  for (const rootId of prior.last_pending_root_issue_ids) if (!askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic2(
+  for (const rootId of prior.last_pending_root_issue_ids) if (!askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic3(
     "classification",
     "PRIOR_PENDING_NOT_ASKED",
     `/prior_state/last_pending_root_issue_ids/${pointerPart(rootId)}`,
     "every prior pending root must appear in the cumulative asked history"
   ));
   for (const { root_issue_id: rootId, status } of prior.root_issue_dispositions) {
-    if (status === "open" && askedHistory.has(rootId) && ledgerById.get(rootId)?.current !== false) arrayPush(diagnostics, diagnostic2(
+    if (status === "open" && askedHistory.has(rootId) && ledgerById.get(rootId)?.current !== false) arrayPush(diagnostics, diagnostic3(
       "classification",
       "PRIOR_LIFECYCLE_STATE_INVALID",
       `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
       "an open prior root can appear in asked history only as an explicitly reopened historical root"
     ));
-    if (status !== "open" && status !== "suppressed_deferred" && !askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic2(
+    if (status !== "open" && status !== "suppressed_deferred" && !askedHistory.has(rootId)) arrayPush(diagnostics, diagnostic3(
       "classification",
       "PRIOR_DISPOSITION_HISTORY_MISMATCH",
       `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
       "asked, resolved, and unknown-suppressed dispositions must appear in cumulative asked history"
     ));
-    if (!ledgerById.has(rootId)) arrayPush(diagnostics, diagnostic2(
+    if (!ledgerById.has(rootId)) arrayPush(diagnostics, diagnostic3(
       "traceability",
       "PRIOR_ROOT_SNAPSHOT_MISSING",
       `/prior_state/root_issue_dispositions/${pointerPart(rootId)}`,
       "every lifecycle disposition must retain its canonical root snapshot"
     ));
   }
-  for (const rootId of prior.asked_root_issue_ids) if (!dispositionById.has(rootId)) arrayPush(diagnostics, diagnostic2(
+  for (const rootId of prior.asked_root_issue_ids) if (!dispositionById.has(rootId)) arrayPush(diagnostics, diagnostic3(
     "classification",
     "PRIOR_DISPOSITION_HISTORY_MISMATCH",
     `/prior_state/asked_root_issue_ids/${pointerPart(rootId)}`,
@@ -1550,7 +5948,7 @@ function validatePriorState(prior, diagnostics) {
     const requiresBlockedTuple = root.current || isRetainedGateStatus(status);
     const expectedReasons = /* @__PURE__ */ new Set();
     const reasons = new Set(root.reasons);
-    if (!dispositionById.has(root.root_issue_id)) arrayPush(diagnostics, diagnostic2(
+    if (!dispositionById.has(root.root_issue_id)) arrayPush(diagnostics, diagnostic3(
       "traceability",
       "PRIOR_ROOT_DISPOSITION_MISSING",
       `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}`,
@@ -1559,7 +5957,7 @@ function validatePriorState(prior, diagnostics) {
     for (const obligationId of root.affected_obligation_ids) {
       const point = priorPointById.get(obligationId);
       if (point?.classification === "blocked" && point.blocked_reason) expectedReasons.add(point.blocked_reason);
-      if (!point || requiresBlockedTuple && (point.classification !== "blocked" || !reasons.has(point.blocked_reason))) arrayPush(diagnostics, diagnostic2(
+      if (!point || requiresBlockedTuple && (point.classification !== "blocked" || !reasons.has(point.blocked_reason))) arrayPush(diagnostics, diagnostic3(
         "traceability",
         "PRIOR_ROOT_ASSOCIATION_INVALID",
         `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}/affected_obligation_ids/${pointerPart(obligationId)}`,
@@ -1568,7 +5966,7 @@ function validatePriorState(prior, diagnostics) {
     }
     if (requiresBlockedTuple && !sameSet(root.reasons, [...expectedReasons])) arrayPush(
       diagnostics,
-      diagnostic2(
+      diagnostic3(
         "traceability",
         "PRIOR_ROOT_ASSOCIATION_INVALID",
         `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}/reasons`,
@@ -1585,7 +5983,7 @@ function validatePriorState(prior, diagnostics) {
   );
   for (const rootId of prior.last_pending_root_issue_ids) if (!ledgerById.get(rootId)?.current) arrayPush(
     diagnostics,
-    diagnostic2(
+    diagnostic3(
       "traceability",
       "PRIOR_PENDING_ROOT_SNAPSHOT_INVALID",
       `/prior_state/last_pending_root_issue_ids/${pointerPart(rootId)}`,
@@ -1593,13 +5991,13 @@ function validatePriorState(prior, diagnostics) {
     )
   );
   const expectedDigest = prior.last_pending_root_issue_ids.length === 0 ? "" : digest(arraySort([...prior.last_pending_root_issue_ids], compareCodePoints2));
-  if (prior.last_question_set_digest !== expectedDigest) arrayPush(diagnostics, diagnostic2(
+  if (prior.last_question_set_digest !== expectedDigest) arrayPush(diagnostics, diagnostic3(
     "traceability",
     "PRIOR_PENDING_DIGEST_MISMATCH",
     "/prior_state/last_question_set_digest",
     "prior question-set digest must be derived from the exact sorted pending root set"
   ));
-  if (prior.clarification_stop && (prior.last_pending_root_issue_ids.length > 0 || prior.clarification_stop.source_revision !== prior.source_revision)) arrayPush(diagnostics, diagnostic2(
+  if (prior.clarification_stop && (prior.last_pending_root_issue_ids.length > 0 || prior.clarification_stop.source_revision !== prior.source_revision)) arrayPush(diagnostics, diagnostic3(
     "classification",
     "PRIOR_STOP_STATE_INVALID",
     "/prior_state/clarification_stop",
@@ -1615,7 +6013,7 @@ function validateRootPartition(ledger, dispositionById, semantics, diagnostics, 
   const retainedOwners = /* @__PURE__ */ new Map();
   for (const root of ledger) {
     const status = dispositionById.get(root.root_issue_id);
-    const retained = !root.current && (isRetainedGateStatus(status) || status === "open");
+    const retained = !root.current && (isRetainedGateStatus(status) || status === "open" && root.answerable);
     if (!root.current && !retained) continue;
     const index = root.current ? currentOwners : retainedOwners;
     for (const obligationId of root.affected_obligation_ids) {
@@ -1628,25 +6026,53 @@ function validateRootPartition(ledger, dispositionById, semantics, diagnostics, 
     if (point.classification !== "blocked") continue;
     const active = currentOwners.get(point.obligation_id) ?? [];
     const retained = retainedOwners.get(point.obligation_id) ?? [];
-    if (active.length !== 1 && (active.length !== 0 || retained.length !== 1)) arrayPush(
+    const actual = arraySort(arrayMap([...active, ...retained], (root) => root.root_issue_id), compareCodePoints2);
+    const exact = point.root_issue_ids ? canonicalStringify(actual) === canonicalStringify(point.root_issue_ids) : actual.length === 1;
+    if (!exact) arrayPush(
       diagnostics,
-      diagnostic2(
+      diagnostic3(
         "traceability",
         "PRIOR_ROOT_PARTITION_INVALID",
         `${path4}/root_snapshot_ledger`,
-        "Blocked formal Test Points must form a complete nonoverlapping partition across active or retained gated roots"
+        "Blocked formal Test Points must retain their exact complete active or retained gated root dependency set"
       )
     );
   }
 }
+function projectRootDependencies(semantics, ledger, dispositions) {
+  const byObligation = /* @__PURE__ */ new Map();
+  for (const root of ledger) {
+    const status = dispositions.get(root.root_issue_id);
+    if (!root.current && !isRetainedGateStatus(status) && !(status === "open" && root.answerable)) continue;
+    for (const id2 of root.affected_obligation_ids) {
+      const ids = byObligation.get(id2) ?? [];
+      arrayPush(ids, root.root_issue_id);
+      byObligation.set(id2, ids);
+    }
+  }
+  for (const point of semantics.formal_test_points) if (point.classification === "blocked") {
+    const ids = arraySort(byObligation.get(point.obligation_id) ?? [], compareCodePoints2);
+    if (point.root_issue_ids !== void 0 || ids.length > 1) point.root_issue_ids = ids;
+  }
+  const points = new Map(arrayMap(semantics.formal_test_points, (point) => [point.obligation_id, point]));
+  for (const root of ledger) {
+    const status = dispositions.get(root.root_issue_id);
+    if (root.current || !isRetainedGateStatus(status) && !(status === "open" && root.answerable)) continue;
+    root.reasons = arraySort([...new Set(arrayFilter(arrayMap(
+      root.affected_obligation_ids,
+      (id2) => points.get(id2)?.blocked_reason
+    ), (reason) => typeof reason === "string"))], compareCodePoints2);
+  }
+  return semantics;
+}
 function normalizeAppendBatch(value, path4, diagnostics) {
-  const batch = record(value, path4, diagnostics);
+  const batch = record2(value, path4, diagnostics);
   checkKeys(batch, ["decision_records", "clarification_events", "execution_events"], path4, diagnostics);
   const decisions = [];
   const decisionIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(batch.decision_records, `${path4}/decision_records`, diagnostics))) {
     const itemPath = `${path4}/decision_records/${index}`;
-    const item = record(raw, itemPath, diagnostics);
+    const item = record2(raw, itemPath, diagnostics);
     if (item.decision_type === "exploratory_adoption") {
       checkKeys(item, [
         "decision_id",
@@ -1667,7 +6093,7 @@ function normalizeAppendBatch(value, path4, diagnostics) {
         "evidence_level"
       ], itemPath, diagnostics);
       const decisionId2 = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
-      if (decisionIds.has(decisionId2)) arrayPush(diagnostics, diagnostic2("reference", "DECISION_ID_DUPLICATE", `${itemPath}/decision_id`, "append Decision Record IDs must be unique"));
+      if (decisionIds.has(decisionId2)) arrayPush(diagnostics, diagnostic3("reference", "DECISION_ID_DUPLICATE", `${itemPath}/decision_id`, "append Decision Record IDs must be unique"));
       decisionIds.add(decisionId2);
       arrayPush(decisions, {
         decision_id: decisionId2,
@@ -1709,13 +6135,13 @@ function normalizeAppendBatch(value, path4, diagnostics) {
       "supersedes_decision_ids"
     ], itemPath, diagnostics);
     const decisionId = canonicalString(item.decision_id, `${itemPath}/decision_id`, diagnostics);
-    if (decisionIds.has(decisionId)) arrayPush(diagnostics, diagnostic2("reference", "DECISION_ID_DUPLICATE", `${itemPath}/decision_id`, "append Decision Record IDs must be unique"));
+    if (decisionIds.has(decisionId)) arrayPush(diagnostics, diagnostic3("reference", "DECISION_ID_DUPLICATE", `${itemPath}/decision_id`, "append Decision Record IDs must be unique"));
     decisionIds.add(decisionId);
     const disposition = enumeration(item.disposition, DECISION_DISPOSITIONS, `${itemPath}/disposition`, diagnostics);
     const answer = canonicalString(item.answer, `${itemPath}/answer`, diagnostics, disposition === "unknown" || disposition === "deferred");
     const evidenceLevel2 = enumeration(item.evidence_level, /* @__PURE__ */ new Set(["E1", "E3"]), `${itemPath}/evidence_level`, diagnostics);
-    if (disposition === "final" && evidenceLevel2 !== "E3") arrayPush(diagnostics, diagnostic2("classification", "DECISION_EVIDENCE_LEVEL_INVALID", `${itemPath}/evidence_level`, "final Decision Record must be E3"));
-    if (disposition === "temporary" && evidenceLevel2 !== "E1") arrayPush(diagnostics, diagnostic2("classification", "DECISION_EVIDENCE_LEVEL_INVALID", `${itemPath}/evidence_level`, "temporary Decision Record must be E1"));
+    if (disposition === "final" && evidenceLevel2 !== "E3") arrayPush(diagnostics, diagnostic3("classification", "DECISION_EVIDENCE_LEVEL_INVALID", `${itemPath}/evidence_level`, "final Decision Record must be E3"));
+    if (disposition === "temporary" && evidenceLevel2 !== "E1") arrayPush(diagnostics, diagnostic3("classification", "DECISION_EVIDENCE_LEVEL_INVALID", `${itemPath}/evidence_level`, "temporary Decision Record must be E1"));
     arrayPush(decisions, {
       decision_id: decisionId,
       question_id: canonicalString(item.question_id, `${itemPath}/question_id`, diagnostics),
@@ -1744,11 +6170,11 @@ function normalizeAppendBatch(value, path4, diagnostics) {
   const eventIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(batch.clarification_events, `${path4}/clarification_events`, diagnostics))) {
     const itemPath = `${path4}/clarification_events/${index}`;
-    const item = record(raw, itemPath, diagnostics);
+    const item = record2(raw, itemPath, diagnostics);
     const eventType = enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics);
     checkKeys(item, eventType === "request_reanalysis" ? ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "source_locator_ids", "affected_items", "reason"] : ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "root_issue_ids"], itemPath, diagnostics);
     const eventId = canonicalString(item.event_id, `${itemPath}/event_id`, diagnostics);
-    if (eventIds.has(eventId)) arrayPush(diagnostics, diagnostic2("reference", "CONTROL_EVENT_ID_DUPLICATE", `${itemPath}/event_id`, "append control event IDs must be unique"));
+    if (eventIds.has(eventId)) arrayPush(diagnostics, diagnostic3("reference", "CONTROL_EVENT_ID_DUPLICATE", `${itemPath}/event_id`, "append control event IDs must be unique"));
     eventIds.add(eventId);
     const common = {
       event_id: eventId,
@@ -1780,20 +6206,20 @@ function normalizeAppendBatch(value, path4, diagnostics) {
 function sameSet(left, right) {
   return canonicalStringify(arraySort([...left], compareCodePoints2)) === canonicalStringify(arraySort([...right], compareCodePoints2));
 }
-function strictlyIncreasing(entries, key) {
-  for (let index = 1; index < entries.length; index += 1) {
-    if (Number(entries[index][key]) <= Number(entries[index - 1][key])) return false;
+function strictlyIncreasing(entries2, key) {
+  for (let index = 1; index < entries2.length; index += 1) {
+    if (Number(entries2[index][key]) <= Number(entries2[index - 1][key])) return false;
   }
   return true;
 }
-function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
-  if (!strictlyIncreasing(batch.decision_records, "clarification_event_seq")) arrayPush(diagnostics, diagnostic2(
+function validateHistory(prior, batch, sourceRevision, semantics, diagnostics, generationRepair) {
+  if (!strictlyIncreasing(batch.decision_records, "clarification_event_seq")) arrayPush(diagnostics, diagnostic3(
     "classification",
     "CLARIFICATION_EVENT_SEQUENCE_NONMONOTONE",
     "/append_batch/decision_records",
     "Decision Record append order must be strictly monotonic"
   ));
-  if (!strictlyIncreasing(batch.clarification_events, "clarification_event_seq")) arrayPush(diagnostics, diagnostic2(
+  if (!strictlyIncreasing(batch.clarification_events, "clarification_event_seq")) arrayPush(diagnostics, diagnostic3(
     "classification",
     "CLARIFICATION_EVENT_SEQUENCE_NONMONOTONE",
     "/append_batch/clarification_events",
@@ -1806,7 +6232,7 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
   arraySort(combined, (left, right) => left.seq - right.seq || compareCodePoints2(left.kind, right.kind));
   const seenSeq = /* @__PURE__ */ new Set();
   for (const entry of combined) {
-    if (seenSeq.has(entry.seq)) arrayPush(diagnostics, diagnostic2(
+    if (seenSeq.has(entry.seq)) arrayPush(diagnostics, diagnostic3(
       "classification",
       "CLARIFICATION_EVENT_SEQUENCE_DUPLICATE",
       "/append_batch",
@@ -1815,7 +6241,7 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
     seenSeq.add(entry.seq);
   }
   for (let index = 0; index < combined.length; index += 1) {
-    if (combined[index].seq !== prior.clarification_event_seq + index + 1) arrayPush(diagnostics, diagnostic2(
+    if (combined[index].seq !== prior.clarification_event_seq + index + 1) arrayPush(diagnostics, diagnostic3(
       "classification",
       "CLARIFICATION_EVENT_SEQUENCE_GAP",
       "/append_batch",
@@ -1823,17 +6249,23 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
     ));
   }
   if (combined.length === 0) {
-    if (sourceRevision !== prior.source_revision) arrayPush(diagnostics, diagnostic2(
+    if (sourceRevision !== prior.source_revision + (generationRepair ? 1 : 0)) arrayPush(diagnostics, diagnostic3(
       "classification",
       "APPEND_REVISION_INVALID",
       "/source_revision",
       "an empty append batch must replay the exact prior immutable source revision"
     ));
-  } else if (sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic2(
+  } else if (sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic3(
     "classification",
     "APPEND_REVISION_INVALID",
     "/source_revision",
     "one append batch must create exactly the next immutable source revision"
+  ));
+  if (generationRepair && combined.length > 0) arrayPush(diagnostics, diagnostic3(
+    "classification",
+    "ARTIFACT_REPAIR_INVALID",
+    "/append_batch",
+    "generation repair must not fabricate or append a business clarification event"
   ));
   const formalIds = new Set(arrayMap(semantics.formal_test_points, (point) => point.obligation_id));
   const pending = new Set(prior.last_pending_root_issue_ids);
@@ -1841,20 +6273,20 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
   for (const [index, item] of arrayEntries(batch.decision_records)) {
     if (item.decision_type === "exploratory_adoption") continue;
     const expectedQuestionId = stableId("question", { root_issue_ids: arraySort([...item.root_issue_ids], compareCodePoints2) });
-    if (item.question_id !== expectedQuestionId) arrayPush(diagnostics, diagnostic2(
+    if (item.question_id !== expectedQuestionId) arrayPush(diagnostics, diagnostic3(
       "traceability",
       "DECISION_QUESTION_ID_MISMATCH",
       `/append_batch/decision_records/${index}/question_id`,
       "Decision question identity must be derived only from its sorted root issue set"
     ));
     for (const rootId of item.root_issue_ids) {
-      if (!pending.has(rootId)) arrayPush(diagnostics, diagnostic2(
+      if (!pending.has(rootId)) arrayPush(diagnostics, diagnostic3(
         "reference",
         "DECISION_ROOT_UNKNOWN",
         `/append_batch/decision_records/${index}/root_issue_ids/${pointerPart(rootId)}`,
         "Decision Record must resolve a root from the prior complete pending set"
       ));
-      if (decidedRoots.has(rootId)) arrayPush(diagnostics, diagnostic2(
+      if (decidedRoots.has(rootId)) arrayPush(diagnostics, diagnostic3(
         "classification",
         "DECISION_ROOT_DUPLICATE",
         `/append_batch/decision_records/${index}/root_issue_ids/${pointerPart(rootId)}`,
@@ -1862,7 +6294,7 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
       ));
       decidedRoots.add(rootId);
     }
-    for (const obligationId of item.affected_obligation_ids) if (!formalIds.has(obligationId)) arrayPush(diagnostics, diagnostic2(
+    for (const obligationId of item.affected_obligation_ids) if (!formalIds.has(obligationId)) arrayPush(diagnostics, diagnostic3(
       "reference",
       "DECISION_OBLIGATION_UNKNOWN",
       `/append_batch/decision_records/${index}/affected_obligation_ids/${pointerPart(obligationId)}`,
@@ -1875,13 +6307,13 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
   for (const [index, event] of arrayEntries(batch.clarification_events)) {
     if (event.type === "request_delivery") {
       requestDeliveryCount += 1;
-      if (!sameSet(event.root_issue_ids, prior.last_pending_root_issue_ids)) arrayPush(diagnostics, diagnostic2(
+      if (!sameSet(event.root_issue_ids, prior.last_pending_root_issue_ids)) arrayPush(diagnostics, diagnostic3(
         "classification",
         "REQUEST_DELIVERY_PENDING_SET_MISMATCH",
         `/append_batch/clarification_events/${index}/root_issue_ids`,
         "request_delivery must exactly equal the prior complete pending root set"
       ));
-      if (combined[combined.length - 1]?.seq !== event.clarification_event_seq) arrayPush(diagnostics, diagnostic2(
+      if (combined[combined.length - 1]?.seq !== event.clarification_event_seq) arrayPush(diagnostics, diagnostic3(
         "classification",
         "REQUEST_DELIVERY_ORDER_INVALID",
         `/append_batch/clarification_events/${index}`,
@@ -1890,19 +6322,19 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
     } else if (event.type === "reopen_root_issues") {
       for (const rootId of event.root_issue_ids) {
         const status = priorDisposition.get(rootId);
-        if (!status) arrayPush(diagnostics, diagnostic2(
+        if (!status) arrayPush(diagnostics, diagnostic3(
           "reference",
           "REOPEN_ROOT_UNKNOWN",
           `/append_batch/clarification_events/${index}/root_issue_ids/${pointerPart(rootId)}`,
           "reopen event references an unknown prior root issue"
         ));
-        else if (status !== "suppressed_unknown" && status !== "suppressed_deferred") arrayPush(diagnostics, diagnostic2(
+        else if (status !== "suppressed_unknown" && status !== "suppressed_deferred") arrayPush(diagnostics, diagnostic3(
           "classification",
           "REOPEN_STATUS_INVALID",
           `/append_batch/clarification_events/${index}/root_issue_ids/${pointerPart(rootId)}`,
           "only suppressed unknown or deferred roots may be reopened"
         ));
-        if (reopened.has(rootId)) arrayPush(diagnostics, diagnostic2(
+        if (reopened.has(rootId)) arrayPush(diagnostics, diagnostic3(
           "classification",
           "REOPEN_ROOT_DUPLICATE",
           `/append_batch/clarification_events/${index}/root_issue_ids/${pointerPart(rootId)}`,
@@ -1912,13 +6344,13 @@ function validateHistory(prior, batch, sourceRevision, semantics, diagnostics) {
       }
     }
   }
-  if (requestDeliveryCount > 1) arrayPush(diagnostics, diagnostic2(
+  if (requestDeliveryCount > 1) arrayPush(diagnostics, diagnostic3(
     "classification",
     "REQUEST_DELIVERY_DUPLICATE",
     "/append_batch/clarification_events",
     "one append batch may contain at most one delivery request"
   ));
-  if (requestDeliveryCount > 0 && reopened.size > 0) arrayPush(diagnostics, diagnostic2(
+  if (requestDeliveryCount > 0 && reopened.size > 0) arrayPush(diagnostics, diagnostic3(
     "classification",
     "CONTROL_EVENT_CONFLICT",
     "/append_batch/clarification_events",
@@ -1949,7 +6381,7 @@ function buildRootIssues(blocked, sourceRevision, diagnostics) {
       batch_id: null
     });
     else if (existing.root_issue_key !== rootIssueKey) {
-      arrayPush(diagnostics, diagnostic2(
+      arrayPush(diagnostics, diagnostic3(
         "traceability",
         "ROOT_ISSUE_ID_COLLISION",
         `/blocked_obligations/${pointerPart(item.obligation_id)}`,
@@ -1957,7 +6389,7 @@ function buildRootIssues(blocked, sourceRevision, diagnostics) {
       ));
       continue;
     } else {
-      if (existing.question !== item.question || existing.answerable !== item.answerable) arrayPush(diagnostics, diagnostic2(
+      if (existing.question !== item.question || existing.answerable !== item.answerable) arrayPush(diagnostics, diagnostic3(
         "classification",
         "ROOT_DESCRIPTOR_CONFLICT",
         `/blocked_obligations/${pointerPart(item.obligation_id)}`,
@@ -2012,7 +6444,7 @@ function nextRootLedger(priorLedger, roots, diagnostics) {
   for (const root of roots) {
     const prior = byId.get(root.root_issue_id);
     if (prior && prior.root_issue_key !== root.root_issue_key) {
-      arrayPush(diagnostics, diagnostic2(
+      arrayPush(diagnostics, diagnostic3(
         "traceability",
         "ROOT_ISSUE_ID_COLLISION",
         `/prior_state/root_snapshot_ledger/${pointerPart(root.root_issue_id)}`,
@@ -2043,7 +6475,7 @@ function projectBlockedSemantics(semantics, priorSemantics, obligationIds, diagn
     if (!obligationIds.has(point.obligation_id) || point.classification === "blocked") continue;
     const priorPoint = priorPoints.get(point.obligation_id);
     if (priorPoint?.classification !== "blocked") {
-      arrayPush(diagnostics, diagnostic2(
+      arrayPush(diagnostics, diagnostic3(
         "classification",
         "BLOCKED_PROJECTION_UNAVAILABLE",
         `/semantic_snapshot/formal_test_points/${pointerPart(point.obligation_id)}`,
@@ -2069,9 +6501,9 @@ function invalidDecision(policy, diagnostics, sourceRevision = 0) {
     diagnostics: finalizeDiagnostics(diagnostics)
   };
 }
-function evaluateClarification(submittedContext, interactionPolicy) {
+function evaluateClarification(submittedContext, interactionPolicy, repairRecord = null) {
   const diagnostics = [];
-  if (!POLICIES.has(interactionPolicy)) arrayPush(diagnostics, diagnostic2(
+  if (!POLICIES.has(interactionPolicy)) arrayPush(diagnostics, diagnostic3(
     "classification",
     "INTERACTION_POLICY_INVALID",
     "/interaction_policy",
@@ -2081,7 +6513,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
   arrayPush(diagnostics, ...captured.diagnostics);
   if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics);
   try {
-    const context = record(captured.snapshot, "/", diagnostics);
+    const context = record2(captured.snapshot, "/", diagnostics);
     checkKeys(context, ["source_revision", "blocked_obligations", "prior_state", "append_batch", "semantic_snapshot"], "", diagnostics);
     const sourceRevision = integer(context.source_revision, "/source_revision", diagnostics, 0);
     const blocked = normalizeBlocked(context.blocked_obligations, "/blocked_obligations", diagnostics);
@@ -2089,8 +6521,34 @@ function evaluateClarification(submittedContext, interactionPolicy) {
     const batch = normalizeAppendBatch(context.append_batch, "/append_batch", diagnostics);
     const semantics = normalizeSemanticSnapshot(context.semantic_snapshot, "/semantic_snapshot", diagnostics);
     validatePriorState(prior, diagnostics);
-    const combined = validateHistory(prior, batch, sourceRevision, semantics, diagnostics);
+    const generationRepair = repairRecord !== null;
+    if (generationRepair) {
+      const repairValidation = validateAgainstSchema(repairRecord, source_pack_schema_default.properties.artifact_repairs.items);
+      const repair = (
+        /** @type {Record<string, unknown>} */
+        repairRecord
+      );
+      if (repairValidation.length > 0 || repair?.base_source_revision !== prior.source_revision || sourceRevision !== prior.source_revision + 1) arrayPush(diagnostics, diagnostic3(
+        "classification",
+        "ARTIFACT_REPAIR_INVALID",
+        "/source_revision",
+        "generation repair requires a closed record bound to exactly the next source revision"
+      ));
+    }
+    const combined = validateHistory(prior, batch, sourceRevision, semantics, diagnostics, generationRepair);
     const roots = buildRootIssues(blocked, sourceRevision, diagnostics);
+    for (const point of semantics.formal_test_points) {
+      const currentIds = arraySort(arrayMap(arrayFilter(
+        roots,
+        (root) => new Set(root.affected_obligation_ids).has(point.obligation_id)
+      ), (root) => root.root_issue_id), compareCodePoints2);
+      if (point.root_issue_ids !== void 0 && canonicalStringify(currentIds) !== canonicalStringify(point.root_issue_ids) || point.root_issue_ids === void 0 && currentIds.length > 1) arrayPush(diagnostics, diagnostic3(
+        "traceability",
+        "BLOCKED_DEPENDENCY_SET_MISMATCH",
+        "/semantic_snapshot/formal_test_points",
+        "current dependency IDs must exactly match compiler blocker descriptors"
+      ));
+    }
     const pointById = new Map(arrayMap(semantics.formal_test_points, (point) => [point.obligation_id, point]));
     const descriptorIds = new Set(arrayMap(blocked, (item) => item.obligation_id));
     const priorDispositionById = new Map(arrayMap(
@@ -2117,7 +6575,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
       const point = pointById.get(item.obligation_id);
       if (point?.classification !== "blocked") arrayPush(
         diagnostics,
-        diagnostic2(
+        diagnostic3(
           "traceability",
           "BLOCKED_DESCRIPTOR_SET_MISMATCH",
           "/blocked_obligations",
@@ -2126,7 +6584,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
       );
       else if (point.blocked_reason !== item.reason) arrayPush(
         diagnostics,
-        diagnostic2(
+        diagnostic3(
           "traceability",
           "BLOCKED_REASON_DESCRIPTOR_MISMATCH",
           `/blocked_obligations/${pointerPart(item.obligation_id)}/reason`,
@@ -2136,7 +6594,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
     }
     for (const point of semantics.formal_test_points) if (point.classification === "blocked" && !descriptorIds.has(point.obligation_id)) {
       const retainedSuppression = (retainedRootsByObligation.get(point.obligation_id)?.length ?? 0) > 0;
-      if (!retainedSuppression) arrayPush(diagnostics, diagnostic2(
+      if (!retainedSuppression) arrayPush(diagnostics, diagnostic3(
         "traceability",
         "BLOCKED_DESCRIPTOR_SET_MISMATCH",
         "/blocked_obligations",
@@ -2148,7 +6606,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
       const priorCurrentSnapshots = arrayFilter(prior.root_snapshot_ledger, (root) => root.current);
       if (canonicalStringify(currentSnapshots) !== canonicalStringify(priorCurrentSnapshots)) arrayPush(
         diagnostics,
-        diagnostic2(
+        diagnostic3(
           "traceability",
           "IMMUTABLE_ROOT_SNAPSHOT_MISMATCH",
           "/blocked_obligations",
@@ -2161,7 +6619,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
       }
       for (const obligationId of replayBlockedObligationIds) if (!pointById.has(obligationId)) arrayPush(
         diagnostics,
-        diagnostic2(
+        diagnostic3(
           "traceability",
           "GATED_FORMAL_TEST_POINT_MISSING",
           `/semantic_snapshot/formal_test_points/${pointerPart(obligationId)}`,
@@ -2169,9 +6627,10 @@ function evaluateClarification(submittedContext, interactionPolicy) {
         )
       );
       const replaySemantics = replayBlockedObligationIds.size > 0 ? projectBlockedSemantics(semantics, prior.semantic_snapshot, replayBlockedObligationIds, diagnostics) : semantics;
+      projectRootDependencies(replaySemantics, replayLedger, priorDispositionById);
       if (canonicalStringify(replaySemantics) !== canonicalStringify(prior.semantic_snapshot)) arrayPush(
         diagnostics,
-        diagnostic2(
+        diagnostic3(
           "traceability",
           "IMMUTABLE_SEMANTIC_SNAPSHOT_MISMATCH",
           "/semantic_snapshot",
@@ -2311,7 +6770,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
     }
     for (const obligationId of blockedObligationIds) if (!pointById.has(obligationId)) arrayPush(
       diagnostics,
-      diagnostic2(
+      diagnostic3(
         "traceability",
         "GATED_FORMAL_TEST_POINT_MISSING",
         `/semantic_snapshot/formal_test_points/${pointerPart(obligationId)}`,
@@ -2323,6 +6782,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
     const dispositionOutput = arrayMap([...dispositions], ([root_issue_id, status]) => ({ root_issue_id, status }));
     arraySort(dispositionOutput, (left, right) => compareCodePoints2(left.root_issue_id, right.root_issue_id));
     const nextLedger = nextRootLedger(prior.root_snapshot_ledger, roots, diagnostics);
+    projectRootDependencies(deliveredSemantics, nextLedger, dispositions);
     validateRootPartition(nextLedger, dispositions, deliveredSemantics, diagnostics, "/state");
     if (diagnostics.length > 0) return invalidDecision(interactionPolicy, diagnostics, sourceRevision);
     const state = {
@@ -2347,7 +6807,7 @@ function evaluateClarification(submittedContext, interactionPolicy) {
       diagnostics: []
     };
   } catch {
-    return invalidDecision(interactionPolicy, [diagnostic2(
+    return invalidDecision(interactionPolicy, [diagnostic3(
       "classification",
       "CLARIFICATION_INPUT_UNREADABLE",
       "/",
@@ -2366,7 +6826,7 @@ function objectArray2(value) {
 function stringArray(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 }
-function diagnostic3(code2, path4, message) {
+function diagnostic4(code2, path4, message) {
   return { category: "reference", code: code2, path: path4, message };
 }
 function compareStrings(left, right) {
@@ -2423,7 +6883,7 @@ var SPARSE_REACHABILITY_CACHE_LIMIT = 2048;
 function buildScopedReachability(graph, scopesById) {
   const ids = [...graph.keys()].sort();
   const globalIndegree = new Uint32Array(ids.length);
-  const globalIndexById = new Map(ids.map((id, index) => [id, index]));
+  const globalIndexById = new Map(ids.map((id2, index) => [id2, index]));
   for (const neighbors of graph.values()) {
     for (const neighbor of neighbors) {
       const index = globalIndexById.get(neighbor);
@@ -2434,9 +6894,9 @@ function buildScopedReachability(graph, scopesById) {
   for (let index = 0; index < ids.length; index += 1) if (globalIndegree[index] === 0) globalReady.push(ids[index]);
   const rankById = /* @__PURE__ */ new Map();
   for (let offset = 0; offset < globalReady.length; offset += 1) {
-    const id = globalReady[offset];
-    rankById.set(id, offset);
-    for (const neighbor of graph.get(id) ?? []) {
+    const id2 = globalReady[offset];
+    rankById.set(id2, offset);
+    for (const neighbor of graph.get(id2) ?? []) {
       const index = (
         /** @type {number} */
         globalIndexById.get(neighbor)
@@ -2463,17 +6923,17 @@ function buildScopedReachability(graph, scopesById) {
       markSparseScope(scope);
       return null;
     }
-    const eligibleIds = ids.filter((id) => scopeContains(scopesById.get(id) ?? "", scope));
+    const eligibleIds = ids.filter((id2) => scopeContains(scopesById.get(id2) ?? "", scope));
     const words = Math.ceil(eligibleIds.length / 32);
     const estimatedBytes = eligibleIds.length * words * Uint32Array.BYTES_PER_ELEMENT;
     if (allocatedBitsetBytes + estimatedBytes > REACHABILITY_BITSET_BUDGET_BYTES) {
       markSparseScope(scope);
       return null;
     }
-    const indexById = new Map(eligibleIds.map((id, index) => [id, index]));
+    const indexById = new Map(eligibleIds.map((id2, index) => [id2, index]));
     const indegree = new Uint32Array(eligibleIds.length);
-    for (const id of eligibleIds) {
-      for (const neighbor of graph.get(id) ?? []) {
+    for (const id2 of eligibleIds) {
+      for (const neighbor of graph.get(id2) ?? []) {
         const index = indexById.get(neighbor);
         if (index !== void 0) indegree[index] += 1;
       }
@@ -2482,23 +6942,23 @@ function buildScopedReachability(graph, scopesById) {
     for (let index = 0; index < eligibleIds.length; index += 1) if (indegree[index] === 0) ready.push(eligibleIds[index]);
     const topological = [];
     for (let offset = 0; offset < ready.length; offset += 1) {
-      const id = ready[offset];
-      topological.push(id);
-      for (const neighbor of graph.get(id) ?? []) {
+      const id2 = ready[offset];
+      topological.push(id2);
+      for (const neighbor of graph.get(id2) ?? []) {
         const index = indexById.get(neighbor);
         if (index === void 0) continue;
         indegree[index] -= 1;
         if (indegree[index] === 0) ready.push(neighbor);
       }
     }
-    const descendants = new Map(eligibleIds.map((id) => [id, new Uint32Array(words)]));
+    const descendants = new Map(eligibleIds.map((id2) => [id2, new Uint32Array(words)]));
     for (let order = topological.length - 1; order >= 0; order -= 1) {
-      const id = topological[order];
+      const id2 = topological[order];
       const bits = (
         /** @type {Uint32Array} */
-        descendants.get(id)
+        descendants.get(id2)
       );
-      for (const neighbor of graph.get(id) ?? []) {
+      for (const neighbor of graph.get(id2) ?? []) {
         const neighborIndex = indexById.get(neighbor);
         if (neighborIndex === void 0) continue;
         bits[neighborIndex >>> 5] |= 1 << (neighborIndex & 31);
@@ -2569,14 +7029,14 @@ function resolveSourcePolicy(sourcePack) {
   rules.forEach((rule, ruleIndex) => {
     if (typeof rule.rule_id !== "string") return;
     const supersedes = stringArray(rule.supersedes);
-    declaredGraph.set(rule.rule_id, supersedes.filter((id) => ruleById.has(id)));
+    declaredGraph.set(rule.rule_id, supersedes.filter((id2) => ruleById.has(id2)));
     stringArray(rule.source_ids).forEach((sourceId, sourceIndex) => {
       if (!sourceIds.has(sourceId)) {
         invalidRuleIds.add(
           /** @type {string} */
           rule.rule_id
         );
-        diagnostics.push(diagnostic3(
+        diagnostics.push(diagnostic4(
           "SOURCE_POLICY_SOURCE_DANGLING",
           `/source_policy/rules/${ruleIndex}/source_ids/${sourceIndex}`,
           `source policy references unknown source "${sourceId}"`
@@ -2589,7 +7049,7 @@ function resolveSourcePolicy(sourcePack) {
           /** @type {string} */
           rule.rule_id
         );
-        diagnostics.push(diagnostic3(
+        diagnostics.push(diagnostic4(
           "SOURCE_POLICY_SUPERSEDES_DANGLING",
           `/source_policy/rules/${ruleIndex}/supersedes/${edgeIndex}`,
           `source policy references unknown superseded rule "${supersededId}"`
@@ -2598,7 +7058,7 @@ function resolveSourcePolicy(sourcePack) {
     });
   });
   const cyclicIds = findCyclicRuleIds(declaredGraph);
-  if (cyclicIds.size > 0) diagnostics.push(diagnostic3(
+  if (cyclicIds.size > 0) diagnostics.push(diagnostic4(
     "SOURCE_POLICY_CYCLE",
     "/source_policy/rules",
     `source policy supersedes graph contains a cycle: ${[...cyclicIds].sort().join(", ")}`
@@ -2614,11 +7074,11 @@ function resolveSourcePolicy(sourcePack) {
     rule.rule_id
   )));
   const graph = new Map(transitRules.map((rule) => {
-    const id = (
+    const id2 = (
       /** @type {string} */
       rule.rule_id
     );
-    return [id, (declaredGraph.get(id) ?? []).filter((target) => transitIds.has(target))];
+    return [id2, (declaredGraph.get(id2) ?? []).filter((target) => transitIds.has(target))];
   }));
   const scopesById = new Map(transitRules.map((rule) => [
     /** @type {string} */
@@ -2799,7 +7259,7 @@ function objectArray3(value) {
 function stringArray2(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 }
-function diagnostic4(category, code2, path4, message) {
+function diagnostic5(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function compareStrings2(left, right) {
@@ -3013,13 +7473,13 @@ function recomputeDerivedValue(claim, acceptedClaims2) {
     return { value: ruleInput.outcome };
   }
   if (claim.derivation_kind === "boundary-representative") {
-    const lower = ruleInput.lower;
+    const lower2 = ruleInput.lower;
     const upper = ruleInput.upper;
-    if (typeof lower !== "number" || !Number.isFinite(lower) || typeof upper !== "number" || !Number.isFinite(upper) || lower > upper) {
+    if (typeof lower2 !== "number" || !Number.isFinite(lower2) || typeof upper !== "number" || !Number.isFinite(upper) || lower2 > upper) {
       return { code: "E2_BOUNDARY_INPUT_INVALID", message: "boundary derivation requires finite ordered lower and upper bounds" };
     }
     const submitted = typeof claim.value === "string" ? Number(claim.value) : Number.NaN;
-    if (!Number.isFinite(submitted) || submitted !== lower && submitted !== upper) {
+    if (!Number.isFinite(submitted) || submitted !== lower2 && submitted !== upper) {
       return { code: "E2_VALUE_MISMATCH", message: "submitted boundary value is not one of the declared bounds" };
     }
     return { value: String(submitted) };
@@ -3076,7 +7536,7 @@ function recomputeDerivedValue(claim, acceptedClaims2) {
 function findE2Cycles(claims) {
   const state = /* @__PURE__ */ new Map();
   const cyclic = /* @__PURE__ */ new Set();
-  const parentsById = new Map([...claims].flatMap(([claimId, claim]) => claim.level === "E2" ? [[claimId, stringArray2(claim.parent_claim_ids).filter((id) => claims.get(id)?.level === "E2")]] : []));
+  const parentsById = new Map([...claims].flatMap(([claimId, claim]) => claim.level === "E2" ? [[claimId, stringArray2(claim.parent_claim_ids).filter((id2) => claims.get(id2)?.level === "E2")]] : []));
   for (const [start, startClaim] of claims) {
     if (startClaim.level !== "E2" || (state.get(start) ?? 0) !== 0) continue;
     const stack = [{ id: start, next: 0 }];
@@ -3138,7 +7598,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
     for (const [locatorIndex, locatorId] of stringArray2(claim.source_locator_ids).entries()) {
       const locator = locators.get(locatorId);
       if (!locator) {
-        diagnostics.push(diagnostic4("reference", "SOURCE_LOCATOR_DANGLING", `/claims/${index}/source_locator_ids/${locatorIndex}`, `claim references unknown locator "${locatorId}"`));
+        diagnostics.push(diagnostic5("reference", "SOURCE_LOCATOR_DANGLING", `/claims/${index}/source_locator_ids/${locatorIndex}`, `claim references unknown locator "${locatorId}"`));
         valid = false;
       } else if (typeof locator.source_id !== "string" || !sources.has(locator.source_id)) {
         valid = false;
@@ -3152,40 +7612,40 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
     const index = claimIndexById.get(claimId) ?? 0;
     let valid = validateLocatorReferences(claim, index);
     if (claim.level === "E0") {
-      diagnostics.push(diagnostic4("classification", "E0_NOT_EVIDENCE", `/claims/${index}/level`, "E0 is a risk hypothesis and cannot enter the evidence graph"));
+      diagnostics.push(diagnostic5("classification", "E0_NOT_EVIDENCE", `/claims/${index}/level`, "E0 is a risk hypothesis and cannot enter the evidence graph"));
       valid = false;
     } else if (claim.claim_form === "direct") {
       const sourceId = typeof claim.source_id === "string" ? claim.source_id : "";
       const source = sources.get(sourceId);
       if (!source) {
-        diagnostics.push(diagnostic4("reference", "SOURCE_DANGLING", `/claims/${index}/source_id`, `claim references unknown source "${sourceId}"`));
+        diagnostics.push(diagnostic5("reference", "SOURCE_DANGLING", `/claims/${index}/source_id`, `claim references unknown source "${sourceId}"`));
         valid = false;
       } else {
         if (claim.level !== "E3") {
-          diagnostics.push(diagnostic4("classification", "DIRECT_CLAIM_LEVEL_INVALID", `/claims/${index}/level`, "a direct authoritative claim must be E3"));
+          diagnostics.push(diagnostic5("classification", "DIRECT_CLAIM_LEVEL_INVALID", `/claims/${index}/level`, "a direct authoritative claim must be E3"));
           valid = false;
         }
         if (!NORMATIVE_SOURCE_KINDS.has(
           /** @type {string} */
           source.kind
         )) {
-          diagnostics.push(diagnostic4("classification", "SOURCE_KIND_NOT_NORMATIVE", `/claims/${index}/source_id`, "current behavior and historical defects cannot supply normative E3 evidence"));
+          diagnostics.push(diagnostic5("classification", "SOURCE_KIND_NOT_NORMATIVE", `/claims/${index}/source_id`, "current behavior and historical defects cannot supply normative E3 evidence"));
           valid = false;
         }
         if (!EFFECTIVE_SOURCE_STATUSES.has(
           /** @type {string} */
           source.status
         )) {
-          diagnostics.push(diagnostic4("classification", "SOURCE_NOT_EFFECTIVE", `/claims/${index}/source_id`, "only approved or effective sources can supply E3 evidence"));
+          diagnostics.push(diagnostic5("classification", "SOURCE_NOT_EFFECTIVE", `/claims/${index}/source_id`, "only approved or effective sources can supply E3 evidence"));
           valid = false;
         }
         const sourceLocators = stringArray2(claim.source_locator_ids).map((locatorId) => locators.get(locatorId)).filter(Boolean);
         if (sourceLocators.some((locator) => locator?.source_id !== sourceId)) {
-          diagnostics.push(diagnostic4("reference", "LOCATOR_SOURCE_MISMATCH", `/claims/${index}/source_locator_ids`, "every direct-claim locator must belong to its source"));
+          diagnostics.push(diagnostic5("reference", "LOCATOR_SOURCE_MISMATCH", `/claims/${index}/source_locator_ids`, "every direct-claim locator must belong to its source"));
           valid = false;
         }
         if (sourceLocators.some((locator) => locator?.extraction_integrity === "uncertain")) {
-          diagnostics.push(diagnostic4("classification", "E3_EXTRACTION_UNCERTAIN", `/claims/${index}/source_locator_ids`, "uncertain extraction cannot become E3"));
+          diagnostics.push(diagnostic5("classification", "E3_EXTRACTION_UNCERTAIN", `/claims/${index}/source_locator_ids`, "uncertain extraction cannot become E3"));
           valid = false;
         }
         const scope = typeof claim.scope === "string" ? claim.scope : "";
@@ -3195,7 +7655,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
           return !excludedScopes.some((excluded) => scopesIntersect(excluded, scope));
         });
         if (!sourceEffective) {
-          diagnostics.push(diagnostic4("classification", "SOURCE_POLICY_NOT_EFFECTIVE", `/claims/${index}/source_id`, "source is not effective for the claim scope"));
+          diagnostics.push(diagnostic5("classification", "SOURCE_POLICY_NOT_EFFECTIVE", `/claims/${index}/source_id`, "source is not effective for the claim scope"));
           valid = false;
         }
       }
@@ -3203,13 +7663,13 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
       const decisionId = typeof claim.decision_id === "string" ? claim.decision_id : "";
       const decision = decisionValidation.decisionsById.get(decisionId);
       if (!decision) {
-        diagnostics.push(diagnostic4("reference", "DECISION_RECORD_DANGLING", `/claims/${index}/decision_id`, `claim references unknown Decision Record "${decisionId}"`));
+        diagnostics.push(diagnostic5("reference", "DECISION_RECORD_DANGLING", `/claims/${index}/decision_id`, `claim references unknown Decision Record "${decisionId}"`));
         valid = false;
       } else {
         const evidenceDisposition = decision.disposition === "final" || decision.disposition === "temporary";
         const expectedClaimLevel = decision.disposition === "final" ? "E3" : decision.disposition === "temporary" ? "E1" : null;
         if (!evidenceDisposition) {
-          diagnostics.push(diagnostic4(
+          diagnostics.push(diagnostic5(
             "classification",
             "DECISION_DISPOSITION_NOT_EVIDENCE",
             `/claims/${index}/decision_id`,
@@ -3217,7 +7677,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
           ));
           valid = false;
         } else if (claim.level !== expectedClaimLevel) {
-          diagnostics.push(diagnostic4(
+          diagnostics.push(diagnostic5(
             "classification",
             "DECISION_CLAIM_LEVEL_MISMATCH",
             `/claims/${index}/level`,
@@ -3228,36 +7688,36 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
         const sharedValid = decision.disposition === "final" ? decisionValidation.validFinalDecisionIds.has(decisionId) : decision.disposition === "temporary" ? decisionValidation.validTemporaryDecisionIds.has(decisionId) : false;
         if (!sharedValid) valid = false;
         if (typeof decision.evidence_ref === "string" && locators.has(decision.evidence_ref) && !stringArray2(claim.source_locator_ids).includes(decision.evidence_ref)) {
-          diagnostics.push(diagnostic4("reference", "DECISION_EVIDENCE_MISMATCH", `/claims/${index}/source_locator_ids`, "Decision Record evidence must be included in the claim locator references"));
+          diagnostics.push(diagnostic5("reference", "DECISION_EVIDENCE_MISMATCH", `/claims/${index}/source_locator_ids`, "Decision Record evidence must be included in the claim locator references"));
           valid = false;
         }
         if (typeof claim.authority !== "string" || typeof decision.authority_scope !== "string" || normalizeScope(claim.authority) !== normalizeScope(decision.authority_scope)) {
-          diagnostics.push(diagnostic4("classification", "DECISION_AUTHORITY_MISMATCH", `/claims/${index}/authority`, "claim authority must match the Decision Record authority scope"));
+          diagnostics.push(diagnostic5("classification", "DECISION_AUTHORITY_MISMATCH", `/claims/${index}/authority`, "claim authority must match the Decision Record authority scope"));
           valid = false;
         }
         if (typeof claim.scope !== "string" || typeof decision.authority_scope !== "string" || !scopeContains(decision.authority_scope, claim.scope)) {
-          diagnostics.push(diagnostic4("classification", "DECISION_AUTHORITY_SCOPE_MISMATCH", `/claims/${index}/scope`, "Decision Record authority does not cover the claim scope"));
+          diagnostics.push(diagnostic5("classification", "DECISION_AUTHORITY_SCOPE_MISMATCH", `/claims/${index}/scope`, "Decision Record authority does not cover the claim scope"));
           valid = false;
         }
         if (typeof claim.scope !== "string" || typeof decision.effective_scope !== "string" || !scopeContains(decision.effective_scope, claim.scope)) {
-          diagnostics.push(diagnostic4("classification", "DECISION_SCOPE_MISMATCH", `/claims/${index}/scope`, "Decision Record does not cover the claim scope"));
+          diagnostics.push(diagnostic5("classification", "DECISION_SCOPE_MISMATCH", `/claims/${index}/scope`, "Decision Record does not cover the claim scope"));
           valid = false;
         }
         if (claim.value !== decision.answer) {
-          diagnostics.push(diagnostic4("classification", "DECISION_VALUE_MISMATCH", `/claims/${index}/value`, "claim value must equal the recorded answer"));
+          diagnostics.push(diagnostic5("classification", "DECISION_VALUE_MISMATCH", `/claims/${index}/value`, "claim value must equal the recorded answer"));
           valid = false;
         }
         const claimScope = typeof claim.scope === "string" ? claim.scope : null;
         const decisionRootIds = new Set(stringArray2(decision.root_issue_ids));
         const namesOverlappingConflict = claimScope !== null && (policy.conflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope) && decisionRootIds.has(conflict.root_issue_id)) || factConflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope) && decisionRootIds.has(conflict.root_issue_id)));
         if (decision.disposition === "temporary" && sharedValid && claim.level === "E1" && namesOverlappingConflict) {
-          diagnostics.push(diagnostic4("classification", "E1_CANNOT_OVERRIDE_CONFLICT", `/claims/${index}`, "temporary evidence cannot override an unresolved E3/E2 source conflict"));
+          diagnostics.push(diagnostic5("classification", "E1_CANNOT_OVERRIDE_CONFLICT", `/claims/${index}`, "temporary evidence cannot override an unresolved E3/E2 source conflict"));
           valid = false;
         }
       }
     } else if (claim.claim_form === "derived" && claim.level === "E2") {
       if (cyclicClaims.has(claimId)) {
-        diagnostics.push(diagnostic4("classification", "E2_CYCLE", `/claims/${index}/parent_claim_ids`, "E2 derivation graph must be acyclic"));
+        diagnostics.push(diagnostic5("classification", "E2_CYCLE", `/claims/${index}/parent_claim_ids`, "E2 derivation graph must be acyclic"));
         valid = false;
       }
       const derivationKind = typeof claim.derivation_kind === "string" ? claim.derivation_kind : "";
@@ -3267,24 +7727,24 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
         derivationKind
       ];
       if (!allowedTargets || !allowedTargets.includes(target)) {
-        diagnostics.push(diagnostic4("classification", "E2_TARGET_NOT_ALLOWED", `/claims/${index}/derivation_target`, "derivation kind cannot produce the requested target"));
+        diagnostics.push(diagnostic5("classification", "E2_TARGET_NOT_ALLOWED", `/claims/${index}/derivation_target`, "derivation kind cannot produce the requested target"));
         valid = false;
       }
       if (claim.kind !== claim.derivation_target) {
-        diagnostics.push(diagnostic4("classification", "E2_KIND_TARGET_MISMATCH", `/claims/${index}/kind`, "derived claim kind must equal its derivation target"));
+        diagnostics.push(diagnostic5("classification", "E2_KIND_TARGET_MISMATCH", `/claims/${index}/kind`, "derived claim kind must equal its derivation target"));
         valid = false;
       }
       const parentLocatorIds = /* @__PURE__ */ new Set();
       for (const [parentIndex, parentId] of stringArray2(claim.parent_claim_ids).entries()) {
         const parent = rawClaims.get(parentId);
         if (!parent) {
-          diagnostics.push(diagnostic4("reference", "E2_PARENT_DANGLING", `/claims/${index}/parent_claim_ids/${parentIndex}`, `E2 references unknown parent "${parentId}"`));
+          diagnostics.push(diagnostic5("reference", "E2_PARENT_DANGLING", `/claims/${index}/parent_claim_ids/${parentIndex}`, `E2 references unknown parent "${parentId}"`));
           valid = false;
         } else if (parent.level !== "E3" && parent.level !== "E2") {
-          diagnostics.push(diagnostic4("classification", "E2_PARENT_LEVEL_INVALID", `/claims/${index}/parent_claim_ids/${parentIndex}`, "E2 parents must be E3 or E2"));
+          diagnostics.push(diagnostic5("classification", "E2_PARENT_LEVEL_INVALID", `/claims/${index}/parent_claim_ids/${parentIndex}`, "E2 parents must be E3 or E2"));
           valid = false;
         } else if (!acceptedClaims2.has(parentId)) {
-          diagnostics.push(diagnostic4("classification", "E2_CHAIN_NOT_GROUNDED", `/claims/${index}/parent_claim_ids/${parentIndex}`, "every E2 chain must end at accepted E3 evidence"));
+          diagnostics.push(diagnostic5("classification", "E2_CHAIN_NOT_GROUNDED", `/claims/${index}/parent_claim_ids/${parentIndex}`, "every E2 chain must end at accepted E3 evidence"));
           valid = false;
         } else {
           const acceptedParent = (
@@ -3292,7 +7752,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
             acceptedClaims2.get(parentId)
           );
           if (typeof acceptedParent.scope !== "string" || typeof claim.scope !== "string" || !scopeContains(acceptedParent.scope, claim.scope)) {
-            diagnostics.push(diagnostic4("classification", "E2_PARENT_SCOPE_MISMATCH", `/claims/${index}/parent_claim_ids/${parentIndex}`, "every accepted parent scope must contain the derived claim scope"));
+            diagnostics.push(diagnostic5("classification", "E2_PARENT_SCOPE_MISMATCH", `/claims/${index}/parent_claim_ids/${parentIndex}`, "every accepted parent scope must contain the derived claim scope"));
             valid = false;
           }
           for (const locatorId of stringArray2(acceptedParent.source_locator_ids)) parentLocatorIds.add(locatorId);
@@ -3300,7 +7760,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
       }
       for (const locatorId of stringArray2(claim.source_locator_ids)) {
         if (!parentLocatorIds.has(locatorId)) {
-          diagnostics.push(diagnostic4("classification", "E2_PROVENANCE_ANCHOR_NOT_IN_PARENTS", `/claims/${index}/source_locator_ids`, "derived provenance anchors must be inherited from accepted parents"));
+          diagnostics.push(diagnostic5("classification", "E2_PROVENANCE_ANCHOR_NOT_IN_PARENTS", `/claims/${index}/source_locator_ids`, "derived provenance anchors must be inherited from accepted parents"));
           valid = false;
           break;
         }
@@ -3308,15 +7768,15 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
       if (valid) {
         const recomputed = recomputeDerivedValue(claim, acceptedClaims2);
         if ("code" in recomputed) {
-          diagnostics.push(diagnostic4("classification", recomputed.code, `/claims/${index}/rule_input`, recomputed.message));
+          diagnostics.push(diagnostic5("classification", recomputed.code, `/claims/${index}/rule_input`, recomputed.message));
           valid = false;
         } else if (claim.value !== recomputed.value) {
-          diagnostics.push(diagnostic4("classification", "E2_VALUE_MISMATCH", `/claims/${index}/value`, "submitted E2 value does not equal the recomputed value"));
+          diagnostics.push(diagnostic5("classification", "E2_VALUE_MISMATCH", `/claims/${index}/value`, "submitted E2 value does not equal the recomputed value"));
           valid = false;
         }
       }
     } else {
-      diagnostics.push(diagnostic4("classification", "EVIDENCE_FORM_INVALID", `/claims/${index}`, "claim form and evidence level are not permitted"));
+      diagnostics.push(diagnostic5("classification", "EVIDENCE_FORM_INVALID", `/claims/${index}`, "claim form and evidence level are not permitted"));
       valid = false;
     }
     validated.add(claimId);
@@ -3396,6 +7856,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
     }
     directRangesBySource.set(sourceId, merged);
   }
+  diagnostics.push(...validateAssetClaims(pack, acceptedClaims2));
   objectArray3(pack.source_reviews).forEach((review, reviewIndex) => {
     if (typeof review.source_id !== "string") return;
     const reviewSourceId = review.source_id;
@@ -3406,14 +7867,14 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
       const content = String(sources.get(reviewSourceId)?.content ?? "");
       let cursor = span.start;
       let represented = true;
-      let lower = 0;
+      let lower2 = 0;
       let upper = ranges.length;
-      while (lower < upper) {
-        const middle = lower + Math.floor((upper - lower) / 2);
-        if (ranges[middle].end <= span.start) lower = middle + 1;
+      while (lower2 < upper) {
+        const middle = lower2 + Math.floor((upper - lower2) / 2);
+        if (ranges[middle].end <= span.start) lower2 = middle + 1;
         else upper = middle;
       }
-      for (let rangeIndex = lower; rangeIndex < ranges.length; rangeIndex += 1) {
+      for (let rangeIndex = lower2; rangeIndex < ranges.length; rangeIndex += 1) {
         const range = ranges[rangeIndex];
         if (range.start >= span.end) break;
         const nextStart = Math.max(span.start, range.start);
@@ -3425,7 +7886,7 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
         if (cursor >= span.end) break;
       }
       if (represented && cursor < span.end && content.slice(cursor, span.end).trim().length > 0) represented = false;
-      if (!represented) diagnostics.push(diagnostic4(
+      if (!represented) diagnostics.push(diagnostic5(
         "traceability",
         "SOURCE_REVIEW_SPAN_UNCLAIMED",
         `/source_reviews/${reviewIndex}/spans/${spanIndex}`,
@@ -3435,13 +7896,13 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
   });
   factLedger2.forEach((entry, entryIndex) => {
     if (typeof entry.claim_id === "string") {
-      if (!rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic4(
+      if (!rawClaims.has(entry.claim_id)) diagnostics.push(diagnostic5(
         "reference",
         "FACT_CLAIM_DANGLING",
         `/fact_ledger/${entryIndex}/claim_id`,
         `fact references unknown claim "${entry.claim_id}"`
       ));
-      else if (!acceptedClaims2.has(entry.claim_id)) diagnostics.push(diagnostic4(
+      else if (!acceptedClaims2.has(entry.claim_id)) diagnostics.push(diagnostic5(
         "classification",
         "FACT_CLAIM_NOT_ACCEPTED",
         `/fact_ledger/${entryIndex}/claim_id`,
@@ -3449,13 +7910,13 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
       ));
     }
     stringArray2(entry.source_claim_ids).forEach((claimId, sourceIndex) => {
-      if (!rawClaims.has(claimId)) diagnostics.push(diagnostic4(
+      if (!rawClaims.has(claimId)) diagnostics.push(diagnostic5(
         "reference",
         "FACT_SOURCE_CLAIM_DANGLING",
         `/fact_ledger/${entryIndex}/source_claim_ids/${sourceIndex}`,
         `fact references unknown source claim "${claimId}"`
       ));
-      else if (!acceptedClaims2.has(claimId)) diagnostics.push(diagnostic4(
+      else if (!acceptedClaims2.has(claimId)) diagnostics.push(diagnostic5(
         "classification",
         "FACT_SOURCE_CLAIM_NOT_ACCEPTED",
         `/fact_ledger/${entryIndex}/source_claim_ids/${sourceIndex}`,
@@ -3468,6 +7929,124 @@ function validateEvidenceGraph(sourcePack, evidenceClaims) {
   const sortedDiagnostics = [...uniqueDiagnostics.values()].sort((left, right) => compareStrings2(`${left.category}\0${left.code}\0${left.path}`, `${right.category}\0${right.code}\0${right.path}`));
   const claimsById = new Map([...acceptedClaims2].sort(([left], [right]) => compareStrings2(left, right)));
   return { claimsById, diagnostics: sortedDiagnostics };
+}
+
+// src/testability-links.mjs
+var apply = Reflect.apply;
+var normalize = String.prototype.normalize;
+var lower = String.prototype.toLowerCase;
+var replace = String.prototype.replace;
+function capabilityLabel(value) {
+  if (typeof value !== "string") return "";
+  const text2 = apply(lower, apply(normalize, value, ["NFKC"]), []);
+  return apply(replace, apply(replace, text2, [/\s+/gu, " "]), [/^[\s]+|[\s.。!！?？:：;；]+$/gu, ""]);
+}
+function resolveObserver(observers, expectation) {
+  const hasRefs = expectation.observer_ref !== void 0 || expectation.target_ref !== void 0;
+  if (hasRefs && (typeof expectation.observer_ref !== "string" || !expectation.observer_ref || typeof expectation.target_ref !== "string" || !expectation.target_ref)) return null;
+  let match = null;
+  for (let index = 0; index < observers.length; index += 1) {
+    const observer = observers[index];
+    const matches = hasRefs ? observer.observer_id === expectation.observer_ref && observer.target_id === expectation.target_ref : capabilityLabel(observer.observer) === capabilityLabel(expectation.observer) && capabilityLabel(observer.observation_target) === capabilityLabel(expectation.observation_target);
+    if (!matches) continue;
+    if (match) return null;
+    match = observer;
+  }
+  return match;
+}
+
+// src/case-semantics.mjs
+var apply2 = Reflect.apply;
+var arrayEntries2 = Array.prototype.entries;
+var arraySome2 = Array.prototype.some;
+var arrayFilter2 = Array.prototype.filter;
+var arrayIncludes = Array.prototype.includes;
+var isArray = Array.isArray;
+var define = Object.defineProperty;
+var entries = (values) => apply2(arrayEntries2, values, []);
+var some = (values, predicate) => apply2(arraySome2, values, [predicate]);
+var filter = (values, predicate) => apply2(arrayFilter2, values, [predicate]);
+var includes = (values, value) => apply2(arrayIncludes, values, [value]);
+var push = (values, value) => define(values, values.length, { value, enumerable: true, writable: true, configurable: true });
+var text = { type: "string", minLength: 1, pattern: "\\S" };
+var id = { type: "string", minLength: 1, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$" };
+var closed = (properties, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
+var operandSchema = { oneOf: ["string", "number", "boolean", "null"].map((type) => closed({ type: { const: type }, value: { type } })) };
+var predicateSchema = closed({ subject_ref: id, operator: { enum: ["equals", "contains", "matches", "within"] }, operand: operandSchema });
+var assertionSchema = closed({ ...predicateSchema.properties, surface: id });
+var riskBasisSchema = closed({ impact: text, likelihood: text, exposure: text });
+var identity = { operation_id: id, operation_ref: id, partition_id: id, subject_ref: id };
+var scenarioSchema = { oneOf: [
+  closed({ ...identity, intent: { const: "behavior" } }),
+  closed({ ...identity, intent: { const: "compatibility" }, compatibility: closed({ baseline_ref: id, dimensions: { type: "array", items: id, minItems: 1, uniqueItems: true } }) })
+] };
+var effectsSchema = { type: "array", items: id, uniqueItems: true };
+var setupSchema = closed({ resource_kind: { enum: ["entry", "fixture", "account", "data"] }, resource_ref: id, completion: predicateSchema, mutation_effects: effectsSchema });
+var resourcesSchema = { type: "array", minItems: 1, items: closed({ resource_id: id, kind: { enum: ["entry", "fixture", "account", "data"] }, locator: { type: "string", pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$" }, evidence_ref: id }) };
+var heuristicSchema = closed({ exploratory_id: id, title: text, scope: text, risk: { enum: ["critical", "high", "medium", "low"] }, origin: { const: "heuristic" }, category: { enum: ["boundary", "concurrency", "failure", "degradation", "security", "usability"] }, hypothesis: text, rationale: text });
+function operandMatchesOperator(predicate) {
+  return predicate?.operator === "within" ? predicate?.operand?.type === "number" : includes(["contains", "matches"], predicate?.operator) ? predicate?.operand?.type === "string" : true;
+}
+function caseScenarioReferenceErrors(draft, obligations) {
+  const errors = (
+    /** @type {Array<{category:string,code:string,path:string,message:string}>} */
+    []
+  );
+  for (const obligation of obligations) {
+    if (!isArray(obligation.primary_operation_refs) || !includes(obligation.primary_operation_refs, draft.scenario?.operation_ref)) push(errors, { category: "classification", code: "CASE_OPERATION_REFERENCE_INVALID", path: "/scenario/operation_ref", message: "Case operation must select a compiler-derived primary operation shared by every linked Test Point" });
+    if (typeof obligation.scenario_partition_ref !== "string" || obligation.scenario_partition_ref !== draft.scenario?.partition_id) push(errors, { category: "classification", code: "CASE_PARTITION_REFERENCE_INVALID", path: "/scenario/partition_id", message: "Case partition must equal every linked compiler-derived responsibility partition" });
+  }
+  return errors;
+}
+function validateCaseSemantics(draft) {
+  const errors = [];
+  const check = (value, schema, path4) => {
+    for (const error of validateAgainstSchema(value, schema)) push(errors, { ...error, path: `${path4}${error.path === "/" ? "" : error.path}` });
+  };
+  check(draft.scenario, scenarioSchema, "/scenario");
+  check(draft.risk_basis, riskBasisSchema, "/risk_basis");
+  check(draft.execution_effects, effectsSchema, "/execution_effects");
+  check(draft.cleanup?.resolved_effects, effectsSchema, "/cleanup/resolved_effects");
+  check(draft.testability_profile?.setup_resources, resourcesSchema, "/testability_profile/setup_resources");
+  const effects = new Set(isArray(draft.execution_effects) ? draft.execution_effects : []);
+  for (const [i, p] of entries(isArray(draft.preconditions) ? draft.preconditions : [])) {
+    check(p.setup, setupSchema, `/preconditions/${i}/setup`);
+    if (!operandMatchesOperator(p.setup?.completion)) push(errors, { category: "classification", code: "SETUP_PREDICATE_INVALID", path: `/preconditions/${i}/setup/completion`, message: "Setup predicate operator requires a compatible typed operand" });
+    const resource = filter(isArray(draft.testability_profile?.setup_resources) ? draft.testability_profile.setup_resources : [], (r) => r.resource_id === p.setup?.resource_ref);
+    if (resource.length !== 1 || resource[0].kind !== p.setup?.resource_kind) push(errors, { category: "reference", code: "SETUP_RESOURCE_UNRESOLVED", path: `/preconditions/${i}/setup`, message: "Setup must resolve exactly one declared concrete resource of matching kind" });
+    if (isArray(p.setup?.mutation_effects)) for (const effect of p.setup.mutation_effects) effects.add(effect);
+  }
+  const fail = (code2, path4, message) => push(errors, { category: "classification", code: code2, path: path4, message });
+  if (draft.scenario?.intent === "compatibility" && draft.scenario.compatibility?.dimensions?.length !== 1) fail("COMPATIBILITY_DIMENSION_MULTIPLE", "/scenario/compatibility", "Each compatibility Case compares one dimension");
+  if (draft.scenario?.intent === "compatibility" && !some(draft.testability_profile?.setup_resources ?? [], (r) => r.resource_id === draft.scenario.compatibility?.baseline_ref)) fail("COMPATIBILITY_BASELINE_UNRESOLVED", "/scenario/compatibility/baseline_ref", "Compatibility baseline must resolve to a concrete sourced resource");
+  const resolved = new Set(isArray(draft.cleanup?.resolved_effects) ? draft.cleanup.resolved_effects : []);
+  if (effects.size > 0 && draft.cleanup?.required !== true || effects.size !== resolved.size || some([...effects], (e) => !resolved.has(e))) fail("SETUP_EFFECTS_UNRESOLVED", "/cleanup", "Cleanup must resolve exactly the declared setup and execution mutation effects");
+  const surfaces = /* @__PURE__ */ new Set();
+  for (const [i, item] of entries(isArray(draft.data) ? draft.data : [])) {
+    if (item.partition_id !== draft.scenario?.partition_id) fail("CASE_PARTITION_MISMATCH", `/data/${i}`, "Data belongs to one scenario partition");
+  }
+  for (const [i, step] of entries(isArray(draft.steps) ? draft.steps : [])) {
+    check(step.operation_id, id, `/steps/${i}/operation_id`);
+    if (step.operation_id !== draft.scenario?.operation_id) fail("CASE_OPERATION_MISMATCH", `/steps/${i}/operation_id`, "Every action must belong to the single scenario operation");
+    for (const [j, e] of entries(isArray(step.expectations) ? step.expectations : [])) {
+      const a = e.oracle?.assertion;
+      check(a, assertionSchema, `/steps/${i}/expectations/${j}/oracle/assertion`);
+      if (a?.subject_ref !== draft.scenario?.subject_ref) fail("CASE_SUBJECT_MISMATCH", `/steps/${i}/expectations/${j}`, "Assertion must observe the single scenario subject");
+      if (a?.operator !== e.oracle?.comparison) fail("ORACLE_OPERATOR_MISMATCH", `/steps/${i}/expectations/${j}`, "Oracle operator must match the typed assertion");
+      const field = (
+        /** @type {Record<string,string>} */
+        { value: "expected_value", state: "expected_state", event: "expected_event", "side-effect": "expected_side_effect" }[e.oracle?.type]
+      );
+      if (field && e.oracle[field] !== String(a?.operand?.value)) fail("ORACLE_DISPLAY_MISMATCH", `/steps/${i}/expectations/${j}`, "Expected display value must equal the typed operand");
+      if (!operandMatchesOperator(a)) fail("ORACLE_OPERAND_INVALID", `/steps/${i}/expectations/${j}`, "Oracle operator requires a compatible typed operand");
+      if (a) surfaces.add(a.surface);
+      const observer = resolveObserver(draft.testability_profile?.observers ?? [], e);
+      if (!observer) fail("TESTABILITY_REFERENCE_MISMATCH", `/steps/${i}/expectations/${j}`, "Expectation must resolve one declared observer");
+      else if (observer.subject_ref !== a?.subject_ref || observer.surface_id !== a?.surface) fail("ASSERTION_OBSERVER_MISMATCH", `/steps/${i}/expectations/${j}`, "Typed subject and surface must match the resolved observer registry");
+    }
+  }
+  if (surfaces.size > 1) fail("CASE_SURFACE_MULTIPLE", "/steps", "Separate observation surfaces into independent Cases");
+  return errors;
 }
 
 // src/classify.mjs
@@ -3488,36 +8067,36 @@ var NATIVE_MAP_ITERATOR_NEXT = Object.getPrototypeOf(NATIVE_MAP_ENTRIES.call(/* 
 var NATIVE_ARRAY_IS_ARRAY2 = Array.isArray;
 var NATIVE_GET_PROTOTYPE_OF2 = Object.getPrototypeOf;
 var NATIVE_GET_OWN_PROPERTY_DESCRIPTORS2 = Object.getOwnPropertyDescriptors;
-var NATIVE_DEFINE_PROPERTY2 = Object.defineProperty;
+var NATIVE_DEFINE_PROPERTY3 = Object.defineProperty;
 var NATIVE_REFLECT_OWN_KEYS2 = Reflect.ownKeys;
 var KEYS = Object.freeze({
   context: ["sourceRevision", "evidence", "obligations", "caseDrafts"],
   evidence: ["claimsById", "factLedger", "conflicts"],
   obligationsArtifact: ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   caseDraftsArtifact: ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
-  obligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "combination_vector"],
+  obligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "primary_operation_refs", "scenario_partition_ref", "required_oracle_refs", "required_capabilities", "combination_vector"],
   combinationVector: ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
   combinationOwner: ["view_id", "fact_ids", "view_element_refs"],
   combinationElementRef: ["view_id", "element_id"],
   combinationAssignment: ["parameter_id", "value_id", "evidence_claim_id"],
   gapObligation: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "gap_issue"],
   gapIssue: ["root_issue_id", "root_issue_key", "missing_type", "semantic_refs", "scope", "answerable", "reasons", "evidence_refs"],
-  fact: ["fact_id", "claim_id", "status", "source_claim_ids"],
+  fact: ["fact_id", "claim_id", "status", "source_claim_ids", "required_view_kinds", "view_review_basis"],
   conflict: ["conflict_id", "root_issue_id", "scope", "rule_ids", "source_ids"],
-  caseDraft: ["case_id", "title", "scope", "risk", "role", "fact_ids", "obligation_ids", "source_claim_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "temporary_assumption", "execution_signature"],
+  caseDraft: ["case_id", "title", "scope", "risk", "scenario", "risk_basis", "execution_effects", "role", "fact_ids", "obligation_ids", "source_claim_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "temporary_assumption", "execution_signature"],
   role: ["value", "evidence_ref", "support_review"],
-  precondition: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"],
-  data: ["name", "value", "provenance", "support_review"],
+  precondition: ["condition", "reachable_from", "setup", "source_claim_ids", "evidence_ref", "support_review"],
+  data: ["name", "value", "partition_id", "provenance", "support_review"],
   provenance: ["type", "ref"],
-  step: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"],
-  expectation: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "oracle_evidence_refs", "closes_obligation_id", "support_review"],
-  oracle: ["type", "expected_value", "expected_state", "expected_event", "expected_side_effect", "comparison", "tolerance", "window"],
-  profile: ["capabilities", "observers", "controls"],
-  capability: ["capability", "status", "provenance_ref"],
-  observer: ["observer", "observation_target", "status", "provenance_ref"],
+  step: ["step_id", "action", "operation_id", "action_evidence_ref", "support_review", "expectations"],
+  expectation: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observer_ref", "target_ref", "observation_surface", "observation_target", "oracle", "evidence_ref", "oracle_evidence_refs", "closes_obligation_id", "support_review"],
+  oracle: ["type", "assertion", "expected_value", "expected_state", "expected_event", "expected_side_effect", "comparison", "tolerance", "window"],
+  profile: ["capabilities", "observers", "controls", "setup_resources"],
+  capability: ["capability", "capability_id", "status", "provenance_ref"],
+  observer: ["observer", "observer_id", "target_id", "subject_ref", "surface_id", "observation_target", "status", "provenance_ref"],
   control: ["control", "status", "provenance_ref"],
   postState: ["state", "evidence_ref", "support_review"],
-  cleanup: ["required", "steps", "evidence_ref", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"],
+  cleanup: ["required", "resolved_effects", "steps", "evidence_ref", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"],
   temporaryAssumption: ["claim_id", "invalidation_condition"],
   execution: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"],
   exploratory: ["exploratory_id", "title", "scope", "risk", "source_claim_ids"]
@@ -3543,7 +8122,7 @@ function isCanonicalString(value) {
 function pointerPart2(segment) {
   return segment.replaceAll("~", "~0").replaceAll("/", "~1");
 }
-function diagnostic5(category, code2, path4, message) {
+function diagnostic6(category, code2, path4, message) {
   return { category, code: code2, path: path4, message };
 }
 function finalizeDiagnostics2(diagnostics) {
@@ -3552,7 +8131,7 @@ function finalizeDiagnostics2(diagnostics) {
     unique.set(`${item.category}\0${item.code}\0${item.path}\0${item.message}`, item);
   }
   if (unique.size > DIAGNOSTIC_LIMIT2) {
-    const truncated = diagnostic5(
+    const truncated = diagnostic6(
       "classification",
       "DIAGNOSTICS_TRUNCATED",
       "/",
@@ -3602,7 +8181,7 @@ function snapshotControlled2(root) {
     }
     if (source instanceof Map) {
       if (NATIVE_GET_PROTOTYPE_OF2(source) !== Map.prototype) {
-        addSnapshotDiagnostic(diagnostic5(
+        addSnapshotDiagnostic(diagnostic6(
           "schema",
           "RECORD_PROTOTYPE_INVALID",
           path4 || "/",
@@ -3612,7 +8191,7 @@ function snapshotControlled2(root) {
         continue;
       }
       if (NATIVE_REFLECT_OWN_KEYS2(source).length > 0) {
-        addSnapshotDiagnostic(diagnostic5(
+        addSnapshotDiagnostic(diagnostic6(
           "schema",
           "MAP_OWN_PROPERTY_INVALID",
           path4 || "/",
@@ -3621,11 +8200,11 @@ function snapshotControlled2(root) {
         assign(null);
         continue;
       }
-      let entries;
+      let entries2;
       try {
-        entries = NATIVE_MAP_ENTRIES.call(source);
+        entries2 = NATIVE_MAP_ENTRIES.call(source);
       } catch {
-        addSnapshotDiagnostic(diagnostic5(
+        addSnapshotDiagnostic(diagnostic6(
           "schema",
           "MAP_BRAND_INVALID",
           path4 || "/",
@@ -3636,7 +8215,7 @@ function snapshotControlled2(root) {
       }
       const capturedEntries = [];
       while (true) {
-        const next = NATIVE_MAP_ITERATOR_NEXT.call(entries);
+        const next = NATIVE_MAP_ITERATOR_NEXT.call(entries2);
         if (next.done) break;
         capturedEntries.push(next.value);
       }
@@ -3644,7 +8223,7 @@ function snapshotControlled2(root) {
       seen.set(source, target2);
       assign(target2);
       const validEntries = capturedEntries.filter(([key]) => typeof key === "string").sort(([left], [right]) => compareCodePoints3(String(left), String(right)));
-      if (validEntries.length !== capturedEntries.length) addSnapshotDiagnostic(diagnostic5(
+      if (validEntries.length !== capturedEntries.length) addSnapshotDiagnostic(diagnostic6(
         "schema",
         "CANONICAL_STRING_INVALID",
         `${path4}/invalid-map-key`,
@@ -3664,7 +8243,7 @@ function snapshotControlled2(root) {
     }
     if (NATIVE_ARRAY_IS_ARRAY2(source)) {
       if (NATIVE_GET_PROTOTYPE_OF2(source) !== Array.prototype) {
-        addSnapshotDiagnostic(diagnostic5(
+        addSnapshotDiagnostic(diagnostic6(
           "schema",
           "RECORD_PROTOTYPE_INVALID",
           path4 || "/",
@@ -3685,7 +8264,7 @@ function snapshotControlled2(root) {
       for (const key of ownKeys2) if (typeof key === "symbol") hasSymbol2 = true;
       if (hasSymbol2) {
         validOwnKeys = false;
-        addSnapshotDiagnostic(diagnostic5(
+        addSnapshotDiagnostic(diagnostic6(
           "schema",
           "ARRAY_SYMBOL_PROPERTY_INVALID",
           path4 || "/",
@@ -3699,7 +8278,7 @@ function snapshotControlled2(root) {
         const index = Number(key);
         if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
           validOwnKeys = false;
-          addSnapshotDiagnostic(diagnostic5("schema", "UNKNOWN_KEY", `${path4}/${pointerPart2(key)}`, "controlled arrays cannot contain named properties"));
+          addSnapshotDiagnostic(diagnostic6("schema", "UNKNOWN_KEY", `${path4}/${pointerPart2(key)}`, "controlled arrays cannot contain named properties"));
         } else numericKeys.push(index);
       }
       if (!validOwnKeys) {
@@ -3716,7 +8295,7 @@ function snapshotControlled2(root) {
         if (holesTruncated || start >= end) return;
         const available = Math.max(0, DIAGNOSTIC_LIMIT2 - 1 - diagnostics.length);
         const emitCount = Math.min(end - start, available);
-        for (let offset = 0; offset < emitCount; offset += 1) addSnapshotDiagnostic(diagnostic5(
+        for (let offset = 0; offset < emitCount; offset += 1) addSnapshotDiagnostic(diagnostic6(
           "schema",
           "ARRAY_HOLE",
           `${path4}/${start + offset}`,
@@ -3736,7 +8315,7 @@ function snapshotControlled2(root) {
       for (const index of numericKeys) {
         const descriptor = descriptors2[String(index)];
         if (!Object.hasOwn(descriptor, "value")) {
-          addSnapshotDiagnostic(diagnostic5("schema", "ACCESSOR_NOT_ALLOWED", `${path4}/${index}`, "controlled values must be own data properties"));
+          addSnapshotDiagnostic(diagnostic6("schema", "ACCESSOR_NOT_ALLOWED", `${path4}/${index}`, "controlled values must be own data properties"));
         } else {
           children2.push({
             source: descriptor.value,
@@ -3752,7 +8331,7 @@ function snapshotControlled2(root) {
     }
     const prototype = NATIVE_GET_PROTOTYPE_OF2(source);
     if (prototype !== Object.prototype && prototype !== null) {
-      addSnapshotDiagnostic(diagnostic5(
+      addSnapshotDiagnostic(diagnostic6(
         "schema",
         "RECORD_PROTOTYPE_INVALID",
         path4 || "/",
@@ -3768,7 +8347,7 @@ function snapshotControlled2(root) {
     const ownKeys = NATIVE_REFLECT_OWN_KEYS2(descriptors);
     let hasSymbol = false;
     for (const key of ownKeys) if (typeof key === "symbol") hasSymbol = true;
-    if (hasSymbol) addSnapshotDiagnostic(diagnostic5(
+    if (hasSymbol) addSnapshotDiagnostic(diagnostic6(
       "schema",
       "RECORD_SYMBOL_PROPERTY_INVALID",
       path4 || "/",
@@ -3779,7 +8358,7 @@ function snapshotControlled2(root) {
     for (const key of stringKeys) {
       const descriptor = descriptors[key];
       const childPath = `${path4}/${pointerPart2(key)}`;
-      if (!Object.hasOwn(descriptor, "value")) addSnapshotDiagnostic(diagnostic5(
+      if (!Object.hasOwn(descriptor, "value")) addSnapshotDiagnostic(diagnostic6(
         "schema",
         "ACCESSOR_NOT_ALLOWED",
         childPath,
@@ -3789,13 +8368,13 @@ function snapshotControlled2(root) {
         source: descriptor.value,
         path: childPath,
         assign(value) {
-          NATIVE_DEFINE_PROPERTY2(target, key, { value, enumerable: true, writable: true, configurable: true });
+          NATIVE_DEFINE_PROPERTY3(target, key, { value, enumerable: true, writable: true, configurable: true });
         }
       });
     }
     for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]);
   }
-  if (diagnosticsTruncated) diagnostics.push(diagnostic5(
+  if (diagnosticsTruncated) diagnostics.push(diagnostic6(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
     "/",
@@ -3807,7 +8386,7 @@ function checkKeys2(value, allowed, path4, diagnostics) {
   if (!isRecord2(value)) return;
   const permitted = new Set(allowed);
   for (const key of Object.keys(value)) {
-    if (!permitted.has(key)) diagnostics.push(diagnostic5(
+    if (!permitted.has(key)) diagnostics.push(diagnostic6(
       "schema",
       "UNKNOWN_KEY",
       `${path4}/${pointerPart2(key)}`,
@@ -3855,21 +8434,23 @@ function normalizedBlockerSubject(subject) {
     claim_refs: [...stringArray3(subject.claim_refs) ?? []].sort(compareCodePoints3)
   };
 }
-function canonicalSetProjection(entries) {
+function canonicalSetProjection(entries2) {
   const byCanonicalValue = /* @__PURE__ */ new Map();
-  for (const entry of entries) byCanonicalValue.set(canonicalStringify(entry), entry);
+  for (const entry of entries2) byCanonicalValue.set(canonicalStringify(entry), entry);
   return canonicalStringify([...byCanonicalValue].sort(([left], [right]) => compareCodePoints3(left, right)).map(([, entry]) => entry));
 }
 function derivePreconditionState(draft) {
   return canonicalSetProjection((objectArray4(draft.preconditions) ?? []).map((item) => ({
     condition: normalizeSemanticString(item.condition),
-    reachable_from: normalizeSemanticString(item.reachable_from)
+    reachable_from: normalizeSemanticString(item.reachable_from),
+    ...item.setup === void 0 ? {} : { setup: item.setup }
   })));
 }
 function deriveDataPartition(draft) {
   return canonicalSetProjection((objectArray4(draft.data) ?? []).map((item) => ({
     name: normalizeSemanticString(item.name),
-    value: normalizeSemanticString(item.value)
+    value: normalizeSemanticString(item.value),
+    ...draft.scenario === void 0 ? {} : { scenario: draft.scenario }
   })));
 }
 function oracleSemanticId(step, expectation) {
@@ -3881,11 +8462,12 @@ function oracleSemanticId(step, expectation) {
   ];
   return stableId("oracle", {
     action: normalizeSemanticString(step.action),
-    observer: normalizeSemanticString(expectation.observer),
-    observation_surface: normalizeSemanticString(expectation.observation_surface),
-    observation_target: normalizeSemanticString(expectation.observation_target),
+    observer: normalizeSemanticString(expectation.observer_ref ?? expectation.observer),
+    observation_surface: isRecord2(oracle.assertion) ? oracle.assertion.surface : normalizeSemanticString(expectation.observation_surface),
+    observation_target: normalizeSemanticString(expectation.target_ref ?? expectation.observation_target),
     oracle: {
       type,
+      ...oracle.assertion === void 0 ? {} : { assertion: oracle.assertion },
       ...expectedField ? { [expectedField]: normalizeSemanticString(oracle[expectedField]) } : {},
       comparison: normalizeSemanticString(oracle.comparison),
       ...oracle.tolerance === void 0 ? {} : { tolerance: oracle.tolerance },
@@ -3918,7 +8500,7 @@ function scopesIntersect2(left, right) {
   return scopeContains(left, right) || scopeContains(right, left);
 }
 function checkCanonical(value, path4, diagnostics) {
-  if (!isCanonicalString(value)) diagnostics.push(diagnostic5(
+  if (!isCanonicalString(value)) diagnostics.push(diagnostic6(
     "schema",
     "CANONICAL_STRING_INVALID",
     path4,
@@ -3931,18 +8513,18 @@ function validateClosedShape(context, diagnostics) {
   const obligations = isRecord2(context.obligations) ? context.obligations : null;
   const drafts = isRecord2(context.caseDrafts) ? context.caseDrafts : null;
   if (!Number.isInteger(context.sourceRevision) || !evidence || !obligations || !drafts) {
-    diagnostics.push(diagnostic5("classification", "CONTEXT_INVALID", "/", "classification context requires sourceRevision, evidence, obligations, and caseDrafts"));
+    diagnostics.push(diagnostic6("classification", "CONTEXT_INVALID", "/", "classification context requires sourceRevision, evidence, obligations, and caseDrafts"));
     return;
   }
   checkKeys2(evidence, KEYS.evidence, "/evidence", diagnostics);
   checkKeys2(obligations, KEYS.obligationsArtifact, "/obligations", diagnostics);
   checkKeys2(drafts, KEYS.caseDraftsArtifact, "/caseDrafts", diagnostics);
   if (!(evidence.claimsById instanceof Map) || !Array.isArray(evidence.factLedger) || !Array.isArray(evidence.conflicts) || !Array.isArray(obligations.obligations) || !Array.isArray(obligations.fact_routes) || !Array.isArray(obligations.interaction_routes) || !Array.isArray(drafts.cases) || !Array.isArray(drafts.obligation_dispositions) || !Array.isArray(drafts.exploratory_candidates)) {
-    diagnostics.push(diagnostic5("classification", "CONTEXT_INVALID", "/", "classification context collections have invalid types"));
+    diagnostics.push(diagnostic6("classification", "CONTEXT_INVALID", "/", "classification context collections have invalid types"));
     return;
   }
-  if (obligations.schema_version !== "2.1.0" || drafts.schema_version !== "2.1.0" || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
-    diagnostics.push(diagnostic5("classification", "SOURCE_REVISION_MISMATCH", "/", "all classification inputs must share source_revision"));
+  if (obligations.schema_version !== "3.0.0" || drafts.schema_version !== "3.0.0" || obligations.source_revision !== context.sourceRevision || drafts.source_revision !== context.sourceRevision) {
+    diagnostics.push(diagnostic6("classification", "SOURCE_REVISION_MISMATCH", "/", "all classification inputs must share source_revision"));
   }
   for (const [claimId, claim] of NATIVE_MAP_ENTRIES.call(evidence.claimsById)) {
     checkCanonical(claimId, `/evidence/claimsById/${pointerPart2(String(claimId))}`, diagnostics);
@@ -3967,6 +8549,10 @@ function validateClosedShape(context, diagnostics) {
   obligations.obligations.forEach((obligation, index) => {
     checkKeys2(obligation, obligation?.kind === "requirement-gap" ? KEYS.gapObligation : KEYS.obligation, `/obligations/obligations/${index}`, diagnostics);
     if (!isRecord2(obligation)) return;
+    if (obligation.caseable === true) {
+      if (stringArray3(obligation.primary_operation_refs, true) === null) diagnostics.push(diagnostic6("schema", "CASE_OPERATION_METADATA_INVALID", `/obligations/obligations/${index}/primary_operation_refs`, "Caseable Test Points require canonical unique compiler primary operation references"));
+      checkCanonical(obligation.scenario_partition_ref, `/obligations/obligations/${index}/scenario_partition_ref`, diagnostics);
+    }
     if (obligation.kind === "requirement-gap" && isRecord2(obligation.gap_issue)) checkKeys2(
       obligation.gap_issue,
       KEYS.gapIssue,
@@ -4007,6 +8593,7 @@ function validateClosedShape(context, diagnostics) {
     const base = `/caseDrafts/cases/${caseIndex}`;
     checkKeys2(draft, KEYS.caseDraft, base, diagnostics);
     if (!isRecord2(draft)) return;
+    for (const error of validateCaseSemantics(draft)) diagnostics.push({ ...error, path: `${base}${error.path}` });
     for (const [field, value] of [["case_id", draft.case_id], ["scope", draft.scope]]) checkCanonical(value, `${base}/${field}`, diagnostics);
     if (isRecord2(draft.role)) checkKeys2(draft.role, KEYS.role, `${base}/role`, diagnostics);
     objectArray4(draft.preconditions)?.forEach((item, index) => checkKeys2(item, KEYS.precondition, `${base}/preconditions/${index}`, diagnostics));
@@ -4052,7 +8639,11 @@ function validateClosedShape(context, diagnostics) {
       }
     }
   });
-  drafts.exploratory_candidates.forEach((candidate, index) => checkKeys2(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics));
+  drafts.exploratory_candidates.forEach((candidate, index) => {
+    if (candidate?.origin === "heuristic") {
+      for (const error of validateAgainstSchema(candidate, heuristicSchema)) diagnostics.push({ ...error, path: `/caseDrafts/exploratory_candidates/${index}${error.path}` });
+    } else checkKeys2(candidate, KEYS.exploratory, `/caseDrafts/exploratory_candidates/${index}`, diagnostics);
+  });
 }
 function buildEvidenceIndex(submitted, diagnostics) {
   const assessments = /* @__PURE__ */ new Map();
@@ -4060,7 +8651,7 @@ function buildEvidenceIndex(submitted, diagnostics) {
   const indegree = /* @__PURE__ */ new Map();
   for (const [mapKey, value] of NATIVE_MAP_ENTRIES.call(submitted)) {
     if (typeof mapKey !== "string" || !isRecord2(value) || value.claim_id !== mapKey) {
-      diagnostics.push(diagnostic5("reference", "EVIDENCE_MAP_IDENTITY_INVALID", `/evidence/claimsById/${pointerPart2(String(mapKey))}`, "accepted evidence Map key must equal an own claim_id"));
+      diagnostics.push(diagnostic6("reference", "EVIDENCE_MAP_IDENTITY_INVALID", `/evidence/claimsById/${pointerPart2(String(mapKey))}`, "accepted evidence Map key must equal an own claim_id"));
       continue;
     }
     const parents = value.level === "E2" ? stringArray3(value.parent_claim_ids, true) ?? [] : [];
@@ -4104,7 +8695,7 @@ function buildEvidenceIndex(submitted, diagnostics) {
       }
     }
   }
-  const queue = [...indegree].filter(([, count]) => count === 0).map(([id]) => id).sort(compareCodePoints3);
+  const queue = [...indegree].filter(([, count]) => count === 0).map(([id2]) => id2).sort(compareCodePoints3);
   let cursor = 0;
   while (cursor < queue.length) {
     const parentId = queue[cursor++];
@@ -4213,13 +8804,13 @@ function requireOracleOwnership(draft, obligations, expectations, reachability, 
   for (const expectation of expectations) {
     const path4 = `${casePath}/expectations/${pointerPart2(expectation.expectationId)}`;
     if (expectation.oracleEvidenceValid && !expectation.oracleEvidenceRefs.includes(expectation.evidenceRef)) {
-      diagnostics.push(diagnostic5("traceability", "ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED", path4, "evidence_ref must be included in oracle_evidence_refs"));
+      diagnostics.push(diagnostic6("traceability", "ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED", path4, "evidence_ref must be included in oracle_evidence_refs"));
       reasons.add("ORACLE_PRIMARY_EVIDENCE_NOT_DECLARED");
     }
     if (expectation.kind === "obligation-oracle") {
       const obligation = obligationsById.get(expectation.closesObligationId);
       if (!obligation || obligation.caseable !== true || obligation.kind === "requirement-gap") {
-        diagnostics.push(diagnostic5("reference", "ORACLE_CLOSE_TARGET_INVALID", path4, "obligation-oracle must close one linked caseable obligation"));
+        diagnostics.push(diagnostic6("reference", "ORACLE_CLOSE_TARGET_INVALID", path4, "obligation-oracle must close one linked caseable obligation"));
         reasons.add("ORACLE_CLOSE_TARGET_INVALID");
         continue;
       }
@@ -4229,14 +8820,14 @@ function requireOracleOwnership(draft, obligations, expectations, reachability, 
       const forbidden = reachability.forbiddenRefsByObligation.get(expectation.closesObligationId) ?? /* @__PURE__ */ new Set();
       const required = stringArray3(obligation.required_oracle_refs) ?? [];
       if (required.some((ref) => !expectation.oracleEvidenceRefs.includes(ref))) {
-        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_PREBINDING_MISSING", path4, "the closing expectation must include every required Oracle prebinding"));
+        diagnostics.push(diagnostic6("traceability", "OBLIGATION_ORACLE_PREBINDING_MISSING", path4, "the closing expectation must include every required Oracle prebinding"));
         reasons.add("OBLIGATION_ORACLE_PREBINDING_MISSING");
       }
       if (expectation.oracleEvidenceRefs.some((ref) => forbidden.has(ref))) {
-        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN", path4, "forbid evidence cannot become a selected-vector Oracle"));
+        diagnostics.push(diagnostic6("traceability", "OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN", path4, "forbid evidence cannot become a selected-vector Oracle"));
         reasons.add("OBLIGATION_ORACLE_EVIDENCE_FORBIDDEN");
       } else if (expectation.oracleEvidenceRefs.some((ref) => !allowed.has(ref))) {
-        diagnostics.push(diagnostic5("traceability", "OBLIGATION_ORACLE_EVIDENCE_UNRELATED", path4, "Oracle evidence must belong to the obligation closure or legal E2 expected-value ancestry"));
+        diagnostics.push(diagnostic6("traceability", "OBLIGATION_ORACLE_EVIDENCE_UNRELATED", path4, "Oracle evidence must belong to the obligation closure or legal E2 expected-value ancestry"));
         reasons.add("OBLIGATION_ORACLE_EVIDENCE_UNRELATED");
       }
     } else if (expectation.kind === "auxiliary") {
@@ -4245,17 +8836,17 @@ function requireOracleOwnership(draft, obligations, expectations, reachability, 
         ...reachability.allowedRefsByObligation.get(obligationId) ?? []
       ]));
       if (expectation.closesObligationId || expectation.oracleEvidenceRefs.some((ref) => !allowed.has(ref))) {
-        diagnostics.push(diagnostic5("traceability", "AUXILIARY_ORACLE_EVIDENCE_UNRELATED", path4, "auxiliary expectations cannot close obligations and must use legal Case Oracle evidence"));
+        diagnostics.push(diagnostic6("traceability", "AUXILIARY_ORACLE_EVIDENCE_UNRELATED", path4, "auxiliary expectations cannot close obligations and must use legal Case Oracle evidence"));
         reasons.add("AUXILIARY_ORACLE_EVIDENCE_UNRELATED");
       }
     } else {
-      diagnostics.push(diagnostic5("classification", "EXPECTATION_KIND_INVALID", path4, "expectation kind must be obligation-oracle or auxiliary"));
+      diagnostics.push(diagnostic6("classification", "EXPECTATION_KIND_INVALID", path4, "expectation kind must be obligation-oracle or auxiliary"));
       reasons.add("EXPECTATION_KIND_INVALID");
     }
   }
   for (const [obligationId, count] of closedCounts) {
     if (count !== 1) {
-      diagnostics.push(diagnostic5(
+      diagnostics.push(diagnostic6(
         "traceability",
         count === 0 ? "OBLIGATION_ORACLE_EXPECTATION_UNMAPPED" : "OBLIGATION_ORACLE_EXPECTATION_DUPLICATE",
         `${casePath}/obligations/${pointerPart2(obligationId)}`,
@@ -4293,6 +8884,10 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const formalEvidenceRoots = /* @__PURE__ */ new Set();
   const downgradeRoots = /* @__PURE__ */ new Set();
   const gate = { rank: 2 };
+  for (const error of caseScenarioReferenceErrors(draft, obligations)) diagnostics.push({ ...error, path: `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}${error.path}` });
+  for (const resource of objectArray4(isRecord2(draft.testability_profile) ? draft.testability_profile.setup_resources : []) ?? []) {
+    if (isCanonicalString(resource.evidence_ref)) evidenceRoots.add(resource.evidence_ref);
+  }
   const requiredFieldsValid = isCanonicalString(draft.case_id) && isNonblank(draft.title) && isCanonicalString(draft.scope) && RISKS2.has(
     /** @type {string} */
     draft.risk
@@ -4310,7 +8905,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const obligationIds = new Set(stringArray3(draft.obligation_ids, true) ?? []);
   for (const factId of factIds) {
     const routes = routesByFact.get(factId) ?? [];
-    const validRoute = routes.length === 1 && routes[0].route_type === "obligations" && (stringArray3(routes[0].obligation_ids, true) ?? []).some((id) => obligationIds.has(id));
+    const validRoute = routes.length === 1 && routes[0].route_type === "obligations" && (stringArray3(routes[0].obligation_ids, true) ?? []).some((id2) => obligationIds.has(id2));
     if (!validRoute) reasons.add("CASE_FACT_ROUTE_INVALID");
   }
   for (const routedFactId of routedFactIds) if (!factIds.includes(routedFactId)) reasons.add("FACT_ROUTE_LINK_MISSING");
@@ -4371,7 +8966,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       if (stepIds.has(
         /** @type {string} */
         step.step_id
-      )) diagnostics.push(diagnostic5(
+      )) diagnostics.push(diagnostic6(
         "traceability",
         "STEP_ID_DUPLICATE",
         `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/steps/${stepIndex}/step_id`,
@@ -4390,7 +8985,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         if (expectationIds.has(
           /** @type {string} */
           expectation.expectation_id
-        )) diagnostics.push(diagnostic5(
+        )) diagnostics.push(diagnostic6(
           "traceability",
           "EXPECTATION_ID_DUPLICATE",
           `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/steps/${stepIndex}/expectations/${expectationIndex}/expectation_id`,
@@ -4425,7 +9020,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
         });
       }
       if (expectationFieldsValid && expectationLocatable) {
-        requiredObservers.push({ observer: String(expectation.observer), target: String(expectation.observation_target) });
+        requiredObservers.push(expectation);
       }
       const oracle = isRecord2(expectation.oracle) ? expectation.oracle : null;
       const expectedField = oracle ? ORACLE_FIELDS[
@@ -4447,7 +9042,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     }
   }
   if (formalOutcomeSignatures.size > 1) {
-    diagnostics.push(diagnostic5(
+    diagnostics.push(diagnostic6(
       "classification",
       "CASE_OUTCOME_NOT_ATOMIC",
       `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/steps`,
@@ -4479,7 +9074,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       /** @type {string} */
       capability.status
     )) reasons.add("CAPABILITY_MISSING");
-    else providedCapabilities.add(capability.capability);
+    else providedCapabilities.add(typeof capability.capability_id === "string" ? capability.capability_id : capabilityLabel(capability.capability));
     applyCapabilityStatus(capability.status, gate, reasons);
     if (isCanonicalString(capability.provenance_ref)) {
       evidenceRoots.add(capability.provenance_ref);
@@ -4502,9 +9097,25 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       if (control.status === "approved-assumption") downgradeRoots.add(control.provenance_ref);
     } else reasons.add("CAPABILITY_PROVENANCE_MISSING");
   }
-  for (const required of requiredCapabilities) if (!providedCapabilities.has(required)) reasons.add("REQUIRED_CAPABILITY_MISSING");
+  for (const required of requiredCapabilities) if (!providedCapabilities.has(required) && !providedCapabilities.has(capabilityLabel(required))) {
+    reasons.add("REQUIRED_CAPABILITY_MISSING");
+    diagnostics.push(diagnostic6(
+      "reference",
+      "TESTABILITY_REFERENCE_MISMATCH",
+      `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/testability_profile/capabilities`,
+      "a required capability must resolve to a declared capability ID; repair the adapter reference before asking about availability"
+    ));
+  }
   for (const required of requiredObservers) {
-    if (!observers.some((observer) => observer.observer === required.observer && observer.observation_target === required.target)) reasons.add("OBSERVER_MISSING");
+    if (!resolveObserver(observers, required)) {
+      reasons.add("OBSERVER_MISSING");
+      diagnostics.push(diagnostic6(
+        "reference",
+        "TESTABILITY_REFERENCE_MISMATCH",
+        `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/steps`,
+        "observer/target must resolve uniquely in the Testability profile; repair the adapter reference before asking about availability"
+      ));
+    }
   }
   if (isRecord2(draft.post_state)) {
     if (!isNonblank(draft.post_state.state) || !isCanonicalString(draft.post_state.evidence_ref)) reasons.add("CASE_GATE_INVALID");
@@ -4523,7 +9134,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   }
   const evidenceSummaryPath = `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/evidence_refs`;
   if (!submittedEvidenceRefs) {
-    diagnostics.push(diagnostic5(
+    diagnostics.push(diagnostic6(
       "classification",
       "CASE_EVIDENCE_SUMMARY_INVALID",
       evidenceSummaryPath,
@@ -4538,7 +9149,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
       const submittedSet = new Set(submittedDirectRefs);
       const missing = actualDirectRefs.filter((ref) => !submittedSet.has(ref));
       const extra = submittedDirectRefs.filter((ref) => !actualSet.has(ref));
-      diagnostics.push(diagnostic5(
+      diagnostics.push(diagnostic6(
         "traceability",
         "CASE_EVIDENCE_SUMMARY_MISMATCH",
         evidenceSummaryPath,
@@ -4555,7 +9166,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   const actualAgentOracleRefs = [...expectationIds].sort(compareCodePoints3);
   const signatureMismatch = signature.precondition_state !== actualSignature.precondition_state || signature.data_partition !== actualSignature.data_partition || submittedRole !== actualSignature.role || canonicalStringify(submittedActions) !== canonicalStringify(actualSignature.action_path) || canonicalStringify(submittedOracles) !== canonicalStringify(actualAgentOracleRefs);
   if (signatureMismatch) {
-    diagnostics.push(diagnostic5(
+    diagnostics.push(diagnostic6(
       "traceability",
       "CASE_EXECUTION_SIGNATURE_MISMATCH",
       `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/execution_signature`,
@@ -4578,7 +9189,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
   if (reasons.size === 0 && gate.rank === 1) {
     const orderedDowngradeRoots = [...downgradeRoots].sort(compareCodePoints3);
     if (orderedDowngradeRoots.length > 1) {
-      diagnostics.push(diagnostic5(
+      diagnostics.push(diagnostic6(
         "classification",
         "CONDITIONAL_ASSUMPTIONS_AMBIGUOUS",
         `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/temporary_assumption`,
@@ -4595,7 +9206,7 @@ function evaluateCase(draft, obligations, routedFactIds, routesByFact, factsById
     }
   }
   if (reasons.size === 0 && gate.rank === 2 && Object.hasOwn(draft, "temporary_assumption")) {
-    diagnostics.push(diagnostic5(
+    diagnostics.push(diagnostic6(
       "classification",
       "TEMPORARY_ASSUMPTION_UNEXPECTED",
       `/caseDrafts/cases/${pointerPart2(String(draft.case_id))}/temporary_assumption`,
@@ -4781,7 +9392,7 @@ function deduplicateCases(executable, obligationsById, oracleReachability, evalu
     const semanticKeys = new Set(items.map((item) => `${item.rank}\0${comparableCase(item.draft)}`));
     if (semanticKeys.size > 1) {
       const caseIds = items.map((item) => String(item.draft.case_id)).sort(compareCodePoints3);
-      diagnostics.push(diagnostic5(
+      diagnostics.push(diagnostic6(
         "classification",
         "DUPLICATE_SIGNATURE_SEMANTIC_CONFLICT",
         `/execution_signatures/${pointerPart2(stableId("execution", JSON.parse(signature)))}`,
@@ -4811,7 +9422,7 @@ function deduplicateCases(executable, obligationsById, oracleReachability, evalu
     const mergedEvaluation = evaluateMerged(merged);
     if (mergedEvaluation.rank === 0 || diagnostics.length > diagnosticsBeforeEvaluation) continue;
     if (mergedEvaluation.rank !== items[0].rank) {
-      diagnostics.push(diagnostic5(
+      diagnostics.push(diagnostic6(
         "classification",
         "DUPLICATE_SIGNATURE_LANE_CONFLICT",
         `/execution_signatures/${pointerPart2(stableId("execution", JSON.parse(signature)))}`,
@@ -4830,7 +9441,7 @@ function classifyCaseDrafts(submittedContext) {
     const trusted = snapshotControlled2(submittedContext);
     if (trusted.diagnostics.length > 0) return resultWithDiagnostics(trusted.diagnostics);
     if (!isRecord2(trusted.snapshot)) return resultWithDiagnostics([
-      diagnostic5("classification", "CONTEXT_INVALID", "/", "classification context must be a closed own-data record")
+      diagnostic6("classification", "CONTEXT_INVALID", "/", "classification context must be a closed own-data record")
     ]);
     const diagnostics = [];
     validateClosedShape(trusted.snapshot, diagnostics);
@@ -4890,19 +9501,19 @@ function classifyCaseDrafts(submittedContext) {
     const factsById = /* @__PURE__ */ new Map();
     for (const fact of facts) {
       const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
-      if (factsById.has(factId)) diagnostics.push(diagnostic5("traceability", "FACT_ID_DUPLICATE", `/facts/${pointerPart2(factId)}`, "fact IDs must be unique"));
+      if (factsById.has(factId)) diagnostics.push(diagnostic6("traceability", "FACT_ID_DUPLICATE", `/facts/${pointerPart2(factId)}`, "fact IDs must be unique"));
       else factsById.set(factId, fact);
     }
     const obligationsById = /* @__PURE__ */ new Map();
     for (const obligation of obligations) {
-      const id = typeof obligation.obligation_id === "string" ? obligation.obligation_id : "";
-      if (obligationsById.has(id)) diagnostics.push(diagnostic5("traceability", "OBLIGATION_ID_DUPLICATE", `/obligations/${pointerPart2(id)}`, "formal obligation IDs must be unique"));
-      else obligationsById.set(id, obligation);
+      const id2 = typeof obligation.obligation_id === "string" ? obligation.obligation_id : "";
+      if (obligationsById.has(id2)) diagnostics.push(diagnostic6("traceability", "OBLIGATION_ID_DUPLICATE", `/obligations/${pointerPart2(id2)}`, "formal obligation IDs must be unique"));
+      else obligationsById.set(id2, obligation);
       if (obligation.kind === "requirement-gap") {
-        if (obligation.caseable !== false || !isRecord2(obligation.gap_issue)) diagnostics.push(diagnostic5(
+        if (obligation.caseable !== false || !isRecord2(obligation.gap_issue)) diagnostics.push(diagnostic6(
           "classification",
           "REQUIREMENT_GAP_CONTRACT_INVALID",
-          `/obligations/${pointerPart2(id)}`,
+          `/obligations/${pointerPart2(id2)}`,
           "compiler-owned requirement gaps must be non-caseable and contain a gap issue"
         ));
         else {
@@ -4911,17 +9522,17 @@ function classifyCaseDrafts(submittedContext) {
             semantic_refs: stringArray3(obligation.gap_issue.semantic_refs) ?? [],
             scope: obligation.gap_issue.scope
           };
-          if (obligation.gap_issue.root_issue_key !== canonicalStringify(signature) || obligation.gap_issue.root_issue_id !== stableId("root", signature)) diagnostics.push(diagnostic5(
+          if (obligation.gap_issue.root_issue_key !== canonicalStringify(signature) || obligation.gap_issue.root_issue_id !== stableId("root", signature)) diagnostics.push(diagnostic6(
             "traceability",
             "REQUIREMENT_GAP_ROOT_INVALID",
-            `/obligations/${pointerPart2(id)}/gap_issue`,
+            `/obligations/${pointerPart2(id2)}/gap_issue`,
             "compiler-owned gap root key and ID must match its immutable semantic identity"
           ));
         }
-      } else if (obligation.caseable !== true) diagnostics.push(diagnostic5(
+      } else if (obligation.caseable !== true) diagnostics.push(diagnostic6(
         "classification",
         "CASEABLE_OBLIGATION_CONTRACT_INVALID",
-        `/obligations/${pointerPart2(id)}/caseable`,
+        `/obligations/${pointerPart2(id2)}/caseable`,
         "normal compiler-owned obligations must be caseable"
       ));
       const vector = isRecord2(obligation.combination_vector) ? obligation.combination_vector : null;
@@ -4930,24 +9541,24 @@ function classifyCaseDrafts(submittedContext) {
         for (const [assignmentIndex, assignment] of (objectArray4(vector.assignments) ?? []).entries()) {
           const claimId = String(assignment.evidence_claim_id ?? "");
           const assessment = evidence.get(claimId);
-          if (!sourceClaims.has(claimId)) diagnostics.push(diagnostic5(
+          if (!sourceClaims.has(claimId)) diagnostics.push(diagnostic6(
             "traceability",
             "TWISE_SELECTED_VALUE_SOURCE_MISSING",
-            `/obligations/${pointerPart2(id)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+            `/obligations/${pointerPart2(id2)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
             "every selected-value evidence claim must be carried by the vector obligation sources"
           ));
-          if (!assessment || assessment.rank === 0 || assessment.reasons.length > 0 || assessment.claim.kind === "diagnostic" || typeof assessment.claim.scope !== "string" || typeof obligation.scope !== "string" || !scopeContains(assessment.claim.scope, obligation.scope)) diagnostics.push(diagnostic5(
+          if (!assessment || assessment.rank === 0 || assessment.reasons.length > 0 || assessment.claim.kind === "diagnostic" || typeof assessment.claim.scope !== "string" || typeof obligation.scope !== "string" || !scopeContains(assessment.claim.scope, obligation.scope)) diagnostics.push(diagnostic6(
             "traceability",
             "TWISE_SELECTED_VALUE_EVIDENCE_INVALID",
-            `/obligations/${pointerPart2(id)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
+            `/obligations/${pointerPart2(id2)}/combination_vector/assignments/${assignmentIndex}/evidence_claim_id`,
             "selected-value evidence must be accepted, non-diagnostic, and cover the obligation scope"
           ));
         }
         const forbidden = new Set(stringArray3(vector.forbid_evidence_refs) ?? []);
-        for (const ref of stringArray3(obligation.required_oracle_refs) ?? []) if (forbidden.has(ref)) diagnostics.push(diagnostic5(
+        for (const ref of stringArray3(obligation.required_oracle_refs) ?? []) if (forbidden.has(ref)) diagnostics.push(diagnostic6(
           "traceability",
           "TWISE_ORACLE_FORBID_CONFLICT",
-          `/obligations/${pointerPart2(id)}/required_oracle_refs/${pointerPart2(ref)}`,
+          `/obligations/${pointerPart2(id2)}/required_oracle_refs/${pointerPart2(ref)}`,
           "forbid evidence cannot be an Oracle prebinding"
         ));
       }
@@ -4959,7 +9570,7 @@ function classifyCaseDrafts(submittedContext) {
       const routeBucket = routesByFact.get(factId);
       if (routeBucket) routeBucket.push(route);
       else routesByFact.set(factId, [route]);
-      if (!factsById.has(factId)) diagnostics.push(diagnostic5(
+      if (!factsById.has(factId)) diagnostics.push(diagnostic6(
         "reference",
         "FACT_ROUTE_FACT_UNKNOWN",
         `/obligations/fact_routes/${routeIndex}/fact_id`,
@@ -4968,7 +9579,7 @@ function classifyCaseDrafts(submittedContext) {
       if (route.route_type === "blocked") {
         const gapId = typeof route.gap_obligation_id === "string" ? route.gap_obligation_id : "";
         const gap = obligationsById.get(gapId);
-        if (!gap || gap.kind !== "requirement-gap" || gap.caseable !== false) diagnostics.push(diagnostic5(
+        if (!gap || gap.kind !== "requirement-gap" || gap.caseable !== false) diagnostics.push(diagnostic6(
           "reference",
           "FACT_ROUTE_GAP_UNKNOWN",
           `/obligations/fact_routes/${routeIndex}/gap_obligation_id`,
@@ -4978,7 +9589,7 @@ function classifyCaseDrafts(submittedContext) {
           const routed = routedFactsByObligation.get(gapId) ?? /* @__PURE__ */ new Set();
           routed.add(factId);
           routedFactsByObligation.set(gapId, routed);
-          if (!isRecord2(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic5(
+          if (!isRecord2(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic6(
             "traceability",
             "FACT_ROUTE_GAP_ROOT_MISMATCH",
             `/obligations/fact_routes/${routeIndex}`,
@@ -4989,14 +9600,14 @@ function classifyCaseDrafts(submittedContext) {
       }
       if (route.route_type !== "obligations") continue;
       const routedObligations = stringArray3(route.obligation_ids, true);
-      if (!routedObligations) diagnostics.push(diagnostic5(
+      if (!routedObligations) diagnostics.push(diagnostic6(
         "traceability",
         "FACT_ROUTE_OBLIGATIONS_INVALID",
         `/obligations/fact_routes/${routeIndex}/obligation_ids`,
         "formal fact route requires a nonempty dense obligation list"
       ));
       for (const obligationId of routedObligations ?? []) {
-        if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic5(
+        if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic6(
           "reference",
           "FACT_ROUTE_OBLIGATION_UNKNOWN",
           `/obligations/fact_routes/${routeIndex}/obligation_ids/${pointerPart2(obligationId)}`,
@@ -5014,7 +9625,7 @@ function classifyCaseDrafts(submittedContext) {
       const assignments = objectArray4(vector.assignments) ?? [];
       const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ""));
       const validStrength = Number.isSafeInteger(vector.strength) && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
-      if (vector.policy_id !== "twise-candidate-cap-v1" || !validStrength || new Set(parameterIds).size !== parameterIds.length || obligation.kind !== "interaction" || obligation.caseable !== true) diagnostics.push(diagnostic5(
+      if (vector.policy_id !== "twise-candidate-cap-v1" || !validStrength || new Set(parameterIds).size !== parameterIds.length || obligation.kind !== "interaction" || obligation.caseable !== true) diagnostics.push(diagnostic6(
         "traceability",
         "TWISE_VECTOR_CONTRACT_INVALID",
         `/obligations/${pointerPart2(obligationId)}/combination_vector`,
@@ -5024,7 +9635,7 @@ function classifyCaseDrafts(submittedContext) {
       const owner = isRecord2(vector.owner) ? vector.owner : {};
       const routedFacts = routedFactsByObligation.get(obligationId) ?? /* @__PURE__ */ new Set();
       for (const factId of stringArray3(owner.fact_ids) ?? []) {
-        if (!routedFacts.has(factId)) diagnostics.push(diagnostic5(
+        if (!routedFacts.has(factId)) diagnostics.push(diagnostic6(
           "traceability",
           "TWISE_OWNER_FACT_ROUTE_MISSING",
           `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/fact_ids/${pointerPart2(factId)}`,
@@ -5032,7 +9643,7 @@ function classifyCaseDrafts(submittedContext) {
         ));
         const fact = factsById.get(factId);
         for (const ref of fact ? [String(fact.claim_id), ...stringArray3(fact.source_claim_ids) ?? []] : []) {
-          if (!sourceClaims.has(ref)) diagnostics.push(diagnostic5(
+          if (!sourceClaims.has(ref)) diagnostics.push(diagnostic6(
             "traceability",
             "TWISE_OWNER_SOURCE_MISSING",
             `/obligations/${pointerPart2(obligationId)}/source_claim_ids`,
@@ -5043,14 +9654,14 @@ function classifyCaseDrafts(submittedContext) {
       const viewRefs = new Set(stringArray3(obligation.view_element_refs) ?? []);
       const ownerViewId = String(owner.view_id ?? "");
       for (const ref of objectArray4(owner.view_element_refs) ?? []) {
-        if (String(ref.view_id ?? "") !== ownerViewId) diagnostics.push(diagnostic5(
+        if (String(ref.view_id ?? "") !== ownerViewId) diagnostics.push(diagnostic6(
           "traceability",
           "TWISE_OWNER_VIEW_MISMATCH",
           `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/view_element_refs`,
           "every selected-vector owner element must belong to the single named owner view"
         ));
         const qualified = `${String(ref.view_id ?? "")}#${String(ref.element_id ?? "")}`;
-        if (!viewRefs.has(qualified)) diagnostics.push(diagnostic5(
+        if (!viewRefs.has(qualified)) diagnostics.push(diagnostic6(
           "traceability",
           "TWISE_OWNER_ELEMENT_REF_MISSING",
           `/obligations/${pointerPart2(obligationId)}/combination_vector/owner/view_element_refs`,
@@ -5073,7 +9684,7 @@ function classifyCaseDrafts(submittedContext) {
       }
       const affected = stringArray3(submitted.affected_obligation_ids, true);
       if (!affected) {
-        diagnostics.push(diagnostic5(
+        diagnostics.push(diagnostic6(
           "schema",
           "BLOCKER_AFFECTED_OBLIGATIONS_INVALID",
           `/obligation_dispositions/${index}/affected_obligation_ids`,
@@ -5114,13 +9725,13 @@ function classifyCaseDrafts(submittedContext) {
     for (const [routeIndex, route] of interactionRoutes.entries()) {
       if (route.route_type !== "blocked") continue;
       const gap = obligationsById.get(String(route.gap_obligation_id ?? ""));
-      if (!gap || gap.kind !== "requirement-gap" || gap.caseable !== false) diagnostics.push(diagnostic5(
+      if (!gap || gap.kind !== "requirement-gap" || gap.caseable !== false) diagnostics.push(diagnostic6(
         "reference",
         "INTERACTION_ROUTE_GAP_UNKNOWN",
         `/obligations/interaction_routes/${routeIndex}/gap_obligation_id`,
         "blocked interaction route must reference one compiler-owned requirement gap"
       ));
-      else if (!isRecord2(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic5(
+      else if (!isRecord2(gap.gap_issue) || gap.gap_issue.root_issue_id !== route.blocker_root_issue_id) diagnostics.push(diagnostic6(
         "traceability",
         "INTERACTION_ROUTE_GAP_ROOT_MISMATCH",
         `/obligations/interaction_routes/${routeIndex}`,
@@ -5129,35 +9740,35 @@ function classifyCaseDrafts(submittedContext) {
     }
     const casesById = /* @__PURE__ */ new Map();
     for (const draft of drafts) {
-      const id = typeof draft.case_id === "string" ? draft.case_id : "";
-      if (casesById.has(id)) diagnostics.push(diagnostic5("traceability", "CASE_ID_DUPLICATE", `/cases/${pointerPart2(id)}`, "Case IDs must be unique before exact-signature deduplication"));
-      else casesById.set(id, draft);
+      const id2 = typeof draft.case_id === "string" ? draft.case_id : "";
+      if (casesById.has(id2)) diagnostics.push(diagnostic6("traceability", "CASE_ID_DUPLICATE", `/cases/${pointerPart2(id2)}`, "Case IDs must be unique before exact-signature deduplication"));
+      else casesById.set(id2, draft);
     }
     const dispositionByObligation = /* @__PURE__ */ new Map();
     const validatedBlockerGroups = /* @__PURE__ */ new Set();
     for (const disposition of dispositions) {
       const obligationId = typeof disposition.obligation_id === "string" ? disposition.obligation_id : "";
-      if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic5(
+      if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic6(
         "reference",
         "OBLIGATION_DISPOSITION_UNKNOWN",
         `/obligation_dispositions/${pointerPart2(obligationId)}`,
         "disposition references an unknown formal obligation"
       ));
-      if (dispositionByObligation.has(obligationId)) diagnostics.push(diagnostic5(
+      if (dispositionByObligation.has(obligationId)) diagnostics.push(diagnostic6(
         "traceability",
         "OBLIGATION_DISPOSITION_DUPLICATE",
         `/obligation_dispositions/${pointerPart2(obligationId)}`,
         "every formal obligation must have exactly one disposition"
       ));
       else dispositionByObligation.set(obligationId, disposition);
-      if (!["case_candidate", "blocker", "not_applicable"].includes(String(disposition.status))) diagnostics.push(diagnostic5(
+      if (!["case_candidate", "blocker", "not_applicable"].includes(String(disposition.status))) diagnostics.push(diagnostic6(
         "classification",
         "OBLIGATION_DISPOSITION_STATUS_INVALID",
         `/obligation_dispositions/${pointerPart2(obligationId)}/status`,
         "formal obligation disposition status is outside the frozen lanes"
       ));
       const obligation = obligationsById.get(obligationId);
-      if (obligation?.caseable === false && !disposition.compiler_gap) diagnostics.push(diagnostic5(
+      if (obligation?.caseable === false && !disposition.compiler_gap) diagnostics.push(diagnostic6(
         "classification",
         "REQUIREMENT_GAP_AGENT_DISPOSITION_FORBIDDEN",
         `/obligation_dispositions/${pointerPart2(obligationId)}`,
@@ -5171,17 +9782,17 @@ function classifyCaseDrafts(submittedContext) {
           /** @type {number} */
           disposition.submitted_index
         ) ?? [];
-        const linked = affected.flatMap((id) => obligationsById.has(id) ? [
+        const linked = affected.flatMap((id2) => obligationsById.has(id2) ? [
           /** @type {Record<string, unknown>} */
-          obligationsById.get(id)
+          obligationsById.get(id2)
         ] : []);
-        if (linked.some((item) => item.caseable !== true)) diagnostics.push(diagnostic5(
+        if (linked.some((item) => item.caseable !== true)) diagnostics.push(diagnostic6(
           "classification",
           "BLOCKER_AFFECTED_OBLIGATION_NOT_CASEABLE",
           `/obligation_dispositions/${disposition.submitted_index}/affected_obligation_ids`,
           "case-draft blocker groups may affect only compiler-derived caseable obligations"
         ));
-        if (linked.some((item) => !scopeContains(String(intent.scope ?? ""), String(item.scope ?? "")))) diagnostics.push(diagnostic5(
+        if (linked.some((item) => !scopeContains(String(intent.scope ?? ""), String(item.scope ?? "")))) diagnostics.push(diagnostic6(
           "classification",
           "BLOCKER_SCOPE_MISMATCH",
           `/obligation_dispositions/${disposition.submitted_index}/issue_intent/scope`,
@@ -5190,7 +9801,7 @@ function classifyCaseDrafts(submittedContext) {
         let reachable = false;
         if (subject.kind === "facts") {
           const refs = stringArray3(subject.fact_ids, true) ?? [];
-          reachable = refs.length > 0 && refs.every((factId) => factsById.has(factId) && affected.some((id) => routedFactsByObligation.get(id)?.has(factId))) && affected.every((id) => refs.some((factId) => routedFactsByObligation.get(id)?.has(factId)));
+          reachable = refs.length > 0 && refs.every((factId) => factsById.has(factId) && affected.some((id2) => routedFactsByObligation.get(id2)?.has(factId))) && affected.every((id2) => refs.some((factId) => routedFactsByObligation.get(id2)?.has(factId)));
         } else if (subject.kind === "view-elements") {
           const refs = objectArray4(subject.view_element_refs)?.map((ref) => `${String(ref.view_id)}#${String(ref.element_id)}`) ?? [];
           reachable = refs.length > 0 && refs.every((ref) => linked.some((item) => (stringArray3(item.view_element_refs) ?? []).includes(ref))) && linked.every((item) => refs.some((ref) => (stringArray3(item.view_element_refs) ?? []).includes(ref)));
@@ -5205,7 +9816,7 @@ function classifyCaseDrafts(submittedContext) {
           ], evidence, evidenceCache, relatedEvidenceCache));
           reachable = refs.length > 0 && refs.every((ref) => evidence.has(ref) && relatedByObligation.some((related) => related.has(ref))) && relatedByObligation.every((related) => refs.some((ref) => related.has(ref)));
         }
-        if (!reachable) diagnostics.push(diagnostic5(
+        if (!reachable) diagnostics.push(diagnostic6(
           "traceability",
           "BLOCKER_SUBJECT_UNREACHABLE",
           `/obligation_dispositions/${disposition.submitted_index}/subject`,
@@ -5226,7 +9837,7 @@ function classifyCaseDrafts(submittedContext) {
             ...routedRoots
           ], evidence, evidenceCache) : null;
           const fullyGroundable = obligation2 && (stringArray3(obligation2.required_oracle_refs) ?? []).length > 0 && (stringArray3(obligation2.required_capabilities) ?? []).length === 0 && evidenceResult?.rank === 2 && evidenceResult.reasons.size === 0;
-          diagnostics.push(diagnostic5(
+          diagnostics.push(diagnostic6(
             "classification",
             fullyGroundable ? "GROUNDABLE_OBLIGATION_CASE_MISSING" : "DISPOSITION_CASES_MISSING",
             `/obligation_dispositions/${pointerPart2(obligationId)}/case_ids`,
@@ -5235,13 +9846,13 @@ function classifyCaseDrafts(submittedContext) {
         }
         for (const caseId of caseIds) {
           const candidate = casesById.get(caseId);
-          if (!candidate) diagnostics.push(diagnostic5(
+          if (!candidate) diagnostics.push(diagnostic6(
             "reference",
             "DISPOSITION_CASE_UNKNOWN",
             `/obligation_dispositions/${pointerPart2(obligationId)}/case_ids/${pointerPart2(caseId)}`,
             "candidate disposition references an unknown Case"
           ));
-          else if (!(stringArray3(candidate.obligation_ids) ?? []).includes(obligationId)) diagnostics.push(diagnostic5(
+          else if (!(stringArray3(candidate.obligation_ids) ?? []).includes(obligationId)) diagnostics.push(diagnostic6(
             "traceability",
             "CASE_LANE_DISPOSITION_MISMATCH",
             `/obligation_dispositions/${pointerPart2(obligationId)}/case_ids/${pointerPart2(caseId)}`,
@@ -5251,7 +9862,7 @@ function classifyCaseDrafts(submittedContext) {
       }
     }
     for (const obligationId of obligationsById.keys()) {
-      if (!dispositionByObligation.has(obligationId)) diagnostics.push(diagnostic5(
+      if (!dispositionByObligation.has(obligationId)) diagnostics.push(diagnostic6(
         "traceability",
         "OBLIGATION_DISPOSITION_MISSING",
         `/obligation_dispositions/${pointerPart2(obligationId)}`,
@@ -5301,7 +9912,7 @@ function classifyCaseDrafts(submittedContext) {
         const relatedEvidence = relatedEvidenceClosure(roots, evidence, evidenceCache, relatedEvidenceCache);
         const blockerEvidenceRefs = stringArray3(disposition.evidence_refs, !explicitIntent);
         if (!blockerEvidenceRefs) {
-          diagnostics.push(diagnostic5(
+          diagnostics.push(diagnostic6(
             "classification",
             "BLOCKER_EVIDENCE_REFS_INVALID",
             `/obligation_dispositions/${pointerPart2(obligationId)}/evidence_refs`,
@@ -5314,7 +9925,7 @@ function classifyCaseDrafts(submittedContext) {
           const blockerAssessment = evidence.get(ref);
           if (!blockerAssessment) {
             blockerRefsValid = false;
-            diagnostics.push(diagnostic5(
+            diagnostics.push(diagnostic6(
               "reference",
               "BLOCKER_EVIDENCE_UNKNOWN",
               `/obligation_dispositions/${pointerPart2(obligationId)}/evidence_refs/${pointerPart2(ref)}`,
@@ -5322,7 +9933,7 @@ function classifyCaseDrafts(submittedContext) {
             ));
           } else if (blockerAssessment.rank === 0 || blockerAssessment.reasons.length > 0) {
             blockerRefsValid = false;
-            diagnostics.push(diagnostic5(
+            diagnostics.push(diagnostic6(
               "classification",
               "BLOCKER_EVIDENCE_INVALID",
               `/obligation_dispositions/${pointerPart2(obligationId)}/evidence_refs/${pointerPart2(ref)}`,
@@ -5330,7 +9941,7 @@ function classifyCaseDrafts(submittedContext) {
             ));
           } else if (!relatedEvidence.has(ref)) {
             blockerRefsValid = false;
-            diagnostics.push(diagnostic5(
+            diagnostics.push(diagnostic6(
               "traceability",
               "BLOCKER_EVIDENCE_UNRELATED",
               `/obligation_dispositions/${pointerPart2(obligationId)}/evidence_refs/${pointerPart2(ref)}`,
@@ -5342,7 +9953,7 @@ function classifyCaseDrafts(submittedContext) {
         const oracles = stringArray3(obligation.required_oracle_refs) ?? [];
         const capabilities = stringArray3(obligation.required_capabilities) ?? [];
         if (explicitIntent?.missing_type === "oracle" && oracles.length > 0 && capabilities.length === 0 && evidenceResult.rank === 2 && evidenceResult.reasons.size === 0) {
-          diagnostics.push(diagnostic5(
+          diagnostics.push(diagnostic6(
             "classification",
             "GROUNDABLE_OBLIGATION_CASE_MISSING",
             `/obligation_dispositions/${pointerPart2(obligationId)}`,
@@ -5392,18 +10003,18 @@ function classifyCaseDrafts(submittedContext) {
     }
     for (const draft of drafts) {
       const obligationIds = stringArray3(draft.obligation_ids, true) ?? [];
-      const linked = obligationIds.flatMap((id) => obligationsById.has(id) ? [
+      const linked = obligationIds.flatMap((id2) => obligationsById.has(id2) ? [
         /** @type {Record<string, unknown>} */
-        obligationsById.get(id)
+        obligationsById.get(id2)
       ] : []);
       for (const obligationId of obligationIds) {
-        if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic5(
+        if (!obligationsById.has(obligationId)) diagnostics.push(diagnostic6(
           "reference",
           "CASE_OBLIGATION_UNKNOWN",
           `/cases/${pointerPart2(String(draft.case_id))}/obligation_ids/${pointerPart2(obligationId)}`,
           "Case references an unknown formal obligation"
         ));
-        else if (obligationsById.get(obligationId)?.caseable === false) diagnostics.push(diagnostic5(
+        else if (obligationsById.get(obligationId)?.caseable === false) diagnostics.push(diagnostic6(
           "classification",
           "REQUIREMENT_GAP_CASE_FORBIDDEN",
           `/cases/${pointerPart2(String(draft.case_id))}/obligation_ids/${pointerPart2(obligationId)}`,
@@ -5414,7 +10025,7 @@ function classifyCaseDrafts(submittedContext) {
           /** @type {string} */
           draft.case_id
         )) {
-          diagnostics.push(diagnostic5(
+          diagnostics.push(diagnostic6(
             "traceability",
             "CASE_LANE_DISPOSITION_MISMATCH",
             `/cases/${pointerPart2(String(draft.case_id))}/obligation_ids/${pointerPart2(obligationId)}`,
@@ -5500,7 +10111,7 @@ function classifyCaseDrafts(submittedContext) {
       }
     }
     for (const [obligationId, ranks] of executableRanksByObligation) {
-      if (ranks.size > 1) diagnostics.push(diagnostic5(
+      if (ranks.size > 1) diagnostics.push(diagnostic6(
         "classification",
         "OBLIGATION_EXECUTABLE_LANE_CONFLICT",
         `/obligations/${pointerPart2(obligationId)}`,
@@ -5532,10 +10143,14 @@ function classifyCaseDrafts(submittedContext) {
     const exploratoryOutput = [];
     for (const candidate of [...exploratory].sort((left, right) => compareCodePoints3(String(left.exploratory_id), String(right.exploratory_id)))) {
       const candidateId = String(candidate.exploratory_id);
+      if (candidate.origin === "heuristic") {
+        exploratoryOutput.push(structuredClone(candidate));
+        continue;
+      }
       let valid = true;
       if (!exploratoryRouteIds.has(candidateId)) {
         valid = false;
-        diagnostics.push(diagnostic5(
+        diagnostics.push(diagnostic6(
           "traceability",
           "EXPLORATORY_ROUTE_MISSING",
           `/exploratory/${pointerPart2(candidateId)}`,
@@ -5546,7 +10161,7 @@ function classifyCaseDrafts(submittedContext) {
         const claim = evidence.get(ref);
         if (!claim) {
           valid = false;
-          diagnostics.push(diagnostic5(
+          diagnostics.push(diagnostic6(
             "reference",
             "EXPLORATORY_EVIDENCE_UNKNOWN",
             `/exploratory/${pointerPart2(String(candidate.exploratory_id))}/source_claim_ids/${pointerPart2(ref)}`,
@@ -5554,7 +10169,7 @@ function classifyCaseDrafts(submittedContext) {
           ));
         } else if (formalDependence.has(ref)) {
           valid = false;
-          diagnostics.push(diagnostic5(
+          diagnostics.push(diagnostic6(
             "classification",
             "EXPLORATORY_FORMAL_EVIDENCE_OVERLAP",
             `/exploratory/${pointerPart2(candidateId)}/source_claim_ids/${pointerPart2(ref)}`,
@@ -5575,8 +10190,8 @@ function classifyCaseDrafts(submittedContext) {
           (objectArray4(replayDraft.steps) ?? []).flatMap((step) => objectArray4(step.expectations) ?? []).flatMap((expectation) => isCanonicalString(expectation.expectation_id) ? [String(expectation.expectation_id)] : [])
         )].sort(compareCodePoints3);
         replayDraft.execution_signature = replaySignature;
-        const linked = (stringArray3(draft.obligation_ids, true) ?? []).flatMap((id) => {
-          const obligation = obligationsById.get(id);
+        const linked = (stringArray3(draft.obligation_ids, true) ?? []).flatMap((id2) => {
+          const obligation = obligationsById.get(id2);
           return obligation ? [obligation] : [];
         });
         const routedFactIds = [...new Set(linked.flatMap((obligation) => [
@@ -5607,7 +10222,7 @@ function classifyCaseDrafts(submittedContext) {
       diagnostics: finalizeDiagnostics2(diagnostics)
     };
   } catch (error) {
-    return resultWithDiagnostics([diagnostic5(
+    return resultWithDiagnostics([diagnostic6(
       "classification",
       "CLASSIFICATION_INPUT_UNREADABLE",
       "/",
@@ -5621,114 +10236,2580 @@ var test_bundle_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "test-bundle.schema.json",
   $defs: {
-    sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
-    string_set: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true },
-    ready_basis: { oneOf: [
-      { type: "object", required: ["origin"], properties: { origin: { const: "default_grounded_recommendation" } }, additionalProperties: false },
-      { type: "object", required: ["origin", "exclusion_claim_semantic_digest"], properties: { origin: { const: "derived_not_applicable" }, exclusion_claim_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false },
-      { type: "object", required: ["origin", "execution_decision_semantic_digest"], properties: { origin: { const: "user_execution_decision" }, execution_decision_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }
-    ] },
+    sha256: {
+      type: "string",
+      pattern: "^[a-f0-9]{64}$"
+    },
+    string_set: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1
+      },
+      uniqueItems: true
+    },
+    ready_basis: {
+      oneOf: [
+        {
+          type: "object",
+          required: [
+            "origin"
+          ],
+          properties: {
+            origin: {
+              const: "default_grounded_recommendation"
+            }
+          },
+          additionalProperties: false
+        },
+        {
+          type: "object",
+          required: [
+            "origin",
+            "exclusion_claim_semantic_digest"
+          ],
+          properties: {
+            origin: {
+              const: "derived_not_applicable"
+            },
+            exclusion_claim_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            }
+          },
+          additionalProperties: false
+        },
+        {
+          type: "object",
+          required: [
+            "origin",
+            "execution_decision_semantic_digest"
+          ],
+          properties: {
+            origin: {
+              const: "user_execution_decision"
+            },
+            execution_decision_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            }
+          },
+          additionalProperties: false
+        }
+      ]
+    },
     ready_item: {
       type: "object",
-      required: ["item_kind", "item_id", "title", "semantic_status", "item_semantic_digest", "related_obligation_ids", "execution_disposition", "reason_code", "reason", "basis"],
+      required: [
+        "item_kind",
+        "item_id",
+        "title",
+        "semantic_status",
+        "item_semantic_digest",
+        "related_obligation_ids",
+        "execution_disposition",
+        "reason_code",
+        "reason",
+        "basis"
+      ],
       properties: {
-        item_kind: { enum: ["case", "formal_test_point", "exploratory"] },
-        item_id: { type: "string", minLength: 1 },
-        title: { type: "string", minLength: 1 },
-        semantic_status: { enum: ["grounded", "conditional", "blocked", "not_applicable", "exploratory"] },
-        item_semantic_digest: { $ref: "#/$defs/sha256" },
-        related_obligation_ids: { $ref: "#/$defs/string_set" },
-        execution_disposition: { enum: ["execute", "do_not_execute"] },
-        reason_code: { type: "string", minLength: 1 },
-        reason: { type: "string", minLength: 1 },
-        basis: { $ref: "#/$defs/ready_basis" }
+        item_kind: {
+          enum: [
+            "case",
+            "formal_test_point",
+            "exploratory"
+          ]
+        },
+        item_id: {
+          type: "string",
+          minLength: 1
+        },
+        title: {
+          type: "string",
+          minLength: 1
+        },
+        semantic_status: {
+          enum: [
+            "grounded",
+            "conditional",
+            "blocked",
+            "not_applicable",
+            "exploratory"
+          ]
+        },
+        item_semantic_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        related_obligation_ids: {
+          $ref: "#/$defs/string_set"
+        },
+        execution_disposition: {
+          enum: [
+            "execute",
+            "do_not_execute"
+          ]
+        },
+        reason_code: {
+          type: "string",
+          minLength: 1
+        },
+        reason: {
+          type: "string",
+          minLength: 1
+        },
+        basis: {
+          $ref: "#/$defs/ready_basis"
+        }
       },
       additionalProperties: false
     },
     tp_execution_coverage: {
       type: "object",
-      required: ["obligation_id", "related_grounded_case_ids", "execute_case_ids", "status"],
-      properties: { obligation_id: { type: "string", minLength: 1 }, related_grounded_case_ids: { $ref: "#/$defs/string_set" }, execute_case_ids: { $ref: "#/$defs/string_set" }, status: { enum: ["full", "partial", "none"] } },
+      required: [
+        "obligation_id",
+        "related_grounded_case_ids",
+        "execute_case_ids",
+        "status"
+      ],
+      properties: {
+        obligation_id: {
+          type: "string",
+          minLength: 1
+        },
+        related_grounded_case_ids: {
+          $ref: "#/$defs/string_set"
+        },
+        execute_case_ids: {
+          $ref: "#/$defs/string_set"
+        },
+        status: {
+          enum: [
+            "full",
+            "partial",
+            "none"
+          ]
+        }
+      },
       additionalProperties: false
     },
     execution_summary: {
       type: "object",
-      required: ["case_count", "formal_test_point_count", "applicable_formal_test_point_count", "not_applicable_formal_test_point_count", "full_test_point_count", "partial_test_point_count", "none_test_point_count", "exploratory_count", "execute_case_count", "do_not_execute_case_count", "do_not_execute_formal_test_point_count", "do_not_execute_exploratory_count", "pending_case_count", "pending_formal_test_point_count", "pending_exploratory_count"],
+      required: [
+        "case_count",
+        "formal_test_point_count",
+        "applicable_formal_test_point_count",
+        "not_applicable_formal_test_point_count",
+        "full_test_point_count",
+        "partial_test_point_count",
+        "none_test_point_count",
+        "exploratory_count",
+        "execute_case_count",
+        "do_not_execute_case_count",
+        "do_not_execute_formal_test_point_count",
+        "do_not_execute_exploratory_count",
+        "pending_case_count",
+        "pending_formal_test_point_count",
+        "pending_exploratory_count"
+      ],
       properties: {
-        case_count: { type: "integer", minimum: 0 },
-        formal_test_point_count: { type: "integer", minimum: 0 },
-        applicable_formal_test_point_count: { type: "integer", minimum: 0 },
-        not_applicable_formal_test_point_count: { type: "integer", minimum: 0 },
-        full_test_point_count: { type: "integer", minimum: 0 },
-        partial_test_point_count: { type: "integer", minimum: 0 },
-        none_test_point_count: { type: "integer", minimum: 0 },
-        exploratory_count: { type: "integer", minimum: 0 },
-        execute_case_count: { type: "integer", minimum: 0 },
-        do_not_execute_case_count: { type: "integer", minimum: 0 },
-        do_not_execute_formal_test_point_count: { type: "integer", minimum: 0 },
-        do_not_execute_exploratory_count: { type: "integer", minimum: 0 },
-        pending_case_count: { type: "integer", minimum: 0 },
-        pending_formal_test_point_count: { type: "integer", minimum: 0 },
-        pending_exploratory_count: { type: "integer", minimum: 0 }
+        case_count: {
+          type: "integer",
+          minimum: 0
+        },
+        formal_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        applicable_formal_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        not_applicable_formal_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        full_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        partial_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        none_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        exploratory_count: {
+          type: "integer",
+          minimum: 0
+        },
+        execute_case_count: {
+          type: "integer",
+          minimum: 0
+        },
+        do_not_execute_case_count: {
+          type: "integer",
+          minimum: 0
+        },
+        do_not_execute_formal_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        do_not_execute_exploratory_count: {
+          type: "integer",
+          minimum: 0
+        },
+        pending_case_count: {
+          type: "integer",
+          minimum: 0
+        },
+        pending_formal_test_point_count: {
+          type: "integer",
+          minimum: 0
+        },
+        pending_exploratory_count: {
+          type: "integer",
+          minimum: 0
+        }
       },
       additionalProperties: false
     },
     ready_execution_plan: {
       type: "object",
-      required: ["status", "semantic_source_digest", "plan_digest", "semantic_result_digest", "items", "runner_case_ids", "promoted_exploratory", "test_point_execution_coverage", "summary", "confirmation"],
+      required: [
+        "status",
+        "semantic_source_digest",
+        "plan_digest",
+        "semantic_result_digest",
+        "items",
+        "runner_case_ids",
+        "promoted_exploratory",
+        "test_point_execution_coverage",
+        "summary",
+        "confirmation"
+      ],
       properties: {
-        status: { const: "ready" },
-        semantic_source_digest: { $ref: "#/$defs/sha256" },
-        plan_digest: { $ref: "#/$defs/sha256" },
-        semantic_result_digest: { $ref: "#/$defs/sha256" },
-        items: { type: "array", items: { $ref: "#/$defs/ready_item" } },
-        runner_case_ids: { $ref: "#/$defs/string_set" },
-        promoted_exploratory: { type: "array", items: { type: "object", required: ["exploratory_id", "adoption_decision_semantic_digest", "obligation_ids", "case_ids"], properties: { exploratory_id: { type: "string", minLength: 1 }, adoption_decision_semantic_digest: { $ref: "#/$defs/sha256" }, obligation_ids: { $ref: "#/$defs/string_set" }, case_ids: { $ref: "#/$defs/string_set" } }, additionalProperties: false } },
-        test_point_execution_coverage: { type: "array", items: { $ref: "#/$defs/tp_execution_coverage" } },
-        summary: { $ref: "#/$defs/execution_summary" },
-        confirmation: { type: "object", required: ["confirmed", "confirmed_plan_digest", "actor", "authority_scope", "confirmation_semantic_digest"], properties: { confirmed: { const: true }, confirmed_plan_digest: { $ref: "#/$defs/sha256" }, actor: { type: "string", minLength: 1 }, authority_scope: { type: "string", minLength: 1 }, confirmation_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }
+        status: {
+          const: "ready"
+        },
+        semantic_source_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        plan_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        semantic_result_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        items: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/ready_item"
+          }
+        },
+        runner_case_ids: {
+          $ref: "#/$defs/string_set"
+        },
+        promoted_exploratory: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "exploratory_id",
+              "adoption_decision_semantic_digest",
+              "obligation_ids",
+              "case_ids"
+            ],
+            properties: {
+              exploratory_id: {
+                type: "string",
+                minLength: 1
+              },
+              adoption_decision_semantic_digest: {
+                $ref: "#/$defs/sha256"
+              },
+              obligation_ids: {
+                $ref: "#/$defs/string_set"
+              },
+              case_ids: {
+                $ref: "#/$defs/string_set"
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        test_point_execution_coverage: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/tp_execution_coverage"
+          }
+        },
+        summary: {
+          $ref: "#/$defs/execution_summary"
+        },
+        confirmation: {
+          type: "object",
+          required: [
+            "confirmed",
+            "confirmed_plan_digest",
+            "actor",
+            "authority_scope",
+            "confirmation_semantic_digest"
+          ],
+          properties: {
+            confirmed: {
+              const: true
+            },
+            confirmed_plan_digest: {
+              $ref: "#/$defs/sha256"
+            },
+            actor: {
+              type: "string",
+              minLength: 1
+            },
+            authority_scope: {
+              type: "string",
+              minLength: 1
+            },
+            confirmation_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            }
+          },
+          additionalProperties: false
+        }
+      },
+      additionalProperties: false
+    },
+    document_item: {
+      type: "object",
+      required: [
+        "item_kind",
+        "item_id",
+        "title",
+        "semantic_status",
+        "item_semantic_digest",
+        "related_obligation_ids",
+        "execution_disposition",
+        "reason_code",
+        "reason",
+        "basis"
+      ],
+      properties: {
+        item_kind: {
+          enum: [
+            "case",
+            "formal_test_point",
+            "exploratory"
+          ]
+        },
+        item_id: {
+          type: "string",
+          minLength: 1
+        },
+        title: {
+          type: "string",
+          minLength: 1
+        },
+        semantic_status: {
+          enum: [
+            "grounded",
+            "conditional",
+            "blocked",
+            "not_applicable",
+            "exploratory"
+          ]
+        },
+        item_semantic_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        related_obligation_ids: {
+          $ref: "#/$defs/string_set"
+        },
+        execution_disposition: {
+          enum: [
+            "execute",
+            "do_not_execute",
+            "pending"
+          ]
+        },
+        reason_code: {
+          oneOf: [
+            {
+              type: "string",
+              minLength: 1
+            },
+            {
+              type: "null"
+            }
+          ]
+        },
+        reason: {
+          oneOf: [
+            {
+              type: "string",
+              minLength: 1
+            },
+            {
+              type: "null"
+            }
+          ]
+        },
+        basis: {
+          oneOf: [
+            {
+              $ref: "#/$defs/ready_basis"
+            },
+            {
+              type: "null"
+            }
+          ]
+        }
+      },
+      additionalProperties: false
+    },
+    document_execution_plan: {
+      type: "object",
+      required: [
+        "status",
+        "semantic_source_digest",
+        "plan_digest",
+        "semantic_result_digest",
+        "items",
+        "runner_case_ids",
+        "promoted_exploratory",
+        "test_point_execution_coverage",
+        "summary",
+        "confirmation"
+      ],
+      properties: {
+        status: {
+          const: "document_only"
+        },
+        semantic_source_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        plan_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        semantic_result_digest: {
+          $ref: "#/$defs/sha256"
+        },
+        items: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/document_item"
+          }
+        },
+        runner_case_ids: {
+          type: "array",
+          const: [],
+          items: {
+            type: "string"
+          }
+        },
+        promoted_exploratory: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "exploratory_id",
+              "adoption_decision_semantic_digest",
+              "obligation_ids",
+              "case_ids"
+            ],
+            properties: {
+              exploratory_id: {
+                type: "string",
+                minLength: 1
+              },
+              adoption_decision_semantic_digest: {
+                $ref: "#/$defs/sha256"
+              },
+              obligation_ids: {
+                $ref: "#/$defs/string_set"
+              },
+              case_ids: {
+                $ref: "#/$defs/string_set"
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        test_point_execution_coverage: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/tp_execution_coverage"
+          }
+        },
+        summary: {
+          $ref: "#/$defs/execution_summary"
+        },
+        confirmation: {
+          type: "null"
+        }
       },
       additionalProperties: false
     }
   },
   type: "object",
-  required: ["schema_version", "source_revision", "grounded", "conditional", "blocked", "exploratory", "coverage", "quality", "execution_plan"],
+  required: [
+    "schema_version",
+    "source_revision",
+    "grounded",
+    "conditional",
+    "blocked",
+    "exploratory",
+    "coverage",
+    "quality",
+    "execution_plan"
+  ],
   properties: {
-    schema_version: { const: "2.1.0" },
-    source_revision: { type: "integer", minimum: 0 },
-    execution_plan: { $ref: "#/$defs/ready_execution_plan" },
+    schema_version: {
+      const: "3.0.0"
+    },
+    source_revision: {
+      type: "integer",
+      minimum: 0
+    },
+    execution_plan: {
+      oneOf: [
+        {
+          $ref: "#/$defs/ready_execution_plan"
+        },
+        {
+          $ref: "#/$defs/document_execution_plan"
+        }
+      ]
+    },
     grounded: {
       type: "array",
       items: {
         type: "object",
-        required: ["case_id", "title", "scope", "risk", "role", "fact_ids", "obligation_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "execution_signature"],
+        required: [
+          "case_id",
+          "title",
+          "scope",
+          "risk",
+          "role",
+          "fact_ids",
+          "obligation_ids",
+          "preconditions",
+          "data",
+          "steps",
+          "testability_profile",
+          "post_state",
+          "cleanup",
+          "evidence_refs",
+          "execution_signature",
+          "scenario",
+          "risk_basis",
+          "execution_effects"
+        ],
         properties: {
-          case_id: { type: "string", minLength: 1 },
-          title: { type: "string", minLength: 1 },
-          scope: { type: "string", minLength: 1 },
-          risk: { enum: ["critical", "high", "medium", "low"] },
-          role: { type: "object", required: ["value", "evidence_ref", "support_review"], properties: { value: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false },
-          fact_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
-          preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "value_origin", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
-            { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
-            { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, value_origin: { enum: ["requirement", "source_description", "example", "derived", "temporary_assumption"] }, support_review: { const: "supported" } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
-          testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
-            capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
-            observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
-            controls: { type: "array", minItems: 1, items: { type: "object", required: ["control", "status"], properties: { control: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } }
-          }, additionalProperties: false },
-          post_state: { type: "object", required: ["state", "evidence_ref", "support_review"], properties: { state: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false },
-          cleanup: { oneOf: [
-            { type: "object", required: ["required", "steps", "evidence_ref", "support_review"], properties: { required: { const: true }, steps: { type: "array", items: { type: "string" }, minItems: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false },
-            { type: "object", required: ["required", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"], properties: { required: { const: false }, no_cleanup_reason: { type: "string", minLength: 1 }, no_cleanup_evidence_ref: { type: "string", minLength: 1 }, support_review: { const: "supported" } }, additionalProperties: false }
-          ] },
-          evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
+          case_id: {
+            type: "string",
+            minLength: 1
+          },
+          title: {
+            type: "string",
+            minLength: 1
+          },
+          scope: {
+            type: "string",
+            minLength: 1
+          },
+          risk: {
+            enum: [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          role: {
+            type: "object",
+            required: [
+              "value",
+              "evidence_ref",
+              "support_review"
+            ],
+            properties: {
+              value: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                const: "supported"
+              }
+            },
+            additionalProperties: false
+          },
+          fact_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          obligation_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          source_claim_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            uniqueItems: true
+          },
+          preconditions: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "condition",
+                "reachable_from",
+                "source_claim_ids",
+                "evidence_ref",
+                "support_review",
+                "setup"
+              ],
+              properties: {
+                condition: {
+                  type: "string",
+                  minLength: 1
+                },
+                reachable_from: {
+                  type: "string",
+                  minLength: 1
+                },
+                source_claim_ids: {
+                  type: "array",
+                  items: {
+                    type: "string"
+                  },
+                  minItems: 1,
+                  uniqueItems: true
+                },
+                evidence_ref: {
+                  type: "string",
+                  minLength: 1
+                },
+                support_review: {
+                  const: "supported"
+                },
+                setup: {
+                  type: "object",
+                  properties: {
+                    resource_kind: {
+                      enum: [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    resource_ref: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    completion: {
+                      type: "object",
+                      properties: {
+                        subject_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        operator: {
+                          enum: [
+                            "equals",
+                            "contains",
+                            "matches",
+                            "within"
+                          ]
+                        },
+                        operand: {
+                          oneOf: [
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "string"
+                                },
+                                value: {
+                                  type: "string"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "number"
+                                },
+                                value: {
+                                  type: "number"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "boolean"
+                                },
+                                value: {
+                                  type: "boolean"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "null"
+                                },
+                                value: {
+                                  type: "null"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            }
+                          ]
+                        }
+                      },
+                      required: [
+                        "subject_ref",
+                        "operator",
+                        "operand"
+                      ],
+                      additionalProperties: false
+                    },
+                    mutation_effects: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      uniqueItems: true
+                    }
+                  },
+                  required: [
+                    "resource_kind",
+                    "resource_ref",
+                    "completion",
+                    "mutation_effects"
+                  ],
+                  additionalProperties: false
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          data: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "name",
+                "value",
+                "provenance",
+                "value_origin",
+                "support_review",
+                "partition_id"
+              ],
+              properties: {
+                name: {
+                  type: "string",
+                  minLength: 1
+                },
+                value: {
+                  type: "string",
+                  minLength: 1
+                },
+                provenance: {
+                  oneOf: [
+                    {
+                      type: "object",
+                      required: [
+                        "type",
+                        "ref"
+                      ],
+                      properties: {
+                        type: {
+                          const: "evidence"
+                        },
+                        ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    },
+                    {
+                      type: "object",
+                      required: [
+                        "type",
+                        "ref"
+                      ],
+                      properties: {
+                        type: {
+                          const: "derivation"
+                        },
+                        ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  ]
+                },
+                value_origin: {
+                  enum: [
+                    "requirement",
+                    "source_description",
+                    "example",
+                    "derived",
+                    "temporary_assumption"
+                  ]
+                },
+                support_review: {
+                  const: "supported"
+                },
+                partition_id: {
+                  type: "string",
+                  minLength: 1
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          steps: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "step_id",
+                "action",
+                "action_evidence_ref",
+                "support_review",
+                "expectations",
+                "operation_id"
+              ],
+              properties: {
+                step_id: {
+                  type: "string",
+                  minLength: 1
+                },
+                action: {
+                  type: "string",
+                  minLength: 1
+                },
+                action_evidence_ref: {
+                  type: "string",
+                  minLength: 1
+                },
+                support_review: {
+                  const: "supported"
+                },
+                expectations: {
+                  type: "array",
+                  minItems: 1,
+                  items: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        required: [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "closes_obligation_id",
+                          "oracle_evidence_refs"
+                        ],
+                        properties: {
+                          kind: {
+                            const: "obligation-oracle"
+                          },
+                          expectation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          business_assertion: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          preceding_action_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observer: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_surface: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_target: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle: {
+                            oneOf: [
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "value"
+                                  },
+                                  expected_value: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "state"
+                                  },
+                                  expected_state: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "event"
+                                  },
+                                  expected_event: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "side-effect"
+                                  },
+                                  expected_side_effect: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              }
+                            ]
+                          },
+                          evidence_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          support_review: {
+                            const: "supported"
+                          },
+                          closes_obligation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle_evidence_refs: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          },
+                          observer_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          target_ref: {
+                            type: "string",
+                            minLength: 1
+                          }
+                        },
+                        additionalProperties: false
+                      },
+                      {
+                        type: "object",
+                        required: [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "oracle_evidence_refs"
+                        ],
+                        properties: {
+                          kind: {
+                            const: "auxiliary"
+                          },
+                          expectation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          business_assertion: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          preceding_action_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observer: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_surface: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_target: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle: {
+                            oneOf: [
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "value"
+                                  },
+                                  expected_value: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "state"
+                                  },
+                                  expected_state: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "event"
+                                  },
+                                  expected_event: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "side-effect"
+                                  },
+                                  expected_side_effect: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              }
+                            ]
+                          },
+                          evidence_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          support_review: {
+                            const: "supported"
+                          },
+                          oracle_evidence_refs: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          },
+                          observer_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          target_ref: {
+                            type: "string",
+                            minLength: 1
+                          }
+                        },
+                        additionalProperties: false
+                      }
+                    ]
+                  }
+                },
+                operation_id: {
+                  type: "string",
+                  minLength: 1
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          testability_profile: {
+            type: "object",
+            required: [
+              "capabilities",
+              "observers",
+              "controls",
+              "setup_resources"
+            ],
+            properties: {
+              capabilities: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "capability",
+                    "status"
+                  ],
+                  properties: {
+                    capability: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    capability_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              observers: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "observer",
+                    "observation_target",
+                    "status",
+                    "subject_ref",
+                    "surface_id"
+                  ],
+                  properties: {
+                    observer: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    observation_target: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    observer_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    target_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    subject_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    surface_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              controls: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "control",
+                    "status"
+                  ],
+                  properties: {
+                    control: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              setup_resources: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  properties: {
+                    resource_id: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    kind: {
+                      enum: [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    locator: {
+                      type: "string",
+                      pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
+                    },
+                    evidence_ref: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    }
+                  },
+                  required: [
+                    "resource_id",
+                    "kind",
+                    "locator",
+                    "evidence_ref"
+                  ],
+                  additionalProperties: false
+                }
+              }
+            },
+            additionalProperties: false
+          },
+          post_state: {
+            type: "object",
+            required: [
+              "state",
+              "evidence_ref",
+              "support_review"
+            ],
+            properties: {
+              state: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                const: "supported"
+              }
+            },
+            additionalProperties: false
+          },
+          cleanup: {
+            oneOf: [
+              {
+                type: "object",
+                required: [
+                  "required",
+                  "steps",
+                  "evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                properties: {
+                  required: {
+                    const: true
+                  },
+                  steps: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1
+                  },
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    const: "supported"
+                  },
+                  resolved_effects: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                required: [
+                  "required",
+                  "no_cleanup_reason",
+                  "no_cleanup_evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                properties: {
+                  required: {
+                    const: false
+                  },
+                  no_cleanup_reason: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  no_cleanup_evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    const: "supported"
+                  },
+                  resolved_effects: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              }
+            ]
+          },
+          evidence_refs: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          execution_signature: {
+            type: "object",
+            required: [
+              "role",
+              "precondition_state",
+              "data_partition",
+              "action_path",
+              "oracle_refs"
+            ],
+            properties: {
+              role: {
+                type: "string",
+                minLength: 1
+              },
+              precondition_state: {
+                type: "string",
+                minLength: 1
+              },
+              data_partition: {
+                type: "string",
+                minLength: 1
+              },
+              action_path: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1
+              },
+              oracle_refs: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          scenario: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  operation_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  operation_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  partition_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  subject_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  intent: {
+                    const: "behavior"
+                  }
+                },
+                required: [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent"
+                ],
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                properties: {
+                  operation_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  operation_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  partition_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  subject_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  intent: {
+                    const: "compatibility"
+                  },
+                  compatibility: {
+                    type: "object",
+                    properties: {
+                      baseline_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      dimensions: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    required: [
+                      "baseline_ref",
+                      "dimensions"
+                    ],
+                    additionalProperties: false
+                  }
+                },
+                required: [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent",
+                  "compatibility"
+                ],
+                additionalProperties: false
+              }
+            ]
+          },
+          risk_basis: {
+            type: "object",
+            properties: {
+              impact: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              likelihood: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              exposure: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              }
+            },
+            required: [
+              "impact",
+              "likelihood",
+              "exposure"
+            ],
+            additionalProperties: false
+          },
+          execution_effects: {
+            type: "array",
+            items: {
+              type: "string",
+              minLength: 1,
+              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+            },
+            uniqueItems: true
+          }
         },
         additionalProperties: false
       }
@@ -5737,52 +12818,2626 @@ var test_bundle_schema_default = {
       type: "array",
       items: {
         type: "object",
-        required: ["case_id", "title", "scope", "risk", "role", "fact_ids", "obligation_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "temporary_assumption", "execution_signature"],
+        required: [
+          "case_id",
+          "title",
+          "scope",
+          "risk",
+          "role",
+          "fact_ids",
+          "obligation_ids",
+          "preconditions",
+          "data",
+          "steps",
+          "testability_profile",
+          "post_state",
+          "cleanup",
+          "evidence_refs",
+          "temporary_assumption",
+          "execution_signature",
+          "scenario",
+          "risk_basis",
+          "execution_effects"
+        ],
         properties: {
-          case_id: { type: "string", minLength: 1 },
-          title: { type: "string", minLength: 1 },
-          scope: { type: "string", minLength: 1 },
-          risk: { enum: ["critical", "high", "medium", "low"] },
-          role: { type: "object", required: ["value", "evidence_ref", "support_review"], properties: { value: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false },
-          fact_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          obligation_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          source_claim_ids: { type: "array", items: { type: "string" }, uniqueItems: true },
-          preconditions: { type: "array", minItems: 1, items: { type: "object", required: ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], properties: { condition: { type: "string", minLength: 1 }, reachable_from: { type: "string", minLength: 1 }, source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          data: { type: "array", minItems: 1, items: { type: "object", required: ["name", "value", "provenance", "value_origin", "support_review"], properties: { name: { type: "string", minLength: 1 }, value: { type: "string", minLength: 1 }, provenance: { oneOf: [
-            { type: "object", required: ["type", "ref"], properties: { type: { const: "evidence" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false },
-            { type: "object", required: ["type", "ref"], properties: { type: { const: "derivation" }, ref: { type: "string", minLength: 1 } }, additionalProperties: false }
-          ] }, value_origin: { enum: ["requirement", "source_description", "example", "derived", "temporary_assumption"] }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false } },
-          steps: { type: "array", minItems: 1, items: { type: "object", required: ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], properties: { step_id: { type: "string", minLength: 1 }, action: { type: "string", minLength: 1 }, action_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, expectations: { type: "array", minItems: 1, items: { oneOf: [{ type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "closes_obligation_id", "oracle_evidence_refs"], properties: { kind: { const: "obligation-oracle" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, closes_obligation_id: { type: "string", minLength: 1 }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }, { type: "object", required: ["kind", "expectation_id", "business_assertion", "preceding_action_id", "observer", "observation_surface", "observation_target", "oracle", "evidence_ref", "support_review", "oracle_evidence_refs"], properties: { kind: { const: "auxiliary" }, expectation_id: { type: "string", minLength: 1 }, business_assertion: { type: "string", minLength: 1 }, preceding_action_id: { type: "string", minLength: 1 }, observer: { type: "string", minLength: 1 }, observation_surface: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, oracle: { oneOf: [{ type: "object", required: ["type", "expected_value", "comparison"], properties: { type: { const: "value" }, expected_value: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_state", "comparison"], properties: { type: { const: "state" }, expected_state: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_event", "comparison"], properties: { type: { const: "event" }, expected_event: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }, { type: "object", required: ["type", "expected_side_effect", "comparison"], properties: { type: { const: "side-effect" }, expected_side_effect: { type: "string", minLength: 1 }, comparison: { enum: ["equals", "contains", "matches", "within"] }, tolerance: { type: "number" }, window: { type: "string" } }, additionalProperties: false }] }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] }, oracle_evidence_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true } }, additionalProperties: false }] } } }, additionalProperties: false } },
-          testability_profile: { type: "object", required: ["capabilities", "observers", "controls"], properties: {
-            capabilities: { type: "array", minItems: 1, items: { type: "object", required: ["capability", "status"], properties: { capability: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
-            observers: { type: "array", minItems: 1, items: { type: "object", required: ["observer", "observation_target", "status"], properties: { observer: { type: "string", minLength: 1 }, observation_target: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } },
-            controls: { type: "array", minItems: 1, items: { type: "object", required: ["control", "status"], properties: { control: { type: "string", minLength: 1 }, status: { enum: ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, provenance_ref: { type: "string", minLength: 1 } }, additionalProperties: false } }
-          }, additionalProperties: false },
-          post_state: { type: "object", required: ["state", "evidence_ref", "support_review"], properties: { state: { type: "string", minLength: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false },
-          cleanup: { oneOf: [
-            { type: "object", required: ["required", "steps", "evidence_ref", "support_review"], properties: { required: { const: true }, steps: { type: "array", items: { type: "string" }, minItems: 1 }, evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false },
-            { type: "object", required: ["required", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"], properties: { required: { const: false }, no_cleanup_reason: { type: "string", minLength: 1 }, no_cleanup_evidence_ref: { type: "string", minLength: 1 }, support_review: { enum: ["supported", "contradicted", "uncertain"] } }, additionalProperties: false }
-          ] },
-          evidence_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
-          temporary_assumption: { type: "object", required: ["claim_id", "invalidation_condition"], properties: { claim_id: { type: "string", minLength: 1 }, invalidation_condition: { type: "string", minLength: 1 } }, additionalProperties: false },
-          execution_signature: { type: "object", required: ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], properties: { role: { type: "string", minLength: 1 }, precondition_state: { type: "string", minLength: 1 }, data_partition: { type: "string", minLength: 1 }, action_path: { type: "array", items: { type: "string" }, minItems: 1 }, oracle_refs: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true } }, additionalProperties: false }
+          case_id: {
+            type: "string",
+            minLength: 1
+          },
+          title: {
+            type: "string",
+            minLength: 1
+          },
+          scope: {
+            type: "string",
+            minLength: 1
+          },
+          risk: {
+            enum: [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          role: {
+            type: "object",
+            required: [
+              "value",
+              "evidence_ref",
+              "support_review"
+            ],
+            properties: {
+              value: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                enum: [
+                  "supported",
+                  "contradicted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          fact_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          obligation_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          source_claim_ids: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            uniqueItems: true
+          },
+          preconditions: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "condition",
+                "reachable_from",
+                "source_claim_ids",
+                "evidence_ref",
+                "support_review",
+                "setup"
+              ],
+              properties: {
+                condition: {
+                  type: "string",
+                  minLength: 1
+                },
+                reachable_from: {
+                  type: "string",
+                  minLength: 1
+                },
+                source_claim_ids: {
+                  type: "array",
+                  items: {
+                    type: "string"
+                  },
+                  minItems: 1,
+                  uniqueItems: true
+                },
+                evidence_ref: {
+                  type: "string",
+                  minLength: 1
+                },
+                support_review: {
+                  enum: [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                setup: {
+                  type: "object",
+                  properties: {
+                    resource_kind: {
+                      enum: [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    resource_ref: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    completion: {
+                      type: "object",
+                      properties: {
+                        subject_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        operator: {
+                          enum: [
+                            "equals",
+                            "contains",
+                            "matches",
+                            "within"
+                          ]
+                        },
+                        operand: {
+                          oneOf: [
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "string"
+                                },
+                                value: {
+                                  type: "string"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "number"
+                                },
+                                value: {
+                                  type: "number"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "boolean"
+                                },
+                                value: {
+                                  type: "boolean"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                type: {
+                                  const: "null"
+                                },
+                                value: {
+                                  type: "null"
+                                }
+                              },
+                              required: [
+                                "type",
+                                "value"
+                              ],
+                              additionalProperties: false
+                            }
+                          ]
+                        }
+                      },
+                      required: [
+                        "subject_ref",
+                        "operator",
+                        "operand"
+                      ],
+                      additionalProperties: false
+                    },
+                    mutation_effects: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      uniqueItems: true
+                    }
+                  },
+                  required: [
+                    "resource_kind",
+                    "resource_ref",
+                    "completion",
+                    "mutation_effects"
+                  ],
+                  additionalProperties: false
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          data: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "name",
+                "value",
+                "provenance",
+                "value_origin",
+                "support_review",
+                "partition_id"
+              ],
+              properties: {
+                name: {
+                  type: "string",
+                  minLength: 1
+                },
+                value: {
+                  type: "string",
+                  minLength: 1
+                },
+                provenance: {
+                  oneOf: [
+                    {
+                      type: "object",
+                      required: [
+                        "type",
+                        "ref"
+                      ],
+                      properties: {
+                        type: {
+                          const: "evidence"
+                        },
+                        ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    },
+                    {
+                      type: "object",
+                      required: [
+                        "type",
+                        "ref"
+                      ],
+                      properties: {
+                        type: {
+                          const: "derivation"
+                        },
+                        ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  ]
+                },
+                value_origin: {
+                  enum: [
+                    "requirement",
+                    "source_description",
+                    "example",
+                    "derived",
+                    "temporary_assumption"
+                  ]
+                },
+                support_review: {
+                  enum: [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                partition_id: {
+                  type: "string",
+                  minLength: 1
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          steps: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              required: [
+                "step_id",
+                "action",
+                "action_evidence_ref",
+                "support_review",
+                "expectations",
+                "operation_id"
+              ],
+              properties: {
+                step_id: {
+                  type: "string",
+                  minLength: 1
+                },
+                action: {
+                  type: "string",
+                  minLength: 1
+                },
+                action_evidence_ref: {
+                  type: "string",
+                  minLength: 1
+                },
+                support_review: {
+                  enum: [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                expectations: {
+                  type: "array",
+                  minItems: 1,
+                  items: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        required: [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "closes_obligation_id",
+                          "oracle_evidence_refs"
+                        ],
+                        properties: {
+                          kind: {
+                            const: "obligation-oracle"
+                          },
+                          expectation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          business_assertion: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          preceding_action_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observer: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_surface: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_target: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle: {
+                            oneOf: [
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "value"
+                                  },
+                                  expected_value: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "state"
+                                  },
+                                  expected_state: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "event"
+                                  },
+                                  expected_event: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "side-effect"
+                                  },
+                                  expected_side_effect: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              }
+                            ]
+                          },
+                          evidence_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          support_review: {
+                            enum: [
+                              "supported",
+                              "contradicted",
+                              "uncertain"
+                            ]
+                          },
+                          closes_obligation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle_evidence_refs: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          },
+                          observer_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          target_ref: {
+                            type: "string",
+                            minLength: 1
+                          }
+                        },
+                        additionalProperties: false
+                      },
+                      {
+                        type: "object",
+                        required: [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "oracle_evidence_refs"
+                        ],
+                        properties: {
+                          kind: {
+                            const: "auxiliary"
+                          },
+                          expectation_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          business_assertion: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          preceding_action_id: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observer: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_surface: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          observation_target: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          oracle: {
+                            oneOf: [
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "value"
+                                  },
+                                  expected_value: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "state"
+                                  },
+                                  expected_state: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "event"
+                                  },
+                                  expected_event: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              },
+                              {
+                                type: "object",
+                                required: [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                properties: {
+                                  type: {
+                                    const: "side-effect"
+                                  },
+                                  expected_side_effect: {
+                                    type: "string",
+                                    minLength: 1
+                                  },
+                                  comparison: {
+                                    enum: [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  tolerance: {
+                                    type: "number"
+                                  },
+                                  window: {
+                                    type: "string"
+                                  },
+                                  assertion: {
+                                    type: "object",
+                                    properties: {
+                                      subject_ref: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      operator: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      operand: {
+                                        oneOf: [
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "string"
+                                              },
+                                              value: {
+                                                type: "string"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "number"
+                                              },
+                                              value: {
+                                                type: "number"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "boolean"
+                                              },
+                                              value: {
+                                                type: "boolean"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          },
+                                          {
+                                            type: "object",
+                                            properties: {
+                                              type: {
+                                                const: "null"
+                                              },
+                                              value: {
+                                                type: "null"
+                                              }
+                                            },
+                                            required: [
+                                              "type",
+                                              "value"
+                                            ],
+                                            additionalProperties: false
+                                          }
+                                        ]
+                                      },
+                                      surface: {
+                                        type: "string",
+                                        minLength: 1,
+                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    required: [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    additionalProperties: false
+                                  }
+                                },
+                                additionalProperties: false
+                              }
+                            ]
+                          },
+                          evidence_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          support_review: {
+                            enum: [
+                              "supported",
+                              "contradicted",
+                              "uncertain"
+                            ]
+                          },
+                          oracle_evidence_refs: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          },
+                          observer_ref: {
+                            type: "string",
+                            minLength: 1
+                          },
+                          target_ref: {
+                            type: "string",
+                            minLength: 1
+                          }
+                        },
+                        additionalProperties: false
+                      }
+                    ]
+                  }
+                },
+                operation_id: {
+                  type: "string",
+                  minLength: 1
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          testability_profile: {
+            type: "object",
+            required: [
+              "capabilities",
+              "observers",
+              "controls",
+              "setup_resources"
+            ],
+            properties: {
+              capabilities: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "capability",
+                    "status"
+                  ],
+                  properties: {
+                    capability: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    capability_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              observers: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "observer",
+                    "observation_target",
+                    "status",
+                    "subject_ref",
+                    "surface_id"
+                  ],
+                  properties: {
+                    observer: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    observation_target: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    observer_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    target_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    subject_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    surface_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              controls: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "control",
+                    "status"
+                  ],
+                  properties: {
+                    control: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    status: {
+                      enum: [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    provenance_ref: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              setup_resources: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  properties: {
+                    resource_id: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    kind: {
+                      enum: [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    locator: {
+                      type: "string",
+                      pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
+                    },
+                    evidence_ref: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    }
+                  },
+                  required: [
+                    "resource_id",
+                    "kind",
+                    "locator",
+                    "evidence_ref"
+                  ],
+                  additionalProperties: false
+                }
+              }
+            },
+            additionalProperties: false
+          },
+          post_state: {
+            type: "object",
+            required: [
+              "state",
+              "evidence_ref",
+              "support_review"
+            ],
+            properties: {
+              state: {
+                type: "string",
+                minLength: 1
+              },
+              evidence_ref: {
+                type: "string",
+                minLength: 1
+              },
+              support_review: {
+                enum: [
+                  "supported",
+                  "contradicted",
+                  "uncertain"
+                ]
+              }
+            },
+            additionalProperties: false
+          },
+          cleanup: {
+            oneOf: [
+              {
+                type: "object",
+                required: [
+                  "required",
+                  "steps",
+                  "evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                properties: {
+                  required: {
+                    const: true
+                  },
+                  steps: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1
+                  },
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    enum: [
+                      "supported",
+                      "contradicted",
+                      "uncertain"
+                    ]
+                  },
+                  resolved_effects: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                required: [
+                  "required",
+                  "no_cleanup_reason",
+                  "no_cleanup_evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                properties: {
+                  required: {
+                    const: false
+                  },
+                  no_cleanup_reason: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  no_cleanup_evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    enum: [
+                      "supported",
+                      "contradicted",
+                      "uncertain"
+                    ]
+                  },
+                  resolved_effects: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              }
+            ]
+          },
+          evidence_refs: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            minItems: 1,
+            uniqueItems: true
+          },
+          temporary_assumption: {
+            type: "object",
+            required: [
+              "claim_id",
+              "invalidation_condition"
+            ],
+            properties: {
+              claim_id: {
+                type: "string",
+                minLength: 1
+              },
+              invalidation_condition: {
+                type: "string",
+                minLength: 1
+              }
+            },
+            additionalProperties: false
+          },
+          execution_signature: {
+            type: "object",
+            required: [
+              "role",
+              "precondition_state",
+              "data_partition",
+              "action_path",
+              "oracle_refs"
+            ],
+            properties: {
+              role: {
+                type: "string",
+                minLength: 1
+              },
+              precondition_state: {
+                type: "string",
+                minLength: 1
+              },
+              data_partition: {
+                type: "string",
+                minLength: 1
+              },
+              action_path: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1
+              },
+              oracle_refs: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          },
+          scenario: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  operation_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  operation_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  partition_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  subject_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  intent: {
+                    const: "behavior"
+                  }
+                },
+                required: [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent"
+                ],
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                properties: {
+                  operation_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  operation_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  partition_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  subject_ref: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  intent: {
+                    const: "compatibility"
+                  },
+                  compatibility: {
+                    type: "object",
+                    properties: {
+                      baseline_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      dimensions: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        minItems: 1,
+                        uniqueItems: true
+                      }
+                    },
+                    required: [
+                      "baseline_ref",
+                      "dimensions"
+                    ],
+                    additionalProperties: false
+                  }
+                },
+                required: [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent",
+                  "compatibility"
+                ],
+                additionalProperties: false
+              }
+            ]
+          },
+          risk_basis: {
+            type: "object",
+            properties: {
+              impact: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              likelihood: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              exposure: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              }
+            },
+            required: [
+              "impact",
+              "likelihood",
+              "exposure"
+            ],
+            additionalProperties: false
+          },
+          execution_effects: {
+            type: "array",
+            items: {
+              type: "string",
+              minLength: 1,
+              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+            },
+            uniqueItems: true
+          }
         },
         additionalProperties: false
       }
     },
-    blocked: { type: "array", items: { type: "object", required: ["obligation_id", "root_issue_id", "subject", "reason", "scope", "recovery", "risk"], properties: { obligation_id: { type: "string", minLength: 1 }, root_issue_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, reason: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, recovery: { type: "object", required: ["missing_type", "required_material", "question"], properties: { missing_type: { type: "string", minLength: 1 }, required_material: { type: "string", minLength: 1 }, question: { type: "string", minLength: 1 } }, additionalProperties: false } }, additionalProperties: false } },
-    exploratory: { type: "array", items: { type: "object", required: ["exploratory_id", "title", "scope", "risk", "reason"], properties: { exploratory_id: { type: "string", minLength: 1 }, title: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, risk: { enum: ["critical", "high", "medium", "low"] }, reason: { type: "string", minLength: 1 } }, additionalProperties: false } },
-    coverage: { type: "object", required: ["requirements", "formal", "executable", "expert_recall", "not_applicable"], properties: {
-      requirements: { type: "object", required: ["total", "accounted", "entries"], properties: { total: { type: "integer", minimum: 0 }, accounted: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["fact_id", "status"], properties: { fact_id: { type: "string", minLength: 1 }, status: { enum: ["covered", "blocked", "not_applicable"] } }, additionalProperties: false } } }, additionalProperties: false },
-      formal: { type: "object", required: ["total", "covered", "entries"], properties: { total: { type: "integer", minimum: 0 }, covered: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["obligation_id", "status"], properties: { obligation_id: { type: "string", minLength: 1 }, status: { enum: ["grounded", "conditional", "blocked", "not_applicable"] } }, additionalProperties: false } } }, additionalProperties: false },
-      executable: { type: "object", required: ["total", "grounded", "entries"], properties: { total: { type: "integer", minimum: 0 }, grounded: { type: "integer", minimum: 0 }, entries: { type: "array", items: { type: "object", required: ["obligation_id", "case_id"], properties: { obligation_id: { type: "string", minLength: 1 }, case_id: { type: "string", minLength: 1 } }, additionalProperties: false } } }, additionalProperties: false },
-      expert_recall: { type: "object", required: ["status", "limits"], properties: { status: { const: "benchmark_only" }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false },
-      not_applicable: { type: "array", items: { oneOf: [
-        { type: "object", required: ["subject_kind", "obligation_id", "subject", "exclusion_claim_id", "scope", "support_review", "reason"], properties: { subject_kind: { const: "formal_test_point" }, obligation_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" }, reason: { type: "string", pattern: "\\S" } }, additionalProperties: false },
-        { type: "object", required: ["subject_kind", "fact_id", "subject", "exclusion_claim_id", "scope", "support_review", "reason"], properties: { subject_kind: { const: "requirement_fact" }, fact_id: { type: "string", minLength: 1 }, subject: { type: "string", pattern: "\\S" }, exclusion_claim_id: { type: "string", minLength: 1 }, scope: { type: "string", minLength: 1 }, support_review: { const: "supported" }, reason: { type: "string", pattern: "\\S" } }, additionalProperties: false }
-      ] } }
-    }, additionalProperties: false },
-    quality: { type: "object", required: ["delivery_status", "compiler_version", "schema_version", "lineage", "limits"], properties: { delivery_status: { enum: ["no_applicable_formal_test_points", "no_deterministic_cases", "critical_gaps", "executable_subset_ready"] }, compiler_version: { type: "string", minLength: 1 }, schema_version: { const: "2.1.0" }, lineage: { type: "object", required: ["semantic_source_digest", "evidence_semantic_digest", "behavior_views_semantic_digest", "test_obligations_semantic_digest", "case_drafts_semantic_digest"], properties: { semantic_source_digest: { $ref: "#/$defs/sha256" }, evidence_semantic_digest: { $ref: "#/$defs/sha256" }, behavior_views_semantic_digest: { $ref: "#/$defs/sha256" }, test_obligations_semantic_digest: { $ref: "#/$defs/sha256" }, case_drafts_semantic_digest: { $ref: "#/$defs/sha256" } }, additionalProperties: false }, limits: { type: "array", items: { type: "string" }, minItems: 1 } }, additionalProperties: false }
+    blocked: {
+      type: "array",
+      items: {
+        type: "object",
+        required: [
+          "obligation_id",
+          "root_issue_id",
+          "blocking_roots",
+          "subject",
+          "reason",
+          "scope",
+          "recovery",
+          "risk"
+        ],
+        properties: {
+          blocking_roots: {
+            type: "array",
+            minItems: 1,
+            uniqueItems: true,
+            items: {
+              type: "object",
+              required: ["root_issue_id", "recovery"],
+              properties: {
+                root_issue_id: { type: "string", minLength: 1 },
+                recovery: {
+                  type: "object",
+                  required: ["missing_type", "required_material", "question"],
+                  properties: {
+                    missing_type: { type: "string", minLength: 1 },
+                    required_material: { type: "string", minLength: 1 },
+                    question: { type: "string", minLength: 1 }
+                  },
+                  additionalProperties: false
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          obligation_id: {
+            type: "string",
+            minLength: 1
+          },
+          root_issue_id: {
+            type: "string",
+            minLength: 1
+          },
+          subject: {
+            type: "string",
+            pattern: "\\S"
+          },
+          reason: {
+            type: "string",
+            minLength: 1
+          },
+          scope: {
+            type: "string",
+            minLength: 1
+          },
+          risk: {
+            enum: [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          recovery: {
+            type: "object",
+            required: [
+              "missing_type",
+              "required_material",
+              "question"
+            ],
+            properties: {
+              missing_type: {
+                type: "string",
+                minLength: 1
+              },
+              required_material: {
+                type: "string",
+                minLength: 1
+              },
+              question: {
+                type: "string",
+                minLength: 1
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        additionalProperties: false
+      }
+    },
+    exploratory: {
+      type: "array",
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: [
+              "exploratory_id",
+              "title",
+              "scope",
+              "risk",
+              "reason"
+            ],
+            properties: {
+              exploratory_id: {
+                type: "string",
+                minLength: 1
+              },
+              title: {
+                type: "string",
+                minLength: 1
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              reason: {
+                type: "string",
+                minLength: 1
+              }
+            },
+            additionalProperties: false
+          },
+          {
+            type: "object",
+            properties: {
+              exploratory_id: {
+                type: "string",
+                minLength: 1,
+                pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+              },
+              title: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              scope: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              origin: {
+                const: "heuristic"
+              },
+              category: {
+                enum: [
+                  "boundary",
+                  "concurrency",
+                  "failure",
+                  "degradation",
+                  "security",
+                  "usability"
+                ]
+              },
+              hypothesis: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              rationale: {
+                type: "string",
+                minLength: 1,
+                pattern: "\\S"
+              },
+              reason: {
+                type: "string",
+                minLength: 1
+              },
+              runner_eligible: {
+                const: false
+              }
+            },
+            required: [
+              "exploratory_id",
+              "title",
+              "scope",
+              "risk",
+              "origin",
+              "category",
+              "hypothesis",
+              "rationale",
+              "reason",
+              "runner_eligible"
+            ],
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    coverage: {
+      type: "object",
+      required: [
+        "requirements",
+        "formal",
+        "executable",
+        "expert_recall",
+        "not_applicable"
+      ],
+      properties: {
+        requirements: {
+          type: "object",
+          required: [
+            "total",
+            "accounted",
+            "entries"
+          ],
+          properties: {
+            total: {
+              type: "integer",
+              minimum: 0
+            },
+            accounted: {
+              type: "integer",
+              minimum: 0
+            },
+            entries: {
+              type: "array",
+              items: {
+                type: "object",
+                required: [
+                  "fact_id",
+                  "status"
+                ],
+                properties: {
+                  fact_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  status: {
+                    enum: [
+                      "covered",
+                      "blocked",
+                      "not_applicable"
+                    ]
+                  }
+                },
+                additionalProperties: false
+              }
+            }
+          },
+          additionalProperties: false
+        },
+        formal: {
+          type: "object",
+          required: [
+            "total",
+            "covered",
+            "entries"
+          ],
+          properties: {
+            total: {
+              type: "integer",
+              minimum: 0
+            },
+            covered: {
+              type: "integer",
+              minimum: 0
+            },
+            entries: {
+              type: "array",
+              items: {
+                type: "object",
+                required: [
+                  "obligation_id",
+                  "status"
+                ],
+                properties: {
+                  obligation_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  status: {
+                    enum: [
+                      "grounded",
+                      "conditional",
+                      "blocked",
+                      "not_applicable"
+                    ]
+                  }
+                },
+                additionalProperties: false
+              }
+            }
+          },
+          additionalProperties: false
+        },
+        executable: {
+          type: "object",
+          required: [
+            "total",
+            "grounded",
+            "entries"
+          ],
+          properties: {
+            total: {
+              type: "integer",
+              minimum: 0
+            },
+            grounded: {
+              type: "integer",
+              minimum: 0
+            },
+            entries: {
+              type: "array",
+              items: {
+                type: "object",
+                required: [
+                  "obligation_id",
+                  "case_id"
+                ],
+                properties: {
+                  obligation_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  case_id: {
+                    type: "string",
+                    minLength: 1
+                  }
+                },
+                additionalProperties: false
+              }
+            }
+          },
+          additionalProperties: false
+        },
+        expert_recall: {
+          type: "object",
+          required: [
+            "status",
+            "limits"
+          ],
+          properties: {
+            status: {
+              const: "benchmark_only"
+            },
+            limits: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              minItems: 1
+            }
+          },
+          additionalProperties: false
+        },
+        not_applicable: {
+          type: "array",
+          items: {
+            oneOf: [
+              {
+                type: "object",
+                required: [
+                  "subject_kind",
+                  "obligation_id",
+                  "subject",
+                  "exclusion_claim_id",
+                  "scope",
+                  "support_review",
+                  "reason"
+                ],
+                properties: {
+                  subject_kind: {
+                    const: "formal_test_point"
+                  },
+                  obligation_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  subject: {
+                    type: "string",
+                    pattern: "\\S"
+                  },
+                  exclusion_claim_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  scope: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    const: "supported"
+                  },
+                  reason: {
+                    type: "string",
+                    pattern: "\\S"
+                  }
+                },
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                required: [
+                  "subject_kind",
+                  "fact_id",
+                  "subject",
+                  "exclusion_claim_id",
+                  "scope",
+                  "support_review",
+                  "reason"
+                ],
+                properties: {
+                  subject_kind: {
+                    const: "requirement_fact"
+                  },
+                  fact_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  subject: {
+                    type: "string",
+                    pattern: "\\S"
+                  },
+                  exclusion_claim_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  scope: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    const: "supported"
+                  },
+                  reason: {
+                    type: "string",
+                    pattern: "\\S"
+                  }
+                },
+                additionalProperties: false
+              }
+            ]
+          }
+        }
+      },
+      additionalProperties: false
+    },
+    quality: {
+      type: "object",
+      required: [
+        "delivery_status",
+        "compiler_version",
+        "schema_version",
+        "lineage",
+        "limits"
+      ],
+      properties: {
+        delivery_status: {
+          enum: [
+            "no_applicable_formal_test_points",
+            "no_deterministic_cases",
+            "critical_gaps",
+            "executable_subset_ready"
+          ]
+        },
+        compiler_version: {
+          type: "string",
+          minLength: 1
+        },
+        schema_version: {
+          const: "3.0.0"
+        },
+        lineage: {
+          type: "object",
+          required: [
+            "semantic_source_digest",
+            "evidence_semantic_digest",
+            "behavior_views_semantic_digest",
+            "test_obligations_semantic_digest",
+            "case_drafts_semantic_digest"
+          ],
+          properties: {
+            semantic_source_digest: {
+              $ref: "#/$defs/sha256"
+            },
+            evidence_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            },
+            behavior_views_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            },
+            test_obligations_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            },
+            case_drafts_semantic_digest: {
+              $ref: "#/$defs/sha256"
+            }
+          },
+          additionalProperties: false
+        },
+        limits: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          minItems: 1
+        }
+      },
+      additionalProperties: false
+    },
+    output_language: {
+      enum: [
+        "zh-CN",
+        "en"
+      ]
+    }
   },
   additionalProperties: false
 };
@@ -5794,7 +15449,7 @@ var test_obligations_schema_default = {
   type: "object",
   required: ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   properties: {
-    schema_version: { const: "2.1.0" },
+    schema_version: { const: "3.0.0" },
     source_revision: { type: "integer", minimum: 0 },
     obligations: {
       type: "array",
@@ -5802,11 +15457,13 @@ var test_obligations_schema_default = {
         oneOf: [
           {
             type: "object",
-            required: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"],
+            required: ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "primary_operation_refs", "scenario_partition_ref", "required_oracle_refs", "required_capabilities"],
             properties: {
               obligation_id: { type: "string", minLength: 1 },
               kind: { enum: ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] },
               caseable: { const: true },
+              primary_operation_refs: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, uniqueItems: true },
+              scenario_partition_ref: { type: "string", minLength: 1 },
               risk: { enum: ["critical", "high", "medium", "low"] },
               scope: { type: "string", minLength: 1 },
               source_claim_ids: { type: "array", items: { type: "string" }, minItems: 1, uniqueItems: true },
@@ -5890,395 +15547,6 @@ var test_obligations_schema_default = {
   },
   additionalProperties: false
 };
-
-// src/contracts.mjs
-var REPLY_STATUS = Object.freeze([
-  "need_artifact",
-  "need_user_answers",
-  "need_revision",
-  "finished",
-  "fatal"
-]);
-var DIAGNOSTIC_CATEGORY = Object.freeze([
-  "schema",
-  "reference",
-  "traceability",
-  "coverage",
-  "classification"
-]);
-var STABLE_ID_COLLECTIONS = Object.freeze([
-  Object.freeze({ path: Object.freeze(["sources"]), id: "source_id" }),
-  Object.freeze({ path: Object.freeze(["locators"]), id: "locator_id" }),
-  Object.freeze({ path: Object.freeze(["source_policy", "rules"]), id: "rule_id" }),
-  Object.freeze({ path: Object.freeze(["decision_records"]), id: "decision_id" }),
-  Object.freeze({ path: Object.freeze(["clarification_events"]), id: "event_id" }),
-  Object.freeze({ path: Object.freeze(["claims"]), id: "claim_id" }),
-  Object.freeze({ path: Object.freeze(["fact_ledger"]), id: "fact_id" }),
-  Object.freeze({ path: Object.freeze(["views"]), id: "view_id" }),
-  Object.freeze({ path: Object.freeze(["views", "*", "elements"]), id: "element_id", namespace: "elements" }),
-  Object.freeze({ path: Object.freeze(["views", "*", "relations"]), id: "relation_id" }),
-  Object.freeze({ path: Object.freeze(["interaction_candidates"]), id: "candidate_id" }),
-  Object.freeze({ path: Object.freeze(["obligations"]), id: "obligation_id" }),
-  Object.freeze({ path: Object.freeze(["cases"]), id: "case_id", namespace: "cases" }),
-  Object.freeze({ path: Object.freeze(["cases", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
-  Object.freeze({ path: Object.freeze(["cases", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
-  Object.freeze({ path: Object.freeze(["exploratory_candidates"]), id: "exploratory_id" }),
-  Object.freeze({ path: Object.freeze(["root_issue_dispositions"]), id: "root_issue_id" }),
-  Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id", namespace: "bundle_cases" }),
-  Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id", namespace: "bundle_cases" }),
-  Object.freeze({ path: Object.freeze(["grounded", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
-  Object.freeze({ path: Object.freeze(["conditional", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
-  Object.freeze({ path: Object.freeze(["grounded", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
-  Object.freeze({ path: Object.freeze(["conditional", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
-  Object.freeze({ path: Object.freeze(["blockers"]), id: "root_issue_id", namespace: "reply_root_issues" }),
-  Object.freeze({ path: Object.freeze(["blocked"]), id: "obligation_id" }),
-  Object.freeze({ path: Object.freeze(["exploratory"]), id: "exploratory_id" })
-]);
-
-// src/schema-validator.mjs
-var supportedKeywords = /* @__PURE__ */ new Set([
-  "$schema",
-  "$id",
-  "$defs",
-  "$ref",
-  "type",
-  "required",
-  "properties",
-  "items",
-  "enum",
-  "const",
-  "oneOf",
-  "allOf",
-  "minItems",
-  "minLength",
-  "pattern",
-  "minimum",
-  "maximum",
-  "uniqueItems",
-  "additionalProperties"
-]);
-var supportedTypes = /* @__PURE__ */ new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
-var NATIVE_ARRAY_EVERY = Array.prototype.every;
-var NATIVE_ARRAY_FILTER3 = Array.prototype.filter;
-var NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
-var NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
-var NATIVE_ARRAY_JOIN2 = Array.prototype.join;
-var NATIVE_ARRAY_MAP3 = Array.prototype.map;
-var NATIVE_ARRAY_SLICE2 = Array.prototype.slice;
-var NATIVE_ARRAY_SOME2 = Array.prototype.some;
-var NATIVE_DEFINE_PROPERTY3 = Object.defineProperty;
-function everyArray(values, predicate) {
-  return (
-    /** @type {boolean} */
-    Reflect.apply(NATIVE_ARRAY_EVERY, values, [predicate])
-  );
-}
-function filterArray2(values, predicate) {
-  return (
-    /** @type {T[]} */
-    Reflect.apply(NATIVE_ARRAY_FILTER3, values, [predicate])
-  );
-}
-function flatMapArray(values, project) {
-  return (
-    /** @type {U[]} */
-    Reflect.apply(NATIVE_ARRAY_FLAT_MAP, values, [project])
-  );
-}
-function forEachArray(values, visit) {
-  Reflect.apply(NATIVE_ARRAY_FOR_EACH, values, [visit]);
-}
-function joinArray2(values, separator) {
-  return (
-    /** @type {string} */
-    Reflect.apply(NATIVE_ARRAY_JOIN2, values, [separator])
-  );
-}
-function mapArray2(values, project) {
-  return (
-    /** @type {U[]} */
-    Reflect.apply(NATIVE_ARRAY_MAP3, values, [project])
-  );
-}
-function pushArray(values, ...items) {
-  for (let index = 0; index < items.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY3, Object, [
-    values,
-    String(values.length),
-    { value: items[index], writable: true, enumerable: true, configurable: true }
-  ]);
-  return values.length;
-}
-function sliceArray(values, start, end) {
-  return (
-    /** @type {T[]} */
-    Reflect.apply(NATIVE_ARRAY_SLICE2, values, end === void 0 ? [start] : [start, end])
-  );
-}
-function someArray(values, predicate) {
-  return (
-    /** @type {boolean} */
-    Reflect.apply(NATIVE_ARRAY_SOME2, values, [predicate])
-  );
-}
-function isSchemaObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-function assertStringArray(value, keyword) {
-  if (!Array.isArray(value) || someArray(value, (item) => typeof item !== "string") || new Set(value).size !== value.length) {
-    throw new Error(`Schema ${keyword} must be an array of unique strings.`);
-  }
-}
-function diagnostic6(code2, path4, message) {
-  return { category: "schema", code: code2, path: path4, message };
-}
-function escapePointerSegment(segment) {
-  return segment.replaceAll("~", "~0").replaceAll("/", "~1");
-}
-function childPointer(path4, segment) {
-  return `${path4}/${escapePointerSegment(segment)}`;
-}
-function assertSupportedSchema(schema) {
-  if (!isSchemaObject(schema)) {
-    throw new Error("Schema must be an object.");
-  }
-  for (const [key, value] of Object.entries(schema)) {
-    if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
-    if (key === "$schema" || key === "$id" || key === "pattern" || key === "$ref") {
-      if (typeof value !== "string") throw new Error(`Schema ${key} must be a string.`);
-      if (key === "pattern") {
-        try {
-          new RegExp(value);
-        } catch {
-          throw new Error("Schema pattern must be a valid regular expression.");
-        }
-      }
-      if (key === "$ref" && !value.startsWith("#/$defs/")) throw new Error("Schema $ref must be a local $defs reference.");
-    } else if (key === "$defs") {
-      if (!isSchemaObject(value)) throw new Error("Schema $defs must be an object.");
-      for (const child of Object.values(value)) assertSupportedSchema(child);
-    } else if (key === "type") {
-      const types = Array.isArray(value) ? value : [value];
-      if (!types.length || someArray(types, (item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
-    } else if (key === "required") {
-      assertStringArray(value, "required");
-    } else if (key === "properties") {
-      if (!isSchemaObject(value)) throw new Error("Schema properties must be an object.");
-      for (const child of Object.values(value)) assertSupportedSchema(child);
-    } else if (key === "items") {
-      assertSupportedSchema(value);
-    } else if (key === "oneOf" || key === "allOf") {
-      if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
-      for (const child of value) assertSupportedSchema(child);
-    } else if (key === "enum") {
-      if (!Array.isArray(value) || value.length === 0 || new Set(mapArray2(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
-    } else if (key === "minItems" || key === "minLength") {
-      if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
-    } else if (key === "minimum" || key === "maximum") {
-      if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
-    } else if (key === "uniqueItems") {
-      if (typeof value !== "boolean") throw new Error("Schema uniqueItems must be boolean.");
-    } else if (key === "additionalProperties") {
-      if (typeof value !== "boolean" && !isSchemaObject(value)) throw new Error("Schema additionalProperties must be boolean or a schema object.");
-      if (isSchemaObject(value)) assertSupportedSchema(value);
-    }
-  }
-  if (typeof schema.minimum === "number" && typeof schema.maximum === "number" && schema.minimum > schema.maximum) throw new Error("Schema minimum must not exceed maximum.");
-}
-function validateAgainstSchema(value, schema) {
-  assertSupportedSchema(schema);
-  return validate(
-    value,
-    /** @type {Record<string, unknown>} */
-    schema,
-    "",
-    /** @type {Record<string, unknown>} */
-    schema
-  );
-}
-function resolveReference(root, reference) {
-  const segments = reference.slice(2).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"));
-  let current = root;
-  for (const segment of segments) {
-    if (!isSchemaObject(current) || !Object.hasOwn(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
-    current = current[segment];
-  }
-  if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
-  return current;
-}
-function validate(value, schema, path4, root) {
-  const diagnostics = [];
-  const pointer = path4 || "/";
-  if (typeof schema.$ref === "string") pushArray(
-    diagnostics,
-    ...validate(value, resolveReference(root, schema.$ref), path4, root)
-  );
-  if (schema.type && !matchesType(value, schema.type)) {
-    return [diagnostic6("TYPE_MISMATCH", pointer, `must be ${Array.isArray(schema.type) ? joinArray2(schema.type, " or ") : schema.type}`)];
-  }
-  if (Object.hasOwn(schema, "const") && canonicalStringify(value) !== canonicalStringify(schema.const)) {
-    pushArray(diagnostics, diagnostic6("CONST_MISMATCH", pointer, "must equal the schema constant"));
-  }
-  if (Array.isArray(schema.enum) && !someArray(schema.enum, (item) => canonicalStringify(item) === canonicalStringify(value))) {
-    pushArray(diagnostics, diagnostic6("ENUM_MISMATCH", pointer, "must be one of the allowed values"));
-  }
-  if (typeof value === "string") {
-    if (typeof schema.minLength === "number" && value.length < schema.minLength) pushArray(diagnostics, diagnostic6("MIN_LENGTH", pointer, "is shorter than the minimum length"));
-    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern).test(value)) pushArray(diagnostics, diagnostic6("PATTERN_MISMATCH", pointer, "does not match the required pattern"));
-  }
-  if (typeof value === "number") {
-    if (typeof schema.minimum === "number" && value < schema.minimum) pushArray(diagnostics, diagnostic6("MINIMUM", pointer, "is below the minimum"));
-    if (typeof schema.maximum === "number" && value > schema.maximum) pushArray(diagnostics, diagnostic6("MAXIMUM", pointer, "is above the maximum"));
-  }
-  if (Array.isArray(value)) {
-    if (typeof schema.minItems === "number" && value.length < schema.minItems) pushArray(diagnostics, diagnostic6("MIN_ITEMS", pointer, "has too few items"));
-    if (schema.uniqueItems === true) {
-      const seen = /* @__PURE__ */ new Set();
-      forEachArray(value, (item, index) => {
-        const key = canonicalStringify(item);
-        if (seen.has(key)) pushArray(diagnostics, diagnostic6("UNIQUE_ITEMS", `${path4}/${index}`, "must not contain duplicate items"));
-        seen.add(key);
-      });
-    }
-    if (schema.items && typeof schema.items === "object" && !Array.isArray(schema.items)) {
-      forEachArray(value, (item, index) => pushArray(diagnostics, ...validate(
-        item,
-        /** @type {Record<string, unknown>} */
-        schema.items,
-        `${path4}/${index}`,
-        root
-      )));
-    }
-  }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const object = (
-      /** @type {Record<string, unknown>} */
-      value
-    );
-    const properties = schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties) ? (
-      /** @type {Record<string, Record<string, unknown>>} */
-      schema.properties
-    ) : {};
-    if (Array.isArray(schema.required)) {
-      for (const key of schema.required) {
-        if (typeof key === "string" && !Object.hasOwn(object, key)) pushArray(diagnostics, diagnostic6("REQUIRED_FIELD_MISSING", childPointer(path4, key), "required field is missing"));
-      }
-    }
-    if (schema.additionalProperties === false) {
-      for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, diagnostic6("ADDITIONAL_PROPERTY", childPointer(path4, key), "additional properties are not allowed"));
-      }
-    } else if (schema.additionalProperties && typeof schema.additionalProperties === "object" && !Array.isArray(schema.additionalProperties)) {
-      for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, ...validate(
-          object[key],
-          /** @type {Record<string, unknown>} */
-          schema.additionalProperties,
-          childPointer(path4, key),
-          root
-        ));
-      }
-    }
-    for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path4, key), root));
-    }
-  }
-  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(
-    value,
-    /** @type {Record<string, unknown>} */
-    child,
-    path4,
-    root
-  ));
-  if (Array.isArray(schema.oneOf)) {
-    const variants = mapArray2(schema.oneOf, (child) => (
-      /** @type {Record<string, unknown>} */
-      child
-    ));
-    const matching = filterArray2(variants, (child) => validate(value, child, path4, root).length === 0);
-    if (matching.length !== 1) {
-      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child, root));
-      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path4, root));
-      else pushArray(diagnostics, diagnostic6("ONE_OF_MISMATCH", pointer, "must match exactly one schema variant"));
-    }
-  }
-  return diagnostics;
-}
-function matchesDiscriminator(value, schema, root) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  if (typeof schema.$ref === "string") return matchesDiscriminator(
-    value,
-    resolveReference(root, schema.$ref),
-    root
-  );
-  const properties = schema.properties;
-  if (!isSchemaObject(properties)) return false;
-  const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, "const") ? [[key, candidate]] : []);
-  return constants.length > 0 && everyArray(constants, ([key, candidate]) => canonicalStringify(
-    /** @type {Record<string, unknown>} */
-    value[key]
-  ) === canonicalStringify(candidate.const));
-}
-function matchesType(value, type) {
-  if (Array.isArray(type)) return someArray(type, (candidate) => matchesType(value, candidate));
-  if (type === "array") return Array.isArray(value);
-  if (type === "object") return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-  if (type === "integer") return typeof value === "number" && Number.isInteger(value);
-  if (type === "null") return value === null;
-  return typeof value === type;
-}
-function validateUniqueStableIds(artifact) {
-  if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) return [];
-  const object = (
-    /** @type {Record<string, unknown>} */
-    artifact
-  );
-  const diagnostics = [];
-  const seenByNamespace = /* @__PURE__ */ new Map();
-  for (
-    const { path: path4, id, namespace, scopeSegments } of
-    /** @type {any[]} */
-    STABLE_ID_COLLECTIONS
-  ) {
-    for (const { items, pointer } of findCollections(object, path4)) {
-      const pointerSegments = filterArray2(pointer.split("/"), Boolean);
-      const scopedPointer = typeof scopeSegments === "number" ? `/${joinArray2(sliceArray(pointerSegments, 0, -scopeSegments), "/")}` : "";
-      const namespaceKey = `${namespace ?? joinArray2(path4, "/")}${scopedPointer}`;
-      const seen = seenByNamespace.get(namespaceKey) ?? /* @__PURE__ */ new Set();
-      seenByNamespace.set(namespaceKey, seen);
-      forEachArray(items, (item, index) => {
-        if (!item || typeof item !== "object" || Array.isArray(item)) return;
-        const value = (
-          /** @type {Record<string, unknown>} */
-          item[id]
-        );
-        if (typeof value !== "string") return;
-        if (seen.has(value)) pushArray(diagnostics, diagnostic6("DUPLICATE_STABLE_ID", `${pointer}/${index}/${id}`, `duplicate stable ID "${value}"`));
-        seen.add(value);
-      });
-    }
-  }
-  return diagnostics;
-}
-function findCollections(value, segments, pointer = "") {
-  if (segments.length === 0) return Array.isArray(value) ? [{ items: value, pointer }] : [];
-  const [segment, ...rest] = segments;
-  if (segment === "*") {
-    if (!Array.isArray(value)) return [];
-    return flatMapArray(value, (item, index) => item && typeof item === "object" && !Array.isArray(item) ? findCollections(
-      /** @type {Record<string, unknown>} */
-      item,
-      rest,
-      `${pointer}/${index}`
-    ) : []);
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, segment)) return [];
-  return findCollections(
-    /** @type {Record<string, unknown>} */
-    value[segment],
-    rest,
-    `${pointer}/${segment}`
-  );
-}
 
 // src/coverage.mjs
 var CONTEXT_KEYS = [
@@ -6732,11 +16000,11 @@ function normalizeContext(submittedContext) {
     diagnostic7("schema", "CONTEXT_INVALID", "/", "Task 10 context must be a closed own-data record")
   ]);
   requireClosed(submittedContext, CONTEXT_KEYS, "", diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
-  if (submittedContext.schema_version !== "2.1.0") pushArray2(diagnostics, diagnostic7(
+  if (submittedContext.schema_version !== "3.0.0") pushArray2(diagnostics, diagnostic7(
     "schema",
     "SCHEMA_VERSION_INVALID",
     "/schema_version",
-    "Task 10 requires schema version 2.1.0"
+    "Task 10 requires schema version 3.0.0"
   ));
   if (!Number.isSafeInteger(submittedContext.source_revision) || Number(submittedContext.source_revision) < 0) pushArray2(diagnostics, diagnostic7(
     "schema",
@@ -6823,10 +16091,10 @@ function normalizeSemanticString2(value) {
   if (typeof value !== "string") return "";
   return value.normalize("NFC").trim().replace(/\s+/gu, " ");
 }
-function canonicalSetProjection2(entries) {
+function canonicalSetProjection2(entries2) {
   const byCanonicalValue = /* @__PURE__ */ new Map();
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
+  for (let index = 0; index < entries2.length; index += 1) {
+    const entry = entries2[index];
     byCanonicalValue.set(canonicalStringify(entry), entry);
   }
   const ordered = sortArray2([...byCanonicalValue], ([left], [right]) => compareCodePoints4(left, right));
@@ -6843,11 +16111,12 @@ function oracleSemanticId2(step, expectation) {
   ];
   return stableId("oracle", {
     action: normalizeSemanticString2(step.action),
-    observer: normalizeSemanticString2(expectation.observer),
-    observation_surface: normalizeSemanticString2(expectation.observation_surface),
-    observation_target: normalizeSemanticString2(expectation.observation_target),
+    observer: normalizeSemanticString2(expectation.observer_ref ?? expectation.observer),
+    observation_surface: isRecord3(oracle.assertion) ? oracle.assertion.surface : normalizeSemanticString2(expectation.observation_surface),
+    observation_target: normalizeSemanticString2(expectation.target_ref ?? expectation.observation_target),
     oracle: {
       type,
+      ...oracle.assertion === void 0 ? {} : { assertion: oracle.assertion },
       ...expectedField ? { [expectedField]: normalizeSemanticString2(oracle[expectedField]) } : {},
       comparison: normalizeSemanticString2(oracle.comparison),
       ...oracle.tolerance === void 0 ? {} : { tolerance: oracle.tolerance },
@@ -6860,13 +16129,15 @@ function derivedExecutionSignature(caseDraft) {
   const preconditionProjection = [];
   for (let index = 0; index < preconditions.length; index += 1) pushArray2(preconditionProjection, {
     condition: normalizeSemanticString2(preconditions[index].condition),
-    reachable_from: normalizeSemanticString2(preconditions[index].reachable_from)
+    reachable_from: normalizeSemanticString2(preconditions[index].reachable_from),
+    ...preconditions[index].setup === void 0 ? {} : { setup: preconditions[index].setup }
   });
   const data = records(caseDraft.data);
   const dataProjection = [];
   for (let index = 0; index < data.length; index += 1) pushArray2(dataProjection, {
     name: normalizeSemanticString2(data[index].name),
-    value: normalizeSemanticString2(data[index].value)
+    value: normalizeSemanticString2(data[index].value),
+    ...caseDraft.scenario === void 0 ? {} : { scenario: caseDraft.scenario }
   });
   const actionPath = [];
   const oracleRefs = /* @__PURE__ */ new Set();
@@ -7167,6 +16438,7 @@ function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption
     for (const capability of records(caseDraft.testability_profile.capabilities)) add(capability.provenance_ref);
     for (const observer of records(caseDraft.testability_profile.observers)) add(observer.provenance_ref);
     for (const control of records(caseDraft.testability_profile.controls)) add(control.provenance_ref);
+    for (const resource of records(caseDraft.testability_profile.setup_resources)) add(resource.evidence_ref);
   }
   if (isRecord3(caseDraft.post_state)) add(caseDraft.post_state.evidence_ref);
   if (isRecord3(caseDraft.cleanup)) {
@@ -7255,6 +16527,7 @@ function validateCaseAssumption(caseDraft, lane, obligations, factsById, graph, 
   ));
 }
 function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path4, diagnostics) {
+  for (const error of caseScenarioReferenceErrors(caseDraft, obligations)) pushArray2(diagnostics, { ...error, path: `${path4}${error.path}` });
   const allowedStatuses = lane === "grounded" ? /* @__PURE__ */ new Set(["provided", "verified"]) : /* @__PURE__ */ new Set(["provided", "verified", "approved-assumption"]);
   const steps = records(caseDraft.steps);
   for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
@@ -7336,13 +16609,13 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path4, 
   for (let capabilityIndex = 0; capabilityIndex < capabilities.length; capabilityIndex += 1) {
     const capability = capabilities[capabilityIndex];
     if (typeof capability.capability === "string" && allowedStatuses.has(String(capability.status ?? ""))) {
-      providedCapabilities.add(capability.capability);
+      providedCapabilities.add(typeof capability.capability_id === "string" ? capability.capability_id : capabilityLabel(capability.capability));
     }
   }
   for (let obligationIndex = 0; obligationIndex < obligations.length; obligationIndex += 1) {
     const obligation = obligations[obligationIndex];
     for (const required of strings(obligation.required_capabilities)) {
-      if (!providedCapabilities.has(required)) pushArray2(diagnostics, diagnostic7(
+      if (!providedCapabilities.has(required) && !providedCapabilities.has(capabilityLabel(required))) pushArray2(diagnostics, diagnostic7(
         "traceability",
         "CASE_REQUIRED_CAPABILITY_MISSING",
         `${path4}/obligation_ids/${pointerPart3(String(obligation.obligation_id ?? ""))}`,
@@ -7351,19 +16624,12 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path4, 
     }
   }
   const observers = records(profile.observers);
-  const observationTargetsByObserver = /* @__PURE__ */ new Map();
-  for (let observerIndex = 0; observerIndex < observers.length; observerIndex += 1) {
-    const observer = observers[observerIndex];
-    if (typeof observer.observer !== "string" || typeof observer.observation_target !== "string" || !allowedStatuses.has(String(observer.status ?? ""))) continue;
-    const targets = observationTargetsByObserver.get(observer.observer) ?? /* @__PURE__ */ new Set();
-    targets.add(observer.observation_target);
-    observationTargetsByObserver.set(observer.observer, targets);
-  }
   for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
     const expectations = records(steps[stepIndex].expectations);
     for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
       const expectation = expectations[expectationIndex];
-      if (!observationTargetsByObserver.get(String(expectation.observer ?? ""))?.has(String(expectation.observation_target ?? ""))) pushArray2(diagnostics, diagnostic7(
+      const resolvedObserver = resolveObserver(observers, expectation);
+      if (!resolvedObserver || !allowedStatuses.has(String(resolvedObserver.status))) pushArray2(diagnostics, diagnostic7(
         "traceability",
         "CASE_EXPECTATION_OBSERVER_MISSING",
         `${path4}/steps/${stepIndex}/expectations/${expectationIndex}`,
@@ -7850,7 +17116,7 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
   const retainedByObligationReason = /* @__PURE__ */ new Map();
   for (const entry of ledger) {
     const status = dispositionById.get(String(entry.root_issue_id ?? ""));
-    const target = entry.current === true ? currentByObligationReason : status === "suppressed_unknown" || status === "suppressed_deferred" || status === "open" ? retainedByObligationReason : null;
+    const target = entry.current === true ? currentByObligationReason : status === "suppressed_unknown" || status === "suppressed_deferred" || status === "open" && entry.answerable === true ? retainedByObligationReason : null;
     if (!target) continue;
     const reasons = strings(entry.reasons);
     const obligationIds = strings(entry.affected_obligation_ids);
@@ -7961,9 +17227,9 @@ function buildBundleTrusted(context) {
     }
   }
   for (const obligation of obligations) {
-    const id = String(obligation.obligation_id ?? "");
-    if (obligationsById.has(id)) pushArray2(diagnostics, diagnostic7("coverage", "FORMAL_TEST_POINT_DUPLICATE", `/obligations/${pointerPart3(id)}`, "formal Test Point IDs must be unique"));
-    else obligationsById.set(id, obligation);
+    const id2 = String(obligation.obligation_id ?? "");
+    if (obligationsById.has(id2)) pushArray2(diagnostics, diagnostic7("coverage", "FORMAL_TEST_POINT_DUPLICATE", `/obligations/${pointerPart3(id2)}`, "formal Test Point IDs must be unique"));
+    else obligationsById.set(id2, obligation);
   }
   const routesByFact = /* @__PURE__ */ new Map();
   for (const route of factRoutes) {
@@ -8135,7 +17401,7 @@ function buildBundleTrusted(context) {
   const pointsById = /* @__PURE__ */ new Map();
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index];
-    requireClosed(point, ["obligation_id", "evidence_level", "classification", "blocked_reason"], `/clarification/semantic_snapshot/formal_test_points/${index}`, diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
+    requireClosed(point, ["obligation_id", "evidence_level", "classification", "blocked_reason", ...point.root_issue_ids !== void 0 ? ["root_issue_ids"] : []], `/clarification/semantic_snapshot/formal_test_points/${index}`, diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
     const obligationId = typeof point.obligation_id === "string" ? point.obligation_id : "";
     const classification = typeof point.classification === "string" ? point.classification : "";
     pointsById.set(obligationId, point);
@@ -8204,6 +17470,7 @@ function buildBundleTrusted(context) {
   const duplicateCaseIds = /* @__PURE__ */ new Set();
   const seenCaseIds = /* @__PURE__ */ new Set();
   for (const caseDraft of executableCaseInput) {
+    for (const error of validateCaseSemantics(caseDraft)) pushArray2(diagnostics, error);
     const caseId = String(caseDraft.case_id ?? "");
     if (seenCaseIds.has(caseId)) duplicateCaseIds.add(caseId);
     else seenCaseIds.add(caseId);
@@ -8219,7 +17486,7 @@ function buildBundleTrusted(context) {
   }
   pushArray2(diagnostics, .../** @type {Diagnostic[]} */
   validateAgainstSchema({
-    schema_version: "2.1.0",
+    schema_version: "3.0.0",
     source_revision: normalized.sourceRevision,
     cases: executableCaseInput,
     obligation_dispositions: [],
@@ -8234,7 +17501,7 @@ function buildBundleTrusted(context) {
       lanes.add(lane);
       baseLanesByObligation.set(obligationId, lanes);
     }
-    const finalLanes = new Set(mapArray3(obligationIds, (id) => String(pointsById.get(id)?.classification ?? "unknown")));
+    const finalLanes = new Set(mapArray3(obligationIds, (id2) => String(pointsById.get(id2)?.classification ?? "unknown")));
     if (finalLanes.size === 1 && finalLanes.has(lane)) {
       validateCaseTraceability(
         caseDraft,
@@ -8265,29 +17532,29 @@ function buildBundleTrusted(context) {
   const duplicateBlockedIds = /* @__PURE__ */ new Set();
   const seenBlockedIds = /* @__PURE__ */ new Set();
   for (const item of blockedInput) {
-    const id = String(item.obligation_id ?? "");
-    if (seenBlockedIds.has(id)) duplicateBlockedIds.add(id);
-    else seenBlockedIds.add(id);
+    const id2 = String(item.obligation_id ?? "");
+    if (seenBlockedIds.has(id2)) duplicateBlockedIds.add(id2);
+    else seenBlockedIds.add(id2);
   }
   if (duplicateBlockedIds.size > 0) {
-    for (const id of sortArray2([...duplicateBlockedIds], compareCodePoints4)) pushArray2(diagnostics, diagnostic7(
+    for (const id2 of sortArray2([...duplicateBlockedIds], compareCodePoints4)) pushArray2(diagnostics, diagnostic7(
       "coverage",
       "FORMAL_DISPOSITION_DUPLICATE",
-      `/classification/blocked/${pointerPart3(id)}`,
+      `/classification/blocked/${pointerPart3(id2)}`,
       "Blocked disposition must be unique"
     ));
     throw new BundleReconciliationError(diagnostics);
   }
   const blockedInputById = /* @__PURE__ */ new Map();
   for (const item of blockedInput) {
-    const id = String(item.obligation_id ?? "");
-    requireClosed(item, ["obligation_id", "root_issue_id", "reason", "risk", "evidence_refs"], `/classification/blocked/${pointerPart3(id)}`, diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
-    canonicalStrings(item.evidence_refs, `/classification/blocked/${pointerPart3(id)}/evidence_refs`, diagnostics);
-    blockedInputById.set(id, item);
-    if (pointsById.get(id)?.classification !== "blocked") pushArray2(diagnostics, diagnostic7(
+    const id2 = String(item.obligation_id ?? "");
+    requireClosed(item, ["obligation_id", "root_issue_id", ...item.root_issue_ids !== void 0 ? ["root_issue_ids"] : [], "reason", "risk", "evidence_refs"], `/classification/blocked/${pointerPart3(id2)}`, diagnostics, "CONTEXT_PROPERTY_UNKNOWN");
+    canonicalStrings(item.evidence_refs, `/classification/blocked/${pointerPart3(id2)}/evidence_refs`, diagnostics);
+    blockedInputById.set(id2, item);
+    if (pointsById.get(id2)?.classification !== "blocked") pushArray2(diagnostics, diagnostic7(
       "traceability",
       "BLOCKED_DISPOSITION_MISMATCH",
-      `/classification/blocked/${pointerPart3(id)}`,
+      `/classification/blocked/${pointerPart3(id2)}`,
       "upstream Blocked disposition must remain Blocked"
     ));
   }
@@ -8367,36 +17634,54 @@ function buildBundleTrusted(context) {
     }
     const currentCandidates = rootLedger.currentByObligationReason.get(obligationId)?.get(reason) ?? [];
     const retainedCandidates = rootLedger.retainedByObligationReason.get(obligationId)?.get(reason) ?? [];
-    const candidates2 = currentCandidates.length > 0 ? currentCandidates : retainedCandidates;
-    if (candidates2.length !== 1) {
+    const candidates2 = sortArray2([...currentCandidates, ...retainedCandidates], (left, right) => compareCodePoints4(String(left.root_issue_id), String(right.root_issue_id)));
+    const actualIds = mapArray3(candidates2, (root) => String(root.root_issue_id));
+    const expectedIds = point.root_issue_ids ?? task8Blocker?.root_issue_ids ?? (task8Blocker ? [task8Blocker.root_issue_id] : actualIds.length === 1 ? actualIds : []);
+    if (task8Blocker && !someArray2(actualIds, (id2) => id2 === task8Blocker.root_issue_id)) pushArray2(diagnostics, diagnostic7(
+      "traceability",
+      "BLOCKED_ROOT_ID_MISMATCH",
+      `/classification/blocked/${pointerPart3(obligationId)}/root_issue_id`,
+      "Task 8 Blocked root identity must name an authoritative dependency"
+    ));
+    if (actualIds.length === 0 || canonicalStringify(actualIds) !== canonicalStringify(expectedIds)) {
       pushArray2(diagnostics, diagnostic7(
         "traceability",
         "BLOCKED_ROOT_TRACE_INVALID",
         `/blocked/${pointerPart3(obligationId)}`,
-        `Blocked formal Test Point requires exactly one root issue; found ${candidates2.length}`
+        "Blocked formal Test Point requires the exact complete authoritative root dependency set"
       ));
       continue;
     }
-    const root = candidates2[0];
-    if (task8Blocker && task8Blocker.root_issue_id !== root.root_issue_id) pushArray2(diagnostics, diagnostic7(
+    const currentIds = mapArray3(currentCandidates, (root) => String(root.root_issue_id));
+    sortArray2(currentIds, compareCodePoints4);
+    const task8ExpectedIds = currentIds.length > 0 ? currentIds : actualIds;
+    if (task8Blocker && (task8Blocker.root_issue_id !== task8ExpectedIds[0] || canonicalStringify(task8Blocker.root_issue_ids ?? [task8Blocker.root_issue_id]) !== canonicalStringify(task8ExpectedIds))) pushArray2(diagnostics, diagnostic7(
       "traceability",
       "BLOCKED_ROOT_ID_MISMATCH",
       `/classification/blocked/${pointerPart3(obligationId)}/root_issue_id`,
       "Task 8 Blocked root identity must equal the selected authoritative Task 9 owner"
     ));
-    const semanticRefs2 = strings(root.semantic_refs);
-    const missingType2 = typeof root.missing_type === "string" ? root.missing_type : "";
-    const question = typeof root.question === "string" ? root.question : "";
-    const risk = typeof obligation?.risk === "string" ? obligation.risk : "";
-    if (semanticRefs2.length === 0 || missingType2.trim().length === 0 || question.trim().length === 0 || !RISKS3.has(risk)) pushArray2(diagnostics, diagnostic7(
-      "traceability",
-      "BLOCKED_RECOVERY_INCOMPLETE",
-      `/blocked/${pointerPart3(obligationId)}/recovery`,
-      "Blocked root must provide missing type, material references, question, and formal risk"
-    ));
+    const blockingRoots = mapArray3(candidates2, (root) => {
+      const semanticRefs2 = strings(root.semantic_refs);
+      const missingType2 = typeof root.missing_type === "string" ? root.missing_type : "";
+      const question = typeof root.question === "string" ? root.question : "";
+      const risk = typeof obligation?.risk === "string" ? obligation.risk : "";
+      if (semanticRefs2.length === 0 || missingType2.trim().length === 0 || question.trim().length === 0 || !RISKS3.has(risk)) pushArray2(diagnostics, diagnostic7(
+        "traceability",
+        "BLOCKED_RECOVERY_INCOMPLETE",
+        `/blocked/${pointerPart3(obligationId)}/recovery`,
+        "Blocked root must provide missing type, material references, question, and formal risk"
+      ));
+      return { root_issue_id: String(root.root_issue_id), recovery: {
+        missing_type: missingType2,
+        required_material: joinArray3(sortArray2([...semanticRefs2], compareCodePoints4), ", "),
+        question
+      } };
+    });
     pushArray2(blocked, {
       obligation_id: obligationId,
-      root_issue_id: String(root.root_issue_id ?? ""),
+      root_issue_id: blockingRoots[0].root_issue_id,
+      blocking_roots: blockingRoots,
       subject: obligationBusinessSubject(
         obligation,
         factIdsByObligation,
@@ -8405,12 +17690,8 @@ function buildBundleTrusted(context) {
       ),
       reason,
       scope: String(obligation?.scope ?? ""),
-      recovery: {
-        missing_type: missingType2,
-        required_material: joinArray3(sortArray2([...semanticRefs2], compareCodePoints4), ", "),
-        question
-      },
-      risk
+      recovery: { ...blockingRoots[0].recovery },
+      risk: String(obligation?.risk ?? "")
     });
   }
   const naInput = records(normalized.classification.not_applicable);
@@ -8523,17 +17804,17 @@ function buildBundleTrusted(context) {
     });
   }
   for (const point of points) {
-    const id = String(point.obligation_id);
-    if ((point.classification === "grounded" || point.classification === "conditional") && !baseLanesByObligation.get(id)?.has(point.classification)) pushArray2(diagnostics, diagnostic7(
+    const id2 = String(point.obligation_id);
+    if ((point.classification === "grounded" || point.classification === "conditional") && !baseLanesByObligation.get(id2)?.has(point.classification)) pushArray2(diagnostics, diagnostic7(
       "traceability",
       "FORMAL_CASE_TRACE_MISSING",
-      `/formal/${pointerPart3(id)}`,
+      `/formal/${pointerPart3(id2)}`,
       "every executable formal Test Point must reference a Case in its final lane"
     ));
-    if (point.classification === "not_applicable" && !naById.has(id)) pushArray2(diagnostics, diagnostic7(
+    if (point.classification === "not_applicable" && !naById.has(id2)) pushArray2(diagnostics, diagnostic7(
       "coverage",
       "NOT_APPLICABLE_DISPOSITION_MISSING",
-      `/formal/${pointerPart3(id)}`,
+      `/formal/${pointerPart3(id2)}`,
       "NotApplicable formal Test Point requires its verified exclusion record"
     ));
   }
@@ -8586,6 +17867,10 @@ function buildBundleTrusted(context) {
   }
   for (const item of exploratoryInput) {
     const exploratoryId = String(item.exploratory_id ?? "");
+    if (item.origin === "heuristic") {
+      for (const error of validateAgainstSchema(item, heuristicSchema)) pushArray2(diagnostics, error);
+      continue;
+    }
     requireClosed(
       item,
       ["exploratory_id", "title", "scope", "risk", "source_claim_ids"],
@@ -8611,7 +17896,8 @@ function buildBundleTrusted(context) {
     title: String(item.title ?? ""),
     scope: String(item.scope ?? ""),
     risk: String(item.risk ?? ""),
-    reason: `Risk hypothesis outside formal Test Point coverage; evidence: ${joinArray3(sortArray2(strings(item.source_claim_ids), compareCodePoints4), ", ")}`
+    reason: item.origin === "heuristic" ? `Unsourced heuristic suggestion; ${String(item.category)}: ${String(item.hypothesis)}; rationale: ${String(item.rationale)}` : `Risk hypothesis outside formal Test Point coverage; evidence: ${joinArray3(sortArray2(strings(item.source_claim_ids), compareCodePoints4), ", ")}`,
+    ...item.origin === "heuristic" ? { origin: "heuristic", category: item.category, hypothesis: item.hypothesis, rationale: item.rationale, runner_eligible: false } : {}
   })), (left, right) => compareCodePoints4(left.exploratory_id, right.exploratory_id));
   if (!sameStrings(exploratoryIds, mapArray3(exploratory, (item) => item.exploratory_id))) pushArray2(diagnostics, diagnostic7(
     "traceability",
@@ -8652,14 +17938,14 @@ function buildBundleTrusted(context) {
     if (route?.route_type === "not_applicable") status = "not_applicable";
     else if (route?.route_type === "obligations") {
       const obligationIds = strings(route.obligation_ids);
-      const dispositions = mapArray3(obligationIds, (id) => String(pointsById.get(id)?.classification ?? "unknown"));
+      const dispositions = mapArray3(obligationIds, (id2) => String(pointsById.get(id2)?.classification ?? "unknown"));
       const executableRouteIds = filterArray3(
         obligationIds,
         (_id, index) => dispositions[index] === "grounded" || dispositions[index] === "conditional"
       );
-      const hasRoutedRequirementGap = someArray2(obligationIds, (id) => obligationsById.get(id)?.kind === "requirement-gap" && pointsById.get(id)?.classification === "blocked");
+      const hasRoutedRequirementGap = someArray2(obligationIds, (id2) => obligationsById.get(id2)?.kind === "requirement-gap" && pointsById.get(id2)?.classification === "blocked");
       if (hasRoutedRequirementGap) status = "blocked";
-      else if (executableRouteIds.length > 0 && everyArray2(executableRouteIds, (id) => sharesCase(factId, id))) status = "covered";
+      else if (executableRouteIds.length > 0 && everyArray2(executableRouteIds, (id2) => sharesCase(factId, id2))) status = "covered";
       else if (everyArray2(dispositions, (item) => item === "not_applicable")) status = "not_applicable";
       else if (executableRouteIds.length > 0) pushArray2(diagnostics, diagnostic7(
         "traceability",
@@ -8697,7 +17983,7 @@ function buildBundleTrusted(context) {
   ));
   if (diagnostics.length > 0) throw new BundleReconciliationError(diagnostics);
   const bundle = {
-    schema_version: "2.1.0",
+    schema_version: "3.0.0",
     source_revision: normalized.sourceRevision,
     grounded: sortArray2(grounded, (left, right) => compareCodePoints4(String(left.case_id), String(right.case_id))),
     conditional: sortArray2(conditional, (left, right) => compareCodePoints4(String(left.case_id), String(right.case_id))),
@@ -8713,7 +17999,7 @@ function buildBundleTrusted(context) {
     quality: {
       delivery_status: deliveryStatus,
       compiler_version: normalized.compilerVersion,
-      schema_version: "2.1.0",
+      schema_version: "3.0.0",
       lineage: normalized.lineage,
       limits: normalized.limits
     }
@@ -8848,12 +18134,12 @@ function allPresentedItems(presentation) {
   }
   return byKey;
 }
-function validPresentedRecord(record2, input, diagnostics, path4, optionCode, itemRefs = []) {
+function validPresentedRecord(record3, input, diagnostics, path4, optionCode, itemRefs = []) {
   const shown = input.currentPresentation;
   const groups = records2(shown?.groups);
   const groupIds = new Set(groups.map((group) => group.group_id));
-  const selectedIds = Array.isArray(record2.decision_group_ids) ? record2.decision_group_ids : [];
-  let valid = Boolean(shown) && record2.presentation_id === shown.presentation_id && selectedIds.length > 0 && selectedIds.every((id) => groupIds.has(id));
+  const selectedIds = Array.isArray(record3.decision_group_ids) ? record3.decision_group_ids : [];
+  let valid = Boolean(shown) && record3.presentation_id === shown.presentation_id && selectedIds.length > 0 && selectedIds.every((id2) => groupIds.has(id2));
   const selectedGroups = groups.filter((group) => selectedIds.includes(group.group_id));
   if (optionCode && !selectedGroups.every((group) => records2(group.allowed_options).some((option) => option.option_code === optionCode))) valid = false;
   const presented = new Set(selectedGroups.flatMap((group) => records2(group.item_refs).map(itemKey)));
@@ -8865,9 +18151,9 @@ function validPresentedRecord(record2, input, diagnostics, path4, optionCode, it
   ));
   return valid;
 }
-function selectedProposedChange(record2, input) {
+function selectedProposedChange(record3, input) {
   if (input.currentPresentation?.entry_context !== "post_ready_change") return null;
-  const selectedIds = Array.isArray(record2.decision_group_ids) ? record2.decision_group_ids.filter((id) => typeof id === "string") : [];
+  const selectedIds = Array.isArray(record3.decision_group_ids) ? record3.decision_group_ids.filter((id2) => typeof id2 === "string") : [];
   const selected = records2(input.currentPresentation?.groups).filter(
     (group) => selectedIds.includes(group.group_id)
   );
@@ -8909,7 +18195,7 @@ function validateSetEvent(event, input, itemsByKey, diagnostics, path4) {
     return false;
   }
   const groupIds = new Set(records2(presentation.groups).map((group) => group.group_id));
-  if (!Array.isArray(event.decision_group_ids) || event.decision_group_ids.length === 0 || event.decision_group_ids.some((id) => !groupIds.has(id))) {
+  if (!Array.isArray(event.decision_group_ids) || event.decision_group_ids.length === 0 || event.decision_group_ids.some((id2) => !groupIds.has(id2))) {
     diagnostics.push(diagnostic8("PRESENTATION_GROUP_INVALID", `${path4}/decision_group_ids`, "Decision group must be one of the displayed groups."));
     valid = false;
   }
@@ -9011,7 +18297,7 @@ function validReanalysis(event, input, itemsByKey, diagnostics, path4) {
     path4
   )) valid = false;
   const locatorIds = new Set(records2(input.sourcePack?.locators).map((locator) => locator.locator_id));
-  if (!Array.isArray(event.source_locator_ids) || event.source_locator_ids.length === 0 || event.source_locator_ids.some((id) => !locatorIds.has(id))) {
+  if (!Array.isArray(event.source_locator_ids) || event.source_locator_ids.length === 0 || event.source_locator_ids.some((id2) => !locatorIds.has(id2))) {
     diagnostics.push(diagnostic8(
       "REANALYSIS_LOCATOR_INVALID",
       `${path4}/source_locator_ids`,
@@ -9056,7 +18342,7 @@ function validExploratoryAdoption(decision, input, itemsByKey, diagnostics, path
   const item = itemsByKey.get(key);
   const presented = shown ? allPresentedItems(shown).get(key) : null;
   const groupIds = new Set(records2(shown?.groups).map((group) => group.group_id));
-  if (!shown || decision.presentation_id !== shown.presentation_id || !Array.isArray(decision.decision_group_ids) || decision.decision_group_ids.length === 0 || decision.decision_group_ids.some((id) => !groupIds.has(id))) valid = false;
+  if (!shown || decision.presentation_id !== shown.presentation_id || !Array.isArray(decision.decision_group_ids) || decision.decision_group_ids.length === 0 || decision.decision_group_ids.some((id2) => !groupIds.has(id2))) valid = false;
   if (!item || item.semantic_status !== "exploratory" || !presented || !decision.decision_group_ids.includes(presented.group.group_id) || decision.item_semantic_digest !== item.item_semantic_digest || decision.item_semantic_change_head_seq !== item.item_semantic_change_head_seq) {
     diagnostics.push(diagnostic8("ADOPTION_ITEM_VERSION_INVALID", path4, "Exploratory adoption must bind the current displayed risk version."));
     valid = false;
@@ -9075,8 +18361,8 @@ function validDecisionSupersession(decision, sourcePack, diagnostics, path4) {
   const temporaryForRoots = prior.filter((candidate) => candidate.disposition === "temporary" && (Array.isArray(candidate.root_issue_ids) ? candidate.root_issue_ids : []).some((root) => decisionRoots.includes(root)));
   const supplied = Array.isArray(decision.supersedes_decision_ids) ? decision.supersedes_decision_ids : [];
   let valid = true;
-  for (const id of supplied) {
-    const target = prior.find((candidate) => candidate.decision_id === id);
+  for (const id2 of supplied) {
+    const target = prior.find((candidate) => candidate.decision_id === id2);
     if (!target || target.disposition !== "temporary") {
       diagnostics.push(diagnostic8("DECISION_SUPERSESSION_INVALID", `${path4}/supersedes_decision_ids`, "A final Decision may supersede only a retained temporary Decision."));
       valid = false;
@@ -9522,28 +18808,28 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
   for (const entry of records3(semanticBundle?.grounded)) addCase(entry, "grounded");
   for (const entry of records3(semanticBundle?.conditional)) addCase(entry, "conditional");
   for (const entry of records3(semanticBundle?.blocked)) {
-    const id = String(entry.obligation_id ?? "");
-    const obligation = obligationById.get(id);
+    const id2 = String(entry.obligation_id ?? "");
+    const obligation = obligationById.get(id2);
     items.push({
       item_kind: "formal_test_point",
-      item_id: id,
-      title: String(entry.subject ?? obligation?.title ?? entry.recovery?.question ?? id),
+      item_id: id2,
+      title: String(entry.subject ?? obligation?.title ?? entry.recovery?.question ?? id2),
       semantic_status: "blocked",
-      related_obligation_ids: [id],
+      related_obligation_ids: [id2],
       semantic: entry
     });
   }
   for (const entry of records3(semanticBundle?.coverage?.not_applicable).filter(
     (candidate) => candidate.subject_kind !== "requirement_fact"
   )) {
-    const id = String(entry.obligation_id ?? "");
-    const obligation = obligationById.get(id);
+    const id2 = String(entry.obligation_id ?? "");
+    const obligation = obligationById.get(id2);
     items.push({
       item_kind: "formal_test_point",
-      item_id: id,
-      title: String(entry.subject ?? obligation?.title ?? id),
+      item_id: id2,
+      title: String(entry.subject ?? obligation?.title ?? id2),
       semantic_status: "not_applicable",
-      related_obligation_ids: [id],
+      related_obligation_ids: [id2],
       semantic: entry
     });
   }
@@ -9580,7 +18866,7 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
       reason: prior.reason,
       basis: structuredClone(prior.basis)
     });
-    else if (item.semantic_status === "grounded") Object.assign(item, {
+    else if (item.semantic_status === "grounded" && sourcePack.delivery_intent !== "case_document") Object.assign(item, {
       execution_disposition: "execute",
       reason_code: "selected_for_run",
       reason: "Selected for this run.",
@@ -9611,13 +18897,13 @@ function buildCoverage(semanticBundle, items, diagnostics) {
   ));
   const formalIds = /* @__PURE__ */ new Set();
   for (const entry of formal) {
-    const id = String(entry.obligation_id ?? "");
-    if (!id || formalIds.has(id)) diagnostics.push(diagnostic9(
+    const id2 = String(entry.obligation_id ?? "");
+    if (!id2 || formalIds.has(id2)) diagnostics.push(diagnostic9(
       "FORMAL_INVENTORY_INVALID",
       "/coverage/formal/entries",
       "Formal Test Point identities must be unique."
     ));
-    formalIds.add(id);
+    formalIds.add(id2);
   }
   const runnerIds = items.filter((item) => item.item_kind === "case" && item.semantic_status === "grounded" && item.execution_disposition === "execute").map((item) => item.item_id).sort();
   const coverage = formal.filter((entry) => entry.status !== "not_applicable").map((entry) => {
@@ -9719,6 +19005,7 @@ function compileExecutionPlan(input) {
   const pending = summary.pending_case_count + summary.pending_formal_test_point_count + summary.pending_exploratory_count;
   const planChangeHead = replay.plan_change_head_seq;
   const confirmation = replay.confirmation;
+  const documentOnly = sourcePack.delivery_intent === "case_document";
   const ready = pending === 0 && confirmation && confirmation.confirmed_plan_digest === planDigest && confirmation.confirmed_plan_change_head_seq === planChangeHead;
   const plan = {
     status: replay.active_pause ? "paused" : pending > 0 ? "decision_required" : ready ? "ready" : "awaiting_confirmation",
@@ -9728,7 +19015,7 @@ function compileExecutionPlan(input) {
     plan_digest: planDigest,
     plan_change_head_seq: planChangeHead,
     items: currentItems,
-    runner_case_ids: runnerIds,
+    runner_case_ids: documentOnly ? [] : runnerIds,
     promoted_exploratory: promotions,
     test_point_execution_coverage: coverage,
     summary,
@@ -9752,7 +19039,25 @@ function compileExecutionPlan(input) {
     }] : [],
     { option_code: "pause", label: "Pause", meaning: "Save the pending plan for later." }
   ];
-  const presentation = ready ? null : createPresentationSnapshot({
+  const zh = sourcePack.output_language === "zh-CN";
+  const L = (en, cn) => zh ? cn : en;
+  const translatedOptions = {
+    do_not_execute: ["\u4E0D\u6267\u884C", "\u4FDD\u7559\u771F\u5B9E\u72B6\u6001\uFF0C\u5C06\u6B64\u9879\u6392\u9664\u5728\u672C\u6B21\u6267\u884C\u4E4B\u5916\u3002"],
+    final: ["\u8865\u5145\u6B63\u5F0F\u89C4\u5219", "\u63D0\u4F9B\u6709\u6743\u5A01\u4F9D\u636E\u7684\u4E1A\u52A1\u89C4\u5219\u5E76\u91CD\u65B0\u7F16\u8BD1\u3002"],
+    temporary: ["\u8865\u5145\u4E34\u65F6\u89C4\u5219", "\u63D0\u4F9B\u4E34\u65F6\u4E1A\u52A1\u89C4\u5219\uFF0C\u4E0D\u5347\u7EA7\u8BC1\u636E\u7B49\u7EA7\u3002"],
+    reopen_root_issues: ["\u91CD\u5F00\u95EE\u9898", "\u91CD\u5F00\u5DF2\u5904\u7406\u7684\u4E1A\u52A1\u95EE\u9898\u5E76\u91CD\u65B0\u7F16\u8BD1\u3002"],
+    request_reanalysis: ["\u91CD\u65B0\u5206\u6790", "\u91CD\u8BFB\u5DF2\u6709\u6765\u6E90\uFF0C\u4E0D\u6DFB\u52A0\u672A\u7ECF\u8BC1\u5B9E\u7684\u4E1A\u52A1\u4E8B\u5B9E\u3002"],
+    adopt: ["\u91C7\u7EB3\u98CE\u9669", "\u786E\u8BA4\u4E1A\u52A1\u89C4\u5219\u540E\uFF0C\u901A\u8FC7\u6B63\u5F0F\u6D41\u7A0B\u91CD\u65B0\u7F16\u8BD1\u63A2\u7D22\u98CE\u9669\u3002"],
+    pause: ["\u6682\u505C", "\u4FDD\u5B58\u5F53\u524D\u72B6\u6001\uFF0C\u7A0D\u540E\u7EE7\u7EED\u3002"]
+  };
+  if (zh) for (const option of executionOptions) {
+    const translated = translatedOptions[option.option_code];
+    if (translated) {
+      option.label = translated[0];
+      option.meaning = translated[1];
+    }
+  }
+  const presentation = ready || documentOnly ? null : createPresentationSnapshot({
     purpose,
     entryContext: "active_analysis",
     runInstanceId: sourcePack.run_instance_id,
@@ -9760,18 +19065,18 @@ function compileExecutionPlan(input) {
     planDigest,
     planChangeHeadSeq: planChangeHead,
     groups: [{
-      question: purpose === "execution_closure" ? "Choose Execute, DoNotExecute, or pause for every pending item." : "Confirm, modify, or pause the complete execution plan.",
+      question: purpose === "execution_closure" ? L("Choose Execute, DoNotExecute, or pause for every pending item.", "\u8BF7\u9010\u9879\u51B3\u5B9A\u5F85\u5904\u7406\u4E8B\u9879\uFF1B\u53EF\u8865\u5145\u89C4\u5219\u3001\u4E0D\u6267\u884C\u6216\u6682\u505C\u3002") : L("Confirm, modify, or pause the complete execution plan.", "\u8BF7\u786E\u8BA4\u5B9E\u9645\u5C55\u793A\u7684\u5B8C\u6574\u6267\u884C\u8BA1\u5212\uFF0C\u6216\u9009\u62E9\u4FEE\u6539\u3001\u6682\u505C\u3002"),
       items: visibleItems,
       allowedOptions: purpose === "execution_closure" ? executionOptions : [
-        { option_code: "confirm", label: "Confirm", meaning: "Confirm this displayed plan." },
-        { option_code: "modify", label: "Modify", meaning: "Change one or more execution choices." },
-        { option_code: "pause", label: "Pause", meaning: "Save before confirmation." }
+        { option_code: "confirm", label: L("Confirm", "\u786E\u8BA4"), meaning: L("Confirm this displayed plan.", "\u786E\u8BA4\u5F53\u524D\u5C55\u793A\u7684\u8FD9\u4E00\u7248\u8BA1\u5212\u3002") },
+        { option_code: "modify", label: L("Modify", "\u4FEE\u6539"), meaning: L("Change one or more execution choices.", "\u4FEE\u6539\u4E00\u9879\u6216\u591A\u9879\u6267\u884C\u51B3\u5B9A\u3002") },
+        { option_code: "pause", label: L("Pause", "\u6682\u505C"), meaning: L("Save before confirmation.", "\u5148\u4FDD\u5B58\uFF0C\u6682\u4E0D\u786E\u8BA4\u3002") }
       ],
-      answerExample: purpose === "execution_closure" ? "Do not execute the named item because the business rule is missing." : "Confirm the displayed plan."
+      answerExample: purpose === "execution_closure" ? L("Do not execute the named item because the business rule is missing.", "\u56E0\u4E1A\u52A1\u89C4\u5219\u5C1A\u672A\u660E\u786E\uFF0C\u672C\u6B21\u4E0D\u6267\u884C\u4E0A\u8FF0\u6307\u5B9A\u4E8B\u9879\u3002") : L("Confirm the displayed plan.", "\u786E\u8BA4\u5F53\u524D\u5C55\u793A\u7684\u5B8C\u6574\u8BA1\u5212\u3002")
     }]
   });
   return {
-    kind: ready ? "ready" : "analysis_only",
+    kind: documentOnly ? "document_only" : ready ? "ready" : "analysis_only",
     plan: JSON.parse(canonicalStringify(plan)),
     presentation,
     workflow_event_head_seq: replay.workflow_event_head_seq,
@@ -9780,7 +19085,8 @@ function compileExecutionPlan(input) {
   };
 }
 function projectReadyExecutionPlan(plan, sourcePack, evidenceClaims) {
-  if (plan?.status !== "ready" || !plan.confirmation) throw new Error("Execution plan is not ready.");
+  const documentOnly = sourcePack.delivery_intent === "case_document";
+  if (!documentOnly && (plan?.status !== "ready" || !plan.confirmation)) throw new Error("Execution plan is not ready.");
   const items = records3(plan.items).map((item) => {
     const projected = {
       item_kind: item.item_kind,
@@ -9796,23 +19102,23 @@ function projectReadyExecutionPlan(plan, sourcePack, evidenceClaims) {
     };
     return projected;
   });
-  const confirmationSemantic = {
+  const confirmationSemantic = documentOnly ? null : {
     action: "confirm_plan",
     actor: String(plan.confirmation.actor).normalize("NFC").trim(),
     authority_scope: String(plan.confirmation.authority_scope).normalize("NFC").trim(),
     confirmed_plan_digest: plan.plan_digest
   };
   return {
-    status: "ready",
+    status: documentOnly ? "document_only" : "ready",
     semantic_source_digest: plan.semantic_source_digest,
     plan_digest: plan.plan_digest,
     semantic_result_digest: "0".repeat(64),
     items,
-    runner_case_ids: strings3(plan.runner_case_ids),
+    runner_case_ids: documentOnly ? [] : strings3(plan.runner_case_ids),
     promoted_exploratory: records3(plan.promoted_exploratory).map((item) => promotionSemantic(item, sourcePack)),
     test_point_execution_coverage: structuredClone(plan.test_point_execution_coverage),
     summary: structuredClone(plan.summary),
-    confirmation: {
+    confirmation: confirmationSemantic === null ? null : {
       confirmed: true,
       confirmed_plan_digest: plan.plan_digest,
       actor: confirmationSemantic.actor,
@@ -10002,16 +19308,16 @@ function auditInteractionMatrix(artifact) {
     "an empty interaction matrix cannot represent a completed audit"
   ));
   const moduleIds = /* @__PURE__ */ new Set();
-  for (const record2 of [...matrix, ...submittedCandidates]) {
-    for (const moduleId of normalizedStrings(record2.module_ids)) moduleIds.add(moduleId);
+  for (const record3 of [...matrix, ...submittedCandidates]) {
+    for (const moduleId of normalizedStrings(record3.module_ids)) moduleIds.add(moduleId);
   }
   const modules = [...moduleIds].sort(compareCodePoints5);
   const cells = [];
-  for (const record2 of matrix) {
-    const modulesForCell = normalizedStrings(record2.module_ids);
-    const rawModuleCount = Array.isArray(record2.module_ids) ? record2.module_ids.length : 0;
-    const dimension = typeof record2.dimension === "string" ? record2.dimension : "";
-    const status = typeof record2.status === "string" ? record2.status : "";
+  for (const record3 of matrix) {
+    const modulesForCell = normalizedStrings(record3.module_ids);
+    const rawModuleCount = Array.isArray(record3.module_ids) ? record3.module_ids.length : 0;
+    const dimension = typeof record3.dimension === "string" ? record3.dimension : "";
+    const status = typeof record3.status === "string" ? record3.status : "";
     const path4 = cellPath(modulesForCell, dimension);
     let valid = true;
     if (modulesForCell.length !== rawModuleCount || modulesForCell.length === 0) {
@@ -10026,7 +19332,7 @@ function auditInteractionMatrix(artifact) {
       diagnostics.push(diagnostic10("schema", "INTERACTION_STATUS_INVALID", `${path4}/status`, "status must be checked-no-signal or candidate"));
       valid = false;
     }
-    if (valid) cells.push({ record: record2, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
+    if (valid) cells.push({ record: record3, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
   }
   const expectedCells = /* @__PURE__ */ new Map();
   if (modules.length === 1) {
@@ -10150,10 +19456,10 @@ function isFormalInteractionEvidence(claim) {
 function reconcileInteractionMatrix(artifact, candidates2, viewsById, viewModeledClaims, claimsById) {
   const input = isObject4(artifact) ? artifact : {};
   const submittedViews = objectArray5(input.views);
-  const cells = objectArray5(input.interaction_matrix).map((record2) => ({
-    modules: normalizedStrings(record2.module_ids),
-    dimension: typeof record2.dimension === "string" ? record2.dimension : "",
-    status: typeof record2.status === "string" ? record2.status : ""
+  const cells = objectArray5(input.interaction_matrix).map((record3) => ({
+    modules: normalizedStrings(record3.module_ids),
+    dimension: typeof record3.dimension === "string" ? record3.dimension : "",
+    status: typeof record3.status === "string" ? record3.status : ""
   }));
   const cellsByKey = /* @__PURE__ */ new Map();
   for (const cell of cells) {
@@ -10627,6 +19933,17 @@ function validateBehaviorViews(evidenceGraph, artifact) {
     if (!primaryClaim || primaryClaim.kind !== "requirement" && primaryClaim.kind !== "assumption" || fact.status === "diagnostic") continue;
     const factClaimIds = [.../* @__PURE__ */ new Set([...typeof fact.claim_id === "string" ? [fact.claim_id] : [], ...stringArray4(fact.source_claim_ids)])];
     const viewIds = [...new Set(factClaimIds.flatMap((claimId) => [...claimViews.get(claimId) ?? []]))].sort(compareCodePoints6);
+    for (const kind of stringArray4(fact.required_view_kinds)) {
+      const primaryViewIds = [...claimViews.get(String(fact.claim_id)) ?? []];
+      const inputs = isObject5(input.obligation_inputs) ? input.obligation_inputs : {};
+      const terminal = viewIds.length === 0 && objectArray6(inputs.terminal_fact_routes).some((route) => route.fact_id === factId && ["blocked", "not_applicable"].includes(String(route.disposition)));
+      if (!terminal && !primaryViewIds.some((viewId) => validViews.get(viewId)?.type === kind)) diagnostics.push({
+        category: "traceability",
+        code: "FACT_REQUIRED_VIEW_MISSING",
+        path: `/factLedger/${factId}/required_view_kinds`,
+        message: `formal fact ${factId} requires a linked ${kind} view; relabelling a custom responsibility cannot discharge it`
+      });
+    }
     if (viewIds.length === 0) continue;
     factRoutes.push({ fact_id: factId, route_type: "views", view_ids: viewIds });
   }
@@ -10645,6 +19962,29 @@ function validateBehaviorViews(evidenceGraph, artifact) {
     factRoutes,
     diagnostics: sortDiagnostics2(diagnostics)
   };
+}
+
+// src/obligations/scenario-identity.mjs
+function partitionIdentity(identity2) {
+  const { kind, scope, responsibility } = identity2;
+  const base = { kind, scope, responsibility };
+  if (kind === "decision") return { ...base, conditions: identity2.rule.conditions, priority: identity2.rule.priority };
+  if (kind === "input-domain") return { ...base, domain: identity2.domain, ...identity2.class ? { class_id: identity2.class.class_id } : { boundary: identity2.boundary, value: identity2.value, inclusive: identity2.inclusive } };
+  if (kind === "timing") return { ...base, timing_event: identity2.timing_event, threshold: identity2.threshold, order: identity2.order, ...identity2.threshold_relation ? { relation: identity2.threshold_relation } : { signal: identity2.signal } };
+  if (kind === "state") return { ...base, from: identity2.transition.from, event: identity2.transition.event, condition: identity2.transition.condition, transition_order: identity2.transition.transition_order };
+  if (kind === "flow") return { ...base, ...identity2.edge ? { from: identity2.edge.from.element_id, condition: identity2.edge.condition, ...identity2.iterations === void 0 ? {} : { iterations: identity2.iterations } } : { node: identity2.node.element_id } };
+  if (kind === "role") return { ...base, role: identity2.role, permission: identity2.permission };
+  if (kind === "integration") return { ...base, contract_element_id: identity2.contract_element_id, ...identity2.side_effect ? { side_effect: identity2.side_effect } : {}, ...identity2.signal ? { signal: identity2.signal } : {}, ...identity2.invariant ? { invariant: identity2.invariant } : {} };
+  throw new TypeError(`Unknown scenario strategy ${String(kind)}`);
+}
+function scenarioPartitionRef(identity2) {
+  return stableId("partition", partitionIdentity(identity2));
+}
+function ownedScenarioMetadata(obligation, owner = "") {
+  const vector = obligation.combination_vector;
+  const operation = { kind: obligation.kind, scope: obligation.scope, owner: vector?.owner ?? owner, view_element_refs: obligation.view_element_refs };
+  const partition = { ...operation, ...vector ? { assignments: vector.assignments.map((a) => ({ parameter_id: a.parameter_id, value_id: a.value_id })) } : {} };
+  return { primary_operation_refs: [stableId("operation", operation)], scenario_partition_ref: stableId("partition", partition) };
 }
 
 // src/obligations/registry.mjs
@@ -10807,7 +20147,7 @@ function qualifiedElementRef(view, element) {
   return qualifyViewElementRef(String(view.view_id), String(element.element_id));
 }
 function buildObligationSeed(input) {
-  const { view, primaryElement, context, identity } = input;
+  const { view, primaryElement, context, identity: identity2 } = input;
   if (!isObject6(context)) throw new TypeError("obligation compilation context must be an object");
   const primaryId = typeof primaryElement.element_id === "string" ? primaryElement.element_id : "";
   const risk = keyedValue(context.riskByElementId, primaryId);
@@ -10852,12 +20192,14 @@ function buildObligationSeed(input) {
   if (sourceClaimIds.length === 0) throw new TypeError(`obligation element "${primaryId}" has no accepted evidence`);
   const viewElementRefs = sortedStrings(elements.map((element) => qualifiedElementRef(view, element)), true);
   return {
-    obligation_id: stableId("obligation", identity),
+    obligation_id: stableId("obligation", identity2),
     kind: String(view.type),
     risk,
     scope: String(view.scope),
     source_claim_ids: sourceClaimIds,
     view_element_refs: viewElementRefs,
+    primary_operation_refs: [qualifiedElementRef(view, input.primaryElement)],
+    scenario_partition_ref: scenarioPartitionRef(identity2),
     required_oracle_refs: oracleRefs,
     required_capabilities: capabilities
   };
@@ -11751,17 +21093,17 @@ function publicContext(view, submitted, contextIndex, diagnostics) {
       }
       const elementId = String(selector.element_id);
       if (view.type === "timing") {
-        const entries = timingSpecialResponsibilitiesByElementId[elementId] ?? [];
-        entries.push({ type: kind, signal: signalClaimId });
-        timingSpecialResponsibilitiesByElementId[elementId] = entries;
+        const entries2 = timingSpecialResponsibilitiesByElementId[elementId] ?? [];
+        entries2.push({ type: kind, signal: signalClaimId });
+        timingSpecialResponsibilitiesByElementId[elementId] = entries2;
       } else if (kind === "invariant") {
-        const entries = integrationInvariantsByElementId[elementId] ?? [];
-        entries.push({ invariant: signalClaimId });
-        integrationInvariantsByElementId[elementId] = entries;
+        const entries2 = integrationInvariantsByElementId[elementId] ?? [];
+        entries2.push({ invariant: signalClaimId });
+        integrationInvariantsByElementId[elementId] = entries2;
       } else {
-        const entries = integrationSpecialResponsibilitiesByElementId[elementId] ?? [];
-        entries.push({ type: kind, signal: signalClaimId });
-        integrationSpecialResponsibilitiesByElementId[elementId] = entries;
+        const entries2 = integrationSpecialResponsibilitiesByElementId[elementId] ?? [];
+        entries2.push({ type: kind, signal: signalClaimId });
+        integrationSpecialResponsibilitiesByElementId[elementId] = entries2;
       }
     }
     responsibilityBindings.push({
@@ -11879,13 +21221,13 @@ function customResponsibilitySeed(responsibility) {
     scope: responsibility.scope
   });
   const kind = CUSTOM_KINDS.get(String(responsibility.responsibility_type ?? "")) ?? "";
-  const identity = { kind, responsibility_key: responsibilityKey2 };
+  const identity2 = { kind, responsibility_key: responsibilityKey2 };
   return {
     semantic_key: responsibility.semantic_key,
     responsibility_key: responsibilityKey2,
     owner: normalizedOwner,
     obligation: {
-      obligation_id: stableId("obligation", identity),
+      obligation_id: stableId("obligation", identity2),
       kind,
       risk: responsibility.risk,
       scope: responsibility.scope,
@@ -12745,8 +22087,13 @@ function validateEvidenceInputs(graph, diagnostics) {
       const factId = typeof fact.fact_id === "string" ? fact.fact_id : "";
       const path4 = `/factLedger/${factId || facts.length}`;
       let valid = true;
-      if (!hasExactKeys2(fact, FACT_FIELDS)) {
+      const audited = Object.hasOwn(fact, "required_view_kinds") || Object.hasOwn(fact, "view_review_basis");
+      if (!hasExactKeys2(fact, audited ? [...FACT_FIELDS, "required_view_kinds", "view_review_basis"].sort(compareCodePoints7) : FACT_FIELDS)) {
         diagnostics.push(diagnostic13("schema", "EVIDENCE_FACT_NOT_CLOSED", path4, "fact entries must contain exactly fact_id, claim_id, status, and source_claim_ids"));
+        valid = false;
+      }
+      if (audited && (!isDenseUniqueStringArray(fact.required_view_kinds, false) || !stringArray5(fact.required_view_kinds).every((kind) => ["flow", "decision", "state", "input-domain", "role", "timing", "integration"].includes(kind)) || !isNonblankUnpadded(fact.view_review_basis))) {
+        diagnostics.push(diagnostic13("schema", "EVIDENCE_FACT_VIEW_REVIEW_INVALID", path4, "fact behavior review must name required view kinds and an auditable basis"));
         valid = false;
       }
       if (!isNonblankUnpadded(factId) || !isNonblankUnpadded(fact.claim_id) || !FACT_STATUSES.has(String(fact.status)) || !isDenseUniqueStringArray(fact.source_claim_ids, true)) {
@@ -13013,9 +22360,9 @@ function validateViewContext(viewId, view, context, diagnostics) {
   const elementIds = new Set(objectArray8(view.elements).flatMap((element) => isNonblankUnpadded(element.element_id) ? [String(element.element_id)] : []));
   for (const field of ELEMENT_CONTEXT_FIELDS) {
     if (!Object.hasOwn(context, field)) continue;
-    const entries = ownEntries(context[field]);
+    const entries2 = ownEntries(context[field]);
     const fieldPath = `${path4}/${field}`;
-    if (entries === null) {
+    if (entries2 === null) {
       diagnostics.push(diagnostic13(
         "schema",
         "OBLIGATION_CONTEXT_MAP_PROTOTYPE_FORBIDDEN",
@@ -13025,7 +22372,7 @@ function validateViewContext(viewId, view, context, diagnostics) {
       valid = false;
       continue;
     }
-    for (const [rawKey, entry] of entries) {
+    for (const [rawKey, entry] of entries2) {
       if (!isNonblankUnpadded(rawKey) || !elementIds.has(String(rawKey))) {
         diagnostics.push(diagnostic13(
           "reference",
@@ -13097,10 +22444,10 @@ function validateViewContext(viewId, view, context, diagnostics) {
   return valid;
 }
 function validateCustomObligations(inputs, viewsById, factsById, claimsById, relations, diagnostics) {
-  const submittedObligations = inputs.customObligations.flatMap((entry) => isObject7(entry.obligation) ? [{ ...entry.obligation, caseable: true }] : []);
+  const submittedObligations = inputs.customObligations.flatMap((entry) => isObject7(entry.obligation) ? [{ ...entry.obligation, ...ownedScenarioMetadata(entry.obligation, entry.responsibility_key), caseable: true }] : []);
   diagnostics.push(.../** @type {Diagnostic[]} */
   validateAgainstSchema({
-    schema_version: "2.1.0",
+    schema_version: "3.0.0",
     source_revision: 0,
     obligations: submittedObligations,
     fact_routes: [],
@@ -13164,11 +22511,11 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       `${path4}/obligation_id`,
       "custom obligation_id must use stable obligation_<16 lowercase hex> form"
     ));
-    const identity = {
+    const identity2 = {
       kind: seed.kind,
       responsibility_key: entry.responsibility_key
     };
-    const expectedId = stableId("obligation", identity);
+    const expectedId = stableId("obligation", identity2);
     if (obligationId !== expectedId) diagnostics.push(diagnostic13(
       "classification",
       "CUSTOM_OBLIGATION_ID_MISMATCH",
@@ -13187,8 +22534,8 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
     const oracleIds = stringArray5(seed.required_oracle_refs);
     const sourceSet = new Set(sourceIds);
     for (const [field, claimId] of [
-      ...sourceIds.map((id) => ["source_claim_ids", id]),
-      ...oracleIds.map((id) => ["required_oracle_refs", id])
+      ...sourceIds.map((id2) => ["source_claim_ids", id2]),
+      ...oracleIds.map((id2) => ["required_oracle_refs", id2])
     ]) {
       const claim = claimsById.get(claimId);
       if (!claim) {
@@ -13304,6 +22651,24 @@ function validateCustomObligations(inputs, viewsById, factsById, claimsById, rel
       ));
       for (const factId of modeledFacts) ownerFactIds.add(factId);
     }
+    if (ownerFactIds.size > 1) diagnostics.push(diagnostic13(
+      "classification",
+      "CUSTOM_RESPONSIBILITY_NOT_ATOMIC",
+      `${path4}/owner`,
+      "one custom responsibility must resolve to one atomic formal fact; split independently verifiable facts into separate responsibilities"
+    ));
+    if (["state", "input-domain", "role", "timing", "integration"].includes(String(seed.kind))) {
+      for (const owner of owners) {
+        const related = directionallyRelatedClaims(relations, owner.roots);
+        const modeled = [...viewsById.values()].some((view) => view.type === seed.kind && scopeContains(String(view.scope), String(seed.scope)) && objectArray8(view.elements).some((element) => elementEvidenceRefs(element).some((ref) => related.has(ref))));
+        if (!modeled) diagnostics.push(diagnostic13(
+          "traceability",
+          "CUSTOM_RESPONSIBILITY_VIEW_REQUIRED",
+          `${path4}/owner`,
+          `custom ${String(seed.kind)} responsibility supplements a dedicated ${String(seed.kind)} view for the same owner; it cannot replace its branch or boundary expansion`
+        ));
+      }
+    }
     const relatedToAnyOwner = directionallyRelatedClaims(
       relations,
       owners.flatMap((owner) => owner.roots)
@@ -13356,6 +22721,9 @@ function finishObligationMerge(byId) {
     caseable: true,
     risk: entry.risk,
     scope: entry.scope,
+    primary_operation_refs: [.../** @type {Set<string>} */
+    entry.primary_operation_refs].sort(compareCodePoints7),
+    scenario_partition_ref: entry.scenario_partition_ref,
     ...Object.fromEntries(OBLIGATION_SET_FIELDS.map((field) => [
       field,
       [.../** @type {Set<string>} */
@@ -13364,12 +22732,15 @@ function finishObligationMerge(byId) {
   })).sort((left, right) => compareCodePoints7(String(left.obligation_id), String(right.obligation_id)));
 }
 function obligationAccumulator(seed, owner = "") {
+  const metadata = seed.primary_operation_refs ? seed : ownedScenarioMetadata(seed, owner);
   return {
     obligation_id: seed.obligation_id,
     kind: seed.kind,
     risk: seed.risk,
     scope: seed.scope,
     owner,
+    primary_operation_refs: new Set(stringArray5(metadata.primary_operation_refs)),
+    scenario_partition_ref: metadata.scenario_partition_ref,
     ...Object.fromEntries(OBLIGATION_SET_FIELDS.map((field) => [field, new Set(stringArray5(seed[field]))]))
   };
 }
@@ -13394,7 +22765,7 @@ function mergeSystemObligations(seeds, diagnostics) {
       byId.set(obligationId, obligationAccumulator(seed));
       return;
     }
-    if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope) {
+    if (existing.kind !== seed.kind || existing.risk !== seed.risk || existing.scope !== seed.scope || existing.scenario_partition_ref !== seed.scenario_partition_ref) {
       diagnostics.push(diagnostic13(
         "classification",
         "OBLIGATION_SIGNATURE_CONFLICT",
@@ -13404,6 +22775,7 @@ function mergeSystemObligations(seeds, diagnostics) {
       return;
     }
     addObligationSets(existing, seed);
+    for (const ref of stringArray5(seed.primary_operation_refs)) existing.primary_operation_refs.add(ref);
   });
   return finishObligationMerge(byId);
 }
@@ -14166,7 +23538,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         evidence_claim_id: valueClaimsByParameter.get(parameterId)?.get(valueId) ?? ""
       }));
       const valueClaimIds = assignments.map(({ evidence_claim_id: evidenceClaimId }) => evidenceClaimId);
-      const identity = {
+      const identity2 = {
         kind: "interaction",
         responsibility: "t-wise-vector",
         policy_id: TWISE_POLICY.policy_id,
@@ -14175,7 +23547,7 @@ function compileCombinationObligations(inputs, viewsById, factsById, claimsById,
         strength: request.strength,
         assignments: semanticAssignments
       };
-      const obligationId = stableId("obligation", identity);
+      const obligationId = stableId("obligation", identity2);
       obligations.push({
         obligation_id: obligationId,
         kind: "interaction",
@@ -14625,8 +23997,9 @@ function compileObligations(evidenceGraph, behaviorViews) {
     "INTERACTION",
     diagnostics
   );
+  for (const obligation of obligations) if (obligation.caseable === true && !obligation.primary_operation_refs) Object.assign(obligation, ownedScenarioMetadata(obligation));
   const compiled = {
-    schema_version: "2.1.0",
+    schema_version: "3.0.0",
     source_revision: typeof artifact.source_revision === "number" ? artifact.source_revision : -1,
     obligations,
     fact_routes: factRoutes,
@@ -14640,6 +24013,11 @@ function compileObligations(evidenceGraph, behaviorViews) {
   );
   assertNoDiagnostics(diagnostics);
   return compiled;
+}
+
+// src/gap-kinds.mjs
+function isExecutionPreparationGap(type) {
+  return type === "testability" || type === "capability" || type === "resource_limit" || type === "resource-limit" || type === "control" || type === "observer" || type === "execution-preparation";
 }
 
 // src/render-markdown.mjs
@@ -14906,87 +24284,6 @@ function codeList(values) {
   for (let index = 0; index < values.length; index += 1) append(encoded, code(values[index]));
   return joinArray4(encoded, ", ");
 }
-function oracleText(oracle) {
-  const expectedField = {
-    value: "expected_value",
-    state: "expected_state",
-    event: "expected_event",
-    "side-effect": "expected_side_effect"
-  }[String(oracle.type)] ?? "";
-  const parts = [inline(oracle.type), inline(oracle.comparison), code(oracle[expectedField])];
-  if (Object.hasOwn(oracle, "tolerance")) append(parts, `tolerance ${code(oracle.tolerance)}`);
-  if (Object.hasOwn(oracle, "window")) append(parts, `window ${code(oracle.window)}`);
-  return joinArray4(parts, " ");
-}
-function renderCase(caseEntry, conditional, headingLevel = 3) {
-  const caseHeading = "#".repeat(headingLevel);
-  const detailHeading = "#".repeat(headingLevel + 1);
-  const lines = [
-    `${caseHeading} ${code(caseEntry.case_id)} \u2014 ${inline(caseEntry.title)}`,
-    "",
-    `- Scope: ${code(caseEntry.scope)}`,
-    `- Risk: ${code(caseEntry.risk)}`,
-    `- Role: ${inline(caseEntry.role.value)} (evidence: ${code(caseEntry.role.evidence_ref)})`,
-    `- Requirement facts: ${codeList(caseEntry.fact_ids)}`,
-    `- Formal Test Points: ${codeList(caseEntry.obligation_ids)}`,
-    `- Evidence references: ${codeList(caseEntry.evidence_refs)}`
-  ];
-  if (conditional) append(
-    lines,
-    `- Temporary assumption: ${code(caseEntry.temporary_assumption.claim_id)}; invalid when ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
-  );
-  append(lines, "", `${detailHeading} Preconditions`, "");
-  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
-    const item = caseEntry.preconditions[index];
-    append(lines, `${index + 1}. ${inline(item.condition)} (reachable from: ${inline(item.reachable_from)}; evidence: ${code(item.evidence_ref)})`);
-  }
-  append(lines, "", `${detailHeading} Test Data`, "");
-  for (let dataIndex = 0; dataIndex < caseEntry.data.length; dataIndex += 1) {
-    const item = caseEntry.data[dataIndex];
-    append(lines, `- ${inline(item.name)} = ${code(item.value)} (origin: ${inline(item.value_origin)}; ${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
-  }
-  append(lines, "", `${detailHeading} Steps and Oracles`, "");
-  for (let index = 0; index < caseEntry.steps.length; index += 1) {
-    const step = caseEntry.steps[index];
-    append(lines, `${index + 1}. ${code(step.step_id)} \u2014 ${inline(step.action)} (evidence: ${code(step.action_evidence_ref)})`);
-    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
-      const expectation = step.expectations[expectationIndex];
-      append(
-        lines,
-        `   - ${code(expectation.expectation_id)}: ${inline(expectation.business_assertion)}`,
-        `     - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} \u2192 ${inline(expectation.observation_target)}`,
-        `     - Oracle: ${oracleText(expectation.oracle)}`,
-        `     - Evidence: ${code(expectation.evidence_ref)}`
-      );
-    }
-  }
-  append(lines, "", `${detailHeading} Post-state and Cleanup`, "");
-  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)} (evidence: ${code(caseEntry.post_state.evidence_ref)})`);
-  if (caseEntry.cleanup.required) {
-    const cleanupSteps = [];
-    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) {
-      append(cleanupSteps, inline(caseEntry.cleanup.steps[index]));
-    }
-    append(lines, `- Cleanup: ${joinArray4(cleanupSteps, "; ")} (evidence: ${code(caseEntry.cleanup.evidence_ref)})`);
-  } else append(
-    lines,
-    `- Cleanup: none \u2014 ${inline(caseEntry.cleanup.no_cleanup_reason)} (evidence: ${code(caseEntry.cleanup.no_cleanup_evidence_ref)})`
-  );
-  return lines;
-}
-function renderCaseLane(title, cases, conditional, headingLevel = 2) {
-  const lines = [`${"#".repeat(headingLevel)} ${title}`, ""];
-  if (cases.length === 0) {
-    append(lines, "_None._");
-    return lines;
-  }
-  for (let index = 0; index < cases.length; index += 1) {
-    const item = cases[index];
-    if (index > 0) append(lines, "");
-    appendArray(lines, renderCase(item, conditional, headingLevel + 1));
-  }
-  return lines;
-}
 function table(headers, rows) {
   const separators = [];
   for (let index = 0; index < headers.length; index += 1) append(separators, "---");
@@ -15001,106 +24298,77 @@ function table(headers, rows) {
 }
 var RISK_ORDER = Object.freeze({ critical: 0, high: 1, medium: 2, low: 3 });
 function titleCase(value) {
-  const text = String(value).replaceAll("_", " ").replaceAll("-", " ");
-  return text.length === 0 ? "" : `${text[0].toUpperCase()}${text.slice(1)}`;
+  const text2 = String(value).replaceAll("_", " ").replaceAll("-", " ");
+  return text2.length === 0 ? "" : `${text2[0].toUpperCase()}${text2.slice(1)}`;
 }
 function businessGapCategory(missingType2) {
   const value = String(missingType2);
-  if (value === "testability" || value === "capability" || value === "resource_limit" || value === "control" || value === "observer") return "execution";
+  if (isExecutionPreparationGap(value)) return "execution";
   if (value === "source-conflict" || value === "fact-conflict" || value === "evidence" || value === "extraction" || value === "authority" || value === "exclusion" || value === "invalid-exclusion") return "evidence";
   return "business";
 }
-function businessGapCause(category) {
-  if (category === "execution") return "Required test setup or observation capability is unavailable or unverified.";
-  if (category === "evidence") return "Source evidence is missing, ambiguous, conflicting, or lacks the required authority.";
-  return "A required product rule or expected outcome is unresolved.";
-}
-function businessGapRequiredInput(category) {
-  if (category === "execution") return "Verified test setup, control, or observation capability.";
-  if (category === "evidence") return "Authoritative source evidence that resolves the ambiguity or conflict.";
-  return "An authoritative product rule or expected result.";
-}
-function groupedScopes(members) {
-  const scopes = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (let index = 0; index < members.length; index += 1) {
-    const scope = String(members[index].scope);
-    if (!seen.has(scope)) {
-      seen.add(scope);
-      append(scopes, inline(scope));
-    }
+function declaredResource(entry, resourceId) {
+  let found = null;
+  for (let index = 0; index < entry.testability_profile.setup_resources.length; index += 1) {
+    const resource = entry.testability_profile.setup_resources[index];
+    if (resource.resource_id !== resourceId) continue;
+    if (found !== null) throw new BundleRenderError([{
+      category: "reference",
+      code: "SETUP_RESOURCE_AMBIGUOUS",
+      path: "/setup_resources",
+      message: "rendered setup resource must resolve uniquely"
+    }]);
+    found = resource;
   }
-  return scopes;
+  if (found === null) throw new BundleRenderError([{
+    category: "reference",
+    code: "SETUP_RESOURCE_UNKNOWN",
+    path: "/setup_resources",
+    message: "rendered setup resource must be declared"
+  }]);
+  return found;
 }
-function highestRisk(members) {
-  let selected = "low";
-  let selectedOrder = RISK_ORDER.low;
-  for (let index = 0; index < members.length; index += 1) {
-    const candidate = String(members[index].risk);
-    const candidateOrder = RISK_ORDER[candidate] ?? 99;
-    if (candidateOrder < selectedOrder) {
-      selected = candidate;
-      selectedOrder = candidateOrder;
-    }
-  }
-  return selected;
+function recoveryQuestion(question, zh) {
+  if (!zh) return question;
+  const capability = /^What verified test setup, control, or observation capability is available for (.*)\?$/u.exec(question);
+  if (capability) return "\u5728\u201C" + capability[1] + "\u201D\u8303\u56F4\u5185\uFF0C\u6709\u54EA\u4E9B\u5DF2\u9A8C\u8BC1\u7684\u6570\u636E\u51C6\u5907\u3001\u63A7\u5236\u6216\u89C2\u5BDF\u80FD\u529B\uFF1F";
+  const authority = /^Which authoritative source rule applies to (.*)\?$/u.exec(question);
+  if (authority) return "\u201C" + authority[1] + "\u201D\u8303\u56F4\u5185\uFF0C\u5E94\u91C7\u7528\u54EA\u4EFD\u6743\u5A01\u6765\u6E90\u4E2D\u7684\u89C4\u5219\uFF1F";
+  const exclusion = /^What authoritative scope-exclusion rule applies to (.*)\?$/u.exec(question);
+  if (exclusion) return "\u54EA\u6761\u6743\u5A01\u89C4\u5219\u5C06\u201C" + exclusion[1] + "\u201D\u6392\u9664\u5728\u672C\u6B21\u8303\u56F4\u5916\uFF1F";
+  const rule = /^What authoritative product rule or expected result resolves the (.*) gap in (.*)\?$/u.exec(question);
+  if (rule) return "\u9488\u5BF9\u201C" + rule[2] + "\u201D\u7684\u7F3A\u53E3\uFF0C\u660E\u786E\u7684\u4EA7\u54C1\u89C4\u5219\u6216\u9884\u671F\u7ED3\u679C\u662F\u4EC0\u4E48\uFF1F";
+  return question;
 }
-function appendBusinessGapSection(lines, blocked, planByItemKey, category, heading, nextGapNumber) {
-  append(lines, "", `## ${heading}`, "");
-  const grouped = /* @__PURE__ */ new Map();
-  const groups = [];
-  for (let index = 0; index < blocked.length; index += 1) {
-    const item = blocked[index];
-    if (businessGapCategory(item.recovery.missing_type) !== category) continue;
-    const rootId = String(item.root_issue_id);
-    let members = grouped.get(rootId);
-    if (!members) {
-      members = [];
-      grouped.set(rootId, members);
-      append(groups, members);
-    }
-    append(members, item);
+function recoveryDetails(item, zh) {
+  const details = [];
+  const reasons = {
+    CAPABILITY_UNKNOWN: ["Capability availability is unconfirmed.", "\u80FD\u529B\u53EF\u7528\u6027\u5C1A\u672A\u786E\u8BA4\u3002"],
+    CAPABILITY_UNAVAILABLE: ["Capability is confirmed unavailable.", "\u80FD\u529B\u5DF2\u786E\u8BA4\u4E0D\u53EF\u7528\u3002"],
+    CAPABILITY_PROVENANCE_MISSING: ["Capability has no supporting verification evidence.", "\u7F3A\u5C11\u80FD\u529B\u7684\u9A8C\u8BC1\u4F9D\u636E\u3002"],
+    CONTROL_MISSING: ["The required control is missing.", "\u7F3A\u5C11\u5FC5\u8981\u7684\u64CD\u4F5C\u63A7\u5236\u3002"],
+    OBSERVER_MISSING: ["The required observer is missing.", "\u7F3A\u5C11\u5FC5\u8981\u7684\u89C2\u5BDF\u80FD\u529B\u3002"],
+    FORMAL_ORACLE_MISSING: ["No sourced expected result is available.", "\u7F3A\u5C11\u6709\u6765\u6E90\u652F\u6301\u7684\u9884\u671F\u7ED3\u679C\u3002"],
+    ORACLE_INVALID: ["The expected-result comparison is incomplete or invalid.", "\u9884\u671F\u7ED3\u679C\u7684\u6BD4\u8F83\u6761\u4EF6\u4E0D\u5B8C\u6574\u6216\u65E0\u6548\u3002"],
+    UNRESOLVED_CONFLICT: ["Conflicting authoritative rules remain unresolved.", "\u6743\u5A01\u89C4\u5219\u95F4\u7684\u51B2\u7A81\u5C1A\u672A\u89E3\u51B3\u3002"],
+    FACT_UNRESOLVED: ["The requirement fact remains ambiguous or conflicted.", "\u9700\u6C42\u4E8B\u5B9E\u4ECD\u5B58\u5728\u6B67\u4E49\u6216\u51B2\u7A81\u3002"]
+  };
+  const codes = String(item.reason).split(",");
+  for (let i = 0; i < codes.length; i += 1) {
+    const pair = reasons[codes[i]];
+    if (pair) append(details, pair[zh ? 1 : 0]);
   }
-  let count = 0;
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const members = groups[groupIndex];
-    const item = members[0];
-    const scopes = groupedScopes(members);
-    const gapNumber = nextGapNumber;
-    nextGapNumber += 1;
-    count += 1;
-    append(
-      lines,
-      `### Gap-${String(gapNumber).padStart(3, "0")} \u2014 ${inline(item.recovery.question)}`,
-      "",
-      `- ${scopes.length === 1 ? "Scope" : "Scopes"}: ${joinArray4(scopes, "; ")}`,
-      `- Risk: ${titleCase(highestRisk(members))}`,
-      `- Cause: ${businessGapCause(category)}`,
-      members.length === 1 ? "- Impact: one formal Test Point cannot become an executable Case." : `- Impact: ${members.length} formal Test Points cannot become executable Cases.`,
-      `- Required input: ${businessGapRequiredInput(category)}`,
-      `- Next action: ${inline(item.recovery.question)}`,
-      "- Affected Test Points and execution decisions:"
-    );
-    for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
-      const member = members[memberIndex];
-      const planItem = planByItemKey.get(`formal_test_point\0${String(member.obligation_id)}`);
-      append(
-        lines,
-        `  - ${inline(member.subject)} \u2014 Scope: ${inline(member.scope)}; Risk: ${titleCase(member.risk)}`
-      );
-      if (planItem?.execution_disposition === "do_not_execute" && typeof planItem.reason === "string") append(
-        lines,
-        `    - Do not execute reason: ${inline(planItem.reason)}`
-      );
+  try {
+    const refs = JSON.parse("[" + item.recovery.required_material + "]");
+    for (let i = 0; i < refs.length; i += 1) {
+      const ref = refs[i];
+      if (ref && typeof ref === "object" && typeof ref.subject === "string" && (ref.kind === "capability" || ref.kind === "control" || ref.kind === "observer")) {
+        append(details, (zh ? "\u6D89\u53CA\u8D44\u6E90\uFF1A" : "Resource: ") + ref.subject + (typeof ref.target === "string" ? " \u2192 " + ref.target : ref.target && typeof ref.target.observation_target === "string" ? " \u2192 " + ref.target.observation_target : ""));
+      }
     }
-    append(
-      lines,
-      ""
-    );
+  } catch {
   }
-  if (count === 0) append(lines, "_None._");
-  else if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  return nextGapNumber;
+  return details;
 }
 function compareBusinessCases(left, right) {
   const leftDisposition = left.planItem?.execution_disposition === "execute" ? 0 : 1;
@@ -15131,77 +24399,6 @@ function businessCaseInventory(snapshot) {
   }
   return { inventory, displayByCaseId };
 }
-function renderBusinessCase(item, displayId) {
-  const caseEntry = item.caseEntry;
-  const disposition = item.planItem?.execution_disposition === "execute" ? "Execute" : "Do not execute";
-  const lines = [
-    `### ${displayId} \u2014 ${inline(caseEntry.title)}`,
-    "",
-    `- Scope: ${inline(caseEntry.scope)}`,
-    `- Risk: ${titleCase(caseEntry.risk)}`,
-    `- Role: ${inline(caseEntry.role.value)}`,
-    `- Evidence status: ${titleCase(item.semanticStatus)}`,
-    `- Execution decision: ${disposition}`
-  ];
-  if (item.semanticStatus === "conditional") append(
-    lines,
-    `- Temporary assumption: valid only until ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
-  );
-  if (disposition === "Do not execute" && typeof item.planItem?.reason === "string") append(
-    lines,
-    `- Do not execute reason: ${inline(item.planItem.reason)}`
-  );
-  append(lines, "", "#### Preconditions", "");
-  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
-    const precondition = caseEntry.preconditions[index];
-    append(lines, `${index + 1}. ${inline(precondition.condition)} (reachable from: ${inline(precondition.reachable_from)})`);
-  }
-  append(lines, "", "#### Test Data", "");
-  for (let index = 0; index < caseEntry.data.length; index += 1) {
-    const datum = caseEntry.data[index];
-    append(lines, `- ${inline(datum.name)} = ${code(datum.value)} \u2014 Origin: ${titleCase(datum.value_origin)}`);
-  }
-  append(lines, "", "#### Steps and Expected Results", "");
-  for (let stepIndex = 0; stepIndex < caseEntry.steps.length; stepIndex += 1) {
-    const step = caseEntry.steps[stepIndex];
-    append(lines, `${stepIndex + 1}. ${inline(step.action)}`);
-    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
-      const expectation = step.expectations[expectationIndex];
-      append(
-        lines,
-        `   - Expected: ${inline(expectation.business_assertion)}`,
-        `   - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} \u2192 ${inline(expectation.observation_target)}`,
-        `   - Oracle: ${oracleText(expectation.oracle)}`
-      );
-    }
-  }
-  append(lines, "", "#### Post-state and Cleanup", "");
-  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)}`);
-  if (caseEntry.cleanup.required) {
-    const cleanupSteps = [];
-    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) append(
-      cleanupSteps,
-      inline(caseEntry.cleanup.steps[index])
-    );
-    append(lines, `- Cleanup: ${joinArray4(cleanupSteps, "; ")}`);
-  } else append(lines, `- Cleanup: none \u2014 ${inline(caseEntry.cleanup.no_cleanup_reason)}`);
-  return lines;
-}
-function renderBusinessCaseLane(title, items, displayByCaseId) {
-  const lines = [`## ${title}`, ""];
-  if (items.length === 0) {
-    append(lines, "_None._");
-    return lines;
-  }
-  for (let index = 0; index < items.length; index += 1) {
-    if (index > 0) append(lines, "");
-    appendArray(lines, renderBusinessCase(
-      items[index],
-      String(displayByCaseId.get(items[index].caseEntry.case_id))
-    ));
-  }
-  return lines;
-}
 function renderMarkdownTrusted(bundle) {
   const captured = snapshotBundle(bundle);
   if (captured.diagnostics.length > 0) throw new BundleRenderError(captured.diagnostics);
@@ -15221,14 +24418,35 @@ function renderMarkdownTrusted(bundle) {
     validateUniqueStableIds(snapshot)
   );
   if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
+  for (let index = 0; index < snapshot.blocked.length; index += 1) {
+    const item = snapshot.blocked[index];
+    const ids = /* @__PURE__ */ new Set();
+    let previous = "";
+    for (let dependencyIndex = 0; dependencyIndex < item.blocking_roots.length; dependencyIndex += 1) {
+      const dependency = item.blocking_roots[dependencyIndex];
+      if (ids.has(dependency.root_issue_id) || previous && previous >= dependency.root_issue_id) append(diagnostics, {
+        category: "traceability",
+        code: "BLOCKED_DEPENDENCY_SET_INVALID",
+        path: `/blocked/${index}/blocking_roots`,
+        message: "Blocked dependencies must be unique and canonical"
+      });
+      ids.add(dependency.root_issue_id);
+      previous = dependency.root_issue_id;
+    }
+    if (item.root_issue_id !== item.blocking_roots[0].root_issue_id || canonicalStringify(item.recovery) !== canonicalStringify(item.blocking_roots[0].recovery)) append(diagnostics, {
+      category: "traceability",
+      code: "BLOCKED_DEPENDENCY_ALIAS_MISMATCH",
+      path: `/blocked/${index}`,
+      message: "Blocked scalar aliases must exactly equal the first dependency"
+    });
+  }
+  if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
   const business = businessCaseInventory(snapshot);
   const runnerIds = new Set(snapshot.execution_plan.runner_case_ids);
   const executeCases = [];
-  const notSelectedCases = [];
   for (let index = 0; index < business.inventory.length; index += 1) {
     const item = business.inventory[index];
     if (runnerIds.has(item.caseEntry.case_id)) append(executeCases, item);
-    else append(notSelectedCases, item);
   }
   const coverage = snapshot.coverage;
   const plan = snapshot.execution_plan;
@@ -15237,22 +24455,61 @@ function renderMarkdownTrusted(bundle) {
     const item = plan.items[index];
     planByItemKey.set(`${String(item.item_kind)}\0${String(item.item_id)}`, item);
   }
+  const zh = snapshot.output_language === "zh-CN";
+  const L = (en, cn) => zh ? cn : en;
+  const label = (value) => {
+    const labels = {
+      grounded: "\u6709\u5145\u5206\u4F9D\u636E",
+      conditional: "\u4F9D\u8D56\u4E34\u65F6\u6761\u4EF6",
+      blocked: "\u53D7\u963B",
+      exploratory: "\u63A2\u7D22\u5EFA\u8BAE",
+      not_applicable: "\u4E0D\u9002\u7528",
+      execute: "\u6267\u884C",
+      do_not_execute: "\u4E0D\u6267\u884C",
+      pending: "\u5F85\u51B3\u5B9A",
+      critical: "\u4E25\u91CD",
+      high: "\u9AD8",
+      medium: "\u4E2D",
+      low: "\u4F4E",
+      document_only: "\u4EC5\u4EA4\u4ED8\u6587\u6863",
+      ready: "\u6267\u884C\u8BA1\u5212\u5DF2\u786E\u8BA4",
+      requirement: "\u9700\u6C42\u89C4\u5B9A",
+      derived: "\u63A8\u5BFC\u503C",
+      example: "\u793A\u4F8B\u503C",
+      assumption: "\u5047\u8BBE\u503C",
+      "temporary-assumption": "\u4E34\u65F6\u5047\u8BBE",
+      equals: "\u7B49\u4E8E",
+      contains: "\u5305\u542B",
+      matches: "\u5339\u914D",
+      within: "\u8303\u56F4\u5185",
+      executable_subset_ready: "\u5DF2\u6709\u53EF\u6267\u884C\u5B50\u96C6",
+      critical_gaps: "\u5B58\u5728\u5173\u952E\u7F3A\u53E3",
+      no_deterministic_cases: "\u5C1A\u65E0\u786E\u5B9A\u6027\u7528\u4F8B",
+      no_applicable_formal_test_points: "\u65E0\u9002\u7528\u6B63\u5F0F\u6D4B\u8BD5\u70B9"
+    };
+    return zh ? labels[String(value)] ?? inline(value) : titleCase(value);
+  };
   const lines = [
-    "# Manual Functional Test Plan",
+    L("# Manual Functional Test Plan", "# \u4EBA\u5DE5\u529F\u80FD\u6D4B\u8BD5\u7528\u4F8B"),
     "",
-    "## Delivery Overview",
+    L("## Delivery Overview", "## \u4EA4\u4ED8\u6982\u89C8"),
     "",
-    "- Generated, not executed. This plan contains no test results or defect verdicts.",
-    `- Readiness: ${titleCase(snapshot.quality.delivery_status)}`,
-    `- Requirement accounting: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
-    `- Formal Test Points covered: ${coverage.formal.covered}/${coverage.formal.total}`,
-    `- Grounded executable coverage: ${coverage.executable.grounded}/${coverage.executable.total}`,
-    `- Execute Cases: ${plan.summary.execute_case_count}`,
-    `- Do not execute Cases: ${plan.summary.do_not_execute_case_count}`,
-    `- Blocked formal Test Points: ${snapshot.blocked.length}`,
-    `- NotApplicable exclusions: ${coverage.not_applicable.length}`,
+    L(
+      "- Generated, not executed. No test results or defect verdicts are claimed.",
+      "- \u4EC5\u751F\u6210\uFF0C\u5C1A\u672A\u6267\u884C\uFF1B\u4E0D\u5305\u542B\u6D4B\u8BD5\u7ED3\u679C\u6216\u7F3A\u9677\u7ED3\u8BBA\u3002"
+    ),
+    "- " + L("Delivery", "\u4EA4\u4ED8\u72B6\u6001") + ": " + label(plan.status),
+    "- " + L(
+      "Coverage boundary: the following ratios account for declared, reviewed facts, not independently proven PRD recall.",
+      "\u8986\u76D6\u8FB9\u754C\uFF1A\u4EE5\u4E0B\u6BD4\u4F8B\u6838\u7B97\u5DF2\u58F0\u660E\u3001\u5DF2\u5BA1\u9605\u7684\u4E8B\u5B9E\uFF0C\u4E0D\u4EE3\u8868\u5DF2\u72EC\u7ACB\u8BC1\u660E PRD \u8BED\u4E49\u65E0\u9057\u6F0F\u3002"
+    ),
+    "- " + L("Requirement accounting", "\u9700\u6C42\u4E8B\u5B9E\u6838\u7B97") + ": " + coverage.requirements.accounted + "/" + coverage.requirements.total,
+    "- " + L("Formal Test Points covered", "\u6B63\u5F0F\u6D4B\u8BD5\u70B9\u8986\u76D6") + ": " + coverage.formal.covered + "/" + coverage.formal.total,
+    "- " + L("Grounded executable coverage", "\u5145\u5206\u4F9D\u636E\u7528\u4F8B\u8986\u76D6") + ": " + coverage.executable.grounded + "/" + coverage.executable.total,
+    "- " + L("Confirmed runner Cases", "\u5DF2\u786E\u8BA4\u53EF\u4EA4\u7ED9\u6267\u884C\u5668\u7684\u7528\u4F8B") + ": " + plan.runner_case_ids.length,
+    "- " + L("Blocked Test Points / scope exclusions", "\u53D7\u963B\u6D4B\u8BD5\u70B9 / \u8303\u56F4\u6392\u9664") + ": " + snapshot.blocked.length + " / " + coverage.not_applicable.length,
     "",
-    "## Execution Overview",
+    L("## Case Overview", "## \u7528\u4F8B\u603B\u89C8"),
     ""
   ];
   const overviewRows = [];
@@ -15262,235 +24519,247 @@ function renderMarkdownTrusted(bundle) {
       String(business.displayByCaseId.get(item.caseEntry.case_id)),
       inline(item.caseEntry.title),
       inline(item.caseEntry.scope),
-      titleCase(item.caseEntry.risk),
-      inline(item.caseEntry.role.value),
-      item.planItem?.execution_disposition === "execute" ? "Execute" : "Do not execute"
+      label(item.caseEntry.risk),
+      label(item.semanticStatus),
+      label(item.planItem?.execution_disposition ?? "pending")
     ]);
   }
-  appendArray(lines, table(["Case", "Title", "Scope", "Risk", "Role", "Decision"], overviewRows));
-  append(lines, "");
-  appendArray(lines, renderBusinessCaseLane("Cases to Execute", executeCases, business.displayByCaseId));
-  append(lines, "");
-  appendArray(lines, renderBusinessCaseLane("Cases Not Selected", notSelectedCases, business.displayByCaseId));
-  let nextGapNumber = 1;
-  nextGapNumber = appendBusinessGapSection(
-    lines,
-    snapshot.blocked,
-    planByItemKey,
-    "business",
-    "Business Rule Gaps",
-    nextGapNumber
-  );
-  nextGapNumber = appendBusinessGapSection(
-    lines,
-    snapshot.blocked,
-    planByItemKey,
-    "execution",
-    "Execution Preparation Gaps",
-    nextGapNumber
-  );
-  appendBusinessGapSection(
-    lines,
-    snapshot.blocked,
-    planByItemKey,
-    "evidence",
-    "Source and Evidence Gaps",
-    nextGapNumber
-  );
-  append(lines, "", "## Scope Exclusions (NotApplicable)", "");
-  if (coverage.not_applicable.length === 0) append(lines, "_None._");
-  for (let index = 0; index < coverage.not_applicable.length; index += 1) {
-    const item = coverage.not_applicable[index];
+  appendArray(lines, table([
+    L("Case", "\u7528\u4F8B"),
+    L("Title", "\u6807\u9898"),
+    L("Scope", "\u8303\u56F4"),
+    L("Risk", "\u98CE\u9669"),
+    L("Evidence status", "\u4F9D\u636E\u72B6\u6001"),
+    L("Decision", "\u6267\u884C\u51B3\u5B9A")
+  ], overviewRows));
+  append(lines, "", L("## Cases", "## \u7528\u4F8B\u660E\u7EC6"), "");
+  if (business.inventory.length === 0) append(lines, L("_None._", "_\u65E0\u3002_"), "");
+  for (let index = 0; index < business.inventory.length; index += 1) {
+    const item = business.inventory[index];
+    const entry = item.caseEntry;
     append(
       lines,
-      `- ${item.subject_kind === "requirement_fact" ? "Requirement fact" : "Formal Test Point"} \u201C${inline(item.subject)}\u201D in ${inline(item.scope)}: ${inline(item.reason)}`
+      "### " + business.displayByCaseId.get(entry.case_id) + " \u2014 " + inline(entry.title),
+      "",
+      "- " + L("Scope", "\u8303\u56F4") + ": " + inline(entry.scope),
+      "- " + L("Role", "\u89D2\u8272") + ": " + inline(entry.role.value),
+      "- " + L("Risk", "\u98CE\u9669") + ": " + label(entry.risk),
+      "- " + L("Evidence status", "\u4F9D\u636E\u72B6\u6001") + ": " + label(item.semanticStatus),
+      "- " + L("Execution decision", "\u6267\u884C\u51B3\u5B9A") + ": " + label(item.planItem?.execution_disposition ?? "pending")
     );
-  }
-  append(lines, "", "## Exploratory Risks", "");
-  if (snapshot.exploratory.length === 0) append(lines, "_None._");
-  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
-    const item = snapshot.exploratory[index];
-    const planItem = planByItemKey.get(`exploratory\0${String(item.exploratory_id)}`);
+    if (item.semanticStatus === "conditional") append(
+      lines,
+      "- " + L("Temporary assumption invalidation", "\u4E34\u65F6\u5047\u8BBE\u5931\u6548\u6761\u4EF6") + ": " + inline(entry.temporary_assumption.invalidation_condition)
+    );
+    if (item.planItem?.reason) append(lines, "- " + L("Decision basis", "\u51B3\u5B9A\u4F9D\u636E") + ": " + inline(
+      item.planItem.basis?.origin === "default_grounded_recommendation" ? L("Selected for this run.", "\u5DF2\u9009\u62E9\u7EB3\u5165\u672C\u6B21\u6267\u884C\u3002") : item.planItem.reason
+    ));
     append(
       lines,
-      `- ${inline(item.title)} \u2014 Scope: ${inline(item.scope)}; Risk: ${titleCase(item.risk)}; Status: exploratory only and outside formal coverage.`
+      "- " + L("Impact rationale", "\u5F71\u54CD\u4F9D\u636E") + ": " + inline(entry.risk_basis.impact),
+      "- " + L("Likelihood rationale", "\u53EF\u80FD\u6027\u4F9D\u636E") + ": " + inline(entry.risk_basis.likelihood),
+      "- " + L("Exposure rationale", "\u5F71\u54CD\u8303\u56F4\u4F9D\u636E") + ": " + inline(entry.risk_basis.exposure)
     );
-    if (planItem?.execution_disposition === "do_not_execute" && typeof planItem.reason === "string") append(
+    if (entry.scenario.intent === "compatibility") {
+      const baseline = declaredResource(entry, entry.scenario.compatibility.baseline_ref);
+      append(lines, "- " + L("Compatibility baseline", "\u517C\u5BB9\u6027\u57FA\u7EBF") + ": " + inline(baseline.locator));
+      append(lines, "- " + L("Comparison dimension", "\u6BD4\u8F83\u7EF4\u5EA6") + ": " + inline(entry.scenario.compatibility.dimensions[0]));
+    }
+    append(lines, "", L("#### Preconditions", "#### \u524D\u7F6E\u6761\u4EF6"), "");
+    for (let i = 0; i < entry.preconditions.length; i += 1) {
+      const pre = entry.preconditions[i];
+      append(lines, String(i + 1) + ". " + inline(pre.condition) + " \u2014 " + L("Preparation", "\u51C6\u5907\u8DEF\u5F84") + ": " + inline(pre.reachable_from));
+      const resource = declaredResource(entry, pre.setup.resource_ref);
+      append(
+        lines,
+        "   - " + L("Resource", "\u8D44\u6E90\u5165\u53E3") + ": " + inline(resource.locator),
+        "   - " + L("Preparation completed when", "\u51C6\u5907\u5B8C\u6210\u5224\u636E") + ": " + inline(pre.setup.completion.subject_ref) + " " + label(pre.setup.completion.operator) + " " + code(pre.setup.completion.operand.value)
+      );
+    }
+    append(lines, "", L("#### Test Data", "#### \u6D4B\u8BD5\u6570\u636E"), "");
+    for (let i = 0; i < entry.data.length; i += 1) {
+      const datum = entry.data[i];
+      append(lines, "- " + inline(datum.name) + " = " + code(datum.value) + " \u2014 " + L("Origin", "\u53D6\u503C\u6765\u6E90") + ": " + label(datum.value_origin));
+    }
+    append(lines, "", L("#### Steps and Expected Results", "#### \u6B65\u9AA4\u4E0E\u9884\u671F\u7ED3\u679C"), "");
+    for (let i = 0; i < entry.steps.length; i += 1) {
+      const step = entry.steps[i];
+      append(lines, String(i + 1) + ". " + inline(step.action));
+      for (let j = 0; j < step.expectations.length; j += 1) {
+        const expectation = step.expectations[j];
+        append(
+          lines,
+          "   - " + L("Expected", "\u9884\u671F") + ": " + inline(expectation.business_assertion),
+          "   - " + L("Observe", "\u89C2\u5BDF") + ": " + inline(expectation.observer) + " / " + inline(expectation.observation_surface) + " \u2192 " + inline(expectation.observation_target)
+        );
+        const assertion = expectation.oracle.assertion;
+        const operator = assertion.operator === "equals" ? L("equals", "\u7B49\u4E8E") : assertion.operator === "contains" ? L("contains", "\u5305\u542B") : assertion.operator === "matches" ? L("matches", "\u5339\u914D") : L("within", "\u8303\u56F4\u5185");
+        append(lines, "   - " + L("Typed Oracle", "\u7ED3\u6784\u5316\u5224\u5B9A") + ": " + inline(assertion.subject_ref) + " " + operator + " " + code(assertion.operand.value));
+        if (expectation.oracle.tolerance !== void 0) append(
+          lines,
+          "   - " + L("Tolerance", "\u5BB9\u5DEE") + ": " + code(expectation.oracle.tolerance)
+        );
+        if (expectation.oracle.window !== void 0) append(
+          lines,
+          "   - " + L("Observation window", "\u89C2\u5BDF\u65F6\u95F4\u7A97") + ": " + inline(expectation.oracle.window)
+        );
+      }
+    }
+    append(
       lines,
-      `  - Do not execute reason: ${inline(planItem.reason)}`
+      "",
+      L("#### Post-state and Cleanup", "#### \u540E\u7F6E\u72B6\u6001\u4E0E\u6E05\u7406"),
+      "",
+      "- " + L("Post-state", "\u540E\u7F6E\u72B6\u6001") + ": " + inline(entry.post_state.state)
     );
+    if (entry.cleanup.required) {
+      for (let i = 0; i < entry.cleanup.steps.length; i += 1) append(
+        lines,
+        "- " + L("Cleanup", "\u6E05\u7406") + ": " + inline(entry.cleanup.steps[i])
+      );
+    } else append(lines, "- " + L("No cleanup", "\u65E0\u9700\u6E05\u7406") + ": " + inline(entry.cleanup.no_cleanup_reason));
+    append(lines, "");
   }
-  append(lines, "", "## Manual Execution Worksheet", "");
+  const groupedGaps = /* @__PURE__ */ new Map();
+  const gapGroups = [];
+  for (let i = 0; i < snapshot.blocked.length; i += 1) {
+    const blockedItem = snapshot.blocked[i];
+    const dependencies = blockedItem.blocking_roots ?? [{ root_issue_id: blockedItem.root_issue_id, recovery: blockedItem.recovery }];
+    for (let dependencyIndex = 0; dependencyIndex < dependencies.length; dependencyIndex += 1) {
+      const item = { ...blockedItem, ...dependencies[dependencyIndex] };
+      if (!groupedGaps.has(item.root_issue_id)) {
+        const group = [];
+        groupedGaps.set(item.root_issue_id, group);
+        append(gapGroups, group);
+      }
+      append(groupedGaps.get(item.root_issue_id), item);
+    }
+  }
+  let gapIndex = 0;
+  const categories = ["business", "execution", "evidence"];
+  for (let categoryIndex = 0; categoryIndex < categories.length; categoryIndex += 1) {
+    const category = categories[categoryIndex];
+    append(lines, category === "business" ? L("## Business Rule Gaps", "## \u5F85\u8865\u5145\u4E1A\u52A1\u89C4\u5219") : category === "execution" ? L("## Execution Preparation Gaps", "## \u5F85\u8865\u9F50\u6267\u884C\u51C6\u5907") : L("## Source and Evidence Gaps", "## \u5F85\u8865\u9F50\u6765\u6E90\u4E0E\u4F9D\u636E"), "");
+    let categoryCount = 0;
+    for (let groupIndex = 0; groupIndex < gapGroups.length; groupIndex += 1) {
+      const members = gapGroups[groupIndex];
+      if (businessGapCategory(members[0].recovery.missing_type) !== category) continue;
+      categoryCount += 1;
+      gapIndex += 1;
+      append(lines, "### " + L("Gap", "\u7F3A\u53E3") + "-" + gapIndex, "");
+      for (let i = 0; i < members.length; i += 1) {
+        const item = members[i];
+        append(lines, "- " + inline(item.subject) + " \u2014 " + L("Scope", "\u8303\u56F4") + ": " + inline(item.scope) + "; " + L("Risk", "\u98CE\u9669") + ": " + label(item.risk));
+        const decision = planByItemKey.get("formal_test_point\0" + item.obligation_id);
+        if (decision?.reason) append(lines, "  - " + L("Decision", "\u6267\u884C\u51B3\u5B9A") + ": " + label(decision.execution_disposition) + " \u2014 " + inline(decision.reason));
+      }
+      append(lines, "- " + L("Question", "\u9700\u786E\u8BA4\u4E8B\u9879") + ": " + inline(recoveryQuestion(members[0].recovery.question, zh)));
+      const details = recoveryDetails(members[0], zh);
+      for (let i = 0; i < details.length; i += 1) append(lines, "- " + inline(details[i]));
+      append(lines, "- " + L("Needed", "\u9700\u8981\u8865\u5145") + ": " + (category === "execution" ? L("Verified preparation, control or observation capability.", "\u5DF2\u9A8C\u8BC1\u7684\u6570\u636E\u51C6\u5907\u3001\u63A7\u5236\u6216\u89C2\u5BDF\u80FD\u529B\u3002") : category === "evidence" ? L("Authoritative evidence resolving the source gap or conflict.", "\u53EF\u6D88\u9664\u6765\u6E90\u7F3A\u5931\u3001\u6B67\u4E49\u6216\u51B2\u7A81\u7684\u6743\u5A01\u8BC1\u636E\u3002") : L("An authoritative product rule and expected result.", "\u660E\u786E\u7684\u4EA7\u54C1\u89C4\u5219\u53CA\u9884\u671F\u7ED3\u679C\u3002")), "");
+    }
+    if (categoryCount === 0) append(lines, L("_None._", "_\u65E0\u3002_"), "");
+  }
+  append(lines, L("## Scope Exclusions", "## \u8303\u56F4\u6392\u9664"), "");
+  if (coverage.not_applicable.length === 0) append(lines, L("_None._", "_\u65E0\u3002_"));
+  for (let i = 0; i < coverage.not_applicable.length; i += 1) {
+    const item = coverage.not_applicable[i];
+    append(lines, "- " + (item.subject_kind === "formal_test_point" ? L("Formal Test Point", "\u6B63\u5F0F\u6D4B\u8BD5\u70B9") : L("Requirement fact", "\u9700\u6C42\u4E8B\u5B9E")) + " \u201C" + inline(item.subject) + "\u201D " + L("in", "\u8303\u56F4") + " " + inline(item.scope) + " \u2014 " + inline(item.reason));
+  }
+  append(lines, "", L("## Exploratory Risks", "## \u63A2\u7D22\u6027\u98CE\u9669"), "");
+  if (snapshot.exploratory.length === 0) append(lines, L("_None._", "_\u65E0\u3002_"));
+  for (let i = 0; i < snapshot.exploratory.length; i += 1) {
+    const item = snapshot.exploratory[i];
+    append(lines, "- " + inline(item.title) + " \u2014 " + label(item.risk) + ": " + L("Nonformal risk hypothesis; not counted as formal coverage.", "\u975E\u6B63\u5F0F\u98CE\u9669\u5EFA\u8BAE\uFF0C\u4E0D\u8BA1\u5165\u6B63\u5F0F\u8986\u76D6\u3002"));
+    if (item.origin === "heuristic") append(
+      lines,
+      "  - " + L("Unsourced heuristic, not evidence", "\u65E0\u6765\u6E90\u7684\u542F\u53D1\u5F0F\u5EFA\u8BAE\uFF0C\u4E0D\u662F\u8BC1\u636E") + ": " + inline(item.hypothesis),
+      "  - " + L("Rationale", "\u63D0\u51FA\u4F9D\u636E") + ": " + inline(item.rationale)
+    );
+    const decision = planByItemKey.get("exploratory\0" + item.exploratory_id);
+    if (decision?.reason) append(lines, "  - " + L("Decision", "\u6267\u884C\u51B3\u5B9A") + ": " + label(decision.execution_disposition) + " \u2014 " + inline(decision.reason));
+  }
   append(
     lines,
-    "Generated, not executed. Record results downstream and bind each record to the delivered bundle digest + stable Case ID listed in the Audit Appendix.",
+    "",
+    L("## Manual Execution Worksheet", "## \u4EBA\u5DE5\u6267\u884C\u8BB0\u5F55\u8868"),
+    "",
+    L(
+      "Not executed. Record results downstream against the bundle digest and stable Case ID; only confirmed runner Cases are listed.",
+      "\u5C1A\u672A\u6267\u884C\u3002\u6267\u884C\u7ED3\u679C\u7531\u4E0B\u6E38\u6309 bundle \u6458\u8981\u548C\u7A33\u5B9A\u7528\u4F8B ID \u8BB0\u5F55\uFF1B\u4E0B\u8868\u4EC5\u5217\u51FA\u5DF2\u786E\u8BA4\u53EF\u6267\u884C\u7684\u7528\u4F8B\u3002"
+    ),
     ""
   );
   const worksheetRows = [];
-  for (let index = 0; index < executeCases.length; index += 1) {
-    const item = executeCases[index];
-    append(worksheetRows, [
-      String(business.displayByCaseId.get(item.caseEntry.case_id)),
-      inline(item.caseEntry.title),
-      inline(item.caseEntry.scope),
-      titleCase(item.caseEntry.risk),
-      inline(item.caseEntry.role.value),
-      "Not recorded",
-      "\u2014",
-      "\u2014"
+  for (let i = 0; i < executeCases.length; i += 1) append(worksheetRows, [
+    String(business.displayByCaseId.get(executeCases[i].caseEntry.case_id)),
+    inline(executeCases[i].caseEntry.title),
+    inline(executeCases[i].caseEntry.scope),
+    label(executeCases[i].caseEntry.risk),
+    inline(executeCases[i].caseEntry.role.value),
+    L("Not recorded", "\u672A\u8BB0\u5F55"),
+    "\u2014",
+    "\u2014"
+  ]);
+  appendArray(lines, table([L("Case", "\u7528\u4F8B"), L("Title", "\u6807\u9898"), L("Scope", "\u8303\u56F4"), L("Risk", "\u98CE\u9669"), L("Role", "\u89D2\u8272"), L("Result", "\u7ED3\u679C"), L("Defect", "\u7F3A\u9677"), L("Notes", "\u5907\u6CE8")], worksheetRows));
+  append(
+    lines,
+    "",
+    L("## Audit Appendix", "## \u5BA1\u8BA1\u7D22\u5F15"),
+    "",
+    L(
+      "Complete typed Oracles, evidence, coverage ledgers and lineage are in the normative JSON. Cases are not duplicated here.",
+      "\u5B8C\u6574\u7684\u7ED3\u6784\u5316 Oracle\u3001\u8BC1\u636E\u3001\u8986\u76D6\u8D26\u672C\u548C\u8840\u7F18\u5747\u4FDD\u7559\u5728\u89C4\u8303 JSON \u4E2D\uFF0C\u6B64\u5904\u4E0D\u91CD\u590D\u7528\u4F8B\u6B63\u6587\u3002"
+    ),
+    "",
+    "- " + L("Schema / compiler", "Schema / \u7F16\u8BD1\u5668") + ": " + code(snapshot.schema_version) + " / " + code(snapshot.quality.compiler_version),
+    "- " + L("Source revision", "\u8D44\u6599\u4FEE\u8BA2") + ": " + snapshot.source_revision,
+    "- " + L("Semantic source digest", "\u8D44\u6599\u8BED\u4E49\u6458\u8981") + ": " + code(snapshot.quality.lineage.semantic_source_digest),
+    "- " + L("Plan digest", "\u8BA1\u5212\u6458\u8981") + ": " + code(plan.plan_digest),
+    "- " + L("Semantic result digest", "\u8BED\u4E49\u7ED3\u679C\u6458\u8981") + ": " + code(plan.semantic_result_digest),
+    ""
+  );
+  const traceRows = [];
+  for (let i = 0; i < business.inventory.length; i += 1) {
+    const entry = business.inventory[i].caseEntry;
+    append(traceRows, [
+      String(business.displayByCaseId.get(entry.case_id)),
+      code(entry.case_id),
+      codeList(entry.obligation_ids),
+      codeList(entry.evidence_refs)
     ]);
   }
-  appendArray(lines, table(
-    ["Case", "Title", "Scope", "Risk", "Role", "Result", "Defect", "Notes"],
-    worksheetRows
-  ));
-  append(
-    lines,
-    "",
-    "## Audit Appendix",
-    "",
-    `- Schema version: ${code(snapshot.schema_version)}`,
-    `- Source revision: ${code(snapshot.source_revision)}`,
-    ""
-  );
-  appendArray(lines, renderCaseLane("Grounded Cases", snapshot.grounded, false, 3));
-  append(lines, "");
-  appendArray(lines, renderCaseLane("Conditional Cases", snapshot.conditional, true, 3));
-  append(lines, "", "### Blocked Formal Test Points", "");
-  if (snapshot.blocked.length === 0) append(lines, "_None._");
-  for (let index = 0; index < snapshot.blocked.length; index += 1) {
-    const item = snapshot.blocked[index];
-    append(
-      lines,
-      `#### ${code(item.obligation_id)}`,
-      "",
-      `- Root issue: ${code(item.root_issue_id)}`,
-      `- Scope: ${code(item.scope)}`,
-      `- Risk: ${code(item.risk)}`,
-      `- Reason: ${code(item.reason)}`,
-      `- Missing type: ${code(item.recovery.missing_type)}`,
-      `- Required material: ${inline(item.recovery.required_material)}`,
-      `- Recovery question: ${inline(item.recovery.question)}`,
-      ""
-    );
-  }
-  if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  append(lines, "", "### Exploratory Cases", "");
-  if (snapshot.exploratory.length === 0) append(lines, "_None._");
-  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
-    const item = snapshot.exploratory[index];
-    append(
-      lines,
-      `#### ${code(item.exploratory_id)} \u2014 ${inline(item.title)}`,
-      "",
-      `- Scope: ${code(item.scope)}`,
-      `- Risk: ${code(item.risk)}`,
-      `- Reason: ${inline(item.reason)}`,
-      ""
-    );
-  }
-  if (lines[lines.length - 1] === "") Reflect.apply(NATIVE_ARRAY_POP3, lines, []);
-  const requirementRows = [];
-  for (let index = 0; index < coverage.requirements.entries.length; index += 1) {
-    const item = coverage.requirements.entries[index];
-    append(requirementRows, [code(item.fact_id), code(item.status)]);
-  }
-  const formalRows = [];
-  for (let index = 0; index < coverage.formal.entries.length; index += 1) {
-    const item = coverage.formal.entries[index];
-    append(formalRows, [code(item.obligation_id), code(item.status)]);
-  }
-  const executableRows = [];
-  for (let index = 0; index < coverage.executable.entries.length; index += 1) {
-    const item = coverage.executable.entries[index];
-    append(executableRows, [code(item.obligation_id), code(item.case_id)]);
-  }
-  append(
-    lines,
-    "",
-    "### Coverage",
-    "",
-    "#### Requirement Fact Ledger",
-    "",
-    `Accounted: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
-    ""
-  );
-  appendArray(lines, table(["Fact", "Status"], requirementRows));
-  append(lines, "", "#### Formal Test Point Ledger", "", `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, "");
-  appendArray(lines, table(["Test Point", "Disposition"], formalRows));
-  append(lines, "", "#### Grounded Executable Ledger", "", `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, "");
-  appendArray(lines, table(["Test Point", "Case"], executableRows));
-  append(lines, "", "#### Expert Recall Ledger", "", `Status: ${code(coverage.expert_recall.status)}`);
-  for (let index = 0; index < coverage.expert_recall.limits.length; index += 1) {
-    append(lines, `- ${inline(coverage.expert_recall.limits[index])}`);
-  }
-  append(lines, "", "#### NotApplicable (excluded from the coverage numerator)", "");
-  if (coverage.not_applicable.length === 0) append(lines, "_None._");
-  else {
-    const notApplicableRows = [];
-    for (let index = 0; index < coverage.not_applicable.length; index += 1) {
-      const item = coverage.not_applicable[index];
-      append(notApplicableRows, [
-        code(item.subject_kind),
-        code(item.obligation_id ?? item.fact_id),
-        code(item.exclusion_claim_id),
-        code(item.scope),
-        code(item.support_review),
-        inline(item.reason)
+  appendArray(lines, table([L("Case", "\u7528\u4F8B"), L("Stable ID", "\u7A33\u5B9A ID"), L("Test Points", "\u6D4B\u8BD5\u70B9"), L("Evidence", "\u8BC1\u636E")], traceRows));
+  const gapTraceRows = [];
+  for (let i = 0; i < snapshot.blocked.length; i += 1) {
+    const item = snapshot.blocked[i];
+    const dependencies = item.blocking_roots ?? [{ root_issue_id: item.root_issue_id, recovery: item.recovery }];
+    for (let dependencyIndex = 0; dependencyIndex < dependencies.length; dependencyIndex += 1) {
+      const dependency = dependencies[dependencyIndex];
+      append(gapTraceRows, [
+        inline(item.subject),
+        code(item.obligation_id),
+        code(dependency.root_issue_id),
+        code(item.reason),
+        code(dependency.recovery.required_material)
       ]);
     }
-    appendArray(lines, table(["Subject kind", "Subject", "Exclusion evidence", "Scope", "Review", "Reason"], notApplicableRows));
   }
-  const planRows = [];
-  for (let index = 0; index < plan.items.length; index += 1) {
-    const item = plan.items[index];
-    append(planRows, [
-      code(item.item_kind),
-      code(item.item_id),
-      inline(item.title),
-      code(item.semantic_status),
-      code(item.execution_disposition),
-      code(item.reason_code)
-    ]);
-  }
-  append(
+  append(lines, "", L("### Gap Traceability", "### \u7F3A\u53E3\u8FFD\u6EAF"), "");
+  appendArray(lines, table([
+    L("Subject", "\u4E8B\u9879"),
+    L("Test Point", "\u6D4B\u8BD5\u70B9"),
+    L("Shared root", "\u5171\u4EAB\u6839\u56E0"),
+    L("Diagnostic codes", "\u8BCA\u65AD\u7801"),
+    L("Recovery references", "\u6062\u590D\u5F15\u7528")
+  ], gapTraceRows));
+  append(lines, "", L("### Exploratory Traceability", "### \u63A2\u7D22\u5EFA\u8BAE\u8FFD\u6EAF"), "");
+  for (let i = 0; i < snapshot.exploratory.length; i += 1) append(
     lines,
-    "",
-    "### Execution Plan",
-    "",
-    `- Status: ${code(plan.status)}`,
-    `- Plan digest: ${code(plan.plan_digest)}`,
-    `- Semantic result digest: ${code(plan.semantic_result_digest)}`,
-    `- Execute Cases: ${plan.summary.execute_case_count}`,
-    `- DoNotExecute Cases: ${plan.summary.do_not_execute_case_count}`,
-    `- DoNotExecute formal Test Points: ${plan.summary.do_not_execute_formal_test_point_count}`,
-    `- DoNotExecute Exploratory items: ${plan.summary.do_not_execute_exploratory_count}`,
-    `- Applicable Test Point execution coverage: full ${plan.summary.full_test_point_count}, partial ${plan.summary.partial_test_point_count}, none ${plan.summary.none_test_point_count}`,
-    `- Runner Case IDs: ${codeList(plan.runner_case_ids)}`,
-    ""
+    "- " + code(snapshot.exploratory[i].exploratory_id) + ": " + inline(snapshot.exploratory[i].reason)
   );
-  appendArray(lines, table(
-    ["Kind", "ID", "Title", "True status", "Execution disposition", "Reason code"],
-    planRows
-  ));
-  append(
-    lines,
-    "",
-    "### Quality",
-    "",
-    `- Delivery status: ${code(snapshot.quality.delivery_status)}`,
-    `- Compiler version: ${code(snapshot.quality.compiler_version)}`,
-    `- Schema version: ${code(snapshot.quality.schema_version)}`,
-    `- Semantic source digest: ${code(snapshot.quality.lineage.semantic_source_digest)}`,
-    `- Evidence semantic digest: ${code(snapshot.quality.lineage.evidence_semantic_digest)}`,
-    `- Behavior Views semantic digest: ${code(snapshot.quality.lineage.behavior_views_semantic_digest)}`,
-    `- Test Obligations semantic digest: ${code(snapshot.quality.lineage.test_obligations_semantic_digest)}`,
-    `- Case Drafts semantic digest: ${code(snapshot.quality.lineage.case_drafts_semantic_digest)}`,
-    "- Limits:"
-  );
-  for (let index = 0; index < snapshot.quality.limits.length; index += 1) {
-    append(lines, `  - ${inline(snapshot.quality.limits[index])}`);
-  }
+  append(lines, "", L("### Limits", "### \u9650\u5236"), "");
+  for (let i = 0; i < snapshot.quality.limits.length; i += 1) append(lines, "- " + (zh && snapshot.quality.limits[i] === "Compilation is limited to the supplied revision." ? "\u672C\u6B21\u7F16\u8BD1\u4EC5\u6DB5\u76D6\u6240\u63D0\u4F9B\u7684\u8D44\u6599\u4FEE\u8BA2\u3002" : inline(snapshot.quality.limits[i])));
   return `${joinArray4(lines, "\n")}
 `;
 }
@@ -15778,10 +25047,10 @@ function weakMapGet(values, key) {
 function weakMapSet(values, key, value) {
   NATIVE_REFLECT_APPLY2(NATIVE_WEAK_MAP_SET, values, [key, value]);
 }
-function makeMap(entries = []) {
+function makeMap(entries2 = []) {
   const output = new NATIVE_MAP();
-  for (let index = 0; index < entries.length; index += 1) {
-    mapSet(output, entries[index][0], entries[index][1]);
+  for (let index = 0; index < entries2.length; index += 1) {
+    mapSet(output, entries2[index][0], entries2[index][1]);
   }
   return output;
 }
@@ -16355,13 +25624,13 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
   const conflictIdsBySource = makeMap();
   for (let index = 0; index < conflicts.length; index += 1) {
     const conflict = conflicts[index];
-    const identity = conflictIdentity(conflict);
-    mapSet(conflictByIdentity, identity, conflict);
+    const identity2 = conflictIdentity(conflict);
+    mapSet(conflictByIdentity, identity2, conflict);
     const sourceIds = makeSet(strings4(conflict.source_ids));
     forEachSet(sourceIds, (sourceId) => {
       const bucket = mapGet(conflictIdsBySource, sourceId);
-      if (bucket) pushArray3(bucket, identity);
-      else mapSet(conflictIdsBySource, sourceId, [identity]);
+      if (bucket) pushArray3(bucket, identity2);
+      else mapSet(conflictIdsBySource, sourceId, [identity2]);
     });
   }
   const directCandidateIdsByClaim = makeMap();
@@ -16434,13 +25703,13 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
       const parentSetIdentities = [];
       for (let parentIndex = 0; parentIndex < uniqueParents.length; parentIndex += 1) {
         const parentCandidates = uniqueParents[parentIndex];
-        let identity = weakMapGet(candidateSetIdentity, parentCandidates);
-        if (identity === void 0) {
-          identity = nextCandidateSetIdentity;
+        let identity2 = weakMapGet(candidateSetIdentity, parentCandidates);
+        if (identity2 === void 0) {
+          identity2 = nextCandidateSetIdentity;
           nextCandidateSetIdentity += 1;
-          weakMapSet(candidateSetIdentity, parentCandidates, identity);
+          weakMapSet(candidateSetIdentity, parentCandidates, identity2);
         }
-        pushArray3(parentSetIdentities, identity);
+        pushArray3(parentSetIdentities, identity2);
       }
       sortArray3(parentSetIdentities, (left, right) => left - right);
       const unionSignature = canonicalStringify([directSignature, parentSetIdentities]);
@@ -16461,7 +25730,7 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
           }
         }
         const baseCandidates = baseParentId === null ? null : mapGet(candidateIdsByClaim, baseParentId) ?? null;
-        if (baseCandidates) forEachSet(baseCandidates, (identity) => setAdd(merged, identity));
+        if (baseCandidates) forEachSet(baseCandidates, (identity2) => setAdd(merged, identity2));
         const coveredByBase = makeSet(
           baseParentId === null ? [] : mapGet(parentsByClaim, baseParentId) ?? []
         );
@@ -16473,7 +25742,7 @@ function prepareConflictRelations(claimsById, sourcePack, conflicts) {
           const parentCandidates = mapGet(candidateIdsByClaim, parentId);
           if (!parentCandidates || setHas(mergedParentSets, parentCandidates)) continue;
           setAdd(mergedParentSets, parentCandidates);
-          forEachSet(parentCandidates, (identity) => setAdd(merged, identity));
+          forEachSet(parentCandidates, (identity2) => setAdd(merged, identity2));
         }
         const ordered = sortArray3(setValuesArray(merged), compareCodePoints9);
         resolvedCount = ordered.length;
@@ -16528,13 +25797,13 @@ function conflictSelectionForCase(caseDraft, relations, allowedConflictIds, cach
   const relationIdentities = [];
   for (let index = 0; index < uniqueRelatedSets.length; index += 1) {
     const related = uniqueRelatedSets[index];
-    let identity = weakMapGet(cache.relationIdentityBySet, related);
-    if (identity === void 0) {
-      identity = cache.nextRelationIdentity;
+    let identity2 = weakMapGet(cache.relationIdentityBySet, related);
+    if (identity2 === void 0) {
+      identity2 = cache.nextRelationIdentity;
       cache.nextRelationIdentity += 1;
-      weakMapSet(cache.relationIdentityBySet, related, identity);
+      weakMapSet(cache.relationIdentityBySet, related, identity2);
     }
-    pushArray3(relationIdentities, identity);
+    pushArray3(relationIdentities, identity2);
   }
   sortArray3(relationIdentities, (left, right) => left - right);
   const unionSignature = canonicalStringify(relationIdentities);
@@ -16542,8 +25811,8 @@ function conflictSelectionForCase(caseDraft, relations, allowedConflictIds, cach
   if (!candidateIds) {
     const merged = makeSet();
     for (let index = 0; index < uniqueRelatedSets.length; index += 1) {
-      forEachSet(uniqueRelatedSets[index], (identity) => {
-        if (setHas(allowedConflictIds, identity)) setAdd(merged, identity);
+      forEachSet(uniqueRelatedSets[index], (identity2) => {
+        if (setHas(allowedConflictIds, identity2)) setAdd(merged, identity2);
       });
     }
     const orderedIds2 = sortArray3(setValuesArray(merged), compareCodePoints9);
@@ -16568,13 +25837,13 @@ function conflictSelectionForCase(caseDraft, relations, allowedConflictIds, cach
   let count = 0;
   const orderedIds = weakMapGet(cache.orderedIdsByUnion, candidateIds) ?? sortArray3(setValuesArray(candidateIds), compareCodePoints9);
   for (let index = 0; index < orderedIds.length; index += 1) {
-    const identity = orderedIds[index];
-    const conflict = mapGet(relations.conflictByIdentity, identity);
+    const identity2 = orderedIds[index];
+    const conflict = mapGet(relations.conflictByIdentity, identity2);
     if (!conflict) continue;
     const conflictScope = conflict.scope;
     if (typeof conflictScope === "string" && scopesIntersect3(caseScope, conflictScope)) {
       count += 1;
-      if (selectedIdentity === null) selectedIdentity = identity;
+      if (selectedIdentity === null) selectedIdentity = identity2;
       if (count === 2) break;
     }
   }
@@ -16800,32 +26069,93 @@ function compilerIssueDescriptor(obligation, submitted) {
   };
   return null;
 }
+function testabilityIssueDescriptor(obligation, reason, caseDrafts) {
+  if (missingType(reason) !== "testability") return null;
+  const refs = makeSet();
+  const drafts = records4(caseDrafts.cases);
+  for (let index = 0; index < drafts.length; index += 1) {
+    const draft = drafts[index];
+    if (!setHas(makeSet(strings4(draft.obligation_ids)), String(obligation.obligation_id))) continue;
+    const profile = isRecord4(draft.testability_profile) ? draft.testability_profile : {};
+    const groups = [
+      { kind: "capability", entries: records4(profile.capabilities) },
+      { kind: "observer", entries: records4(profile.observers) },
+      { kind: "control", entries: records4(profile.controls) }
+    ];
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const group = groups[groupIndex];
+      for (let entryIndex = 0; entryIndex < group.entries.length; entryIndex += 1) {
+        const entry = group.entries[entryIndex];
+        if (entry.status !== "unknown" && entry.status !== "unavailable") continue;
+        const label = entry.capability ?? entry.observer ?? entry.control;
+        setAdd(refs, canonicalStringify({
+          kind: group.kind,
+          subject: capabilityLabel(label),
+          target: group.kind === "observer" ? {
+            subject_ref: String(entry.subject_ref ?? ""),
+            surface_id: String(entry.surface_id ?? ""),
+            observation_target: capabilityLabel(entry.observation_target)
+          } : null
+        }));
+      }
+    }
+  }
+  if (setValuesArray(refs).length === 0) return null;
+  return {
+    missing_type: "testability",
+    semantic_refs: sortArray3(setValuesArray(refs), compareCodePoints9),
+    scope: String(obligation.scope),
+    answerable: false,
+    reasons: [reason],
+    evidence_refs: []
+  };
+}
+function issueDescriptors(obligation, submitted, reason, caseDrafts, evidenceRefs = []) {
+  const descriptor = compilerIssueDescriptor(obligation, submitted) ?? testabilityIssueDescriptor(obligation, reason, caseDrafts);
+  if (!descriptor) return [{
+    missing_type: missingType(reason),
+    semantic_refs: semanticRefs(obligation, reason),
+    scope: String(obligation.scope ?? ""),
+    answerable: !/UNKNOWN|UNAVAILABLE|MISSING_CAPABILITY|MISSING_OBSERVER|MISSING_CONTROL|CAPABILITY_MISSING|OBSERVER_MISSING|CONTROL_MISSING/u.test(reason),
+    reasons: [reason],
+    evidence_refs: evidenceRefs
+  }];
+  if (submitted?.subject?.kind === "capabilities" && obligation.kind !== "requirement-gap") return mapArray4(
+    sortArray3(setValuesArray(makeSet(mapArray4(strings4(submitted.subject.capabilities), capabilityLabel))), compareCodePoints9),
+    (subject) => ({ ...descriptor, semantic_refs: [canonicalStringify({ kind: "capability", subject, target: null })] })
+  );
+  if (!compilerIssueDescriptor(obligation, submitted)) return mapArray4(
+    descriptor.semantic_refs,
+    (ref) => ({ ...descriptor, semantic_refs: [ref] })
+  );
+  return [descriptor];
+}
 function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
   const blocked = mapArray4(records4(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
-    const compilerIssue = compilerIssueDescriptor(
-      obligation,
-      mapGet(submittedByObligation, String(item.obligation_id))
-    );
-    const signature = compilerIssue ? {
-      missing_type: compilerIssue.missing_type,
-      semantic_refs: compilerIssue.semantic_refs,
-      scope: compilerIssue.scope
-    } : {
-      missing_type: missingType(String(item.reason)),
-      semantic_refs: semanticRefs(obligation, String(item.reason)),
-      scope: String(obligation.scope ?? "")
-    };
-    return { ...item, root_issue_id: stableId("root", signature) };
+    const rootIds = sortArray3(mapArray4(
+      issueDescriptors(
+        obligation,
+        mapGet(submittedByObligation, String(item.obligation_id)),
+        String(item.reason),
+        caseDrafts
+      ),
+      (descriptor) => stableId("root", {
+        missing_type: descriptor.missing_type,
+        semantic_refs: descriptor.semantic_refs,
+        scope: descriptor.scope
+      })
+    ), compareCodePoints9);
+    return { ...item, root_issue_id: rootIds[0], root_issue_ids: rootIds };
   });
   return { ...classification, blocked };
 }
 function clarificationQuestion(missingTypeValue, scope) {
   const type = String(missingTypeValue);
   const businessScope = String(scope);
-  if (type === "testability" || type === "capability" || type === "resource_limit" || type === "control" || type === "observer") {
+  if (isExecutionPreparationGap(type)) {
     return `What verified test setup, control, or observation capability is available for ${businessScope}?`;
   }
   if (type === "source-conflict" || type === "fact-conflict" || type === "evidence" || type === "extraction" || type === "authority") {
@@ -16839,28 +26169,34 @@ function clarificationQuestion(missingTypeValue, scope) {
 function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
-  return sortArray3(mapArray4(records4(classification.blocked), (item) => {
+  const output = [];
+  for (const item of records4(classification.blocked)) {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const reason = String(item.reason);
-    const compilerIssue = compilerIssueDescriptor(
+    for (const compilerIssue of issueDescriptors(
       obligation,
-      mapGet(submittedByObligation, String(item.obligation_id))
-    );
-    const type = compilerIssue?.missing_type ?? missingType(reason);
-    const scope = compilerIssue?.scope ?? String(obligation.scope ?? "unknown");
-    const technical = reason.includes("UNAVAILABLE") || reason.includes("UNKNOWN") || reason.includes("MISSING_CAPABILITY") || reason.includes("MISSING_OBSERVER") || reason.includes("MISSING_CONTROL");
-    return {
-      obligation_id: String(item.obligation_id),
-      missing_type: type,
-      semantic_refs: compilerIssue?.semantic_refs ?? semanticRefs(obligation, reason),
-      scope,
-      risk: String(item.risk),
+      mapGet(submittedByObligation, String(item.obligation_id)),
       reason,
-      evidence_refs: sortArray3(compilerIssue?.evidence_refs ?? strings4(item.evidence_refs), compareCodePoints9),
-      answerable: compilerIssue?.answerable ?? !technical,
-      question: clarificationQuestion(type, scope)
-    };
-  }), (left, right) => compareCodePoints9(left.obligation_id, right.obligation_id));
+      caseDrafts,
+      strings4(item.evidence_refs)
+    )) {
+      const type = compilerIssue?.missing_type ?? missingType(reason);
+      const scope = compilerIssue?.scope ?? String(obligation.scope ?? "unknown");
+      const technical = reason.includes("UNAVAILABLE") || reason.includes("UNKNOWN") || reason.includes("MISSING_CAPABILITY") || reason.includes("MISSING_OBSERVER") || reason.includes("MISSING_CONTROL") || reason.includes("CAPABILITY_MISSING") || reason.includes("OBSERVER_MISSING") || reason.includes("CONTROL_MISSING");
+      pushArray3(output, {
+        obligation_id: String(item.obligation_id),
+        missing_type: type,
+        semantic_refs: compilerIssue?.semantic_refs ?? semanticRefs(obligation, reason),
+        scope,
+        risk: String(item.risk),
+        reason,
+        evidence_refs: sortArray3([...compilerIssue?.evidence_refs ?? strings4(item.evidence_refs)], compareCodePoints9),
+        answerable: compilerIssue?.answerable ?? !technical,
+        question: clarificationQuestion(type, scope)
+      });
+    }
+  }
+  return sortArray3(output, (left, right) => compareCodePoints9(left.obligation_id, right.obligation_id) || compareCodePoints9(canonicalStringify(left.semantic_refs), canonicalStringify(right.semantic_refs)));
 }
 function buildSourceConflictBridge(classification, obligations, relations, conflicts) {
   const obligationById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), item]));
@@ -16975,7 +26311,9 @@ function translateClarificationAppend(clarificationInput, sourceConflictBridge) 
   }
   const events = records4(output.append_batch.clarification_events);
   for (let index = 0; index < events.length; index += 1) {
-    events[index].root_issue_ids = translateRootIds(events[index].root_issue_ids).ids;
+    if (events[index].root_issue_ids !== void 0) {
+      events[index].root_issue_ids = translateRootIds(events[index].root_issue_ids).ids;
+    }
   }
   return output;
 }
@@ -17041,7 +26379,9 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
   for (let index = 0; index < output.length; index += 1) output[index].batch_id = batchId;
   return output;
 }
-function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, clarificationState) {
+function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, clarificationState, obligations, claimsById) {
+  const zh = sourcePack.output_language === "zh-CN";
+  const L = (en, cn) => zh ? cn : en;
   const pointById = makeMap(mapArray4(
     records4(semantic.formal_test_points),
     (point) => [String(point.obligation_id), point]
@@ -17055,6 +26395,11 @@ function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, c
     }))
   });
   const changeHead = toNumber(clarificationState.clarification_event_seq);
+  const titles = makeMap(mapArray4(obligations, (obligation) => {
+    const claims = mapArray4(strings4(obligation.source_claim_ids), (id2) => mapGet(claimsById, id2));
+    const values = filterArray4(mapArray4(claims, (claim) => String(claim?.value ?? "")), (value) => value.length > 0);
+    return [String(obligation.obligation_id), String(obligation.title ?? (joinArray5(values, "; ") || obligation.scope))];
+  }));
   return createPresentationSnapshot({
     purpose: "semantic_clarification",
     entryContext: "active_analysis",
@@ -17063,13 +26408,13 @@ function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, c
     planDigest,
     planChangeHeadSeq: changeHead,
     groups: mapArray4(pendingRoots, (root) => ({
-      question: String(root.question),
+      question: `${joinArray5(mapArray4(strings4(root.affected_obligation_ids), (id2) => String(mapGet(titles, id2))), "; ")} \u2014 ${L(String(root.question), isExecutionPreparationGap(root.missing_type) ? "\u54EA\u4E9B\u5DF2\u9A8C\u8BC1\u7684\u6570\u636E\u51C6\u5907\u3001\u63A7\u5236\u6216\u89C2\u5BDF\u80FD\u529B\u53EF\u4EE5\u652F\u6301\u4E0A\u8FF0\u884C\u4E3A\uFF1F" : root.missing_type === "source-conflict" ? "\u4E0A\u8FF0\u884C\u4E3A\u5E94\u4EE5\u54EA\u4EFD\u6743\u5A01\u89C4\u5219\u4E3A\u51C6\uFF1F" : "\u4E0A\u8FF0\u884C\u4E3A\u7684\u6B63\u5F0F\u4EA7\u54C1\u89C4\u5219\u4E0E\u9884\u671F\u7ED3\u679C\u662F\u4EC0\u4E48\uFF1F\u8BF7\u6CE8\u660E\u4F9D\u636E\u3002")}`,
       items: mapArray4(strings4(root.affected_obligation_ids), (obligationId) => {
         const point = mapGet(pointById, obligationId) ?? {};
         return {
           item_kind: "formal_test_point",
           item_id: obligationId,
-          title: `Formal Test Point ${obligationId}`,
+          title: String(mapGet(titles, obligationId) ?? L("Product behavior needing clarification", "\u5F85\u6F84\u6E05\u7684\u4EA7\u54C1\u884C\u4E3A")),
           item_semantic_digest: digest({
             obligation_id: obligationId,
             evidence_level: point.evidence_level,
@@ -17081,13 +26426,13 @@ function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, c
         };
       }),
       allowedOptions: [
-        { option_code: "final", label: "Final answer", meaning: "Apply an authoritative final business answer." },
-        { option_code: "temporary", label: "Temporary answer", meaning: "Record a provisional answer without upgrading evidence." },
-        { option_code: "unknown", label: "Unknown", meaning: "Record that the answer is currently unknown." },
-        { option_code: "deferred", label: "Defer", meaning: "Leave this issue unresolved for later." },
-        { option_code: "request_delivery", label: "Continue to execution closure", meaning: "Keep the true Blocked status and decide its run disposition." }
+        { option_code: "final", label: L("Final answer", "\u6B63\u5F0F\u7B54\u6848"), meaning: isExecutionPreparationGap(root.missing_type) ? L("Provide verified execution-preparation information with its authority and source.", "\u63D0\u4F9B\u5DF2\u6838\u5B9E\u7684\u6267\u884C\u51C6\u5907\u4FE1\u606F\uFF0C\u6CE8\u660E\u6743\u9650\u8303\u56F4\u53CA\u6765\u6E90\u3002") : L("Apply an authoritative final business answer.", "\u63D0\u4F9B\u6709\u6743\u5A01\u4F9D\u636E\u7684\u6B63\u5F0F\u4E1A\u52A1\u7B54\u6848\u3002") },
+        { option_code: "temporary", label: L("Temporary answer", "\u4E34\u65F6\u7B54\u6848"), meaning: L("Record a provisional answer without upgrading evidence.", "\u8BB0\u5F55\u4E34\u65F6\u7B54\u6848\uFF0C\u4E0D\u5347\u7EA7\u8BC1\u636E\u7B49\u7EA7\u3002") },
+        { option_code: "unknown", label: L("Unknown", "\u5C1A\u4E0D\u660E\u786E"), meaning: L("Record that the answer is currently unknown.", "\u8BB0\u5F55\u5F53\u524D\u672A\u77E5\uFF0C\u4E0D\u81EA\u52A8\u91CD\u590D\u8FFD\u95EE\u3002") },
+        { option_code: "deferred", label: L("Defer", "\u7A0D\u540E\u5904\u7406"), meaning: L("Leave this issue unresolved for later.", "\u4FDD\u7559\u7F3A\u53E3\uFF0C\u7A0D\u540E\u518D\u5904\u7406\u3002") },
+        { option_code: "request_delivery", label: L("Deliver with gaps", "\u5E26\u7F3A\u53E3\u4EA4\u4ED8"), meaning: L("Keep the true Blocked status in the delivery.", "\u4FDD\u7559\u771F\u5B9E\u53D7\u963B\u72B6\u6001\u5E76\u4EA4\u4ED8\uFF0C\u4E0D\u4F2A\u9020\u4E0D\u9002\u7528\u3002") }
       ],
-      answerExample: `Answer ${String(root.root_issue_id)} with a final, temporary, unknown, deferred, or delivery decision.`
+      answerExample: isExecutionPreparationGap(root.missing_type) ? L("Provide verifiable setup, entry, sample or observation resources and their sources; otherwise say unknown, defer, or deliver with this preparation gap recorded.", "\u63D0\u4F9B\u53EF\u6838\u67E5\u7684\u73AF\u5883\u3001\u5165\u53E3\u3001\u6837\u672C\u6216\u89C2\u5BDF\u8D44\u6E90\u53CA\u5176\u6765\u6E90\uFF1B\u5426\u5219\u9009\u62E9\u5C1A\u4E0D\u660E\u786E\u3001\u7A0D\u540E\u5904\u7406\uFF0C\u6216\u4FDD\u7559\u6B64\u6267\u884C\u51C6\u5907\u7F3A\u53E3\u4EA4\u4ED8\u3002") : L("For the behavior shown above: provide the confirmed rule and source, give a temporary answer, or say unknown, defer, or deliver with this gap recorded.", "\u9488\u5BF9\u4E0A\u8FF0\u884C\u4E3A\uFF1A\u7ED9\u51FA\u6B63\u5F0F\u89C4\u5219\u53CA\u6765\u6E90\u3001\u6682\u5B9A\u89C4\u5219\uFF0C\u6216\u9009\u62E9\u5C1A\u4E0D\u660E\u786E\u3001\u7A0D\u540E\u5904\u7406\u3001\u5E26\u7F3A\u53E3\u4EA4\u4ED8\u3002")
     }))
   });
 }
@@ -17124,10 +26469,10 @@ function semanticSnapshot(classification, obligations, claimsById) {
     const item = groundedCases[caseIndex];
     const ids2 = strings4(item.obligation_ids);
     for (let idIndex = 0; idIndex < ids2.length; idIndex += 1) {
-      const id = ids2[idIndex];
-      const existing = mapGet(disposition, id) ?? { lane: "grounded", reason: null, cases: [] };
+      const id2 = ids2[idIndex];
+      const existing = mapGet(disposition, id2) ?? { lane: "grounded", reason: null, cases: [] };
       pushArray3(existing.cases, item);
-      mapSet(disposition, id, existing);
+      mapSet(disposition, id2, existing);
     }
   }
   const conditionalCases = records4(classification.conditional);
@@ -17135,10 +26480,10 @@ function semanticSnapshot(classification, obligations, claimsById) {
     const item = conditionalCases[caseIndex];
     const ids2 = strings4(item.obligation_ids);
     for (let idIndex = 0; idIndex < ids2.length; idIndex += 1) {
-      const id = ids2[idIndex];
-      const existing = mapGet(disposition, id) ?? { lane: "conditional", reason: null, cases: [] };
+      const id2 = ids2[idIndex];
+      const existing = mapGet(disposition, id2) ?? { lane: "conditional", reason: null, cases: [] };
       pushArray3(existing.cases, item);
-      mapSet(disposition, id, existing);
+      mapSet(disposition, id2, existing);
     }
   }
   const blockedItems = records4(classification.blocked);
@@ -17148,7 +26493,8 @@ function semanticSnapshot(classification, obligations, claimsById) {
     {
       lane: "blocked",
       reason: String(blockedItems[index].reason),
-      cases: []
+      cases: [],
+      rootIds: blockedItems[index].root_issue_ids
     }
   );
   const notApplicableItems = records4(classification.not_applicable);
@@ -17169,7 +26515,8 @@ function semanticSnapshot(classification, obligations, claimsById) {
       obligation_id: String(obligation.obligation_id),
       evidence_level: evidenceLevel(obligation, state?.cases ?? [], claimsById, lane, state?.notApplicable),
       classification: lane,
-      blocked_reason: lane === "blocked" ? state?.reason ?? "FORMAL_DISPOSITION_MISSING" : null
+      blocked_reason: lane === "blocked" ? state?.reason ?? "FORMAL_DISPOSITION_MISSING" : null,
+      ...lane === "blocked" && state?.rootIds ? { root_issue_ids: strings4(state.rootIds) } : {}
     };
   }), (left, right) => compareCodePoints9(left.obligation_id, right.obligation_id));
   const ids = (lane) => sortArray3(mapArray4(
@@ -17182,7 +26529,7 @@ function semanticSnapshot(classification, obligations, claimsById) {
   const notApplicable = ids("not_applicable");
   const executableCount = grounded.length + conditional.length;
   const riskById = makeMap(mapArray4(obligations, (item) => [String(item.obligation_id), String(item.risk)]));
-  const hasHighBlocked = someArray3(blocked, (id) => mapGet(riskById, id) === "critical" || mapGet(riskById, id) === "high");
+  const hasHighBlocked = someArray3(blocked, (id2) => mapGet(riskById, id2) === "critical" || mapGet(riskById, id2) === "high");
   const applicableCount = points.length - notApplicable.length;
   const deliveryStatus = applicableCount === 0 ? "no_applicable_formal_test_points" : executableCount === 0 && blocked.length > 0 ? "no_deterministic_cases" : executableCount > 0 && hasHighBlocked ? "critical_gaps" : "executable_subset_ready";
   return {
@@ -17256,6 +26603,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
     const schemaDiagnostics = validateArtifactSchemas(input);
     if (schemaDiagnostics.length > 0) return revisionRequired("schema", sourceRevision, schemaDiagnostics);
     const sourcePolicy = resolveSourcePolicy(input.source_pack);
+    const sourceIntegrity = validateSourceIntegrity(input.source_pack);
+    if (sourceIntegrity.length > 0) return revisionRequired("source_pack", sourceRevision, diagnosticArray(sourceIntegrity));
     const policyDiagnostics = diagnosticArray(sourcePolicy.diagnostics);
     if (policyDiagnostics.length > 0) return revisionRequired("source_policy", sourceRevision, policyDiagnostics);
     const evidence = validateEvidenceGraph(input.source_pack, input.evidence_claims);
@@ -17321,6 +26670,12 @@ function evaluateRevisionCaptured(submittedInput, options) {
       sourceRevision,
       diagnosticArray(classification.diagnostics)
     );
+    classification = bindBlockedRootIdentity(
+      classification,
+      records4(obligations.obligations),
+      /** @type {Record<string, unknown>} */
+      input.case_drafts
+    );
     const semantics = semanticSnapshot(
       classification,
       records4(obligations.obligations),
@@ -17334,6 +26689,13 @@ function evaluateRevisionCaptured(submittedInput, options) {
       clarificationInput,
       sourceConflictBridge
     );
+    const repairHistory = records4(sourcePack.artifact_repairs);
+    const lastRepair = repairHistory[repairHistory.length - 1];
+    const priorClarification = (
+      /** @type {Record<string, unknown>} */
+      translatedClarification.prior_state
+    );
+    const generationRepair = lastRepair && lastRepair.base_source_revision === priorClarification.source_revision && sourceRevision === toNumber(priorClarification.source_revision) + 1 ? lastRepair : null;
     const clarification = evaluateClarification(
       {
         source_revision: sourceRevision,
@@ -17348,7 +26710,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
         semantic_snapshot: semantics
       },
       /** @type {'pause_for_clarification'|'record_only'} */
-      interactionPolicy
+      interactionPolicy,
+      generationRepair
     );
     if (clarification.diagnostics.length > 0) return revisionRequired(
       "clarification",
@@ -17365,7 +26728,9 @@ function evaluateRevisionCaptured(submittedInput, options) {
         pendingRootIssues,
         clarification.semantic_snapshot,
         sourcePack,
-        clarification.state
+        clarification.state,
+        records4(obligations.obligations),
+        graph.claimsById
       );
       return {
         status: "need_user_answers",
@@ -17402,7 +26767,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         input.case_drafts
       );
       bundle = buildBundle({
-        schema_version: "2.1.0",
+        schema_version: "3.0.0",
         source_revision: sourceRevision,
         compiler_version: input.compiler_version,
         lineage: input.lineage,
@@ -17460,7 +26825,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         (candidate) => !promotedExploratoryIds.has(String(candidate.exploratory_id))
       )
     };
-    if (execution.kind !== "ready") {
+    if (execution.kind !== "ready" && execution.kind !== "document_only") {
       const presentation = (
         /** @type {any} */
         execution.presentation
@@ -17505,6 +26870,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     );
     bundle = {
       ...bundle,
+      ...sourcePack.output_language ? { output_language: sourcePack.output_language } : {},
       execution_plan: readyPlan,
       quality: {
         ...bundle.quality,
@@ -17932,9 +27298,9 @@ function processOwnerIsAlive(ownerPid) {
     return Boolean(error && typeof error === "object" && "code" in error && error.code === "EPERM");
   }
 }
-function compilerProcessIdentityHasCanonicalShape(ownerPid, identity) {
-  if (typeof ownerPid !== "number" || typeof identity !== "string") return false;
-  const parts = stringSplit(identity, ":");
+function compilerProcessIdentityHasCanonicalShape(ownerPid, identity2) {
+  if (typeof ownerPid !== "number" || typeof identity2 !== "string") return false;
+  const parts = stringSplit(identity2, ":");
   if (parts.length !== 2 || parts[0] !== nativeString(ownerPid) || parts[1].length === 0) {
     return false;
   }
@@ -18116,10 +27482,10 @@ function delay(milliseconds) {
   });
 }
 async function readRunLockOwner(runDirectory, ownerPath) {
-  const text = await readTextIfPresent(runDirectory, ownerPath);
-  if (text === null) return null;
+  const text2 = await readTextIfPresent(runDirectory, ownerPath);
+  if (text2 === null) return null;
   try {
-    const value = NATIVE_REFLECT_APPLY3(NATIVE_JSON_PARSE, NATIVE_JSON, [text]);
+    const value = NATIVE_REFLECT_APPLY3(NATIVE_JSON_PARSE, NATIVE_JSON, [text2]);
     return value && typeof value === "object" ? (
       /** @type {Record<string,unknown>} */
       value
@@ -18136,22 +27502,22 @@ function sameFileGeneration(left, right) {
   return Boolean(left && right && left.dev === right.dev && left.ino === right.ino);
 }
 async function readRunLockHeartbeatProof(runDirectory, directory) {
-  let entries;
+  let entries2;
   try {
-    entries = await readdir(directory, { withFileTypes: true });
+    entries2 = await readdir(directory, { withFileTypes: true });
   } catch (error) {
     if (isMissing(error)) return "";
     throw error;
   }
   const proof = [];
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
+  for (let index = 0; index < entries2.length; index += 1) {
+    const entry = entries2[index];
     if (!regexpTest2(RUN_LOCK_HEARTBEAT_MARKER, entry.name)) continue;
     if (direntIsSymbolicLink(entry) || !direntIsFile(entry)) throw new RunStoreIntegrityError(
       "Run coordination heartbeat proof is not a real file."
     );
-    const text = await readTextIfPresent(runDirectory, pathJoin(directory, entry.name));
-    if (text !== null) append2(proof, `${entry.name}:${text}`);
+    const text2 = await readTextIfPresent(runDirectory, pathJoin(directory, entry.name));
+    if (text2 !== null) append2(proof, `${entry.name}:${text2}`);
   }
   NATIVE_REFLECT_APPLY3(NATIVE_ARRAY_SORT6, proof, []);
   return nativeJsonStringify(proof);
@@ -18866,9 +28232,9 @@ async function restoreResidueClaim(runDirectory, claimed, target) {
 }
 async function cleanupRunLockResidues(runDirectory, expectedStatus, token, afterClaim) {
   await assertExactRunLockOwnership(runDirectory, expectedStatus, token);
-  const entries = await readdir(runDirectory, { withFileTypes: true });
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
+  const entries2 = await readdir(runDirectory, { withFileTypes: true });
+  for (let index = 0; index < entries2.length; index += 1) {
+    const entry = entries2[index];
     if (!regexpTest2(RUN_LOCK_RESIDUE_DIRECTORY, entry.name)) continue;
     if (direntIsSymbolicLink(entry) || !direntIsDirectory(entry)) throw new RunStoreIntegrityError(
       "Run coordination crash residue is not a real directory."
@@ -19191,18 +28557,18 @@ async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       throw error;
     }
     const status = observed.status;
-    const record2 = observed.record;
-    const ownerPid = record2?.pid;
-    const ownerToken = record2?.token;
-    const ownerLease = record2?.lease_expires_at_ms;
-    const ownerProcessStart = record2?.process_start_identity;
+    const record3 = observed.record;
+    const ownerPid = record3?.pid;
+    const ownerToken = record3?.token;
+    const ownerLease = record3?.lease_expires_at_ms;
+    const ownerProcessStart = record3?.process_start_identity;
     const ownerShapeValid = typeof ownerToken === "string" && ownerToken.length > 0 && typeof ownerPid === "number" && typeof ownerLease === "number" && NATIVE_REFLECT_APPLY3(NATIVE_NUMBER_IS_SAFE_INTEGER2, NATIVE_NUMBER2, [ownerPid]) && NATIVE_REFLECT_APPLY3(NATIVE_NUMBER_IS_SAFE_INTEGER2, NATIVE_NUMBER2, [ownerLease]);
     const now = currentTimeMilliseconds();
     const currentPidIdentityMatches = ownerPid !== NATIVE_PROCESS_PID || ownerProcessStart === void 0 || ownerProcessStart === NATIVE_PROCESS_START_IDENTITY;
-    const hasCompilerHeartbeat = typeof record2?.heartbeat_seq === "number" && NATIVE_REFLECT_APPLY3(
+    const hasCompilerHeartbeat = typeof record3?.heartbeat_seq === "number" && NATIVE_REFLECT_APPLY3(
       NATIVE_NUMBER_IS_SAFE_INTEGER2,
       NATIVE_NUMBER2,
-      [record2.heartbeat_seq]
+      [record3.heartbeat_seq]
     );
     const compilerIdentityValid = hasCompilerHeartbeat && compilerProcessIdentityHasCanonicalShape(ownerPid, ownerProcessStart);
     const heartbeatLease = compilerIdentityValid ? status.mtimeMs + RUN_LOCK_LEASE_MS : ownerLease;
@@ -19303,15 +28669,15 @@ async function inspectTree(runDirectory, directory) {
   for (let cursor = 0; cursor < pending.length; cursor += 1) {
     const current = pending[cursor];
     await assertNoSymlinkPath(runDirectory, current);
-    let entries;
+    let entries2;
     try {
-      entries = await readdir(current, { withFileTypes: true });
+      entries2 = await readdir(current, { withFileTypes: true });
     } catch (error) {
       if (isMissing(error)) continue;
       throw error;
     }
-    for (let index = 0; index < entries.length; index += 1) {
-      const entry = entries[index];
+    for (let index = 0; index < entries2.length; index += 1) {
+      const entry = entries2[index];
       const target = pathJoin(current, entry.name);
       if (direntIsSymbolicLink(entry)) throw new RunStoreIntegrityError(
         `Controlled run tree contains a symbolic link: ${pathRelative(runDirectory, target)}`
@@ -19340,13 +28706,13 @@ async function ensureRunInstance(runDirectory) {
   const existing = await readJsonIfPresent(runDirectory, target);
   if (existing) {
     const value2 = existing.value;
-    if (!value2 || typeof value2 !== "object" || value2.schema_version !== "2.1.0" || typeof value2.run_instance_id !== "string" || !/^RUN-[0-9a-f-]{36}$/u.test(value2.run_instance_id) || typeof value2.created_at !== "string") throw new RunStoreIntegrityError(
+    if (!value2 || typeof value2 !== "object" || value2.schema_version !== "3.0.0" || typeof value2.run_instance_id !== "string" || !/^RUN-[0-9a-f-]{36}$/u.test(value2.run_instance_id) || typeof value2.created_at !== "string") throw new RunStoreIntegrityError(
       "Immutable run-instance.json is invalid."
     );
     return value2;
   }
   const value = {
-    schema_version: "2.1.0",
+    schema_version: "3.0.0",
     run_instance_id: `RUN-${NATIVE_RANDOM_UUID()}`,
     created_at: NATIVE_REFLECT_APPLY3(
       NATIVE_DATE_TO_ISO_STRING,
@@ -19359,9 +28725,9 @@ async function ensureRunInstance(runDirectory) {
 }
 async function recoverStagingClaims(runDirectory) {
   const directory = pathJoin(runDirectory, "staging");
-  let entries;
+  let entries2;
   try {
-    entries = await readdir(directory, { withFileTypes: true });
+    entries2 = await readdir(directory, { withFileTypes: true });
   } catch (error) {
     if (isMissing(error)) return;
     throw error;
@@ -19374,8 +28740,8 @@ async function recoverStagingClaims(runDirectory) {
     const fileName = STAGE_FILES[typedStage];
     const prefix = `.${fileName}.claim-`;
     const claims = [];
-    for (let index = 0; index < entries.length; index += 1) {
-      const entry = entries[index];
+    for (let index = 0; index < entries2.length; index += 1) {
+      const entry = entries2[index];
       if (direntIsFile(entry) && stringStartsWith(entry.name, prefix)) append2(claims, entry.name);
     }
     NATIVE_REFLECT_APPLY3(NATIVE_ARRAY_SORT6, claims, []);
@@ -19427,8 +28793,8 @@ async function recoverStagingClaims(runDirectory) {
   }
   const previewPrefix = ".post-ready-preview-request.json.claim-";
   const previewClaims = [];
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
+  for (let index = 0; index < entries2.length; index += 1) {
+    const entry = entries2[index];
     if (direntIsFile(entry) && stringStartsWith(entry.name, previewPrefix)) {
       append2(previewClaims, entry.name);
     }
@@ -19464,15 +28830,15 @@ async function cleanupTemporaryFiles(runDirectory) {
     const pending = [roots[rootIndex]];
     for (let cursor = 0; cursor < pending.length; cursor += 1) {
       const directory = pending[cursor];
-      let entries;
+      let entries2;
       try {
-        entries = await readdir(directory, { withFileTypes: true });
+        entries2 = await readdir(directory, { withFileTypes: true });
       } catch (error) {
         if (isMissing(error)) continue;
         throw error;
       }
-      for (let index = 0; index < entries.length; index += 1) {
-        const entry = entries[index];
+      for (let index = 0; index < entries2.length; index += 1) {
+        const entry = entries2[index];
         const target = pathJoin(directory, entry.name);
         if (direntIsSymbolicLink(entry)) throw new RunStoreIntegrityError(
           `Controlled run tree contains a symbolic link: ${pathRelative(runDirectory, target)}`
@@ -19543,10 +28909,10 @@ async function readTextIfPresent(runDirectory, filePath) {
   }
 }
 async function readJson(runDirectory, filePath) {
-  const text = await readText(runDirectory, filePath);
+  const text2 = await readText(runDirectory, filePath);
   requireRunStoreIntrinsics();
-  const value = NATIVE_REFLECT_APPLY3(NATIVE_JSON_PARSE, NATIVE_JSON, [text]);
-  return { text, value, digest: digest(value) };
+  const value = NATIVE_REFLECT_APPLY3(NATIVE_JSON_PARSE, NATIVE_JSON, [text2]);
+  return { text: text2, value, digest: digest(value) };
 }
 async function readJsonIfPresent(runDirectory, filePath) {
   try {
@@ -19594,17 +28960,17 @@ function outputPaths(runDirectory, sourceRevision) {
   };
 }
 async function acceptedSourceRevisions(runDirectory) {
-  let entries;
+  let entries2;
   const acceptedDirectory = pathJoin(runDirectory, "accepted");
   try {
-    entries = await readdir(acceptedDirectory, { withFileTypes: true });
+    entries2 = await readdir(acceptedDirectory, { withFileTypes: true });
   } catch (error) {
     if (isMissing(error)) return [];
     throw error;
   }
   const revisions = [];
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
+  for (let index = 0; index < entries2.length; index += 1) {
+    const entry = entries2[index];
     if (direntIsSymbolicLink(entry)) throw new RunStoreIntegrityError("Accepted revision cannot be a symbolic link.");
     if (!direntIsDirectory(entry)) continue;
     const match = NATIVE_REFLECT_APPLY3(NATIVE_REGEXP_EXEC2, REVISION_DIRECTORY, [entry.name]);
@@ -19695,7 +29061,7 @@ async function readCurrentState(runDirectory) {
 }
 async function writeReadyCurrent(runDirectory, pointer) {
   await atomicWriteJson(runDirectory, outputPaths(runDirectory, 0).current, {
-    status: "ready",
+    status: pointer.status === "document_only" ? "document_only" : "ready",
     run_instance_id: pointer.run_instance_id,
     source_revision: pointer.source_revision,
     bundle_path: pointer.bundle_path,
@@ -19938,17 +29304,17 @@ function diagnosticOwner(pointer) {
 }
 function mapInternalRevision(result) {
   if (!result || typeof result !== "object") return PROTOCOL_VIOLATION;
-  const record2 = (
+  const record3 = (
     /** @type {Record<string, unknown>} */
     result
   );
-  if (record2.status !== "need_revision" || typeof record2.stage !== "string" || !Array.isArray(record2.diagnostics) || record2.diagnostics.length === 0) {
+  if (record3.status !== "need_revision" || typeof record3.stage !== "string" || !Array.isArray(record3.diagnostics) || record3.diagnostics.length === 0) {
     return PROTOCOL_VIOLATION;
   }
   let stage;
-  if (record2.stage === "schema") {
+  if (record3.stage === "schema") {
     let owner = null;
-    for (const item of record2.diagnostics) {
+    for (const item of record3.diagnostics) {
       if (!item || typeof item !== "object") return PROTOCOL_VIOLATION;
       const path4 = (
         /** @type {Record<string, unknown>} */
@@ -19960,7 +29326,7 @@ function mapInternalRevision(result) {
       owner = candidate;
     }
     stage = owner;
-  } else stage = INTERNAL_STAGE_OWNER[record2.stage];
+  } else stage = INTERNAL_STAGE_OWNER[record3.stage];
   if (!stage) return PROTOCOL_VIOLATION;
   return {
     kind: "need_revision",
@@ -19969,15 +29335,91 @@ function mapInternalRevision(result) {
   };
 }
 
+// src/artifact-repair.mjs
+var SEMANTIC_STAGES = Object.freeze(["evidence_claims", "behavior_views", "case_drafts"]);
+function repairs(source) {
+  return Array.isArray(source?.artifact_repairs) ? source.artifact_repairs : [];
+}
+function appendedRepair(prior, next) {
+  const before = repairs(prior);
+  const after = repairs(next);
+  return after.length === before.length + 1 ? after[after.length - 1] : null;
+}
+function repairDiagnostics(priorContext, next) {
+  const prior = priorContext?.source_pack;
+  const before = repairs(prior);
+  const after = repairs(next);
+  const issue = (message) => [{
+    category: "traceability",
+    code: "ARTIFACT_REPAIR_INVALID",
+    path: "/artifact_repairs",
+    message
+  }];
+  if (canonicalStringify(after.slice(0, before.length)) !== canonicalStringify(before)) return issue("Repair history is append-only.");
+  if (after.length === before.length) return [];
+  const repair = appendedRepair(prior, next);
+  if (!prior || !repair || repair.repair_seq !== after.length || repair.base_source_revision !== prior.source_revision) return issue("One repair must bind the immediately preceding revision and next repair sequence.");
+  const target = repair.stage === "source_pack" ? prior : priorContext.artifacts?.[repair.stage];
+  if (!target || digest(target) !== repair.accepted_artifact_digest) return issue("Repair target must match an existing immutable accepted artifact digest.");
+  for (const key of ["decision_records", "clarification_events", "execution_events"]) {
+    if (canonicalStringify(prior[key] ?? []) !== canonicalStringify(next[key] ?? [])) return issue("A generation repair cannot also append business or execution decisions.");
+  }
+  return [];
+}
+function reusableStages(prior, next) {
+  const repair = appendedRepair(prior, next);
+  if (repair) {
+    const index = SEMANTIC_STAGES.indexOf(repair.stage);
+    return index < 0 ? [] : SEMANTIC_STAGES.slice(0, index);
+  }
+  const executionOnly = canonicalStringify(prior.decision_records) === canonicalStringify(next.decision_records) && canonicalStringify(prior.clarification_events) === canonicalStringify(next.clarification_events) && (next.execution_events?.length ?? 0) > (prior.execution_events?.length ?? 0);
+  return executionOnly ? [...SEMANTIC_STAGES] : [];
+}
+function unconfirmedWorkflow(state) {
+  if (!state) return null;
+  const copy = structuredClone(state);
+  copy.confirmation = null;
+  copy.presentation_snapshot = null;
+  copy.active_pause = null;
+  if (copy.execution_plan) {
+    copy.execution_plan.confirmation = null;
+    copy.execution_plan.status = "decision_required";
+  }
+  return copy;
+}
+
+// src/presentation-summary.mjs
+function groupRiskCounts(group, obligations, plan = null) {
+  const risks = new Map(obligations.map((item) => [item.obligation_id, item.risk]));
+  const cases = new Map((plan?.items ?? []).filter((item) => item.item_kind === "case").map((item) => [item.item_id, item.related_obligation_ids ?? []]));
+  const ids = /* @__PURE__ */ new Set();
+  for (const item of group.item_refs) {
+    if (item.item_kind === "formal_test_point") ids.add(item.item_id);
+    else if (item.item_kind === "case") {
+      const related = cases.get(item.item_id);
+      if (!Array.isArray(related) || related.length === 0) throw new Error("Presented Case lacks compiled formal responsibility bindings.");
+      for (const id2 of related) ids.add(id2);
+    } else if (item.item_kind !== "exploratory") throw new Error("Presented item kind has no formal risk projection.");
+  }
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const id2 of ids) {
+    const risk = String(risks.get(id2));
+    if (!risks.has(id2)) throw new Error("Presented formal responsibility is absent from the compiled obligation ledger.");
+    if (risk !== "critical" && risk !== "high" && risk !== "medium" && risk !== "low") throw new Error("Presented formal responsibility has invalid compiled risk.");
+    counts[risk] += 1;
+  }
+  return counts;
+}
+
 // src/advance-strict.mjs
 var moduleDirectory = path3.dirname(realpathSync(fileURLToPath(import.meta.url)));
 var schemaDirectory = path3.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "849392f2387bb804b06121fa4ed9a7e990408daa33a0a0c9b2a320f1d722a6fa" : void 0;
-var embeddedSchemaVersion = true ? "2.1.0" : void 0;
-var embeddedCompilerVersion = true ? "0.3.0" : void 0;
+var embeddedManifestDigest = true ? "a4adb6fa32e5c0eba7fc65f150d6d50020e16e4be47d7e3fb381259d113e7d78" : void 0;
+var embeddedSchemaVersion = true ? "3.0.0" : void 0;
+var embeddedCompilerVersion = true ? "0.4.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
@@ -20064,12 +29506,12 @@ function migrationRequired() {
       {
         category: "reference",
         code: "RUN_MIGRATION_REQUIRED",
-        message: "Older-schema runs cannot resume under the v2.1 protocol."
+        message: "Older-schema runs cannot resume under the v3.0 protocol."
       },
       {
         category: "traceability",
         code: "NEW_RUN_REQUIRED",
-        message: "Create a new v2.1 run; the prior run remains preserved and read-only."
+        message: "Create a new v3.0 run; the prior run remains preserved and read-only."
       }
     ]
   };
@@ -20116,16 +29558,16 @@ function artifactDiagnostics(artifact, schema) {
 }
 async function stagedArtifact(runDirectory, stage, sourceRevision) {
   const candidatePath2 = stagingPath(runDirectory, stage);
-  const text = await guardedAwait(readTextIfPresent(runDirectory, candidatePath2));
-  if (text === null) return null;
+  const text2 = await guardedAwait(readTextIfPresent(runDirectory, candidatePath2));
+  if (text2 === null) return null;
   try {
-    const value = JSON.parse(text);
-    return { text, value, digest: digest(value), parseDiagnostics: [] };
+    const value = JSON.parse(text2);
+    return { text: text2, value, digest: digest(value), parseDiagnostics: [] };
   } catch {
     return {
-      text,
-      value: text,
-      digest: digest(text),
+      text: text2,
+      value: text2,
+      digest: digest(text2),
       parseDiagnostics: [{
         category: "schema",
         code: "ARTIFACT_JSON_INVALID",
@@ -20171,12 +29613,12 @@ function historySequenceIntegrity(sourcePack) {
       );
       previous = sequence;
       sequences.push(sequence);
-      const identity = values[index]?.[identityField];
-      if (typeof identity === "string" && identities.has(identity)) return fatalReply(
+      const identity2 = values[index]?.[identityField];
+      if (typeof identity2 === "string" && identities.has(identity2)) return fatalReply(
         "RUN_INTEGRITY_ERROR",
         "Decision and control histories cannot reuse event identities."
       );
-      if (typeof identity === "string") identities.add(identity);
+      if (typeof identity2 === "string") identities.add(identity2);
     }
   }
   sequences.sort((left, right) => left - right);
@@ -20190,6 +29632,12 @@ function historySequenceIntegrity(sourcePack) {
 }
 function initialClarificationHistoryDiagnostics(sourcePack) {
   const diagnostics = [];
+  if (arrayIsArray(sourcePack.artifact_repairs) && sourcePack.artifact_repairs.length > 0) diagnostics.push({
+    category: "traceability",
+    code: "ARTIFACT_REPAIR_INVALID",
+    path: "/artifact_repairs",
+    message: "An initial run cannot repair a nonexistent accepted artifact."
+  });
   const events = arrayIsArray(sourcePack.clarification_events) ? sourcePack.clarification_events : [];
   if (events.length > 0) diagnostics.push({
     category: "classification",
@@ -20209,17 +29657,31 @@ function initialClarificationHistoryDiagnostics(sourcePack) {
   return diagnostics;
 }
 function sourceRevisionIntegrity(prior, next) {
+  const repair = appendedRepair(prior, next);
+  const extractionRepair = repair?.stage === "source_pack";
   const immutablePrior = {
     run_scope: prior.run_scope,
     sources: prior.sources,
-    locators: prior.locators,
-    source_policy: prior.source_policy
+    source_policy: prior.source_policy,
+    ...extractionRepair ? {} : {
+      locators: prior.locators,
+      source_reviews: prior.source_reviews,
+      source_assets: prior.source_assets,
+      output_language: prior.output_language ?? "en",
+      delivery_intent: prior.delivery_intent ?? "execution_plan"
+    }
   };
   const immutableNext = {
     run_scope: next.run_scope,
     sources: next.sources,
-    locators: next.locators,
-    source_policy: next.source_policy
+    source_policy: next.source_policy,
+    ...extractionRepair ? {} : {
+      locators: next.locators,
+      source_reviews: next.source_reviews,
+      source_assets: next.source_assets,
+      output_language: next.output_language ?? "en",
+      delivery_intent: next.delivery_intent ?? "execution_plan"
+    }
   };
   if (canonicalStringify(immutablePrior) !== canonicalStringify(immutableNext)) {
     return newRunRequired("RUN_INTEGRITY_ERROR: immutable original source set or run scope changed.");
@@ -20240,7 +29702,7 @@ function sourceRevisionIntegrity(prior, next) {
     ...nextEvents.slice(priorEvents.length),
     ...nextExecution.slice(priorExecution.length)
   ];
-  if (added.length === 0) return fatalReply(
+  if (added.length === 0 && !repair) return fatalReply(
     "RUN_INTEGRITY_ERROR",
     "A higher source revision must contain one nonempty append batch."
   );
@@ -20378,7 +29840,7 @@ function appendBatch(previous, current) {
 function clarificationAppendInput(previousState, previousSource, sourcePack) {
   const append3 = appendBatch(previousSource, sourcePack);
   const priorState = structuredClone(previousState);
-  if (append3.decision_records.length === 0 && append3.clarification_events.length === 0) {
+  if (!appendedRepair(previousSource, sourcePack) && append3.decision_records.length === 0 && append3.clarification_events.length === 0) {
     priorState.source_revision = sourcePack.source_revision;
     priorState.clarification_event_seq = maximumEventSequence2(sourcePack);
     if (priorState.clarification_stop) {
@@ -20394,8 +29856,8 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2, 
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests2 }),
     source_revision: sourceRevision,
     stage,
-    compiler_version: embeddedCompilerVersion ?? "0.3.0",
-    schema_version: embeddedSchemaVersion ?? "2.1.0",
+    compiler_version: embeddedCompilerVersion ?? "0.4.0",
+    schema_version: embeddedSchemaVersion ?? "3.0.0",
     run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests2,
     audit_lineage: structuredClone(acceptedDigests2),
@@ -20422,10 +29884,12 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2, 
 }
 function finishedReply(result, checkpointValue, current, markdownPath, noticeCode = null) {
   const summary = result.bundle.execution_plan.summary;
+  const runnerReady = result.bundle.execution_plan.status === "ready";
   return {
     ...current,
     status: "finished",
     markdown_path: markdownPath,
+    runner_ready: runnerReady,
     semantic_result_digest: result.bundle.execution_plan.semantic_result_digest,
     execute_case_count: summary.execute_case_count,
     do_not_execute_case_count: summary.do_not_execute_case_count,
@@ -20437,13 +29901,13 @@ function finishedReply(result, checkpointValue, current, markdownPath, noticeCod
       none: summary.none_test_point_count
     },
     modification_hint: "This Skill does not start E2E execution. You may later supplement rules, reopen issues, request reanalysis, or change this run disposition.",
-    preview_control: nextPreviewControl({
+    preview_control: runnerReady ? nextPreviewControl({
       run_instance_id: checkpointValue.run_instance_id,
       source_revision: result.source_revision,
       bundle_digest: result.bundle_digest,
       plan_digest: result.bundle.execution_plan.plan_digest,
       confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
-    }, checkpointValue, String(checkpointValue.compiler_version)),
+    }, checkpointValue, String(checkpointValue.compiler_version)) : null,
     ...noticeCode ? { notice_code: noticeCode } : {}
   };
 }
@@ -20482,9 +29946,45 @@ function evaluateAdapterRevision(artifacts, clarification, registry, workflowSta
       clarificationState: clarification,
       workflowState,
       interactionPolicy: "pause_for_clarification",
-      limits: ["Compilation is limited to the accepted immutable revision."]
+      limits: [sourcePack.output_language === "zh-CN" ? "\u672C\u6B21\u7F16\u8BD1\u4EC5\u9650\u5DF2\u63A5\u53D7\u7684\u4E0D\u53EF\u53D8\u8D44\u6599\u4FEE\u8BA2\u3002" : "Compilation is limited to the accepted immutable revision."]
     })
   );
+}
+function previewHistoryPath(runDirectory, revision) {
+  return path3.join(path3.dirname(clarificationStatePath(runDirectory, revision)), "post-ready-preview-history.json");
+}
+function previewReady(result, runInstanceId) {
+  return {
+    run_instance_id: runInstanceId,
+    source_revision: result.source_revision,
+    bundle_digest: result.bundle_digest,
+    plan_digest: result.bundle.execution_plan.plan_digest,
+    plan_change_head_seq: result.workflow_state.execution_plan.plan_change_head_seq,
+    confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest,
+    items: result.bundle.execution_plan.items
+  };
+}
+function consumedPreview(state) {
+  const prior = state ?? { preview_epoch: 0, preview_state: "idle", active_preview_presentation: null, last_preview_request: null };
+  return prior.preview_state === "active" ? {
+    ...prior,
+    preview_epoch: prior.preview_epoch + 1,
+    preview_state: "consumed",
+    active_preview_presentation: null
+  } : prior;
+}
+async function replayPreviewHistory(runDirectory, result, registry, state, runInstanceId) {
+  const stored = await guardedAwait(readJsonIfPresent(runDirectory, previewHistoryPath(runDirectory, result.source_revision)));
+  if (!stored) return state;
+  if (!arrayIsArray(stored.value) || result.status !== "finished" || result.bundle.execution_plan.status !== "ready") throw new Error("Preview history requires a ready revision and a request array.");
+  let current = state;
+  for (const request of stored.value) {
+    if (artifactDiagnostics(request, registry.schemas.get("post-ready-preview-request.schema.json")).length > 0) throw new Error("Preview history request failed its closed schema.");
+    const next = processPreviewRequest({ request, state: current, ready: previewReady(result, runInstanceId), compilerVersion: registry.compilerVersion });
+    if (next.kind === "rejected" || next.state.preview_epoch <= current.preview_epoch) throw new Error("Preview history contains a stale, reordered, or invalid request: " + canonicalStringify(next.diagnostics));
+    current = next.state;
+  }
+  return current;
 }
 function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prior) {
   if (sourceRevision === 0) return null;
@@ -20492,6 +29992,9 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
     "RUN_INTEGRITY_ERROR",
     "The prior accepted source revision is unavailable."
   );
+  const repairErrors = repairDiagnostics(prior, sourcePack);
+  if (repairErrors.length > 0) return { kind: "need_revision", diagnostics: repairErrors };
+  if (appendedRepair(prior.source_pack, sourcePack)) return null;
   const appended = appendBatch(prior.source_pack, sourcePack);
   if (prior.workflow_state?.presentation_snapshot?.entry_context === "post_ready_change") {
     const previousExecutionEvents = arrayIsArray(prior.source_pack.execution_events) ? prior.source_pack.execution_events : [];
@@ -20565,11 +30068,8 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
   let previousComplete = true;
   let active = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
+    const previewState = consumedPreview(active?.preview_state);
     const sourceRevision = revisions[revisionIndex];
-    if (sourceRevision > 0 && !previousComplete) return fatalReply(
-      "RUN_INTEGRITY_ERROR",
-      "A higher accepted source revision cannot follow an incomplete prior revision."
-    );
     const sourceArtifact = await guardedAwait(readJson(
       runDirectory,
       acceptedPath(runDirectory, sourceRevision, "source_pack")
@@ -20578,7 +30078,17 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
       /** @type {Record<string, unknown>} */
       sourceArtifact.value
     );
-    if (sourcePack.schema_version !== "2.1.0") return migrationRequired();
+    const repair = previousSource ? appendedRepair(previousSource, sourcePack) : null;
+    if (sourceRevision > 0 && !previousComplete && !repair) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "An incomplete prior revision can only be followed by a bound generation repair."
+    );
+    if (repairDiagnostics(active, sourcePack).length > 0) return fatalReply(
+      "RUN_INTEGRITY_ERROR",
+      "Accepted generation repair failed immutable target validation."
+    );
+    if (repair && active) active.workflow_state = unconfirmedWorkflow(active.workflow_state);
+    if (sourcePack.schema_version !== "3.0.0") return migrationRequired();
     if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
       "RUN_INTEGRITY_ERROR",
       "Accepted Source Pack belongs to a different run instance."
@@ -20614,6 +30124,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
     let evidenceClaims = null;
     let behaviorViews = null;
     let caseDrafts = null;
+    let compiledObligations = [];
     let missingEarlierStage = false;
     for (const stage of ["evidence_claims", "behavior_views", "case_drafts"]) {
       const typedStage = (
@@ -20632,29 +30143,29 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
         "RUN_INTEGRITY_ERROR",
         "Accepted artifacts must preserve the fixed stage prefix."
       );
-      const record2 = (
+      const record3 = (
         /** @type {Record<string, unknown>} */
         artifact.value
       );
-      if (record2.source_revision !== sourceRevision) return fatalReply(
+      if (record3.source_revision !== sourceRevision) return fatalReply(
         "RUN_INTEGRITY_ERROR",
         `Accepted ${typedStage} revision does not match its directory.`
       );
-      if (artifactDiagnostics(record2, registry.schemas.get(STAGE_SCHEMA[typedStage])).length > 0) {
+      if (artifactDiagnostics(record3, registry.schemas.get(STAGE_SCHEMA[typedStage])).length > 0) {
         return fatalReply(
           "RUN_INTEGRITY_ERROR",
           `Accepted ${typedStage} failed deterministic schema validation.`
         );
       }
       if (typedStage === "evidence_claims") {
-        evidenceClaims = record2;
+        evidenceClaims = record3;
         const acceptedEvidence = validateEvidenceGraph(sourcePack, evidenceClaims);
         if (acceptedEvidence.diagnostics.length > 0 || adapterEvidenceDiagnostics(evidenceClaims, acceptedEvidence.claimsById).length > 0) return fatalReply(
           "RUN_INTEGRITY_ERROR",
           "Accepted evidence_claims failed deterministic semantic validation."
         );
       } else if (typedStage === "behavior_views") {
-        behaviorViews = record2;
+        behaviorViews = record3;
         const derived = deriveObligations(
           sourcePack,
           /** @type {Record<string, unknown>} */
@@ -20666,7 +30177,8 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
           "RUN_INTEGRITY_ERROR",
           "Accepted behavior_views failed deterministic semantic validation."
         );
-      } else caseDrafts = record2;
+        compiledObligations = derived.artifact.obligations;
+      } else caseDrafts = record3;
     }
     const clarificationInput = sourceRevision === 0 ? {
       prior_state: initialClarificationState(0, maximumEventSequence2(sourcePack)),
@@ -20718,18 +30230,30 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
         source_pack: sourcePack,
         artifacts,
         state,
+        obligations: compiledObligations,
         clarification_input: clarificationInput,
         result: replay,
-        workflow_state: replay.workflow_state ?? active?.workflow_state ?? null
+        workflow_state: replay.workflow_state ?? active?.workflow_state ?? null,
+        preview_state: await replayPreviewHistory(runDirectory, replay, registry, previewState, runInstance.run_instance_id)
+      };
+      if (active.preview_state.active_preview_presentation) active.workflow_state = {
+        ...active.workflow_state,
+        presentation_snapshot: active.preview_state.active_preview_presentation
       };
     } else {
-      previousState = null;
+      previousState = /** @type {any} */
+      clarificationInput.prior_state;
       previousComplete = false;
       active = {
         complete: false,
         source_pack: sourcePack,
+        obligations: compiledObligations,
+        artifacts: { source_pack: sourcePack, evidence_claims: evidenceClaims, behavior_views: behaviorViews, case_drafts: caseDrafts },
+        state: previousState,
         clarification_input: clarificationInput,
-        workflow_state: active?.workflow_state ?? null
+        reuse_from: previousSource ? { source_pack: previousSource, stages: reusableStages(previousSource, sourcePack) } : null,
+        workflow_state: active?.workflow_state ?? null,
+        preview_state: previewState
       };
     }
     previousSource = sourcePack;
@@ -20784,16 +30308,20 @@ async function advanceStrictExclusive(runDirectory) {
         } catch {
           recoveryCheckpointArtifact = null;
         }
-        const recoveryCheckpoint = (
+        const recordedCheckpoint = (
           /** @type {any} */
           recoveryCheckpointArtifact?.value ?? null
         );
-        if (acceptedContext.active && recoveryCheckpoint && recoveryCheckpoint.run_instance_id === runInstance.run_instance_id && recoveryCheckpoint.source_revision === acceptedContext.active.source_pack.source_revision && (recoveryCheckpoint.active_preview_presentation || recoveryCheckpoint.presentation_snapshot)) {
-          acceptedContext.active.workflow_state = {
-            ...acceptedContext.active.workflow_state ?? {},
-            presentation_snapshot: recoveryCheckpoint.active_preview_presentation ?? recoveryCheckpoint.presentation_snapshot
-          };
+        if (acceptedContext.active && recordedCheckpoint?.run_instance_id === runInstance.run_instance_id && recordedCheckpoint.source_revision <= acceptedContext.active.source_pack.source_revision && Number(recordedCheckpoint.preview_epoch) > Number(acceptedContext.active.preview_state.preview_epoch)) {
+          return fatalReply("RUN_INTEGRITY_ERROR", "Durable preview history is missing; its observed epoch cannot be reset from a checkpoint.");
         }
+        let recoveryCheckpoint = (
+          /** @type {any} */
+          acceptedContext.active ? {
+            ...recoveryCheckpointArtifact?.value ?? {},
+            ...acceptedContext.active.preview_state
+          } : recoveryCheckpointArtifact?.value ?? null
+        );
         if (acceptedContext.active) {
           const activeRevision = Number(acceptedContext.active.source_pack.source_revision);
           const activeIsReady = acceptedContext.active.complete && acceptedContext.active.result?.status === "finished";
@@ -20801,7 +30329,7 @@ async function advanceStrictExclusive(runDirectory) {
             /** @type {any} */
             await guardedAwait2(() => readCurrentState(runDirectory))
           );
-          if (currentState?.status === "ready" && (currentState.source_revision < activeRevision || !activeIsReady)) {
+          if ((currentState?.status === "ready" || currentState?.status === "document_only") && (currentState.source_revision < activeRevision || !activeIsReady)) {
             await guardedAwait2(() => writeNonReadyCurrent(
               runDirectory,
               runInstance.run_instance_id,
@@ -20837,6 +30365,15 @@ async function advanceStrictExclusive(runDirectory) {
           "RUN_INTEGRITY_ERROR",
           "A source revision and post-ready preview request cannot be staged together."
         );
+        if (!sourceCandidate && !previewCandidate && acceptedContext.active?.preview_state?.preview_state === "active") {
+          const history = await guardedAwait2(() => readJson(runDirectory, previewHistoryPath(runDirectory, acceptedContext.active.source_pack.source_revision)));
+          const entries2 = (
+            /** @type {any[]} */
+            history.value
+          );
+          const value = entries2[entries2.length - 1];
+          previewCandidate = { text: null, value, digest: digest(value) };
+        }
         if (sourceCandidate) {
           const candidateRecord = sourceCandidate.value && typeof sourceCandidate.value === "object" ? (
             /** @type {Record<string, unknown>} */
@@ -20878,7 +30415,7 @@ async function advanceStrictExclusive(runDirectory) {
             "RUN_INTEGRITY_ERROR",
             "Source revisions must begin at r000 and advance by exactly one."
           );
-          if (typeof candidateRecord?.schema_version === "string" && candidateRecord.schema_version !== "2.1.0") return migrationRequired();
+          if (typeof candidateRecord?.schema_version === "string" && candidateRecord.schema_version !== "3.0.0") return migrationRequired();
           const diagnostics = sourceCandidate.parseDiagnostics.length > 0 ? sourceCandidate.parseDiagnostics : stableDiagnostics(validateAgainstSchema(
             sourceCandidate.value,
             registry.schemas.get(STAGE_SCHEMA.source_pack)
@@ -20973,13 +30510,18 @@ async function advanceStrictExclusive(runDirectory) {
             candidateRevision
           ));
           const priorActiveContext = acceptedContext.active;
+          const isRepair = priorActiveContext && appendedRepair(priorActiveContext.source_pack, sourceCandidate.value);
           acceptedContext.active = {
             complete: false,
             source_pack: (
               /** @type {Record<string, unknown>} */
               sourceCandidate.value
             ),
-            workflow_state: priorActiveContext?.workflow_state ?? null,
+            workflow_state: isRepair ? unconfirmedWorkflow(priorActiveContext.workflow_state) : priorActiveContext?.workflow_state ?? null,
+            reuse_from: priorActiveContext ? {
+              source_pack: priorActiveContext.source_pack,
+              stages: reusableStages(priorActiveContext.source_pack, sourceCandidate.value)
+            } : null,
             clarification_input: candidateRevision === 0 ? {
               prior_state: initialClarificationState(
                 0,
@@ -21005,7 +30547,7 @@ async function advanceStrictExclusive(runDirectory) {
             null,
             sourceDigests,
             runInstance.run_instance_id,
-            priorActiveContext?.workflow_state ?? null,
+            acceptedContext.active.workflow_state,
             recoveryCheckpoint
           );
           if (recoveryCheckpoint?.preview_state === "active") {
@@ -21014,11 +30556,12 @@ async function advanceStrictExclusive(runDirectory) {
             sourceCheckpoint.active_preview_presentation = null;
           }
           await guardedAwait2(() => writeCheckpoint(runDirectory, sourceCheckpoint));
+          recoveryCheckpoint = sourceCheckpoint;
           revisions = await guardedAwait2(() => acceptedSourceRevisions(runDirectory));
         }
         if (previewCandidate) {
           const active = acceptedContext.active;
-          if (!active?.complete || active.result?.status !== "finished") return revisionReply(
+          if (!active?.complete || active.result?.status !== "finished" || active.result.bundle.execution_plan.status !== "ready") return revisionReply(
             runDirectory,
             "source_pack",
             revisions.at(-1) ?? 0,
@@ -21041,21 +30584,37 @@ async function advanceStrictExclusive(runDirectory) {
             previewCandidate.value,
             previewDiagnostics
           );
-          const currentState = (
+          let currentState = (
             /** @type {any} */
             await guardedAwait2(() => readCurrentState(runDirectory))
           );
           const result2 = active.result;
-          if (!currentState || currentState.status !== "ready" || currentState.source_revision !== result2.source_revision || currentState.bundle_digest !== result2.bundle_digest || currentState.plan_digest !== result2.bundle.execution_plan.plan_digest) return fatalReply(
+          const recoverablePointer = !currentState || currentState.run_instance_id === runInstance.run_instance_id && (currentState.status === "ready" && currentState.source_revision < result2.source_revision || currentState.status === "stale" && currentState.active_source_revision <= result2.source_revision);
+          if (recoverablePointer) {
+            const paths2 = await guardedAwait2(() => writeFinalOutput(runDirectory, result2.source_revision, result2.bundle, result2.markdown));
+            currentState = {
+              status: "ready",
+              run_instance_id: runInstance.run_instance_id,
+              source_revision: result2.source_revision,
+              bundle_path: paths2.bundle,
+              bundle_digest: result2.bundle_digest,
+              plan_digest: result2.bundle.execution_plan.plan_digest
+            };
+            await guardedAwait2(() => writeReadyCurrent(runDirectory, currentState));
+          }
+          if (!currentState || currentState.status !== "ready" || currentState.run_instance_id !== runInstance.run_instance_id || currentState.source_revision !== result2.source_revision || currentState.bundle_digest !== result2.bundle_digest || currentState.plan_digest !== result2.bundle.execution_plan.plan_digest) return fatalReply(
             "RUN_INTEGRITY_ERROR",
             "The ready pointer does not match the highest accepted ready revision."
           );
-          const storedCheckpoint = (
-            /** @type {any} */
-            (await guardedAwait2(() => readJsonIfPresent(
-              runDirectory,
-              path3.join(runDirectory, "checkpoint.json")
-            )))?.value ?? {}
+          const storedCheckpoint = checkpoint(
+            result2.source_revision,
+            "finished",
+            active.source_pack,
+            active.state,
+            await guardedAwait2(() => acceptedDigests(runDirectory, result2.source_revision)),
+            runInstance.run_instance_id,
+            result2.workflow_state,
+            recoveryCheckpoint
           );
           const processed = processPreviewRequest({
             request: previewCandidate.value,
@@ -21078,6 +30637,14 @@ async function advanceStrictExclusive(runDirectory) {
             previewCandidate.value,
             processed.diagnostics
           );
+          const historyPath = previewHistoryPath(runDirectory, result2.source_revision);
+          const history = (
+            /** @type {any[]} */
+            (await guardedAwait2(() => readJsonIfPresent(runDirectory, historyPath)))?.value ?? []
+          );
+          if (history.length === 0 || digest(history[history.length - 1]) !== previewCandidate.digest) {
+            await guardedAwait2(() => atomicWriteJson(runDirectory, historyPath, [...history, previewCandidate.value]));
+          }
           const updatedCheckpoint = {
             ...storedCheckpoint,
             preview_epoch: processed.state.preview_epoch,
@@ -21088,7 +30655,7 @@ async function advanceStrictExclusive(runDirectory) {
             presentation_snapshot_digest: processed.presentation ? digest(processed.presentation) : null
           };
           await guardedAwait2(() => writeCheckpoint(runDirectory, updatedCheckpoint));
-          await guardedAwait2(() => discardPostReadyPreviewRequest(runDirectory, previewCandidate));
+          if (previewCandidate.text !== null) await guardedAwait2(() => discardPostReadyPreviewRequest(runDirectory, previewCandidate));
           if (processed.kind === "cancelled") return finishedReply(
             result2,
             updatedCheckpoint,
@@ -21110,7 +30677,7 @@ async function advanceStrictExclusive(runDirectory) {
               counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
               return counts;
             }, { case: 0, formal_test_point: 0, exploratory: 0 }),
-            risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+            risk_counts: groupRiskCounts(group, active.obligations, result2.bundle.execution_plan),
             options: group.allowed_options,
             answer_example: group.answer_example
           }));
@@ -21163,6 +30730,26 @@ async function advanceStrictExclusive(runDirectory) {
           "Accepted Source Pack failed deterministic integrity validation."
         );
         const accepted = { source_pack: sourcePack };
+        const reuse = acceptedContext.active?.reuse_from;
+        if (reuse) for (const stage of reuse.stages) {
+          const typedStage = (
+            /** @type {'evidence_claims'|'behavior_views'|'case_drafts'} */
+            stage
+          );
+          const priorArtifact = await guardedAwait2(() => readJson(
+            runDirectory,
+            acceptedPath(runDirectory, reuse.source_pack.source_revision, typedStage)
+          ));
+          const carried = { .../** @type {Record<string,unknown>} */
+          priorArtifact.value, source_revision: sourceRevision };
+          const target = acceptedPath(runDirectory, sourceRevision, typedStage);
+          const existing = await guardedAwait2(() => readJsonIfPresent(runDirectory, target));
+          if (existing && existing.digest !== digest(carried)) return fatalReply(
+            "RUN_INTEGRITY_ERROR",
+            "Carried semantic artifact differs from its immutable source."
+          );
+          if (!existing) await guardedAwait2(() => atomicWriteJson(runDirectory, target, carried));
+        }
         for (const stage of ["evidence_claims", "behavior_views"]) {
           const typedStage = (
             /** @type {'evidence_claims'|'behavior_views'} */
@@ -21179,10 +30766,12 @@ async function advanceStrictExclusive(runDirectory) {
           ));
           if (artifact && candidate) {
             if (candidate.parseDiagnostics.length > 0 || artifact.digest !== candidate.digest) {
-              return fatalReply(
-                "RUN_INTEGRITY_ERROR",
-                `Staging ${typedStage} conflicts with the immutable accepted artifact.`
-              );
+              return revisionReply(runDirectory, "source_pack", sourceRevision + 1, sourcePack, [{
+                category: "traceability",
+                code: "ACCEPTED_ARTIFACT_REPAIR_REQUIRED",
+                path: "/artifact_repairs",
+                message: `Preserve accepted ${typedStage}; append a generation repair bound to revision ${sourceRevision} and digest ${artifact.digest}, then regenerate from that stage.`
+              }]);
             }
             await guardedAwait2(() => discardStagingSnapshot(
               runDirectory,
@@ -21319,9 +30908,17 @@ async function advanceStrictExclusive(runDirectory) {
           sourceRevision
         ));
         if (caseArtifact && caseCandidate) {
-          if (caseCandidate.parseDiagnostics.length > 0 || caseArtifact.digest !== caseCandidate.digest) return fatalReply(
-            "RUN_INTEGRITY_ERROR",
-            "Staging case_drafts conflicts with the immutable accepted artifact."
+          if (caseCandidate.parseDiagnostics.length > 0 || caseArtifact.digest !== caseCandidate.digest) return revisionReply(
+            runDirectory,
+            "source_pack",
+            sourceRevision + 1,
+            sourcePack,
+            [{
+              category: "traceability",
+              code: "ACCEPTED_ARTIFACT_REPAIR_REQUIRED",
+              path: "/artifact_repairs",
+              message: `Preserve accepted case_drafts; append a generation repair bound to revision ${sourceRevision} and digest ${caseArtifact.digest}, then regenerate Cases.`
+            }]
           );
           await guardedAwait2(() => discardStagingSnapshot(
             runDirectory,
@@ -21482,7 +31079,7 @@ async function advanceStrictExclusive(runDirectory) {
                 counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
                 return counts;
               }, { case: 0, formal_test_point: 0, exploratory: 0 }),
-              risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+              risk_counts: groupRiskCounts(group, derived.artifact.obligations, plan),
               options: group.allowed_options,
               answer_example: group.answer_example
             }));
@@ -21533,7 +31130,7 @@ async function advanceStrictExclusive(runDirectory) {
                 counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
                 return counts;
               }, { case: 0, formal_test_point: 0, exploratory: 0 }),
-              risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+              risk_counts: groupRiskCounts(group, derived.artifact.obligations),
               options: group.allowed_options,
               answer_example: group.answer_example
             })),
@@ -21562,10 +31159,9 @@ async function advanceStrictExclusive(runDirectory) {
           result.markdown
         ));
         digests.test_bundle = result.bundle_digest;
-        const priorCheckpointArtifact = recoveryCheckpointArtifact;
         const priorCheckpoint = (
           /** @type {Record<string,unknown>|null} */
-          priorCheckpointArtifact?.value ?? null
+          recoveryCheckpoint
         );
         const checkpointValue = checkpoint(
           sourceRevision,
@@ -21592,7 +31188,10 @@ async function advanceStrictExclusive(runDirectory) {
           bundle_digest: result.bundle_digest,
           plan_digest: result.bundle.execution_plan.plan_digest
         };
-        await guardedAwait2(() => writeReadyCurrent(runDirectory, current));
+        await guardedAwait2(() => writeReadyCurrent(runDirectory, {
+          ...current,
+          status: result.bundle.execution_plan.status === "ready" ? "ready" : "document_only"
+        }));
         return finishedReply(result, checkpointValue, current, paths.markdown);
       } finally {
         await baseGuardedAwait(releaseRunLock());
@@ -21651,7 +31250,7 @@ function fatalReply2(code2, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-    const compilerVersion = true ? "0.3.0" : "0.3.0";
+    const compilerVersion = true ? "0.4.0" : "0.4.0";
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1 ? fatalReply2(
       "RUNNER_ARGUMENTS_INVALID",

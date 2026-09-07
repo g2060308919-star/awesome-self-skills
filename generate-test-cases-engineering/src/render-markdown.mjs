@@ -1,6 +1,7 @@
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import { canonicalStringify } from './canonical.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
+import { isExecutionPreparationGap } from './gap-kinds.mjs';
 
 /** @typedef {{category:string,code:string,path:string,message:string}} Diagnostic */
 
@@ -288,89 +289,6 @@ function codeList(values) {
   return joinArray(encoded, ', ');
 }
 
-/** @param {any} oracle */
-function oracleText(oracle) {
-  const expectedField = {
-    value: 'expected_value', state: 'expected_state', event: 'expected_event', 'side-effect': 'expected_side_effect'
-  }[String(oracle.type)] ?? '';
-  const parts = [inline(oracle.type), inline(oracle.comparison), code(oracle[expectedField])];
-  if (Object.hasOwn(oracle, 'tolerance')) append(parts, `tolerance ${code(oracle.tolerance)}`);
-  if (Object.hasOwn(oracle, 'window')) append(parts, `window ${code(oracle.window)}`);
-  return joinArray(parts, ' ');
-}
-
-/** @param {any} caseEntry @param {boolean} conditional @param {number} [headingLevel] */
-function renderCase(caseEntry, conditional, headingLevel = 3) {
-  const caseHeading = '#'.repeat(headingLevel);
-  const detailHeading = '#'.repeat(headingLevel + 1);
-  const lines = [
-    `${caseHeading} ${code(caseEntry.case_id)} — ${inline(caseEntry.title)}`,
-    '',
-    `- Scope: ${code(caseEntry.scope)}`,
-    `- Risk: ${code(caseEntry.risk)}`,
-    `- Role: ${inline(caseEntry.role.value)} (evidence: ${code(caseEntry.role.evidence_ref)})`,
-    `- Requirement facts: ${codeList(caseEntry.fact_ids)}`,
-    `- Formal Test Points: ${codeList(caseEntry.obligation_ids)}`,
-    `- Evidence references: ${codeList(caseEntry.evidence_refs)}`
-  ];
-  if (conditional) append(lines,
-    `- Temporary assumption: ${code(caseEntry.temporary_assumption.claim_id)}; invalid when ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
-  );
-  append(lines, '', `${detailHeading} Preconditions`, '');
-  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
-    const item = caseEntry.preconditions[index];
-    append(lines, `${index + 1}. ${inline(item.condition)} (reachable from: ${inline(item.reachable_from)}; evidence: ${code(item.evidence_ref)})`);
-  }
-  append(lines, '', `${detailHeading} Test Data`, '');
-  for (let dataIndex = 0; dataIndex < caseEntry.data.length; dataIndex += 1) {
-    const item = caseEntry.data[dataIndex];
-    append(lines, `- ${inline(item.name)} = ${code(item.value)} (origin: ${inline(item.value_origin)}; ${inline(item.provenance.type)}: ${code(item.provenance.ref)})`);
-  }
-  append(lines, '', `${detailHeading} Steps and Oracles`, '');
-  for (let index = 0; index < caseEntry.steps.length; index += 1) {
-    const step = caseEntry.steps[index];
-    append(lines, `${index + 1}. ${code(step.step_id)} — ${inline(step.action)} (evidence: ${code(step.action_evidence_ref)})`);
-    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
-      const expectation = step.expectations[expectationIndex];
-      append(
-        lines,
-        `   - ${code(expectation.expectation_id)}: ${inline(expectation.business_assertion)}`,
-        `     - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} → ${inline(expectation.observation_target)}`,
-        `     - Oracle: ${oracleText(expectation.oracle)}`,
-        `     - Evidence: ${code(expectation.evidence_ref)}`
-      );
-    }
-  }
-  append(lines, '', `${detailHeading} Post-state and Cleanup`, '');
-  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)} (evidence: ${code(caseEntry.post_state.evidence_ref)})`);
-  if (caseEntry.cleanup.required) {
-    /** @type {string[]} */
-    const cleanupSteps = [];
-    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) {
-      append(cleanupSteps, inline(caseEntry.cleanup.steps[index]));
-    }
-    append(lines, `- Cleanup: ${joinArray(cleanupSteps, '; ')} (evidence: ${code(caseEntry.cleanup.evidence_ref)})`);
-  } else append(lines,
-    `- Cleanup: none — ${inline(caseEntry.cleanup.no_cleanup_reason)} (evidence: ${code(caseEntry.cleanup.no_cleanup_evidence_ref)})`
-  );
-  return lines;
-}
-
-/** @param {string} title @param {any[]} cases @param {boolean} conditional @param {number} [headingLevel] */
-function renderCaseLane(title, cases, conditional, headingLevel = 2) {
-  const lines = [`${'#'.repeat(headingLevel)} ${title}`, ''];
-  if (cases.length === 0) {
-    append(lines, '_None._');
-    return lines;
-  }
-  for (let index = 0; index < cases.length; index += 1) {
-    const item = cases[index];
-    if (index > 0) append(lines, '');
-    appendArray(lines, renderCase(item, conditional, headingLevel + 1));
-  }
-  return lines;
-}
-
 /** @param {string[]} headers @param {string[][]} rows */
 function table(headers, rows) {
   /** @type {string[]} */
@@ -398,123 +316,84 @@ function titleCase(value) {
 /** @param {unknown} missingType */
 function businessGapCategory(missingType) {
   const value = String(missingType);
-  if (value === 'testability' || value === 'capability' || value === 'resource_limit'
-    || value === 'control' || value === 'observer') return 'execution';
+  if (isExecutionPreparationGap(value)) return 'execution';
   if (value === 'source-conflict' || value === 'fact-conflict' || value === 'evidence'
     || value === 'extraction' || value === 'authority' || value === 'exclusion'
     || value === 'invalid-exclusion') return 'evidence';
   return 'business';
 }
 
-/** @param {'business'|'execution'|'evidence'} category */
-function businessGapCause(category) {
-  if (category === 'execution') return 'Required test setup or observation capability is unavailable or unverified.';
-  if (category === 'evidence') return 'Source evidence is missing, ambiguous, conflicting, or lacks the required authority.';
-  return 'A required product rule or expected outcome is unresolved.';
-}
-
-/** @param {'business'|'execution'|'evidence'} category */
-function businessGapRequiredInput(category) {
-  if (category === 'execution') return 'Verified test setup, control, or observation capability.';
-  if (category === 'evidence') return 'Authoritative source evidence that resolves the ambiguity or conflict.';
-  return 'An authoritative product rule or expected result.';
-}
-
-/** @param {any[]} members */
-function groupedScopes(members) {
-  /** @type {string[]} */
-  const scopes = [];
-  const seen = new Set();
-  for (let index = 0; index < members.length; index += 1) {
-    const scope = String(members[index].scope);
-    if (!seen.has(scope)) {
-      seen.add(scope);
-      append(scopes, inline(scope));
-    }
+/** @param {any} entry @param {string} resourceId */
+function declaredResource(entry, resourceId) {
+  let found = null;
+  for (let index = 0; index < entry.testability_profile.setup_resources.length; index += 1) {
+    const resource = entry.testability_profile.setup_resources[index];
+    if (resource.resource_id !== resourceId) continue;
+    if (found !== null) throw new BundleRenderError([{
+      category: 'reference', code: 'SETUP_RESOURCE_AMBIGUOUS', path: '/setup_resources',
+      message: 'rendered setup resource must resolve uniquely'
+    }]);
+    found = resource;
   }
-  return scopes;
+  if (found === null) throw new BundleRenderError([{
+    category: 'reference', code: 'SETUP_RESOURCE_UNKNOWN', path: '/setup_resources',
+    message: 'rendered setup resource must be declared'
+  }]);
+  return found;
 }
 
-/** @param {any[]} members */
-function highestRisk(members) {
-  let selected = 'low';
-  let selectedOrder = RISK_ORDER.low;
-  for (let index = 0; index < members.length; index += 1) {
-    const candidate = String(members[index].risk);
-    const candidateOrder = RISK_ORDER[candidate] ?? 99;
-    if (candidateOrder < selectedOrder) {
-      selected = candidate;
-      selectedOrder = candidateOrder;
-    }
-  }
-  return selected;
-}
-
-/**
- * @param {string[]} lines
- * @param {any[]} blocked
- * @param {Map<string,any>} planByItemKey
- * @param {'business'|'execution'|'evidence'} category
- * @param {string} heading
- * @param {number} nextGapNumber
+/** Translate compiler-authored prompts only; preserve operator-authored questions.
+ * @param {string} question @param {boolean} zh
  */
-function appendBusinessGapSection(lines, blocked, planByItemKey, category, heading, nextGapNumber) {
-  append(lines, '', `## ${heading}`, '');
-  /** @type {Map<string, any[]>} */
-  const grouped = new Map();
-  /** @type {any[][]} */
-  const groups = [];
-  for (let index = 0; index < blocked.length; index += 1) {
-    const item = blocked[index];
-    if (businessGapCategory(item.recovery.missing_type) !== category) continue;
-    const rootId = String(item.root_issue_id);
-    let members = grouped.get(rootId);
-    if (!members) {
-      members = [];
-      grouped.set(rootId, members);
-      append(groups, members);
-    }
-    append(members, item);
+function recoveryQuestion(question, zh) {
+  if (!zh) return question;
+  const capability = /^What verified test setup, control, or observation capability is available for (.*)\?$/u.exec(question);
+  if (capability) return '在“' + capability[1] + '”范围内，有哪些已验证的数据准备、控制或观察能力？';
+  const authority = /^Which authoritative source rule applies to (.*)\?$/u.exec(question);
+  if (authority) return '“' + authority[1] + '”范围内，应采用哪份权威来源中的规则？';
+  const exclusion = /^What authoritative scope-exclusion rule applies to (.*)\?$/u.exec(question);
+  if (exclusion) return '哪条权威规则将“' + exclusion[1] + '”排除在本次范围外？';
+  const rule = /^What authoritative product rule or expected result resolves the (.*) gap in (.*)\?$/u.exec(question);
+  if (rule) return '针对“' + rule[2] + '”的缺口，明确的产品规则或预期结果是什么？';
+  return question;
+}
+
+/** @param {any} item @param {boolean} zh */
+function recoveryDetails(item, zh) {
+  /** @type {string[]} */
+  const details = [];
+  /** @type {Record<string,[string,string]>} */
+  const reasons = {
+    CAPABILITY_UNKNOWN: ['Capability availability is unconfirmed.', '能力可用性尚未确认。'],
+    CAPABILITY_UNAVAILABLE: ['Capability is confirmed unavailable.', '能力已确认不可用。'],
+    CAPABILITY_PROVENANCE_MISSING: ['Capability has no supporting verification evidence.', '缺少能力的验证依据。'],
+    CONTROL_MISSING: ['The required control is missing.', '缺少必要的操作控制。'],
+    OBSERVER_MISSING: ['The required observer is missing.', '缺少必要的观察能力。'],
+    FORMAL_ORACLE_MISSING: ['No sourced expected result is available.', '缺少有来源支持的预期结果。'],
+    ORACLE_INVALID: ['The expected-result comparison is incomplete or invalid.', '预期结果的比较条件不完整或无效。'],
+    UNRESOLVED_CONFLICT: ['Conflicting authoritative rules remain unresolved.', '权威规则间的冲突尚未解决。'],
+    FACT_UNRESOLVED: ['The requirement fact remains ambiguous or conflicted.', '需求事实仍存在歧义或冲突。']
+  };
+  const codes = String(item.reason).split(',');
+  for (let i = 0; i < codes.length; i += 1) {
+    const pair = reasons[codes[i]];
+    if (pair) append(details, pair[zh ? 1 : 0]);
   }
-  let count = 0;
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const members = groups[groupIndex];
-    const item = members[0];
-    const scopes = groupedScopes(members);
-    const gapNumber = nextGapNumber;
-    nextGapNumber += 1;
-    count += 1;
-    append(lines,
-      `### Gap-${String(gapNumber).padStart(3, '0')} — ${inline(item.recovery.question)}`,
-      '',
-      `- ${scopes.length === 1 ? 'Scope' : 'Scopes'}: ${joinArray(scopes, '; ')}`,
-      `- Risk: ${titleCase(highestRisk(members))}`,
-      `- Cause: ${businessGapCause(category)}`,
-      members.length === 1
-        ? '- Impact: one formal Test Point cannot become an executable Case.'
-        : `- Impact: ${members.length} formal Test Points cannot become executable Cases.`,
-      `- Required input: ${businessGapRequiredInput(category)}`,
-      `- Next action: ${inline(item.recovery.question)}`,
-      '- Affected Test Points and execution decisions:'
-    );
-    for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
-      const member = members[memberIndex];
-      const planItem = planByItemKey.get(`formal_test_point\u0000${String(member.obligation_id)}`);
-      append(lines,
-        `  - ${inline(member.subject)} — Scope: ${inline(member.scope)}; Risk: ${titleCase(member.risk)}`
-      );
-      if (planItem?.execution_disposition === 'do_not_execute'
-        && typeof planItem.reason === 'string') append(
-        lines, `    - Do not execute reason: ${inline(planItem.reason)}`
-      );
+  // Compiler semantic refs may contain typed resource subjects mixed with trace IDs.
+  // Decode only the resource descriptors; keep opaque IDs in the audit index.
+  try {
+    const refs = JSON.parse('[' + item.recovery.required_material + ']');
+    for (let i = 0; i < refs.length; i += 1) {
+      const ref = refs[i];
+      if (ref && typeof ref === 'object' && typeof ref.subject === 'string'
+        && (ref.kind === 'capability' || ref.kind === 'control' || ref.kind === 'observer')) {
+        append(details, (zh ? '涉及资源：' : 'Resource: ') + ref.subject
+          + (typeof ref.target === 'string' ? ' → ' + ref.target
+            : ref.target && typeof ref.target.observation_target === 'string' ? ' → ' + ref.target.observation_target : ''));
+      }
     }
-    append(lines,
-      ''
-    );
-  }
-  if (count === 0) append(lines, '_None._');
-  else if (lines[lines.length - 1] === '') Reflect.apply(NATIVE_ARRAY_POP, lines, []);
-  return nextGapNumber;
+  } catch { /* Plain trace references are intentionally rendered only in the audit. */ }
+  return details;
 }
 
 /** @param {any} left @param {any} right */
@@ -554,77 +433,6 @@ function businessCaseInventory(snapshot) {
   return { inventory, displayByCaseId };
 }
 
-/** @param {any} item @param {string} displayId */
-function renderBusinessCase(item, displayId) {
-  const caseEntry = item.caseEntry;
-  const disposition = item.planItem?.execution_disposition === 'execute' ? 'Execute' : 'Do not execute';
-  const lines = [
-    `### ${displayId} — ${inline(caseEntry.title)}`,
-    '',
-    `- Scope: ${inline(caseEntry.scope)}`,
-    `- Risk: ${titleCase(caseEntry.risk)}`,
-    `- Role: ${inline(caseEntry.role.value)}`,
-    `- Evidence status: ${titleCase(item.semanticStatus)}`,
-    `- Execution decision: ${disposition}`
-  ];
-  if (item.semanticStatus === 'conditional') append(lines,
-    `- Temporary assumption: valid only until ${inline(caseEntry.temporary_assumption.invalidation_condition)}`
-  );
-  if (disposition === 'Do not execute' && typeof item.planItem?.reason === 'string') append(
-    lines, `- Do not execute reason: ${inline(item.planItem.reason)}`
-  );
-  append(lines, '', '#### Preconditions', '');
-  for (let index = 0; index < caseEntry.preconditions.length; index += 1) {
-    const precondition = caseEntry.preconditions[index];
-    append(lines, `${index + 1}. ${inline(precondition.condition)} (reachable from: ${inline(precondition.reachable_from)})`);
-  }
-  append(lines, '', '#### Test Data', '');
-  for (let index = 0; index < caseEntry.data.length; index += 1) {
-    const datum = caseEntry.data[index];
-    append(lines, `- ${inline(datum.name)} = ${code(datum.value)} — Origin: ${titleCase(datum.value_origin)}`);
-  }
-  append(lines, '', '#### Steps and Expected Results', '');
-  for (let stepIndex = 0; stepIndex < caseEntry.steps.length; stepIndex += 1) {
-    const step = caseEntry.steps[stepIndex];
-    append(lines, `${stepIndex + 1}. ${inline(step.action)}`);
-    for (let expectationIndex = 0; expectationIndex < step.expectations.length; expectationIndex += 1) {
-      const expectation = step.expectations[expectationIndex];
-      append(lines,
-        `   - Expected: ${inline(expectation.business_assertion)}`,
-        `   - Observe: ${inline(expectation.observer)} via ${inline(expectation.observation_surface)} → ${inline(expectation.observation_target)}`,
-        `   - Oracle: ${oracleText(expectation.oracle)}`
-      );
-    }
-  }
-  append(lines, '', '#### Post-state and Cleanup', '');
-  append(lines, `- Post-state: ${inline(caseEntry.post_state.state)}`);
-  if (caseEntry.cleanup.required) {
-    /** @type {string[]} */
-    const cleanupSteps = [];
-    for (let index = 0; index < caseEntry.cleanup.steps.length; index += 1) append(
-      cleanupSteps, inline(caseEntry.cleanup.steps[index])
-    );
-    append(lines, `- Cleanup: ${joinArray(cleanupSteps, '; ')}`);
-  } else append(lines, `- Cleanup: none — ${inline(caseEntry.cleanup.no_cleanup_reason)}`);
-  return lines;
-}
-
-/** @param {string} title @param {any[]} items @param {Map<string,string>} displayByCaseId */
-function renderBusinessCaseLane(title, items, displayByCaseId) {
-  const lines = [`## ${title}`, ''];
-  if (items.length === 0) {
-    append(lines, '_None._');
-    return lines;
-  }
-  for (let index = 0; index < items.length; index += 1) {
-    if (index > 0) append(lines, '');
-    appendArray(lines, renderBusinessCase(
-      items[index], String(displayByCaseId.get(items[index].caseEntry.case_id))
-    ));
-  }
-  return lines;
-}
-
 /**
  * Render only fields already present in the canonical bundle. The renderer has
  * no second content channel and therefore cannot add facts or evidence.
@@ -639,16 +447,33 @@ function renderMarkdownTrusted(bundle) {
   appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateAgainstSchema(snapshot, testBundleSchema)));
   appendArray(diagnostics, /** @type {Diagnostic[]} */ (validateUniqueStableIds(snapshot)));
   if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
+  for (let index = 0; index < snapshot.blocked.length; index += 1) {
+    const item = snapshot.blocked[index];
+    const ids = new Set();
+    let previous = '';
+    for (let dependencyIndex = 0; dependencyIndex < item.blocking_roots.length; dependencyIndex += 1) {
+      const dependency = item.blocking_roots[dependencyIndex];
+      if (ids.has(dependency.root_issue_id) || (previous && previous >= dependency.root_issue_id)) append(diagnostics, {
+        category: 'traceability', code: 'BLOCKED_DEPENDENCY_SET_INVALID', path: `/blocked/${index}/blocking_roots`,
+        message: 'Blocked dependencies must be unique and canonical'
+      });
+      ids.add(dependency.root_issue_id);
+      previous = dependency.root_issue_id;
+    }
+    if (item.root_issue_id !== item.blocking_roots[0].root_issue_id
+      || canonicalStringify(item.recovery) !== canonicalStringify(item.blocking_roots[0].recovery)) append(diagnostics, {
+      category: 'traceability', code: 'BLOCKED_DEPENDENCY_ALIAS_MISMATCH', path: `/blocked/${index}`,
+      message: 'Blocked scalar aliases must exactly equal the first dependency'
+    });
+  }
+  if (diagnostics.length > 0) throw new BundleRenderError(diagnostics);
   const business = businessCaseInventory(snapshot);
   const runnerIds = new Set(snapshot.execution_plan.runner_case_ids);
   /** @type {any[]} */
   const executeCases = [];
-  /** @type {any[]} */
-  const notSelectedCases = [];
   for (let index = 0; index < business.inventory.length; index += 1) {
     const item = business.inventory[index];
     if (runnerIds.has(item.caseEntry.case_id)) append(executeCases, item);
-    else append(notSelectedCases, item);
   }
   const coverage = snapshot.coverage;
   const plan = snapshot.execution_plan;
@@ -657,221 +482,238 @@ function renderMarkdownTrusted(bundle) {
     const item = plan.items[index];
     planByItemKey.set(`${String(item.item_kind)}\u0000${String(item.item_id)}`, item);
   }
+  const zh = snapshot.output_language === 'zh-CN';
+  /** @param {string} en @param {string} cn */
+  const L = (en, cn) => zh ? cn : en;
+  /** @param {unknown} value */
+  const label = (value) => {
+    /** @type {Record<string,string>} */
+    const labels = {
+      grounded: '有充分依据', conditional: '依赖临时条件', blocked: '受阻',
+      exploratory: '探索建议', not_applicable: '不适用', execute: '执行',
+      do_not_execute: '不执行', pending: '待决定', critical: '严重', high: '高',
+      medium: '中', low: '低', document_only: '仅交付文档', ready: '执行计划已确认',
+      requirement: '需求规定', derived: '推导值', example: '示例值', assumption: '假设值',
+      'temporary-assumption': '临时假设',
+      equals: '等于', contains: '包含', matches: '匹配', within: '范围内',
+      executable_subset_ready: '已有可执行子集', critical_gaps: '存在关键缺口',
+      no_deterministic_cases: '尚无确定性用例', no_applicable_formal_test_points: '无适用正式测试点'
+    };
+    return zh ? labels[String(value)] ?? inline(value) : titleCase(value);
+  };
   const lines = [
-    '# Manual Functional Test Plan',
-    '',
-    '## Delivery Overview',
-    '',
-    '- Generated, not executed. This plan contains no test results or defect verdicts.',
-    `- Readiness: ${titleCase(snapshot.quality.delivery_status)}`,
-    `- Requirement accounting: ${coverage.requirements.accounted}/${coverage.requirements.total}`,
-    `- Formal Test Points covered: ${coverage.formal.covered}/${coverage.formal.total}`,
-    `- Grounded executable coverage: ${coverage.executable.grounded}/${coverage.executable.total}`,
-    `- Execute Cases: ${plan.summary.execute_case_count}`,
-    `- Do not execute Cases: ${plan.summary.do_not_execute_case_count}`,
-    `- Blocked formal Test Points: ${snapshot.blocked.length}`,
-    `- NotApplicable exclusions: ${coverage.not_applicable.length}`,
-    '',
-    '## Execution Overview',
-    ''
+    L('# Manual Functional Test Plan', '# 人工功能测试用例'), '',
+    L('## Delivery Overview', '## 交付概览'), '',
+    L('- Generated, not executed. No test results or defect verdicts are claimed.',
+      '- 仅生成，尚未执行；不包含测试结果或缺陷结论。'),
+    '- ' + L('Delivery', '交付状态') + ': ' + label(plan.status),
+    '- ' + L('Coverage boundary: the following ratios account for declared, reviewed facts, not independently proven PRD recall.',
+      '覆盖边界：以下比例核算已声明、已审阅的事实，不代表已独立证明 PRD 语义无遗漏。'),
+    '- ' + L('Requirement accounting', '需求事实核算') + ': ' + coverage.requirements.accounted + '/' + coverage.requirements.total,
+    '- ' + L('Formal Test Points covered', '正式测试点覆盖') + ': ' + coverage.formal.covered + '/' + coverage.formal.total,
+    '- ' + L('Grounded executable coverage', '充分依据用例覆盖') + ': ' + coverage.executable.grounded + '/' + coverage.executable.total,
+    '- ' + L('Confirmed runner Cases', '已确认可交给执行器的用例') + ': ' + plan.runner_case_ids.length,
+    '- ' + L('Blocked Test Points / scope exclusions', '受阻测试点 / 范围排除') + ': ' + snapshot.blocked.length + ' / ' + coverage.not_applicable.length,
+    '', L('## Case Overview', '## 用例总览'), ''
   ];
   /** @type {string[][]} */
   const overviewRows = [];
   for (let index = 0; index < business.inventory.length; index += 1) {
     const item = business.inventory[index];
     append(overviewRows, [
-      String(business.displayByCaseId.get(item.caseEntry.case_id)),
-      inline(item.caseEntry.title), inline(item.caseEntry.scope), titleCase(item.caseEntry.risk),
-      inline(item.caseEntry.role.value),
-      item.planItem?.execution_disposition === 'execute' ? 'Execute' : 'Do not execute'
+      String(business.displayByCaseId.get(item.caseEntry.case_id)), inline(item.caseEntry.title),
+      inline(item.caseEntry.scope), label(item.caseEntry.risk), label(item.semanticStatus),
+      label(item.planItem?.execution_disposition ?? 'pending')
     ]);
   }
-  appendArray(lines, table(['Case', 'Title', 'Scope', 'Risk', 'Role', 'Decision'], overviewRows));
-  append(lines, '');
-  appendArray(lines, renderBusinessCaseLane('Cases to Execute', executeCases, business.displayByCaseId));
-  append(lines, '');
-  appendArray(lines, renderBusinessCaseLane('Cases Not Selected', notSelectedCases, business.displayByCaseId));
-  let nextGapNumber = 1;
-  nextGapNumber = appendBusinessGapSection(
-    lines, snapshot.blocked, planByItemKey, 'business', 'Business Rule Gaps', nextGapNumber
-  );
-  nextGapNumber = appendBusinessGapSection(
-    lines, snapshot.blocked, planByItemKey, 'execution', 'Execution Preparation Gaps', nextGapNumber
-  );
-  appendBusinessGapSection(
-    lines, snapshot.blocked, planByItemKey, 'evidence', 'Source and Evidence Gaps', nextGapNumber
-  );
-  append(lines, '', '## Scope Exclusions (NotApplicable)', '');
-  if (coverage.not_applicable.length === 0) append(lines, '_None._');
-  for (let index = 0; index < coverage.not_applicable.length; index += 1) {
-    const item = coverage.not_applicable[index];
+  appendArray(lines, table([
+    L('Case', '用例'), L('Title', '标题'), L('Scope', '范围'), L('Risk', '风险'),
+    L('Evidence status', '依据状态'), L('Decision', '执行决定')
+  ], overviewRows));
+  append(lines, '', L('## Cases', '## 用例明细'), '');
+  if (business.inventory.length === 0) append(lines, L('_None._', '_无。_'), '');
+  for (let index = 0; index < business.inventory.length; index += 1) {
+    const item = business.inventory[index];
+    const entry = item.caseEntry;
+    append(lines, '### ' + business.displayByCaseId.get(entry.case_id) + ' — ' + inline(entry.title), '',
+      '- ' + L('Scope', '范围') + ': ' + inline(entry.scope),
+      '- ' + L('Role', '角色') + ': ' + inline(entry.role.value),
+      '- ' + L('Risk', '风险') + ': ' + label(entry.risk),
+      '- ' + L('Evidence status', '依据状态') + ': ' + label(item.semanticStatus),
+      '- ' + L('Execution decision', '执行决定') + ': ' + label(item.planItem?.execution_disposition ?? 'pending'));
+    if (item.semanticStatus === 'conditional') append(lines,
+      '- ' + L('Temporary assumption invalidation', '临时假设失效条件') + ': ' + inline(entry.temporary_assumption.invalidation_condition));
+    if (item.planItem?.reason) append(lines, '- ' + L('Decision basis', '决定依据') + ': ' + inline(
+      item.planItem.basis?.origin === 'default_grounded_recommendation'
+        ? L('Selected for this run.', '已选择纳入本次执行。') : item.planItem.reason));
     append(lines,
-      `- ${item.subject_kind === 'requirement_fact' ? 'Requirement fact' : 'Formal Test Point'} “${inline(item.subject)}” in ${inline(item.scope)}: ${inline(item.reason)}`
-    );
+      '- ' + L('Impact rationale', '影响依据') + ': ' + inline(entry.risk_basis.impact),
+      '- ' + L('Likelihood rationale', '可能性依据') + ': ' + inline(entry.risk_basis.likelihood),
+      '- ' + L('Exposure rationale', '影响范围依据') + ': ' + inline(entry.risk_basis.exposure));
+    if (entry.scenario.intent === 'compatibility') {
+      const baseline = declaredResource(entry, entry.scenario.compatibility.baseline_ref);
+      append(lines, '- ' + L('Compatibility baseline', '兼容性基线') + ': ' + inline(baseline.locator));
+      append(lines, '- ' + L('Comparison dimension', '比较维度') + ': ' + inline(entry.scenario.compatibility.dimensions[0]));
+    }
+    append(lines, '', L('#### Preconditions', '#### 前置条件'), '');
+    for (let i = 0; i < entry.preconditions.length; i += 1) {
+      const pre = entry.preconditions[i];
+      append(lines, String(i + 1) + '. ' + inline(pre.condition) + ' — ' + L('Preparation', '准备路径') + ': ' + inline(pre.reachable_from));
+      const resource = declaredResource(entry, pre.setup.resource_ref);
+      append(lines, '   - ' + L('Resource', '资源入口') + ': ' + inline(resource.locator),
+        '   - ' + L('Preparation completed when', '准备完成判据') + ': ' + inline(pre.setup.completion.subject_ref) + ' ' + label(pre.setup.completion.operator) + ' ' + code(pre.setup.completion.operand.value));
+    }
+    append(lines, '', L('#### Test Data', '#### 测试数据'), '');
+    for (let i = 0; i < entry.data.length; i += 1) {
+      const datum = entry.data[i];
+      append(lines, '- ' + inline(datum.name) + ' = ' + code(datum.value) + ' — ' + L('Origin', '取值来源') + ': ' + label(datum.value_origin));
+    }
+    append(lines, '', L('#### Steps and Expected Results', '#### 步骤与预期结果'), '');
+    for (let i = 0; i < entry.steps.length; i += 1) {
+      const step = entry.steps[i];
+      append(lines, String(i + 1) + '. ' + inline(step.action));
+      for (let j = 0; j < step.expectations.length; j += 1) {
+        const expectation = step.expectations[j];
+        append(lines, '   - ' + L('Expected', '预期') + ': ' + inline(expectation.business_assertion),
+          '   - ' + L('Observe', '观察') + ': ' + inline(expectation.observer) + ' / '
+            + inline(expectation.observation_surface) + ' → ' + inline(expectation.observation_target));
+        const assertion = expectation.oracle.assertion;
+        const operator = assertion.operator === 'equals' ? L('equals', '等于')
+          : assertion.operator === 'contains' ? L('contains', '包含')
+            : assertion.operator === 'matches' ? L('matches', '匹配') : L('within', '范围内');
+        append(lines, '   - ' + L('Typed Oracle', '结构化判定') + ': ' + inline(assertion.subject_ref)
+          + ' ' + operator + ' ' + code(assertion.operand.value));
+        if (expectation.oracle.tolerance !== undefined) append(lines,
+          '   - ' + L('Tolerance', '容差') + ': ' + code(expectation.oracle.tolerance));
+        if (expectation.oracle.window !== undefined) append(lines,
+          '   - ' + L('Observation window', '观察时间窗') + ': ' + inline(expectation.oracle.window));
+      }
+    }
+    append(lines, '', L('#### Post-state and Cleanup', '#### 后置状态与清理'), '',
+      '- ' + L('Post-state', '后置状态') + ': ' + inline(entry.post_state.state));
+    if (entry.cleanup.required) {
+      for (let i = 0; i < entry.cleanup.steps.length; i += 1) append(lines,
+        '- ' + L('Cleanup', '清理') + ': ' + inline(entry.cleanup.steps[i]));
+    } else append(lines, '- ' + L('No cleanup', '无需清理') + ': ' + inline(entry.cleanup.no_cleanup_reason));
+    append(lines, '');
   }
-  append(lines, '', '## Exploratory Risks', '');
-  if (snapshot.exploratory.length === 0) append(lines, '_None._');
-  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
-    const item = snapshot.exploratory[index];
-    const planItem = planByItemKey.get(`exploratory\u0000${String(item.exploratory_id)}`);
-    append(lines,
-      `- ${inline(item.title)} — Scope: ${inline(item.scope)}; Risk: ${titleCase(item.risk)}; Status: exploratory only and outside formal coverage.`
-    );
-    if (planItem?.execution_disposition === 'do_not_execute'
-      && typeof planItem.reason === 'string') append(
-      lines, `  - Do not execute reason: ${inline(planItem.reason)}`
-    );
+  const groupedGaps = new Map();
+  /** @type {any[][]} */
+  const gapGroups = [];
+  for (let i = 0; i < snapshot.blocked.length; i += 1) {
+    const blockedItem = snapshot.blocked[i];
+    const dependencies = blockedItem.blocking_roots ?? [{ root_issue_id: blockedItem.root_issue_id, recovery: blockedItem.recovery }];
+    for (let dependencyIndex = 0; dependencyIndex < dependencies.length; dependencyIndex += 1) {
+    const item = { ...blockedItem, ...dependencies[dependencyIndex] };
+    if (!groupedGaps.has(item.root_issue_id)) {
+      /** @type {any[]} */
+      const group = [];
+      groupedGaps.set(item.root_issue_id, group);
+      append(gapGroups, group);
+    }
+    append(groupedGaps.get(item.root_issue_id), item);
+    }
   }
-  append(lines, '', '## Manual Execution Worksheet', '');
-  append(lines,
-    'Generated, not executed. Record results downstream and bind each record to the delivered bundle digest + stable Case ID listed in the Audit Appendix.',
-    ''
-  );
+  let gapIndex = 0;
+  const categories = ['business', 'execution', 'evidence'];
+  for (let categoryIndex = 0; categoryIndex < categories.length; categoryIndex += 1) {
+    const category = categories[categoryIndex];
+    append(lines, category === 'business' ? L('## Business Rule Gaps', '## 待补充业务规则')
+      : category === 'execution' ? L('## Execution Preparation Gaps', '## 待补齐执行准备')
+        : L('## Source and Evidence Gaps', '## 待补齐来源与依据'), '');
+    let categoryCount = 0;
+    for (let groupIndex = 0; groupIndex < gapGroups.length; groupIndex += 1) {
+    const members = gapGroups[groupIndex];
+    if (businessGapCategory(members[0].recovery.missing_type) !== category) continue;
+    categoryCount += 1;
+    gapIndex += 1;
+    append(lines, '### ' + L('Gap', '缺口') + '-' + gapIndex, '');
+    for (let i = 0; i < members.length; i += 1) {
+      const item = members[i];
+      append(lines, '- ' + inline(item.subject) + ' — ' + L('Scope', '范围') + ': ' + inline(item.scope)
+        + '; ' + L('Risk', '风险') + ': ' + label(item.risk));
+      const decision = planByItemKey.get('formal_test_point\u0000' + item.obligation_id);
+      if (decision?.reason) append(lines, '  - ' + L('Decision', '执行决定') + ': ' + label(decision.execution_disposition) + ' — ' + inline(decision.reason));
+    }
+    append(lines, '- ' + L('Question', '需确认事项') + ': ' + inline(recoveryQuestion(members[0].recovery.question, zh)));
+    const details = recoveryDetails(members[0], zh);
+    for (let i = 0; i < details.length; i += 1) append(lines, '- ' + inline(details[i]));
+    append(lines, '- ' + L('Needed', '需要补充') + ': ' + (category === 'execution'
+      ? L('Verified preparation, control or observation capability.', '已验证的数据准备、控制或观察能力。')
+      : category === 'evidence'
+        ? L('Authoritative evidence resolving the source gap or conflict.', '可消除来源缺失、歧义或冲突的权威证据。')
+        : L('An authoritative product rule and expected result.', '明确的产品规则及预期结果。')), '');
+    }
+    if (categoryCount === 0) append(lines, L('_None._', '_无。_'), '');
+  }
+  append(lines, L('## Scope Exclusions', '## 范围排除'), '');
+  if (coverage.not_applicable.length === 0) append(lines, L('_None._', '_无。_'));
+  for (let i = 0; i < coverage.not_applicable.length; i += 1) {
+    const item = coverage.not_applicable[i];
+    append(lines, '- ' + (item.subject_kind === 'formal_test_point' ? L('Formal Test Point', '正式测试点') : L('Requirement fact', '需求事实'))
+      + ' “' + inline(item.subject) + '” ' + L('in', '范围') + ' ' + inline(item.scope) + ' — ' + inline(item.reason));
+  }
+  append(lines, '', L('## Exploratory Risks', '## 探索性风险'), '');
+  if (snapshot.exploratory.length === 0) append(lines, L('_None._', '_无。_'));
+  for (let i = 0; i < snapshot.exploratory.length; i += 1) {
+    const item = snapshot.exploratory[i];
+    append(lines, '- ' + inline(item.title) + ' — ' + label(item.risk) + ': '
+      + L('Nonformal risk hypothesis; not counted as formal coverage.', '非正式风险建议，不计入正式覆盖。'));
+    if (item.origin === 'heuristic') append(lines,
+      '  - ' + L('Unsourced heuristic, not evidence', '无来源的启发式建议，不是证据') + ': ' + inline(item.hypothesis),
+      '  - ' + L('Rationale', '提出依据') + ': ' + inline(item.rationale));
+    const decision = planByItemKey.get('exploratory\u0000' + item.exploratory_id);
+    if (decision?.reason) append(lines, '  - ' + L('Decision', '执行决定') + ': ' + label(decision.execution_disposition) + ' — ' + inline(decision.reason));
+  }
+  append(lines, '', L('## Manual Execution Worksheet', '## 人工执行记录表'), '',
+    L('Not executed. Record results downstream against the bundle digest and stable Case ID; only confirmed runner Cases are listed.',
+      '尚未执行。执行结果由下游按 bundle 摘要和稳定用例 ID 记录；下表仅列出已确认可执行的用例。'), '');
   /** @type {string[][]} */
   const worksheetRows = [];
-  for (let index = 0; index < executeCases.length; index += 1) {
-    const item = executeCases[index];
-    append(worksheetRows, [
-      String(business.displayByCaseId.get(item.caseEntry.case_id)), inline(item.caseEntry.title),
-      inline(item.caseEntry.scope), titleCase(item.caseEntry.risk), inline(item.caseEntry.role.value),
-      'Not recorded', '—', '—'
-    ]);
-  }
-  appendArray(lines, table(
-    ['Case', 'Title', 'Scope', 'Risk', 'Role', 'Result', 'Defect', 'Notes'], worksheetRows
-  ));
-  append(lines,
-    '', '## Audit Appendix', '',
-    `- Schema version: ${code(snapshot.schema_version)}`,
-    `- Source revision: ${code(snapshot.source_revision)}`,
-    ''
-  );
-  appendArray(lines, renderCaseLane('Grounded Cases', snapshot.grounded, false, 3));
-  append(lines, '');
-  appendArray(lines, renderCaseLane('Conditional Cases', snapshot.conditional, true, 3));
-  append(lines, '', '### Blocked Formal Test Points', '');
-  if (snapshot.blocked.length === 0) append(lines, '_None._');
-  for (let index = 0; index < snapshot.blocked.length; index += 1) {
-    const item = snapshot.blocked[index];
-    append(
-      lines,
-      `#### ${code(item.obligation_id)}`,
-      '',
-      `- Root issue: ${code(item.root_issue_id)}`,
-      `- Scope: ${code(item.scope)}`,
-      `- Risk: ${code(item.risk)}`,
-      `- Reason: ${code(item.reason)}`,
-      `- Missing type: ${code(item.recovery.missing_type)}`,
-      `- Required material: ${inline(item.recovery.required_material)}`,
-      `- Recovery question: ${inline(item.recovery.question)}`,
-      ''
-    );
-  }
-  if (lines[lines.length - 1] === '') Reflect.apply(NATIVE_ARRAY_POP, lines, []);
-  append(lines, '', '### Exploratory Cases', '');
-  if (snapshot.exploratory.length === 0) append(lines, '_None._');
-  for (let index = 0; index < snapshot.exploratory.length; index += 1) {
-    const item = snapshot.exploratory[index];
-    append(
-      lines,
-      `#### ${code(item.exploratory_id)} — ${inline(item.title)}`,
-      '',
-      `- Scope: ${code(item.scope)}`,
-      `- Risk: ${code(item.risk)}`,
-      `- Reason: ${inline(item.reason)}`,
-      ''
-    );
-  }
-  if (lines[lines.length - 1] === '') Reflect.apply(NATIVE_ARRAY_POP, lines, []);
+  for (let i = 0; i < executeCases.length; i += 1) append(worksheetRows, [
+    String(business.displayByCaseId.get(executeCases[i].caseEntry.case_id)),
+    inline(executeCases[i].caseEntry.title), inline(executeCases[i].caseEntry.scope),
+    label(executeCases[i].caseEntry.risk), inline(executeCases[i].caseEntry.role.value),
+    L('Not recorded', '未记录'), '—', '—'
+  ]);
+  appendArray(lines, table([L('Case', '用例'), L('Title', '标题'), L('Scope', '范围'), L('Risk', '风险'), L('Role', '角色'), L('Result', '结果'), L('Defect', '缺陷'), L('Notes', '备注')], worksheetRows));
+  append(lines, '', L('## Audit Appendix', '## 审计索引'), '',
+    L('Complete typed Oracles, evidence, coverage ledgers and lineage are in the normative JSON. Cases are not duplicated here.',
+      '完整的结构化 Oracle、证据、覆盖账本和血缘均保留在规范 JSON 中，此处不重复用例正文。'), '',
+    '- ' + L('Schema / compiler', 'Schema / 编译器') + ': ' + code(snapshot.schema_version) + ' / ' + code(snapshot.quality.compiler_version),
+    '- ' + L('Source revision', '资料修订') + ': ' + snapshot.source_revision,
+    '- ' + L('Semantic source digest', '资料语义摘要') + ': ' + code(snapshot.quality.lineage.semantic_source_digest),
+    '- ' + L('Plan digest', '计划摘要') + ': ' + code(plan.plan_digest),
+    '- ' + L('Semantic result digest', '语义结果摘要') + ': ' + code(plan.semantic_result_digest), '');
   /** @type {string[][]} */
-  const requirementRows = [];
-  for (let index = 0; index < coverage.requirements.entries.length; index += 1) {
-    const item = coverage.requirements.entries[index];
-    append(requirementRows, [code(item.fact_id), code(item.status)]);
+  const traceRows = [];
+  for (let i = 0; i < business.inventory.length; i += 1) {
+    const entry = business.inventory[i].caseEntry;
+    append(traceRows, [String(business.displayByCaseId.get(entry.case_id)), code(entry.case_id),
+      codeList(entry.obligation_ids), codeList(entry.evidence_refs)]);
   }
+  appendArray(lines, table([L('Case', '用例'), L('Stable ID', '稳定 ID'), L('Test Points', '测试点'), L('Evidence', '证据')], traceRows));
   /** @type {string[][]} */
-  const formalRows = [];
-  for (let index = 0; index < coverage.formal.entries.length; index += 1) {
-    const item = coverage.formal.entries[index];
-    append(formalRows, [code(item.obligation_id), code(item.status)]);
-  }
-  /** @type {string[][]} */
-  const executableRows = [];
-  for (let index = 0; index < coverage.executable.entries.length; index += 1) {
-    const item = coverage.executable.entries[index];
-    append(executableRows, [code(item.obligation_id), code(item.case_id)]);
-  }
-  append(
-    lines,
-    '', '### Coverage', '',
-    '#### Requirement Fact Ledger', '',
-    `Accounted: ${coverage.requirements.accounted}/${coverage.requirements.total}`, ''
-  );
-  appendArray(lines, table(['Fact', 'Status'], requirementRows));
-  append(lines, '', '#### Formal Test Point Ledger', '', `Covered: ${coverage.formal.covered}/${coverage.formal.total} declared`, '');
-  appendArray(lines, table(['Test Point', 'Disposition'], formalRows));
-  append(lines, '', '#### Grounded Executable Ledger', '', `Grounded: ${coverage.executable.grounded}/${coverage.executable.total}`, '');
-  appendArray(lines, table(['Test Point', 'Case'], executableRows));
-  append(lines, '', '#### Expert Recall Ledger', '', `Status: ${code(coverage.expert_recall.status)}`);
-  for (let index = 0; index < coverage.expert_recall.limits.length; index += 1) {
-    append(lines, `- ${inline(coverage.expert_recall.limits[index])}`);
-  }
-  append(lines, '', '#### NotApplicable (excluded from the coverage numerator)', '');
-  if (coverage.not_applicable.length === 0) append(lines, '_None._');
-  else {
-    /** @type {string[][]} */
-    const notApplicableRows = [];
-    for (let index = 0; index < coverage.not_applicable.length; index += 1) {
-      const item = coverage.not_applicable[index];
-      append(notApplicableRows, [
-        code(item.subject_kind), code(item.obligation_id ?? item.fact_id),
-        code(item.exclusion_claim_id), code(item.scope), code(item.support_review), inline(item.reason)
-      ]);
+  const gapTraceRows = [];
+  for (let i = 0; i < snapshot.blocked.length; i += 1) {
+    const item = snapshot.blocked[i];
+    const dependencies = item.blocking_roots ?? [{ root_issue_id: item.root_issue_id, recovery: item.recovery }];
+    for (let dependencyIndex = 0; dependencyIndex < dependencies.length; dependencyIndex += 1) {
+      const dependency = dependencies[dependencyIndex];
+      append(gapTraceRows, [inline(item.subject), code(item.obligation_id), code(dependency.root_issue_id),
+        code(item.reason), code(dependency.recovery.required_material)]);
     }
-    appendArray(lines, table(['Subject kind', 'Subject', 'Exclusion evidence', 'Scope', 'Review', 'Reason'], notApplicableRows));
   }
-  /** @type {string[][]} */
-  const planRows = [];
-  for (let index = 0; index < plan.items.length; index += 1) {
-    const item = plan.items[index];
-    append(planRows, [
-      code(item.item_kind), code(item.item_id), inline(item.title), code(item.semantic_status),
-      code(item.execution_disposition), code(item.reason_code)
-    ]);
-  }
-  append(
-    lines,
-    '', '### Execution Plan', '',
-    `- Status: ${code(plan.status)}`,
-    `- Plan digest: ${code(plan.plan_digest)}`,
-    `- Semantic result digest: ${code(plan.semantic_result_digest)}`,
-    `- Execute Cases: ${plan.summary.execute_case_count}`,
-    `- DoNotExecute Cases: ${plan.summary.do_not_execute_case_count}`,
-    `- DoNotExecute formal Test Points: ${plan.summary.do_not_execute_formal_test_point_count}`,
-    `- DoNotExecute Exploratory items: ${plan.summary.do_not_execute_exploratory_count}`,
-    `- Applicable Test Point execution coverage: full ${plan.summary.full_test_point_count}, partial ${plan.summary.partial_test_point_count}, none ${plan.summary.none_test_point_count}`,
-    `- Runner Case IDs: ${codeList(plan.runner_case_ids)}`,
-    ''
-  );
-  appendArray(lines, table(
-    ['Kind', 'ID', 'Title', 'True status', 'Execution disposition', 'Reason code'], planRows
-  ));
-  append(
-    lines,
-    '', '### Quality', '',
-    `- Delivery status: ${code(snapshot.quality.delivery_status)}`,
-    `- Compiler version: ${code(snapshot.quality.compiler_version)}`,
-    `- Schema version: ${code(snapshot.quality.schema_version)}`,
-    `- Semantic source digest: ${code(snapshot.quality.lineage.semantic_source_digest)}`,
-    `- Evidence semantic digest: ${code(snapshot.quality.lineage.evidence_semantic_digest)}`,
-    `- Behavior Views semantic digest: ${code(snapshot.quality.lineage.behavior_views_semantic_digest)}`,
-    `- Test Obligations semantic digest: ${code(snapshot.quality.lineage.test_obligations_semantic_digest)}`,
-    `- Case Drafts semantic digest: ${code(snapshot.quality.lineage.case_drafts_semantic_digest)}`,
-    '- Limits:'
-  );
-  for (let index = 0; index < snapshot.quality.limits.length; index += 1) {
-    append(lines, `  - ${inline(snapshot.quality.limits[index])}`);
-  }
+  append(lines, '', L('### Gap Traceability', '### 缺口追溯'), '');
+  appendArray(lines, table([L('Subject', '事项'), L('Test Point', '测试点'), L('Shared root', '共享根因'),
+    L('Diagnostic codes', '诊断码'), L('Recovery references', '恢复引用')], gapTraceRows));
+  append(lines, '', L('### Exploratory Traceability', '### 探索建议追溯'), '');
+  for (let i = 0; i < snapshot.exploratory.length; i += 1) append(lines,
+    '- ' + code(snapshot.exploratory[i].exploratory_id) + ': ' + inline(snapshot.exploratory[i].reason));
+  append(lines, '', L('### Limits', '### 限制'), '');
+  for (let i = 0; i < snapshot.quality.limits.length; i += 1) append(lines, '- ' + (
+    zh && snapshot.quality.limits[i] === 'Compilation is limited to the supplied revision.'
+      ? '本次编译仅涵盖所提供的资料修订。' : inline(snapshot.quality.limits[i])));
   return `${joinArray(lines, '\n')}\n`;
 }
 

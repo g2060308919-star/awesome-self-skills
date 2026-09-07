@@ -57,8 +57,9 @@ test('schema registry loads every versioned schema from its manifest', async () 
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const registry = await loadSchemaRegistry(schemaDirectory, manifest.digest);
 
-  assert.equal(registry.schemaVersion, '2.1.0');
-  assert.equal(registry.schemas.size, 13);
+  assert.equal(registry.schemaVersion, '3.0.0');
+  assert.equal(registry.schemas.size, 14);
+  assert.ok(registry.schemas.has('run-catalog.schema.json'));
 });
 
 test('schema integrity mismatch is fatal before an empty run is read', async () => {
@@ -72,7 +73,7 @@ test('schema integrity mismatch is fatal before an empty run is read', async () 
     await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
     await cp(runnerPath, temporaryRunner);
     const originalManifest = await readFile(manifestPath, 'utf8');
-    await writeFile(temporaryManifest, originalManifest.replace('"schema_version":"2.1.0"', '"schema_version":"9.0.0"'));
+    await writeFile(temporaryManifest, originalManifest.replace('"schema_version":"3.0.0"', '"schema_version":"9.0.0"'));
     const result = await runCompiler(runDirectory, temporaryRunner);
     const reply = JSON.parse(result.stdout);
 
@@ -96,7 +97,7 @@ test('schema tampering is fatal before an empty run is read', async () => {
     await cp(manifestPath, path.join(temporaryScripts, 'schema-manifest.json'));
     await cp(runnerPath, temporaryRunner);
     const tamperedSchema = path.join(temporaryScripts, 'schemas/source-pack.schema.json');
-    await writeFile(tamperedSchema, (await readFile(tamperedSchema, 'utf8')).replace('"2.1.0"', '"9.0.0"'));
+    await writeFile(tamperedSchema, (await readFile(tamperedSchema, 'utf8')).replace('"3.0.0"', '"9.0.0"'));
     const result = await runCompiler(runDirectory, temporaryRunner);
     const reply = JSON.parse(result.stdout);
 

@@ -68,7 +68,8 @@ test('semantic clarification exposes the exact compiler-owned presentation shown
   assert.equal(result.presentation.groups.length, result.pending_root_issues.length);
   assert.deepEqual(validateAgainstSchema(result.presentation, presentationSchema), []);
   const group = result.presentation.groups[0];
-  assert.equal(group.question, result.pending_root_issues[0].question);
+  assert.ok(group.question.endsWith(result.pending_root_issues[0].question));
+  assert.ok(group.question.startsWith('payment settles in two days — '));
   assert.equal(group.item_refs.length > 0, true);
   assert.equal(group.allowed_options.some((/** @type {any} */ option) => option.option_code === 'unknown'), true);
 });

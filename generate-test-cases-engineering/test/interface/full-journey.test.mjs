@@ -56,9 +56,10 @@ test('full journey: installed-shape runner accepts the complete all-E3 artifact 
       'need_artifact/behavior_views',
       'need_artifact/case_drafts',
       'need_user_answers/done',
-      'need_artifact/evidence_claims',
-      'need_artifact/behavior_views',
-      'need_artifact/case_drafts',
+      // Execution-only confirmation carries immutable semantic stages forward.
+      'finished/done',
+      'finished/done',
+      'finished/done',
       'finished/done'
     ]);
     assert.equal(run.reply.status, 'finished');

@@ -105,6 +105,20 @@ test('append-only clarification histories preserve their written order', () => {
   assert.notEqual(canonicalStringify(events), canonicalStringify({ clarification_events: [...events.clarification_events].reverse() }));
 });
 
+test('generality canonical audit sets reorder but extraction spans and repair history do not', () => {
+  const audit = { source_assets: [{ asset_id: 'asset_b' }, { asset_id: 'asset_a' }],
+    source_reviews: [{ source_id: 'source_b', spans: [{ start: 0 }, { start: 3 }] }, { source_id: 'source_a', spans: [] }],
+    fact_ledger: [{ fact_id: 'fact_a', required_view_kinds: ['timing', 'decision'] }] };
+  const reordered = structuredClone(audit);
+  reordered.source_assets.reverse(); reordered.source_reviews.reverse();
+  reordered.fact_ledger[0].required_view_kinds.reverse();
+  assert.equal(canonicalStringify(audit), canonicalStringify(reordered));
+  reordered.source_reviews[1].spans.reverse();
+  assert.notEqual(canonicalStringify(audit), canonicalStringify(reordered));
+  const history = { artifact_repairs: [{ repair_seq: 1 }, { repair_seq: 2 }] };
+  assert.notEqual(canonicalStringify(history), canonicalStringify({ artifact_repairs: [...history.artifact_repairs].reverse() }));
+});
+
 test('same-named arrays outside declared paths retain their input order', () => {
   assert.notEqual(
     canonicalStringify({ metadata: { source_ids: ['source_b', 'source_a'] } }),

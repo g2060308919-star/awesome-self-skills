@@ -15,9 +15,10 @@ test('full journey: 100 fresh installed-shape runs are byte-identical', { timeou
     'need_artifact/behavior_views',
     'need_artifact/case_drafts',
     'need_user_answers/done',
-    'need_artifact/evidence_claims',
-    'need_artifact/behavior_views',
-    'need_artifact/case_drafts',
+    // Confirmation-only revision reuses the accepted semantic artifacts.
+    'finished/done',
+    'finished/done',
+    'finished/done',
     'finished/done'
   ];
   assert.equal(result.repetitions, 100);

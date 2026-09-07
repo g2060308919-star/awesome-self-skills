@@ -2,56 +2,2462 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "case-drafts.schema.json",
   "type": "object",
-  "required": ["schema_version", "source_revision", "cases", "obligation_dispositions", "exploratory_candidates"],
+  "required": [
+    "schema_version",
+    "source_revision",
+    "cases",
+    "obligation_dispositions",
+    "exploratory_candidates"
+  ],
   "properties": {
-    "schema_version": { "const": "2.1.0" },
-    "source_revision": { "type": "integer", "minimum": 0 },
+    "schema_version": {
+      "const": "3.0.0"
+    },
+    "source_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
     "cases": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["case_id", "title", "scope", "risk", "role", "fact_ids", "obligation_ids", "preconditions", "data", "steps", "testability_profile", "post_state", "cleanup", "evidence_refs", "execution_signature"],
+        "required": [
+          "case_id",
+          "title",
+          "scope",
+          "risk",
+          "role",
+          "fact_ids",
+          "obligation_ids",
+          "preconditions",
+          "data",
+          "steps",
+          "testability_profile",
+          "post_state",
+          "cleanup",
+          "evidence_refs",
+          "execution_signature",
+          "scenario",
+          "risk_basis",
+          "execution_effects"
+        ],
         "properties": {
-          "case_id": { "type": "string", "minLength": 1 },
-          "title": { "type": "string", "minLength": 1 },
-          "scope": { "type": "string", "minLength": 1 },
-          "risk": { "enum": ["critical", "high", "medium", "low"] },
-          "role": { "type": "object", "required": ["value", "evidence_ref", "support_review"], "properties": { "value": { "type": "string", "minLength": 1 }, "evidence_ref": { "type": "string", "minLength": 1 }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] } }, "additionalProperties": false },
-          "fact_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
-          "obligation_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
-          "source_claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-          "preconditions": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["condition", "reachable_from", "source_claim_ids", "evidence_ref", "support_review"], "properties": { "condition": { "type": "string", "minLength": 1 }, "reachable_from": { "type": "string", "minLength": 1 }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true }, "evidence_ref": { "type": "string", "minLength": 1 }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] } }, "additionalProperties": false } },
-          "data": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["name", "value", "provenance", "support_review"], "properties": { "name": { "type": "string", "minLength": 1 }, "value": { "type": "string", "minLength": 1 }, "provenance": { "oneOf": [
-            { "type": "object", "required": ["type", "ref"], "properties": { "type": { "const": "evidence" }, "ref": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
-            { "type": "object", "required": ["type", "ref"], "properties": { "type": { "const": "derivation" }, "ref": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
-          ] }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] } }, "additionalProperties": false } },
-          "steps": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["step_id", "action", "action_evidence_ref", "support_review", "expectations"], "properties": {
-            "step_id": { "type": "string", "minLength": 1 }, "action": { "type": "string", "minLength": 1 }, "action_evidence_ref": { "type": "string", "minLength": 1 }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] },
-            "expectations": { "type": "array", "minItems": 1, "items": {"oneOf":[{"type":"object","required":["kind","expectation_id","business_assertion","preceding_action_id","observer","observation_surface","observation_target","oracle","evidence_ref","support_review","closes_obligation_id","oracle_evidence_refs"],"properties":{"kind":{"const":"obligation-oracle"},"expectation_id":{"type":"string","minLength":1},"business_assertion":{"type":"string","minLength":1},"preceding_action_id":{"type":"string","minLength":1},"observer":{"type":"string","minLength":1},"observation_surface":{"type":"string","minLength":1},"observation_target":{"type":"string","minLength":1},"oracle":{"oneOf":[{"type":"object","required":["type","expected_value","comparison"],"properties":{"type":{"const":"value"},"expected_value":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false},{"type":"object","required":["type","expected_state","comparison"],"properties":{"type":{"const":"state"},"expected_state":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false},{"type":"object","required":["type","expected_event","comparison"],"properties":{"type":{"const":"event"},"expected_event":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false},{"type":"object","required":["type","expected_side_effect","comparison"],"properties":{"type":{"const":"side-effect"},"expected_side_effect":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false}]},"evidence_ref":{"type":"string","minLength":1},"support_review":{"enum":["supported","contradicted","uncertain"]},"closes_obligation_id":{"type":"string","minLength":1},"oracle_evidence_refs":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"uniqueItems":true}},"additionalProperties":false},{"type":"object","required":["kind","expectation_id","business_assertion","preceding_action_id","observer","observation_surface","observation_target","oracle","evidence_ref","support_review","oracle_evidence_refs"],"properties":{"kind":{"const":"auxiliary"},"expectation_id":{"type":"string","minLength":1},"business_assertion":{"type":"string","minLength":1},"preceding_action_id":{"type":"string","minLength":1},"observer":{"type":"string","minLength":1},"observation_surface":{"type":"string","minLength":1},"observation_target":{"type":"string","minLength":1},"oracle":{"oneOf":[{"type":"object","required":["type","expected_value","comparison"],"properties":{"type":{"const":"value"},"expected_value":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false},{"type":"object","required":["type","expected_state","comparison"],"properties":{"type":{"const":"state"},"expected_state":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false},{"type":"object","required":["type","expected_event","comparison"],"properties":{"type":{"const":"event"},"expected_event":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false},{"type":"object","required":["type","expected_side_effect","comparison"],"properties":{"type":{"const":"side-effect"},"expected_side_effect":{"type":"string","minLength":1},"comparison":{"enum":["equals","contains","matches","within"]},"tolerance":{"type":"number"},"window":{"type":"string"}},"additionalProperties":false}]},"evidence_ref":{"type":"string","minLength":1},"support_review":{"enum":["supported","contradicted","uncertain"]},"oracle_evidence_refs":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"uniqueItems":true}},"additionalProperties":false}]} }
-          }, "additionalProperties": false } },
-          "testability_profile": { "type": "object", "required": ["capabilities", "observers", "controls"], "properties": {
-            "capabilities": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["capability", "status"], "properties": { "capability": { "type": "string", "minLength": 1 }, "status": { "enum": ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, "provenance_ref": { "type": "string", "minLength": 1 } }, "additionalProperties": false } },
-            "observers": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["observer", "observation_target", "status"], "properties": { "observer": { "type": "string", "minLength": 1 }, "observation_target": { "type": "string", "minLength": 1 }, "status": { "enum": ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, "provenance_ref": { "type": "string", "minLength": 1 } }, "additionalProperties": false } },
-            "controls": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["control", "status"], "properties": { "control": { "type": "string", "minLength": 1 }, "status": { "enum": ["provided", "verified", "approved-assumption", "unavailable", "unknown"] }, "provenance_ref": { "type": "string", "minLength": 1 } }, "additionalProperties": false } }
-          }, "additionalProperties": false },
-          "post_state": { "type": "object", "required": ["state", "evidence_ref", "support_review"], "properties": { "state": { "type": "string", "minLength": 1 }, "evidence_ref": { "type": "string", "minLength": 1 }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] } }, "additionalProperties": false },
-          "cleanup": { "oneOf": [
-            { "type": "object", "required": ["required", "steps", "evidence_ref", "support_review"], "properties": { "required": { "const": true }, "steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 }, "evidence_ref": { "type": "string", "minLength": 1 }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] } }, "additionalProperties": false },
-            { "type": "object", "required": ["required", "no_cleanup_reason", "no_cleanup_evidence_ref", "support_review"], "properties": { "required": { "const": false }, "no_cleanup_reason": { "type": "string", "minLength": 1 }, "no_cleanup_evidence_ref": { "type": "string", "minLength": 1 }, "support_review": { "enum": ["supported", "contradicted", "uncertain"] } }, "additionalProperties": false }
-          ] },
-          "evidence_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
-          "temporary_assumption": { "type": "object", "required": ["claim_id", "invalidation_condition"], "properties": { "claim_id": { "type": "string", "minLength": 1 }, "invalidation_condition": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
-          "execution_signature": { "type": "object", "required": ["role", "precondition_state", "data_partition", "action_path", "oracle_refs"], "properties": { "role": { "type": "string", "minLength": 1 }, "precondition_state": { "type": "string", "minLength": 1 }, "data_partition": { "type": "string", "minLength": 1 }, "action_path": { "type": "array", "items": { "type": "string" }, "minItems": 1 }, "oracle_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false }
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "risk": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "role": {
+            "type": "object",
+            "required": [
+              "value",
+              "evidence_ref",
+              "support_review"
+            ],
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "support_review": {
+                "enum": [
+                  "supported",
+                  "contradicted",
+                  "uncertain"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "obligation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "source_claim_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "preconditions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "condition",
+                "reachable_from",
+                "source_claim_ids",
+                "evidence_ref",
+                "support_review",
+                "setup"
+              ],
+              "properties": {
+                "condition": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reachable_from": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_claim_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "uniqueItems": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "support_review": {
+                  "enum": [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                "setup": {
+                  "type": "object",
+                  "properties": {
+                    "resource_kind": {
+                      "enum": [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    "resource_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    "completion": {
+                      "type": "object",
+                      "properties": {
+                        "subject_ref": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        "operator": {
+                          "enum": [
+                            "equals",
+                            "contains",
+                            "matches",
+                            "within"
+                          ]
+                        },
+                        "operand": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "number"
+                                },
+                                "value": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "boolean"
+                                },
+                                "value": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "null"
+                                },
+                                "value": {
+                                  "type": "null"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "subject_ref",
+                        "operator",
+                        "operand"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mutation_effects": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      "uniqueItems": true
+                    }
+                  },
+                  "required": [
+                    "resource_kind",
+                    "resource_ref",
+                    "completion",
+                    "mutation_effects"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "data": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "value",
+                "provenance",
+                "support_review",
+                "partition_id"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "provenance": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "ref"
+                      ],
+                      "properties": {
+                        "type": {
+                          "const": "evidence"
+                        },
+                        "ref": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "ref"
+                      ],
+                      "properties": {
+                        "type": {
+                          "const": "derivation"
+                        },
+                        "ref": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "support_review": {
+                  "enum": [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                "partition_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "step_id",
+                "action",
+                "action_evidence_ref",
+                "support_review",
+                "expectations",
+                "operation_id"
+              ],
+              "properties": {
+                "step_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "action": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "action_evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "support_review": {
+                  "enum": [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                "expectations": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "closes_obligation_id",
+                          "oracle_evidence_refs"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "const": "obligation-oracle"
+                          },
+                          "expectation_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "business_assertion": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "preceding_action_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observer": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observation_surface": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observation_target": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "oracle": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "value"
+                                  },
+                                  "expected_value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "state"
+                                  },
+                                  "expected_state": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "event"
+                                  },
+                                  "expected_event": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "side-effect"
+                                  },
+                                  "expected_side_effect": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "evidence_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "support_review": {
+                            "enum": [
+                              "supported",
+                              "contradicted",
+                              "uncertain"
+                            ]
+                          },
+                          "closes_obligation_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "oracle_evidence_refs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "minItems": 1,
+                            "uniqueItems": true
+                          },
+                          "observer_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "kind",
+                          "expectation_id",
+                          "business_assertion",
+                          "preceding_action_id",
+                          "observer",
+                          "observation_surface",
+                          "observation_target",
+                          "oracle",
+                          "evidence_ref",
+                          "support_review",
+                          "oracle_evidence_refs"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "const": "auxiliary"
+                          },
+                          "expectation_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "business_assertion": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "preceding_action_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observer": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observation_surface": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observation_target": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "oracle": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_value",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "value"
+                                  },
+                                  "expected_value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_state",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "state"
+                                  },
+                                  "expected_state": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_event",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "event"
+                                  },
+                                  "expected_event": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "expected_side_effect",
+                                  "comparison",
+                                  "assertion"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "const": "side-effect"
+                                  },
+                                  "expected_side_effect": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "comparison": {
+                                    "enum": [
+                                      "equals",
+                                      "contains",
+                                      "matches",
+                                      "within"
+                                    ]
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  },
+                                  "assertion": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject_ref": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      },
+                                      "operator": {
+                                        "enum": [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      "operand": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "string"
+                                              },
+                                              "value": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "number"
+                                              },
+                                              "value": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "boolean"
+                                              },
+                                              "value": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "const": "null"
+                                              },
+                                              "value": {
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "value"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "surface": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "subject_ref",
+                                      "operator",
+                                      "operand",
+                                      "surface"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "evidence_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "support_review": {
+                            "enum": [
+                              "supported",
+                              "contradicted",
+                              "uncertain"
+                            ]
+                          },
+                          "oracle_evidence_refs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "minItems": 1,
+                            "uniqueItems": true
+                          },
+                          "observer_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "operation_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "testability_profile": {
+            "type": "object",
+            "required": [
+              "capabilities",
+              "observers",
+              "controls",
+              "setup_resources"
+            ],
+            "properties": {
+              "capabilities": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "capability",
+                    "status"
+                  ],
+                  "properties": {
+                    "capability": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "enum": [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    "provenance_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "capability_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "observers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "observer",
+                    "observation_target",
+                    "status",
+                    "subject_ref",
+                    "surface_id"
+                  ],
+                  "properties": {
+                    "observer": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "observation_target": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "enum": [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    "provenance_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "observer_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "subject_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "surface_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "controls": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "control",
+                    "status"
+                  ],
+                  "properties": {
+                    "control": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "enum": [
+                        "provided",
+                        "verified",
+                        "approved-assumption",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    "provenance_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "setup_resources": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "resource_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    "kind": {
+                      "enum": [
+                        "entry",
+                        "fixture",
+                        "account",
+                        "data"
+                      ]
+                    },
+                    "locator": {
+                      "type": "string",
+                      "pattern": "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
+                    },
+                    "evidence_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    }
+                  },
+                  "required": [
+                    "resource_id",
+                    "kind",
+                    "locator",
+                    "evidence_ref"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "post_state": {
+            "type": "object",
+            "required": [
+              "state",
+              "evidence_ref",
+              "support_review"
+            ],
+            "properties": {
+              "state": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "support_review": {
+                "enum": [
+                  "supported",
+                  "contradicted",
+                  "uncertain"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "cleanup": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "required",
+                  "steps",
+                  "evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                "properties": {
+                  "required": {
+                    "const": true
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "support_review": {
+                    "enum": [
+                      "supported",
+                      "contradicted",
+                      "uncertain"
+                    ]
+                  },
+                  "resolved_effects": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "required",
+                  "no_cleanup_reason",
+                  "no_cleanup_evidence_ref",
+                  "support_review",
+                  "resolved_effects"
+                ],
+                "properties": {
+                  "required": {
+                    "const": false
+                  },
+                  "no_cleanup_reason": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "no_cleanup_evidence_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "support_review": {
+                    "enum": [
+                      "supported",
+                      "contradicted",
+                      "uncertain"
+                    ]
+                  },
+                  "resolved_effects": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "temporary_assumption": {
+            "type": "object",
+            "required": [
+              "claim_id",
+              "invalidation_condition"
+            ],
+            "properties": {
+              "claim_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "invalidation_condition": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "execution_signature": {
+            "type": "object",
+            "required": [
+              "role",
+              "precondition_state",
+              "data_partition",
+              "action_path",
+              "oracle_refs"
+            ],
+            "properties": {
+              "role": {
+                "type": "string",
+                "minLength": 1
+              },
+              "precondition_state": {
+                "type": "string",
+                "minLength": 1
+              },
+              "data_partition": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action_path": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "oracle_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          },
+          "scenario": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "operation_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "partition_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "subject_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "intent": {
+                    "const": "behavior"
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "operation_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "partition_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "subject_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  "intent": {
+                    "const": "compatibility"
+                  },
+                  "compatibility": {
+                    "type": "object",
+                    "properties": {
+                      "baseline_ref": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      "dimensions": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
+                      }
+                    },
+                    "required": [
+                      "baseline_ref",
+                      "dimensions"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "operation_ref",
+                  "partition_id",
+                  "subject_ref",
+                  "intent",
+                  "compatibility"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "risk_basis": {
+            "type": "object",
+            "properties": {
+              "impact": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "likelihood": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "exposure": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "impact",
+              "likelihood",
+              "exposure"
+            ],
+            "additionalProperties": false
+          },
+          "execution_effects": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+            },
+            "uniqueItems": true
+          }
         },
         "additionalProperties": false
       }
     },
-    "obligation_dispositions": { "type": "array", "items": { "oneOf": [
-      { "type": "object", "required": ["obligation_id", "status", "case_ids"], "properties": { "obligation_id": { "type": "string", "minLength": 1 }, "status": { "const": "case_candidate" }, "case_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false },
-      { "type": "object", "required": ["status", "affected_obligation_ids", "issue_intent", "subject"], "properties": { "status": { "const": "blocker" }, "affected_obligation_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }, "issue_intent": { "type": "object", "required": ["missing_type", "scope", "answerable", "risk", "reasons", "evidence_refs"], "properties": { "missing_type": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }, "scope": { "type": "string", "minLength": 1 }, "answerable": { "type": "boolean" }, "risk": { "enum": ["critical", "high", "medium", "low"] }, "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true } }, "additionalProperties": false }, "subject": { "oneOf": [ { "type": "object", "required": ["kind", "fact_ids"], "properties": { "kind": { "const": "facts" }, "fact_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false }, { "type": "object", "required": ["kind", "view_element_refs"], "properties": { "kind": { "const": "view-elements" }, "view_element_refs": { "type": "array", "items": { "type": "object", "required": ["view_id", "element_id"], "properties": { "view_id": { "type": "string", "minLength": 1 }, "element_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false }, { "type": "object", "required": ["kind", "capabilities"], "properties": { "kind": { "const": "capabilities" }, "capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false }, { "type": "object", "required": ["kind", "claim_refs"], "properties": { "kind": { "const": "evidence-conflict" }, "claim_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false } ] } }, "additionalProperties": false },
-      { "type": "object", "required": ["obligation_id", "status", "exclusion_claim_id", "scope", "support_review"], "properties": { "obligation_id": { "type": "string", "minLength": 1 }, "status": { "const": "not_applicable" }, "exclusion_claim_id": { "type": "string", "minLength": 1 }, "scope": { "type": "string", "minLength": 1 }, "support_review": { "const": "supported" } }, "additionalProperties": false }
-    ] } },
-    "exploratory_candidates": { "type": "array", "items": { "type": "object", "required": ["exploratory_id", "title", "scope", "risk", "source_claim_ids"], "properties": { "exploratory_id": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1 }, "scope": { "type": "string", "minLength": 1 }, "risk": { "enum": ["critical", "high", "medium", "low"] }, "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false } }
+    "obligation_dispositions": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "obligation_id",
+              "status",
+              "case_ids"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "const": "case_candidate"
+              },
+              "case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "affected_obligation_ids",
+              "issue_intent",
+              "subject"
+            ],
+            "properties": {
+              "status": {
+                "const": "blocker"
+              },
+              "affected_obligation_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "issue_intent": {
+                "type": "object",
+                "required": [
+                  "missing_type",
+                  "scope",
+                  "answerable",
+                  "risk",
+                  "reasons",
+                  "evidence_refs"
+                ],
+                "properties": {
+                  "missing_type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "answerable": {
+                    "type": "boolean"
+                  },
+                  "risk": {
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "uniqueItems": true
+                  },
+                  "evidence_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "additionalProperties": false
+              },
+              "subject": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "fact_ids"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "facts"
+                      },
+                      "fact_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "view_element_refs"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "view-elements"
+                      },
+                      "view_element_refs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "view_id",
+                            "element_id"
+                          ],
+                          "properties": {
+                            "view_id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "element_id": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "capabilities"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "capabilities"
+                      },
+                      "capabilities": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "claim_refs"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "evidence-conflict"
+                      },
+                      "claim_refs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "obligation_id",
+              "status",
+              "exclusion_claim_id",
+              "scope",
+              "support_review"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "const": "not_applicable"
+              },
+              "exclusion_claim_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "scope": {
+                "type": "string",
+                "minLength": 1
+              },
+              "support_review": {
+                "const": "supported"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "exploratory_candidates": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "exploratory_id",
+              "title",
+              "scope",
+              "risk",
+              "source_claim_ids"
+            ],
+            "properties": {
+              "exploratory_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "scope": {
+                "type": "string",
+                "minLength": 1
+              },
+              "risk": {
+                "enum": [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "source_claim_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "exploratory_id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "scope": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "risk": {
+                "enum": [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "origin": {
+                "const": "heuristic"
+              },
+              "category": {
+                "enum": [
+                  "boundary",
+                  "concurrency",
+                  "failure",
+                  "degradation",
+                  "security",
+                  "usability"
+                ]
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "exploratory_id",
+              "title",
+              "scope",
+              "risk",
+              "origin",
+              "category",
+              "hypothesis",
+              "rationale"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
   },
   "additionalProperties": false
 }

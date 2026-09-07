@@ -4,7 +4,9 @@ import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-
 import testObligationsSchema from '../skill/generate-test-cases/scripts/schemas/test-obligations.schema.json' with { type: 'json' };
 import { canonicalStringify, stableId } from './canonical.mjs';
 import { scopeContains } from './decision-record.mjs';
+import { capabilityLabel, resolveObserver } from './testability-links.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
+import { validateCaseSemantics, heuristicSchema, caseScenarioReferenceErrors } from './case-semantics.mjs';
 
 /** @typedef {{category:string,code:string,path:string,message:string}} Diagnostic */
 
@@ -434,8 +436,8 @@ function normalizeContext(submittedContext) {
     ...diagnostics, diagnostic('schema', 'CONTEXT_INVALID', '/', 'Task 10 context must be a closed own-data record')
   ]);
   requireClosed(submittedContext, CONTEXT_KEYS, '', diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
-  if (submittedContext.schema_version !== '2.1.0') pushArray(diagnostics, diagnostic(
-    'schema', 'SCHEMA_VERSION_INVALID', '/schema_version', 'Task 10 requires schema version 2.1.0'
+  if (submittedContext.schema_version !== '3.0.0') pushArray(diagnostics, diagnostic(
+    'schema', 'SCHEMA_VERSION_INVALID', '/schema_version', 'Task 10 requires schema version 3.0.0'
   ));
   if (!Number.isSafeInteger(submittedContext.source_revision) || Number(submittedContext.source_revision) < 0) pushArray(diagnostics, diagnostic(
     'schema', 'SOURCE_REVISION_INVALID', '/source_revision', 'source revision must be a nonnegative safe integer'
@@ -548,11 +550,12 @@ function oracleSemanticId(step, expectation) {
   const expectedField = ORACLE_FIELDS[/** @type {keyof typeof ORACLE_FIELDS} */ (type)];
   return stableId('oracle', {
     action: normalizeSemanticString(step.action),
-    observer: normalizeSemanticString(expectation.observer),
-    observation_surface: normalizeSemanticString(expectation.observation_surface),
-    observation_target: normalizeSemanticString(expectation.observation_target),
+    observer: normalizeSemanticString(expectation.observer_ref ?? expectation.observer),
+    observation_surface: isRecord(oracle.assertion) ? oracle.assertion.surface : normalizeSemanticString(expectation.observation_surface),
+    observation_target: normalizeSemanticString(expectation.target_ref ?? expectation.observation_target),
     oracle: {
       type,
+      ...(oracle.assertion === undefined ? {} : {assertion:oracle.assertion}),
       ...(expectedField ? { [expectedField]: normalizeSemanticString(oracle[expectedField]) } : {}),
       comparison: normalizeSemanticString(oracle.comparison),
       ...(oracle.tolerance === undefined ? {} : { tolerance: oracle.tolerance }),
@@ -568,13 +571,15 @@ function derivedExecutionSignature(caseDraft) {
   const preconditionProjection = [];
   for (let index = 0; index < preconditions.length; index += 1) pushArray(preconditionProjection, {
     condition: normalizeSemanticString(preconditions[index].condition),
-    reachable_from: normalizeSemanticString(preconditions[index].reachable_from)
+    reachable_from: normalizeSemanticString(preconditions[index].reachable_from),
+    ...(preconditions[index].setup === undefined ? {} : {setup:preconditions[index].setup})
   });
   const data = records(caseDraft.data);
   /** @type {Array<{name:string,value:string}>} */
   const dataProjection = [];
   for (let index = 0; index < data.length; index += 1) pushArray(dataProjection, {
-    name: normalizeSemanticString(data[index].name), value: normalizeSemanticString(data[index].value)
+    name: normalizeSemanticString(data[index].name), value: normalizeSemanticString(data[index].value),
+    ...(caseDraft.scenario === undefined ? {} : {scenario:caseDraft.scenario})
   });
   /** @type {string[]} */
   const actionPath = [];
@@ -1152,6 +1157,7 @@ function caseDirectEvidence(caseDraft, obligations, factsById, includeAssumption
     for (const capability of records(caseDraft.testability_profile.capabilities)) add(capability.provenance_ref);
     for (const observer of records(caseDraft.testability_profile.observers)) add(observer.provenance_ref);
     for (const control of records(caseDraft.testability_profile.controls)) add(control.provenance_ref);
+    for (const resource of records(caseDraft.testability_profile.setup_resources)) add(resource.evidence_ref);
   }
   if (isRecord(caseDraft.post_state)) add(caseDraft.post_state.evidence_ref);
   if (isRecord(caseDraft.cleanup)) {
@@ -1260,6 +1266,7 @@ function validateCaseAssumption(caseDraft, lane, obligations, factsById, graph, 
  * @param {Diagnostic[]} diagnostics
  */
 function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, diagnostics) {
+  for (const error of caseScenarioReferenceErrors(caseDraft,obligations)) pushArray(diagnostics,{...error,path:`${path}${error.path}`});
   const allowedStatuses = lane === 'grounded'
     ? new Set(['provided', 'verified'])
     : new Set(['provided', 'verified', 'approved-assumption']);
@@ -1339,13 +1346,13 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, d
   for (let capabilityIndex = 0; capabilityIndex < capabilities.length; capabilityIndex += 1) {
     const capability = capabilities[capabilityIndex];
     if (typeof capability.capability === 'string' && allowedStatuses.has(String(capability.status ?? ''))) {
-      providedCapabilities.add(capability.capability);
+      providedCapabilities.add(typeof capability.capability_id === 'string' ? capability.capability_id : capabilityLabel(capability.capability));
     }
   }
   for (let obligationIndex = 0; obligationIndex < obligations.length; obligationIndex += 1) {
     const obligation = obligations[obligationIndex];
     for (const required of strings(obligation.required_capabilities)) {
-      if (!providedCapabilities.has(required)) pushArray(diagnostics, diagnostic(
+      if (!providedCapabilities.has(required) && !providedCapabilities.has(capabilityLabel(required))) pushArray(diagnostics, diagnostic(
         'traceability', 'CASE_REQUIRED_CAPABILITY_MISSING', `${path}/obligation_ids/${pointerPart(String(obligation.obligation_id ?? ''))}`,
         `Case Testability profile must cover required capability ${required}`
       ));
@@ -1353,21 +1360,12 @@ function validateCaseExecutionGates(caseDraft, lane, obligations, graph, path, d
   }
 
   const observers = records(profile.observers);
-  const observationTargetsByObserver = new Map();
-  for (let observerIndex = 0; observerIndex < observers.length; observerIndex += 1) {
-    const observer = observers[observerIndex];
-    if (typeof observer.observer !== 'string' || typeof observer.observation_target !== 'string'
-      || !allowedStatuses.has(String(observer.status ?? ''))) continue;
-    const targets = observationTargetsByObserver.get(observer.observer) ?? new Set();
-    targets.add(observer.observation_target);
-    observationTargetsByObserver.set(observer.observer, targets);
-  }
   for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
     const expectations = records(steps[stepIndex].expectations);
     for (let expectationIndex = 0; expectationIndex < expectations.length; expectationIndex += 1) {
       const expectation = expectations[expectationIndex];
-      if (!observationTargetsByObserver.get(String(expectation.observer ?? ''))
-        ?.has(String(expectation.observation_target ?? ''))) pushArray(diagnostics, diagnostic(
+      const resolvedObserver = resolveObserver(observers, expectation);
+      if (!resolvedObserver || !allowedStatuses.has(String(resolvedObserver.status))) pushArray(diagnostics, diagnostic(
         'traceability', 'CASE_EXPECTATION_OBSERVER_MISSING',
         `${path}/steps/${stepIndex}/expectations/${expectationIndex}`,
         'each expectation requires an executable observer with the same observer and observation_target'
@@ -1824,7 +1822,7 @@ function validateRootLedger(roots, ledger, dispositions, sourceRevision, diagnos
   for (const entry of ledger) {
     const status = dispositionById.get(String(entry.root_issue_id ?? ''));
     const target = entry.current === true ? currentByObligationReason
-      : (status === 'suppressed_unknown' || status === 'suppressed_deferred' || status === 'open')
+      : (status === 'suppressed_unknown' || status === 'suppressed_deferred' || (status === 'open' && entry.answerable === true))
         ? retainedByObligationReason : null;
     if (!target) continue;
     const reasons = strings(entry.reasons);
@@ -2086,7 +2084,7 @@ function buildBundleTrusted(context) {
   const pointsById = new Map();
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index];
-    requireClosed(point, ['obligation_id', 'evidence_level', 'classification', 'blocked_reason'], `/clarification/semantic_snapshot/formal_test_points/${index}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
+    requireClosed(point, ['obligation_id', 'evidence_level', 'classification', 'blocked_reason', ...(point.root_issue_ids !== undefined ? ['root_issue_ids'] : [])], `/clarification/semantic_snapshot/formal_test_points/${index}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
     const obligationId = typeof point.obligation_id === 'string' ? point.obligation_id : '';
     const classification = typeof point.classification === 'string' ? point.classification : '';
     pointsById.set(obligationId, point);
@@ -2141,6 +2139,7 @@ function buildBundleTrusted(context) {
   const duplicateCaseIds = new Set();
   const seenCaseIds = new Set();
   for (const caseDraft of executableCaseInput) {
+    for (const error of validateCaseSemantics(caseDraft)) pushArray(diagnostics,error);
     const caseId = String(caseDraft.case_id ?? '');
     if (seenCaseIds.has(caseId)) duplicateCaseIds.add(caseId);
     else seenCaseIds.add(caseId);
@@ -2153,7 +2152,7 @@ function buildBundleTrusted(context) {
     throw new BundleReconciliationError(diagnostics);
   }
   pushArray(diagnostics, .../** @type {Diagnostic[]} */ (validateAgainstSchema({
-    schema_version: '2.1.0', source_revision: normalized.sourceRevision,
+    schema_version: '3.0.0', source_revision: normalized.sourceRevision,
     cases: executableCaseInput,
     obligation_dispositions: [], exploratory_candidates: []
   }, caseDraftsSchema)));
@@ -2199,7 +2198,7 @@ function buildBundleTrusted(context) {
   const blockedInputById = new Map();
   for (const item of blockedInput) {
     const id = String(item.obligation_id ?? '');
-    requireClosed(item, ['obligation_id', 'root_issue_id', 'reason', 'risk', 'evidence_refs'], `/classification/blocked/${pointerPart(id)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
+    requireClosed(item, ['obligation_id', 'root_issue_id', ...(item.root_issue_ids !== undefined ? ['root_issue_ids'] : []), 'reason', 'risk', 'evidence_refs'], `/classification/blocked/${pointerPart(id)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN');
     canonicalStrings(item.evidence_refs, `/classification/blocked/${pointerPart(id)}/evidence_refs`, diagnostics);
     blockedInputById.set(id, item);
     if (pointsById.get(id)?.classification !== 'blocked') pushArray(diagnostics, diagnostic(
@@ -2268,19 +2267,29 @@ function buildBundleTrusted(context) {
     }
     const currentCandidates = rootLedger.currentByObligationReason.get(obligationId)?.get(reason) ?? [];
     const retainedCandidates = rootLedger.retainedByObligationReason.get(obligationId)?.get(reason) ?? [];
-    const candidates = currentCandidates.length > 0 ? currentCandidates : retainedCandidates;
-    if (candidates.length !== 1) {
+    const candidates = sortArray([...currentCandidates, ...retainedCandidates], (left, right) => compareCodePoints(String(left.root_issue_id), String(right.root_issue_id)));
+    const actualIds = mapArray(candidates, (root) => String(root.root_issue_id));
+    const expectedIds = point.root_issue_ids ?? task8Blocker?.root_issue_ids ?? (task8Blocker ? [task8Blocker.root_issue_id] : actualIds.length === 1 ? actualIds : []);
+    if (task8Blocker && !someArray(actualIds, (id) => id === task8Blocker.root_issue_id)) pushArray(diagnostics, diagnostic(
+      'traceability', 'BLOCKED_ROOT_ID_MISMATCH', `/classification/blocked/${pointerPart(obligationId)}/root_issue_id`,
+      'Task 8 Blocked root identity must name an authoritative dependency'
+    ));
+    if (actualIds.length === 0 || canonicalStringify(actualIds) !== canonicalStringify(expectedIds)) {
       pushArray(diagnostics, diagnostic(
         'traceability', 'BLOCKED_ROOT_TRACE_INVALID', `/blocked/${pointerPart(obligationId)}`,
-        `Blocked formal Test Point requires exactly one root issue; found ${candidates.length}`
+        'Blocked formal Test Point requires the exact complete authoritative root dependency set'
       ));
       continue;
     }
-    const root = candidates[0];
-    if (task8Blocker && task8Blocker.root_issue_id !== root.root_issue_id) pushArray(diagnostics, diagnostic(
+    const currentIds = mapArray(currentCandidates, (root) => String(root.root_issue_id));
+    sortArray(currentIds, compareCodePoints);
+    const task8ExpectedIds = currentIds.length > 0 ? currentIds : actualIds;
+    if (task8Blocker && (task8Blocker.root_issue_id !== task8ExpectedIds[0]
+      || canonicalStringify(task8Blocker.root_issue_ids ?? [task8Blocker.root_issue_id]) !== canonicalStringify(task8ExpectedIds))) pushArray(diagnostics, diagnostic(
       'traceability', 'BLOCKED_ROOT_ID_MISMATCH', `/classification/blocked/${pointerPart(obligationId)}/root_issue_id`,
       'Task 8 Blocked root identity must equal the selected authoritative Task 9 owner'
     ));
+    const blockingRoots = mapArray(candidates, (root) => {
     const semanticRefs = strings(root.semantic_refs);
     const missingType = typeof root.missing_type === 'string' ? root.missing_type : '';
     const question = typeof root.question === 'string' ? root.question : '';
@@ -2288,20 +2297,22 @@ function buildBundleTrusted(context) {
     if (semanticRefs.length === 0 || missingType.trim().length === 0 || question.trim().length === 0 || !RISKS.has(risk)) pushArray(diagnostics, diagnostic(
       'traceability', 'BLOCKED_RECOVERY_INCOMPLETE', `/blocked/${pointerPart(obligationId)}/recovery`, 'Blocked root must provide missing type, material references, question, and formal risk'
     ));
+    return { root_issue_id: String(root.root_issue_id), recovery: {
+      missing_type: missingType,
+      required_material: joinArray(sortArray([...semanticRefs], compareCodePoints), ', '), question
+    } };
+    });
     pushArray(blocked, {
       obligation_id: obligationId,
-      root_issue_id: String(root.root_issue_id ?? ''),
+      root_issue_id: blockingRoots[0].root_issue_id,
+      blocking_roots: blockingRoots,
       subject: obligationBusinessSubject(
         obligation, factIdsByObligation, primaryClaimByFactId, claimsById
       ),
       reason,
       scope: String(obligation?.scope ?? ''),
-      recovery: {
-        missing_type: missingType,
-        required_material: joinArray(sortArray([...semanticRefs], compareCodePoints), ', '),
-        question
-      },
-      risk
+      recovery: { ...blockingRoots[0].recovery },
+      risk: String(obligation?.risk ?? '')
     });
   }
 
@@ -2449,6 +2460,10 @@ function buildBundleTrusted(context) {
   }
   for (const item of exploratoryInput) {
     const exploratoryId = String(item.exploratory_id ?? '');
+    if (item.origin === 'heuristic') {
+      for (const error of validateAgainstSchema(item,heuristicSchema)) pushArray(diagnostics,error);
+      continue;
+    }
     requireClosed(
       item, ['exploratory_id', 'title', 'scope', 'risk', 'source_claim_ids'],
       `/classification/exploratory/${pointerPart(exploratoryId)}`, diagnostics, 'CONTEXT_PROPERTY_UNKNOWN'
@@ -2468,7 +2483,8 @@ function buildBundleTrusted(context) {
     title: String(item.title ?? ''),
     scope: String(item.scope ?? ''),
     risk: String(item.risk ?? ''),
-    reason: `Risk hypothesis outside formal Test Point coverage; evidence: ${joinArray(sortArray(strings(item.source_claim_ids), compareCodePoints), ', ')}`
+    reason: item.origin === 'heuristic' ? `Unsourced heuristic suggestion; ${String(item.category)}: ${String(item.hypothesis)}; rationale: ${String(item.rationale)}` : `Risk hypothesis outside formal Test Point coverage; evidence: ${joinArray(sortArray(strings(item.source_claim_ids), compareCodePoints), ', ')}`,
+    ...(item.origin === 'heuristic' ? {origin:'heuristic',category:item.category,hypothesis:item.hypothesis,rationale:item.rationale,runner_eligible:false} : {})
   })), (left, right) => compareCodePoints(left.exploratory_id, right.exploratory_id));
   if (!sameStrings(exploratoryIds, mapArray(exploratory, (item) => item.exploratory_id))) pushArray(diagnostics, diagnostic(
     'traceability', 'EXPLORATORY_LANE_MISMATCH', '/exploratory', 'Task 8 and Task 9 Exploratory identities must match exactly'
@@ -2561,7 +2577,7 @@ function buildBundleTrusted(context) {
 
   if (diagnostics.length > 0) throw new BundleReconciliationError(diagnostics);
   const bundle = {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: normalized.sourceRevision,
     grounded: sortArray(grounded, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
     conditional: sortArray(conditional, (left, right) => compareCodePoints(String(left.case_id), String(right.case_id))),
@@ -2577,7 +2593,7 @@ function buildBundleTrusted(context) {
     quality: {
       delivery_status: deliveryStatus,
       compiler_version: normalized.compilerVersion,
-      schema_version: '2.1.0',
+      schema_version: '3.0.0',
       lineage: normalized.lineage,
       limits: normalized.limits
     }

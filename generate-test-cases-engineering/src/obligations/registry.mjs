@@ -1,4 +1,5 @@
 import { stableId } from '../canonical.mjs';
+import { scenarioPartitionRef } from './scenario-identity.mjs';
 import { scopeContains } from '../decision-record.mjs';
 
 const RISK_LEVELS = new Set(['critical', 'high', 'medium', 'low']);
@@ -15,6 +16,8 @@ const OBLIGATION_VIEW_TYPE_SET = new Set(OBLIGATION_VIEW_TYPES);
  * @property {string} scope
  * @property {string[]} source_claim_ids
  * @property {string[]} view_element_refs
+ * @property {string[]} primary_operation_refs
+ * @property {string} scenario_partition_ref
  * @property {string[]} required_oracle_refs
  * @property {string[]} required_capabilities
  */
@@ -264,6 +267,8 @@ export function buildObligationSeed(input) {
     scope: String(view.scope),
     source_claim_ids: sourceClaimIds,
     view_element_refs: viewElementRefs,
+    primary_operation_refs: [qualifiedElementRef(view, input.primaryElement)],
+    scenario_partition_ref: scenarioPartitionRef(identity),
     required_oracle_refs: oracleRefs,
     required_capabilities: capabilities
   };

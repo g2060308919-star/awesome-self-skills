@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { canonicalStringify, stableId } from '../../src/canonical.mjs';
 import { executionSignature } from '../../src/classify.mjs';
 import { buildBundle, BundleReconciliationError } from '../../src/coverage.mjs';
+import { evaluateClarification } from '../../src/clarification.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -18,6 +19,13 @@ const fixture = JSON.parse(await readFile(path.join(
 
 function context() {
   return structuredClone(fixture);
+}
+
+// Synthetic Oracle-graph responsibilities share the fixture's actual execution
+// scenario; their distinct support refs and evidence edges remain untouched.
+function graphScenario() {
+  const scenario = fixture.classification.grounded[0].scenario;
+  return { primary_operation_refs: [scenario.operation_ref], scenario_partition_ref: scenario.partition_id };
 }
 
 /** @param {any} expectation @param {string} obligationId @param {string[]} oracleEvidenceRefs */
@@ -105,9 +113,10 @@ function sharedAssumptionClosureContext(size) {
     const suffix = String(index).padStart(4, '0');
     const factId = `fact_shared_${suffix}`;
     const obligationId = `obligation_shared_${suffix}`;
-    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_grounded'] });
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+      ...graphScenario(),
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#shared_${suffix}`],
       required_oracle_refs: [finalClaim], required_capabilities: ['checkout-control']
     });
@@ -606,6 +615,7 @@ test('each covered Test Point requires one explicit distinct Oracle closure', ()
   const candidate = input.classification.grounded[0];
   input.obligations_artifact.obligations.push({
     obligation_id: 'obligation_second', kind: 'flow', caseable: true, risk: 'medium', scope: 'checkout',
+    ...graphScenario(),
     source_claim_ids: ['claim_second'], view_element_refs: ['view_checkout#second'],
     required_oracle_refs: ['claim_oracle_second'], required_capabilities: []
   });
@@ -720,7 +730,7 @@ test('the accepted fact ledger is the requirement denominator and every fact has
           source_locator_ids: ['locator_unrouted'], source_id: 'source_prd'
         });
         input.evidence_claims.fact_ledger.push({
-          fact_id: 'fact_unrouted', claim_id: 'claim_unrouted', status: 'active',
+          fact_id: 'fact_unrouted', claim_id: 'claim_unrouted', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.',
           source_claim_ids: ['claim_unrouted']
         });
       }
@@ -873,7 +883,7 @@ test('NotApplicable independence includes fact evidence routed to the excluded f
     source_locator_ids: ['locator_na_fact'], source_id: 'source_prd'
   });
   input.evidence_claims.fact_ledger.push({
-    fact_id: 'fact_na_support', claim_id: 'claim_na_fact', status: 'active', source_claim_ids: ['claim_na_fact']
+    fact_id: 'fact_na_support', claim_id: 'claim_na_fact', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_na_fact']
   });
   input.obligations_artifact.fact_routes.push({
     fact_id: 'fact_na_support', route_type: 'obligations', obligation_ids: ['obligation_na']
@@ -1014,11 +1024,15 @@ function appendHistoricalBlockedRoot(input, status = 'suppressed_deferred') {
   return root;
 }
 
-test('Blocked ownership prefers the unique current root over retained history and binds the Task 8 blocker', () => {
+test('Blocked ownership retains current and historical suppressed dependencies and binds the Task 8 blocker', () => {
   const input = context();
-  appendHistoricalBlockedRoot(input);
+  const historical = appendHistoricalBlockedRoot(input);
+  input.clarification.semantic_snapshot.formal_test_points.find((/** @type {any} */ point) => point.obligation_id === 'obligation_blocked').root_issue_ids = [
+    historical.root_issue_id, input.clarification.root_issues[0].root_issue_id
+  ].sort();
   const bundle = buildBundle(input);
-  assert.equal(bundle.blocked[0].root_issue_id, input.clarification.root_issues[0].root_issue_id);
+  assert.deepEqual(bundle.blocked[0].blocking_roots.map((/** @type {any} */ root) => root.root_issue_id),
+    input.clarification.semantic_snapshot.formal_test_points.find((/** @type {any} */ point) => point.obligation_id === 'obligation_blocked').root_issue_ids);
 
   const dangling = context();
   dangling.classification.blocked[0].root_issue_id = 'root_dangling';
@@ -1030,6 +1044,57 @@ test('Blocked ownership prefers the unique current root over retained history an
   forgedLedgerId.clarification.state.root_issue_dispositions[0].root_issue_id = 'root_forged';
   forgedLedgerId.classification.blocked[0].root_issue_id = 'root_forged';
   assert.equal(diagnosticCodes(() => buildBundle(forgedLedgerId)).includes('ROOT_LEDGER_ID_MISMATCH'), true);
+});
+
+test('Blocked dependencies reject omitted, foreign, duplicate, and noncanonical semantic root sets', () => {
+  for (const mutation of ['omitted', 'foreign', 'duplicate', 'noncanonical']) {
+    const input = context();
+    const old = appendHistoricalBlockedRoot(input);
+    const ids = [old.root_issue_id, input.clarification.root_issues[0].root_issue_id].sort();
+    const point = input.clarification.semantic_snapshot.formal_test_points.find((/** @type {any} */ item) => item.obligation_id === 'obligation_blocked');
+    point.root_issue_ids = mutation === 'omitted' ? ids.slice(0, 1)
+      : mutation === 'foreign' ? [...ids, 'root_foreign'].sort()
+        : mutation === 'duplicate' ? [...ids, ids[0]].sort() : [...ids].reverse();
+    assert.ok(diagnosticCodes(() => buildBundle(input)).includes('BLOCKED_ROOT_TRACE_INVALID'), mutation);
+  }
+});
+
+test('actual bundle reconciliation retains a mixed-reason historical gate after clarification restoration', () => {
+  const input = context();
+  const old = appendHistoricalBlockedRoot(input);
+  const current = input.clarification.root_issues[0];
+  const reason = 'CAPABILITY_UNAVAILABLE';
+  const priorReason = 'CAPABILITY_UNAVAILABLE,CAPABILITY_UNKNOWN';
+  const prior = structuredClone(input.clarification.state);
+  const point = input.clarification.semantic_snapshot.formal_test_points.find((/** @type {any} */ p) => p.obligation_id === 'obligation_blocked');
+  prior.semantic_snapshot = structuredClone(input.clarification.semantic_snapshot);
+  const priorPoint = prior.semantic_snapshot.formal_test_points.find((/** @type {any} */ p) => p.obligation_id === 'obligation_blocked');
+  priorPoint.blocked_reason = priorReason;
+  priorPoint.root_issue_ids = [old.root_issue_id, current.root_issue_id].sort();
+  for (const root of prior.root_snapshot_ledger) root.reasons = [priorReason];
+  point.blocked_reason = reason;
+  point.root_issue_ids = [current.root_issue_id];
+  input.classification.blocked[0].reason = reason;
+  input.classification.blocked[0].root_issue_ids = [current.root_issue_id];
+  const restored = evaluateClarification({
+    source_revision: prior.source_revision + 1, prior_state: prior,
+    semantic_snapshot: input.clarification.semantic_snapshot,
+    blocked_obligations: [{ obligation_id: 'obligation_blocked', missing_type: current.missing_type,
+      semantic_refs: [...current.semantic_refs], scope: current.scope, risk: input.classification.blocked[0].risk,
+      reason, evidence_refs: [...current.evidence_refs], answerable: current.answerable, question: current.question }],
+    append_batch: { decision_records: [], clarification_events: [{ event_id: 'restore-X',
+      clarification_event_seq: prior.clarification_event_seq + 1, type: 'request_reanalysis', actor: 'fixture owner',
+      event_at: '2026-09-05T00:00:00Z', source_locator_ids: ['locator_refund'], affected_items: [], reason: 'Fixture X restored.' }] }
+  }, 'record_only');
+  assert.deepEqual(restored.diagnostics, []);
+  input.source_revision = restored.source_revision;
+  input.evidence_claims.source_revision = restored.source_revision;
+  input.obligations_artifact.source_revision = restored.source_revision;
+  input.clarification = restored;
+  const bundle = buildBundle(input);
+  assert.equal(bundle.blocked.length, 1);
+  assert.equal(bundle.blocked[0].blocking_roots.length, 2);
+  assert.equal(bundle.coverage.formal.total, 3);
 });
 
 test('Blocked ownership falls back only to one unresolved retained or reopened historical root', () => {
@@ -1142,7 +1207,7 @@ test('Case evidence is the exact accepted direct-root summary reconstructed from
 test('every Case independently includes every normative fact routed to its linked Test Points', () => {
   const input = context();
   input.evidence_claims.fact_ledger.push({
-    fact_id: 'fact_grounded_second', claim_id: 'claim_grounded', status: 'active',
+    fact_id: 'fact_grounded_second', claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.',
     source_claim_ids: ['claim_grounded']
   });
   input.obligations_artifact.fact_routes.push({
@@ -1236,8 +1301,8 @@ test('diagnostic and descriptive facts stay outside the normative requirement de
     }
   );
   input.evidence_claims.fact_ledger.push(
-    { fact_id: 'fact_diagnostic', claim_id: 'claim_diagnostic_fact', status: 'diagnostic', source_claim_ids: ['claim_diagnostic_fact'] },
-    { fact_id: 'fact_description', claim_id: 'claim_description_fact', status: 'active', source_claim_ids: ['claim_description_fact'] }
+    { fact_id: 'fact_diagnostic', claim_id: 'claim_diagnostic_fact', status: 'diagnostic', required_view_kinds: [], view_review_basis: 'Diagnostic-only fixture.', source_claim_ids: ['claim_diagnostic_fact'] },
+    { fact_id: 'fact_description', claim_id: 'claim_description_fact', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_description_fact'] }
   );
 
   const bundle = buildBundle(input);
@@ -1542,9 +1607,10 @@ function blockedScaleContext(size) {
       scope: `scale/${suffix}`, value: `Scale requirement ${suffix}`,
       source_locator_ids: [`locator_scale_${suffix}`], source_id: 'source_scale'
     });
-    facts.push({ fact_id: factId, claim_id: claimId, status: 'active', source_claim_ids: [claimId] });
+    facts.push({ fact_id: factId, claim_id: claimId, status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: [claimId] });
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'medium', scope: `scale/${suffix}`,
+      primary_operation_refs: [`view_scale#${suffix}`], scenario_partition_ref: `partition_scale_${suffix}`,
       source_claim_ids: [claimId], view_element_refs: [`view_scale#${suffix}`],
       required_oracle_refs: [claimId], required_capabilities: []
     });
@@ -1792,9 +1858,10 @@ function notApplicableScaleContext(size) {
         source_locator_ids: ['locator_legacy_exclusion'], source_id: 'source_scope'
       }
     );
-    facts.push({ fact_id: factId, claim_id: factClaimId, status: 'active', source_claim_ids: [factClaimId] });
+    facts.push({ fact_id: factId, claim_id: factClaimId, status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: [factClaimId] });
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'low', scope: `checkout/legacy/${suffix}`,
+      primary_operation_refs: [`view_checkout#legacy_${suffix}`], scenario_partition_ref: `partition_legacy_${suffix}`,
       source_claim_ids: [factClaimId], view_element_refs: [`view_checkout#legacy_${suffix}`],
       required_oracle_refs: [], required_capabilities: []
     });
@@ -1904,11 +1971,12 @@ function denseOracleContext(size) {
     const evidenceRef = `claim_dense_${suffix}`;
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+      ...graphScenario(),
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#dense_${suffix}`],
       required_oracle_refs: ['claim_oracle_grounded'], required_capabilities: ['checkout-control']
     });
     routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
-    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_grounded'] });
     points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
     expectations.push({
       ...structuredClone(candidate.steps[0].expectations[0]), expectation_id: expectationId,
@@ -1985,12 +2053,13 @@ function prefixOracleContext(size) {
     const obligationId = `obligation_prefix_${suffix}`;
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+      ...graphScenario(),
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#prefix_${suffix}`],
       required_oracle_refs: [oracleId], required_capabilities: ['checkout-control']
     });
     points.push({ obligation_id: obligationId, evidence_level: 'E2', classification: 'grounded', blocked_reason: null });
     facts.push({
-      fact_id: `fact_prefix_${suffix}`, claim_id: 'claim_grounded', status: 'active',
+      fact_id: `fact_prefix_${suffix}`, claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.',
       source_claim_ids: ['claim_grounded']
     });
     routes.push({
@@ -2101,9 +2170,10 @@ function componentIsolatedForestContext(size) {
       parent_claim_ids: [last], parameters: { table_id: `component_leaf_${index}` },
       rule_input: { conditions: [`leaf ${index}`], outcome: `leaf ${index}` }
     });
-    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_grounded'] });
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+      ...graphScenario(),
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#component_${suffix}`],
       required_oracle_refs: ['claim_component_root'], required_capabilities: ['checkout-control']
     });
@@ -2240,10 +2310,11 @@ function multiRootOracleContext(size) {
   const finalEvidence = `claim_multi_merge_${String(size - 1).padStart(4, '0')}`;
   input.evidence_claims.claims.push(...roots, ...merges);
   input.evidence_claims.fact_ledger = [{
-    fact_id: 'fact_multi', claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded']
+    fact_id: 'fact_multi', claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_grounded']
   }];
   input.obligations_artifact.obligations = [{
     obligation_id: 'obligation_multi', kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+    ...graphScenario(),
     source_claim_ids: ['claim_grounded'], view_element_refs: ['view_checkout#multi'],
     required_oracle_refs: roots.map((item) => item.claim_id), required_capabilities: ['checkout-control']
   }];
@@ -2330,11 +2401,12 @@ function sharedMultiRootExpectationsContext(size) {
       rule_input: { conditions: [`leaf ${suffix}`], outcome: `accepted ${suffix}` }
     });
     facts.push({
-      fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded']
+      fact_id: factId, claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_grounded']
     });
     routes.push({ fact_id: factId, route_type: 'obligations', obligation_ids: [obligationId] });
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+      ...graphScenario(),
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#multi_${suffix}`],
       required_oracle_refs: [...roots], required_capabilities: ['checkout-control']
     });
@@ -2414,9 +2486,10 @@ function manyCaseForestContext(size) {
         rule_input: { conditions: [`case ${suffix}`], outcome: 'accepted' }
       }
     );
-    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', source_claim_ids: ['claim_grounded'] });
+    facts.push({ fact_id: factId, claim_id: 'claim_grounded', status: 'active', required_view_kinds: [], view_review_basis: 'Synthetic ledger fixture; no independent required-view claim.', source_claim_ids: ['claim_grounded'] });
     obligations.push({
       obligation_id: obligationId, kind: 'flow', caseable: true, risk: 'high', scope: 'checkout',
+      ...graphScenario(),
       source_claim_ids: ['claim_grounded'], view_element_refs: [`view_checkout#case_${suffix}`],
       required_oracle_refs: [oracleId], required_capabilities: ['checkout-control']
     });

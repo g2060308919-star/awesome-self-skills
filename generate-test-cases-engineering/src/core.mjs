@@ -6,7 +6,7 @@ import { canonicalStringify, digest, stableId } from './canonical.mjs';
 import { evaluateClarification } from './clarification.mjs';
 import { classifyCaseDrafts } from './classify.mjs';
 import { buildBundle, BundleReconciliationError } from './coverage.mjs';
-import { scopeContains } from './decision-record.mjs';
+import { scopeContains, validateSourceIntegrity } from './decision-record.mjs';
 import { validateEvidenceGraph } from './evidence.mjs';
 import {
   compileExecutionPlan, normalizeSemantic, projectReadyExecutionPlan, semanticResultDigest
@@ -18,6 +18,8 @@ import {
 import { renderMarkdown, BundleRenderError } from './render-markdown.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
+import { capabilityLabel } from './testability-links.mjs';
+import { isExecutionPreparationGap } from './gap-kinds.mjs';
 
 /** @typedef {{category:string,code:string,path:string,message:string,related_id?:string}} Diagnostic */
 
@@ -1405,25 +1407,77 @@ function compilerIssueDescriptor(obligation, submitted) {
   return null;
 }
 
+/** Missing shared resources belong to the capability, not each affected Test Point.
+ * @param {Record<string, unknown>} obligation @param {string} reason
+ * @param {Record<string, unknown>} caseDrafts */
+function testabilityIssueDescriptor(obligation, reason, caseDrafts) {
+  if (missingType(reason) !== 'testability') return null;
+  const refs = makeSet();
+  const drafts = records(caseDrafts.cases);
+  for (let index = 0; index < drafts.length; index += 1) {
+    const draft = drafts[index];
+    if (!setHas(makeSet(strings(draft.obligation_ids)), String(obligation.obligation_id))) continue;
+    const profile = isRecord(draft.testability_profile) ? draft.testability_profile : {};
+    const groups = [
+      { kind: 'capability', entries: records(profile.capabilities) },
+      { kind: 'observer', entries: records(profile.observers) },
+      { kind: 'control', entries: records(profile.controls) }
+    ];
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const group = groups[groupIndex];
+      for (let entryIndex = 0; entryIndex < group.entries.length; entryIndex += 1) {
+        const entry = group.entries[entryIndex];
+        if (entry.status !== 'unknown' && entry.status !== 'unavailable') continue;
+        const label = entry.capability ?? entry.observer ?? entry.control;
+        setAdd(refs, canonicalStringify({
+          kind: group.kind,
+          subject: capabilityLabel(label),
+          target: group.kind === 'observer'
+            ? { subject_ref: String(entry.subject_ref ?? ''),
+              surface_id: String(entry.surface_id ?? ''), observation_target: capabilityLabel(entry.observation_target) } : null
+        }));
+      }
+    }
+  }
+  if (setValuesArray(refs).length === 0) return null;
+  return {
+    missing_type: 'testability', semantic_refs: sortArray(setValuesArray(refs), compareCodePoints),
+    scope: String(obligation.scope), answerable: false, reasons: [reason], evidence_refs: []
+  };
+}
+
+/** Expand resource sets before identity is derived; a Test Point may depend on several roots.
+ * @param {Record<string, unknown>} obligation @param {any} submitted
+ * @param {string} reason @param {Record<string, unknown>} caseDrafts @param {string[]} [evidenceRefs] */
+function issueDescriptors(obligation, submitted, reason, caseDrafts, evidenceRefs = []) {
+  const descriptor = compilerIssueDescriptor(obligation, submitted)
+    ?? testabilityIssueDescriptor(obligation, reason, caseDrafts);
+  if (!descriptor) return [{
+    missing_type: missingType(reason), semantic_refs: semanticRefs(obligation, reason),
+    scope: String(obligation.scope ?? ''),
+    answerable: !/UNKNOWN|UNAVAILABLE|MISSING_CAPABILITY|MISSING_OBSERVER|MISSING_CONTROL|CAPABILITY_MISSING|OBSERVER_MISSING|CONTROL_MISSING/u.test(reason),
+    reasons: [reason], evidence_refs: evidenceRefs
+  }];
+  if (submitted?.subject?.kind === 'capabilities' && obligation.kind !== 'requirement-gap') return mapArray(
+    sortArray(setValuesArray(makeSet(mapArray(strings(submitted.subject.capabilities), capabilityLabel))), compareCodePoints),
+    (subject) => ({ ...descriptor, semantic_refs: [canonicalStringify({ kind: 'capability', subject, target: null })] })
+  );
+  if (!compilerIssueDescriptor(obligation, submitted)) return mapArray(descriptor.semantic_refs,
+    (ref) => ({ ...descriptor, semantic_refs: [ref] }));
+  return [descriptor];
+}
+
 /** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Record<string, unknown>} caseDrafts */
 function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
   const blocked = mapArray(records(classification.blocked), (item) => {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
-    const compilerIssue = compilerIssueDescriptor(
-      obligation, mapGet(submittedByObligation, String(item.obligation_id))
-    );
-    const signature = compilerIssue ? {
-      missing_type: compilerIssue.missing_type,
-      semantic_refs: compilerIssue.semantic_refs,
-      scope: compilerIssue.scope
-    } : {
-      missing_type: missingType(String(item.reason)),
-      semantic_refs: semanticRefs(obligation, String(item.reason)),
-      scope: String(obligation.scope ?? '')
-    };
-    return { ...item, root_issue_id: stableId('root', signature) };
+    const rootIds = sortArray(mapArray(issueDescriptors(obligation,
+      mapGet(submittedByObligation, String(item.obligation_id)), String(item.reason), caseDrafts),
+    (descriptor) => stableId('root', { missing_type: descriptor.missing_type,
+      semantic_refs: descriptor.semantic_refs, scope: descriptor.scope })), compareCodePoints);
+    return { ...item, root_issue_id: rootIds[0], root_issue_ids: rootIds };
   });
   return { ...classification, blocked };
 }
@@ -1432,8 +1486,7 @@ function bindBlockedRootIdentity(classification, obligations, caseDrafts) {
 function clarificationQuestion(missingTypeValue, scope) {
   const type = String(missingTypeValue);
   const businessScope = String(scope);
-  if (type === 'testability' || type === 'capability' || type === 'resource_limit'
-    || type === 'control' || type === 'observer') {
+  if (isExecutionPreparationGap(type)) {
     return `What verified test setup, control, or observation capability is available for ${businessScope}?`;
   }
   if (type === 'source-conflict' || type === 'fact-conflict' || type === 'evidence'
@@ -1450,26 +1503,31 @@ function clarificationQuestion(missingTypeValue, scope) {
 function blockedDescriptors(classification, obligations, caseDrafts) {
   const obligationById = makeMap(mapArray(obligations, (item) => [String(item.obligation_id), item]));
   const submittedByObligation = blockerInputsByObligation(caseDrafts);
-  return sortArray(mapArray(records(classification.blocked), (item) => {
+  /** @type {any[]} */
+  const output = [];
+  for (const item of records(classification.blocked)) {
     const obligation = mapGet(obligationById, String(item.obligation_id)) ?? {};
     const reason = String(item.reason);
-    const compilerIssue = compilerIssueDescriptor(
-      obligation, mapGet(submittedByObligation, String(item.obligation_id))
-    );
+    for (const compilerIssue of issueDescriptors(obligation,
+      mapGet(submittedByObligation, String(item.obligation_id)), reason, caseDrafts, strings(item.evidence_refs))) {
     const type = compilerIssue?.missing_type ?? missingType(reason);
     const scope = compilerIssue?.scope ?? String(obligation.scope ?? 'unknown');
     const technical = reason.includes('UNAVAILABLE') || reason.includes('UNKNOWN')
       || reason.includes('MISSING_CAPABILITY') || reason.includes('MISSING_OBSERVER')
-      || reason.includes('MISSING_CONTROL');
-    return {
+      || reason.includes('MISSING_CONTROL') || reason.includes('CAPABILITY_MISSING')
+      || reason.includes('OBSERVER_MISSING') || reason.includes('CONTROL_MISSING');
+    pushArray(output, {
       obligation_id: String(item.obligation_id), missing_type: type,
       semantic_refs: compilerIssue?.semantic_refs ?? semanticRefs(obligation, reason), scope,
       risk: String(item.risk), reason,
-      evidence_refs: sortArray(compilerIssue?.evidence_refs ?? strings(item.evidence_refs), compareCodePoints),
+      evidence_refs: sortArray([...(compilerIssue?.evidence_refs ?? strings(item.evidence_refs))], compareCodePoints),
       answerable: compilerIssue?.answerable ?? !technical,
       question: clarificationQuestion(type, scope)
-    };
-  }), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
+    });
+    }
+  }
+  return sortArray(output, (left, right) => compareCodePoints(left.obligation_id, right.obligation_id)
+    || compareCodePoints(canonicalStringify(left.semantic_refs), canonicalStringify(right.semantic_refs)));
 }
 
 /**
@@ -1608,7 +1666,9 @@ function translateClarificationAppend(clarificationInput, sourceConflictBridge) 
   }
   const events = records(output.append_batch.clarification_events);
   for (let index = 0; index < events.length; index += 1) {
-    events[index].root_issue_ids = translateRootIds(events[index].root_issue_ids).ids;
+    if (events[index].root_issue_ids !== undefined) {
+      events[index].root_issue_ids = translateRootIds(events[index].root_issue_ids).ids;
+    }
   }
   return output;
 }
@@ -1693,8 +1753,13 @@ function externalizePendingRoots(pending, conflicts, sourceConflictBridge) {
  * @param {Record<string, unknown>} semantic
  * @param {Record<string, unknown>} sourcePack
  * @param {Record<string, unknown>} clarificationState
+ * @param {Record<string, unknown>[]} obligations
+ * @param {Map<string, Record<string, unknown>>} claimsById
  */
-function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, clarificationState) {
+function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, clarificationState, obligations, claimsById) {
+  const zh = sourcePack.output_language === 'zh-CN';
+  /** @param {string} en @param {string} cn */
+  const L = (en, cn) => zh ? cn : en;
   const pointById = makeMap(mapArray(
     records(semantic.formal_test_points), (point) => [String(point.obligation_id), point]
   ));
@@ -1707,18 +1772,26 @@ function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, c
     }))
   });
   const changeHead = toNumber(clarificationState.clarification_event_seq);
+  const titles = makeMap(mapArray(obligations, (obligation) => {
+    const claims = mapArray(strings(obligation.source_claim_ids), (id) => mapGet(claimsById, id));
+    const values = filterArray(mapArray(claims, (claim) => String(claim?.value ?? '')), (value) => value.length > 0);
+    return [String(obligation.obligation_id), String(obligation.title ?? (joinArray(values, '; ') || obligation.scope))];
+  }));
   return createPresentationSnapshot({
     purpose: 'semantic_clarification', entryContext: 'active_analysis',
     runInstanceId: String(sourcePack.run_instance_id),
     sourceRevision: toNumber(sourcePack.source_revision),
     planDigest, planChangeHeadSeq: changeHead,
     groups: mapArray(pendingRoots, (root) => ({
-      question: String(root.question),
+      question: `${joinArray(mapArray(strings(root.affected_obligation_ids), (id) => String(mapGet(titles, id))), '; ')} — ${L(String(root.question), isExecutionPreparationGap(root.missing_type)
+        ? '哪些已验证的数据准备、控制或观察能力可以支持上述行为？'
+        : root.missing_type === 'source-conflict' ? '上述行为应以哪份权威规则为准？'
+          : '上述行为的正式产品规则与预期结果是什么？请注明依据。')}`,
       items: mapArray(strings(root.affected_obligation_ids), (obligationId) => {
         const point = mapGet(pointById, obligationId) ?? {};
         return {
           item_kind: 'formal_test_point', item_id: obligationId,
-          title: `Formal Test Point ${obligationId}`,
+          title: String(mapGet(titles, obligationId) ?? L('Product behavior needing clarification', '待澄清的产品行为')),
           item_semantic_digest: digest({
             obligation_id: obligationId,
             evidence_level: point.evidence_level,
@@ -1730,13 +1803,17 @@ function semanticClarificationPresentation(pendingRoots, semantic, sourcePack, c
         };
       }),
       allowedOptions: [
-        { option_code: 'final', label: 'Final answer', meaning: 'Apply an authoritative final business answer.' },
-        { option_code: 'temporary', label: 'Temporary answer', meaning: 'Record a provisional answer without upgrading evidence.' },
-        { option_code: 'unknown', label: 'Unknown', meaning: 'Record that the answer is currently unknown.' },
-        { option_code: 'deferred', label: 'Defer', meaning: 'Leave this issue unresolved for later.' },
-        { option_code: 'request_delivery', label: 'Continue to execution closure', meaning: 'Keep the true Blocked status and decide its run disposition.' }
+        { option_code: 'final', label: L('Final answer', '正式答案'), meaning: isExecutionPreparationGap(root.missing_type)
+          ? L('Provide verified execution-preparation information with its authority and source.', '提供已核实的执行准备信息，注明权限范围及来源。')
+          : L('Apply an authoritative final business answer.', '提供有权威依据的正式业务答案。') },
+        { option_code: 'temporary', label: L('Temporary answer', '临时答案'), meaning: L('Record a provisional answer without upgrading evidence.', '记录临时答案，不升级证据等级。') },
+        { option_code: 'unknown', label: L('Unknown', '尚不明确'), meaning: L('Record that the answer is currently unknown.', '记录当前未知，不自动重复追问。') },
+        { option_code: 'deferred', label: L('Defer', '稍后处理'), meaning: L('Leave this issue unresolved for later.', '保留缺口，稍后再处理。') },
+        { option_code: 'request_delivery', label: L('Deliver with gaps', '带缺口交付'), meaning: L('Keep the true Blocked status in the delivery.', '保留真实受阻状态并交付，不伪造不适用。') }
       ],
-      answerExample: `Answer ${String(root.root_issue_id)} with a final, temporary, unknown, deferred, or delivery decision.`
+      answerExample: isExecutionPreparationGap(root.missing_type)
+        ? L('Provide verifiable setup, entry, sample or observation resources and their sources; otherwise say unknown, defer, or deliver with this preparation gap recorded.', '提供可核查的环境、入口、样本或观察资源及其来源；否则选择尚不明确、稍后处理，或保留此执行准备缺口交付。')
+        : L('For the behavior shown above: provide the confirmed rule and source, give a temporary answer, or say unknown, defer, or deliver with this gap recorded.', '针对上述行为：给出正式规则及来源、暂定规则，或选择尚不明确、稍后处理、带缺口交付。')
     }))
   });
 }
@@ -1771,7 +1848,7 @@ function evidenceLevel(obligation, cases, claimsById, lane, notApplicable) {
 
 /** @param {any} classification @param {Record<string, unknown>[]} obligations @param {Map<string, Record<string, unknown>>} claimsById */
 function semanticSnapshot(classification, obligations, claimsById) {
-  /** @type {Map<string, {lane:string,reason:string|null,cases:Record<string, unknown>[],notApplicable?:Record<string, unknown>}>} */
+  /** @type {Map<string, {lane:string,reason:string|null,cases:Record<string, unknown>[],notApplicable?:Record<string, unknown>,rootIds?:unknown}>} */
   const disposition = makeMap();
   const groundedCases = records(classification.grounded);
   for (let caseIndex = 0; caseIndex < groundedCases.length; caseIndex += 1) {
@@ -1798,7 +1875,7 @@ function semanticSnapshot(classification, obligations, claimsById) {
   const blockedItems = records(classification.blocked);
   for (let index = 0; index < blockedItems.length; index += 1) mapSet(disposition,
     String(blockedItems[index].obligation_id), {
-      lane: 'blocked', reason: String(blockedItems[index].reason), cases: []
+      lane: 'blocked', reason: String(blockedItems[index].reason), cases: [], rootIds: blockedItems[index].root_issue_ids
     }
   );
   const notApplicableItems = records(classification.not_applicable);
@@ -1814,7 +1891,8 @@ function semanticSnapshot(classification, obligations, claimsById) {
       obligation_id: String(obligation.obligation_id),
       evidence_level: evidenceLevel(obligation, state?.cases ?? [], claimsById, lane, state?.notApplicable),
       classification: lane,
-      blocked_reason: lane === 'blocked' ? (state?.reason ?? 'FORMAL_DISPOSITION_MISSING') : null
+      blocked_reason: lane === 'blocked' ? (state?.reason ?? 'FORMAL_DISPOSITION_MISSING') : null,
+      ...(lane === 'blocked' && state?.rootIds ? { root_issue_ids: strings(state.rootIds) } : {})
     };
   }), (left, right) => compareCodePoints(left.obligation_id, right.obligation_id));
   const ids = (/** @type {string} */ lane) => sortArray(mapArray(
@@ -1896,6 +1974,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
     if (schemaDiagnostics.length > 0) return revisionRequired('schema', sourceRevision, schemaDiagnostics);
 
     const sourcePolicy = resolveSourcePolicy(input.source_pack);
+    const sourceIntegrity = validateSourceIntegrity(input.source_pack);
+    if (sourceIntegrity.length > 0) return revisionRequired('source_pack', sourceRevision, diagnosticArray(sourceIntegrity));
     const policyDiagnostics = diagnosticArray(sourcePolicy.diagnostics);
     if (policyDiagnostics.length > 0) return revisionRequired('source_policy', sourceRevision, policyDiagnostics);
 
@@ -1947,6 +2027,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
     if (classification.diagnostics.length > 0) return revisionRequired(
       'classification', sourceRevision, diagnosticArray(classification.diagnostics)
     );
+    classification = bindBlockedRootIdentity(classification, records(obligations.obligations),
+      /** @type {Record<string, unknown>} */ (input.case_drafts));
     const semantics = semanticSnapshot(
       classification, records(obligations.obligations), graph.claimsById
     );
@@ -1954,6 +2036,15 @@ function evaluateRevisionCaptured(submittedInput, options) {
     const translatedClarification = translateClarificationAppend(
       clarificationInput, sourceConflictBridge
     );
+    // The runner verifies append-only history and the accepted target digest.
+    // Preserve the prior revision for a real generation repair, not a fake user event.
+    const repairHistory = records(sourcePack.artifact_repairs);
+    const lastRepair = repairHistory[repairHistory.length - 1];
+    const priorClarification = /** @type {Record<string, unknown>} */ (translatedClarification.prior_state);
+    const generationRepair = lastRepair
+      && lastRepair.base_source_revision === priorClarification.source_revision
+      && sourceRevision === toNumber(priorClarification.source_revision) + 1
+      ? lastRepair : null;
     const clarification = evaluateClarification({
       source_revision: sourceRevision,
       blocked_obligations: blockedDescriptors(
@@ -1963,7 +2054,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
       prior_state: translatedClarification.prior_state,
       append_batch: translatedClarification.append_batch,
       semantic_snapshot: semantics
-    }, /** @type {'pause_for_clarification'|'record_only'} */ (interactionPolicy));
+    }, /** @type {'pause_for_clarification'|'record_only'} */ (interactionPolicy), generationRepair);
     if (clarification.diagnostics.length > 0) return revisionRequired(
       'clarification', sourceRevision, diagnosticArray(clarification.diagnostics)
     );
@@ -1972,7 +2063,8 @@ function evaluateRevisionCaptured(submittedInput, options) {
         clarification.pending_root_issues, graph.conflicts, sourceConflictBridge
       );
       const presentation = semanticClarificationPresentation(
-        pendingRootIssues, clarification.semantic_snapshot, sourcePack, clarification.state
+        pendingRootIssues, clarification.semantic_snapshot, sourcePack, clarification.state,
+        records(obligations.obligations), graph.claimsById
       );
       return {
         status: 'need_user_answers', purpose: 'semantic_clarification',
@@ -2003,7 +2095,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         /** @type {Record<string, unknown>} */ (input.case_drafts)
       );
       bundle = buildBundle({
-        schema_version: '2.1.0', source_revision: sourceRevision,
+        schema_version: '3.0.0', source_revision: sourceRevision,
         compiler_version: input.compiler_version, lineage: input.lineage,
         evidence_claims: input.evidence_claims, obligations_artifact: obligations,
         classification: bundleClassification, clarification,
@@ -2050,7 +2142,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
         (candidate) => !promotedExploratoryIds.has(String(candidate.exploratory_id))
       )
     };
-    if (execution.kind !== 'ready') {
+    if (execution.kind !== 'ready' && execution.kind !== 'document_only') {
       const presentation = /** @type {any} */ (execution.presentation);
       const workflowState = {
         execution_plan: execution.plan,
@@ -2088,6 +2180,7 @@ function evaluateRevisionCaptured(submittedInput, options) {
     );
     bundle = {
       ...bundle,
+      ...(sourcePack.output_language ? { output_language: sourcePack.output_language } : {}),
       execution_plan: readyPlan,
       quality: {
         ...bundle.quality,

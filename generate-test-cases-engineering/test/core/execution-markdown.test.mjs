@@ -28,8 +28,8 @@ test('Markdown mechanically mirrors ready plan counts, runner ids, and semantic 
   const result = finishedJourney();
   assert.equal(result.status, 'finished');
   const plan = result.bundle.execution_plan;
-  assert.match(result.markdown, /## Execution Plan/u);
-  assert.match(result.markdown, new RegExp(`Execute Cases: ${plan.summary.execute_case_count}`, 'u'));
+  assert.match(result.markdown, /## Delivery Overview/u);
+  assert.match(result.markdown, new RegExp(`Confirmed runner Cases: ${plan.runner_case_ids.length}`, 'u'));
   for (const caseId of plan.runner_case_ids) {
     assert.equal(result.markdown.includes(caseId.replaceAll('_', '\\_')), true);
   }
@@ -42,7 +42,7 @@ test('Markdown is business-first and moves stable IDs into the audit appendix', 
   const [primary, audit] = result.markdown.split('## Audit Appendix');
 
   assert.match(primary, /## Delivery Overview/u);
-  assert.match(primary, /## Cases to Execute/u);
+  assert.match(primary, /## Cases$/mu);
   assert.match(primary, /## Manual Execution Worksheet/u);
   assert.match(primary, /Risk: High/u);
   assert.match(primary, /Generated, not executed/u);
@@ -65,7 +65,7 @@ test('manual execution worksheet is a blank projection of runner_case_ids', () =
   assert.match(worksheet, /Notes/u);
   assert.equal((worksheet.match(/Not recorded/gu) ?? []).length,
     result.bundle.execution_plan.runner_case_ids.length);
-  assert.match(worksheet, /bundle digest \+ stable Case ID/u);
+  assert.match(worksheet, /bundle digest and stable Case ID/u);
 });
 
 test('business test data displays the compiler-owned value origin', () => {
@@ -143,9 +143,10 @@ test('business display numbering places Execute Cases before earlier-scope DoNot
 test('audit appendix owns every stable-ID section in the Markdown heading tree', () => {
   const audit = finishedJourney().markdown.split('## Audit Appendix')[1];
 
-  assert.match(audit, /^### Grounded Cases$/mu);
-  assert.match(audit, /^### Coverage$/mu);
-  assert.match(audit, /^### Execution Plan$/mu);
+  assert.match(audit, /Stable ID \| Test Points \| Evidence/u);
+  assert.match(audit, /^### Gap Traceability$/mu);
+  assert.match(audit, /^### Exploratory Traceability$/mu);
+  assert.doesNotMatch(audit, /#### Steps and Expected Results/u);
   assert.doesNotMatch(audit, /^## (?:Grounded Cases|Coverage|Execution Plan)$/mu);
 });
 
@@ -170,9 +171,9 @@ test('business delivery preserves explicit DoNotExecute and supported exclusion 
   const exploratoryPrimary = exploratory.markdown.split('## Audit Appendix')[0];
   const exclusionPrimary = notApplicable.markdown.split('## Audit Appendix')[0];
 
-  assert.match(conditionalPrimary, /Do not execute reason: Test operator explicitly excluded this conditional item\./u);
-  assert.match(blockedPrimary, /Do not execute reason: Test operator explicitly excluded this blocked item\./u);
-  assert.match(exploratoryPrimary, /Do not execute reason: Test operator explicitly excluded this exploratory item\./u);
+  assert.match(conditionalPrimary, /Decision basis: Test operator explicitly excluded this conditional item\./u);
+  assert.match(blockedPrimary, /Decision: Do not execute — Test operator explicitly excluded this blocked item\./u);
+  assert.match(exploratoryPrimary, /Decision: Do not execute — Test operator explicitly excluded this exploratory item\./u);
   assert.match(exclusionPrimary, /This scenario is excluded\./u);
   assert.doesNotMatch(exclusionPrimary, /supported exclusion evidence marks this subject out of scope/u);
 });
@@ -184,7 +185,19 @@ test('blocked recovery presents one answerable atomic question', () => {
 
   assert.match(item.recovery.question, /\?$/u);
   assert.doesNotMatch(item.recovery.question, /^Clarification required for/u);
-  assert.equal((primary.match(new RegExp(item.recovery.question.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gu')) ?? []).length, 2);
+  assert.equal(primary.split(item.recovery.question).length - 1, 1);
+});
+
+test('blocked root dependency projection rejects removed sets, duplicates and conflicting scalar aliases', () => {
+  const result = completeJourneyRevision(buildJourney('all-blocked'));
+  for (const mutation of ['missing', 'duplicate', 'alias']) {
+    const bundle = structuredClone(result.bundle);
+    const item = bundle.blocked[0];
+    if (mutation === 'missing') delete item.blocking_roots;
+    if (mutation === 'duplicate') item.blocking_roots.push(structuredClone(item.blocking_roots[0]));
+    if (mutation === 'alias') item.recovery.question = 'Conflicting question?';
+    assert.throws(() => renderMarkdown(bundle), undefined, mutation);
+  }
 });
 
 test('exclusion blockers are presented as source and evidence gaps', () => {
@@ -192,6 +205,7 @@ test('exclusion blockers are presented as source and evidence gaps', () => {
   const bundle = structuredClone(result.bundle);
   bundle.blocked[0].recovery.missing_type = 'exclusion';
   bundle.blocked[0].recovery.question = 'What authoritative scope-exclusion rule applies to refund?';
+  bundle.blocked[0].blocking_roots[0].recovery = { ...bundle.blocked[0].recovery };
 
   const primary = renderMarkdown(bundle).split('## Audit Appendix')[0];
   const evidenceSection = primary.split('## Source and Evidence Gaps')[1];
@@ -231,7 +245,7 @@ test('one root issue is rendered once with every affected Test Point decision', 
   const executionGaps = primary.split('## Execution Preparation Gaps')[1].split('## Source and Evidence Gaps')[0];
 
   assert.equal((executionGaps.match(/^### Gap-/gmu) ?? []).length, 1);
-  assert.match(executionGaps, /Scopes: refund\/basic; refund\/critical/u);
+  // Each affected scope is retained with its own risk; no duplicated aggregate prose.
   assert.match(executionGaps, /Risk: Critical/u);
   assert.match(executionGaps, /basic refund handling — Scope: refund\/basic; Risk: Low/u);
   assert.match(executionGaps, /critical refund handling — Scope: refund\/critical; Risk: Critical/u);

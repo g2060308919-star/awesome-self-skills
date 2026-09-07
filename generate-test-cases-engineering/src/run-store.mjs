@@ -1822,7 +1822,7 @@ export async function ensureRunInstance(runDirectory) {
   if (existing) {
     const value = existing.value;
     if (!value || typeof value !== 'object'
-      || value.schema_version !== '2.1.0'
+      || value.schema_version !== '3.0.0'
       || typeof value.run_instance_id !== 'string'
       || !/^RUN-[0-9a-f-]{36}$/u.test(value.run_instance_id)
       || typeof value.created_at !== 'string') throw new RunStoreIntegrityError(
@@ -1831,7 +1831,7 @@ export async function ensureRunInstance(runDirectory) {
     return value;
   }
   const value = {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     run_instance_id: `RUN-${NATIVE_RANDOM_UUID()}`,
     created_at: NATIVE_REFLECT_APPLY(
       NATIVE_DATE_TO_ISO_STRING, new NATIVE_DATE(currentTimeMilliseconds()), []
@@ -2218,7 +2218,7 @@ export async function readCurrentState(runDirectory) {
 /** @param {string} runDirectory @param {Record<string,unknown>} pointer */
 export async function writeReadyCurrent(runDirectory, pointer) {
   await atomicWriteJson(runDirectory, outputPaths(runDirectory, 0).current, {
-    status: 'ready',
+    status: pointer.status === 'document_only' ? 'document_only' : 'ready',
     run_instance_id: pointer.run_instance_id,
     source_revision: pointer.source_revision,
     bundle_path: pointer.bundle_path,

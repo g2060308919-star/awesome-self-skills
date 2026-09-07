@@ -8,6 +8,7 @@ import { evaluateRevision } from '../../src/core.mjs';
 import { resolveSourcePolicy } from '../../src/source-policy.mjs';
 import { completeJourneyRevision } from '../helpers/run-journey.mjs';
 import { completeSourcePack } from '../helpers/source-pack.mjs';
+import { migrateCaseSemantics, refreshExecutionSignature } from '../helpers/classification-context.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const dimensions = [
@@ -210,7 +211,17 @@ function caseDraft(rule) {
     claim_id: rule.claimId,
     invalidation_condition: 'A final rule replaces this temporary decision.'
   };
-  return draft;
+  const migrated = migrateCaseSemantics(draft, { operationRef: `${rule.viewId}#${rule.elementId}` });
+  // Independently specified branch selector; evidence and Oracle result are not partition identity.
+  const partition = rule.viewType === 'role' ? {
+    kind: 'role', scope: rule.scope, responsibility: 'permission', role: 'tester', permission: `execute-${rule.key}`
+  } : {
+    kind: 'decision', scope: rule.scope, responsibility: 'rule', conditions: [...rule.conditions].sort(), priority: rule.priority
+  };
+  migrated.scenario.partition_id = stableId('partition', partition);
+  for (const datum of migrated.data) datum.partition_id = migrated.scenario.partition_id;
+  refreshExecutionSignature(migrated);
+  return migrated;
 }
 
 /**
@@ -271,24 +282,24 @@ function revisionFromRules(rules, options = {}) {
     return { obligation_id: id, status: 'case_candidate', case_ids: [`case_${rule.key}`] };
   });
   return {
-    schema_version: '2.1.0', source_revision: sourceRevision, compiler_version: '0.1.0',
+    schema_version: '3.0.0', source_revision: sourceRevision, compiler_version: '0.1.0',
     lineage: { source_digest: digestB, case_draft_digest: digestC },
     source_pack: completeSourcePack({
-      schema_version: '2.1.0', source_revision: sourceRevision,
+      schema_version: '3.0.0', source_revision: sourceRevision,
       run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: '*',
       sources, locators, source_policy: { rules: policyRules },
       decision_records: decisions, clarification_events: [], execution_events: []
-    }, { claims }),
+    }, { claims, fact_ledger: facts }),
     evidence_claims: {
-      schema_version: '2.1.0', source_revision: sourceRevision, claims, fact_ledger: facts
+      schema_version: '3.0.0', source_revision: sourceRevision, claims, fact_ledger: facts
     },
     behavior_views: {
-      schema_version: '2.1.0', source_revision: sourceRevision, views,
+      schema_version: '3.0.0', source_revision: sourceRevision, views,
       interaction_matrix: interaction.matrix, interaction_candidates: interaction.candidates,
       obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
-      schema_version: '2.1.0', source_revision: sourceRevision, cases,
+      schema_version: '3.0.0', source_revision: sourceRevision, cases,
       obligation_dispositions: dispositions, exploratory_candidates: []
     },
     clarification: {
@@ -339,7 +350,7 @@ function buildRevision(scenario) {
       extraClaims: [exclusion],
       extraLocators: [{
         locator_id: 'locator_exclusion', source_id: 'source_prd', type: 'text-range',
-        text_range: { start: 100, end: 101 }, content_digest: digestA,
+        text_range: { start: 0, end: 1 }, content_digest: digestA,
         extraction_integrity: 'verified'
       }]
     });
@@ -571,6 +582,7 @@ test('core journey preserves a surfaced source-conflict root through a legal fin
   const narrowPayment = { ...broadPayment, scope: 'checkout.payment.card' };
   const firstInput = JSON.parse(JSON.stringify(conflictRevision())
     .replaceAll('checkout.payment', 'checkout.payment.card')
+    .replaceAll(caseDraft(broadPayment).scenario.partition_id, caseDraft(narrowPayment).scenario.partition_id)
     .replaceAll(obligationId(broadPayment), obligationId(narrowPayment)));
   for (const policyRule of firstInput.source_pack.source_policy.rules) {
     if (policyRule.rule_id === 'policy_payment_old' || policyRule.rule_id === 'policy_payment_new') {

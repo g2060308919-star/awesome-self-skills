@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
   "properties": {
-    "schema_version": { "const": "2.1.0" },
+    "schema_version": { "const": "3.0.0" },
     "source_revision": { "type": "integer", "minimum": 0 },
     "obligations": {
       "type": "array",
@@ -12,11 +12,13 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities"],
+            "required": ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "primary_operation_refs", "scenario_partition_ref", "required_oracle_refs", "required_capabilities"],
             "properties": {
               "obligation_id": { "type": "string", "minLength": 1 },
               "kind": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] },
               "caseable": { "const": true },
+              "primary_operation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+              "scenario_partition_ref": { "type": "string", "minLength": 1 },
               "risk": { "enum": ["critical", "high", "medium", "low"] },
               "scope": { "type": "string", "minLength": 1 },
               "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },

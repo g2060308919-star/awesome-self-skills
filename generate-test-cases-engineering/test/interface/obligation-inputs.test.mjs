@@ -38,7 +38,7 @@ function fourViewRevision() {
   ];
   return {
     source_pack: completeSourcePack({
-      schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
+      schema_version: '3.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
       sources: [{
         source_id: 'source_prd', kind: 'prd', version: '1', status: 'effective',
         authority: 'owner', content: 'Four view responsibilities.',
@@ -58,7 +58,7 @@ function fourViewRevision() {
       claim_id: claimId, claim_form: 'direct', source_locator_ids: ['locator_prd']
     })) }),
     evidence_claims: {
-      schema_version: '2.1.0', source_revision: 0,
+      schema_version: '3.0.0', source_revision: 0,
       claims: claimIds.map((claimId) => ({
         claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
         scope: 'checkout', value: claimId, source_locator_ids: ['locator_prd'],
@@ -66,11 +66,13 @@ function fourViewRevision() {
       })),
       fact_ledger: claimIds.map((claimId) => ({
         fact_id: `fact_${claimId.slice('claim_'.length)}`, claim_id: claimId,
-        status: 'active', source_claim_ids: [claimId]
+        status: 'active', source_claim_ids: [claimId],
+        required_view_kinds: [claimId==='claim_input'?'input-domain':claimId.startsWith('claim_role')?'role':['claim_timing','claim_timeout'].includes(claimId)?'timing':'integration'],
+        view_review_basis: 'Synthetic source explicitly supplies the corresponding specialized behavior view.'
       }))
     },
     behavior_views: {
-      schema_version: '2.1.0', source_revision: 0,
+      schema_version: '3.0.0', source_revision: 0,
       views: [
         {
           view_id: 'view_input', type: 'input-domain', scope: 'checkout',
@@ -449,7 +451,7 @@ test('installed obligation input rejects malformed nonempty reserved arrays inst
 
 test('obligation input compiler ignores the removed hidden fifth input', () => {
   const artifact = {
-    schema_version: '2.1.0', source_revision: 7, views: [], interaction_matrix: [],
+    schema_version: '3.0.0', source_revision: 7, views: [], interaction_matrix: [],
     interaction_candidates: [], obligation_inputs: emptyObligationInputs()
   };
   const clean = compileObligationInputs({}, artifact);

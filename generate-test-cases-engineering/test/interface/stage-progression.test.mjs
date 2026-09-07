@@ -281,7 +281,7 @@ test('real runner fails closed when an integration view omits responsibility-spe
   const claimIds = [...new Set(view.source_claim_ids)];
   const sourceDigest = '8b3b0f135f46063311dae5777d88238f613a136aaec61cbcc5df4910620500da';
   const sourcePack = {
-    schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
+    schema_version: '3.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_integration', kind: 'prd', version: '1', status: 'effective',
       authority: 'owner', content: 'Integration contract requirements',
@@ -299,7 +299,7 @@ test('real runner fails closed when an integration view omits responsibility-spe
     decision_records: [], clarification_events: [], execution_events: []
   };
   const evidenceClaims = {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     claims: claimIds.map((claimId) => ({
       claim_id: claimId, claim_form: 'direct', level: 'E3', kind: 'requirement',
       scope: view.scope, value: claimId, source_locator_ids: ['locator_integration'],

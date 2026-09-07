@@ -261,7 +261,7 @@ function buildInitialItems(semanticBundle, obligations, evidenceClaims, priorPla
       execution_disposition: prior.execution_disposition,
       reason_code: prior.reason_code, reason: prior.reason, basis: structuredClone(prior.basis)
     });
-    else if (item.semantic_status === 'grounded') Object.assign(item, {
+    else if (item.semantic_status === 'grounded' && sourcePack.delivery_intent !== 'case_document') Object.assign(item, {
       execution_disposition: 'execute', reason_code: 'selected_for_run', reason: 'Selected for this run.',
       basis: { origin: 'default_grounded_recommendation' }
     });
@@ -397,6 +397,7 @@ export function compileExecutionPlan(input) {
   const pending = summary.pending_case_count + summary.pending_formal_test_point_count + summary.pending_exploratory_count;
   const planChangeHead = replay.plan_change_head_seq;
   const confirmation = replay.confirmation;
+  const documentOnly = sourcePack.delivery_intent === 'case_document';
   const ready = pending === 0 && confirmation
     && confirmation.confirmed_plan_digest === planDigest
     && confirmation.confirmed_plan_change_head_seq === planChangeHead;
@@ -409,7 +410,7 @@ export function compileExecutionPlan(input) {
     plan_digest: planDigest,
     plan_change_head_seq: planChangeHead,
     items: currentItems,
-    runner_case_ids: runnerIds,
+    runner_case_ids: documentOnly ? [] : runnerIds,
     promoted_exploratory: promotions,
     test_point_execution_coverage: coverage,
     summary,
@@ -431,7 +432,24 @@ export function compileExecutionPlan(input) {
     }] : []),
     { option_code: 'pause', label: 'Pause', meaning: 'Save the pending plan for later.' }
   ];
-  const presentation = ready ? null : createPresentationSnapshot({
+  const zh = sourcePack.output_language === 'zh-CN';
+  /** @param {string} en @param {string} cn */
+  const L = (en, cn) => zh ? cn : en;
+  /** @type {Record<string,[string,string]>} */
+  const translatedOptions = {
+    do_not_execute: ['不执行', '保留真实状态，将此项排除在本次执行之外。'],
+    final: ['补充正式规则', '提供有权威依据的业务规则并重新编译。'],
+    temporary: ['补充临时规则', '提供临时业务规则，不升级证据等级。'],
+    reopen_root_issues: ['重开问题', '重开已处理的业务问题并重新编译。'],
+    request_reanalysis: ['重新分析', '重读已有来源，不添加未经证实的业务事实。'],
+    adopt: ['采纳风险', '确认业务规则后，通过正式流程重新编译探索风险。'],
+    pause: ['暂停', '保存当前状态，稍后继续。']
+  };
+  if (zh) for (const option of executionOptions) {
+    const translated = translatedOptions[option.option_code];
+    if (translated) { option.label = translated[0]; option.meaning = translated[1]; }
+  }
+  const presentation = ready || documentOnly ? null : createPresentationSnapshot({
     purpose,
     entryContext: 'active_analysis',
     runInstanceId: sourcePack.run_instance_id,
@@ -440,23 +458,23 @@ export function compileExecutionPlan(input) {
     planChangeHeadSeq: planChangeHead,
     groups: [{
       question: purpose === 'execution_closure'
-        ? 'Choose Execute, DoNotExecute, or pause for every pending item.'
-        : 'Confirm, modify, or pause the complete execution plan.',
+        ? L('Choose Execute, DoNotExecute, or pause for every pending item.', '请逐项决定待处理事项；可补充规则、不执行或暂停。')
+        : L('Confirm, modify, or pause the complete execution plan.', '请确认实际展示的完整执行计划，或选择修改、暂停。'),
       items: visibleItems,
       allowedOptions: purpose === 'execution_closure'
         ? executionOptions
         : [
-          { option_code: 'confirm', label: 'Confirm', meaning: 'Confirm this displayed plan.' },
-          { option_code: 'modify', label: 'Modify', meaning: 'Change one or more execution choices.' },
-          { option_code: 'pause', label: 'Pause', meaning: 'Save before confirmation.' }
+          { option_code: 'confirm', label: L('Confirm', '确认'), meaning: L('Confirm this displayed plan.', '确认当前展示的这一版计划。') },
+          { option_code: 'modify', label: L('Modify', '修改'), meaning: L('Change one or more execution choices.', '修改一项或多项执行决定。') },
+          { option_code: 'pause', label: L('Pause', '暂停'), meaning: L('Save before confirmation.', '先保存，暂不确认。') }
         ],
       answerExample: purpose === 'execution_closure'
-        ? 'Do not execute the named item because the business rule is missing.'
-        : 'Confirm the displayed plan.'
+        ? L('Do not execute the named item because the business rule is missing.', '因业务规则尚未明确，本次不执行上述指定事项。')
+        : L('Confirm the displayed plan.', '确认当前展示的完整计划。')
     }]
   });
   return {
-    kind: ready ? 'ready' : 'analysis_only',
+    kind: documentOnly ? 'document_only' : ready ? 'ready' : 'analysis_only',
     plan: JSON.parse(canonicalStringify(plan)),
     presentation,
     workflow_event_head_seq: replay.workflow_event_head_seq,
@@ -467,7 +485,8 @@ export function compileExecutionPlan(input) {
 
 /** @param {any} plan @param {any} sourcePack @param {any} evidenceClaims */
 export function projectReadyExecutionPlan(plan, sourcePack, evidenceClaims) {
-  if (plan?.status !== 'ready' || !plan.confirmation) throw new Error('Execution plan is not ready.');
+  const documentOnly = sourcePack.delivery_intent === 'case_document';
+  if (!documentOnly && (plan?.status !== 'ready' || !plan.confirmation)) throw new Error('Execution plan is not ready.');
   const items = records(plan.items).map((item) => {
     const projected = {
       item_kind: item.item_kind, item_id: item.item_id, title: item.title,
@@ -478,21 +497,21 @@ export function projectReadyExecutionPlan(plan, sourcePack, evidenceClaims) {
     };
     return projected;
   });
-  const confirmationSemantic = {
+  const confirmationSemantic = documentOnly ? null : {
     action: 'confirm_plan', actor: String(plan.confirmation.actor).normalize('NFC').trim(),
     authority_scope: String(plan.confirmation.authority_scope).normalize('NFC').trim(),
     confirmed_plan_digest: plan.plan_digest
   };
   return {
-    status: 'ready',
+    status: documentOnly ? 'document_only' : 'ready',
     semantic_source_digest: plan.semantic_source_digest, plan_digest: plan.plan_digest,
     semantic_result_digest: '0'.repeat(64), items,
-    runner_case_ids: strings(plan.runner_case_ids),
+    runner_case_ids: documentOnly ? [] : strings(plan.runner_case_ids),
     promoted_exploratory: records(plan.promoted_exploratory)
       .map((item) => promotionSemantic(item, sourcePack)),
     test_point_execution_coverage: structuredClone(plan.test_point_execution_coverage),
     summary: structuredClone(plan.summary),
-    confirmation: {
+    confirmation: confirmationSemantic === null ? null : {
       confirmed: true, confirmed_plan_digest: plan.plan_digest,
       actor: confirmationSemantic.actor, authority_scope: confirmationSemantic.authority_scope,
       confirmation_semantic_digest: digest(confirmationSemantic)

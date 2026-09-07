@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { stableId } from '../../src/canonical.mjs';
 import { completeSourcePack } from '../helpers/source-pack.mjs';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { compile as compileFlow } from '../../src/obligations/flow.mjs';
@@ -54,7 +55,7 @@ function evidenceGraphFor(artifact) {
 function acceptedFlowEvidence(artifact) {
   const view = artifact.views[0];
   const sourcePack = {
-    schema_version: '2.1.0', source_revision: artifact.source_revision,
+    schema_version: '3.0.0', source_revision: artifact.source_revision,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: view.scope,
     sources: [{
       source_id: 'source_flow', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
@@ -88,7 +89,7 @@ function acceptedFlowEvidence(artifact) {
     });
   }
   const evidenceClaims = {
-    schema_version: '2.1.0', source_revision: artifact.source_revision, claims, fact_ledger: []
+    schema_version: '3.0.0', source_revision: artifact.source_revision, claims, fact_ledger: []
   };
   completeSourcePack(sourcePack, evidenceClaims);
   assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
@@ -202,7 +203,26 @@ const expectedFlowSeeds = [
 
 // The three loop ID literals were hand-calculated from an explicit signature containing
 // responsibility='loop-iterations', iterations=0|1|3, and the semantic edge identity.
-// Maximum-support claims remain validated output provenance because no ninth seed field is available.
+// Maximum-support claims remain provenance, independent of compiler-owned scenario selectors.
+const flowModel = (await flowFixture()).views[0];
+const loopIterations = new Map([
+  ['obligation_a52384a31e6731ee', 0], ['obligation_2fc37475e8b4fbde', 1], ['obligation_5b43a9555a159638', 3]
+]);
+for (const seed of expectedFlowSeeds) {
+  const primary = flowModel.elements.find((/** @type {any} */ value) => seed.view_element_refs[0] === flowModel.view_id + '#' + value.element_id);
+  const loop = loopIterations.has(seed.obligation_id);
+  const responsibility = loop ? 'loop-iterations' : primary.kind === 'flow-edge' ? 'edge'
+    : primary.node_type === 'end' ? 'terminal' : 'exception';
+  Object.assign(seed, {
+    primary_operation_refs: [seed.view_element_refs[0]],
+    scenario_partition_ref: stableId('partition', {
+      kind: 'flow', scope: seed.scope, responsibility,
+      ...(primary.kind === 'flow-edge' ? { from: primary.from_element_id, condition: primary.condition }
+        : { node: primary.element_id }),
+      ...(loop ? { iterations: loopIterations.get(seed.obligation_id) } : {})
+    })
+  });
+}
 
 test('flow obligations hand-count every explicit edge, terminal, sourced exception, and 0/1/declared-max loop responsibility', async () => {
   const artifact = await flowFixture();
@@ -214,7 +234,7 @@ test('flow obligations hand-count every explicit edge, terminal, sourced excepti
   assert.equal(actual.length, 9);
   assert.deepEqual(actual, expectedFlowSeeds);
   const obligationsArtifact = {
-    schema_version: '2.1.0', source_revision: 4,
+    schema_version: '3.0.0', source_revision: 4,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

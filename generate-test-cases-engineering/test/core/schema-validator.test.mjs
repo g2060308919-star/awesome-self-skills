@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { migrateCaseSemantics } from '../helpers/classification-context.mjs';
 import {
   assertSupportedSchema,
   validateAgainstSchema,
@@ -27,13 +28,14 @@ const testBundleSchema = JSON.parse(await readFile(path.join(schemaDirectory, 't
 /** @returns {any} */
 function minimumSourcePack() {
   return {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc',
     run_scope: 'checkout',
     sources: [],
     locators: [],
     source_reviews: [],
+    source_assets: [],
     source_policy: { rules: [] },
     decision_records: [],
     clarification_events: [],
@@ -44,7 +46,7 @@ function minimumSourcePack() {
 /** @returns {any} */
 function minimumClaims() {
   return {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: 0,
     claims: [],
     fact_ledger: []
@@ -53,7 +55,7 @@ function minimumClaims() {
 
 /** @param {string} [caseId] @returns {any} */
 function completeCase(caseId = 'case_a') {
-  return {
+  return migrateCaseSemantics({
     case_id: caseId,
     title: 'Save settings',
     scope: 'checkout',
@@ -85,7 +87,7 @@ function completeCase(caseId = 'case_a') {
     cleanup: { required: false, no_cleanup_reason: 'The fixture is isolated.', no_cleanup_evidence_ref: 'claim_a', support_review: 'supported' },
     evidence_refs: ['claim_a', 'claim_e2', 'claim_role'],
     execution_signature: { role: 'member', precondition_state: 'signed-in', data_partition: 'valid-boundary', action_path: ['open', 'save'], oracle_refs: ['expect_effect', 'expect_event', 'expect_state', 'expect_value'] }
-  };
+  }, { operationRef: 'view_a#element_a' });
 }
 
 /** @param {string} caseId */
@@ -109,10 +111,10 @@ function completeBundle() {
     execution_disposition, reason_code, reason: String(reason_code), basis
   }));
   return {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     grounded: [completeBundleCase('case_grounded')],
     conditional: [{ ...completeBundleCase('case_conditional'), temporary_assumption: { claim_id: 'claim_e1', invalidation_condition: 'The owner rejects the temporary rule.' } }],
-    blocked: [{ obligation_id: 'obligation_blocked', root_issue_id: 'root_oracle', subject: 'Checkout result', reason: 'Missing Oracle', scope: 'checkout', risk: 'high', recovery: { missing_type: 'oracle', required_material: 'Expected outcome', question: 'What result is expected?' } }],
+    blocked: [{ obligation_id: 'obligation_blocked', root_issue_id: 'root_oracle', subject: 'Checkout result', reason: 'Missing Oracle', scope: 'checkout', risk: 'high', recovery: { missing_type: 'oracle', required_material: 'Expected outcome', question: 'What result is expected?' }, blocking_roots: [{ root_issue_id: 'root_oracle', recovery: { missing_type: 'oracle', required_material: 'Expected outcome', question: 'What result is expected?' } }] }],
     exploratory: [{ exploratory_id: 'exploratory_retry', title: 'Explore retry behavior', scope: 'checkout', risk: 'low', reason: 'Risk hypothesis only.' }],
     coverage: {
       requirements: { total: 1, accounted: 1, entries: [{ fact_id: 'fact_a', status: 'covered' }] },
@@ -121,7 +123,7 @@ function completeBundle() {
       expert_recall: { status: 'benchmark_only', limits: ['No hidden labels available.'] },
       not_applicable: []
     },
-    quality: { delivery_status: 'executable_subset_ready', compiler_version: '0.3.0', schema_version: '2.1.0', lineage: { semantic_source_digest: 'a'.repeat(64), evidence_semantic_digest: 'b'.repeat(64), behavior_views_semantic_digest: 'c'.repeat(64), test_obligations_semantic_digest: 'd'.repeat(64), case_drafts_semantic_digest: 'e'.repeat(64) }, limits: ['Expert recall is benchmark-only.'] },
+    quality: { delivery_status: 'executable_subset_ready', compiler_version: '0.4.0', schema_version: '3.0.0', lineage: { semantic_source_digest: 'a'.repeat(64), evidence_semantic_digest: 'b'.repeat(64), behavior_views_semantic_digest: 'c'.repeat(64), test_obligations_semantic_digest: 'd'.repeat(64), case_drafts_semantic_digest: 'e'.repeat(64) }, limits: ['Expert recall is benchmark-only.'] },
     execution_plan: {
       status: 'ready', semantic_source_digest: 'a'.repeat(64),
       plan_digest: '6'.repeat(64), semantic_result_digest: '7'.repeat(64), items: readyItems,
@@ -167,7 +169,8 @@ test('source review schema is closed and requires typed exhaustive spans', () =>
     source_id: 'source_a', content_digest: 'a'.repeat(64),
     spans: [{
       span_id: 'span_a', start: 0, end: 4, classification: 'normative',
-      rationale: 'Explicit rule.'
+      rationale: 'Explicit rule.',
+      review_basis: { reviewer: 'fixture-author', method: 'source inspection', evidence: 'Rule' }
     }]
   });
 
@@ -270,7 +273,7 @@ test('schema rejects unknown nested compiler-controlled properties', () => {
 
 test('schema rejects ill-typed nested interaction items', () => {
   const artifact = {
-    schema_version: '2.1.0', source_revision: 0, views: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [],
+    schema_version: '3.0.0', source_revision: 0, views: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [],
     interaction_matrix: [{ module_ids: 'orders', dimension: 'role', status: 'checked-no-signal' }]
   };
 
@@ -295,13 +298,13 @@ test('schema validates closed evidence claim forms and source policy metadata', 
   });
   sourcePack.source_policy.rules.push({ rule_id: 'rule_a', source_ids: ['source_a'], scope: 'checkout', authority: 'product-owner', status: 'effective' });
   const claims = {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     claims: [
       { claim_id: 'claim_direct', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'Cap total.', source_locator_ids: ['locator_a'], source_id: 'source_a' },
       { claim_id: 'claim_decision', claim_form: 'decision-record', level: 'E1', kind: 'assumption', scope: 'checkout', value: 'Use USD.', decision_id: 'decision_a', authority: 'product-owner', source_locator_ids: ['locator_a'] },
       { claim_id: 'claim_derived', claim_form: 'derived', level: 'E2', kind: 'test-data', scope: 'checkout', value: '10', derivation_kind: 'boundary-representative', derivation_target: 'test-data', parent_claim_ids: ['claim_direct'], source_locator_ids: ['locator_a'], parameters: {}, rule_input: { lower: 1, upper: 10 } }
     ],
-    fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_direct', status: 'active', source_claim_ids: ['claim_direct'] }]
+    fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_direct', status: 'active', source_claim_ids: ['claim_direct'], required_view_kinds: ['input-domain'], view_review_basis: 'Total cap defines a boundary.' }]
   };
 
   assert.deepEqual(validateAgainstSchema(sourcePack, sourcePackSchema), []);
@@ -318,7 +321,7 @@ test('evidence schema admits every E2 derivation shape and defers semantic matri
     unit: 'USD', precision: 2, rounding: 'half-up'
   });
   formula.parameters = { formula_id: 'tax_total', unit: 'USD', precision: 2, rounding: 'half-up' };
-  const artifact = { schema_version: '2.1.0', source_revision: 0, claims: [
+  const artifact = { schema_version: '3.0.0', source_revision: 0, claims: [
     derived('formula', 'test-data', { formula: 'x+1' }), formula,
     derived('decision-table-instance', 'expected-value', { outcome: 'approved' }), derived('decision-table-instance', 'model-element', {}),
     derived('boundary-representative', 'test-data', { lower: 1, upper: 2, inclusive: true }), derived('enumeration-complement', 'test-data', { enumerated_values: ['draft', 'saved'], closed_world: true }), derived('enumeration-complement', 'model-element', { closed_world: false }),
@@ -327,7 +330,7 @@ test('evidence schema admits every E2 derivation shape and defers semantic matri
   assert.deepEqual(validateAgainstSchema(artifact, claimsSchema), []);
 
   const e0 = {
-    schema_version: '2.1.0', source_revision: 0, fact_ledger: [],
+    schema_version: '3.0.0', source_revision: 0, fact_ledger: [],
     claims: [{ claim_id: 'claim_e0', claim_form: 'direct', level: 'E0', kind: 'requirement', scope: 'checkout', value: 'Speculation', source_locator_ids: ['locator_a'], source_id: 'source_a' }]
   };
   assert.deepEqual(validateAgainstSchema(e0, claimsSchema), [{
@@ -348,12 +351,12 @@ test('all seven behavior views allow evidence-only, model-only, and pending supp
   ];
 
   for (const [type, element] of fixtures) {
-    const artifact = { schema_version: '2.1.0', source_revision: 0, views: [{ view_id: `view_${type}`, type, scope: 'checkout', source_claim_ids: [], elements: [element], relations: [] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
+    const artifact = { schema_version: '3.0.0', source_revision: 0, views: [{ view_id: `view_${type}`, type, scope: 'checkout', source_claim_ids: [], elements: [element], relations: [] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
     assert.deepEqual(validateAgainstSchema(artifact, behaviorViewsSchema), [], type);
   }
 
   const relation = { relation_id: 'relation_model', kind: 'sequence', from_element_id: 'node_model', to_element_id: 'node_model', sequence: 0 };
-  const modelOnly = { schema_version: '2.1.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ ...relation, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
+  const modelOnly = { schema_version: '3.0.0', source_revision: 0, views: [{ view_id: 'view_model', type: 'flow', scope: 'checkout', source_claim_ids: [], elements: [{ element_id: 'node_model', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: [], model_refs: ['claim_e2'] }], relations: [{ ...relation, source_claim_ids: [], model_refs: ['claim_e2'] }] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [] };
   assert.deepEqual(validateAgainstSchema(modelOnly, behaviorViewsSchema), []);
 
   const bothEmpty = structuredClone(modelOnly);
@@ -363,7 +366,7 @@ test('all seven behavior views allow evidence-only, model-only, and pending supp
 
 test('schema validates structured behavior forms and rejects their unknown properties', () => {
   const artifact = {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     views: [{
       view_id: 'view_checkout', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'],
       elements: [
@@ -382,7 +385,7 @@ test('schema validates structured behavior forms and rejects their unknown prope
 
 test('case draft schema carries every factual support and Testability gate', () => {
   const artifact = {
-    schema_version: '2.1.0', source_revision: 0, cases: [completeCase()],
+    schema_version: '3.0.0', source_revision: 0, cases: [completeCase()],
     obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }],
     exploratory_candidates: []
   };
@@ -446,7 +449,7 @@ test('schema accepts the five public statuses and rejects cross-purpose field le
 
 test('schema detects duplicate nested definition IDs but excludes reference arrays', () => {
   const artifact = {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [
       { element_id: 'element_same', kind: 'flow-node', node_type: 'action', label: 'Open', source_claim_ids: ['claim_a'], model_refs: [] },
       { element_id: 'element_same', kind: 'flow-node', node_type: 'action', label: 'Open again', source_claim_ids: ['claim_a'], model_refs: [] }
@@ -488,13 +491,25 @@ test('the six persisted domain artifact schemas accept hand-derived representati
     .filter((/** @type {string} */ file) => file.endsWith('.schema.json'))
     .map(async (/** @type {string} */ file) => [file, JSON.parse(await readFile(path.join(schemaDirectory, file), 'utf8'))])));
   const fixtures = {
-    'source-pack.schema.json': { schema_version: '2.1.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout', sources: [{ source_id: 'source_a', kind: 'prd', version: '1', status: 'effective', authority: 'owner', content: 'Rule', content_digest: 'a'.repeat(64) }], locators: [{ locator_id: 'locator_a', source_id: 'source_a', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: 'a'.repeat(64), extraction_integrity: 'verified' }], source_reviews: [{ source_id: 'source_a', content_digest: 'a'.repeat(64), spans: [{ span_id: 'span_a', start: 0, end: 4, classification: 'normative', rationale: 'Fixture rule.' }] }], source_policy: { rules: [{ rule_id: 'policy_a', source_ids: ['source_a'], scope: 'checkout', authority: 'owner', status: 'effective' }] }, decision_records: [{ decision_id: 'decision_a', question_id: 'question_a', presentation_id: 'PRESENTATION-a', decision_group_ids: ['GROUP-a'], root_issue_ids: ['root_a'], affected_obligation_ids: ['obligation_a'], clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-01', question: 'Question?', answer: 'Answer.', disposition: 'temporary', authority_scope: 'task', effective_scope: 'checkout', evidence_ref: 'locator_a', evidence_level: 'E1' }], clarification_events: [{ event_id: 'event_a', clarification_event_seq: 2, type: 'request_delivery', actor: 'owner', event_at: '2026-08-01', presentation_id: 'PRESENTATION-a', decision_group_ids: ['GROUP-a'], root_issue_ids: ['root_a'] }], execution_events: [] },
-    'evidence-claims.schema.json': { schema_version: '2.1.0', source_revision: 0, claims: [{ claim_id: 'claim_a', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'Save', source_locator_ids: ['locator_a'], source_id: 'source_a' }], fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_a', status: 'active', source_claim_ids: ['claim_a'] }] },
-    'behavior-views.schema.json': { schema_version: '2.1.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [{ element_id: 'element_a', kind: 'flow-node', node_type: 'action', label: 'Save', source_claim_ids: ['claim_a'], model_refs: [] }], relations: [] }], interaction_matrix: [{ module_ids: ['checkout'], dimension: 'role', status: 'checked-no-signal' }], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], semantic_subject_refs: [{ kind: 'fact', fact_id: 'fact_a' }], formal_view_id: 'view_a' }] },
-    'test-obligations.schema.json': { schema_version: '2.1.0', source_revision: 0, obligations: [{ obligation_id: 'obligation_a', kind: 'flow', caseable: true, risk: 'medium', scope: 'checkout', source_claim_ids: ['claim_a'], view_element_refs: ['element_a'], required_oracle_refs: ['oracle_a'], required_capabilities: ['browser'] }], fact_routes: [{ fact_id: 'fact_a', route_type: 'obligations', obligation_ids: ['obligation_a'] }], interaction_routes: [{ candidate_id: 'candidate_a', route_type: 'formal-view', formal_view_id: 'view_a' }] },
-    'case-drafts.schema.json': { schema_version: '2.1.0', source_revision: 0, cases: [completeCase()], obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }], exploratory_candidates: [{ exploratory_id: 'exploratory_a', title: 'Explore retry', scope: 'checkout', risk: 'low', source_claim_ids: ['claim_a'] }] },
+    'source-pack.schema.json': { schema_version: '3.0.0', source_revision: 0, run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout', sources: [{ source_id: 'source_a', kind: 'prd', version: '1', status: 'effective', authority: 'owner', content: 'Rule', content_digest: 'a'.repeat(64) }], locators: [{ locator_id: 'locator_a', source_id: 'source_a', type: 'text-range', text_range: { start: 0, end: 4 }, content_digest: 'a'.repeat(64), extraction_integrity: 'verified' }], source_reviews: [{ source_id: 'source_a', content_digest: 'a'.repeat(64), spans: [{ span_id: 'span_a', start: 0, end: 4, classification: 'normative', rationale: 'Fixture rule.' }] }], source_policy: { rules: [{ rule_id: 'policy_a', source_ids: ['source_a'], scope: 'checkout', authority: 'owner', status: 'effective' }] }, decision_records: [{ decision_id: 'decision_a', question_id: 'question_a', presentation_id: 'PRESENTATION-a', decision_group_ids: ['GROUP-a'], root_issue_ids: ['root_a'], affected_obligation_ids: ['obligation_a'], clarification_event_seq: 1, confirmer: 'owner', confirmed_at: '2026-08-01', question: 'Question?', answer: 'Answer.', disposition: 'temporary', authority_scope: 'task', effective_scope: 'checkout', evidence_ref: 'locator_a', evidence_level: 'E1' }], clarification_events: [{ event_id: 'event_a', clarification_event_seq: 2, type: 'request_delivery', actor: 'owner', event_at: '2026-08-01', presentation_id: 'PRESENTATION-a', decision_group_ids: ['GROUP-a'], root_issue_ids: ['root_a'] }], execution_events: [] },
+    'evidence-claims.schema.json': { schema_version: '3.0.0', source_revision: 0, claims: [{ claim_id: 'claim_a', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'checkout', value: 'Save', source_locator_ids: ['locator_a'], source_id: 'source_a' }], fact_ledger: [{ fact_id: 'fact_a', claim_id: 'claim_a', status: 'active', source_claim_ids: ['claim_a'] }] },
+    'behavior-views.schema.json': { schema_version: '3.0.0', source_revision: 0, views: [{ view_id: 'view_a', type: 'flow', scope: 'checkout', source_claim_ids: ['claim_a'], elements: [{ element_id: 'element_a', kind: 'flow-node', node_type: 'action', label: 'Save', source_claim_ids: ['claim_a'], model_refs: [] }], relations: [] }], interaction_matrix: [{ module_ids: ['checkout'], dimension: 'role', status: 'checked-no-signal' }], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: [{ candidate_id: 'candidate_a', module_ids: ['checkout'], dimension: 'role', disposition: 'formal-view', source_claim_ids: ['claim_a'], semantic_subject_refs: [{ kind: 'fact', fact_id: 'fact_a' }], formal_view_id: 'view_a' }] },
+    'test-obligations.schema.json': { schema_version: '3.0.0', source_revision: 0, obligations: [{ obligation_id: 'obligation_a', kind: 'flow', caseable: true, risk: 'medium', scope: 'checkout', source_claim_ids: ['claim_a'], view_element_refs: ['element_a'], required_oracle_refs: ['oracle_a'], required_capabilities: ['browser'] }], fact_routes: [{ fact_id: 'fact_a', route_type: 'obligations', obligation_ids: ['obligation_a'] }], interaction_routes: [{ candidate_id: 'candidate_a', route_type: 'formal-view', formal_view_id: 'view_a' }] },
+    'case-drafts.schema.json': { schema_version: '3.0.0', source_revision: 0, cases: [completeCase()], obligation_dispositions: [{ obligation_id: 'obligation_a', status: 'case_candidate', case_ids: ['case_a'] }], exploratory_candidates: [{ exploratory_id: 'exploratory_a', title: 'Explore retry', scope: 'checkout', risk: 'low', source_claim_ids: ['claim_a'] }] },
     'test-bundle.schema.json': completeBundle()
   };
 
+  const sourceFixture = /** @type {any} */ (fixtures['source-pack.schema.json']);
+  for (const obligation of /** @type {any} */ (fixtures['test-obligations.schema.json']).obligations) {
+    obligation.primary_operation_refs = ['view_a#element_a'];
+    obligation.scenario_partition_ref = 'fixture-save-partition';
+  }
+  sourceFixture.source_assets = [];
+  for (const review of sourceFixture.source_reviews) for (const span of review.spans) {
+    span.review_basis = { reviewer: 'fixture-author', method: 'source inspection', evidence: span.rationale };
+  }
+  for (const fact of /** @type {any} */ (fixtures['evidence-claims.schema.json']).fact_ledger) {
+    fact.required_view_kinds = ['flow']; fact.view_review_basis = 'Source defines a save action.';
+  }
   for (const [file, fixture] of Object.entries(fixtures)) assert.deepEqual(validateAgainstSchema(fixture, schemas[file]), [], file);
 });

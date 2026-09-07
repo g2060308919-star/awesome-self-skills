@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { validReviewBasis, validateSourceAssetAudit } from './source-audit.mjs';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isObject(value) {
@@ -45,7 +46,7 @@ export function validateSourceIntegrity(sourcePack) {
     typeof source.source_id === 'string' ? [[source.source_id, source]] : []
   )));
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
-  const diagnostics = [];
+  const diagnostics = validateSourceAssetAudit(pack);
   sources.forEach((source, index) => {
     if (typeof source.content !== 'string' || typeof source.content_digest !== 'string') return;
     const actualDigest = createHash('sha256').update(source.content, 'utf8').digest('hex');
@@ -79,6 +80,10 @@ export function validateSourceIntegrity(sourcePack) {
     const validSpans = [];
     const seenSpanIds = new Set();
     objectArray(review.spans).forEach((span, spanIndex) => {
+      if (!validReviewBasis(span.review_basis)) diagnostics.push(diagnostic(
+        'SOURCE_REVIEW_BASIS_INVALID', `/source_reviews/${reviewIndex}/spans/${spanIndex}/review_basis`,
+        'every disposition requires a reviewer, review method and review evidence'
+      ));
       if (typeof span.span_id === 'string') {
         if (seenSpanIds.has(span.span_id)) diagnostics.push(diagnostic(
           'SOURCE_REVIEW_SPAN_ID_DUPLICATE', `/source_reviews/${reviewIndex}/spans/${spanIndex}/span_id`,

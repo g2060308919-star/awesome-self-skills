@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { stableId } from '../../src/canonical.mjs';
 import { completeSourcePack } from '../helpers/source-pack.mjs';
 import { validateEvidenceGraph } from '../../src/evidence.mjs';
 import { compile as compileDecision } from '../../src/obligations/decision.mjs';
@@ -32,7 +33,7 @@ async function decisionFixture() {
 
 function oracleSourcePack() {
   return completeSourcePack({
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
     sources: [{
       source_id: 'source_oracle', kind: 'prd', version: '1', status: 'effective', authority: 'owner',
@@ -57,7 +58,7 @@ function oracleSourcePack() {
 
 function oracleEvidenceClaims() {
   return {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     claims: [
       {
         claim_id: 'claim_total_rule', claim_form: 'direct', level: 'E3', kind: 'requirement',
@@ -222,6 +223,19 @@ const expectedDecisionSeeds = [
   }
 ];
 
+// Expected selector projections come from the authored fixture, not compiler output.
+const decisionModel = (await decisionFixture()).views[0];
+for (const seed of expectedDecisionSeeds) {
+  const element = decisionModel.elements.find((/** @type {any} */ value) => seed.view_element_refs[0].endsWith('#' + value.element_id));
+  Object.assign(seed, {
+    primary_operation_refs: [...seed.view_element_refs],
+    scenario_partition_ref: stableId('partition', {
+      kind: 'decision', scope: seed.scope, responsibility: 'rule',
+      conditions: [...element.conditions].sort(), priority: element.priority
+    })
+  });
+}
+
 test('decision obligations hand-count each explicit valid rule once with priority, conditions, result evidence, and no truth-table completion', async () => {
   const artifact = await decisionFixture();
   const graph = evidenceGraphFor(artifact);
@@ -232,7 +246,7 @@ test('decision obligations hand-count each explicit valid rule once with priorit
   assert.equal(actual.length, 3);
   assert.deepEqual(actual, expectedDecisionSeeds);
   const obligationsArtifact = {
-    schema_version: '2.1.0', source_revision: 11,
+    schema_version: '3.0.0', source_revision: 11,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };
@@ -265,7 +279,7 @@ test('decision obligations accept Task 3 expected-value Oracles through source a
     ['claim_total', 'model_total_rule']
   );
   const obligationsArtifact = {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     obligations: actual.map((seed) => ({ ...seed, caseable: true })),
     fact_routes: [], interaction_routes: []
   };

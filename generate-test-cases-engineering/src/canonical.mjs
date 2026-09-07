@@ -33,6 +33,12 @@ const ORDERED_ARRAY_PATHS = new Set([
   '/views/elements/transition_order', '/elements/transition_order'
 ]);
 const SET_ARRAY_PATHS = new Set([
+  '/primary_operation_refs', '/obligations/primary_operation_refs',
+  '/source_assets', '/source_reviews', '/fact_ledger/required_view_kinds',
+  '/execution_effects', '/cleanup/resolved_effects', '/preconditions/setup/mutation_effects', '/testability_profile/setup_resources',
+  '/cases/execution_effects', '/cases/cleanup/resolved_effects', '/cases/preconditions/setup/mutation_effects', '/cases/testability_profile/setup_resources',
+  '/grounded/execution_effects', '/grounded/cleanup/resolved_effects', '/grounded/preconditions/setup/mutation_effects', '/grounded/testability_profile/setup_resources',
+  '/conditional/execution_effects', '/conditional/cleanup/resolved_effects', '/conditional/preconditions/setup/mutation_effects', '/conditional/testability_profile/setup_resources',
   '/source_ids', '/supersedes', '/source_locator_ids', '/source_claim_ids', '/parent_claim_ids', '/root_issue_ids', '/affected_obligation_ids', '/module_ids', '/view_element_refs', '/required_oracle_refs', '/required_capabilities', '/obligation_ids', '/case_ids', '/oracle_refs', '/oracle_evidence_refs', '/asked_root_issue_ids',
   '/sources', '/locators', '/source_policy/rules', '/source_policy/rules/source_ids', '/source_policy/rules/supersedes', '/decision_records/root_issue_ids', '/decision_records/affected_obligation_ids', '/clarification_events/root_issue_ids',
   '/claims', '/claims/source_locator_ids', '/claims/parent_claim_ids', '/claims/closed_world_input/enumerated_values', '/claims/formula_input/inputs', '/claims/rule_input/inputs', '/claims/rule_input/enumerated_values', '/fact_ledger', '/fact_ledger/source_claim_ids',
@@ -49,6 +55,7 @@ const SET_ARRAY_PATHS = new Set([
 const ROOT_ISSUE_ASSOCIATIONS = new Set(['case_ids', 'case_id', 'test_point_ids', 'test_point_id', 'obligation_ids', 'obligation_id']);
 const EXECUTION_SIGNATURE_ASSOCIATIONS = new Set(['obligation_ids', 'obligation_id']);
 const COLLECTION_ID_FIELDS = new Map([
+  ['/source_assets', 'asset_id'], ['/source_reviews', 'source_id'],
   ['/sources', 'source_id'], ['/locators', 'locator_id'], ['/source_policy/rules', 'rule_id'], ['/decision_records', 'decision_id'], ['/clarification_events', 'event_id'], ['/claims', 'claim_id'], ['/fact_ledger', 'fact_id'], ['/views', 'view_id'], ['/views/elements', 'element_id'], ['/views/elements/classes', 'class_id'], ['/elements', 'element_id'], ['/elements/classes', 'class_id'], ['/views/relations', 'relation_id'], ['/interaction_candidates', 'candidate_id'], ['/obligations', 'obligation_id'], ['/fact_routes', 'fact_id'], ['/interaction_routes', 'candidate_id'],
   ['/cases', 'case_id'], ['/cases/data', 'name'], ['/cases/steps/expectations', 'expectation_id'], ['/cases/testability_profile/capabilities', 'capability'], ['/cases/testability_profile/observers', 'observer'], ['/cases/testability_profile/controls', 'control'],
   ['/data', 'name'], ['/steps/expectations', 'expectation_id'], ['/testability_profile/capabilities', 'capability'], ['/testability_profile/observers', 'observer'], ['/testability_profile/controls', 'control'],

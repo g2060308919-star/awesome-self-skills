@@ -29,6 +29,8 @@ function addFact(revision, factId, claimId) {
     fact_id: factId,
     claim_id: claimId,
     status: 'active',
+    required_view_kinds: [],
+    view_review_basis: 'Synthetic terminal-route responsibility; no independently required specialized view.',
     source_claim_ids: [claimId]
   });
 }
@@ -800,6 +802,26 @@ test('all eight closed custom responsibility types compile to their fixed obliga
     ['cross-module-interaction', 'interaction']
   ];
   const revision = buildJourney('all-e3');
+  // Specialist custom responsibilities supplement authored branch-bearing views.
+  // Keep the same owner and all eight custom obligations under test.
+  const support = {source_claim_ids:['claim_checkout'],model_refs:[]};
+  const dedicated = [
+    {view_id:'view_custom_state',type:'state',elements:[
+      {...support,element_id:'ready',kind:'state',state:'ready'},
+      {...support,element_id:'accepted',kind:'state',state:'accepted'},
+      {...support,element_id:'submit',kind:'transition',from_state:'ready',to_state:'accepted',event:'submit',condition:'cart ready',transition_order:['submit']}
+    ]},
+    {view_id:'view_custom_input',type:'input-domain',elements:[{...support,element_id:'amount',kind:'input-domain',domain:'amount',classes:[{class_id:'valid',label:'valid amount'}],bounds:{lower:1,upper:100,inclusive:true}}]},
+    {view_id:'view_custom_role',type:'role',elements:[{...support,element_id:'buyer',kind:'role-permission',role:'buyer',permissions:['submit']}]},
+    {view_id:'view_custom_timing',type:'timing',elements:[{...support,element_id:'deadline',kind:'timing-rule',timing_event:'submit',threshold:30,order:0}]}
+  ];
+  revision.behavior_views.views.push(...dedicated.map(view=>({...view,scope:'checkout',source_claim_ids:['claim_checkout'],relations:[]})));
+  for (const [view_id,selectors] of /** @type {Array<[string,Record<string,string>[]]>} */ ([
+    ['view_custom_input',[{kind:'equivalence-class',element_id:'amount',class_id:'valid'},{kind:'boundary',element_id:'amount',boundary:'lower'},{kind:'boundary',element_id:'amount',boundary:'upper'}]],
+    ['view_custom_role',[{kind:'permission',element_id:'buyer',permission:'submit'}]],
+    ['view_custom_timing',['before','equal','after'].map(kind=>({kind,element_id:'deadline'}))]
+  ])) revision.behavior_views.obligation_inputs.view_contexts.push({view_id,bindings:selectors.map(selector=>({selector,risk:'medium',source_claim_ids:['claim_checkout'],required_oracle_refs:[],required_capabilities:[]}))});
+  addCheckoutIntegrationView(revision);
   const responsibilities = mappings.map(([responsibilityType], index) => ({
     responsibility_type: responsibilityType,
     semantic_key: `audit-label-${index}`,

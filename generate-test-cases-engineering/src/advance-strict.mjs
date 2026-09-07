@@ -22,6 +22,8 @@ import { loadSchemaRegistry } from './schema-registry.mjs';
 import { AGENT_STAGE_SCHEMA, mapInternalRevision } from './reply-routing.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { resolveSourcePolicy } from './source-policy.mjs';
+import { appendedRepair, repairDiagnostics, reusableStages, unconfirmedWorkflow } from './artifact-repair.mjs';
+import { groupRiskCounts } from './presentation-summary.mjs';
 
 const moduleDirectory = path.dirname(realpathSync(fileURLToPath(import.meta.url)));
 const schemaDirectory = path.resolve(
@@ -142,11 +144,11 @@ function migrationRequired() {
     status: 'fatal', diagnostics: [
       {
         category: 'reference', code: 'RUN_MIGRATION_REQUIRED',
-        message: 'Older-schema runs cannot resume under the v2.1 protocol.'
+        message: 'Older-schema runs cannot resume under the v3.0 protocol.'
       },
       {
         category: 'traceability', code: 'NEW_RUN_REQUIRED',
-        message: 'Create a new v2.1 run; the prior run remains preserved and read-only.'
+        message: 'Create a new v3.0 run; the prior run remains preserved and read-only.'
       }
     ]
   };
@@ -272,6 +274,10 @@ function historySequenceIntegrity(sourcePack) {
 /** @param {Record<string, unknown>} sourcePack */
 function initialClarificationHistoryDiagnostics(sourcePack) {
   const diagnostics = [];
+  if (arrayIsArray(sourcePack.artifact_repairs) && sourcePack.artifact_repairs.length > 0) diagnostics.push({
+    category: 'traceability', code: 'ARTIFACT_REPAIR_INVALID', path: '/artifact_repairs',
+    message: 'An initial run cannot repair a nonexistent accepted artifact.'
+  });
   const events = arrayIsArray(sourcePack.clarification_events)
     ? sourcePack.clarification_events : [];
   if (events.length > 0) diagnostics.push({
@@ -294,13 +300,23 @@ function initialClarificationHistoryDiagnostics(sourcePack) {
 
 /** @param {Record<string, unknown>} prior @param {Record<string, unknown>} next */
 function sourceRevisionIntegrity(prior, next) {
+  const repair = appendedRepair(prior, next);
+  const extractionRepair = repair?.stage === 'source_pack';
   const immutablePrior = {
     run_scope: prior.run_scope, sources: prior.sources,
-    locators: prior.locators, source_policy: prior.source_policy
+    source_policy: prior.source_policy,
+    ...(extractionRepair ? {} : {
+      locators: prior.locators, source_reviews: prior.source_reviews, source_assets: prior.source_assets,
+      output_language: prior.output_language ?? 'en', delivery_intent: prior.delivery_intent ?? 'execution_plan'
+    })
   };
   const immutableNext = {
     run_scope: next.run_scope, sources: next.sources,
-    locators: next.locators, source_policy: next.source_policy
+    source_policy: next.source_policy,
+    ...(extractionRepair ? {} : {
+      locators: next.locators, source_reviews: next.source_reviews, source_assets: next.source_assets,
+      output_language: next.output_language ?? 'en', delivery_intent: next.delivery_intent ?? 'execution_plan'
+    })
   };
   if (canonicalStringify(immutablePrior) !== canonicalStringify(immutableNext)) {
     return newRunRequired('RUN_INTEGRITY_ERROR: immutable original source set or run scope changed.');
@@ -321,7 +337,7 @@ function sourceRevisionIntegrity(prior, next) {
     ...nextDecisions.slice(priorDecisions.length), ...nextEvents.slice(priorEvents.length),
     ...nextExecution.slice(priorExecution.length)
   ];
-  if (added.length === 0) return fatalReply(
+  if (added.length === 0 && !repair) return fatalReply(
     'RUN_INTEGRITY_ERROR', 'A higher source revision must contain one nonempty append batch.'
   );
   const priorMaximum = maximumEventSequence(prior);
@@ -473,7 +489,8 @@ function appendBatch(previous, current) {
 function clarificationAppendInput(previousState, previousSource, sourcePack) {
   const append = appendBatch(previousSource, sourcePack);
   const priorState = structuredClone(previousState);
-  if (append.decision_records.length === 0 && append.clarification_events.length === 0) {
+  if (!appendedRepair(previousSource, sourcePack)
+    && append.decision_records.length === 0 && append.clarification_events.length === 0) {
     priorState.source_revision = sourcePack.source_revision;
     priorState.clarification_event_seq = maximumEventSequence(sourcePack);
     if (priorState.clarification_stop) {
@@ -490,8 +507,8 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests, r
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests }),
     source_revision: sourceRevision, stage,
-    compiler_version: embeddedCompilerVersion ?? '0.3.0',
-    schema_version: embeddedSchemaVersion ?? '2.1.0',
+    compiler_version: embeddedCompilerVersion ?? '0.4.0',
+    schema_version: embeddedSchemaVersion ?? '3.0.0',
     run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests,
     audit_lineage: structuredClone(acceptedDigests),
@@ -524,8 +541,10 @@ function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests, r
 /** @param {any} result @param {Record<string,unknown>} checkpointValue @param {Record<string,unknown>} current @param {string} markdownPath @param {string|null} [noticeCode] */
 function finishedReply(result, checkpointValue, current, markdownPath, noticeCode = null) {
   const summary = result.bundle.execution_plan.summary;
+  const runnerReady = result.bundle.execution_plan.status === 'ready';
   return {
     ...current, status: 'finished', markdown_path: markdownPath,
+    runner_ready: runnerReady,
     semantic_result_digest: result.bundle.execution_plan.semantic_result_digest,
     execute_case_count: summary.execute_case_count,
     do_not_execute_case_count: summary.do_not_execute_case_count,
@@ -537,13 +556,13 @@ function finishedReply(result, checkpointValue, current, markdownPath, noticeCod
       none: summary.none_test_point_count
     },
     modification_hint: 'This Skill does not start E2E execution. You may later supplement rules, reopen issues, request reanalysis, or change this run disposition.',
-    preview_control: nextPreviewControl({
+    preview_control: runnerReady ? nextPreviewControl({
       run_instance_id: checkpointValue.run_instance_id,
       source_revision: result.source_revision,
       bundle_digest: result.bundle_digest,
       plan_digest: result.bundle.execution_plan.plan_digest,
       confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
-    }, checkpointValue, String(checkpointValue.compiler_version)),
+    }, checkpointValue, String(checkpointValue.compiler_version)) : null,
     ...(noticeCode ? { notice_code: noticeCode } : {})
   };
 }
@@ -580,8 +599,54 @@ function evaluateAdapterRevision(artifacts, clarification, registry, workflowSta
     clarificationState: clarification,
     workflowState,
     interactionPolicy: 'pause_for_clarification',
-    limits: ['Compilation is limited to the accepted immutable revision.']
+    limits: [sourcePack.output_language === 'zh-CN'
+      ? '本次编译仅限已接受的不可变资料修订。'
+      : 'Compilation is limited to the accepted immutable revision.']
   }));
+}
+
+/** Durable compiler-private requests preserve shown preview bindings without trusting a checkpoint.
+ * Each element is validated against the existing closed private request schema.
+ * @param {string} runDirectory @param {number} revision */
+function previewHistoryPath(runDirectory, revision) {
+  return path.join(path.dirname(clarificationStatePath(runDirectory, revision)), 'post-ready-preview-history.json');
+}
+
+/** @param {any} result @param {string} runInstanceId */
+function previewReady(result, runInstanceId) {
+  return {
+    run_instance_id: runInstanceId,
+    source_revision: result.source_revision,
+    bundle_digest: result.bundle_digest,
+    plan_digest: result.bundle.execution_plan.plan_digest,
+    plan_change_head_seq: result.workflow_state.execution_plan.plan_change_head_seq,
+    confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest,
+    items: result.bundle.execution_plan.items
+  };
+}
+
+/** @param {any} state */
+function consumedPreview(state) {
+  const prior = state ?? { preview_epoch: 0, preview_state: 'idle', active_preview_presentation: null, last_preview_request: null };
+  return prior.preview_state === 'active' ? {
+    ...prior, preview_epoch: prior.preview_epoch + 1, preview_state: 'consumed', active_preview_presentation: null
+  } : prior;
+}
+
+/** @param {string} runDirectory @param {any} result @param {any} registry @param {any} state @param {string} runInstanceId */
+async function replayPreviewHistory(runDirectory, result, registry, state, runInstanceId) {
+  const stored = await guardedAwait(readJsonIfPresent(runDirectory, previewHistoryPath(runDirectory, result.source_revision)));
+  if (!stored) return state;
+  if (!arrayIsArray(stored.value) || result.status !== 'finished'
+    || result.bundle.execution_plan.status !== 'ready') throw new Error('Preview history requires a ready revision and a request array.');
+  let current = state;
+  for (const request of stored.value) {
+    if (artifactDiagnostics(request, registry.schemas.get('post-ready-preview-request.schema.json')).length > 0) throw new Error('Preview history request failed its closed schema.');
+    const next = processPreviewRequest({ request, state: current, ready: previewReady(result, runInstanceId), compilerVersion: registry.compilerVersion });
+    if (next.kind === 'rejected' || next.state.preview_epoch <= current.preview_epoch) throw new Error('Preview history contains a stale, reordered, or invalid request: ' + canonicalStringify(next.diagnostics));
+    current = next.state;
+  }
+  return current;
 }
 
 /**
@@ -599,6 +664,9 @@ function validateSourceRevisionAppend(sourceRevision, sourcePack, registry, prio
   if (!prior) return fatalReply(
     'RUN_INTEGRITY_ERROR', 'The prior accepted source revision is unavailable.'
   );
+  const repairErrors = repairDiagnostics(prior, sourcePack);
+  if (repairErrors.length > 0) return { kind: 'need_revision', diagnostics: repairErrors };
+  if (appendedRepair(prior.source_pack, sourcePack)) return null;
   const appended = appendBatch(prior.source_pack, sourcePack);
   if (prior.workflow_state?.presentation_snapshot?.entry_context === 'post_ready_change') {
     const previousExecutionEvents = arrayIsArray(prior.source_pack.execution_events)
@@ -683,16 +751,21 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
   /** @type {any} */
   let active = null;
   for (let revisionIndex = 0; revisionIndex < revisions.length; revisionIndex += 1) {
+    const previewState = consumedPreview(active?.preview_state);
     const sourceRevision = revisions[revisionIndex];
-    if (sourceRevision > 0 && !previousComplete) return fatalReply(
-      'RUN_INTEGRITY_ERROR',
-      'A higher accepted source revision cannot follow an incomplete prior revision.'
-    );
     const sourceArtifact = await guardedAwait(readJson(
       runDirectory, acceptedPath(runDirectory, sourceRevision, 'source_pack')
     ));
     const sourcePack = /** @type {Record<string, unknown>} */ (sourceArtifact.value);
-    if (sourcePack.schema_version !== '2.1.0') return migrationRequired();
+    const repair = previousSource ? appendedRepair(previousSource, sourcePack) : null;
+    if (sourceRevision > 0 && !previousComplete && !repair) return fatalReply(
+      'RUN_INTEGRITY_ERROR', 'An incomplete prior revision can only be followed by a bound generation repair.'
+    );
+    if (repairDiagnostics(active, sourcePack).length > 0) return fatalReply(
+      'RUN_INTEGRITY_ERROR', 'Accepted generation repair failed immutable target validation.'
+    );
+    if (repair && active) active.workflow_state = unconfirmedWorkflow(active.workflow_state);
+    if (sourcePack.schema_version !== '3.0.0') return migrationRequired();
     if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack belongs to a different run instance.'
     );
@@ -728,6 +801,8 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
     let behaviorViews = null;
     /** @type {Record<string, unknown>|null} */
     let caseDrafts = null;
+    /** @type {any[]} */
+    let compiledObligations = [];
     let missingEarlierStage = false;
     for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) {
       const typedStage = /** @type {'evidence_claims'|'behavior_views'|'case_drafts'} */ (stage);
@@ -763,6 +838,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
         if (derived.diagnostics.length > 0 || !derived.artifact) return fatalReply(
           'RUN_INTEGRITY_ERROR', 'Accepted behavior_views failed deterministic semantic validation.'
         );
+        compiledObligations = derived.artifact.obligations;
       } else caseDrafts = record;
     }
     const clarificationInput = sourceRevision === 0 ? {
@@ -800,17 +876,25 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
       previousState = state;
       previousComplete = true;
       active = {
-        complete: true, source_pack: sourcePack, artifacts, state,
+        complete: true, source_pack: sourcePack, artifacts, state, obligations: compiledObligations,
         clarification_input: clarificationInput, result: replay,
-        workflow_state: replay.workflow_state ?? active?.workflow_state ?? null
+        workflow_state: replay.workflow_state ?? active?.workflow_state ?? null,
+        preview_state: await replayPreviewHistory(runDirectory, replay, registry, previewState, runInstance.run_instance_id)
+      };
+      if (active.preview_state.active_preview_presentation) active.workflow_state = {
+        ...active.workflow_state, presentation_snapshot: active.preview_state.active_preview_presentation
       };
     } else {
-      previousState = null;
+      previousState = /** @type {any} */ (clarificationInput.prior_state);
       previousComplete = false;
       active = {
-        complete: false, source_pack: sourcePack,
+        complete: false, source_pack: sourcePack, obligations: compiledObligations,
+        artifacts: { source_pack: sourcePack, evidence_claims: evidenceClaims, behavior_views: behaviorViews, case_drafts: caseDrafts },
+        state: previousState,
         clarification_input: clarificationInput,
-        workflow_state: active?.workflow_state ?? null
+        reuse_from: previousSource ? { source_pack: previousSource, stages: reusableStages(previousSource, sourcePack) } : null,
+        workflow_state: active?.workflow_state ?? null,
+        preview_state: previewState
       };
     }
     previousSource = sourcePack;
@@ -868,23 +952,21 @@ async function advanceStrictExclusive(runDirectory) {
       // torn checkpoint; no user-authored input is inferred from the corrupt bytes.
       recoveryCheckpointArtifact = null;
     }
-    const recoveryCheckpoint = /** @type {any} */ (recoveryCheckpointArtifact?.value ?? null);
-    if (acceptedContext.active && recoveryCheckpoint
-      && recoveryCheckpoint.run_instance_id === runInstance.run_instance_id
-      && recoveryCheckpoint.source_revision === acceptedContext.active.source_pack.source_revision
-      && (recoveryCheckpoint.active_preview_presentation || recoveryCheckpoint.presentation_snapshot)) {
-      acceptedContext.active.workflow_state = {
-        ...(acceptedContext.active.workflow_state ?? {}),
-        presentation_snapshot: recoveryCheckpoint.active_preview_presentation
-          ?? recoveryCheckpoint.presentation_snapshot
-      };
+    const recordedCheckpoint = /** @type {any} */ (recoveryCheckpointArtifact?.value ?? null);
+    if (acceptedContext.active && recordedCheckpoint?.run_instance_id === runInstance.run_instance_id
+      && recordedCheckpoint.source_revision <= acceptedContext.active.source_pack.source_revision
+      && Number(recordedCheckpoint.preview_epoch) > Number(acceptedContext.active.preview_state.preview_epoch)) {
+      return fatalReply('RUN_INTEGRITY_ERROR', 'Durable preview history is missing; its observed epoch cannot be reset from a checkpoint.');
     }
+    let recoveryCheckpoint = /** @type {any} */ (acceptedContext.active ? {
+      ...(recoveryCheckpointArtifact?.value ?? {}), ...acceptedContext.active.preview_state
+    } : recoveryCheckpointArtifact?.value ?? null);
     if (acceptedContext.active) {
       const activeRevision = Number(acceptedContext.active.source_pack.source_revision);
       const activeIsReady = acceptedContext.active.complete
         && acceptedContext.active.result?.status === 'finished';
       const currentState = /** @type {any} */ (await guardedAwait(() => readCurrentState(runDirectory)));
-      if (currentState?.status === 'ready'
+      if ((currentState?.status === 'ready' || currentState?.status === 'document_only')
         && (currentState.source_revision < activeRevision || !activeIsReady)) {
         await guardedAwait(() => writeNonReadyCurrent(
           runDirectory, runInstance.run_instance_id, activeRevision
@@ -914,6 +996,13 @@ async function advanceStrictExclusive(runDirectory) {
     if (sourceCandidate && previewCandidate) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'A source revision and post-ready preview request cannot be staged together.'
     );
+    // Resume the actually shown active preview, even if the disposable checkpoint was lost.
+    if (!sourceCandidate && !previewCandidate && acceptedContext.active?.preview_state?.preview_state === 'active') {
+      const history = await guardedAwait(() => readJson(runDirectory, previewHistoryPath(runDirectory, acceptedContext.active.source_pack.source_revision)));
+      const entries = /** @type {any[]} */ (history.value);
+      const value = entries[entries.length - 1];
+      previewCandidate = { text: null, value, digest: digest(value) };
+    }
     if (sourceCandidate) {
       const candidateRecord = sourceCandidate.value && typeof sourceCandidate.value === 'object'
         ? /** @type {Record<string, unknown>} */ (sourceCandidate.value) : null;
@@ -946,7 +1035,7 @@ async function advanceStrictExclusive(runDirectory) {
         'RUN_INTEGRITY_ERROR', 'Source revisions must begin at r000 and advance by exactly one.'
       );
       if (typeof candidateRecord?.schema_version === 'string'
-        && candidateRecord.schema_version !== '2.1.0') return migrationRequired();
+        && candidateRecord.schema_version !== '3.0.0') return migrationRequired();
       const diagnostics = sourceCandidate.parseDiagnostics.length > 0
         ? sourceCandidate.parseDiagnostics
         : stableDiagnostics(validateAgainstSchema(
@@ -1014,10 +1103,15 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, runInstance.run_instance_id, candidateRevision
       ));
       const priorActiveContext = acceptedContext.active;
+      const isRepair = priorActiveContext && appendedRepair(priorActiveContext.source_pack, sourceCandidate.value);
       acceptedContext.active = {
         complete: false,
         source_pack: /** @type {Record<string, unknown>} */ (sourceCandidate.value),
-        workflow_state: priorActiveContext?.workflow_state ?? null,
+        workflow_state: isRepair ? unconfirmedWorkflow(priorActiveContext.workflow_state) : priorActiveContext?.workflow_state ?? null,
+        reuse_from: priorActiveContext ? {
+          source_pack: priorActiveContext.source_pack,
+          stages: reusableStages(priorActiveContext.source_pack, sourceCandidate.value)
+        } : null,
         clarification_input: candidateRevision === 0 ? {
           prior_state: initialClarificationState(
             0, maximumEventSequence(
@@ -1034,7 +1128,7 @@ async function advanceStrictExclusive(runDirectory) {
       const sourceCheckpoint = checkpoint(
         candidateRevision, 'source_pack',
         /** @type {Record<string, unknown>} */ (sourceCandidate.value), null, sourceDigests,
-        runInstance.run_instance_id, priorActiveContext?.workflow_state ?? null,
+        runInstance.run_instance_id, acceptedContext.active.workflow_state,
         recoveryCheckpoint
       );
       if (recoveryCheckpoint?.preview_state === 'active') {
@@ -1043,11 +1137,13 @@ async function advanceStrictExclusive(runDirectory) {
         sourceCheckpoint.active_preview_presentation = null;
       }
       await guardedAwait(() => writeCheckpoint(runDirectory, sourceCheckpoint));
+      recoveryCheckpoint = sourceCheckpoint;
       revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
     }
     if (previewCandidate) {
       const active = acceptedContext.active;
-      if (!active?.complete || active.result?.status !== 'finished') return revisionReply(
+      if (!active?.complete || active.result?.status !== 'finished'
+        || active.result.bundle.execution_plan.status !== 'ready') return revisionReply(
         runDirectory, 'source_pack', revisions.at(-1) ?? 0, previewCandidate.value, [{
           category: 'classification', code: 'POST_READY_PREVIEW_NOT_READY', path: '/',
           message: 'A post-ready preview requires the current highest accepted revision to be ready.'
@@ -1061,17 +1157,32 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, 'source_pack', revisions.at(-1) ?? 0,
         previewCandidate.value, previewDiagnostics
       );
-      const currentState = /** @type {any} */ (await guardedAwait(() => readCurrentState(runDirectory)));
+      let currentState = /** @type {any} */ (await guardedAwait(() => readCurrentState(runDirectory)));
       const result = active.result;
+      const recoverablePointer = !currentState || (currentState.run_instance_id === runInstance.run_instance_id
+        && ((currentState.status === 'ready' && currentState.source_revision < result.source_revision)
+          || (currentState.status === 'stale' && currentState.active_source_revision <= result.source_revision)));
+      if (recoverablePointer) {
+        const paths = await guardedAwait(() => writeFinalOutput(runDirectory, result.source_revision, result.bundle, result.markdown));
+        currentState = {
+          status: 'ready', run_instance_id: runInstance.run_instance_id,
+          source_revision: result.source_revision, bundle_path: paths.bundle,
+          bundle_digest: result.bundle_digest, plan_digest: result.bundle.execution_plan.plan_digest
+        };
+        await guardedAwait(() => writeReadyCurrent(runDirectory, currentState));
+      }
       if (!currentState || currentState.status !== 'ready'
+        || currentState.run_instance_id !== runInstance.run_instance_id
         || currentState.source_revision !== result.source_revision
         || currentState.bundle_digest !== result.bundle_digest
         || currentState.plan_digest !== result.bundle.execution_plan.plan_digest) return fatalReply(
         'RUN_INTEGRITY_ERROR', 'The ready pointer does not match the highest accepted ready revision.'
       );
-      const storedCheckpoint = /** @type {any} */ ((await guardedAwait(() => readJsonIfPresent(
-        runDirectory, path.join(runDirectory, 'checkpoint.json')
-      )))?.value ?? {});
+      const storedCheckpoint = checkpoint(
+        result.source_revision, 'finished', active.source_pack, active.state,
+        await guardedAwait(() => acceptedDigests(runDirectory, result.source_revision)),
+        runInstance.run_instance_id, result.workflow_state, recoveryCheckpoint
+      );
       const processed = processPreviewRequest({
         request: previewCandidate.value,
         state: storedCheckpoint,
@@ -1090,6 +1201,11 @@ async function advanceStrictExclusive(runDirectory) {
         runDirectory, 'source_pack', result.source_revision,
         previewCandidate.value, processed.diagnostics
       );
+      const historyPath = previewHistoryPath(runDirectory, result.source_revision);
+      const history = /** @type {any[]} */ ((await guardedAwait(() => readJsonIfPresent(runDirectory, historyPath)))?.value ?? []);
+      if (history.length === 0 || digest(history[history.length - 1]) !== previewCandidate.digest) {
+        await guardedAwait(() => atomicWriteJson(runDirectory, historyPath, [...history, previewCandidate.value]));
+      }
       const updatedCheckpoint = {
         ...storedCheckpoint,
         preview_epoch: processed.state.preview_epoch,
@@ -1100,7 +1216,7 @@ async function advanceStrictExclusive(runDirectory) {
         presentation_snapshot_digest: processed.presentation ? digest(processed.presentation) : null
       };
       await guardedAwait(() => writeCheckpoint(runDirectory, updatedCheckpoint));
-      await guardedAwait(() => discardPostReadyPreviewRequest(runDirectory, previewCandidate));
+      if (previewCandidate.text !== null) await guardedAwait(() => discardPostReadyPreviewRequest(runDirectory, previewCandidate));
       if (processed.kind === 'cancelled') return finishedReply(
         result, updatedCheckpoint, currentState,
         outputPaths(runDirectory, result.source_revision).markdown,
@@ -1118,7 +1234,7 @@ async function advanceStrictExclusive(runDirectory) {
           counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
           return counts;
         }, { case: 0, formal_test_point: 0, exploratory: 0 }),
-        risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+        risk_counts: groupRiskCounts(group, active.obligations, result.bundle.execution_plan),
         options: group.allowed_options,
         answer_example: group.answer_example
       }));
@@ -1166,6 +1282,23 @@ async function advanceStrictExclusive(runDirectory) {
     /** @type {Record<string, unknown>} */
     const accepted = { source_pack: sourcePack };
 
+    // Replay-safe compiler carry-forward. The immutable source transition proves
+    // exactly which stages may be reused; no Agent copy or changed staging wins.
+    const reuse = acceptedContext.active?.reuse_from;
+    if (reuse) for (const stage of reuse.stages) {
+      const typedStage = /** @type {'evidence_claims'|'behavior_views'|'case_drafts'} */ (stage);
+      const priorArtifact = await guardedAwait(() => readJson(
+        runDirectory, acceptedPath(runDirectory, reuse.source_pack.source_revision, typedStage)
+      ));
+      const carried = { .../** @type {Record<string,unknown>} */ (priorArtifact.value), source_revision: sourceRevision };
+      const target = acceptedPath(runDirectory, sourceRevision, typedStage);
+      const existing = await guardedAwait(() => readJsonIfPresent(runDirectory, target));
+      if (existing && existing.digest !== digest(carried)) return fatalReply(
+        'RUN_INTEGRITY_ERROR', 'Carried semantic artifact differs from its immutable source.'
+      );
+      if (!existing) await guardedAwait(() => atomicWriteJson(runDirectory, target, carried));
+    }
+
     for (const stage of ['evidence_claims', 'behavior_views']) {
       const typedStage = /** @type {'evidence_claims'|'behavior_views'} */ (stage);
       let artifact = await guardedAwait(() => readJsonIfPresent(
@@ -1176,10 +1309,10 @@ async function advanceStrictExclusive(runDirectory) {
       ));
       if (artifact && candidate) {
         if (candidate.parseDiagnostics.length > 0 || artifact.digest !== candidate.digest) {
-          return fatalReply(
-            'RUN_INTEGRITY_ERROR',
-            `Staging ${typedStage} conflicts with the immutable accepted artifact.`
-          );
+          return revisionReply(runDirectory, 'source_pack', sourceRevision + 1, sourcePack, [{
+            category: 'traceability', code: 'ACCEPTED_ARTIFACT_REPAIR_REQUIRED', path: '/artifact_repairs',
+            message: `Preserve accepted ${typedStage}; append a generation repair bound to revision ${sourceRevision} and digest ${artifact.digest}, then regenerate from that stage.`
+          }]);
         }
         await guardedAwait(() => discardStagingSnapshot(
           runDirectory, typedStage, /** @type {{text:string}} */ (candidate)
@@ -1271,8 +1404,11 @@ async function advanceStrictExclusive(runDirectory) {
     ));
     if (caseArtifact && caseCandidate) {
       if (caseCandidate.parseDiagnostics.length > 0
-        || caseArtifact.digest !== caseCandidate.digest) return fatalReply(
-        'RUN_INTEGRITY_ERROR', 'Staging case_drafts conflicts with the immutable accepted artifact.'
+        || caseArtifact.digest !== caseCandidate.digest) return revisionReply(
+        runDirectory, 'source_pack', sourceRevision + 1, sourcePack, [{
+          category: 'traceability', code: 'ACCEPTED_ARTIFACT_REPAIR_REQUIRED', path: '/artifact_repairs',
+          message: `Preserve accepted case_drafts; append a generation repair bound to revision ${sourceRevision} and digest ${caseArtifact.digest}, then regenerate Cases.`
+        }]
       );
       await guardedAwait(() => discardStagingSnapshot(
         runDirectory, 'case_drafts', /** @type {{text:string}} */ (caseCandidate)
@@ -1378,7 +1514,7 @@ async function advanceStrictExclusive(runDirectory) {
             counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
             return counts;
           }, { case: 0, formal_test_point: 0, exploratory: 0 }),
-          risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+          risk_counts: groupRiskCounts(group, derived.artifact.obligations, plan),
           options: group.allowed_options,
           answer_example: group.answer_example
         }));
@@ -1424,7 +1560,7 @@ async function advanceStrictExclusive(runDirectory) {
             counts[item.item_kind] = (counts[item.item_kind] ?? 0) + 1;
             return counts;
           }, { case: 0, formal_test_point: 0, exploratory: 0 }),
-          risk_counts: { critical: 0, high: 0, medium: 0, low: 0 },
+          risk_counts: groupRiskCounts(group, derived.artifact.obligations),
           options: group.allowed_options,
           answer_example: group.answer_example
         })),
@@ -1448,9 +1584,8 @@ async function advanceStrictExclusive(runDirectory) {
       runDirectory, sourceRevision, result.bundle, result.markdown
     ));
     digests.test_bundle = result.bundle_digest;
-    const priorCheckpointArtifact = recoveryCheckpointArtifact;
     const priorCheckpoint = /** @type {Record<string,unknown>|null} */ (
-      priorCheckpointArtifact?.value ?? null
+      recoveryCheckpoint
     );
     const checkpointValue = checkpoint(
       sourceRevision, 'finished', sourcePack, clarificationState, digests,
@@ -1471,7 +1606,9 @@ async function advanceStrictExclusive(runDirectory) {
       bundle_digest: result.bundle_digest,
       plan_digest: result.bundle.execution_plan.plan_digest
     };
-    await guardedAwait(() => writeReadyCurrent(runDirectory, current));
+    await guardedAwait(() => writeReadyCurrent(runDirectory, {
+      ...current, status: result.bundle.execution_plan.status === 'ready' ? 'ready' : 'document_only'
+    }));
     return finishedReply(result, checkpointValue, current, paths.markdown);
     } finally {
       await baseGuardedAwait(releaseRunLock());

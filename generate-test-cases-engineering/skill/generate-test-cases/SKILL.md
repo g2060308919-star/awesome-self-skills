@@ -9,6 +9,7 @@ Produce evidence-grounded manual functional test Cases through the bundled deter
 
 ## Load policy only when needed
 
+- Read `references/run-management.md` before creating, recovering, repairing, replacing, or batching a run. Maintain its private `run-catalog.json` with real compiler-issued identities and explicit active/completed/failed/superseded relationships.
 - Read `references/evidence-policy.md` when collecting sources, resolving authority, creating locators, or writing `source_pack` and `evidence_claims`; read it before writing either artifact.
 - Read `references/behavior-views.md` when routing accepted facts, supplying `obligation_inputs`, and checking formal Test Point coverage; read it before writing `behavior_views`.
 - Read `references/clarification-policy.md` when handling `need_user_answers`, interpreting answers, delivering now, or reopening suppressed root issues.
@@ -24,6 +25,8 @@ Try every supplied path, attachment, and inline source. If no requirement conten
 If any requirement content is readable, continue. Record partial extraction gaps and uncertain regions instead of asking for every missing input before analysis. Never fill a product fact from generic domain knowledge.
 
 Freeze the requested product, module, role, client, version, region, and environment scope before extracting facts. Do not broaden or narrow that scope merely because later analysis discovers more material. If the user's original request did not state a dimension, record it as unspecified rather than choosing one; a later material scope change requires `NEW_RUN_REQUIRED`.
+
+Set `output_language` to the user's requested language (`zh-CN` or `en`), otherwise use the language of their request. Preserve source quotations and technical names verbatim. Set `delivery_intent=case_document` for ordinary requests to generate test Cases, a test document, or test points. Set `execution_plan` only when the user explicitly asks to select and confirm a downstream execution list. Do not ask for an execution-plan preference just to generate a document.
 
 ## Run the private workflow
 
@@ -47,7 +50,7 @@ Create private run directory
 -> on need_user_answers, present one merged batch
 -> append presentation-bound Decision Records, clarification controls, or execution events and increment source_revision once
 -> call runner again
--> after execution_closure, show the complete final_confirmation plan
+-> only for execution_plan delivery, handle execution_closure and show the complete final_confirmation plan
 -> on finished, present generated Markdown and canonical JSON paths without starting tests
 ```
 
@@ -67,7 +70,7 @@ Always complete A–G analysis before asking clarification. The only earlier que
 
 ### Handle `need_artifact`
 
-Open the named `schema_ref`. Create only the requested stage artifact for the returned `source_revision`, write it to the corresponding `staging` filename, and call the runner again. Preserve all accepted artifacts and compiler-owned derived files.
+Open the named `schema_ref`. Create the requested stage artifact for the returned `source_revision`, write it to the corresponding `staging` filename, and call the runner again. For a small fully readable requirement, the run-management policy permits a bounded source/evidence/views staging batch after reading each schema and policy; every stage retains its normal compiler checks. Never batch Case Drafts before reading compiler-derived obligation IDs. Preserve all accepted artifacts and compiler-owned derived files.
 
 Use these fixed staging names:
 
@@ -78,15 +81,17 @@ Use these fixed staging names:
 
 Any other requested stage is `PIPELINE_PROTOCOL_ERROR`; write no artifact and never invent a process surface.
 
-For `source_pack`, recompute each Source SHA-256 and add one exhaustive `source_reviews` entry whose ordered spans account for every non-whitespace part of that Source as normative, non-normative, or uncertain. For `case_drafts`, keep distinct business outcomes in distinct Cases and never submit compiler-owned `value_origin` or final IDs. Follow the loaded evidence and Case-writing policies for the exact semantic rules.
+For `source_pack`, recompute each Source SHA-256 and add one exhaustive `source_reviews` entry whose ordered spans account for every non-whitespace part as normative, non-normative, or uncertain with review basis. Inventory `source_assets`; actually read every relevant image/media, or record its unread/unavailable state without pretending its rules were reviewed. For `evidence_claims`, explicitly review each fact's `required_view_kinds`; a custom responsibility cannot replace a required specialized view. For `case_drafts`, keep distinct business outcomes in distinct Cases and never submit compiler-owned `value_origin` or final IDs. Follow the loaded evidence and Case-writing policies for exact semantic rules.
 
 ### Handle `need_revision`
 
-Group diagnostics by normalized stage, code, path, and root cause. Repair only the returned artifact and keep its `source_revision` unchanged. Re-run the compiler after each repair.
+Group diagnostics by normalized stage, code, path, and root cause. An unaccepted artifact is repaired at the same staged revision. If the returned stage was already accepted, or the diagnostic is `ACCEPTED_ARTIFACT_REPAIR_REQUIRED`, follow run-management's digest-bound `artifact_repairs` append instead; preserve accepted bytes and regenerate downstream at the new revision. Re-run the compiler after each repair. Testability reference mismatches are Adapter corrections, not business questions or proof of missing environment.
 
 Allow at most three repair attempts for the same normalized root cause at the same stage. On the fourth identical no-progress result, stop as `PIPELINE_NO_PROGRESS`, report the last diagnostics and last valid checkpoint, and do not recast the result as a business Blocked item or compiler `fatal`.
 
 Reset the repair counter only when the stage or normalized root cause materially changes.
+
+A digest-bound accepted-artifact repair must retain the counter for the original semantic stage/root. The intermediate Source Pack append, revision increment, and compiler carry-forward are administrative progress and do not reset that counter.
 
 ### Handle `need_user_answers`
 
@@ -100,11 +105,15 @@ For `entry_context=post_ready_change`, accept only the latest compiler-owned pre
 
 Apply the exact semantic-answer rules in `references/clarification-policy.md` and all disposition/event rules in `references/execution-closure-policy.md`. Copy compiler IDs, item digests, change heads, group IDs, `next_event_seq`, and run identity exactly. Append one immutable Source Pack revision per user reply, increment `source_revision` exactly once for the whole accepted group, and call the runner again. Never modify an accepted revision. Ambiguous phrases such as “these” or “use the recommendation” write no record until the target set is unique.
 
+For an execution-only append submit only the Source Pack. The compiler carries forward the accepted semantic artifacts. Do not copy or reauthor evidence/views/Cases unless requested.
+
 ### Handle `finished`
 
 Return the real `markdown_path` and canonical `bundle_path`, source revision, bundle/plan digest, separate Case/Test Point/Exploratory counts, and the short modification hint. Lead with a business-readable summary and keep internal IDs and digests only in an audit section or behind the file links. Describe coverage as declared-scope accounting, not complete product-behavior coverage. State that the confirmed `runner_case_ids` contains only Grounded + Execute Cases, that the Markdown worksheet is blank until a downstream operator records results, and that this Skill does not automatically start E2E tests. Do not ask for another confirmation or repeat the full item list.
 
-Never edit final JSON, rewrite Markdown, add a Case, improve a classification, or recompute coverage after `finished`. If the user later asks to supplement a rule, reopen an issue, reanalyze a locator, or change a disposition, use the bound post-ready preview flow above. Original source or material scope changes require `NEW_RUN_REQUIRED`.
+When `runner_ready=false`, say the document is delivered but no execution plan has been confirmed; `runner_case_ids` is empty and pending is not DoNotExecute or NotApplicable. Do not prompt for execution confirmation. The current pointer is `document_only`, never ready. Mark the catalog row completed. When `runner_ready=true`, the existing confirmation and preview protections apply unchanged.
+
+Never edit final JSON, rewrite Markdown, add a Case, improve a classification, or recompute coverage after `finished`. For a confirmed execution plan, use the bound post-ready preview flow for user-requested changes. For a document-only result, generation corrections use a digest-bound repair; an explicit later request for an execution list uses a Source Pack repair to change `delivery_intent` and regenerates the plan, requiring a newly displayed confirmation. Business answers remain Decision Records, never repair records. Original source or material scope changes require `NEW_RUN_REQUIRED` and linked catalog entries.
 
 ### Handle `fatal`
 
@@ -112,7 +121,7 @@ Report the compiler diagnostics and the last valid checkpoint, if one exists. Do
 
 ## Preserve adapter boundaries
 
-- Generate only artifacts requested by the runner.
+- Generate only the four semantic artifacts in the requested workflow; private catalog metadata and approved bounded staging batches follow run-management and never become a fifth stage.
 - Copy the compiler-issued `run_instance_id` from the first `need_artifact` reply into every Source Pack revision; never invent or replace it.
 - Clarification answers, `request_delivery`, `reopen_root_issues`, and supplements for unresolved business facts must append to the same run. These are source revisions, not new run identities.
 - If the original PRD, a supplementary source, or the material task scope changes, return `NEW_RUN_REQUIRED`, preserve the old run, and create or use a sibling private run only for an actual user source or scope change. Never silently repurpose the old run.
@@ -120,4 +129,4 @@ Report the compiler diagnostics and the last valid checkpoint, if one exists. Do
 - Keep user-visible content limited to the requested final files, a merged clarification set, `INPUT_UNAVAILABLE`, `PIPELINE_NO_PROGRESS`, or fatal diagnostics.
 - Never weaken evidence, invent an Oracle, hide a formal Test Point in Exploratory, or remove a Blocked item to improve coverage.
 - Never publish or document an alternate process entry point.
-- Never invoke an E2E Runner, browser automation, API automation, or any downstream executor. This Skill ends after it generates and confirms the execution list.
+- Never invoke an E2E Runner, browser automation, API automation, or any downstream executor. This Skill ends after document delivery or an explicitly requested execution-list confirmation.

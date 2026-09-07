@@ -402,7 +402,7 @@ test('skill presents business-readable clarification and manual delivery without
   assert.match(skill, /business-readable summary[\s\S]*internal IDs[\s\S]*only in an audit section/iu);
 
   assert.match(clarification, /never show `root_issue_id`, `question_id`, obligation IDs, Fact IDs, Claim IDs, digests, or raw enum codes/iu);
-  assert.match(clarification, /Critical: N, High: N, Medium: N, Low: N/iu);
+  assert.match(clarification, /risk counts[\s\S]*localized labels[\s\S]*严重\/高\/中\/低/iu);
   assert.match(clarification, /one independently answerable business decision/iu);
   assert.match(clarification, /why it is being asked[\s\S]*what remains blocked/iu);
   assert.match(clarification, /business-rule gaps[\s\S]*execution-preparation gaps[\s\S]*scope exclusions[\s\S]*source or evidence gaps/iu);

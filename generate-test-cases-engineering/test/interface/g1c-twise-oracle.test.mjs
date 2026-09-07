@@ -405,6 +405,7 @@ test('installed t-wise risk and forbid evidence fail closed unless strong, relat
     });
     revision.evidence_claims.fact_ledger.push({
       fact_id: 'fact_forbid_e1', claim_id: 'claim_forbid_e1', status: 'active',
+      required_view_kinds: ['decision'], view_review_basis: 'Temporary selection assumption is attached to the authored decision rule.',
       source_claim_ids: ['claim_forbid_e1']
     });
     revision.behavior_views.views[0].source_claim_ids.push('claim_forbid_e1');
@@ -512,6 +513,7 @@ test('installed t-wise risk and forbid evidence fail closed unless strong, relat
     });
     revision.evidence_claims.fact_ledger.push({
       fact_id: 'fact_joint_forbid', claim_id: 'claim_joint_forbid_e3', status: 'active',
+      required_view_kinds: ['decision'], view_review_basis: 'The authored rule explicitly forbids the joint selection.',
       source_claim_ids: ['claim_joint_forbid_e3']
     });
     revision.behavior_views.views[0].source_claim_ids.push('claim_joint_forbid_e3');
@@ -772,11 +774,12 @@ test('obligation Oracle closure is exactly one-to-one and auxiliary expectations
       ...clone(expectation(draft)), kind: 'auxiliary', expectation_id: 'expectation_auxiliary',
       business_assertion: 'Audit trail is visible',
       observation_target: 'audit trail',
-      oracle: { type: 'event', expected_event: 'audit visible', comparison: 'equals' }
+      oracle: { type: 'event', expected_event: 'audit visible', comparison: 'equals', assertion:{subject_ref:'order.status',surface:'UI',operator:'equals',operand:{type:'string',value:'audit visible'}} }
     });
     delete draft.steps[0].expectations[1].closes_obligation_id;
     draft.testability_profile.observers.push({
       observer: 'tester', observation_target: 'audit trail', status: 'verified',
+      subject_ref:'order.status',surface_id:'UI',
       provenance_ref: 'claim_capability'
     });
     refreshOracleRefs(draft);
@@ -826,11 +829,12 @@ test('auxiliary expectations retain their own Oracle, evidence, support, and sco
     draft.steps[0].expectations.push({
       ...clone(expectation(draft)), kind: 'auxiliary', expectation_id: 'expectation_auxiliary_gate',
       business_assertion: 'Audit trail is visible', observation_target: 'audit trail',
-      oracle: { type: 'event', expected_event: 'audit visible', comparison: 'equals' }
+      oracle: { type: 'event', expected_event: 'audit visible', comparison: 'equals', assertion:{subject_ref:'order.status',surface:'UI',operator:'equals',operand:{type:'string',value:'audit visible'}} }
     });
     delete draft.steps[0].expectations[1].closes_obligation_id;
     draft.testability_profile.observers.push({
       observer: 'tester', observation_target: 'audit trail', status: 'verified',
+      subject_ref:'order.status',surface_id:'UI',
       provenance_ref: 'claim_capability'
     });
     refreshOracleRefs(draft);
@@ -840,6 +844,7 @@ test('auxiliary expectations retain their own Oracle, evidence, support, and sco
   await t.test('invalid typed Oracle', () => {
     const draft = addAuxiliary(baseCase());
     draft.steps[0].expectations[1].oracle.expected_event = '';
+    draft.steps[0].expectations[1].oracle.assertion.operand.value = '';
     const result = classifyCaseDrafts(classificationContext({ cases: [draft] }));
     assert.match(result.blocked[0].reason, /ORACLE_INVALID/u);
   });
@@ -991,6 +996,8 @@ test('Case and expectation closure cannot target requirement gaps, Blocked lanes
         ...signature, answerable: false, reasons: ['resource limit'], evidence_refs: ['claim_fact']
       }
     });
+    delete gap.primary_operation_refs;
+    delete gap.scenario_partition_ref;
     const result = classifyCaseDrafts(classificationContext({ obligations: [gap], dispositions: [] }));
     assert.equal(result.grounded.length + result.conditional.length, 0);
     assert.equal(result.diagnostics.some((item) => item.code === 'REQUIREMENT_GAP_CASE_FORBIDDEN'), true);
@@ -1262,7 +1269,7 @@ test('Oracle expectation order and association/evidence metadata do not affect i
   const first = baseCase();
   first.steps[0].expectations.push({
     ...clone(expectation(first)), kind: 'auxiliary', expectation_id: 'expectation_aux',
-    oracle: { type: 'event', expected_event: 'audit', comparison: 'equals' }
+    oracle: { type: 'event', expected_event: 'audit', comparison: 'equals', assertion:{subject_ref:'order.status',surface:'UI',operator:'equals',operand:{type:'string',value:'audit'}} }
   });
   delete first.steps[0].expectations[1].closes_obligation_id;
   const second = clone(first);

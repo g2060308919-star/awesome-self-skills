@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
 import { evaluateRevision } from '../../src/core.mjs';
 import { completeSourcePack } from './source-pack.mjs';
+import { migrateCaseSemantics, refreshExecutionSignature } from './classification-context.mjs';
 
 export const JOURNEY_NAMES = Object.freeze([
   'all-e3',
@@ -338,7 +339,17 @@ function caseDraft(rule) {
       invalidation_condition: 'A final rule replaces this temporary decision.'
     };
   }
-  return draft;
+  const migrated = migrateCaseSemantics(draft, { operationRef: `${rule.viewId}#${rule.elementId}` });
+  // Independently specified branch selector; evidence and Oracle result are not partition identity.
+  const partition = rule.viewType === 'role' ? {
+    kind: 'role', scope: rule.scope, responsibility: 'permission', role: 'tester', permission: `execute-${rule.key}`
+  } : {
+    kind: 'decision', scope: rule.scope, responsibility: 'rule', conditions: [...rule.conditions].sort(), priority: rule.priority
+  };
+  migrated.scenario.partition_id = stableId('partition', partition);
+  for (const datum of migrated.data) datum.partition_id = migrated.scenario.partition_id;
+  refreshExecutionSignature(migrated);
+  return migrated;
 }
 
 /**
@@ -409,29 +420,29 @@ export function revisionFromRules(rules, options = {}) {
     return { obligation_id: id, status: 'case_candidate', case_ids: [`case_${rule.key}`] };
   });
   return {
-    schema_version: '2.1.0',
+    schema_version: '3.0.0',
     source_revision: sourceRevision,
-    compiler_version: '0.3.0',
+    compiler_version: '0.4.0',
     lineage: { source_digest: alternateContentDigest, case_draft_digest: revisedContentDigest },
     source_pack: completeSourcePack({
-      schema_version: '2.1.0', source_revision: sourceRevision,
+      schema_version: '3.0.0', source_revision: sourceRevision,
       run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: '*',
       sources, locators, source_policy: { rules: policyRules },
       decision_records: decisions, clarification_events: [], execution_events: []
-    }, { claims }),
+    }, { claims, fact_ledger: facts }),
     evidence_claims: {
-      schema_version: '2.1.0', source_revision: sourceRevision,
+      schema_version: '3.0.0', source_revision: sourceRevision,
       claims, fact_ledger: facts
     },
     behavior_views: {
-      schema_version: '2.1.0', source_revision: sourceRevision,
+      schema_version: '3.0.0', source_revision: sourceRevision,
       views: rules.map(behaviorView),
       interaction_matrix: interaction.matrix,
       interaction_candidates: interaction.candidates,
       obligation_inputs: obligationInputs(rules)
     },
     case_drafts: {
-      schema_version: '2.1.0', source_revision: sourceRevision,
+      schema_version: '3.0.0', source_revision: sourceRevision,
       cases, obligation_dispositions: dispositions, exploratory_candidates: []
     },
     clarification: {

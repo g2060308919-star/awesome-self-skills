@@ -2,6 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compileExecutionPlan } from '../../src/execution-plan.mjs';
 
+test('generality P23: a case document does not imply an execution choice or runner projection', () => {
+  const input = base();
+  input.sourcePack.delivery_intent = 'case_document';
+  const result = compileExecutionPlan(input);
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.kind, 'document_only');
+  assert.equal(result.plan.items[0].execution_disposition, 'pending');
+  assert.deepEqual(result.plan.runner_case_ids, []);
+  assert.equal(result.plan.confirmation, null);
+  assert.equal(result.presentation, null);
+});
+
 const runId = 'RUN-12345678-1234-4234-8234-123456789abc';
 const runDigest = 'a'.repeat(64);
 
@@ -22,7 +34,7 @@ function caseEntry(status = 'grounded') {
 function base(status = 'grounded') {
   return {
     semanticBundle: {
-      schema_version: '2.1.0', source_revision: 0,
+      schema_version: '3.0.0', source_revision: 0,
       grounded: status === 'grounded' ? [caseEntry()] : [],
       conditional: status === 'conditional' ? [caseEntry('conditional')] : [],
       blocked: status === 'blocked' ? [{
@@ -38,7 +50,7 @@ function base(status = 'grounded') {
     obligations: [{ obligation_id: 'tp_a', title: 'Save', scope: 'checkout', risk: 'high' }],
     evidenceClaims: { claims: [{ claim_id: 'claim_a', level: status === 'conditional' ? 'E1' : 'E3', kind: 'requirement', scope: 'checkout', value: 'Save.' }] },
     sourcePack: {
-      schema_version: '2.1.0', source_revision: 0, run_instance_id: runId,
+      schema_version: '3.0.0', source_revision: 0, run_instance_id: runId,
       run_scope: 'checkout', sources: [{ source_id: 'source_a', content_digest: runDigest }],
       decision_records: [], clarification_events: [], execution_events: []
     },

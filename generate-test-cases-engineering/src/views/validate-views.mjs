@@ -344,6 +344,17 @@ export function validateBehaviorViews(evidenceGraph, artifact) {
     if (!primaryClaim || (primaryClaim.kind !== 'requirement' && primaryClaim.kind !== 'assumption') || fact.status === 'diagnostic') continue;
     const factClaimIds = [...new Set([...(typeof fact.claim_id === 'string' ? [fact.claim_id] : []), ...stringArray(fact.source_claim_ids)])];
     const viewIds = [...new Set(factClaimIds.flatMap((claimId) => [...(claimViews.get(claimId) ?? [])]))].sort(compareCodePoints);
+    for (const kind of stringArray(fact.required_view_kinds)) {
+      const primaryViewIds = [...(claimViews.get(String(fact.claim_id)) ?? [])];
+      const inputs = isObject(input.obligation_inputs) ? input.obligation_inputs : {};
+      const terminal = viewIds.length === 0 && objectArray(inputs.terminal_fact_routes)
+        .some(route => route.fact_id === factId && ['blocked', 'not_applicable'].includes(String(route.disposition)));
+      if (!terminal && !primaryViewIds.some(viewId => validViews.get(viewId)?.type === kind)) diagnostics.push({
+        category: 'traceability', code: 'FACT_REQUIRED_VIEW_MISSING',
+        path: `/factLedger/${factId}/required_view_kinds`,
+        message: `formal fact ${factId} requires a linked ${kind} view; relabelling a custom responsibility cannot discharge it`
+      });
+    }
     // Fact closure is intentionally deferred until terminal intents and every
     // obligation strategy have been compiled. This pass owns only the modeled
     // side of that later modeled-xor-terminal reconciliation.

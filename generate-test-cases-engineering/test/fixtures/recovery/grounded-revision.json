@@ -1,6 +1,6 @@
 {
   "source_pack": {
-    "schema_version": "2.1.0",
+    "schema_version": "3.0.0",
     "source_revision": 0,
     "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
     "run_scope": "checkout",
@@ -12,7 +12,7 @@
         "status": "effective",
         "authority": "owner",
         "content": "A ready cart can be submitted and accepted.",
-      "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
+        "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
         "scope": "checkout"
       }
     ],
@@ -21,31 +21,41 @@
         "locator_id": "locator_checkout",
         "source_id": "source_prd",
         "type": "text-range",
-        "text_range": { "start": 0, "end": 43 },
-      "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
+        "text_range": {
+          "start": 0,
+          "end": 43
+        },
+        "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
         "extraction_integrity": "verified"
       }
-  ],
-  "source_reviews": [
-    {
-      "source_id": "source_prd",
-      "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
-      "spans": [
-        {
-          "span_id": "review_source_prd_001",
-          "start": 0,
-          "end": 43,
-          "classification": "normative",
-          "rationale": "Covered by the direct checkout Claim."
-        }
-      ]
-    }
-  ],
-  "source_policy": {
+    ],
+    "source_reviews": [
+      {
+        "source_id": "source_prd",
+        "content_digest": "6424e46e1bd8fe3aa1739ae6844cedd2a4f28c828b4cea8c8d0dfd37cdad796a",
+        "spans": [
+          {
+            "span_id": "review_source_prd_001",
+            "start": 0,
+            "end": 43,
+            "classification": "normative",
+            "rationale": "Covered by the direct checkout Claim.",
+            "review_basis": {
+              "reviewer": "fixture-author",
+              "method": "fixture source inspection",
+              "evidence": "A ready cart can be submitted and accepted."
+            }
+          }
+        ]
+      }
+    ],
+    "source_policy": {
       "rules": [
         {
           "rule_id": "policy_prd",
-          "source_ids": ["source_prd"],
+          "source_ids": [
+            "source_prd"
+          ],
           "scope": "checkout",
           "authority": "owner",
           "status": "effective"
@@ -53,10 +63,12 @@
       ]
     },
     "decision_records": [],
-    "clarification_events": [], "execution_events": []
+    "clarification_events": [],
+    "execution_events": [],
+    "source_assets": []
   },
   "evidence_claims": {
-    "schema_version": "2.1.0",
+    "schema_version": "3.0.0",
     "source_revision": 0,
     "claims": [
       {
@@ -66,7 +78,9 @@
         "kind": "requirement",
         "scope": "checkout",
         "value": "checkout accepted",
-        "source_locator_ids": ["locator_checkout"],
+        "source_locator_ids": [
+          "locator_checkout"
+        ],
         "source_id": "source_prd"
       }
     ],
@@ -75,27 +89,39 @@
         "fact_id": "fact_checkout",
         "claim_id": "claim_checkout",
         "status": "active",
-        "source_claim_ids": ["claim_checkout"]
+        "source_claim_ids": [
+          "claim_checkout"
+        ],
+        "required_view_kinds": [
+          "decision"
+        ],
+        "view_review_basis": "The ready-cart submission fixture specifies a decision rule; no independent timing/input/state-machine/integration rule is present."
       }
     ]
   },
   "behavior_views": {
-    "schema_version": "2.1.0",
+    "schema_version": "3.0.0",
     "source_revision": 0,
     "views": [
       {
         "view_id": "view_checkout",
         "type": "decision",
         "scope": "checkout",
-        "source_claim_ids": ["claim_checkout"],
+        "source_claim_ids": [
+          "claim_checkout"
+        ],
         "elements": [
           {
             "element_id": "rule_checkout",
             "kind": "decision-rule",
-            "conditions": ["cart is ready"],
+            "conditions": [
+              "cart is ready"
+            ],
             "result": "checkout accepted",
             "priority": 0,
-            "source_claim_ids": ["claim_checkout"],
+            "source_claim_ids": [
+              "claim_checkout"
+            ],
             "model_refs": []
           }
         ],
@@ -103,19 +129,66 @@
       }
     ],
     "interaction_matrix": [
-      { "module_ids": ["checkout"], "dimension": "shared-entity", "status": "checked-no-signal" },
-      { "module_ids": ["checkout"], "dimension": "role", "status": "checked-no-signal" },
-      { "module_ids": ["checkout"], "dimension": "client", "status": "checked-no-signal" },
-      { "module_ids": ["checkout"], "dimension": "interface-event", "status": "checked-no-signal" },
-      { "module_ids": ["checkout"], "dimension": "time", "status": "checked-no-signal" },
-      { "module_ids": ["checkout"], "dimension": "concurrency", "status": "checked-no-signal" },
-      { "module_ids": ["checkout"], "dimension": "side-effect", "status": "checked-no-signal" }
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "shared-entity",
+        "status": "checked-no-signal"
+      },
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "role",
+        "status": "checked-no-signal"
+      },
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "client",
+        "status": "checked-no-signal"
+      },
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "interface-event",
+        "status": "checked-no-signal"
+      },
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "time",
+        "status": "checked-no-signal"
+      },
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "concurrency",
+        "status": "checked-no-signal"
+      },
+      {
+        "module_ids": [
+          "checkout"
+        ],
+        "dimension": "side-effect",
+        "status": "checked-no-signal"
+      }
     ],
-    "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
+    "obligation_inputs": {
+      "view_contexts": [],
+      "terminal_fact_routes": [],
+      "custom_responsibilities": [],
+      "combination_requests": []
+    },
     "interaction_candidates": []
   },
   "case_drafts": {
-    "schema_version": "2.1.0",
+    "schema_version": "3.0.0",
     "source_revision": 0,
     "cases": [
       {
@@ -123,25 +196,54 @@
         "title": "Verify checkout acceptance",
         "scope": "checkout",
         "risk": "high",
-        "role": { "value": "tester", "evidence_ref": "claim_checkout", "support_review": "supported" },
-        "fact_ids": ["fact_checkout"],
-        "obligation_ids": ["obligation_8cc31c1b2773c94c"],
-        "source_claim_ids": ["claim_checkout"],
+        "role": {
+          "value": "tester",
+          "evidence_ref": "claim_checkout",
+          "support_review": "supported"
+        },
+        "fact_ids": [
+          "fact_checkout"
+        ],
+        "obligation_ids": [
+          "obligation_8cc31c1b2773c94c"
+        ],
+        "source_claim_ids": [
+          "claim_checkout"
+        ],
         "preconditions": [
           {
             "condition": "cart is ready",
             "reachable_from": "revision start",
-            "source_claim_ids": ["claim_checkout"],
+            "source_claim_ids": [
+              "claim_checkout"
+            ],
             "evidence_ref": "claim_checkout",
-            "support_review": "supported"
+            "support_review": "supported",
+            "setup": {
+              "resource_kind": "fixture",
+              "resource_ref": "fixture:setup-0",
+              "completion": {
+                "subject_ref": "fixture-ready-0",
+                "operator": "equals",
+                "operand": {
+                  "type": "boolean",
+                  "value": true
+                }
+              },
+              "mutation_effects": []
+            }
           }
         ],
         "data": [
           {
             "name": "scenario input",
             "value": "ready-cart",
-            "provenance": { "type": "evidence", "ref": "claim_checkout" },
-            "support_review": "supported"
+            "provenance": {
+              "type": "evidence",
+              "ref": "claim_checkout"
+            },
+            "support_review": "supported",
+            "partition_id": "partition_69f92d98ec2a337b"
           }
         ],
         "steps": [
@@ -159,48 +261,113 @@
                 "observer": "tester",
                 "observation_surface": "UI",
                 "observation_target": "result",
-                "oracle": { "type": "state", "expected_state": "checkout accepted", "comparison": "equals" },
+                "oracle": {
+                  "type": "state",
+                  "expected_state": "checkout accepted",
+                  "comparison": "equals",
+                  "assertion": {
+                    "subject_ref": "fixture-subject",
+                    "surface": "UI",
+                    "operator": "equals",
+                    "operand": {
+                      "type": "string",
+                      "value": "checkout accepted"
+                    }
+                  }
+                },
                 "evidence_ref": "claim_checkout",
-                "oracle_evidence_refs": ["claim_checkout"],
+                "oracle_evidence_refs": [
+                  "claim_checkout"
+                ],
                 "closes_obligation_id": "obligation_8cc31c1b2773c94c",
                 "support_review": "supported"
               }
-            ]
+            ],
+            "operation_id": "fixture-operation"
           }
         ],
         "testability_profile": {
           "capabilities": [
-            { "capability": "run-control", "status": "provided", "provenance_ref": "claim_checkout" }
+            {
+              "capability": "run-control",
+              "status": "provided",
+              "provenance_ref": "claim_checkout"
+            }
           ],
           "observers": [
-            { "observer": "tester", "observation_target": "result", "status": "verified", "provenance_ref": "claim_checkout" }
+            {
+              "observer": "tester",
+              "observation_target": "result",
+              "status": "verified",
+              "provenance_ref": "claim_checkout",
+              "subject_ref": "fixture-subject",
+              "surface_id": "UI"
+            }
           ],
           "controls": [
-            { "control": "submit-checkout", "status": "provided", "provenance_ref": "claim_checkout" }
+            {
+              "control": "submit-checkout",
+              "status": "provided",
+              "provenance_ref": "claim_checkout"
+            }
+          ],
+          "setup_resources": [
+            {
+              "resource_id": "fixture:setup-0",
+              "kind": "fixture",
+              "locator": "fixture://synthetic/setup-0",
+              "evidence_ref": "claim_checkout"
+            }
           ]
         },
-        "post_state": { "state": "checkout accepted", "evidence_ref": "claim_checkout", "support_review": "supported" },
+        "post_state": {
+          "state": "checkout accepted",
+          "evidence_ref": "claim_checkout",
+          "support_review": "supported"
+        },
         "cleanup": {
           "required": false,
           "no_cleanup_reason": "The scenario is isolated.",
           "no_cleanup_evidence_ref": "claim_checkout",
-          "support_review": "supported"
+          "support_review": "supported",
+          "resolved_effects": []
         },
-        "evidence_refs": ["claim_checkout"],
+        "evidence_refs": [
+          "claim_checkout"
+        ],
         "execution_signature": {
           "role": "tester",
-          "precondition_state": "[{\"condition\":\"cart is ready\",\"reachable_from\":\"revision start\"}]",
-          "data_partition": "[{\"name\":\"scenario input\",\"value\":\"ready-cart\"}]",
-          "action_path": ["Submit checkout"],
-          "oracle_refs": ["expectation_checkout"]
-        }
+          "precondition_state": "[{\"condition\":\"cart is ready\",\"reachable_from\":\"revision start\",\"setup\":{\"completion\":{\"operand\":{\"type\":\"boolean\",\"value\":true},\"operator\":\"equals\",\"subject_ref\":\"fixture-ready-0\"},\"mutation_effects\":[],\"resource_kind\":\"fixture\",\"resource_ref\":\"fixture:setup-0\"}}]",
+          "data_partition": "[{\"name\":\"scenario input\",\"scenario\":{\"intent\":\"behavior\",\"operation_id\":\"fixture-operation\",\"operation_ref\":\"view_checkout#rule_checkout\",\"partition_id\":\"partition_69f92d98ec2a337b\",\"subject_ref\":\"fixture-subject\"},\"value\":\"ready-cart\"}]",
+          "action_path": [
+            "Submit checkout"
+          ],
+          "oracle_refs": [
+            "expectation_checkout"
+          ]
+        },
+        "scenario": {
+          "operation_id": "fixture-operation",
+          "operation_ref": "view_checkout#rule_checkout",
+          "partition_id": "partition_69f92d98ec2a337b",
+          "subject_ref": "fixture-subject",
+          "intent": "behavior"
+        },
+        "risk_basis": {
+          "impact": "Synthetic fixture behavior fails",
+          "likelihood": "Fixture explicitly exercises this path",
+          "exposure": "Fixture test role"
+        },
+        "execution_effects": []
       }
     ],
     "obligation_dispositions": [
       {
         "obligation_id": "obligation_8cc31c1b2773c94c",
         "status": "case_candidate",
-        "case_ids": ["case_checkout"]
+        "case_ids": [
+          "case_checkout"
+        ]
       }
     ],
     "exploratory_candidates": []

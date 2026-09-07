@@ -42,7 +42,7 @@ async function fixture(relativePath) {
 /** @param {'verified' | 'machine-extracted' | 'uncertain'} [integrity] @param {string} [kind] @returns {any} */
 function sourcePack(integrity = 'verified', kind = 'prd') {
   return {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0, source_assets: [],
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'checkout',
     sources: [{ source_id: 'source_prd', kind, version: '1', status: 'effective', authority: 'owner', content: sourceContent, content_digest: digestA, scope: 'checkout' }],
     source_reviews: [{
@@ -52,11 +52,13 @@ function sourcePack(integrity = 'verified', kind = 'prd') {
           span_id: 'span_rule', start: 0, end: 4,
           classification: integrity === 'uncertain' ? 'uncertain'
             : kind === 'production-behavior' ? 'non_normative' : 'normative',
-          rationale: kind === 'production-behavior' ? 'Diagnostic context only.' : 'Supplied rule text.'
+          rationale: kind === 'production-behavior' ? 'Diagnostic context only.' : 'Supplied rule text.',
+          review_basis: { reviewer: 'fixture-author', method: 'source inspection', evidence: 'Rule is the supplied source text.' }
         },
         {
           span_id: 'span_context', start: 5, end: 12,
-          classification: 'non_normative', rationale: 'Unclaimed fixture context.'
+          classification: 'non_normative', rationale: 'Unclaimed fixture context.',
+          review_basis: { reviewer: 'fixture-author', method: 'source inspection', evidence: 'formula is a fixture label.' }
         }
       ]
     }],
@@ -205,7 +207,7 @@ test('source review coverage indexes direct locator ranges instead of rescanning
     });
   }
   const pack = {
-    schema_version: '2.1.0', source_revision: 0,
+    schema_version: '3.0.0', source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc', run_scope: 'large',
     sources: [{
       source_id: 'source_large', kind: 'prd', version: '1', status: 'effective',
@@ -247,7 +249,7 @@ function derived(overrides = {}) {
 
 /** @param {Array<Record<string, unknown>>} claims @returns {any} */
 function artifact(claims) {
-  return { schema_version: '2.1.0', source_revision: 0, claims, fact_ledger: [] };
+  return { schema_version: '3.0.0', source_revision: 0, claims, fact_ledger: [] };
 }
 
 /** @param {unknown} pack @param {unknown} claims */
@@ -263,6 +265,10 @@ function assertValidContracts(pack, claims) {
   }
   assert.deepEqual(validateAgainstSchema(pack, sourcePackSchema), []);
   assert.deepEqual(validateUniqueStableIds(pack), []);
+  for (const fact of /** @type {any} */ (claims).fact_ledger) {
+    fact.required_view_kinds ??= [];
+    fact.view_review_basis ??= 'Reviewed fixture facts; no specialized behavior is asserted.';
+  }
   assert.deepEqual(validateAgainstSchema(claims, evidenceClaimsSchema), []);
   assert.deepEqual(validateUniqueStableIds(claims), []);
 }

@@ -25,7 +25,7 @@ function v1SemanticCore(bundle) {
   return copy;
 }
 
-test('canonical bundles preserve ten reviewed semantic cores and one exact v2 JSON/Markdown golden', async () => {
+test('canonical bundles preserve ten reviewed semantic cores and one exact v3 JSON/Markdown golden', async () => {
   assert.equal(JOURNEY_NAMES.length, 10);
   for (const name of JOURNEY_NAMES) {
     const expectedBundleText = await readFile(path.join(goldenRoot, `${name}.json`), 'utf8');
@@ -72,5 +72,5 @@ test('canonical bundle hard gates: Blocked retains the formal Test Point and rec
   assert.equal(bundle.coverage.formal.total, 1);
   assert.equal(bundle.coverage.formal.entries[0].status, 'blocked');
   assert.ok(bundle.blocked[0].obligation_id);
-  assert.match(result.markdown, /Recovery/u);
+  assert.ok(result.markdown.includes(bundle.blocked[0].recovery.question));
 });
