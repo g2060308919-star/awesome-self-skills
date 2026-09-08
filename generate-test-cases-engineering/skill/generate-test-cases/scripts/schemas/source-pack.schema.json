@@ -18,7 +18,10 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "3.0.0"
+      "enum": [
+        "3.0.0",
+        "4.0.0"
+      ]
     },
     "source_revision": {
       "type": "integer",
@@ -1219,6 +1222,34 @@
         "execution_plan"
       ]
     },
+    "case_document_ref": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "revision",
+        "manifest_digest",
+        "bundle_digest"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manifest_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bundle_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
     "artifact_repairs": {
       "type": "array",
       "items": {
@@ -1260,5 +1291,48 @@
       }
     }
   },
+  "oneOf": [
+    {
+      "properties": {
+        "schema_version": {
+          "const": "3.0.0"
+        }
+      }
+    },
+    {
+      "required": [
+        "delivery_intent"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "4.0.0"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "delivery_intent": {
+              "const": "case_document"
+            }
+          },
+          "not": {
+            "required": [
+              "case_document_ref"
+            ]
+          }
+        },
+        {
+          "required": [
+            "case_document_ref"
+          ],
+          "properties": {
+            "delivery_intent": {
+              "const": "execution_plan"
+            }
+          }
+        }
+      ]
+    }
+  ],
   "additionalProperties": false
 }

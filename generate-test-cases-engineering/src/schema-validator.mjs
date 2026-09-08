@@ -3,8 +3,8 @@ import { STABLE_ID_COLLECTIONS } from './contracts.mjs';
 
 const supportedKeywords = new Set([
   '$schema', '$id', '$defs', '$ref', 'type', 'required', 'properties', 'items', 'enum', 'const',
-  'oneOf', 'allOf', 'minItems', 'minLength', 'pattern', 'minimum', 'maximum',
-  'uniqueItems', 'additionalProperties'
+  'oneOf', 'allOf', 'not', 'minItems', 'maxItems', 'prefixItems', 'minLength', 'pattern', 'minimum', 'maximum',
+  'uniqueItems', 'additionalProperties', 'unevaluatedProperties'
 ]);
 const supportedTypes = new Set(['array', 'boolean', 'integer', 'null', 'number', 'object', 'string']);
 const NATIVE_ARRAY_EVERY = Array.prototype.every;
@@ -115,20 +115,22 @@ export function assertSupportedSchema(schema) {
       if (!isSchemaObject(value)) throw new Error('Schema properties must be an object.');
       for (const child of Object.values(value)) assertSupportedSchema(child);
     } else if (key === 'items') {
+      if (typeof value !== 'boolean') assertSupportedSchema(value);
+    } else if (key === 'not') {
       assertSupportedSchema(value);
-    } else if (key === 'oneOf' || key === 'allOf') {
+    } else if (key === 'oneOf' || key === 'allOf' || key === 'prefixItems') {
       if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
       for (const child of value) assertSupportedSchema(child);
     } else if (key === 'enum') {
       if (!Array.isArray(value) || value.length === 0 || new Set(mapArray(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error('Schema enum must be a non-empty array of unique values.');
-    } else if (key === 'minItems' || key === 'minLength') {
+    } else if (key === 'minItems' || key === 'maxItems' || key === 'minLength') {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
     } else if (key === 'minimum' || key === 'maximum') {
       if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
     } else if (key === 'uniqueItems') {
       if (typeof value !== 'boolean') throw new Error('Schema uniqueItems must be boolean.');
-    } else if (key === 'additionalProperties') {
-      if (typeof value !== 'boolean' && !isSchemaObject(value)) throw new Error('Schema additionalProperties must be boolean or a schema object.');
+    } else if (key === 'additionalProperties' || key === 'unevaluatedProperties') {
+      if (typeof value !== 'boolean' && !isSchemaObject(value)) throw new Error(`Schema ${key} must be boolean or a schema object.`);
       if (isSchemaObject(value)) assertSupportedSchema(value);
     }
   }
@@ -159,14 +161,17 @@ function resolveReference(root, reference) {
   return current;
 }
 
-/** @param {unknown} value @param {Record<string, unknown>} schema @param {string} path @param {Record<string, unknown>} root */
-function validate(value, schema, path, root) {
+/** @param {unknown} value @param {Record<string, unknown>} schema @param {string} path @param {Record<string, unknown>} root @param {Set<string>} [parentEvaluatedProperties] */
+function validate(value, schema, path, root, parentEvaluatedProperties) {
   /** @type {Array<{category: string, code: string, path: string, message: string}>} */
   const diagnostics = [];
+  // Annotations are instance-local and only successful schemas contribute them.
+  // Child property validation must not leak its nested keys into this object.
+  const evaluatedProperties = new Set();
   const pointer = path || '/';
   if (typeof schema.$ref === 'string') pushArray(
     diagnostics,
-    ...validate(value, resolveReference(root, schema.$ref), path, root)
+    ...validate(value, resolveReference(root, schema.$ref), path, root, evaluatedProperties)
   );
   if (schema.type && !matchesType(value, schema.type)) {
     return [diagnostic('TYPE_MISMATCH', pointer, `must be ${Array.isArray(schema.type) ? joinArray(schema.type, ' or ') : schema.type}`)];
@@ -187,6 +192,7 @@ function validate(value, schema, path, root) {
   }
   if (Array.isArray(value)) {
     if (typeof schema.minItems === 'number' && value.length < schema.minItems) pushArray(diagnostics, diagnostic('MIN_ITEMS', pointer, 'has too few items'));
+    if (typeof schema.maxItems === 'number' && value.length > schema.maxItems) pushArray(diagnostics, diagnostic('MAX_ITEMS', pointer, 'has too many items'));
     if (schema.uniqueItems === true) {
       const seen = new Set();
       forEachArray(value, (item, index) => {
@@ -195,9 +201,16 @@ function validate(value, schema, path, root) {
         seen.add(key);
       });
     }
-    if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
-      forEachArray(value, (item, index) => pushArray(diagnostics, ...validate(item, /** @type {Record<string, unknown>} */ (schema.items), `${path}/${index}`, root)));
-    }
+    const prefixItems = Array.isArray(schema.prefixItems) ? schema.prefixItems : [];
+    forEachArray(value, (item, index) => {
+      if (index < prefixItems.length) {
+        pushArray(diagnostics, ...validate(item, /** @type {Record<string, unknown>} */ (prefixItems[index]), `${path}/${index}`, root));
+      } else if (schema.items === false) {
+        pushArray(diagnostics, diagnostic('ADDITIONAL_ITEM', `${path}/${index}`, 'additional items are not allowed'));
+      } else if (isSchemaObject(schema.items)) {
+        pushArray(diagnostics, ...validate(item, schema.items, `${path}/${index}`, root));
+      }
+    });
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const object = /** @type {Record<string, unknown>} */ (value);
@@ -212,24 +225,57 @@ function validate(value, schema, path, root) {
       for (const key of Object.keys(object)) {
         if (!Object.hasOwn(properties, key)) pushArray(diagnostics, diagnostic('ADDITIONAL_PROPERTY', childPointer(path, key), 'additional properties are not allowed'));
       }
-    } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object' && !Array.isArray(schema.additionalProperties)) {
+    } else if (schema.additionalProperties === true || isSchemaObject(schema.additionalProperties)) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, ...validate(object[key], /** @type {Record<string, unknown>} */ (schema.additionalProperties), childPointer(path, key), root));
+        if (!Object.hasOwn(properties, key)) {
+          evaluatedProperties.add(key);
+          if (isSchemaObject(schema.additionalProperties)) pushArray(diagnostics, ...validate(object[key], schema.additionalProperties, childPointer(path, key), root));
+        }
       }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path, key), root));
+      if (Object.hasOwn(object, key)) {
+        evaluatedProperties.add(key);
+        pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path, key), root));
+      }
     }
   }
-  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(value, /** @type {Record<string, unknown>} */ (child), path, root));
+  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(value, /** @type {Record<string, unknown>} */ (child), path, root, evaluatedProperties));
   if (Array.isArray(schema.oneOf)) {
-    const variants = mapArray(schema.oneOf, (child) => /** @type {Record<string, unknown>} */ (child));
-    const matching = filterArray(variants, (child) => validate(value, child, path, root).length === 0);
-    if (matching.length !== 1) {
-      const discriminated = filterArray(variants, (child) => matchesDiscriminator(value, child, root));
-      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path, root));
+    const variants = mapArray(schema.oneOf, (child) => {
+      const variantSchema = /** @type {Record<string, unknown>} */ (child);
+      const variantEvaluatedProperties = new Set();
+      return {
+        schema: variantSchema,
+        diagnostics: validate(value, variantSchema, path, root, variantEvaluatedProperties),
+        evaluatedProperties: variantEvaluatedProperties
+      };
+    });
+    const matching = filterArray(variants, (child) => child.diagnostics.length === 0);
+    if (matching.length === 1) {
+      for (const key of matching[0].evaluatedProperties) evaluatedProperties.add(key);
+    } else {
+      const discriminated = filterArray(variants, (child) => matchesDiscriminator(value, child.schema, root));
+      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...discriminated[0].diagnostics);
       else pushArray(diagnostics, diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
     }
+  }
+  if (isSchemaObject(schema.not) && validate(value, schema.not, path, root).length === 0) {
+    pushArray(diagnostics, diagnostic('NOT_MATCHED', pointer, 'must not match the prohibited schema'));
+  }
+  if (isSchemaObject(value) && Object.hasOwn(schema, 'unevaluatedProperties')) {
+    for (const key of Object.keys(value)) {
+      if (evaluatedProperties.has(key)) continue;
+      if (schema.unevaluatedProperties === false) {
+        pushArray(diagnostics, diagnostic('UNEVALUATED_PROPERTY', childPointer(path, key), 'unevaluated properties are not allowed'));
+      } else {
+        evaluatedProperties.add(key);
+        if (isSchemaObject(schema.unevaluatedProperties)) pushArray(diagnostics, ...validate(value[key], schema.unevaluatedProperties, childPointer(path, key), root));
+      }
+    }
+  }
+  if (diagnostics.length === 0 && parentEvaluatedProperties) {
+    for (const key of evaluatedProperties) parentEvaluatedProperties.add(key);
   }
   return diagnostics;
 }

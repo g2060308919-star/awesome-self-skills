@@ -3328,7 +3328,10 @@ var source_pack_schema_default = {
   ],
   properties: {
     schema_version: {
-      const: "3.0.0"
+      enum: [
+        "3.0.0",
+        "4.0.0"
+      ]
     },
     source_revision: {
       type: "integer",
@@ -4529,6 +4532,34 @@ var source_pack_schema_default = {
         "execution_plan"
       ]
     },
+    case_document_ref: {
+      type: "object",
+      required: [
+        "run_id",
+        "revision",
+        "manifest_digest",
+        "bundle_digest"
+      ],
+      properties: {
+        run_id: {
+          type: "string",
+          minLength: 1
+        },
+        revision: {
+          type: "integer",
+          minimum: 0
+        },
+        manifest_digest: {
+          type: "string",
+          pattern: "^sha256:[0-9a-f]{64}$"
+        },
+        bundle_digest: {
+          type: "string",
+          pattern: "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      additionalProperties: false
+    },
     artifact_repairs: {
       type: "array",
       items: {
@@ -4570,6 +4601,49 @@ var source_pack_schema_default = {
       }
     }
   },
+  oneOf: [
+    {
+      properties: {
+        schema_version: {
+          const: "3.0.0"
+        }
+      }
+    },
+    {
+      required: [
+        "delivery_intent"
+      ],
+      properties: {
+        schema_version: {
+          const: "4.0.0"
+        }
+      },
+      oneOf: [
+        {
+          properties: {
+            delivery_intent: {
+              const: "case_document"
+            }
+          },
+          not: {
+            required: [
+              "case_document_ref"
+            ]
+          }
+        },
+        {
+          required: [
+            "case_document_ref"
+          ],
+          properties: {
+            delivery_intent: {
+              const: "execution_plan"
+            }
+          }
+        }
+      ]
+    }
+  ],
   additionalProperties: false
 };
 
@@ -4933,13 +5007,17 @@ var supportedKeywords = /* @__PURE__ */ new Set([
   "const",
   "oneOf",
   "allOf",
+  "not",
   "minItems",
+  "maxItems",
+  "prefixItems",
   "minLength",
   "pattern",
   "minimum",
   "maximum",
   "uniqueItems",
-  "additionalProperties"
+  "additionalProperties",
+  "unevaluatedProperties"
 ]);
 var supportedTypes = /* @__PURE__ */ new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
 var NATIVE_ARRAY_EVERY = Array.prototype.every;
@@ -5049,20 +5127,22 @@ function assertSupportedSchema(schema) {
       if (!isSchemaObject(value)) throw new Error("Schema properties must be an object.");
       for (const child of Object.values(value)) assertSupportedSchema(child);
     } else if (key === "items") {
+      if (typeof value !== "boolean") assertSupportedSchema(value);
+    } else if (key === "not") {
       assertSupportedSchema(value);
-    } else if (key === "oneOf" || key === "allOf") {
+    } else if (key === "oneOf" || key === "allOf" || key === "prefixItems") {
       if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
       for (const child of value) assertSupportedSchema(child);
     } else if (key === "enum") {
       if (!Array.isArray(value) || value.length === 0 || new Set(mapArray2(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
-    } else if (key === "minItems" || key === "minLength") {
+    } else if (key === "minItems" || key === "maxItems" || key === "minLength") {
       if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
     } else if (key === "minimum" || key === "maximum") {
       if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
     } else if (key === "uniqueItems") {
       if (typeof value !== "boolean") throw new Error("Schema uniqueItems must be boolean.");
-    } else if (key === "additionalProperties") {
-      if (typeof value !== "boolean" && !isSchemaObject(value)) throw new Error("Schema additionalProperties must be boolean or a schema object.");
+    } else if (key === "additionalProperties" || key === "unevaluatedProperties") {
+      if (typeof value !== "boolean" && !isSchemaObject(value)) throw new Error(`Schema ${key} must be boolean or a schema object.`);
       if (isSchemaObject(value)) assertSupportedSchema(value);
     }
   }
@@ -5089,12 +5169,13 @@ function resolveReference(root, reference) {
   if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
   return current;
 }
-function validate(value, schema, path4, root) {
+function validate(value, schema, path4, root, parentEvaluatedProperties) {
   const diagnostics = [];
+  const evaluatedProperties = /* @__PURE__ */ new Set();
   const pointer = path4 || "/";
   if (typeof schema.$ref === "string") pushArray(
     diagnostics,
-    ...validate(value, resolveReference(root, schema.$ref), path4, root)
+    ...validate(value, resolveReference(root, schema.$ref), path4, root, evaluatedProperties)
   );
   if (schema.type && !matchesType(value, schema.type)) {
     return [diagnostic2("TYPE_MISMATCH", pointer, `must be ${Array.isArray(schema.type) ? joinArray2(schema.type, " or ") : schema.type}`)];
@@ -5115,6 +5196,7 @@ function validate(value, schema, path4, root) {
   }
   if (Array.isArray(value)) {
     if (typeof schema.minItems === "number" && value.length < schema.minItems) pushArray(diagnostics, diagnostic2("MIN_ITEMS", pointer, "has too few items"));
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) pushArray(diagnostics, diagnostic2("MAX_ITEMS", pointer, "has too many items"));
     if (schema.uniqueItems === true) {
       const seen = /* @__PURE__ */ new Set();
       forEachArray(value, (item, index) => {
@@ -5123,15 +5205,22 @@ function validate(value, schema, path4, root) {
         seen.add(key);
       });
     }
-    if (schema.items && typeof schema.items === "object" && !Array.isArray(schema.items)) {
-      forEachArray(value, (item, index) => pushArray(diagnostics, ...validate(
-        item,
-        /** @type {Record<string, unknown>} */
-        schema.items,
-        `${path4}/${index}`,
-        root
-      )));
-    }
+    const prefixItems = Array.isArray(schema.prefixItems) ? schema.prefixItems : [];
+    forEachArray(value, (item, index) => {
+      if (index < prefixItems.length) {
+        pushArray(diagnostics, ...validate(
+          item,
+          /** @type {Record<string, unknown>} */
+          prefixItems[index],
+          `${path4}/${index}`,
+          root
+        ));
+      } else if (schema.items === false) {
+        pushArray(diagnostics, diagnostic2("ADDITIONAL_ITEM", `${path4}/${index}`, "additional items are not allowed"));
+      } else if (isSchemaObject(schema.items)) {
+        pushArray(diagnostics, ...validate(item, schema.items, `${path4}/${index}`, root));
+      }
+    });
   }
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const object = (
@@ -5151,19 +5240,19 @@ function validate(value, schema, path4, root) {
       for (const key of Object.keys(object)) {
         if (!Object.hasOwn(properties, key)) pushArray(diagnostics, diagnostic2("ADDITIONAL_PROPERTY", childPointer(path4, key), "additional properties are not allowed"));
       }
-    } else if (schema.additionalProperties && typeof schema.additionalProperties === "object" && !Array.isArray(schema.additionalProperties)) {
+    } else if (schema.additionalProperties === true || isSchemaObject(schema.additionalProperties)) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, ...validate(
-          object[key],
-          /** @type {Record<string, unknown>} */
-          schema.additionalProperties,
-          childPointer(path4, key),
-          root
-        ));
+        if (!Object.hasOwn(properties, key)) {
+          evaluatedProperties.add(key);
+          if (isSchemaObject(schema.additionalProperties)) pushArray(diagnostics, ...validate(object[key], schema.additionalProperties, childPointer(path4, key), root));
+        }
       }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path4, key), root));
+      if (Object.hasOwn(object, key)) {
+        evaluatedProperties.add(key);
+        pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path4, key), root));
+      }
     }
   }
   if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(
@@ -5171,19 +5260,47 @@ function validate(value, schema, path4, root) {
     /** @type {Record<string, unknown>} */
     child,
     path4,
-    root
+    root,
+    evaluatedProperties
   ));
   if (Array.isArray(schema.oneOf)) {
-    const variants = mapArray2(schema.oneOf, (child) => (
-      /** @type {Record<string, unknown>} */
-      child
-    ));
-    const matching = filterArray2(variants, (child) => validate(value, child, path4, root).length === 0);
-    if (matching.length !== 1) {
-      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child, root));
-      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...validate(value, discriminated[0], path4, root));
+    const variants = mapArray2(schema.oneOf, (child) => {
+      const variantSchema = (
+        /** @type {Record<string, unknown>} */
+        child
+      );
+      const variantEvaluatedProperties = /* @__PURE__ */ new Set();
+      return {
+        schema: variantSchema,
+        diagnostics: validate(value, variantSchema, path4, root, variantEvaluatedProperties),
+        evaluatedProperties: variantEvaluatedProperties
+      };
+    });
+    const matching = filterArray2(variants, (child) => child.diagnostics.length === 0);
+    if (matching.length === 1) {
+      for (const key of matching[0].evaluatedProperties) evaluatedProperties.add(key);
+    } else {
+      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child.schema, root));
+      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...discriminated[0].diagnostics);
       else pushArray(diagnostics, diagnostic2("ONE_OF_MISMATCH", pointer, "must match exactly one schema variant"));
     }
+  }
+  if (isSchemaObject(schema.not) && validate(value, schema.not, path4, root).length === 0) {
+    pushArray(diagnostics, diagnostic2("NOT_MATCHED", pointer, "must not match the prohibited schema"));
+  }
+  if (isSchemaObject(value) && Object.hasOwn(schema, "unevaluatedProperties")) {
+    for (const key of Object.keys(value)) {
+      if (evaluatedProperties.has(key)) continue;
+      if (schema.unevaluatedProperties === false) {
+        pushArray(diagnostics, diagnostic2("UNEVALUATED_PROPERTY", childPointer(path4, key), "unevaluated properties are not allowed"));
+      } else {
+        evaluatedProperties.add(key);
+        if (isSchemaObject(schema.unevaluatedProperties)) pushArray(diagnostics, ...validate(value[key], schema.unevaluatedProperties, childPointer(path4, key), root));
+      }
+    }
+  }
+  if (diagnostics.length === 0 && parentEvaluatedProperties) {
+    for (const key of evaluatedProperties) parentEvaluatedProperties.add(key);
   }
   return diagnostics;
 }
@@ -10748,4524 +10865,4698 @@ var test_bundle_schema_default = {
         }
       },
       additionalProperties: false
-    }
-  },
-  type: "object",
-  required: [
-    "schema_version",
-    "source_revision",
-    "grounded",
-    "conditional",
-    "blocked",
-    "exploratory",
-    "coverage",
-    "quality",
-    "execution_plan"
-  ],
-  properties: {
-    schema_version: {
-      const: "3.0.0"
     },
-    source_revision: {
-      type: "integer",
-      minimum: 0
-    },
-    execution_plan: {
-      oneOf: [
-        {
-          $ref: "#/$defs/ready_execution_plan"
-        },
-        {
-          $ref: "#/$defs/document_execution_plan"
-        }
-      ]
-    },
-    grounded: {
-      type: "array",
-      items: {
-        type: "object",
-        required: [
-          "case_id",
-          "title",
-          "scope",
-          "risk",
-          "role",
-          "fact_ids",
-          "obligation_ids",
-          "preconditions",
-          "data",
-          "steps",
-          "testability_profile",
-          "post_state",
-          "cleanup",
-          "evidence_refs",
-          "execution_signature",
-          "scenario",
-          "risk_basis",
-          "execution_effects"
-        ],
-        properties: {
-          case_id: {
-            type: "string",
-            minLength: 1
-          },
-          title: {
-            type: "string",
-            minLength: 1
-          },
-          scope: {
-            type: "string",
-            minLength: 1
-          },
-          risk: {
-            enum: [
-              "critical",
-              "high",
-              "medium",
-              "low"
-            ]
-          },
-          role: {
-            type: "object",
-            required: [
-              "value",
-              "evidence_ref",
-              "support_review"
-            ],
-            properties: {
-              value: {
-                type: "string",
-                minLength: 1
-              },
-              evidence_ref: {
-                type: "string",
-                minLength: 1
-              },
-              support_review: {
-                const: "supported"
-              }
-            },
-            additionalProperties: false
-          },
-          fact_ids: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            minItems: 1,
-            uniqueItems: true
-          },
-          obligation_ids: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            minItems: 1,
-            uniqueItems: true
-          },
-          source_claim_ids: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            uniqueItems: true
-          },
-          preconditions: {
-            type: "array",
-            minItems: 1,
-            items: {
-              type: "object",
-              required: [
-                "condition",
-                "reachable_from",
-                "source_claim_ids",
-                "evidence_ref",
-                "support_review",
-                "setup"
-              ],
-              properties: {
-                condition: {
-                  type: "string",
-                  minLength: 1
-                },
-                reachable_from: {
-                  type: "string",
-                  minLength: 1
-                },
-                source_claim_ids: {
-                  type: "array",
-                  items: {
-                    type: "string"
-                  },
-                  minItems: 1,
-                  uniqueItems: true
-                },
-                evidence_ref: {
-                  type: "string",
-                  minLength: 1
-                },
-                support_review: {
-                  const: "supported"
-                },
-                setup: {
-                  type: "object",
-                  properties: {
-                    resource_kind: {
-                      enum: [
-                        "entry",
-                        "fixture",
-                        "account",
-                        "data"
-                      ]
-                    },
-                    resource_ref: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    completion: {
-                      type: "object",
-                      properties: {
-                        subject_ref: {
-                          type: "string",
-                          minLength: 1,
-                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                        },
-                        operator: {
-                          enum: [
-                            "equals",
-                            "contains",
-                            "matches",
-                            "within"
-                          ]
-                        },
-                        operand: {
-                          oneOf: [
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "string"
-                                },
-                                value: {
-                                  type: "string"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "number"
-                                },
-                                value: {
-                                  type: "number"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "boolean"
-                                },
-                                value: {
-                                  type: "boolean"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "null"
-                                },
-                                value: {
-                                  type: "null"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            }
-                          ]
-                        }
-                      },
-                      required: [
-                        "subject_ref",
-                        "operator",
-                        "operand"
-                      ],
-                      additionalProperties: false
-                    },
-                    mutation_effects: {
-                      type: "array",
-                      items: {
-                        type: "string",
-                        minLength: 1,
-                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                      },
-                      uniqueItems: true
-                    }
-                  },
-                  required: [
-                    "resource_kind",
-                    "resource_ref",
-                    "completion",
-                    "mutation_effects"
-                  ],
-                  additionalProperties: false
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          data: {
-            type: "array",
-            minItems: 1,
-            items: {
-              type: "object",
-              required: [
-                "name",
-                "value",
-                "provenance",
-                "value_origin",
-                "support_review",
-                "partition_id"
-              ],
-              properties: {
-                name: {
-                  type: "string",
-                  minLength: 1
-                },
-                value: {
-                  type: "string",
-                  minLength: 1
-                },
-                provenance: {
-                  oneOf: [
-                    {
-                      type: "object",
-                      required: [
-                        "type",
-                        "ref"
-                      ],
-                      properties: {
-                        type: {
-                          const: "evidence"
-                        },
-                        ref: {
-                          type: "string",
-                          minLength: 1
-                        }
-                      },
-                      additionalProperties: false
-                    },
-                    {
-                      type: "object",
-                      required: [
-                        "type",
-                        "ref"
-                      ],
-                      properties: {
-                        type: {
-                          const: "derivation"
-                        },
-                        ref: {
-                          type: "string",
-                          minLength: 1
-                        }
-                      },
-                      additionalProperties: false
-                    }
-                  ]
-                },
-                value_origin: {
-                  enum: [
-                    "requirement",
-                    "source_description",
-                    "example",
-                    "derived",
-                    "temporary_assumption"
-                  ]
-                },
-                support_review: {
-                  const: "supported"
-                },
-                partition_id: {
-                  type: "string",
-                  minLength: 1
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          steps: {
-            type: "array",
-            minItems: 1,
-            items: {
-              type: "object",
-              required: [
-                "step_id",
-                "action",
-                "action_evidence_ref",
-                "support_review",
-                "expectations",
-                "operation_id"
-              ],
-              properties: {
-                step_id: {
-                  type: "string",
-                  minLength: 1
-                },
-                action: {
-                  type: "string",
-                  minLength: 1
-                },
-                action_evidence_ref: {
-                  type: "string",
-                  minLength: 1
-                },
-                support_review: {
-                  const: "supported"
-                },
-                expectations: {
-                  type: "array",
-                  minItems: 1,
-                  items: {
-                    oneOf: [
-                      {
-                        type: "object",
-                        required: [
-                          "kind",
-                          "expectation_id",
-                          "business_assertion",
-                          "preceding_action_id",
-                          "observer",
-                          "observation_surface",
-                          "observation_target",
-                          "oracle",
-                          "evidence_ref",
-                          "support_review",
-                          "closes_obligation_id",
-                          "oracle_evidence_refs"
-                        ],
-                        properties: {
-                          kind: {
-                            const: "obligation-oracle"
-                          },
-                          expectation_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          business_assertion: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          preceding_action_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observer: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_surface: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_target: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          oracle: {
-                            oneOf: [
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_value",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "value"
-                                  },
-                                  expected_value: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_state",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "state"
-                                  },
-                                  expected_state: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_event",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "event"
-                                  },
-                                  expected_event: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_side_effect",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "side-effect"
-                                  },
-                                  expected_side_effect: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              }
-                            ]
-                          },
-                          evidence_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          support_review: {
-                            const: "supported"
-                          },
-                          closes_obligation_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          oracle_evidence_refs: {
-                            type: "array",
-                            items: {
-                              type: "string",
-                              minLength: 1
-                            },
-                            minItems: 1,
-                            uniqueItems: true
-                          },
-                          observer_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          target_ref: {
-                            type: "string",
-                            minLength: 1
-                          }
-                        },
-                        additionalProperties: false
-                      },
-                      {
-                        type: "object",
-                        required: [
-                          "kind",
-                          "expectation_id",
-                          "business_assertion",
-                          "preceding_action_id",
-                          "observer",
-                          "observation_surface",
-                          "observation_target",
-                          "oracle",
-                          "evidence_ref",
-                          "support_review",
-                          "oracle_evidence_refs"
-                        ],
-                        properties: {
-                          kind: {
-                            const: "auxiliary"
-                          },
-                          expectation_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          business_assertion: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          preceding_action_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observer: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_surface: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_target: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          oracle: {
-                            oneOf: [
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_value",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "value"
-                                  },
-                                  expected_value: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_state",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "state"
-                                  },
-                                  expected_state: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_event",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "event"
-                                  },
-                                  expected_event: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_side_effect",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "side-effect"
-                                  },
-                                  expected_side_effect: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              }
-                            ]
-                          },
-                          evidence_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          support_review: {
-                            const: "supported"
-                          },
-                          oracle_evidence_refs: {
-                            type: "array",
-                            items: {
-                              type: "string",
-                              minLength: 1
-                            },
-                            minItems: 1,
-                            uniqueItems: true
-                          },
-                          observer_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          target_ref: {
-                            type: "string",
-                            minLength: 1
-                          }
-                        },
-                        additionalProperties: false
-                      }
-                    ]
-                  }
-                },
-                operation_id: {
-                  type: "string",
-                  minLength: 1
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          testability_profile: {
-            type: "object",
-            required: [
-              "capabilities",
-              "observers",
-              "controls",
-              "setup_resources"
-            ],
-            properties: {
-              capabilities: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  required: [
-                    "capability",
-                    "status"
-                  ],
-                  properties: {
-                    capability: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    status: {
-                      enum: [
-                        "provided",
-                        "verified"
-                      ]
-                    },
-                    provenance_ref: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    capability_id: {
-                      type: "string",
-                      minLength: 1
-                    }
-                  },
-                  additionalProperties: false
-                }
-              },
-              observers: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  required: [
-                    "observer",
-                    "observation_target",
-                    "status",
-                    "subject_ref",
-                    "surface_id"
-                  ],
-                  properties: {
-                    observer: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    observation_target: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    status: {
-                      enum: [
-                        "provided",
-                        "verified"
-                      ]
-                    },
-                    provenance_ref: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    observer_id: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    target_id: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    subject_ref: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    surface_id: {
-                      type: "string",
-                      minLength: 1
-                    }
-                  },
-                  additionalProperties: false
-                }
-              },
-              controls: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  required: [
-                    "control",
-                    "status"
-                  ],
-                  properties: {
-                    control: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    status: {
-                      enum: [
-                        "provided",
-                        "verified"
-                      ]
-                    },
-                    provenance_ref: {
-                      type: "string",
-                      minLength: 1
-                    }
-                  },
-                  additionalProperties: false
-                }
-              },
-              setup_resources: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  properties: {
-                    resource_id: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    kind: {
-                      enum: [
-                        "entry",
-                        "fixture",
-                        "account",
-                        "data"
-                      ]
-                    },
-                    locator: {
-                      type: "string",
-                      pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
-                    },
-                    evidence_ref: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    }
-                  },
-                  required: [
-                    "resource_id",
-                    "kind",
-                    "locator",
-                    "evidence_ref"
-                  ],
-                  additionalProperties: false
-                }
-              }
-            },
-            additionalProperties: false
-          },
-          post_state: {
-            type: "object",
-            required: [
-              "state",
-              "evidence_ref",
-              "support_review"
-            ],
-            properties: {
-              state: {
-                type: "string",
-                minLength: 1
-              },
-              evidence_ref: {
-                type: "string",
-                minLength: 1
-              },
-              support_review: {
-                const: "supported"
-              }
-            },
-            additionalProperties: false
-          },
-          cleanup: {
-            oneOf: [
-              {
-                type: "object",
-                required: [
-                  "required",
-                  "steps",
-                  "evidence_ref",
-                  "support_review",
-                  "resolved_effects"
-                ],
-                properties: {
-                  required: {
-                    const: true
-                  },
-                  steps: {
-                    type: "array",
-                    items: {
-                      type: "string"
-                    },
-                    minItems: 1
-                  },
-                  evidence_ref: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  support_review: {
-                    const: "supported"
-                  },
-                  resolved_effects: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    uniqueItems: true
-                  }
-                },
-                additionalProperties: false
-              },
-              {
-                type: "object",
-                required: [
-                  "required",
-                  "no_cleanup_reason",
-                  "no_cleanup_evidence_ref",
-                  "support_review",
-                  "resolved_effects"
-                ],
-                properties: {
-                  required: {
-                    const: false
-                  },
-                  no_cleanup_reason: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  no_cleanup_evidence_ref: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  support_review: {
-                    const: "supported"
-                  },
-                  resolved_effects: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    uniqueItems: true
-                  }
-                },
-                additionalProperties: false
-              }
-            ]
-          },
-          evidence_refs: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            minItems: 1,
-            uniqueItems: true
-          },
-          execution_signature: {
-            type: "object",
-            required: [
-              "role",
-              "precondition_state",
-              "data_partition",
-              "action_path",
-              "oracle_refs"
-            ],
-            properties: {
-              role: {
-                type: "string",
-                minLength: 1
-              },
-              precondition_state: {
-                type: "string",
-                minLength: 1
-              },
-              data_partition: {
-                type: "string",
-                minLength: 1
-              },
-              action_path: {
-                type: "array",
-                items: {
-                  type: "string"
-                },
-                minItems: 1
-              },
-              oracle_refs: {
-                type: "array",
-                items: {
-                  type: "string"
-                },
-                minItems: 1,
-                uniqueItems: true
-              }
-            },
-            additionalProperties: false
-          },
-          scenario: {
-            oneOf: [
-              {
-                type: "object",
-                properties: {
-                  operation_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  operation_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  partition_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  subject_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  intent: {
-                    const: "behavior"
-                  }
-                },
-                required: [
-                  "operation_id",
-                  "operation_ref",
-                  "partition_id",
-                  "subject_ref",
-                  "intent"
-                ],
-                additionalProperties: false
-              },
-              {
-                type: "object",
-                properties: {
-                  operation_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  operation_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  partition_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  subject_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  intent: {
-                    const: "compatibility"
-                  },
-                  compatibility: {
-                    type: "object",
-                    properties: {
-                      baseline_ref: {
-                        type: "string",
-                        minLength: 1,
-                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                      },
-                      dimensions: {
-                        type: "array",
-                        items: {
-                          type: "string",
-                          minLength: 1,
-                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                        },
-                        minItems: 1,
-                        uniqueItems: true
-                      }
-                    },
-                    required: [
-                      "baseline_ref",
-                      "dimensions"
-                    ],
-                    additionalProperties: false
-                  }
-                },
-                required: [
-                  "operation_id",
-                  "operation_ref",
-                  "partition_id",
-                  "subject_ref",
-                  "intent",
-                  "compatibility"
-                ],
-                additionalProperties: false
-              }
-            ]
-          },
-          risk_basis: {
-            type: "object",
-            properties: {
-              impact: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              likelihood: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              exposure: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              }
-            },
-            required: [
-              "impact",
-              "likelihood",
-              "exposure"
-            ],
-            additionalProperties: false
-          },
-          execution_effects: {
-            type: "array",
-            items: {
-              type: "string",
-              minLength: 1,
-              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-            },
-            uniqueItems: true
-          }
-        },
-        additionalProperties: false
-      }
-    },
-    conditional: {
-      type: "array",
-      items: {
-        type: "object",
-        required: [
-          "case_id",
-          "title",
-          "scope",
-          "risk",
-          "role",
-          "fact_ids",
-          "obligation_ids",
-          "preconditions",
-          "data",
-          "steps",
-          "testability_profile",
-          "post_state",
-          "cleanup",
-          "evidence_refs",
-          "temporary_assumption",
-          "execution_signature",
-          "scenario",
-          "risk_basis",
-          "execution_effects"
-        ],
-        properties: {
-          case_id: {
-            type: "string",
-            minLength: 1
-          },
-          title: {
-            type: "string",
-            minLength: 1
-          },
-          scope: {
-            type: "string",
-            minLength: 1
-          },
-          risk: {
-            enum: [
-              "critical",
-              "high",
-              "medium",
-              "low"
-            ]
-          },
-          role: {
-            type: "object",
-            required: [
-              "value",
-              "evidence_ref",
-              "support_review"
-            ],
-            properties: {
-              value: {
-                type: "string",
-                minLength: 1
-              },
-              evidence_ref: {
-                type: "string",
-                minLength: 1
-              },
-              support_review: {
-                enum: [
-                  "supported",
-                  "contradicted",
-                  "uncertain"
-                ]
-              }
-            },
-            additionalProperties: false
-          },
-          fact_ids: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            minItems: 1,
-            uniqueItems: true
-          },
-          obligation_ids: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            minItems: 1,
-            uniqueItems: true
-          },
-          source_claim_ids: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            uniqueItems: true
-          },
-          preconditions: {
-            type: "array",
-            minItems: 1,
-            items: {
-              type: "object",
-              required: [
-                "condition",
-                "reachable_from",
-                "source_claim_ids",
-                "evidence_ref",
-                "support_review",
-                "setup"
-              ],
-              properties: {
-                condition: {
-                  type: "string",
-                  minLength: 1
-                },
-                reachable_from: {
-                  type: "string",
-                  minLength: 1
-                },
-                source_claim_ids: {
-                  type: "array",
-                  items: {
-                    type: "string"
-                  },
-                  minItems: 1,
-                  uniqueItems: true
-                },
-                evidence_ref: {
-                  type: "string",
-                  minLength: 1
-                },
-                support_review: {
-                  enum: [
-                    "supported",
-                    "contradicted",
-                    "uncertain"
-                  ]
-                },
-                setup: {
-                  type: "object",
-                  properties: {
-                    resource_kind: {
-                      enum: [
-                        "entry",
-                        "fixture",
-                        "account",
-                        "data"
-                      ]
-                    },
-                    resource_ref: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    completion: {
-                      type: "object",
-                      properties: {
-                        subject_ref: {
-                          type: "string",
-                          minLength: 1,
-                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                        },
-                        operator: {
-                          enum: [
-                            "equals",
-                            "contains",
-                            "matches",
-                            "within"
-                          ]
-                        },
-                        operand: {
-                          oneOf: [
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "string"
-                                },
-                                value: {
-                                  type: "string"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "number"
-                                },
-                                value: {
-                                  type: "number"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "boolean"
-                                },
-                                value: {
-                                  type: "boolean"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              properties: {
-                                type: {
-                                  const: "null"
-                                },
-                                value: {
-                                  type: "null"
-                                }
-                              },
-                              required: [
-                                "type",
-                                "value"
-                              ],
-                              additionalProperties: false
-                            }
-                          ]
-                        }
-                      },
-                      required: [
-                        "subject_ref",
-                        "operator",
-                        "operand"
-                      ],
-                      additionalProperties: false
-                    },
-                    mutation_effects: {
-                      type: "array",
-                      items: {
-                        type: "string",
-                        minLength: 1,
-                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                      },
-                      uniqueItems: true
-                    }
-                  },
-                  required: [
-                    "resource_kind",
-                    "resource_ref",
-                    "completion",
-                    "mutation_effects"
-                  ],
-                  additionalProperties: false
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          data: {
-            type: "array",
-            minItems: 1,
-            items: {
-              type: "object",
-              required: [
-                "name",
-                "value",
-                "provenance",
-                "value_origin",
-                "support_review",
-                "partition_id"
-              ],
-              properties: {
-                name: {
-                  type: "string",
-                  minLength: 1
-                },
-                value: {
-                  type: "string",
-                  minLength: 1
-                },
-                provenance: {
-                  oneOf: [
-                    {
-                      type: "object",
-                      required: [
-                        "type",
-                        "ref"
-                      ],
-                      properties: {
-                        type: {
-                          const: "evidence"
-                        },
-                        ref: {
-                          type: "string",
-                          minLength: 1
-                        }
-                      },
-                      additionalProperties: false
-                    },
-                    {
-                      type: "object",
-                      required: [
-                        "type",
-                        "ref"
-                      ],
-                      properties: {
-                        type: {
-                          const: "derivation"
-                        },
-                        ref: {
-                          type: "string",
-                          minLength: 1
-                        }
-                      },
-                      additionalProperties: false
-                    }
-                  ]
-                },
-                value_origin: {
-                  enum: [
-                    "requirement",
-                    "source_description",
-                    "example",
-                    "derived",
-                    "temporary_assumption"
-                  ]
-                },
-                support_review: {
-                  enum: [
-                    "supported",
-                    "contradicted",
-                    "uncertain"
-                  ]
-                },
-                partition_id: {
-                  type: "string",
-                  minLength: 1
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          steps: {
-            type: "array",
-            minItems: 1,
-            items: {
-              type: "object",
-              required: [
-                "step_id",
-                "action",
-                "action_evidence_ref",
-                "support_review",
-                "expectations",
-                "operation_id"
-              ],
-              properties: {
-                step_id: {
-                  type: "string",
-                  minLength: 1
-                },
-                action: {
-                  type: "string",
-                  minLength: 1
-                },
-                action_evidence_ref: {
-                  type: "string",
-                  minLength: 1
-                },
-                support_review: {
-                  enum: [
-                    "supported",
-                    "contradicted",
-                    "uncertain"
-                  ]
-                },
-                expectations: {
-                  type: "array",
-                  minItems: 1,
-                  items: {
-                    oneOf: [
-                      {
-                        type: "object",
-                        required: [
-                          "kind",
-                          "expectation_id",
-                          "business_assertion",
-                          "preceding_action_id",
-                          "observer",
-                          "observation_surface",
-                          "observation_target",
-                          "oracle",
-                          "evidence_ref",
-                          "support_review",
-                          "closes_obligation_id",
-                          "oracle_evidence_refs"
-                        ],
-                        properties: {
-                          kind: {
-                            const: "obligation-oracle"
-                          },
-                          expectation_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          business_assertion: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          preceding_action_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observer: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_surface: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_target: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          oracle: {
-                            oneOf: [
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_value",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "value"
-                                  },
-                                  expected_value: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_state",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "state"
-                                  },
-                                  expected_state: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_event",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "event"
-                                  },
-                                  expected_event: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_side_effect",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "side-effect"
-                                  },
-                                  expected_side_effect: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              }
-                            ]
-                          },
-                          evidence_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          support_review: {
-                            enum: [
-                              "supported",
-                              "contradicted",
-                              "uncertain"
-                            ]
-                          },
-                          closes_obligation_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          oracle_evidence_refs: {
-                            type: "array",
-                            items: {
-                              type: "string",
-                              minLength: 1
-                            },
-                            minItems: 1,
-                            uniqueItems: true
-                          },
-                          observer_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          target_ref: {
-                            type: "string",
-                            minLength: 1
-                          }
-                        },
-                        additionalProperties: false
-                      },
-                      {
-                        type: "object",
-                        required: [
-                          "kind",
-                          "expectation_id",
-                          "business_assertion",
-                          "preceding_action_id",
-                          "observer",
-                          "observation_surface",
-                          "observation_target",
-                          "oracle",
-                          "evidence_ref",
-                          "support_review",
-                          "oracle_evidence_refs"
-                        ],
-                        properties: {
-                          kind: {
-                            const: "auxiliary"
-                          },
-                          expectation_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          business_assertion: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          preceding_action_id: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observer: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_surface: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          observation_target: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          oracle: {
-                            oneOf: [
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_value",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "value"
-                                  },
-                                  expected_value: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_state",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "state"
-                                  },
-                                  expected_state: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_event",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "event"
-                                  },
-                                  expected_event: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              },
-                              {
-                                type: "object",
-                                required: [
-                                  "type",
-                                  "expected_side_effect",
-                                  "comparison",
-                                  "assertion"
-                                ],
-                                properties: {
-                                  type: {
-                                    const: "side-effect"
-                                  },
-                                  expected_side_effect: {
-                                    type: "string",
-                                    minLength: 1
-                                  },
-                                  comparison: {
-                                    enum: [
-                                      "equals",
-                                      "contains",
-                                      "matches",
-                                      "within"
-                                    ]
-                                  },
-                                  tolerance: {
-                                    type: "number"
-                                  },
-                                  window: {
-                                    type: "string"
-                                  },
-                                  assertion: {
-                                    type: "object",
-                                    properties: {
-                                      subject_ref: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      },
-                                      operator: {
-                                        enum: [
-                                          "equals",
-                                          "contains",
-                                          "matches",
-                                          "within"
-                                        ]
-                                      },
-                                      operand: {
-                                        oneOf: [
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "string"
-                                              },
-                                              value: {
-                                                type: "string"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "number"
-                                              },
-                                              value: {
-                                                type: "number"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "boolean"
-                                              },
-                                              value: {
-                                                type: "boolean"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          },
-                                          {
-                                            type: "object",
-                                            properties: {
-                                              type: {
-                                                const: "null"
-                                              },
-                                              value: {
-                                                type: "null"
-                                              }
-                                            },
-                                            required: [
-                                              "type",
-                                              "value"
-                                            ],
-                                            additionalProperties: false
-                                          }
-                                        ]
-                                      },
-                                      surface: {
-                                        type: "string",
-                                        minLength: 1,
-                                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                                      }
-                                    },
-                                    required: [
-                                      "subject_ref",
-                                      "operator",
-                                      "operand",
-                                      "surface"
-                                    ],
-                                    additionalProperties: false
-                                  }
-                                },
-                                additionalProperties: false
-                              }
-                            ]
-                          },
-                          evidence_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          support_review: {
-                            enum: [
-                              "supported",
-                              "contradicted",
-                              "uncertain"
-                            ]
-                          },
-                          oracle_evidence_refs: {
-                            type: "array",
-                            items: {
-                              type: "string",
-                              minLength: 1
-                            },
-                            minItems: 1,
-                            uniqueItems: true
-                          },
-                          observer_ref: {
-                            type: "string",
-                            minLength: 1
-                          },
-                          target_ref: {
-                            type: "string",
-                            minLength: 1
-                          }
-                        },
-                        additionalProperties: false
-                      }
-                    ]
-                  }
-                },
-                operation_id: {
-                  type: "string",
-                  minLength: 1
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          testability_profile: {
-            type: "object",
-            required: [
-              "capabilities",
-              "observers",
-              "controls",
-              "setup_resources"
-            ],
-            properties: {
-              capabilities: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  required: [
-                    "capability",
-                    "status"
-                  ],
-                  properties: {
-                    capability: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    status: {
-                      enum: [
-                        "provided",
-                        "verified",
-                        "approved-assumption",
-                        "unavailable",
-                        "unknown"
-                      ]
-                    },
-                    provenance_ref: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    capability_id: {
-                      type: "string",
-                      minLength: 1
-                    }
-                  },
-                  additionalProperties: false
-                }
-              },
-              observers: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  required: [
-                    "observer",
-                    "observation_target",
-                    "status",
-                    "subject_ref",
-                    "surface_id"
-                  ],
-                  properties: {
-                    observer: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    observation_target: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    status: {
-                      enum: [
-                        "provided",
-                        "verified",
-                        "approved-assumption",
-                        "unavailable",
-                        "unknown"
-                      ]
-                    },
-                    provenance_ref: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    observer_id: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    target_id: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    subject_ref: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    surface_id: {
-                      type: "string",
-                      minLength: 1
-                    }
-                  },
-                  additionalProperties: false
-                }
-              },
-              controls: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  required: [
-                    "control",
-                    "status"
-                  ],
-                  properties: {
-                    control: {
-                      type: "string",
-                      minLength: 1
-                    },
-                    status: {
-                      enum: [
-                        "provided",
-                        "verified",
-                        "approved-assumption",
-                        "unavailable",
-                        "unknown"
-                      ]
-                    },
-                    provenance_ref: {
-                      type: "string",
-                      minLength: 1
-                    }
-                  },
-                  additionalProperties: false
-                }
-              },
-              setup_resources: {
-                type: "array",
-                minItems: 1,
-                items: {
-                  type: "object",
-                  properties: {
-                    resource_id: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    kind: {
-                      enum: [
-                        "entry",
-                        "fixture",
-                        "account",
-                        "data"
-                      ]
-                    },
-                    locator: {
-                      type: "string",
-                      pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
-                    },
-                    evidence_ref: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    }
-                  },
-                  required: [
-                    "resource_id",
-                    "kind",
-                    "locator",
-                    "evidence_ref"
-                  ],
-                  additionalProperties: false
-                }
-              }
-            },
-            additionalProperties: false
-          },
-          post_state: {
-            type: "object",
-            required: [
-              "state",
-              "evidence_ref",
-              "support_review"
-            ],
-            properties: {
-              state: {
-                type: "string",
-                minLength: 1
-              },
-              evidence_ref: {
-                type: "string",
-                minLength: 1
-              },
-              support_review: {
-                enum: [
-                  "supported",
-                  "contradicted",
-                  "uncertain"
-                ]
-              }
-            },
-            additionalProperties: false
-          },
-          cleanup: {
-            oneOf: [
-              {
-                type: "object",
-                required: [
-                  "required",
-                  "steps",
-                  "evidence_ref",
-                  "support_review",
-                  "resolved_effects"
-                ],
-                properties: {
-                  required: {
-                    const: true
-                  },
-                  steps: {
-                    type: "array",
-                    items: {
-                      type: "string"
-                    },
-                    minItems: 1
-                  },
-                  evidence_ref: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  support_review: {
-                    enum: [
-                      "supported",
-                      "contradicted",
-                      "uncertain"
-                    ]
-                  },
-                  resolved_effects: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    uniqueItems: true
-                  }
-                },
-                additionalProperties: false
-              },
-              {
-                type: "object",
-                required: [
-                  "required",
-                  "no_cleanup_reason",
-                  "no_cleanup_evidence_ref",
-                  "support_review",
-                  "resolved_effects"
-                ],
-                properties: {
-                  required: {
-                    const: false
-                  },
-                  no_cleanup_reason: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  no_cleanup_evidence_ref: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  support_review: {
-                    enum: [
-                      "supported",
-                      "contradicted",
-                      "uncertain"
-                    ]
-                  },
-                  resolved_effects: {
-                    type: "array",
-                    items: {
-                      type: "string",
-                      minLength: 1,
-                      pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                    },
-                    uniqueItems: true
-                  }
-                },
-                additionalProperties: false
-              }
-            ]
-          },
-          evidence_refs: {
-            type: "array",
-            items: {
-              type: "string"
-            },
-            minItems: 1,
-            uniqueItems: true
-          },
-          temporary_assumption: {
-            type: "object",
-            required: [
-              "claim_id",
-              "invalidation_condition"
-            ],
-            properties: {
-              claim_id: {
-                type: "string",
-                minLength: 1
-              },
-              invalidation_condition: {
-                type: "string",
-                minLength: 1
-              }
-            },
-            additionalProperties: false
-          },
-          execution_signature: {
-            type: "object",
-            required: [
-              "role",
-              "precondition_state",
-              "data_partition",
-              "action_path",
-              "oracle_refs"
-            ],
-            properties: {
-              role: {
-                type: "string",
-                minLength: 1
-              },
-              precondition_state: {
-                type: "string",
-                minLength: 1
-              },
-              data_partition: {
-                type: "string",
-                minLength: 1
-              },
-              action_path: {
-                type: "array",
-                items: {
-                  type: "string"
-                },
-                minItems: 1
-              },
-              oracle_refs: {
-                type: "array",
-                items: {
-                  type: "string"
-                },
-                minItems: 1,
-                uniqueItems: true
-              }
-            },
-            additionalProperties: false
-          },
-          scenario: {
-            oneOf: [
-              {
-                type: "object",
-                properties: {
-                  operation_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  operation_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  partition_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  subject_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  intent: {
-                    const: "behavior"
-                  }
-                },
-                required: [
-                  "operation_id",
-                  "operation_ref",
-                  "partition_id",
-                  "subject_ref",
-                  "intent"
-                ],
-                additionalProperties: false
-              },
-              {
-                type: "object",
-                properties: {
-                  operation_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  operation_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  partition_id: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  subject_ref: {
-                    type: "string",
-                    minLength: 1,
-                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                  },
-                  intent: {
-                    const: "compatibility"
-                  },
-                  compatibility: {
-                    type: "object",
-                    properties: {
-                      baseline_ref: {
-                        type: "string",
-                        minLength: 1,
-                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                      },
-                      dimensions: {
-                        type: "array",
-                        items: {
-                          type: "string",
-                          minLength: 1,
-                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-                        },
-                        minItems: 1,
-                        uniqueItems: true
-                      }
-                    },
-                    required: [
-                      "baseline_ref",
-                      "dimensions"
-                    ],
-                    additionalProperties: false
-                  }
-                },
-                required: [
-                  "operation_id",
-                  "operation_ref",
-                  "partition_id",
-                  "subject_ref",
-                  "intent",
-                  "compatibility"
-                ],
-                additionalProperties: false
-              }
-            ]
-          },
-          risk_basis: {
-            type: "object",
-            properties: {
-              impact: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              likelihood: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              exposure: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              }
-            },
-            required: [
-              "impact",
-              "likelihood",
-              "exposure"
-            ],
-            additionalProperties: false
-          },
-          execution_effects: {
-            type: "array",
-            items: {
-              type: "string",
-              minLength: 1,
-              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-            },
-            uniqueItems: true
-          }
-        },
-        additionalProperties: false
-      }
-    },
-    blocked: {
-      type: "array",
-      items: {
-        type: "object",
-        required: [
-          "obligation_id",
-          "root_issue_id",
-          "blocking_roots",
-          "subject",
-          "reason",
-          "scope",
-          "recovery",
-          "risk"
-        ],
-        properties: {
-          blocking_roots: {
-            type: "array",
-            minItems: 1,
-            uniqueItems: true,
-            items: {
-              type: "object",
-              required: ["root_issue_id", "recovery"],
-              properties: {
-                root_issue_id: { type: "string", minLength: 1 },
-                recovery: {
-                  type: "object",
-                  required: ["missing_type", "required_material", "question"],
-                  properties: {
-                    missing_type: { type: "string", minLength: 1 },
-                    required_material: { type: "string", minLength: 1 },
-                    question: { type: "string", minLength: 1 }
-                  },
-                  additionalProperties: false
-                }
-              },
-              additionalProperties: false
-            }
-          },
-          obligation_id: {
-            type: "string",
-            minLength: 1
-          },
-          root_issue_id: {
-            type: "string",
-            minLength: 1
-          },
-          subject: {
-            type: "string",
-            pattern: "\\S"
-          },
-          reason: {
-            type: "string",
-            minLength: 1
-          },
-          scope: {
-            type: "string",
-            minLength: 1
-          },
-          risk: {
-            enum: [
-              "critical",
-              "high",
-              "medium",
-              "low"
-            ]
-          },
-          recovery: {
-            type: "object",
-            required: [
-              "missing_type",
-              "required_material",
-              "question"
-            ],
-            properties: {
-              missing_type: {
-                type: "string",
-                minLength: 1
-              },
-              required_material: {
-                type: "string",
-                minLength: 1
-              },
-              question: {
-                type: "string",
-                minLength: 1
-              }
-            },
-            additionalProperties: false
-          }
-        },
-        additionalProperties: false
-      }
-    },
-    exploratory: {
-      type: "array",
-      items: {
-        oneOf: [
-          {
-            type: "object",
-            required: [
-              "exploratory_id",
-              "title",
-              "scope",
-              "risk",
-              "reason"
-            ],
-            properties: {
-              exploratory_id: {
-                type: "string",
-                minLength: 1
-              },
-              title: {
-                type: "string",
-                minLength: 1
-              },
-              scope: {
-                type: "string",
-                minLength: 1
-              },
-              risk: {
-                enum: [
-                  "critical",
-                  "high",
-                  "medium",
-                  "low"
-                ]
-              },
-              reason: {
-                type: "string",
-                minLength: 1
-              }
-            },
-            additionalProperties: false
-          },
-          {
-            type: "object",
-            properties: {
-              exploratory_id: {
-                type: "string",
-                minLength: 1,
-                pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
-              },
-              title: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              scope: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              risk: {
-                enum: [
-                  "critical",
-                  "high",
-                  "medium",
-                  "low"
-                ]
-              },
-              origin: {
-                const: "heuristic"
-              },
-              category: {
-                enum: [
-                  "boundary",
-                  "concurrency",
-                  "failure",
-                  "degradation",
-                  "security",
-                  "usability"
-                ]
-              },
-              hypothesis: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              rationale: {
-                type: "string",
-                minLength: 1,
-                pattern: "\\S"
-              },
-              reason: {
-                type: "string",
-                minLength: 1
-              },
-              runner_eligible: {
-                const: false
-              }
-            },
-            required: [
-              "exploratory_id",
-              "title",
-              "scope",
-              "risk",
-              "origin",
-              "category",
-              "hypothesis",
-              "rationale",
-              "reason",
-              "runner_eligible"
-            ],
-            additionalProperties: false
-          }
-        ]
-      }
-    },
-    coverage: {
+    legacyBundle: {
       type: "object",
       required: [
-        "requirements",
-        "formal",
-        "executable",
-        "expert_recall",
-        "not_applicable"
+        "schema_version",
+        "source_revision",
+        "grounded",
+        "conditional",
+        "blocked",
+        "exploratory",
+        "coverage",
+        "quality",
+        "execution_plan"
       ],
       properties: {
-        requirements: {
-          type: "object",
-          required: [
-            "total",
-            "accounted",
-            "entries"
-          ],
-          properties: {
-            total: {
-              type: "integer",
-              minimum: 0
+        schema_version: {
+          const: "3.0.0"
+        },
+        source_revision: {
+          type: "integer",
+          minimum: 0
+        },
+        execution_plan: {
+          oneOf: [
+            {
+              $ref: "#/$defs/ready_execution_plan"
             },
-            accounted: {
-              type: "integer",
-              minimum: 0
-            },
-            entries: {
-              type: "array",
-              items: {
+            {
+              $ref: "#/$defs/document_execution_plan"
+            }
+          ]
+        },
+        grounded: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "case_id",
+              "title",
+              "scope",
+              "risk",
+              "role",
+              "fact_ids",
+              "obligation_ids",
+              "preconditions",
+              "data",
+              "steps",
+              "testability_profile",
+              "post_state",
+              "cleanup",
+              "evidence_refs",
+              "execution_signature",
+              "scenario",
+              "risk_basis",
+              "execution_effects"
+            ],
+            properties: {
+              case_id: {
+                type: "string",
+                minLength: 1
+              },
+              title: {
+                type: "string",
+                minLength: 1
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              role: {
                 type: "object",
                 required: [
-                  "fact_id",
-                  "status"
+                  "value",
+                  "evidence_ref",
+                  "support_review"
                 ],
                 properties: {
-                  fact_id: {
+                  value: {
                     type: "string",
                     minLength: 1
                   },
-                  status: {
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    const: "supported"
+                  }
+                },
+                additionalProperties: false
+              },
+              fact_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              obligation_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              source_claim_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              },
+              preconditions: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "condition",
+                    "reachable_from",
+                    "source_claim_ids",
+                    "evidence_ref",
+                    "support_review",
+                    "setup"
+                  ],
+                  properties: {
+                    condition: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    reachable_from: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    source_claim_ids: {
+                      type: "array",
+                      items: {
+                        type: "string"
+                      },
+                      minItems: 1,
+                      uniqueItems: true
+                    },
+                    evidence_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    support_review: {
+                      const: "supported"
+                    },
+                    setup: {
+                      type: "object",
+                      properties: {
+                        resource_kind: {
+                          enum: [
+                            "entry",
+                            "fixture",
+                            "account",
+                            "data"
+                          ]
+                        },
+                        resource_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        completion: {
+                          type: "object",
+                          properties: {
+                            subject_ref: {
+                              type: "string",
+                              minLength: 1,
+                              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                            },
+                            operator: {
+                              enum: [
+                                "equals",
+                                "contains",
+                                "matches",
+                                "within"
+                              ]
+                            },
+                            operand: {
+                              oneOf: [
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "string"
+                                    },
+                                    value: {
+                                      type: "string"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                },
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "number"
+                                    },
+                                    value: {
+                                      type: "number"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                },
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "boolean"
+                                    },
+                                    value: {
+                                      type: "boolean"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                },
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "null"
+                                    },
+                                    value: {
+                                      type: "null"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                }
+                              ]
+                            }
+                          },
+                          required: [
+                            "subject_ref",
+                            "operator",
+                            "operand"
+                          ],
+                          additionalProperties: false
+                        },
+                        mutation_effects: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                            minLength: 1,
+                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                          },
+                          uniqueItems: true
+                        }
+                      },
+                      required: [
+                        "resource_kind",
+                        "resource_ref",
+                        "completion",
+                        "mutation_effects"
+                      ],
+                      additionalProperties: false
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              data: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "name",
+                    "value",
+                    "provenance",
+                    "value_origin",
+                    "support_review",
+                    "partition_id"
+                  ],
+                  properties: {
+                    name: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    value: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    provenance: {
+                      oneOf: [
+                        {
+                          type: "object",
+                          required: [
+                            "type",
+                            "ref"
+                          ],
+                          properties: {
+                            type: {
+                              const: "evidence"
+                            },
+                            ref: {
+                              type: "string",
+                              minLength: 1
+                            }
+                          },
+                          additionalProperties: false
+                        },
+                        {
+                          type: "object",
+                          required: [
+                            "type",
+                            "ref"
+                          ],
+                          properties: {
+                            type: {
+                              const: "derivation"
+                            },
+                            ref: {
+                              type: "string",
+                              minLength: 1
+                            }
+                          },
+                          additionalProperties: false
+                        }
+                      ]
+                    },
+                    value_origin: {
+                      enum: [
+                        "requirement",
+                        "source_description",
+                        "example",
+                        "derived",
+                        "temporary_assumption"
+                      ]
+                    },
+                    support_review: {
+                      const: "supported"
+                    },
+                    partition_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              steps: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "step_id",
+                    "action",
+                    "action_evidence_ref",
+                    "support_review",
+                    "expectations",
+                    "operation_id"
+                  ],
+                  properties: {
+                    step_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    action: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    action_evidence_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    support_review: {
+                      const: "supported"
+                    },
+                    expectations: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        oneOf: [
+                          {
+                            type: "object",
+                            required: [
+                              "kind",
+                              "expectation_id",
+                              "business_assertion",
+                              "preceding_action_id",
+                              "observer",
+                              "observation_surface",
+                              "observation_target",
+                              "oracle",
+                              "evidence_ref",
+                              "support_review",
+                              "closes_obligation_id",
+                              "oracle_evidence_refs"
+                            ],
+                            properties: {
+                              kind: {
+                                const: "obligation-oracle"
+                              },
+                              expectation_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              business_assertion: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              preceding_action_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observer: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_surface: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_target: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              oracle: {
+                                oneOf: [
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_value",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "value"
+                                      },
+                                      expected_value: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_state",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "state"
+                                      },
+                                      expected_state: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_event",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "event"
+                                      },
+                                      expected_event: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_side_effect",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "side-effect"
+                                      },
+                                      expected_side_effect: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  }
+                                ]
+                              },
+                              evidence_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              support_review: {
+                                const: "supported"
+                              },
+                              closes_obligation_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              oracle_evidence_refs: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                  minLength: 1
+                                },
+                                minItems: 1,
+                                uniqueItems: true
+                              },
+                              observer_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              target_ref: {
+                                type: "string",
+                                minLength: 1
+                              }
+                            },
+                            additionalProperties: false
+                          },
+                          {
+                            type: "object",
+                            required: [
+                              "kind",
+                              "expectation_id",
+                              "business_assertion",
+                              "preceding_action_id",
+                              "observer",
+                              "observation_surface",
+                              "observation_target",
+                              "oracle",
+                              "evidence_ref",
+                              "support_review",
+                              "oracle_evidence_refs"
+                            ],
+                            properties: {
+                              kind: {
+                                const: "auxiliary"
+                              },
+                              expectation_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              business_assertion: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              preceding_action_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observer: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_surface: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_target: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              oracle: {
+                                oneOf: [
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_value",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "value"
+                                      },
+                                      expected_value: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_state",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "state"
+                                      },
+                                      expected_state: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_event",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "event"
+                                      },
+                                      expected_event: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_side_effect",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "side-effect"
+                                      },
+                                      expected_side_effect: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  }
+                                ]
+                              },
+                              evidence_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              support_review: {
+                                const: "supported"
+                              },
+                              oracle_evidence_refs: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                  minLength: 1
+                                },
+                                minItems: 1,
+                                uniqueItems: true
+                              },
+                              observer_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              target_ref: {
+                                type: "string",
+                                minLength: 1
+                              }
+                            },
+                            additionalProperties: false
+                          }
+                        ]
+                      }
+                    },
+                    operation_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              testability_profile: {
+                type: "object",
+                required: [
+                  "capabilities",
+                  "observers",
+                  "controls",
+                  "setup_resources"
+                ],
+                properties: {
+                  capabilities: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      required: [
+                        "capability",
+                        "status"
+                      ],
+                      properties: {
+                        capability: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        status: {
+                          enum: [
+                            "provided",
+                            "verified"
+                          ]
+                        },
+                        provenance_ref: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        capability_id: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  observers: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      required: [
+                        "observer",
+                        "observation_target",
+                        "status",
+                        "subject_ref",
+                        "surface_id"
+                      ],
+                      properties: {
+                        observer: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        observation_target: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        status: {
+                          enum: [
+                            "provided",
+                            "verified"
+                          ]
+                        },
+                        provenance_ref: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        observer_id: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        target_id: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        subject_ref: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        surface_id: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  controls: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      required: [
+                        "control",
+                        "status"
+                      ],
+                      properties: {
+                        control: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        status: {
+                          enum: [
+                            "provided",
+                            "verified"
+                          ]
+                        },
+                        provenance_ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  setup_resources: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      properties: {
+                        resource_id: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        kind: {
+                          enum: [
+                            "entry",
+                            "fixture",
+                            "account",
+                            "data"
+                          ]
+                        },
+                        locator: {
+                          type: "string",
+                          pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
+                        },
+                        evidence_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        }
+                      },
+                      required: [
+                        "resource_id",
+                        "kind",
+                        "locator",
+                        "evidence_ref"
+                      ],
+                      additionalProperties: false
+                    }
+                  }
+                },
+                additionalProperties: false
+              },
+              post_state: {
+                type: "object",
+                required: [
+                  "state",
+                  "evidence_ref",
+                  "support_review"
+                ],
+                properties: {
+                  state: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
+                    const: "supported"
+                  }
+                },
+                additionalProperties: false
+              },
+              cleanup: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: [
+                      "required",
+                      "steps",
+                      "evidence_ref",
+                      "support_review",
+                      "resolved_effects"
+                    ],
+                    properties: {
+                      required: {
+                        const: true
+                      },
+                      steps: {
+                        type: "array",
+                        items: {
+                          type: "string"
+                        },
+                        minItems: 1
+                      },
+                      evidence_ref: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      support_review: {
+                        const: "supported"
+                      },
+                      resolved_effects: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    required: [
+                      "required",
+                      "no_cleanup_reason",
+                      "no_cleanup_evidence_ref",
+                      "support_review",
+                      "resolved_effects"
+                    ],
+                    properties: {
+                      required: {
+                        const: false
+                      },
+                      no_cleanup_reason: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      no_cleanup_evidence_ref: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      support_review: {
+                        const: "supported"
+                      },
+                      resolved_effects: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                ]
+              },
+              evidence_refs: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              execution_signature: {
+                type: "object",
+                required: [
+                  "role",
+                  "precondition_state",
+                  "data_partition",
+                  "action_path",
+                  "oracle_refs"
+                ],
+                properties: {
+                  role: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  precondition_state: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  data_partition: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  action_path: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1
+                  },
+                  oracle_refs: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1,
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              },
+              scenario: {
+                oneOf: [
+                  {
+                    type: "object",
+                    properties: {
+                      operation_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      operation_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      partition_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      subject_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      intent: {
+                        const: "behavior"
+                      }
+                    },
+                    required: [
+                      "operation_id",
+                      "operation_ref",
+                      "partition_id",
+                      "subject_ref",
+                      "intent"
+                    ],
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    properties: {
+                      operation_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      operation_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      partition_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      subject_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      intent: {
+                        const: "compatibility"
+                      },
+                      compatibility: {
+                        type: "object",
+                        properties: {
+                          baseline_ref: {
+                            type: "string",
+                            minLength: 1,
+                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                          },
+                          dimensions: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1,
+                              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          }
+                        },
+                        required: [
+                          "baseline_ref",
+                          "dimensions"
+                        ],
+                        additionalProperties: false
+                      }
+                    },
+                    required: [
+                      "operation_id",
+                      "operation_ref",
+                      "partition_id",
+                      "subject_ref",
+                      "intent",
+                      "compatibility"
+                    ],
+                    additionalProperties: false
+                  }
+                ]
+              },
+              risk_basis: {
+                type: "object",
+                properties: {
+                  impact: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  likelihood: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  exposure: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  }
+                },
+                required: [
+                  "impact",
+                  "likelihood",
+                  "exposure"
+                ],
+                additionalProperties: false
+              },
+              execution_effects: {
+                type: "array",
+                items: {
+                  type: "string",
+                  minLength: 1,
+                  pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                },
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        conditional: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "case_id",
+              "title",
+              "scope",
+              "risk",
+              "role",
+              "fact_ids",
+              "obligation_ids",
+              "preconditions",
+              "data",
+              "steps",
+              "testability_profile",
+              "post_state",
+              "cleanup",
+              "evidence_refs",
+              "temporary_assumption",
+              "execution_signature",
+              "scenario",
+              "risk_basis",
+              "execution_effects"
+            ],
+            properties: {
+              case_id: {
+                type: "string",
+                minLength: 1
+              },
+              title: {
+                type: "string",
+                minLength: 1
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              role: {
+                type: "object",
+                required: [
+                  "value",
+                  "evidence_ref",
+                  "support_review"
+                ],
+                properties: {
+                  value: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
                     enum: [
-                      "covered",
-                      "blocked",
-                      "not_applicable"
+                      "supported",
+                      "contradicted",
+                      "uncertain"
                     ]
                   }
                 },
                 additionalProperties: false
-              }
-            }
-          },
-          additionalProperties: false
-        },
-        formal: {
-          type: "object",
-          required: [
-            "total",
-            "covered",
-            "entries"
-          ],
-          properties: {
-            total: {
-              type: "integer",
-              minimum: 0
-            },
-            covered: {
-              type: "integer",
-              minimum: 0
-            },
-            entries: {
-              type: "array",
-              items: {
+              },
+              fact_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              obligation_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              source_claim_ids: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                uniqueItems: true
+              },
+              preconditions: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "condition",
+                    "reachable_from",
+                    "source_claim_ids",
+                    "evidence_ref",
+                    "support_review",
+                    "setup"
+                  ],
+                  properties: {
+                    condition: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    reachable_from: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    source_claim_ids: {
+                      type: "array",
+                      items: {
+                        type: "string"
+                      },
+                      minItems: 1,
+                      uniqueItems: true
+                    },
+                    evidence_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    support_review: {
+                      enum: [
+                        "supported",
+                        "contradicted",
+                        "uncertain"
+                      ]
+                    },
+                    setup: {
+                      type: "object",
+                      properties: {
+                        resource_kind: {
+                          enum: [
+                            "entry",
+                            "fixture",
+                            "account",
+                            "data"
+                          ]
+                        },
+                        resource_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        completion: {
+                          type: "object",
+                          properties: {
+                            subject_ref: {
+                              type: "string",
+                              minLength: 1,
+                              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                            },
+                            operator: {
+                              enum: [
+                                "equals",
+                                "contains",
+                                "matches",
+                                "within"
+                              ]
+                            },
+                            operand: {
+                              oneOf: [
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "string"
+                                    },
+                                    value: {
+                                      type: "string"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                },
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "number"
+                                    },
+                                    value: {
+                                      type: "number"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                },
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "boolean"
+                                    },
+                                    value: {
+                                      type: "boolean"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                },
+                                {
+                                  type: "object",
+                                  properties: {
+                                    type: {
+                                      const: "null"
+                                    },
+                                    value: {
+                                      type: "null"
+                                    }
+                                  },
+                                  required: [
+                                    "type",
+                                    "value"
+                                  ],
+                                  additionalProperties: false
+                                }
+                              ]
+                            }
+                          },
+                          required: [
+                            "subject_ref",
+                            "operator",
+                            "operand"
+                          ],
+                          additionalProperties: false
+                        },
+                        mutation_effects: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                            minLength: 1,
+                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                          },
+                          uniqueItems: true
+                        }
+                      },
+                      required: [
+                        "resource_kind",
+                        "resource_ref",
+                        "completion",
+                        "mutation_effects"
+                      ],
+                      additionalProperties: false
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              data: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "name",
+                    "value",
+                    "provenance",
+                    "value_origin",
+                    "support_review",
+                    "partition_id"
+                  ],
+                  properties: {
+                    name: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    value: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    provenance: {
+                      oneOf: [
+                        {
+                          type: "object",
+                          required: [
+                            "type",
+                            "ref"
+                          ],
+                          properties: {
+                            type: {
+                              const: "evidence"
+                            },
+                            ref: {
+                              type: "string",
+                              minLength: 1
+                            }
+                          },
+                          additionalProperties: false
+                        },
+                        {
+                          type: "object",
+                          required: [
+                            "type",
+                            "ref"
+                          ],
+                          properties: {
+                            type: {
+                              const: "derivation"
+                            },
+                            ref: {
+                              type: "string",
+                              minLength: 1
+                            }
+                          },
+                          additionalProperties: false
+                        }
+                      ]
+                    },
+                    value_origin: {
+                      enum: [
+                        "requirement",
+                        "source_description",
+                        "example",
+                        "derived",
+                        "temporary_assumption"
+                      ]
+                    },
+                    support_review: {
+                      enum: [
+                        "supported",
+                        "contradicted",
+                        "uncertain"
+                      ]
+                    },
+                    partition_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              steps: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  required: [
+                    "step_id",
+                    "action",
+                    "action_evidence_ref",
+                    "support_review",
+                    "expectations",
+                    "operation_id"
+                  ],
+                  properties: {
+                    step_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    action: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    action_evidence_ref: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    support_review: {
+                      enum: [
+                        "supported",
+                        "contradicted",
+                        "uncertain"
+                      ]
+                    },
+                    expectations: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        oneOf: [
+                          {
+                            type: "object",
+                            required: [
+                              "kind",
+                              "expectation_id",
+                              "business_assertion",
+                              "preceding_action_id",
+                              "observer",
+                              "observation_surface",
+                              "observation_target",
+                              "oracle",
+                              "evidence_ref",
+                              "support_review",
+                              "closes_obligation_id",
+                              "oracle_evidence_refs"
+                            ],
+                            properties: {
+                              kind: {
+                                const: "obligation-oracle"
+                              },
+                              expectation_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              business_assertion: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              preceding_action_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observer: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_surface: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_target: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              oracle: {
+                                oneOf: [
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_value",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "value"
+                                      },
+                                      expected_value: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_state",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "state"
+                                      },
+                                      expected_state: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_event",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "event"
+                                      },
+                                      expected_event: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_side_effect",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "side-effect"
+                                      },
+                                      expected_side_effect: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  }
+                                ]
+                              },
+                              evidence_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              support_review: {
+                                enum: [
+                                  "supported",
+                                  "contradicted",
+                                  "uncertain"
+                                ]
+                              },
+                              closes_obligation_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              oracle_evidence_refs: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                  minLength: 1
+                                },
+                                minItems: 1,
+                                uniqueItems: true
+                              },
+                              observer_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              target_ref: {
+                                type: "string",
+                                minLength: 1
+                              }
+                            },
+                            additionalProperties: false
+                          },
+                          {
+                            type: "object",
+                            required: [
+                              "kind",
+                              "expectation_id",
+                              "business_assertion",
+                              "preceding_action_id",
+                              "observer",
+                              "observation_surface",
+                              "observation_target",
+                              "oracle",
+                              "evidence_ref",
+                              "support_review",
+                              "oracle_evidence_refs"
+                            ],
+                            properties: {
+                              kind: {
+                                const: "auxiliary"
+                              },
+                              expectation_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              business_assertion: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              preceding_action_id: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observer: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_surface: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              observation_target: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              oracle: {
+                                oneOf: [
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_value",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "value"
+                                      },
+                                      expected_value: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_state",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "state"
+                                      },
+                                      expected_state: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_event",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "event"
+                                      },
+                                      expected_event: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "expected_side_effect",
+                                      "comparison",
+                                      "assertion"
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "side-effect"
+                                      },
+                                      expected_side_effect: {
+                                        type: "string",
+                                        minLength: 1
+                                      },
+                                      comparison: {
+                                        enum: [
+                                          "equals",
+                                          "contains",
+                                          "matches",
+                                          "within"
+                                        ]
+                                      },
+                                      tolerance: {
+                                        type: "number"
+                                      },
+                                      window: {
+                                        type: "string"
+                                      },
+                                      assertion: {
+                                        type: "object",
+                                        properties: {
+                                          subject_ref: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          },
+                                          operator: {
+                                            enum: [
+                                              "equals",
+                                              "contains",
+                                              "matches",
+                                              "within"
+                                            ]
+                                          },
+                                          operand: {
+                                            oneOf: [
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "string"
+                                                  },
+                                                  value: {
+                                                    type: "string"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "number"
+                                                  },
+                                                  value: {
+                                                    type: "number"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "boolean"
+                                                  },
+                                                  value: {
+                                                    type: "boolean"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              },
+                                              {
+                                                type: "object",
+                                                properties: {
+                                                  type: {
+                                                    const: "null"
+                                                  },
+                                                  value: {
+                                                    type: "null"
+                                                  }
+                                                },
+                                                required: [
+                                                  "type",
+                                                  "value"
+                                                ],
+                                                additionalProperties: false
+                                              }
+                                            ]
+                                          },
+                                          surface: {
+                                            type: "string",
+                                            minLength: 1,
+                                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                                          }
+                                        },
+                                        required: [
+                                          "subject_ref",
+                                          "operator",
+                                          "operand",
+                                          "surface"
+                                        ],
+                                        additionalProperties: false
+                                      }
+                                    },
+                                    additionalProperties: false
+                                  }
+                                ]
+                              },
+                              evidence_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              support_review: {
+                                enum: [
+                                  "supported",
+                                  "contradicted",
+                                  "uncertain"
+                                ]
+                              },
+                              oracle_evidence_refs: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                  minLength: 1
+                                },
+                                minItems: 1,
+                                uniqueItems: true
+                              },
+                              observer_ref: {
+                                type: "string",
+                                minLength: 1
+                              },
+                              target_ref: {
+                                type: "string",
+                                minLength: 1
+                              }
+                            },
+                            additionalProperties: false
+                          }
+                        ]
+                      }
+                    },
+                    operation_id: {
+                      type: "string",
+                      minLength: 1
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              testability_profile: {
                 type: "object",
                 required: [
-                  "obligation_id",
-                  "status"
+                  "capabilities",
+                  "observers",
+                  "controls",
+                  "setup_resources"
                 ],
                 properties: {
-                  obligation_id: {
+                  capabilities: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      required: [
+                        "capability",
+                        "status"
+                      ],
+                      properties: {
+                        capability: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        status: {
+                          enum: [
+                            "provided",
+                            "verified",
+                            "approved-assumption",
+                            "unavailable",
+                            "unknown"
+                          ]
+                        },
+                        provenance_ref: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        capability_id: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  observers: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      required: [
+                        "observer",
+                        "observation_target",
+                        "status",
+                        "subject_ref",
+                        "surface_id"
+                      ],
+                      properties: {
+                        observer: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        observation_target: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        status: {
+                          enum: [
+                            "provided",
+                            "verified",
+                            "approved-assumption",
+                            "unavailable",
+                            "unknown"
+                          ]
+                        },
+                        provenance_ref: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        observer_id: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        target_id: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        subject_ref: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        surface_id: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  controls: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      required: [
+                        "control",
+                        "status"
+                      ],
+                      properties: {
+                        control: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        status: {
+                          enum: [
+                            "provided",
+                            "verified",
+                            "approved-assumption",
+                            "unavailable",
+                            "unknown"
+                          ]
+                        },
+                        provenance_ref: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  setup_resources: {
+                    type: "array",
+                    minItems: 1,
+                    items: {
+                      type: "object",
+                      properties: {
+                        resource_id: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        kind: {
+                          enum: [
+                            "entry",
+                            "fixture",
+                            "account",
+                            "data"
+                          ]
+                        },
+                        locator: {
+                          type: "string",
+                          pattern: "^(?:[A-Za-z][A-Za-z0-9+.-]*://|/)[^\\s]+$"
+                        },
+                        evidence_ref: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        }
+                      },
+                      required: [
+                        "resource_id",
+                        "kind",
+                        "locator",
+                        "evidence_ref"
+                      ],
+                      additionalProperties: false
+                    }
+                  }
+                },
+                additionalProperties: false
+              },
+              post_state: {
+                type: "object",
+                required: [
+                  "state",
+                  "evidence_ref",
+                  "support_review"
+                ],
+                properties: {
+                  state: {
                     type: "string",
                     minLength: 1
                   },
-                  status: {
+                  evidence_ref: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  support_review: {
                     enum: [
-                      "grounded",
-                      "conditional",
-                      "blocked",
-                      "not_applicable"
+                      "supported",
+                      "contradicted",
+                      "uncertain"
                     ]
                   }
                 },
                 additionalProperties: false
-              }
-            }
-          },
-          additionalProperties: false
-        },
-        executable: {
-          type: "object",
-          required: [
-            "total",
-            "grounded",
-            "entries"
-          ],
-          properties: {
-            total: {
-              type: "integer",
-              minimum: 0
-            },
-            grounded: {
-              type: "integer",
-              minimum: 0
-            },
-            entries: {
-              type: "array",
-              items: {
+              },
+              cleanup: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: [
+                      "required",
+                      "steps",
+                      "evidence_ref",
+                      "support_review",
+                      "resolved_effects"
+                    ],
+                    properties: {
+                      required: {
+                        const: true
+                      },
+                      steps: {
+                        type: "array",
+                        items: {
+                          type: "string"
+                        },
+                        minItems: 1
+                      },
+                      evidence_ref: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      support_review: {
+                        enum: [
+                          "supported",
+                          "contradicted",
+                          "uncertain"
+                        ]
+                      },
+                      resolved_effects: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    required: [
+                      "required",
+                      "no_cleanup_reason",
+                      "no_cleanup_evidence_ref",
+                      "support_review",
+                      "resolved_effects"
+                    ],
+                    properties: {
+                      required: {
+                        const: false
+                      },
+                      no_cleanup_reason: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      no_cleanup_evidence_ref: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      support_review: {
+                        enum: [
+                          "supported",
+                          "contradicted",
+                          "uncertain"
+                        ]
+                      },
+                      resolved_effects: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          minLength: 1,
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                        },
+                        uniqueItems: true
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                ]
+              },
+              evidence_refs: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                minItems: 1,
+                uniqueItems: true
+              },
+              temporary_assumption: {
                 type: "object",
                 required: [
-                  "obligation_id",
-                  "case_id"
+                  "claim_id",
+                  "invalidation_condition"
                 ],
                 properties: {
-                  obligation_id: {
+                  claim_id: {
                     type: "string",
                     minLength: 1
                   },
-                  case_id: {
+                  invalidation_condition: {
+                    type: "string",
+                    minLength: 1
+                  }
+                },
+                additionalProperties: false
+              },
+              execution_signature: {
+                type: "object",
+                required: [
+                  "role",
+                  "precondition_state",
+                  "data_partition",
+                  "action_path",
+                  "oracle_refs"
+                ],
+                properties: {
+                  role: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  precondition_state: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  data_partition: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  action_path: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1
+                  },
+                  oracle_refs: {
+                    type: "array",
+                    items: {
+                      type: "string"
+                    },
+                    minItems: 1,
+                    uniqueItems: true
+                  }
+                },
+                additionalProperties: false
+              },
+              scenario: {
+                oneOf: [
+                  {
+                    type: "object",
+                    properties: {
+                      operation_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      operation_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      partition_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      subject_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      intent: {
+                        const: "behavior"
+                      }
+                    },
+                    required: [
+                      "operation_id",
+                      "operation_ref",
+                      "partition_id",
+                      "subject_ref",
+                      "intent"
+                    ],
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    properties: {
+                      operation_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      operation_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      partition_id: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      subject_ref: {
+                        type: "string",
+                        minLength: 1,
+                        pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                      },
+                      intent: {
+                        const: "compatibility"
+                      },
+                      compatibility: {
+                        type: "object",
+                        properties: {
+                          baseline_ref: {
+                            type: "string",
+                            minLength: 1,
+                            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                          },
+                          dimensions: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              minLength: 1,
+                              pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                            },
+                            minItems: 1,
+                            uniqueItems: true
+                          }
+                        },
+                        required: [
+                          "baseline_ref",
+                          "dimensions"
+                        ],
+                        additionalProperties: false
+                      }
+                    },
+                    required: [
+                      "operation_id",
+                      "operation_ref",
+                      "partition_id",
+                      "subject_ref",
+                      "intent",
+                      "compatibility"
+                    ],
+                    additionalProperties: false
+                  }
+                ]
+              },
+              risk_basis: {
+                type: "object",
+                properties: {
+                  impact: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  likelihood: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  exposure: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  }
+                },
+                required: [
+                  "impact",
+                  "likelihood",
+                  "exposure"
+                ],
+                additionalProperties: false
+              },
+              execution_effects: {
+                type: "array",
+                items: {
+                  type: "string",
+                  minLength: 1,
+                  pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                },
+                uniqueItems: true
+              }
+            },
+            additionalProperties: false
+          }
+        },
+        blocked: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "obligation_id",
+              "root_issue_id",
+              "blocking_roots",
+              "subject",
+              "reason",
+              "scope",
+              "recovery",
+              "risk"
+            ],
+            properties: {
+              blocking_roots: {
+                type: "array",
+                minItems: 1,
+                uniqueItems: true,
+                items: {
+                  type: "object",
+                  required: [
+                    "root_issue_id",
+                    "recovery"
+                  ],
+                  properties: {
+                    root_issue_id: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    recovery: {
+                      type: "object",
+                      required: [
+                        "missing_type",
+                        "required_material",
+                        "question"
+                      ],
+                      properties: {
+                        missing_type: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        required_material: {
+                          type: "string",
+                          minLength: 1
+                        },
+                        question: {
+                          type: "string",
+                          minLength: 1
+                        }
+                      },
+                      additionalProperties: false
+                    }
+                  },
+                  additionalProperties: false
+                }
+              },
+              obligation_id: {
+                type: "string",
+                minLength: 1
+              },
+              root_issue_id: {
+                type: "string",
+                minLength: 1
+              },
+              subject: {
+                type: "string",
+                pattern: "\\S"
+              },
+              reason: {
+                type: "string",
+                minLength: 1
+              },
+              scope: {
+                type: "string",
+                minLength: 1
+              },
+              risk: {
+                enum: [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              recovery: {
+                type: "object",
+                required: [
+                  "missing_type",
+                  "required_material",
+                  "question"
+                ],
+                properties: {
+                  missing_type: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  required_material: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  question: {
                     type: "string",
                     minLength: 1
                   }
                 },
                 additionalProperties: false
               }
+            },
+            additionalProperties: false
+          }
+        },
+        exploratory: {
+          type: "array",
+          items: {
+            oneOf: [
+              {
+                type: "object",
+                required: [
+                  "exploratory_id",
+                  "title",
+                  "scope",
+                  "risk",
+                  "reason"
+                ],
+                properties: {
+                  exploratory_id: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  title: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  scope: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  risk: {
+                    enum: [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  reason: {
+                    type: "string",
+                    minLength: 1
+                  }
+                },
+                additionalProperties: false
+              },
+              {
+                type: "object",
+                properties: {
+                  exploratory_id: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/#-]*$"
+                  },
+                  title: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  scope: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  risk: {
+                    enum: [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  origin: {
+                    const: "heuristic"
+                  },
+                  category: {
+                    enum: [
+                      "boundary",
+                      "concurrency",
+                      "failure",
+                      "degradation",
+                      "security",
+                      "usability"
+                    ]
+                  },
+                  hypothesis: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  rationale: {
+                    type: "string",
+                    minLength: 1,
+                    pattern: "\\S"
+                  },
+                  reason: {
+                    type: "string",
+                    minLength: 1
+                  },
+                  runner_eligible: {
+                    const: false
+                  }
+                },
+                required: [
+                  "exploratory_id",
+                  "title",
+                  "scope",
+                  "risk",
+                  "origin",
+                  "category",
+                  "hypothesis",
+                  "rationale",
+                  "reason",
+                  "runner_eligible"
+                ],
+                additionalProperties: false
+              }
+            ]
+          }
+        },
+        coverage: {
+          type: "object",
+          required: [
+            "requirements",
+            "formal",
+            "executable",
+            "expert_recall",
+            "not_applicable"
+          ],
+          properties: {
+            requirements: {
+              type: "object",
+              required: [
+                "total",
+                "accounted",
+                "entries"
+              ],
+              properties: {
+                total: {
+                  type: "integer",
+                  minimum: 0
+                },
+                accounted: {
+                  type: "integer",
+                  minimum: 0
+                },
+                entries: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: [
+                      "fact_id",
+                      "status"
+                    ],
+                    properties: {
+                      fact_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      status: {
+                        enum: [
+                          "covered",
+                          "blocked",
+                          "not_applicable"
+                        ]
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                }
+              },
+              additionalProperties: false
+            },
+            formal: {
+              type: "object",
+              required: [
+                "total",
+                "covered",
+                "entries"
+              ],
+              properties: {
+                total: {
+                  type: "integer",
+                  minimum: 0
+                },
+                covered: {
+                  type: "integer",
+                  minimum: 0
+                },
+                entries: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: [
+                      "obligation_id",
+                      "status"
+                    ],
+                    properties: {
+                      obligation_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      status: {
+                        enum: [
+                          "grounded",
+                          "conditional",
+                          "blocked",
+                          "not_applicable"
+                        ]
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                }
+              },
+              additionalProperties: false
+            },
+            executable: {
+              type: "object",
+              required: [
+                "total",
+                "grounded",
+                "entries"
+              ],
+              properties: {
+                total: {
+                  type: "integer",
+                  minimum: 0
+                },
+                grounded: {
+                  type: "integer",
+                  minimum: 0
+                },
+                entries: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: [
+                      "obligation_id",
+                      "case_id"
+                    ],
+                    properties: {
+                      obligation_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      case_id: {
+                        type: "string",
+                        minLength: 1
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                }
+              },
+              additionalProperties: false
+            },
+            expert_recall: {
+              type: "object",
+              required: [
+                "status",
+                "limits"
+              ],
+              properties: {
+                status: {
+                  const: "benchmark_only"
+                },
+                limits: {
+                  type: "array",
+                  items: {
+                    type: "string"
+                  },
+                  minItems: 1
+                }
+              },
+              additionalProperties: false
+            },
+            not_applicable: {
+              type: "array",
+              items: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: [
+                      "subject_kind",
+                      "obligation_id",
+                      "subject",
+                      "exclusion_claim_id",
+                      "scope",
+                      "support_review",
+                      "reason"
+                    ],
+                    properties: {
+                      subject_kind: {
+                        const: "formal_test_point"
+                      },
+                      obligation_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      subject: {
+                        type: "string",
+                        pattern: "\\S"
+                      },
+                      exclusion_claim_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      scope: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      support_review: {
+                        const: "supported"
+                      },
+                      reason: {
+                        type: "string",
+                        pattern: "\\S"
+                      }
+                    },
+                    additionalProperties: false
+                  },
+                  {
+                    type: "object",
+                    required: [
+                      "subject_kind",
+                      "fact_id",
+                      "subject",
+                      "exclusion_claim_id",
+                      "scope",
+                      "support_review",
+                      "reason"
+                    ],
+                    properties: {
+                      subject_kind: {
+                        const: "requirement_fact"
+                      },
+                      fact_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      subject: {
+                        type: "string",
+                        pattern: "\\S"
+                      },
+                      exclusion_claim_id: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      scope: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      support_review: {
+                        const: "supported"
+                      },
+                      reason: {
+                        type: "string",
+                        pattern: "\\S"
+                      }
+                    },
+                    additionalProperties: false
+                  }
+                ]
+              }
             }
           },
           additionalProperties: false
         },
-        expert_recall: {
+        quality: {
           type: "object",
           required: [
-            "status",
+            "delivery_status",
+            "compiler_version",
+            "schema_version",
+            "lineage",
             "limits"
           ],
           properties: {
-            status: {
-              const: "benchmark_only"
+            delivery_status: {
+              enum: [
+                "no_applicable_formal_test_points",
+                "no_deterministic_cases",
+                "critical_gaps",
+                "executable_subset_ready"
+              ]
+            },
+            compiler_version: {
+              type: "string",
+              minLength: 1
+            },
+            schema_version: {
+              const: "3.0.0"
+            },
+            lineage: {
+              type: "object",
+              required: [
+                "semantic_source_digest",
+                "evidence_semantic_digest",
+                "behavior_views_semantic_digest",
+                "test_obligations_semantic_digest",
+                "case_drafts_semantic_digest"
+              ],
+              properties: {
+                semantic_source_digest: {
+                  $ref: "#/$defs/sha256"
+                },
+                evidence_semantic_digest: {
+                  $ref: "#/$defs/sha256"
+                },
+                behavior_views_semantic_digest: {
+                  $ref: "#/$defs/sha256"
+                },
+                test_obligations_semantic_digest: {
+                  $ref: "#/$defs/sha256"
+                },
+                case_drafts_semantic_digest: {
+                  $ref: "#/$defs/sha256"
+                }
+              },
+              additionalProperties: false
             },
             limits: {
               type: "array",
@@ -15277,169 +15568,54 @@ var test_bundle_schema_default = {
           },
           additionalProperties: false
         },
-        not_applicable: {
-          type: "array",
-          items: {
-            oneOf: [
-              {
-                type: "object",
-                required: [
-                  "subject_kind",
-                  "obligation_id",
-                  "subject",
-                  "exclusion_claim_id",
-                  "scope",
-                  "support_review",
-                  "reason"
-                ],
-                properties: {
-                  subject_kind: {
-                    const: "formal_test_point"
-                  },
-                  obligation_id: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  subject: {
-                    type: "string",
-                    pattern: "\\S"
-                  },
-                  exclusion_claim_id: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  scope: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  support_review: {
-                    const: "supported"
-                  },
-                  reason: {
-                    type: "string",
-                    pattern: "\\S"
-                  }
-                },
-                additionalProperties: false
-              },
-              {
-                type: "object",
-                required: [
-                  "subject_kind",
-                  "fact_id",
-                  "subject",
-                  "exclusion_claim_id",
-                  "scope",
-                  "support_review",
-                  "reason"
-                ],
-                properties: {
-                  subject_kind: {
-                    const: "requirement_fact"
-                  },
-                  fact_id: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  subject: {
-                    type: "string",
-                    pattern: "\\S"
-                  },
-                  exclusion_claim_id: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  scope: {
-                    type: "string",
-                    minLength: 1
-                  },
-                  support_review: {
-                    const: "supported"
-                  },
-                  reason: {
-                    type: "string",
-                    pattern: "\\S"
-                  }
-                },
-                additionalProperties: false
-              }
-            ]
-          }
+        output_language: {
+          enum: [
+            "zh-CN",
+            "en"
+          ]
         }
       },
       additionalProperties: false
     },
-    quality: {
+    caseDocumentBundle: {
       type: "object",
       required: [
-        "delivery_status",
-        "compiler_version",
         "schema_version",
-        "lineage",
-        "limits"
+        "compiler_version",
+        "delivery_intent",
+        "source_revision",
+        "cases"
       ],
       properties: {
-        delivery_status: {
-          enum: [
-            "no_applicable_formal_test_points",
-            "no_deterministic_cases",
-            "critical_gaps",
-            "executable_subset_ready"
-          ]
+        schema_version: {
+          const: "4.0.0"
         },
         compiler_version: {
-          type: "string",
-          minLength: 1
+          const: "0.5.0"
         },
-        schema_version: {
-          const: "3.0.0"
+        delivery_intent: {
+          const: "case_document"
         },
-        lineage: {
-          type: "object",
-          required: [
-            "semantic_source_digest",
-            "evidence_semantic_digest",
-            "behavior_views_semantic_digest",
-            "test_obligations_semantic_digest",
-            "case_drafts_semantic_digest"
-          ],
-          properties: {
-            semantic_source_digest: {
-              $ref: "#/$defs/sha256"
-            },
-            evidence_semantic_digest: {
-              $ref: "#/$defs/sha256"
-            },
-            behavior_views_semantic_digest: {
-              $ref: "#/$defs/sha256"
-            },
-            test_obligations_semantic_digest: {
-              $ref: "#/$defs/sha256"
-            },
-            case_drafts_semantic_digest: {
-              $ref: "#/$defs/sha256"
-            }
-          },
-          additionalProperties: false
+        source_revision: {
+          type: "integer",
+          minimum: 0
         },
-        limits: {
+        cases: {
           type: "array",
-          items: {
-            type: "string"
-          },
-          minItems: 1
+          maxItems: 0
         }
       },
       additionalProperties: false
-    },
-    output_language: {
-      enum: [
-        "zh-CN",
-        "en"
-      ]
     }
   },
-  additionalProperties: false
+  oneOf: [
+    {
+      $ref: "#/$defs/legacyBundle"
+    },
+    {
+      $ref: "#/$defs/caseDocumentBundle"
+    }
+  ]
 };
 
 // skill/generate-test-cases/scripts/schemas/test-obligations.schema.json
@@ -18005,12 +18181,16 @@ function buildBundleTrusted(context) {
     }
   };
   const canonicalBundle = JSON.parse(canonicalStringify(bundle));
+  const legacyBundleSchema = test_bundle_schema_default.$defs.legacyBundle;
   const intermediateSchema = (
     /** @type {any} */
-    structuredClone(test_bundle_schema_default)
+    structuredClone({
+      ...legacyBundleSchema,
+      $defs: test_bundle_schema_default.$defs
+    })
   );
   intermediateSchema.required = [];
-  for (const key of test_bundle_schema_default.required) {
+  for (const key of legacyBundleSchema.required) {
     if (key !== "execution_plan") pushArray2(intermediateSchema.required, key);
   }
   delete intermediateSchema.properties.execution_plan;
@@ -29417,9 +29597,9 @@ var schemaDirectory = path3.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "a4adb6fa32e5c0eba7fc65f150d6d50020e16e4be47d7e3fb381259d113e7d78" : void 0;
-var embeddedSchemaVersion = true ? "3.0.0" : void 0;
-var embeddedCompilerVersion = true ? "0.4.0" : void 0;
+var embeddedManifestDigest = true ? "98a877ffb42909d046484700956324456fd51462b2d5b3af0d9b10013e0a3b04" : void 0;
+var embeddedSchemaVersion = true ? "4.0.0" : void 0;
+var embeddedCompilerVersion = true ? "0.5.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
@@ -29515,6 +29695,9 @@ function migrationRequired() {
       }
     ]
   };
+}
+function supportedArtifactSchemaVersion(value) {
+  return value === "3.0.0" || value === "4.0.0";
 }
 function errorMessage(error) {
   return error instanceof Error ? error.message : "Run directory is unavailable.";
@@ -29852,12 +30035,13 @@ function clarificationAppendInput(previousState, previousSource, sourcePack) {
 function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests2, runInstanceId, workflowState = null, priorCheckpoint = null) {
   const presentation = workflowState?.presentation_snapshot ?? null;
   const plan = workflowState?.execution_plan ?? null;
+  const legacyV3 = sourcePack.schema_version === "3.0.0";
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests2 }),
     source_revision: sourceRevision,
     stage,
-    compiler_version: embeddedCompilerVersion ?? "0.4.0",
-    schema_version: embeddedSchemaVersion ?? "3.0.0",
+    compiler_version: legacyV3 ? "0.4.0" : embeddedCompilerVersion ?? "0.5.0",
+    schema_version: legacyV3 ? "3.0.0" : embeddedSchemaVersion ?? "4.0.0",
     run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests2,
     audit_lineage: structuredClone(acceptedDigests2),
@@ -29932,11 +30116,12 @@ async function acceptedDigests(runDirectory, sourceRevision) {
 function evaluateAdapterRevision(artifacts, clarification, registry, workflowState = null) {
   const sourcePack = artifacts.source_pack;
   const caseDrafts = artifacts.case_drafts;
+  const compilerVersion = sourcePack.schema_version === "3.0.0" ? "0.4.0" : registry.compilerVersion;
   return (
     /** @type {any} */
     evaluateRevision(artifacts, {
       systemLineage: {
-        compiler_version: registry.compilerVersion,
+        compiler_version: compilerVersion,
         lineage: {
           source_digest: digest(sourcePack),
           case_draft_digest: digest(caseDrafts)
@@ -30088,7 +30273,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
       "Accepted generation repair failed immutable target validation."
     );
     if (repair && active) active.workflow_state = unconfirmedWorkflow(active.workflow_state);
-    if (sourcePack.schema_version !== "3.0.0") return migrationRequired();
+    if (!supportedArtifactSchemaVersion(sourcePack.schema_version)) return migrationRequired();
     if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
       "RUN_INTEGRITY_ERROR",
       "Accepted Source Pack belongs to a different run instance."
@@ -30415,7 +30600,7 @@ async function advanceStrictExclusive(runDirectory) {
             "RUN_INTEGRITY_ERROR",
             "Source revisions must begin at r000 and advance by exactly one."
           );
-          if (typeof candidateRecord?.schema_version === "string" && candidateRecord.schema_version !== "3.0.0") return migrationRequired();
+          if (typeof candidateRecord?.schema_version === "string" && !supportedArtifactSchemaVersion(candidateRecord.schema_version)) return migrationRequired();
           const diagnostics = sourceCandidate.parseDiagnostics.length > 0 ? sourceCandidate.parseDiagnostics : stableDiagnostics(validateAgainstSchema(
             sourceCandidate.value,
             registry.schemas.get(STAGE_SCHEMA.source_pack)
@@ -31250,7 +31435,7 @@ function fatalReply2(code2, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-    const compilerVersion = true ? "0.4.0" : "0.4.0";
+    const compilerVersion = true ? "0.5.0" : "0.5.0";
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1 ? fatalReply2(
       "RUNNER_ARGUMENTS_INVALID",

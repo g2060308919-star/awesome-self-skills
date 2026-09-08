@@ -1,0 +1,250 @@
+{
+  "schema_version": "3.0.0",
+  "source_revision": 0,
+  "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
+  "run_scope": "review-platform",
+  "delivery_intent": "case_document",
+  "output_language": "zh-CN",
+  "sources": [
+    {
+      "source_id": "source_prd",
+      "kind": "prd",
+      "version": "1",
+      "status": "effective",
+      "authority": "review-platform-owner",
+      "content": "# B 端评价平台：列表筛选与内容展示\n\n## 范围与协作模块\n主验收范围为评价中台的 B 端评价列表；C 端提交评价，城市指南后端汇总评价，评价内容服务提供内容，内容安全提供审核结果。只验证这些依赖在 B 端呈现的结果，不扩展为各上游模块的内部验收。\n\n## 明确需求\nB 端评价列表新增业务线筛选，选择业务线后仅展示该业务线的评价。\n当 source=22 时，来源显示为“打车去过”。\n当 source=23 时，来源显示为“普通用户”。\n当 star_level=500 时，推荐程度显示为“推荐”。\n当 star_level=1 时，推荐程度显示为“常规”。\n当 star_level=0 时，推荐程度显示为“不推荐”。\n除本次新增与明确变更外，其他筛选项、列、内容分类、标记、质量、相关性均与当前线上一致。\n\n## 待业务确认\n列表展示 IP，但 IP 的业务含义未定义。\n字段为空时的展示方式未定义。\n排序方向未定义。\n\n## 输入边界\n本 PRD 不提供环境 URL、账号、权限资源证明、样本数据构造工具、查询方式、observer 或 Mock 地址。\n",
+      "content_digest": "fab1ad813c33f28056e583a8f62f1722a41aafc03c0cfa25f22629ce005f7705",
+      "scope": "review-platform"
+    }
+  ],
+  "locators": [],
+  "source_reviews": [
+    {
+      "source_id": "source_prd",
+      "content_digest": "fab1ad813c33f28056e583a8f62f1722a41aafc03c0cfa25f22629ce005f7705",
+      "spans": [
+        {
+          "span_id": "review_0",
+          "start": 0,
+          "end": 19,
+          "classification": "non_normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "# B 端评价平台：列表筛选与内容展示"
+          }
+        },
+        {
+          "span_id": "review_21",
+          "start": 21,
+          "end": 31,
+          "classification": "non_normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "## 范围与协作模块"
+          }
+        },
+        {
+          "span_id": "review_32",
+          "start": 32,
+          "end": 126,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "主验收范围为评价中台的 B 端评价列表；C 端提交评价，城市指南后端汇总评价，评价内容服务提供内容，内容安全提供审核结果。只验证这些依赖在 B 端呈现的结果，不扩展为各上游模块的内部验收。"
+          }
+        },
+        {
+          "span_id": "review_128",
+          "start": 128,
+          "end": 135,
+          "classification": "non_normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "## 明确需求"
+          }
+        },
+        {
+          "span_id": "review_136",
+          "start": 136,
+          "end": 168,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "B 端评价列表新增业务线筛选，选择业务线后仅展示该业务线的评价。"
+          }
+        },
+        {
+          "span_id": "review_169",
+          "start": 169,
+          "end": 195,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "当 source=22 时，来源显示为“打车去过”。"
+          }
+        },
+        {
+          "span_id": "review_196",
+          "start": 196,
+          "end": 222,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "当 source=23 时，来源显示为“普通用户”。"
+          }
+        },
+        {
+          "span_id": "review_223",
+          "start": 223,
+          "end": 254,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "当 star_level=500 时，推荐程度显示为“推荐”。"
+          }
+        },
+        {
+          "span_id": "review_255",
+          "start": 255,
+          "end": 284,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "当 star_level=1 时，推荐程度显示为“常规”。"
+          }
+        },
+        {
+          "span_id": "review_285",
+          "start": 285,
+          "end": 315,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "当 star_level=0 时，推荐程度显示为“不推荐”。"
+          }
+        },
+        {
+          "span_id": "review_316",
+          "start": 316,
+          "end": 359,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "除本次新增与明确变更外，其他筛选项、列、内容分类、标记、质量、相关性均与当前线上一致。"
+          }
+        },
+        {
+          "span_id": "review_361",
+          "start": 361,
+          "end": 369,
+          "classification": "non_normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "## 待业务确认"
+          }
+        },
+        {
+          "span_id": "review_370",
+          "start": 370,
+          "end": 392,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "列表展示 IP，但 IP 的业务含义未定义。"
+          }
+        },
+        {
+          "span_id": "review_393",
+          "start": 393,
+          "end": 407,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "字段为空时的展示方式未定义。"
+          }
+        },
+        {
+          "span_id": "review_408",
+          "start": 408,
+          "end": 416,
+          "classification": "normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "排序方向未定义。"
+          }
+        },
+        {
+          "span_id": "review_418",
+          "start": 418,
+          "end": 425,
+          "classification": "non_normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "## 输入边界"
+          }
+        },
+        {
+          "span_id": "review_426",
+          "start": 426,
+          "end": 485,
+          "classification": "non_normative",
+          "rationale": "Task 01 fixture source line reviewed without inventing execution resources.",
+          "review_basis": {
+            "reviewer": "fixture-author",
+            "method": "line-by-line fixture review",
+            "evidence": "本 PRD 不提供环境 URL、账号、权限资源证明、样本数据构造工具、查询方式、observer 或 Mock 地址。"
+          }
+        }
+      ]
+    }
+  ],
+  "source_policy": {
+    "rules": [
+      {
+        "rule_id": "policy_prd",
+        "source_ids": [
+          "source_prd"
+        ],
+        "scope": "review-platform",
+        "authority": "review-platform-owner",
+        "status": "effective"
+      }
+    ]
+  },
+  "decision_records": [],
+  "clarification_events": [],
+  "execution_events": [],
+  "source_assets": []
+}

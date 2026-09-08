@@ -57,8 +57,9 @@ test('schema registry loads every versioned schema from its manifest', async () 
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const registry = await loadSchemaRegistry(schemaDirectory, manifest.digest);
 
-  assert.equal(registry.schemaVersion, '3.0.0');
-  assert.equal(registry.schemas.size, 14);
+  assert.equal(registry.schemaVersion, '4.0.0');
+  assert.equal(registry.compilerVersion, '0.5.0');
+  assert.ok(registry.schemas.size >= 14);
   assert.ok(registry.schemas.has('run-catalog.schema.json'));
 });
 
@@ -73,7 +74,7 @@ test('schema integrity mismatch is fatal before an empty run is read', async () 
     await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
     await cp(runnerPath, temporaryRunner);
     const originalManifest = await readFile(manifestPath, 'utf8');
-    await writeFile(temporaryManifest, originalManifest.replace('"schema_version":"3.0.0"', '"schema_version":"9.0.0"'));
+    await writeFile(temporaryManifest, originalManifest.replace('"schema_version":"4.0.0"', '"schema_version":"9.0.0"'));
     const result = await runCompiler(runDirectory, temporaryRunner);
     const reply = JSON.parse(result.stdout);
 

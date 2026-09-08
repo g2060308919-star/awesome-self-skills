@@ -214,7 +214,9 @@ test('schema rejects an unknown schema version', () => {
   const artifact = minimumSourcePack();
   artifact.schema_version = '9.0.0';
 
-  assert.equal(validateAgainstSchema(artifact, sourcePackSchema)[0]?.code, 'CONST_MISMATCH');
+  assert.ok(validateAgainstSchema(artifact, sourcePackSchema).some((item) =>
+    item.code === 'ENUM_MISMATCH' || item.code === 'CONST_MISMATCH'
+      || item.code === 'ONE_OF_MISMATCH'));
 });
 
 test('schema rejects controlled extra properties and invalid locator enums', () => {

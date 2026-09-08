@@ -2599,9 +2599,14 @@ function buildBundleTrusted(context) {
     }
   };
   const canonicalBundle = JSON.parse(canonicalStringify(bundle));
-  const intermediateSchema = /** @type {any} */ (structuredClone(testBundleSchema));
+  // This reconciler produces v3 semantics, not the v4 Case Document envelope.
+  // Keep the root definitions so legacy local references still resolve.
+  const legacyBundleSchema = testBundleSchema.$defs.legacyBundle;
+  const intermediateSchema = /** @type {any} */ (structuredClone({
+    ...legacyBundleSchema, $defs: testBundleSchema.$defs
+  }));
   intermediateSchema.required = [];
-  for (const key of testBundleSchema.required) {
+  for (const key of legacyBundleSchema.required) {
     if (key !== 'execution_plan') pushArray(intermediateSchema.required, key);
   }
   delete intermediateSchema.properties.execution_plan;

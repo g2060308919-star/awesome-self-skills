@@ -154,6 +154,11 @@ function migrationRequired() {
   };
 }
 
+/** @param {unknown} value */
+function supportedArtifactSchemaVersion(value) {
+  return value === '3.0.0' || value === '4.0.0';
+}
+
 /** @param {unknown} error */
 function errorMessage(error) {
   return error instanceof Error ? error.message : 'Run directory is unavailable.';
@@ -504,11 +509,12 @@ function clarificationAppendInput(previousState, previousSource, sourcePack) {
 function checkpoint(sourceRevision, stage, sourcePack, state, acceptedDigests, runInstanceId, workflowState = null, priorCheckpoint = null) {
   const presentation = workflowState?.presentation_snapshot ?? null;
   const plan = workflowState?.execution_plan ?? null;
+  const legacyV3 = sourcePack.schema_version === '3.0.0';
   return {
     input_digest: digest({ source_revision: sourceRevision, accepted_artifact_digests: acceptedDigests }),
     source_revision: sourceRevision, stage,
-    compiler_version: embeddedCompilerVersion ?? '0.4.0',
-    schema_version: embeddedSchemaVersion ?? '3.0.0',
+    compiler_version: legacyV3 ? '0.4.0' : (embeddedCompilerVersion ?? '0.5.0'),
+    schema_version: legacyV3 ? '3.0.0' : (embeddedSchemaVersion ?? '4.0.0'),
     run_instance_id: runInstanceId,
     accepted_artifact_digests: acceptedDigests,
     audit_lineage: structuredClone(acceptedDigests),
@@ -588,9 +594,11 @@ async function acceptedDigests(runDirectory, sourceRevision) {
 function evaluateAdapterRevision(artifacts, clarification, registry, workflowState = null) {
   const sourcePack = artifacts.source_pack;
   const caseDrafts = artifacts.case_drafts;
+  const compilerVersion = sourcePack.schema_version === '3.0.0'
+    ? '0.4.0' : registry.compilerVersion;
   return /** @type {any} */ (evaluateRevision(artifacts, {
     systemLineage: {
-      compiler_version: registry.compilerVersion,
+      compiler_version: compilerVersion,
       lineage: {
         source_digest: digest(sourcePack), case_draft_digest: digest(caseDrafts)
       },
@@ -765,7 +773,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
       'RUN_INTEGRITY_ERROR', 'Accepted generation repair failed immutable target validation.'
     );
     if (repair && active) active.workflow_state = unconfirmedWorkflow(active.workflow_state);
-    if (sourcePack.schema_version !== '3.0.0') return migrationRequired();
+    if (!supportedArtifactSchemaVersion(sourcePack.schema_version)) return migrationRequired();
     if (sourcePack.run_instance_id !== runInstance.run_instance_id) return fatalReply(
       'RUN_INTEGRITY_ERROR', 'Accepted Source Pack belongs to a different run instance.'
     );
@@ -1035,7 +1043,7 @@ async function advanceStrictExclusive(runDirectory) {
         'RUN_INTEGRITY_ERROR', 'Source revisions must begin at r000 and advance by exactly one.'
       );
       if (typeof candidateRecord?.schema_version === 'string'
-        && candidateRecord.schema_version !== '3.0.0') return migrationRequired();
+        && !supportedArtifactSchemaVersion(candidateRecord.schema_version)) return migrationRequired();
       const diagnostics = sourceCandidate.parseDiagnostics.length > 0
         ? sourceCandidate.parseDiagnostics
         : stableDiagnostics(validateAgainstSchema(
