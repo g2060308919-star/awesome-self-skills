@@ -402,7 +402,7 @@ test('BR-13 acquired capture receipts allow only verified user-statement append 
       directory, appendBlocked, revision1.artifacts.source_pack, material
     );
     const behaviorRequest = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(behaviorRequest.status, 'need_artifact', JSON.stringify(behaviorRequest));
+    assert.equal(behaviorRequest.status, 'need_revision', JSON.stringify(behaviorRequest));
     assert.equal(behaviorRequest.stage, 'behavior_views');
 
     const acceptedR1 = JSON.parse(await readFile(
@@ -421,7 +421,7 @@ test('BR-13 acquired capture receipts allow only verified user-statement append 
     revision1.artifacts.behavior_views.source_revision = 1;
     await stage(directory, 'behavior_views', revision1.artifacts.behavior_views);
     const caseRequest = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(caseRequest.status, 'need_artifact', JSON.stringify(caseRequest));
+    assert.equal(caseRequest.status, 'need_revision', JSON.stringify(caseRequest));
     assert.equal(caseRequest.stage, 'case_drafts');
     const durableText = (await Promise.all((await files(directory)).map(file => readFile(file, 'utf8')))).join('\n');
     assert.doesNotMatch(
@@ -522,7 +522,7 @@ test('T12 source-acquisition cancellation is terminal, idempotent, secret-free, 
       parent_run_id: runId, creation_reason: 'resume_cancelled'
     });
     const resumed = /** @type {any} */ (await advanceStrict(path.join(catalog, 'runs', siblingRunId)));
-    assert.equal(resumed.status, 'need_artifact', JSON.stringify(resumed));
+    assert.equal(resumed.status, 'need_revision', JSON.stringify(resumed));
     assert.equal(resumed.stage, 'source_pack');
   } finally {
     await rm(catalog, { recursive: true, force: true });
@@ -541,7 +541,7 @@ test('v4 runner consumes schema-valid provide_artifact events only through diges
     await writeFile(path.join(directory, 'staging/source-pack.json'), `${canonicalStringify(candidate)}\n`, 'utf8');
 
     const accepted = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
+    assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
     const acceptedSource = JSON.parse(await readFile(path.join(directory, 'accepted/r000/source-pack.json'), 'utf8'));
     assert.deepEqual(acceptedSource.artifact_events, candidate.artifact_events);
@@ -561,7 +561,7 @@ test('v4 runner consumes schema-valid provide_artifact events only through diges
     await writeFile(path.join(directory, 'staging/evidence-claims.json'),
       `${canonicalStringify(v4PipelineFixture().artifacts.evidence_claims)}\n`, 'utf8');
     const continued = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(continued.status, 'need_artifact', JSON.stringify(continued));
+    assert.equal(continued.status, 'need_revision', JSON.stringify(continued));
     assert.equal(continued.stage, 'behavior_views');
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -599,7 +599,7 @@ test('T11 production runner resolves a registered stable Cooper resource, applie
       `${canonicalStringify(candidate)}\n`, 'utf8');
 
     const accepted = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
+    assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
     const persisted = JSON.parse(await readFile(
       path.join(directory, 'accepted/r000/source-pack.json'), 'utf8'
@@ -649,7 +649,7 @@ test('T11 production runner reuses the digest receipt for an expiry-audited sour
     await writeFile(path.join(directory, 'staging/evidence-claims.json'),
       `${canonicalStringify(fixture.artifacts.evidence_claims)}\n`, 'utf8');
     const evidenceAccepted = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(evidenceAccepted.status, 'need_artifact', JSON.stringify(evidenceAccepted));
+    assert.equal(evidenceAccepted.status, 'need_revision', JSON.stringify(evidenceAccepted));
     assert.equal(evidenceAccepted.stage, 'behavior_views');
     assert.equal((await files(directory)).some(file => file.endsWith('.b64')), false);
   } finally {
@@ -717,7 +717,7 @@ test('T11 production runner blocks a missing normative asset, then binds verifie
       `${canonicalStringify(resumed)}\n`, 'utf8');
 
     const accepted = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
+    assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
     const persisted = JSON.parse(await readFile(
       path.join(directory, 'accepted/r000/source-pack.json'), 'utf8'
@@ -731,7 +731,7 @@ test('T11 production runner blocks a missing normative asset, then binds verifie
     await writeFile(path.join(directory, 'staging/evidence-claims.json'),
       `${canonicalStringify(fixture.artifacts.evidence_claims)}\n`, 'utf8');
     const evidenceAccepted = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(evidenceAccepted.status, 'need_artifact', JSON.stringify(evidenceAccepted));
+    assert.equal(evidenceAccepted.status, 'need_revision', JSON.stringify(evidenceAccepted));
     assert.equal(evidenceAccepted.stage, 'behavior_views');
   } finally {
     await rm(directory, { recursive: true, force: true });

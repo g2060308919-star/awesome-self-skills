@@ -108,7 +108,7 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
     assert.deepEqual(instance.lineage, sibling.lineage);
     const resumed = await installed.advanceStrict(sibling.run_directory);
     assert.equal(resumed.scope.run_instance_id, sibling.run_id, JSON.stringify(resumed));
-    assert.equal(resumed.status, 'need_artifact', JSON.stringify(resumed));
+    assert.equal(resumed.status, 'need_revision', JSON.stringify(resumed));
 
     const tamperedInstance = { ...instance, delivery_intent: 'execution_plan' };
     await writeFile(
@@ -235,9 +235,8 @@ test('installed private action seam submits every advertised semantic control th
       if (action === 'cancel_run') {
         assert.equal(accepted.status, 'cancelled', JSON.stringify(accepted));
       } else {
-        assert.equal(['need_user_answers', 'need_artifact'].includes(accepted.status), true,
+        assert.equal(['need_user_answers', 'need_revision'].includes(accepted.status), true,
           `${action}:${JSON.stringify(accepted)}`);
-        assert.notEqual(accepted.status, 'need_revision', action);
         assert.notEqual(accepted.status, 'fatal', action);
         await readFile(path.join(directory, 'accepted/r001/source-pack.json'), 'utf8');
       }
@@ -429,7 +428,7 @@ test('installed source-action seam alone stages a canonical resumed Source Pack 
     assert.doesNotMatch(JSON.stringify(staged), /INSTALLED_ACTION_SECRET|signature=|id=17/iu);
 
     const accepted = await installed.advanceStrict(directory);
-    assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
+    assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
     const persisted = JSON.parse(await readFile(
       path.join(directory, 'accepted/r000/source-pack.json'), 'utf8'
@@ -493,7 +492,7 @@ test('installed source-action seam derives reviewed asset digests and resumes wi
       canonical_uri: assetUri, asset_digest: byteDigest(material)
     }]);
     const accepted = await installed.advanceStrict(directory);
-    assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
+    assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
   } finally {
     await rm(directory, { recursive: true, force: true });

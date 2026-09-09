@@ -1,6 +1,7 @@
 import replySchema from '../skill/generate-test-cases/scripts/schemas/reply.schema.json' with { type: 'json' };
 import { canonicalStringify, digest } from './canonical.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
+import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 
 /** @param {unknown} value */
@@ -32,7 +33,7 @@ export function createSemanticQuestionReplyV4(
       description: '从已提交检查点追加展示中允许的澄清事件。'
     },
     semantic_presentation: structuredClone(presentation),
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
   const diagnostics = validateAgainstSchema(reply, replySchema);
   if (diagnostics.length) {
@@ -96,7 +97,7 @@ export function createNeedArtifactReplyV4(input) {
       run_id: value.run_id, phase: 'source_acquisition',
       phase_version: value.resume_ref.committed_revision
     },
-    non_blocking_diagnostics: value.non_blocking_diagnostics
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(value.non_blocking_diagnostics)
   };
   const diagnostics = validateAgainstSchema(reply, { $ref: '#/$defs/needArtifactReply', $defs: replySchema.$defs });
   if (diagnostics.length) throw new TypeError(`NEED_ARTIFACT_REPLY_INVALID:${canonicalStringify(diagnostics)}`);

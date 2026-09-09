@@ -88,7 +88,9 @@ function answerEvent(presentation, pattern, answer) {
 /** @param {string} directory @param {any} reply @param {any} fixture */
 async function satisfyArtifactRequests(directory, reply, fixture) {
   let current = reply;
-  for (let count = 0; count < 4 && current.status === 'need_artifact'; count += 1) {
+  for (let count = 0; count < 4
+    && current.status === 'need_revision'
+    && current.incomplete_reason?.code === 'STAGE_ARTIFACT_REQUIRED'; count += 1) {
     assert.notEqual(current.stage, 'source_pack', 'the clarification revision Source Pack was already staged');
     await stage(directory, current.stage, fixture.artifacts[current.stage]);
     current = await advanceStrict(directory);
@@ -156,7 +158,8 @@ async function deliverBendCaseDocumentWithClosedRoot(catalog, documentRunId) {
   const revision1 = await bendReviewJourneyFixture(documentRunId, 1, [ip.event]);
   await stage(directory, 'source_pack', revision1.artifacts.source_pack);
   let afterIp = /** @type {any} */ (await advanceStrict(directory));
-  if (afterIp.status === 'need_artifact') {
+  if (afterIp.status === 'need_revision'
+    && afterIp.incomplete_reason?.code === 'STAGE_ARTIFACT_REQUIRED') {
     afterIp = await satisfyArtifactRequests(directory, afterIp, revision1);
   }
   const empty = answerEvent(afterIp.semantic_presentation, /空值/u, '—');
@@ -190,7 +193,8 @@ async function startExecutionSibling(catalog, executionRunId, caseDocumentRef) {
     run_id: executionRunId, delivery_intent: 'execution_plan'
   });
   const initial = /** @type {any} */ (await advanceStrict(directory));
-  assert.equal(initial.status, 'need_artifact', JSON.stringify(initial));
+  assert.equal(initial.status, 'need_revision', JSON.stringify(initial));
+  assert.equal(initial.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
   assert.equal(initial.phase, 'execution_closure');
   assert.equal(initial.stage, 'source_pack');
   assert.deepEqual(validateAgainstSchema(initial, replySchema), []);
@@ -353,7 +357,7 @@ test('T12 semantic-clarification cancellation rejects later appends and resumes 
       parent_run_id: runId, run_id: siblingRunId
     });
     const resumed = /** @type {any} */ (await advanceStrict(path.join(catalog, 'runs', siblingRunId)));
-    assert.equal(resumed.status, 'need_artifact', JSON.stringify(resumed));
+    assert.equal(resumed.status, 'need_revision', JSON.stringify(resumed));
     assert.equal(resumed.stage, 'source_pack');
   } finally {
     await rm(catalog, { recursive: true, force: true });
@@ -382,7 +386,8 @@ test('T15 real runner conserves pending questions across a recovered partial-ans
     // This is the recovery boundary: no in-memory state from the Adapter is
     // required after the complete candidate event has reached staging.
     let afterIp = /** @type {any} */ (await advanceStrict(directory));
-    if (afterIp.status === 'need_artifact') {
+    if (afterIp.status === 'need_revision'
+      && afterIp.incomplete_reason?.code === 'STAGE_ARTIFACT_REQUIRED') {
       assert.equal(afterIp.stage, 'evidence_claims', JSON.stringify(afterIp));
       afterIp = await satisfyArtifactRequests(directory, afterIp, revision1);
     }
@@ -1202,7 +1207,7 @@ test('T12 execution-closure and final-confirmation cancellation are terminal and
     const closureResumed = /** @type {any} */ (await advanceStrict(
       path.join(catalog, 'runs', closureSiblingId)
     ));
-    assert.equal(closureResumed.status, 'need_artifact', JSON.stringify(closureResumed));
+    assert.equal(closureResumed.status, 'need_revision', JSON.stringify(closureResumed));
     assert.equal(closureResumed.stage, 'source_pack');
 
     const final = await startExecutionSibling(catalog, finalRunId, document.caseDocumentRef);
@@ -1244,7 +1249,7 @@ test('T12 execution-closure and final-confirmation cancellation are terminal and
     const finalResumed = /** @type {any} */ (await advanceStrict(
       path.join(catalog, 'runs', finalSiblingId)
     ));
-    assert.equal(finalResumed.status, 'need_artifact', JSON.stringify(finalResumed));
+    assert.equal(finalResumed.status, 'need_revision', JSON.stringify(finalResumed));
     assert.equal(finalResumed.stage, 'source_pack');
 
     assert.equal(await readFile(document.manifestPath, 'utf8'), document.manifestBytes);

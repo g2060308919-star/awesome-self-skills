@@ -11764,6 +11764,32 @@ var init_semantic_gaps_v4 = __esm({
   }
 });
 
+// src/non-blocking-diagnostics-v4.mjs
+function compareNonBlockingDiagnosticsV4(left, right) {
+  for (const [leftValue, rightValue] of [
+    [String(left.code ?? ""), String(right.code ?? "")],
+    [String(left.source_event_id ?? ""), String(right.source_event_id ?? "")],
+    [
+      canonicalStringify(left.affected_question_part_ids ?? []),
+      canonicalStringify(right.affected_question_part_ids ?? [])
+    ]
+  ]) {
+    const comparison = compareUnicodeScalar(leftValue, rightValue);
+    if (comparison !== 0) return comparison;
+  }
+  return 0;
+}
+function sortNonBlockingDiagnosticsV4(diagnostics2) {
+  return structuredClone(diagnostics2).sort(compareNonBlockingDiagnosticsV4);
+}
+var init_non_blocking_diagnostics_v4 = __esm({
+  "src/non-blocking-diagnostics-v4.mjs"() {
+    "use strict";
+    init_canonical();
+    init_semantic_gaps_v4();
+  }
+});
+
 // src/clarification-v4.mjs
 import { createHash as createHash5 } from "node:crypto";
 function isRecord(value) {
@@ -12509,7 +12535,7 @@ function applySemanticClarificationEventsV4(submitted) {
         decisions: structuredClone(existingDecisions),
         replayed_decision_id: replay.decision_id,
         decision_claim_summaries: [],
-        non_blocking_diagnostics: replayCandidate.warnings,
+        non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(replayCandidate.warnings),
         diagnostics: []
       };
     }
@@ -12558,7 +12584,7 @@ function applySemanticClarificationEventsV4(submitted) {
     decisions: decisions2,
     decision_claim_summaries: decisionClaimSummaries,
     case_classification: lastClassification,
-    non_blocking_diagnostics: warnings,
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(warnings),
     diagnostics: []
   };
 }
@@ -12570,6 +12596,7 @@ var init_clarification_v4 = __esm({
     init_presentation_schema();
     init_canonical();
     init_decision_record();
+    init_non_blocking_diagnostics_v4();
     init_semantic_gaps_v4();
     init_schema_validator();
     ACTIONS = Object.freeze([
@@ -28667,7 +28694,7 @@ var init_reply_schema = __esm({
             "non_blocking_diagnostics"
           ],
           properties: {
-            status: { const: "need_artifact" },
+            status: { const: "need_revision" },
             phase: {
               enum: ["source_acquisition", "requirements_analysis", "case_design", "execution_closure"]
             },
@@ -28690,19 +28717,44 @@ var init_reply_schema = __esm({
                 run_instance_id: { type: "string", minLength: 1 }
               }
             },
-            diagnostics: { $ref: "#/$defs/diagnostics" },
+            diagnostics: { type: "array", maxItems: 0 },
             produced_artifacts: {
               type: "array",
               items: { $ref: "#/$defs/producedArtifact" }
             },
-            incomplete_reason: { $ref: "#/$defs/incompleteReason" },
+            incomplete_reason: {
+              type: "object",
+              additionalProperties: false,
+              required: ["code", "summary"],
+              properties: {
+                code: { const: "STAGE_ARTIFACT_REQUIRED" },
+                summary: { type: "string", minLength: 1 }
+              }
+            },
             user_next_steps: {
               type: "array",
               minItems: 1,
-              uniqueItems: true,
-              items: { $ref: "#/$defs/userNextStep" }
+              maxItems: 1,
+              prefixItems: [{
+                type: "object",
+                additionalProperties: false,
+                required: ["action", "description"],
+                properties: {
+                  action: { const: "write_stage_artifact" },
+                  description: { type: "string", minLength: 1 }
+                }
+              }],
+              items: false
             },
-            recovery: { $ref: "#/$defs/recoverySummary" },
+            recovery: {
+              type: "object",
+              additionalProperties: false,
+              required: ["mode", "description"],
+              properties: {
+                mode: { const: "write_staging_artifact" },
+                description: { type: "string", minLength: 1 }
+              }
+            },
             non_blocking_diagnostics: {
               type: "array",
               uniqueItems: true,
@@ -28741,22 +28793,9 @@ var init_reply_schema = __esm({
           ]
         },
         needArtifactReply: {
-          type: "object",
-          required: ["status", "non_blocking_diagnostics"],
-          properties: {
-            status: { const: "need_artifact" },
-            non_blocking_diagnostics: {
-              type: "array",
-              uniqueItems: true,
-              items: { $ref: "#/$defs/nonBlockingDiagnostic" }
-            }
-          },
-          oneOf: [
-            { $ref: "#/$defs/sourceAcquisitionNeedArtifactReply" },
-            { $ref: "#/$defs/v4StageArtifactReply" }
-          ]
+          $ref: "#/$defs/sourceAcquisitionNeedArtifactReply"
         },
-        needRevisionReply: {
+        v4InvalidArtifactRevisionReply: {
           type: "object",
           unevaluatedProperties: false,
           allOf: [
@@ -28838,6 +28877,22 @@ var init_reply_schema = __esm({
                 schema_ref: { const: "case-drafts.schema.json" }
               }
             }
+          ]
+        },
+        needRevisionReply: {
+          type: "object",
+          required: ["status", "non_blocking_diagnostics"],
+          properties: {
+            status: { const: "need_revision" },
+            non_blocking_diagnostics: {
+              type: "array",
+              uniqueItems: true,
+              items: { $ref: "#/$defs/nonBlockingDiagnostic" }
+            }
+          },
+          oneOf: [
+            { $ref: "#/$defs/v4StageArtifactReply" },
+            { $ref: "#/$defs/v4InvalidArtifactRevisionReply" }
           ]
         },
         finishedReply: {
@@ -45422,6 +45477,7 @@ function renderExecutionWorksheetCsvV4(input, orderedCaseIds) {
 
 // src/canonical-delivery-v4.mjs
 init_contracts();
+init_non_blocking_diagnostics_v4();
 await init_run_store();
 init_schema_validator();
 var BUNDLE_KEYS = Object.freeze([
@@ -45544,7 +45600,7 @@ function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
       mode: "create_new_run",
       description: "\u539F\u59CB\u8D44\u6599\u6216\u5B9E\u8D28\u8303\u56F4\u6539\u53D8\u65F6\u521B\u5EFA\u65B0\u8FD0\u884C\uFF1B\u5F53\u524D canonical \u4EA4\u4ED8\u4FDD\u6301\u4E0D\u53EF\u53D8\u3002"
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
   if (validateAgainstSchema(reply, { $ref: "#/$defs/finishedReply", $defs: reply_schema_default.$defs }).length) {
     throw new TypeError("CANONICAL_FINISHED_REPLY_INVALID");
@@ -45639,7 +45695,7 @@ function executionFinishedReply(manifest, planBytes, diagnostics2) {
       description: manifest.runner_ready ? "\u67E5\u770B\u5DF2\u786E\u8BA4\u7684\u6267\u884C\u6E05\u5355\uFF1B\u672C Skill \u4E0D\u4F1A\u81EA\u52A8\u542F\u52A8 E2E \u6D4B\u8BD5\u3002" : "\u67E5\u770B\u672A\u9009\u62E9\u6267\u884C\u7684\u7ED3\u8BBA\uFF1BCase Document \u4FDD\u6301\u6709\u6548\u3002"
     }],
     recovery: { mode: "create_new_run", description: "\u9700\u8981\u6539\u53D8\u8BED\u4E49\u6216\u6267\u884C\u9009\u62E9\u65F6\u6309\u89C4\u8303\u521B\u5EFA\u65B0\u8FD0\u884C\u3002" },
-    non_blocking_diagnostics: structuredClone(diagnostics2)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(diagnostics2)
   };
   if (validateAgainstSchema(reply, { $ref: "#/$defs/finishedReply", $defs: reply_schema_default.$defs }).length) {
     throw new TypeError("CANONICAL_FINISHED_REPLY_INVALID");
@@ -48164,6 +48220,7 @@ init_schema_validator();
 // src/stop-replies-v4.mjs
 init_reply_schema();
 init_canonical();
+init_non_blocking_diagnostics_v4();
 init_schema_validator();
 var hash2 = (value) => "sha256:" + digest(value);
 function createSemanticQuestionReplyV4(runId, presentation, nonBlockingDiagnostics = []) {
@@ -48186,7 +48243,7 @@ function createSemanticQuestionReplyV4(runId, presentation, nonBlockingDiagnosti
       description: "\u4ECE\u5DF2\u63D0\u4EA4\u68C0\u67E5\u70B9\u8FFD\u52A0\u5C55\u793A\u4E2D\u5141\u8BB8\u7684\u6F84\u6E05\u4E8B\u4EF6\u3002"
     },
     semantic_presentation: structuredClone(presentation),
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
   const diagnostics2 = validateAgainstSchema(reply, reply_schema_default);
   if (diagnostics2.length) {
@@ -48240,7 +48297,7 @@ function createNeedArtifactReplyV4(input) {
       phase: "source_acquisition",
       phase_version: value.resume_ref.committed_revision
     },
-    non_blocking_diagnostics: value.non_blocking_diagnostics
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(value.non_blocking_diagnostics)
   };
   const diagnostics2 = validateAgainstSchema(reply, { $ref: "#/$defs/needArtifactReply", $defs: reply_schema_default.$defs });
   if (diagnostics2.length) throw new TypeError(`NEED_ARTIFACT_REPLY_INVALID:${canonicalStringify(diagnostics2)}`);
@@ -48521,7 +48578,7 @@ function revisionReply(runDirectory, revision, value, diagnostics2, runId, phase
 }
 function sourceArtifactRequest(runDirectory, runId) {
   return {
-    status: "need_artifact",
+    status: "need_revision",
     phase: "execution_closure",
     run_id: runId,
     stage: "source_pack",
@@ -53401,6 +53458,7 @@ async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
 init_source_canonicalization();
 await init_run_store();
 init_schema_validator();
+init_non_blocking_diagnostics_v4();
 var STAGES = (
   /** @type {const} */
   ["source_pack", "evidence_claims", "behavior_views", "case_drafts"]
@@ -53416,7 +53474,7 @@ function stagePhase(stage) {
 }
 function artifactRequest(runDirectory, stage, sourceRevision, runInstanceId, nonBlockingDiagnostics = []) {
   return {
-    status: "need_artifact",
+    status: "need_revision",
     stage,
     schema_ref: AGENT_STAGE_SCHEMA[stage],
     phase: stagePhase(stage),
@@ -53436,7 +53494,7 @@ function artifactRequest(runDirectory, stage, sourceRevision, runInstanceId, non
       mode: "write_staging_artifact",
       description: "\u4FDD\u7559\u5DF2\u63A5\u53D7 revision\uFF0C\u5728\u540C\u4E00\u8FD0\u884C\u76EE\u5F55\u5199\u5165\u6240\u8BF7\u6C42\u7684\u5019\u9009\u5DE5\u4EF6\u540E\u91CD\u8C03 runner\u3002"
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
 function revisionReply2(runDirectory, stage, sourceRevision, artifact, diagnostics2, runInstanceId, nonBlockingDiagnostics = []) {
@@ -53467,7 +53525,7 @@ function revisionReply2(runDirectory, stage, sourceRevision, artifact, diagnosti
       mode: "retry_current_run",
       description: "\u4FDD\u7559\u5DF2\u63A5\u53D7 revision\uFF0C\u53EA\u66FF\u6362\u5C1A\u672A\u63A5\u53D7\u7684 staging \u5019\u9009\u5DE5\u4EF6\u3002"
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
 function qualityFailure3(runId, phase, code2, summary, nonBlockingDiagnostics = []) {
@@ -53484,7 +53542,7 @@ function qualityFailure3(runId, phase, code2, summary, nonBlockingDiagnostics = 
       mode: "resume_from_committed_checkpoint",
       description: "\u4FEE\u6B63\u5F53\u524D\u5019\u9009\u5DE5\u4EF6\u540E\uFF0C\u4ECE\u5DF2\u63D0\u4EA4\u68C0\u67E5\u70B9\u7EE7\u7EED\u3002"
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
 function semanticQuestionReply(runId, presentation, nonBlockingDiagnostics = []) {
@@ -54133,7 +54191,7 @@ async function consumeSemanticAppend(runDirectory, registry, artifacts, revision
         revision,
         artifacts,
         checkpoint: checkpoint2,
-        non_blocking_diagnostics: warnings
+        non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(warnings)
       };
     }
     return {
@@ -54825,10 +54883,10 @@ async function finalizeCaseDocumentRevision(runDirectory, runId, completedAt, ar
   );
   if (result.status === "need_artifact") return {
     ...result,
-    non_blocking_diagnostics: [
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4([
       ...result.non_blocking_diagnostics ?? [],
       ...structuredClone(nonBlockingDiagnostics)
-    ]
+    ])
   };
   if (result.status !== "compiled" || !record16(result.obligations)) return qualityFailure3(
     runId,
@@ -55425,7 +55483,7 @@ var schemaDirectory = path11.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "75a04a5f10cda967e8f4c1eeb4437ad3e875cd2ca30b775da62918aaaacae5b6" : void 0;
+var embeddedManifestDigest = true ? "8c0fb68b1326ded7ef01b9e1e29a690b417b31a85521b6080ab4bdaeec6f9107" : void 0;
 var embeddedSchemaVersion = true ? "4.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.5.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;

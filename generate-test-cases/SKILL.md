@@ -76,16 +76,7 @@ Every user-visible stop path must state: current state, produced artifacts, inco
 
 ### Handle `need_artifact`
 
-Report current state, produced artifacts, why acquisition or the requested semantic artifact is incomplete, the advertised `provide_artifact`/`cancel_run` next actions, and the exact `resume_ref` recovery. Never retain a signed retrieval URL. For source acquisition, collect the complete batch named by `artifact_requests`, review the safe canonical Source Pack, and call `stageV4SourceAcquisitionAction` with the validated reply, that Source Pack, each request's safe input, and its exact material bytes; then call the runner again. The helper derives all events and computed Source fields and atomically stages only the safe resumed Source Pack plus short-lived material.
-
-For an ordinary semantic stage artifact, open the named Schema and matching policy, write only its fixed staging file, and call the runner again:
-
-- `source_pack` -> `staging/source-pack.json`
-- `evidence_claims` -> `staging/evidence-claims.json`
-- `behavior_views` -> `staging/behavior-views.json`
-- `case_drafts` -> `staging/case-drafts.json`
-
-Any other Agent-writable stage is `PIPELINE_PROTOCOL_ERROR`. Never invent a fifth artifact.
+Report current state, produced artifacts, why source acquisition is incomplete, the advertised `provide_artifact`/`cancel_run` next actions, and the exact `resume_ref` recovery. Never retain a signed retrieval URL. Collect the complete batch named by `artifact_requests`, review the safe canonical Source Pack, and call `stageV4SourceAcquisitionAction` with the validated reply, that Source Pack, each request's safe input, and its exact material bytes; then call the runner again. The helper derives all events and computed Source fields and atomically stages only the safe resumed Source Pack plus short-lived material. `need_artifact` is reserved for this complete source-acquisition recovery contract.
 
 ### Handle `need_user_answers`
 
@@ -96,6 +87,15 @@ For semantic clarification, allow only `answer_question_part`, `defer_question_p
 ### Handle `need_revision`
 
 Report current state, accepted artifacts, exact validation reason, the artifact/action that can be corrected next, and recovery from the last committed checkpoint. Repair an unaccepted staging artifact at the same revision. Repair an accepted semantic artifact only through the digest-bound append procedure in `run-management.md`; never edit accepted, derived, or output bytes.
+
+When `incomplete_reason.code` is `STAGE_ARTIFACT_REQUIRED`, open the named Schema and matching policy, write only its fixed staging file, and call the runner again:
+
+- `source_pack` -> `staging/source-pack.json`
+- `evidence_claims` -> `staging/evidence-claims.json`
+- `behavior_views` -> `staging/behavior-views.json`
+- `case_drafts` -> `staging/case-drafts.json`
+
+Any other Agent-writable stage is `PIPELINE_PROTOCOL_ERROR`. Never invent a fifth artifact.
 
 Allow three repair attempts for the same normalized stage and root cause. The fourth identical no-progress result is `PIPELINE_NO_PROGRESS`, not a compiler fatal or business Blocked item. Reset the counter only on material stage or cause change.
 

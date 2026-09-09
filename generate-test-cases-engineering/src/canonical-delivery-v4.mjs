@@ -8,6 +8,7 @@ import { renderBusinessMarkdownV4 } from './business-markdown-v4.mjs';
 import { canonicalStringify, digest } from './canonical.mjs';
 import { renderExecutionWorksheetCsvV4 } from './canonical-output-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
+import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
 import {
   atomicWriteJson, atomicWriteText, outputPaths, readText, revisionName
 } from './run-store.mjs';
@@ -128,7 +129,7 @@ function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
       mode: 'create_new_run',
       description: '原始资料或实质范围改变时创建新运行；当前 canonical 交付保持不可变。'
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
   if (validateAgainstSchema(reply, { $ref: '#/$defs/finishedReply', $defs: replySchema.$defs }).length) {
     throw new TypeError('CANONICAL_FINISHED_REPLY_INVALID');
@@ -245,7 +246,7 @@ function executionFinishedReply(manifest, planBytes, diagnostics) {
         : '查看未选择执行的结论；Case Document 保持有效。'
     }],
     recovery: { mode: 'create_new_run', description: '需要改变语义或执行选择时按规范创建新运行。' },
-    non_blocking_diagnostics: structuredClone(diagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(diagnostics)
   };
   if (validateAgainstSchema(reply, { $ref: '#/$defs/finishedReply', $defs: replySchema.$defs }).length) {
     throw new TypeError('CANONICAL_FINISHED_REPLY_INVALID');

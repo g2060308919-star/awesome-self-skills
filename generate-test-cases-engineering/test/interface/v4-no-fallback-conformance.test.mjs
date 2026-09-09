@@ -50,7 +50,8 @@ test('[P-11][BR-14][BR-15] T15 adapter repair cannot become a business/resource 
 
     await stage(directory, 'behavior_views', fixture.artifacts.behavior_views);
     const next = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(next.status, 'need_artifact', JSON.stringify(next));
+    assert.equal(next.status, 'need_revision', JSON.stringify(next));
+    assert.equal(next.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(next.stage, 'case_drafts');
 
     const strayMarkdown = path.join(directory, 'agent-fallback-test-cases.md');
@@ -146,7 +147,8 @@ test('T15 a read-only v3 migration sibling is consumable by the production runne
     reanalysis.artifacts.evidence_claims.semantic_gaps = [];
     await stage(migrated.sibling_run_directory, 'source_pack', reanalysis.artifacts.source_pack);
     let reply = /** @type {any} */ (await advanceStrict(migrated.sibling_run_directory));
-    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(reply.stage, 'evidence_claims', JSON.stringify(reply));
     for (const stageName of /** @type {Array<keyof typeof STAGE_FILES>} */ ([
       'evidence_claims', 'behavior_views', 'case_drafts'

@@ -90,7 +90,7 @@
       "reason": "An execution sibling without its Source Pack returns the full closed stop contract while retaining its durable run identity.",
       "value": {
         "run_id": "RUN-execution",
-        "status": "need_artifact",
+        "status": "need_revision",
         "phase": "execution_closure",
         "stage": "source_pack",
         "schema_ref": "source-pack.schema.json",
@@ -100,6 +100,40 @@
         "incomplete_reason": { "code": "STAGE_ARTIFACT_REQUIRED", "summary": "仍需 execution Source Pack。" },
         "user_next_steps": [{ "action": "write_stage_artifact", "description": "写入请求的 Source Pack。" }],
         "recovery": { "mode": "write_staging_artifact", "description": "在同一运行目录补齐工件。" },
+        "non_blocking_diagnostics": []
+      }
+    },
+    {
+      "name": "invalid_stage_reply_requests_revision",
+      "reason": "An invalid submitted stage retains its exact artifact identity and returns a closed corrective revision contract.",
+      "value": {
+        "run_id": "RUN-v4",
+        "status": "need_revision",
+        "phase": "case_design",
+        "stage": "case_drafts",
+        "schema_ref": "case-drafts.schema.json",
+        "source_revision": 2,
+        "artifact_path": "/tmp/run/staging/case-drafts.json",
+        "artifact_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+        "diagnostics": [{
+          "category": "schema",
+          "code": "CASE_DRAFT_INVALID",
+          "path": "/cases/0",
+          "message": "A Case expectation must close one compiler-owned obligation."
+        }],
+        "produced_artifacts": [],
+        "incomplete_reason": {
+          "code": "CASE_DRAFT_INVALID",
+          "summary": "A Case expectation must close one compiler-owned obligation."
+        },
+        "user_next_steps": [{
+          "action": "revise_artifact",
+          "description": "Revise the rejected Case Draft and retry this run."
+        }],
+        "recovery": {
+          "mode": "retry_current_run",
+          "description": "Keep accepted revisions and replace only the staging candidate."
+        },
         "non_blocking_diagnostics": []
       }
     },

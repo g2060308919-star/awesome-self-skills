@@ -113,7 +113,8 @@ async function startQuestionJourney(directory, runId, advance = advanceStrict) {
   const fixture = await bendReviewJourneyFixture(runId);
   await stage(directory, 'source_pack', fixture.artifacts.source_pack);
   const evidenceRequest = /** @type {any} */ (await advance(directory));
-  assert.equal(evidenceRequest.status, 'need_artifact', JSON.stringify(evidenceRequest));
+  assert.equal(evidenceRequest.status, 'need_revision', JSON.stringify(evidenceRequest));
+  assert.equal(evidenceRequest.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
   assert.equal(evidenceRequest.stage, 'evidence_claims');
   await stage(directory, 'evidence_claims', fixture.artifacts.evidence_claims);
   const pending = /** @type {any} */ (await advance(directory));
@@ -173,7 +174,7 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
     );
     await stage(directory, 'source_pack', revision2.artifacts.source_pack);
     const behaviorRequest = /** @type {any} */ (await installedAdvanceStrict(directory));
-    assert.equal(behaviorRequest.status, 'need_artifact', JSON.stringify(behaviorRequest));
+    assert.equal(behaviorRequest.status, 'need_revision', JSON.stringify(behaviorRequest));
     assert.equal(behaviorRequest.stage, 'behavior_views');
     const closedCheckpointBytes = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
 
@@ -182,7 +183,7 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
     );
     await stage(directory, 'source_pack', staleRevision3.artifacts.source_pack);
     const staleAfterClose = /** @type {any} */ (await installedAdvanceStrict(directory));
-    assert.equal(staleAfterClose.status, 'need_artifact', JSON.stringify(staleAfterClose));
+    assert.equal(staleAfterClose.status, 'need_revision', JSON.stringify(staleAfterClose));
     assert.equal(staleAfterClose.stage, 'behavior_views');
     assert.deepEqual(staleAfterClose.non_blocking_diagnostics, []);
     assert.equal(await exists(path.join(directory, 'accepted/r003/source-pack.json')), false);
@@ -193,7 +194,7 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
     );
 
     const cleanReplay = /** @type {any} */ (await installedAdvanceStrict(directory));
-    assert.equal(cleanReplay.status, 'need_artifact', JSON.stringify(cleanReplay));
+    assert.equal(cleanReplay.status, 'need_revision', JSON.stringify(cleanReplay));
     assert.equal(cleanReplay.stage, 'behavior_views');
     assert.deepEqual(cleanReplay.non_blocking_diagnostics, []);
   } finally {
@@ -272,11 +273,15 @@ test('T15 carries final-authority downgrade warnings into the next stage request
     await stage(directory, 'source_pack', revision1.artifacts.source_pack);
     const reply = /** @type {any} */ (await advanceStrict(directory));
 
-    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
     assert.equal(reply.stage, 'behavior_views');
     assert.deepEqual(
       reply.non_blocking_diagnostics.map((/** @type {any} */ item) => item.code),
       events.map(() => 'FINAL_AUTHORITY_NOT_GRANTED')
+    );
+    assert.deepEqual(
+      reply.non_blocking_diagnostics.map((/** @type {any} */ item) => item.source_event_id),
+      events.map((/** @type {any} */ event) => event.event_id).sort()
     );
 
     await stage(directory, 'source_pack', revision1.artifacts.source_pack);
@@ -284,7 +289,7 @@ test('T15 carries final-authority downgrade warnings into the next stage request
     assert.deepEqual(replay.non_blocking_diagnostics, reply.non_blocking_diagnostics);
 
     const laterResume = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(laterResume.status, 'need_artifact', JSON.stringify(laterResume));
+    assert.equal(laterResume.status, 'need_revision', JSON.stringify(laterResume));
     assert.equal(laterResume.stage, 'behavior_views');
     assert.deepEqual(laterResume.non_blocking_diagnostics, []);
   } finally {
@@ -318,6 +323,10 @@ test('T15 carries accepted final-authority warnings through a downstream need_re
       reply.non_blocking_diagnostics.map((/** @type {any} */ item) => item.code),
       events.map(() => 'FINAL_AUTHORITY_NOT_GRANTED')
     );
+    assert.deepEqual(
+      reply.non_blocking_diagnostics.map((/** @type {any} */ item) => item.source_event_id),
+      events.map((/** @type {any} */ event) => event.event_id).sort()
+    );
 
     await stage(directory, 'source_pack', revision1.artifacts.source_pack);
     const replay = /** @type {any} */ (await advanceStrict(directory));
@@ -325,7 +334,7 @@ test('T15 carries accepted final-authority warnings through a downstream need_re
 
     await rm(path.join(directory, 'staging/behavior-views.json'));
     const later = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(later.status, 'need_artifact', JSON.stringify(later));
+    assert.equal(later.status, 'need_revision', JSON.stringify(later));
     assert.equal(later.stage, 'behavior_views');
     assert.deepEqual(later.non_blocking_diagnostics, []);
   } finally {
@@ -365,7 +374,7 @@ test('T15 durable runner preserves a blank turn, records explicit defer, then se
     );
     await stage(directory, 'source_pack', revision2.artifacts.source_pack);
     const afterDefer = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(afterDefer.status, 'need_artifact', JSON.stringify(afterDefer));
+    assert.equal(afterDefer.status, 'need_revision', JSON.stringify(afterDefer));
     assert.equal(afterDefer.stage, 'behavior_views');
     const deferredCheckpoint = JSON.parse(await readFile(
       path.join(directory, 'derived/r002/checkpoint.json'), 'utf8'
@@ -386,7 +395,7 @@ test('T15 durable runner preserves a blank turn, records explicit defer, then se
     assert.deepEqual(validateAgainstSchema(revision3.artifacts.source_pack, sourcePackSchema), []);
     await stage(directory, 'source_pack', revision3.artifacts.source_pack);
     const afterDeliveryRequest = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(afterDeliveryRequest.status, 'need_artifact', JSON.stringify(afterDeliveryRequest));
+    assert.equal(afterDeliveryRequest.status, 'need_revision', JSON.stringify(afterDeliveryRequest));
     assert.equal(afterDeliveryRequest.stage, 'behavior_views');
     const closedCheckpoint = JSON.parse(await readFile(
       path.join(directory, 'derived/r003/checkpoint.json'), 'utf8'
@@ -398,7 +407,7 @@ test('T15 durable runner preserves a blank turn, records explicit defer, then se
 
     await stage(directory, 'behavior_views', revision3.artifacts.behavior_views);
     const caseRequest = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(caseRequest.status, 'need_artifact', JSON.stringify(caseRequest));
+    assert.equal(caseRequest.status, 'need_revision', JSON.stringify(caseRequest));
     assert.equal(caseRequest.stage, 'case_drafts');
     await stage(directory, 'case_drafts', revision3.artifacts.case_drafts);
     const finished = /** @type {any} */ (await advanceStrict(directory));

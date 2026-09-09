@@ -317,7 +317,7 @@ function revisionReply(
 /** @param {string} runDirectory @param {string} runId */
 function sourceArtifactRequest(runDirectory, runId) {
   return {
-    status: 'need_artifact', phase: 'execution_closure', run_id: runId,
+    status: 'need_revision', phase: 'execution_closure', run_id: runId,
     stage: 'source_pack', schema_ref: AGENT_STAGE_SCHEMA.source_pack,
     scope: { source_revision: 0, run_instance_id: runId }, diagnostics: [],
     produced_artifacts: [],

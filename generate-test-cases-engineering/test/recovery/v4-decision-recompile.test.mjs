@@ -5,6 +5,7 @@ import test from 'node:test';
 import * as clarification from '../../src/clarification.mjs';
 import { digest } from '../../src/canonical.mjs';
 import { compileV4DecisionEvidenceOverlay, validateV4EvidenceSourceBoundary } from '../../src/evidence.mjs';
+import { sortNonBlockingDiagnosticsV4 } from '../../src/non-blocking-diagnostics-v4.mjs';
 import sourcePackSchema from '../../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { sourceBoundaryFixture } from '../helpers/v4-source-boundary.mjs';
@@ -218,4 +219,53 @@ test('a uniquely mapped late answer is accepted once; replay is stable and stale
     assert.equal(stale.committed_revision, staleBase.checkpoint.revision);
     assert.equal(stale.presentation?.presentation_id ?? null, staleBase.presentation?.presentation_id ?? null);
   }
+});
+
+test('non-blocking diagnostics are sorted by code event and affected question parts', () => {
+  const base = checkpoint({ second: true });
+  const submissions = base.presentation.question_parts.map((/** @type {any} */ part) => {
+    const answer = part.answer_options[0];
+    const message = `用户回答：${answer}`;
+    return {
+      event: event(base, message, answer, part, {
+        resolution: 'final', origin: 'user_statement', authority: 'task_scoped'
+      }),
+      message
+    };
+  }).sort((/** @type {any} */ left, /** @type {any} */ right) =>
+    right.event.event_id.localeCompare(left.event.event_id));
+  assert.ok(submissions[0].event.event_id > submissions[1].event.event_id, 'fixture must submit warnings in descending order');
+  const bindings = base.checkpoint.semantic_gap_ledger.map((/** @type {any} */ root) => ({
+    root_issue_id: root.root_issue_id, obligation_ids: [`OBL-${root.root_issue_id}`]
+  }));
+  const result = clarification.applySemanticClarificationEventsV4({
+    checkpoint: base.checkpoint,
+    clarification_events: submissions.map((/** @type {any} */ item) => item.event),
+    existing_decisions: [], presentation_history: [base.presentation],
+    normalized_user_messages: submissions.map((/** @type {any} */ item) => item.message),
+    previous_obligations_by_root: bindings,
+    current_obligations_by_root: bindings
+  });
+  assert.equal(result.commit_required, true);
+  assert.equal(result.non_blocking_diagnostics.length, 2);
+  assert.deepEqual(
+    result.non_blocking_diagnostics.map((/** @type {any} */ item) => item.source_event_id),
+    submissions.map((/** @type {any} */ item) => item.event.event_id).sort(),
+    'public warnings must not inherit submitted event order'
+  );
+});
+
+test('non-blocking diagnostic ordering uses affected question parts as the third tuple key', () => {
+  const shared = {
+    code: 'FINAL_AUTHORITY_NOT_GRANTED', severity: 'warning',
+    message: 'Final authority was not granted.', source_event_id: 'EVENT-shared'
+  };
+  const sorted = sortNonBlockingDiagnosticsV4([
+    { ...shared, affected_question_part_ids: ['QP-z'] },
+    { ...shared, affected_question_part_ids: ['QP-a'] }
+  ]);
+  assert.deepEqual(
+    sorted.map((/** @type {any} */ item) => item.affected_question_part_ids),
+    [['QP-a'], ['QP-z']]
+  );
 });

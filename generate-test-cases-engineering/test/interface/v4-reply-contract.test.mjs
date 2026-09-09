@@ -104,7 +104,7 @@ const replies = {
 };
 
 const stageArtifactReply = {
-  ...common, status: 'need_artifact', phase: 'execution_closure',
+  ...common, status: 'need_revision', phase: 'execution_closure',
   stage: 'source_pack', schema_ref: 'source-pack.schema.json',
   scope: { source_revision: 0, run_instance_id: 'RUN-v4' }, diagnostics: [],
   incomplete_reason: { code: 'STAGE_ARTIFACT_REQUIRED', summary: '仍需 execution Source Pack。' },
@@ -139,7 +139,12 @@ test('v4 reply six discriminator branches share the exact nonBlockingDiagnostic 
   ]);
   const branches = replySchema.$defs.v4Reply.oneOf.map(/** @param {{$ref: string}} reference */ ({ $ref }) => {
     assert.match($ref, /^#\/\$defs\/[^/]+$/);
-    return replySchema.$defs[$ref.slice('#/$defs/'.length)];
+    let branch = replySchema.$defs[$ref.slice('#/$defs/'.length)];
+    while (branch.$ref) {
+      assert.match(branch.$ref, /^#\/\$defs\/[^/]+$/);
+      branch = replySchema.$defs[branch.$ref.slice('#/$defs/'.length)];
+    }
+    return branch;
   });
   assert.deepEqual(branches.map(/** @param {{properties: {status: {const: string}}}} branch */ (branch) => branch.properties.status.const).sort(), Object.keys(replies).sort());
   for (const branch of branches) {
@@ -175,7 +180,7 @@ test('v4 need_artifact requires every frozen recovery field and rejects v3 or ex
   }
 });
 
-test('v4 stage-artifact stop is a closed BR-16 reply for execution and generation stages', () => {
+test('v4 stage-artifact stop is a closed need_revision reply for execution and generation stages', () => {
   assert.deepEqual(validateAgainstSchema(stageArtifactReply, replySchema), []);
   assert.deepEqual(validateAgainstSchema({
     ...stageArtifactReply, phase: 'requirements_analysis', stage: 'evidence_claims',
@@ -192,6 +197,32 @@ test('v4 stage-artifact stop is a closed BR-16 reply for execution and generatio
   assert.notDeepEqual(validateAgainstSchema({
     ...stageArtifactReply, phase: 'case_design'
   }, replySchema), [], 'source_pack cannot claim the case-design phase');
+  assert.notDeepEqual(validateAgainstSchema({
+    ...stageArtifactReply, status: 'need_artifact'
+  }, replySchema), [], 'need_artifact is reserved for the complete source-acquisition recovery contract');
+  assert.notDeepEqual(validateAgainstSchema({
+    ...stageArtifactReply,
+    incomplete_reason: { code: 'CASE_DRAFT_INVALID', summary: 'wrong route' }
+  }, replySchema), [], 'stage absence has one exact incomplete reason');
+  assert.notDeepEqual(validateAgainstSchema({
+    ...stageArtifactReply,
+    user_next_steps: [{ action: 'provide_artifact', description: 'wrong owner' }]
+  }, replySchema), [], 'stage absence stays owned by the Agent adapter');
+  assert.notDeepEqual(validateAgainstSchema({
+    ...stageArtifactReply,
+    recovery: { mode: 'resume_from_committed_checkpoint', description: 'wrong recovery' }
+  }, replySchema), [], 'stage absence uses staging recovery');
+});
+
+test('v4 need_artifact has exactly the complete source-acquisition discriminator', () => {
+  const definition = replySchema.$defs.needArtifactReply;
+  assert.deepEqual(definition, { $ref: '#/$defs/sourceAcquisitionNeedArtifactReply' });
+  assert.deepEqual(validateAgainstSchema(replies.need_artifact, replySchema), []);
+  for (const key of ['artifact_requests', 'resume_ref', 'available_actions']) {
+    const invalid = /** @type {Record<string, any>} */ ({ ...replies.need_artifact });
+    delete invalid[key];
+    assert.notDeepEqual(validateAgainstSchema(invalid, replySchema), [], `need_artifact missing ${key}`);
+  }
 });
 
 test('v4 need_artifact freezes provide_artifact then cancel_run as its exact two actions', () => {

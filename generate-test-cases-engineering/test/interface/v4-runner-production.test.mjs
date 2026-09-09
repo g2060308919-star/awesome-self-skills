@@ -35,7 +35,8 @@ test('advanceStrict drives a v4 Case Document through the four artifacts and pub
     const input = v4PipelineFixture();
     const runInstance = await ensureV4RunInstance(directory, { delivery_intent: 'case_document' });
     const initial = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(initial.status, 'need_artifact', JSON.stringify(initial));
+    assert.equal(initial.status, 'need_revision', JSON.stringify(initial));
+    assert.equal(initial.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(initial.stage, 'source_pack');
     assertV4StopContract(initial);
     input.artifacts.source_pack.run_instance_id = runInstance.run_id;
@@ -45,7 +46,8 @@ test('advanceStrict drives a v4 Case Document through the four artifacts and pub
       await stage(directory, submittedStage, input.artifacts[submittedStage]);
       const reply = /** @type {any} */ (await advanceStrict(directory));
       if (index < expectedStages.length - 1) {
-        assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+        assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+        assert.equal(reply.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
         assert.equal(reply.stage, expectedStages[index + 1]);
         assertV4StopContract(reply);
       } else {
@@ -98,7 +100,8 @@ test('every v4 Agent stage rejects an invalid artifact with the complete BR-16 s
       await stage(directory, submittedStage, input.artifacts[submittedStage]);
       const accepted = /** @type {any} */ (await advanceStrict(directory));
       if (index < stages.length - 1) {
-        assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
+        assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
+        assert.equal(accepted.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
         assert.equal(accepted.stage, stages[index + 1]);
         assertV4StopContract(accepted);
       } else {

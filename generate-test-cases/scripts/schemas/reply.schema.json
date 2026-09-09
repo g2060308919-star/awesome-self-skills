@@ -1000,7 +1000,7 @@
         "non_blocking_diagnostics"
       ],
       "properties": {
-        "status": { "const": "need_artifact" },
+        "status": { "const": "need_revision" },
         "phase": {
           "enum": ["source_acquisition", "requirements_analysis", "case_design", "execution_closure"]
         },
@@ -1021,16 +1021,41 @@
             "run_instance_id": { "type": "string", "minLength": 1 }
           }
         },
-        "diagnostics": { "$ref": "#/$defs/diagnostics" },
+        "diagnostics": { "type": "array", "maxItems": 0 },
         "produced_artifacts": {
           "type": "array", "items": { "$ref": "#/$defs/producedArtifact" }
         },
-        "incomplete_reason": { "$ref": "#/$defs/incompleteReason" },
-        "user_next_steps": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "$ref": "#/$defs/userNextStep" }
+        "incomplete_reason": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "summary"],
+          "properties": {
+            "code": { "const": "STAGE_ARTIFACT_REQUIRED" },
+            "summary": { "type": "string", "minLength": 1 }
+          }
         },
-        "recovery": { "$ref": "#/$defs/recoverySummary" },
+        "user_next_steps": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "prefixItems": [{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["action", "description"],
+            "properties": {
+              "action": { "const": "write_stage_artifact" },
+              "description": { "type": "string", "minLength": 1 }
+            }
+          }],
+          "items": false
+        },
+        "recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "description"],
+          "properties": {
+            "mode": { "const": "write_staging_artifact" },
+            "description": { "type": "string", "minLength": 1 }
+          }
+        },
         "non_blocking_diagnostics": {
           "type": "array", "uniqueItems": true,
           "items": { "$ref": "#/$defs/nonBlockingDiagnostic" }
@@ -1068,21 +1093,9 @@
       ]
     },
     "needArtifactReply": {
-      "type": "object",
-      "required": ["status", "non_blocking_diagnostics"],
-      "properties": {
-        "status": { "const": "need_artifact" },
-        "non_blocking_diagnostics": {
-          "type": "array", "uniqueItems": true,
-          "items": { "$ref": "#/$defs/nonBlockingDiagnostic" }
-        }
-      },
-      "oneOf": [
-        { "$ref": "#/$defs/sourceAcquisitionNeedArtifactReply" },
-        { "$ref": "#/$defs/v4StageArtifactReply" }
-      ]
+      "$ref": "#/$defs/sourceAcquisitionNeedArtifactReply"
     },
-    "needRevisionReply": {
+    "v4InvalidArtifactRevisionReply": {
       "type": "object",
       "unevaluatedProperties": false,
       "allOf": [
@@ -1162,6 +1175,21 @@
             "schema_ref": { "const": "case-drafts.schema.json" }
           }
         }
+      ]
+    },
+    "needRevisionReply": {
+      "type": "object",
+      "required": ["status", "non_blocking_diagnostics"],
+      "properties": {
+        "status": { "const": "need_revision" },
+        "non_blocking_diagnostics": {
+          "type": "array", "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonBlockingDiagnostic" }
+        }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/v4StageArtifactReply" },
+        { "$ref": "#/$defs/v4InvalidArtifactRevisionReply" }
       ]
     },
     "finishedReply": {

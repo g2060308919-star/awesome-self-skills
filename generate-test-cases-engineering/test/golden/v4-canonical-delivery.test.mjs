@@ -13,6 +13,15 @@ const delivery = /** @type {any} */ (await import('../../src/canonical-delivery-
 }));
 const byteDigest = (/** @type {string} */ value) => `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 
+/** @param {string} eventId */
+function warning(eventId) {
+  return {
+    code: 'FINAL_AUTHORITY_NOT_GRANTED', severity: 'warning',
+    message: 'Final authority was not granted.', source_event_id: eventId,
+    affected_question_part_ids: [`QP-${eventId}`]
+  };
+}
+
 /** @returns {any} */
 function fixture() {
   const riskKinds = [
@@ -151,6 +160,17 @@ test('T12 publishes current.json only after all three artifacts survive exact re
     'case_document', 'business_markdown', 'execution_worksheet'
   ]);
   assert.equal(result.reply.incomplete_reason, null);
+});
+
+test('T12 finished delivery canonicalizes public warning order at its construction boundary', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-delivery-warning-order-'));
+  const input = fixture();
+  input.non_blocking_diagnostics = [warning('EVENT-z'), warning('EVENT-a')];
+  const result = await delivery.publishCaseDocumentDeliveryV4(directory, input);
+  assert.deepEqual(
+    result.reply.non_blocking_diagnostics.map((/** @type {any} */ item) => item.source_event_id),
+    ['EVENT-a', 'EVENT-z']
+  );
 });
 
 test('T12 finished verification rejects a missing or byte-tampered JSON, Markdown or CSV', async () => {

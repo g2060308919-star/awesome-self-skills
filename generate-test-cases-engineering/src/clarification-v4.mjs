@@ -7,6 +7,7 @@ import {
   compileSemanticDecisionV4,
   normalizeDecisionMessageV4
 } from './decision-record.mjs';
+import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
 import {
   canonicalStringSetV4,
   canonicalTextV4,
@@ -901,7 +902,7 @@ export function applySemanticClarificationEventsV4(submitted) {
         presentation: structuredClone(original.clarification_state.presentation), checkpoint: structuredClone(original),
         decisions: structuredClone(existingDecisions), replayed_decision_id: replay.decision_id,
         decision_claim_summaries: [],
-        non_blocking_diagnostics: replayCandidate.warnings, diagnostics: []
+        non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(replayCandidate.warnings), diagnostics: []
       };
     }
     let acceptedFromSuperseded = false;
@@ -949,7 +950,7 @@ export function applySemanticClarificationEventsV4(submitted) {
     decisions,
     decision_claim_summaries: decisionClaimSummaries,
     case_classification: lastClassification,
-    non_blocking_diagnostics: warnings,
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(warnings),
     diagnostics: []
   };
 }

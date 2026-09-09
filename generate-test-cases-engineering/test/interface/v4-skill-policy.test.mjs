@@ -59,6 +59,8 @@ test('v4 Skill routes every advertised action through the installed private acti
   assert.match(skill, /never (?:mint|compute|invent)[\s\S]*(?:event ID|event_id)[\s\S]*(?:digest|protocol ID)/iu);
   assert.match(skill, /semantic[\s\S]*`constructV4Action`[\s\S]*execution/iu);
   assert.match(skill, /`need_artifact`[\s\S]*complete batch[\s\S]*`stageV4SourceAcquisitionAction`[\s\S]*(?:call|invoke)[\s\S]*runner again/iu);
+  assert.match(skill, /`need_artifact`[\s\S]*reserved[\s\S]*source-acquisition recovery contract/iu);
+  assert.match(skill, /`need_revision`[\s\S]*`STAGE_ARTIFACT_REQUIRED`[\s\S]*`staging\/source-pack\.json`[\s\S]*`staging\/case-drafts\.json`/iu);
   assert.match(evidence, /`stageV4SourceAcquisitionAction`[\s\S]*exact material bytes[\s\S]*safe input[\s\S]*Source Pack/iu);
   assert.match(evidence, /signed retrieval URL[\s\S]*(?:never|must not)[\s\S]*(?:Source Pack|staging|persist)/iu);
 });

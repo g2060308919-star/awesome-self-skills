@@ -36,6 +36,7 @@ import { AGENT_STAGE_SCHEMA } from './reply-routing.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
+import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
 
@@ -57,7 +58,7 @@ function artifactRequest(
   runDirectory, stage, sourceRevision, runInstanceId, nonBlockingDiagnostics = []
 ) {
   return {
-    status: 'need_artifact', stage, schema_ref: AGENT_STAGE_SCHEMA[stage],
+    status: 'need_revision', stage, schema_ref: AGENT_STAGE_SCHEMA[stage],
     phase: stagePhase(stage), run_id: runInstanceId,
     scope: { source_revision: sourceRevision, run_instance_id: runInstanceId }, diagnostics: [],
     produced_artifacts: [],
@@ -73,7 +74,7 @@ function artifactRequest(
       mode: 'write_staging_artifact',
       description: '保留已接受 revision，在同一运行目录写入所请求的候选工件后重调 runner。'
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
 
@@ -105,7 +106,7 @@ function revisionReply(
       mode: 'retry_current_run',
       description: '保留已接受 revision，只替换尚未接受的 staging 候选工件。'
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
 
@@ -121,7 +122,7 @@ function qualityFailure(runId, phase, code, summary, nonBlockingDiagnostics = []
       mode: 'resume_from_committed_checkpoint',
       description: '修正当前候选工件后，从已提交检查点继续。'
     },
-    non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
 
@@ -780,7 +781,7 @@ async function consumeSemanticAppend(
         .filter((/** @type {any} */ warning) => warning !== null);
       return {
         kind: 'advanced', revision, artifacts,
-        checkpoint, non_blocking_diagnostics: warnings
+        checkpoint, non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(warnings)
       };
     }
     return {
@@ -1317,9 +1318,9 @@ async function finalizeCaseDocumentRevision(
   );
   if (result.status === 'need_artifact') return {
     ...result,
-    non_blocking_diagnostics: [
+    non_blocking_diagnostics: sortNonBlockingDiagnosticsV4([
       ...(result.non_blocking_diagnostics ?? []), ...structuredClone(nonBlockingDiagnostics)
-    ]
+    ])
   };
   if (result.status !== 'compiled' || !record(result.obligations)) return qualityFailure(
     runId, 'case_design', result.reason_code ?? 'V4_CASE_DOCUMENT_QUALITY_FAILURE',

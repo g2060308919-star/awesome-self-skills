@@ -102,9 +102,9 @@ test('T15 installed v4 runner is deterministic across three fresh durable direct
   assert.equal(new Set(observations.map(item => item.runId)).size, 3);
   assert.deepEqual(observations.map(item => item.replies), Array.from({ length: 3 }, () => [
     'need_artifact/source_pack',
-    'need_artifact/evidence_claims',
-    'need_artifact/behavior_views',
-    'need_artifact/case_drafts',
+    'need_revision/evidence_claims',
+    'need_revision/behavior_views',
+    'need_revision/case_drafts',
     'finished/delivered_cases',
     'finished/delivered_cases'
   ]));

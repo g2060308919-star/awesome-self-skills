@@ -15,6 +15,15 @@ const bytes = value => new TextEncoder().encode(value);
 const hash = value => 'sha256:' + digest(value);
 const registry = createSourceProviderRegistry([{ provider: 'known', version: '1', hosts: ['known.example.test'], kind: 'other', query_order: 'sensitive' }]);
 
+/** @param {string} eventId */
+function warning(eventId) {
+  return {
+    code: 'FINAL_AUTHORITY_NOT_GRANTED', severity: 'warning',
+    message: 'Final authority was not granted.', source_event_id: eventId,
+    affected_question_part_ids: [`QP-${eventId}`]
+  };
+}
+
 function state(reasonCode = 'UNSUPPORTED_SIGNED_URL_PROVIDER') {
   const parsed = canonicalizeSourceUrl(reasonCode === 'UNSUPPORTED_SIGNED_URL_PROVIDER'
     ? 'https://unknown.example.test/file?id=7&signature=TOP_SECRET'
@@ -57,6 +66,18 @@ test('v4 need_artifact reply alone plus safe input can construct the advertised 
     byte_length: content.length, content_digest: sourceByteDigest(content)
   }, registry);
   assert.equal(event.event_type, 'provide_artifact');
+});
+
+test('v4 need_artifact reply canonicalizes public warning order at its construction boundary', () => {
+  const value = state();
+  const reply = replies.createNeedArtifactReplyV4({
+    run_id: 'RUN-source', artifact_requests: [value.request], resume_ref: value.resume,
+    produced_artifacts: [], non_blocking_diagnostics: [warning('EVENT-z'), warning('EVENT-a')]
+  });
+  assert.deepEqual(
+    reply.non_blocking_diagnostics.map((/** @type {any} */ item) => item.source_event_id),
+    ['EVENT-a', 'EVENT-z']
+  );
 });
 
 test('v4 need_artifact reply fails closed for stale/tampered refs and missing user recovery fields', () => {

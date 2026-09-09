@@ -211,7 +211,7 @@
     "reply.schema.json": [
       "v4SemanticActionContext", "v4SemanticQuestionPart", "v4SemanticRecovery", "v4SemanticPresentation",
       "v4ExecutionClosurePresentation", "v4CancelContext", "v4FinalConfirmationPresentation", "v4ExecutionPresentation",
-      "sourceAcquisitionNeedArtifactReply", "v4StageArtifactReply"
+      "sourceAcquisitionNeedArtifactReply", "v4StageArtifactReply", "v4InvalidArtifactRevisionReply"
     ],
     "source-pack.schema.json": [
       "v4DecisionTarget", "v4DecisionAnswerOrigin", "v4DecisionObligationAudit", "v4SemanticDecision",

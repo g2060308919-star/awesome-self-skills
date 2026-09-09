@@ -115,7 +115,8 @@ test('T13 production runner detects an otherwise empty migrated v4 sibling from 
       fixture.migration.sibling_run_directory
     ));
 
-    assert.equal(reply.status, 'need_artifact', JSON.stringify(reply));
+    assert.equal(reply.status, 'need_revision', JSON.stringify(reply));
+    assert.equal(reply.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(reply.stage, 'source_pack', JSON.stringify(reply));
     assert.equal(reply.scope.run_instance_id, fixture.migration.v4_run_id);
     assert.equal(await readFile(instancePath, 'utf8'), instanceBefore);

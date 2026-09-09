@@ -277,7 +277,8 @@ test('BR17 real runner advertises and commits a version-bound semantic reopen in
     assert.deepEqual(validateAgainstSchema(answered.source, sourcePackSchema), []);
     await stage(siblingDirectory, 'source_pack', answered.source);
     const afterAnswer = /** @type {any} */ (await advanceStrict(siblingDirectory));
-    assert.equal(afterAnswer.status, 'need_artifact', JSON.stringify(afterAnswer));
+    assert.equal(afterAnswer.status, 'need_revision', JSON.stringify(afterAnswer));
+    assert.equal(afterAnswer.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(afterAnswer.stage, 'behavior_views');
     const siblingCheckpoint0 = JSON.parse(await readFile(
       path.join(siblingDirectory, 'derived/r000/checkpoint.json'), 'utf8'

@@ -93,7 +93,8 @@ test('BR-01: the private runner accepts a valid v4 intent before requesting the 
     await mkdir(path.join(directory, 'staging'), { recursive: true });
     await writeFile(path.join(directory, 'staging/source-pack.json'), JSON.stringify(value));
     const next = await advanceStrict(directory);
-    assert.equal(next.status, 'need_artifact', JSON.stringify(next));
+    assert.equal(next.status, 'need_revision', JSON.stringify(next));
+    assert.equal(next.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(next.stage, 'evidence_claims', JSON.stringify(next));
   } finally {
     await rm(directory, { recursive: true, force: true });
