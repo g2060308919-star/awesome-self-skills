@@ -8,7 +8,7 @@ Date: 2026-09-09 (Asia/Shanghai)
 - `02-technical-design.md` was read as architecture context; SHA-256 `8696d16ddd42cea7347c4f244cdca3fd2c3fae893f088692ca9959e4aaa8a0c2`.
 - `03-development-spec.md` was read as the sole normative implementation and acceptance contract; SHA-256 `36cd18a5d290bd16d09c4c75db24882253194a17f8cd29f7021a03b608dd7a45`.
 - Repository baseline: `1b16eddda0ed13a02a41d6a1dd1c5cecf23cfa02`.
-- Predecessor code candidate: `244f1ea01d4843ae88d7f64b97b512850963efd1` on `codex/generate-test-cases-v4`. Its pressure and clean-checkout evidence below is retained as defect-discovery evidence only; a later conformance correction invalidated it as final-candidate evidence.
+- Verified code candidate: `42a509e03034218604d86b9774a07d464855d730` on `codex/generate-test-cases-v4`.
 - Development root: `generate-test-cases-engineering`.
 - Published repository Skill: `generate-test-cases`.
 - Runtime: Node `v24.18.0`; npm `11.16.0`.
@@ -44,42 +44,40 @@ All commands ran from the development root unless another directory is shown.
 
 The public-pilot result is corpus-admission evidence only. Its deliberate `release_eligible:false` / `insufficient_evidence` field is not represented as an expert-quality or external business-accuracy result, and comparator/expert scoring is outside this v4 development contract.
 
-## Predecessor fresh-context pressure runs (discovery evidence only)
+## Three final-candidate fresh-context pressure runs
 
-Each Agent started without the implementation conversation, read the release Skill and the real Task 15 B-end PRD, used the installed public runner in fresh `/private/tmp` durable directories, and left the candidate worktree clean at the same SHA. These runs targeted `244f1ea`; because the public stale-answer contract changed afterward, they are not reused as final-candidate pressure evidence.
+Each Agent started without the implementation conversation, read the release Skill and the real Task 15 B-end PRD, used only the installed public runner in a fresh `/private/tmp` durable directory, and left the candidate worktree clean at the same SHA.
 
 ### 1. Success and canonical delivery
 
 - Result: PASS; no P0/P1.
-- Report: `/private/tmp/gtc-v4-final-success-verify-244f1ea.rZie7u/success-observation.json`.
-- Report SHA-256: `2ebfb72c989f5517f487cd4c347ffe886a1313e421c285d298fc300b7930b7fc`.
-- Ten runner calls: all exit 0, empty stderr, exactly one JSON line.
-- Result `delivered_with_gaps` at r003; five modules; seven independent Cases/Test Points; explicit sorting gap.
-- JSON, business Markdown and worksheet CSV have identical Case membership and verified digests under one manifest. No execution plan, E2E start or fallback artifact occurred.
+- Report: `/private/tmp/gtc-v4-42a509e-success-3r0LPY/success-observation.json`; SHA-256 `3f2be00606c2529b629156cdea711c25b7435fabbd785ff6718ca708a56531d1`.
+- Transcript: `/private/tmp/gtc-v4-42a509e-success-3r0LPY/success-transcript.jsonl`; SHA-256 `c9aa7b9135c57f16b102311c42cc6f24b3ce97ea25dedd2a769efccef4b03bae`.
+- Result `delivered_with_gaps` at r003; five modules; seven independent Cases/Test Points; question conservation 3 -> 2 after the IP-only answer; blank replay committed nothing; the sorting gap remained explicitly closed for delivery.
+- JSON, business Markdown and worksheet CSV have identical 7/7/7 Case membership and verified digests under one current manifest. No execution-resource question, execution plan, E2E start or fallback artifact occurred.
 
 ### 2. Failure chain and no fallback
 
 - Result: PASS; no P0/P1.
-- Report: `/private/tmp/gtc-v4-244f1ea01d4843ae88d7f64b97b512850963efd1-final-failure-20260909T063901Z/report.md`; SHA-256 `60787074c03098365dc10f37f24a40ed2a2cd63bdd56350b5a18c357d6c238de`.
-- Machine evidence: `evidence.json`; SHA-256 `4ab17d298791f6d06580eccbf8fbb6a102186f2d2e502f91536eea1c0ccf8356`.
-- Transcript: `cli-transcript.jsonl`; SHA-256 `630b78eaf600a48f487b5fadf3b0a8c3c704d3e7bcb687ca178d7613f2c7b804`.
-- 259/259 assertions; 22 installed CLI calls all obeyed the JSON protocol; the expected SIGKILL was recovered exactly once.
+- Report: `/private/tmp/gtc-v4-42a509e-failure-20260909T082332Z/report.md`; SHA-256 `6feb129b938b4dc134ce40a6afc22026e2ccb9b0bd010e03b1d18072920e2f7c`.
+- Machine evidence: `evidence.json`; SHA-256 `e289bfb2effba368bd5d261cccd6e16bcc87ea11dbb9e69e6a596ef755ffb8e4`.
+- Transcript: `cli-transcript.jsonl`; SHA-256 `1009ad30d1e16c7ccb407c898931ad307afe30c45bee9d5562bbae5ead2d7cdc`.
+- 259/259 assertions across 27 commands; 22 installed CLI calls all exited 0 with empty stderr, exactly one schema-valid JSON line; the expected SIGKILL was recovered exactly once.
 - Malformed Behavior returned `need_revision/BEHAVIOR_BINDING_MISSING` without semantic/resource laundering. Applicable zero Case returned `fatal/quality_failure/FORMAL_TEST_POINT_UNCOVERED`, with no current output. Stray Markdown/XLSX remained inert. Repair delivered seven Cases and three explicitly closed gaps. All-DNE yielded `no_execution_selected` and `[]`; the ready sibling projected exactly Grounded + Execute + ready Cases.
 
 ### 3. Recovery, partial answers and stale answers
 
 - Result: PASS; no P0/P1.
-- Fresh audit: `/private/tmp/gtc-v4-final-recovery.qY32MQ/fresh-installed-report.json`; SHA-256 `5c3afb66ee1e9a528a7f9462dd71872c169355b96b0cbb5d75e5d5f014215349`.
-- CLI transcript SHA-256: `bc2a3d6629b6bcf2c83edc3f3271fb0b72b68ec991579d7ba86a6a5dc63e9689`.
-- Targeted suite report SHA-256: `f430546c462048dd94acd453179febb5ce96e59cb54ef15586a9471e2d219a95`.
-- 152/152 fresh-CLI assertions plus Task 15/repeatability 7/7 on the predecessor contract.
-- Questions converged exactly 3 -> 2 -> 1. Blank input wrote nothing; defer and explicit close remained distinct. Both stale windows returned the current nonfatal state and exactly one `STALE_ANSWER`; r002/r005 were not accepted; staging disappeared; checkpoint, Decision journal and clarification state stayed byte-identical; the next replay had no warning or root resurrection.
-- Reservation-boundary SIGKILL recovery and signed-query semantic equivalence passed. Safe acquisition removed ephemeral material, and persisted files contained no credential/query text.
+- Report: `/private/tmp/gtc-v4-42a509e-recovery-S9X1jV/recovery-report.json`; SHA-256 `40efc4e7064da871e9bf39bef65f3a5ab8d7b472d8f9ffe83cf6d04f7b24cb58`.
+- Transcript: `/private/tmp/gtc-v4-42a509e-recovery-S9X1jV/recovery-transcript.jsonl`; SHA-256 `56adab73686c3444b322b0ebc8fbae60dccbdeb8e802fea02c662371073cdd3d`.
+- 188/188 assertions. Questions converged exactly 3 -> 2 -> 1. Blank input wrote nothing; defer and explicit close remained distinct.
+- Both stale windows returned the exact current public state with `non_blocking_diagnostics: []`; no staging or accepted revision appeared, and checkpoint, Decision journal, clarification state and root inventory stayed unchanged. Replay did not resurrect a warning or root.
+- Reservation-boundary SIGKILL recovery and full-production signed-query semantic equivalence passed. Safe acquisition removed ephemeral material, and persisted files contained no credential/query text.
 
-## Predecessor isolated clean-checkout verification
+## Isolated clean-checkout verification
 
-- Directory: `/private/tmp/gtc-v4-final.bKtqWL/repo` (retained only as predecessor evidence).
-- Detached HEAD before and after: `244f1ea01d4843ae88d7f64b97b512850963efd1`.
+- Directory: `/private/tmp/gtc-v4-final-42a509e.wpz69q/repo`.
+- Detached HEAD before and after: `42a509e03034218604d86b9774a07d464855d730`.
 - `git status --porcelain=v1 --untracked-files=all`: empty before dependency installation and empty after all gates.
 - `npm ci --offline`: exit 0; four packages installed; zero vulnerabilities.
 - `npm run check`: exit 0; 1442/1442 plus repeatability 2/2.
@@ -89,18 +87,19 @@ Each Agent started without the implementation conversation, read the release Ski
 - `npm run build -- --check`, Skill directory byte diff, bundle syntax and `git diff --check`: all exit 0.
 - Post-gate status: clean; no production, fixture, generated, or user-file drift.
 
-## Predecessor artifact digests
+## Frozen artifact digests
 
 | Artifact | SHA-256 |
 |---|---|
 | `src/advance-strict.mjs` | `a1110633d8ab23da3b5ac971b31aee7dbf112b5d7d4a7cb607fd81639b31a4cf` |
 | `src/advance-v4.mjs` | `539117c4d663fcb2fd2010fba94ad36273b9913ce5eb3f11156fcf35ff816f55` |
 | `skill/generate-test-cases/SKILL.md` | `b7e1d280b488e2430cd933d143eb271082b62dc93e70b4bb57c5dbf42aa3614f` |
-| `skill/generate-test-cases/scripts/schema-manifest.json` | `96051722a512fc4e6c3b10839fd4d7fba8d1f05c368fbbc18d5c404ed3112162` |
-| `skill/generate-test-cases/scripts/test-compiler.mjs` | `b83ca58b79ee9cb5e284a153674b8f2a3e7905c73be4e8f9101cbdddc55d7e7c` |
+| `skill/generate-test-cases/scripts/schema-manifest.json` | `2d356f4d50a4f542b6d66ae5903b832d1d20a2e0c7cc47275ce55fe064b59f71` |
+| `skill/generate-test-cases/scripts/schemas/reply.schema.json` | `f6d82072d0a634cf85708f3d336128fd8b3f7bf2fe055faf46e8c33b4f1efa8b` |
+| `skill/generate-test-cases/scripts/test-compiler.mjs` | `22c60e987cee8919f4257665b47774cd99d7afd74db679930b8f60fcbc8e764a` |
 
-The manifest binds compiler `0.5.0`, schema `4.0.0`, and schema-set digest `6bab3dfab5896cc1f1c7f61480328b540a661cfb4c4568ae08ed7fc82d7f4ecd`.
+The manifest binds compiler `0.5.0`, schema `4.0.0`, and schema-set digest `75a04a5f10cda967e8f4c1eeb4437ad3e875cd2ca30b775da62918aaaacae5b6`.
 
-## Current closure state
+## Closure
 
-The normative stale-answer correction passes local targeted, full, build, synchronization, syntax, and validator gates. Final-candidate fresh-context pressure runs, isolated clean-checkout verification, and pre-merge review must be rerun before this report can claim Tasks T01-T15 and the v4 Definition of Done are merge-ready. No global Skill installation, npm publication, comparator/expert benchmark claim, or RC tag is part of this closure.
+Tasks T01-T15 and the v4 Definition of Done are satisfied for the requested development contract at verified code candidate `42a509e03034218604d86b9774a07d464855d730`. The Skill produces and confirms canonical manual functional Case Documents and, only on explicit downstream intent, an execution plan/runner Case ID projection. It does not run E2E tests. No global Skill installation, npm publication, comparator/expert benchmark claim, or RC tag is part of this closure.
