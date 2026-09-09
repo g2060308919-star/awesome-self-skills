@@ -69,7 +69,7 @@ async function directorySnapshot(directory, prefix = '') {
   return snapshot;
 }
 
-test('runner entry dynamic import exposes only advanceStrict and has zero process or run side effects', async () => {
+test('runner entry dynamic import exposes only the private run and action seams with zero side effects', async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'g1d-import-run-'));
   const revision = JSON.parse(await readFile(revisionPath, 'utf8'));
   await mkdir(path.join(runDirectory, 'staging'));
@@ -129,7 +129,11 @@ test('runner entry dynamic import exposes only advanceStrict and has zero proces
       runSnapshot: await directorySnapshot(runDirectory)
     }, {
       probe: {
-        exports: ['advanceStrict'], importedStdout: '', importedStderr: '',
+        exports: [
+          'advanceStrict', 'constructV4Action', 'createV4RunDirectory',
+          'sourceAcquisitionMaterialPathV4',
+          'stageV4SourceAcquisitionAction'
+        ], importedStdout: '', importedStderr: '',
         exitCodeBefore: null, exitCodeAfter: null, argvUnchanged: true,
         runEntries: ['staging']
       },

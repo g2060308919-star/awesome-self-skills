@@ -826,6 +826,8 @@ export async function runInstalledRevision(revision, options = {}) {
   const selectedStages = options.stageNames ?? stages;
   /** @type {any[]} */
   const replies = [];
+  /** @type {{stage:string,artifact:any,reply:any}[]} */
+  const submittedEvents = [];
   if (revision) {
     const initial = await invokeRunner(runDirectory, extraArgs);
     const assignedRunId = initial?.scope?.run_instance_id ?? initial?.run_instance_id;
@@ -834,10 +836,17 @@ export async function runInstalledRevision(revision, options = {}) {
     }
     for (const stage of selectedStages) {
       await stageArtifact(runDirectory, revision[stage], /** @type {keyof typeof stageFiles} */ (stage));
-      replies.push(await invokeRunner(runDirectory, extraArgs));
+      const stageReply = await invokeRunner(runDirectory, extraArgs);
+      replies.push(stageReply);
+      submittedEvents.push({
+        stage,
+        artifact: structuredClone(revision[stage]),
+        reply: structuredClone(stageReply)
+      });
       if (replies.at(-1).status === 'need_revision'
         || replies.at(-1).status === 'need_user_answers'
-        || replies.at(-1).status === 'fatal') break;
+        || replies.at(-1).status === 'fatal'
+        || replies.at(-1).status === 'finished') break;
     }
     if ((options.complete ?? true) && selectedStages.includes('case_drafts')) {
       let activeRevision = revision;
@@ -894,9 +903,18 @@ export async function runInstalledRevision(revision, options = {}) {
         } else break;
         for (const stage of stages) {
           await stageArtifact(runDirectory, activeRevision[stage], /** @type {keyof typeof stageFiles} */ (stage));
-          replies.push(await invokeRunner(runDirectory, extraArgs));
-          if (replies.at(-1).status === 'need_revision' || replies.at(-1).status === 'fatal') break;
+          const stageReply = await invokeRunner(runDirectory, extraArgs);
+          replies.push(stageReply);
+          submittedEvents.push({
+            stage,
+            artifact: structuredClone(activeRevision[stage]),
+            reply: structuredClone(stageReply)
+          });
+          if (replies.at(-1).status === 'need_revision'
+            || replies.at(-1).status === 'fatal'
+            || replies.at(-1).status === 'finished') break;
         }
+        if (replies.at(-1)?.status === 'finished') break;
       }
     }
   } else replies.push(await invokeRunner(runDirectory, extraArgs));
@@ -910,7 +928,7 @@ export async function runInstalledRevision(revision, options = {}) {
     markdown = await readFile(reply.markdown_path, 'utf8');
   }
   return {
-    runDirectory, replies, reply, bundle, bundleText, markdown,
+    runDirectory, replies, submittedEvents, reply, bundle, bundleText, markdown,
     bundleDigest: bundle ? digest(bundle) : '',
     markdownDigest: markdown ? digest(markdown) : ''
   };

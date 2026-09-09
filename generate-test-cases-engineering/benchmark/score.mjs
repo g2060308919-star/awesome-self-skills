@@ -5,6 +5,7 @@ import path from 'node:path';
 import * as nodeUrl from 'node:url';
 import { promisify } from 'node:util';
 import { validateAgainstSchema } from '../src/schema-validator.mjs';
+import { applyReportExitCode } from './cli-exit-code.mjs';
 import {
   deriveCandidateBinding as deriveReleaseCandidateBinding,
   reconcileCandidateBindings as reconcileReleaseCandidateBindings,
@@ -1382,7 +1383,9 @@ async function main() {
   const { manifest, capturedRuns } = await loadBenchmarkInputs(manifestPath);
   const metrics = scoreBenchmark(manifest, capturedRuns);
   const gate = evaluateReleaseGates(metrics);
-  process.stdout.write(`${JSON.stringify({ status: gate.status, failures: gate.failures, metrics })}\n`);
+  const report = { status: gate.status, failures: gate.failures, metrics };
+  process.stdout.write(`${JSON.stringify(report)}\n`);
+  applyReportExitCode(report);
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

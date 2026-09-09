@@ -1,4 +1,6 @@
 /** Structural accountability only: the Adapter must independently review semantics. */
+export { validateCaptureAudit } from './source-capture-audit.mjs';
+export { validateV4SourceReviews, validateV4ClaimLocators } from './source-locators-v4.mjs';
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function record(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
 /** @param {unknown} value */

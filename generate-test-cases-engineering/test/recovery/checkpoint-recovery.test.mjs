@@ -648,16 +648,13 @@ test('expired or reused PID owners recover while a renewed live lease remains he
       await stage(runDirectory, 'source_pack', revision.source_pack);
       await mkdir(lockDirectory);
       await writeFile(path.join(lockDirectory, 'owner.json'), `${JSON.stringify(owner)}\n`, 'utf8');
-      const pending = advanceStrict(runDirectory);
-      const state = await Promise.race([
-        pending, new Promise((resolve) => setTimeout(() => resolve('waiting'), 500))
-      ]);
-      if (state === 'waiting') {
-        await rm(lockDirectory, { recursive: true, force: true });
-        await pending;
-      }
-      assert.notEqual(state, 'waiting', `${owner.token} was mistaken for the active owner`);
-      assert.equal((/** @type {any} */ (state)).stage, 'evidence_claims');
+      let staleObserved = false;
+      const release = await acquireRunLock(runDirectory, {
+        afterStaleObservation: async () => { staleObserved = true; }
+      });
+      assert.equal(staleObserved, true, `${owner.token} was mistaken for the active owner`);
+      await release();
+      assert.equal((/** @type {any} */ (await advanceStrict(runDirectory))).stage, 'evidence_claims');
     } finally {
       await rm(runDirectory, { recursive: true, force: true });
     }

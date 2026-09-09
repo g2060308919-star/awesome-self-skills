@@ -400,7 +400,7 @@ function requireClosed(value, allowed, path, diagnostics, code) {
   for (const key of sortArray(Object.keys(value), compareCodePoints)) if (!allowedKeys.has(key)) pushArray(diagnostics, diagnostic(
     'schema', code, `${path}/${pointerPart(key)}`, 'property is outside the closed Task 10 contract'
   ));
-  for (const key of allowed) if (!Object.hasOwn(value, key)) pushArray(diagnostics, diagnostic(
+  for (const key of allowed) if (!NATIVE_HAS_OWN(value, key)) pushArray(diagnostics, diagnostic(
     'schema', 'CONTEXT_PROPERTY_MISSING', `${path}/${pointerPart(key)}`, 'required Task 10 context property is missing'
   ));
 }
@@ -415,7 +415,7 @@ function canonicalStrings(value, path, diagnostics, nonempty = false) {
   const output = [];
   const seen = new Set();
   for (let index = 0; index < value.length; index += 1) {
-    if (!Object.hasOwn(value, index) || typeof value[index] !== 'string'
+    if (!NATIVE_HAS_OWN(value, index) || typeof value[index] !== 'string'
       || value[index].length === 0 || value[index] !== value[index].trim() || seen.has(value[index])) {
       pushArray(diagnostics, diagnostic('schema', 'STRING_ARRAY_INVALID', `${path}/${index}`, 'value must be a dense unique nonpadded string array'));
       continue;
@@ -1496,7 +1496,7 @@ function validateExplicitOracleClosure(
         'Oracle evidence is outside the closed Test Point ancestry'
       ));
     } else if (expectation.kind === 'auxiliary') {
-      if (Object.hasOwn(expectation, 'closes_obligation_id')
+      if (NATIVE_HAS_OWN(expectation, 'closes_obligation_id')
         || someArray(oracleRefs, (ref) => !someArray(
           [...closureByObligation.values()], (closure) => allows(closure, ref)
         ))) pushArray(diagnostics, diagnostic(
@@ -1973,7 +1973,7 @@ function buildBundleTrusted(context) {
     const vector = isRecord(obligation.combination_vector) ? obligation.combination_vector : null;
     if (!vector) continue;
     const assignments = records(vector.assignments);
-    const parameterIds = assignments.map((assignment) => String(assignment.parameter_id ?? ''));
+    const parameterIds = mapArray(assignments, (assignment) => String(assignment.parameter_id ?? ''));
     const validStrength = Number.isSafeInteger(vector.strength)
       && Number(vector.strength) >= 2 && Number(vector.strength) <= assignments.length;
     if (vector.policy_id !== 'twise-candidate-cap-v1' || !validStrength

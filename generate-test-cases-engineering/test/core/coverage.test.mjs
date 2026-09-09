@@ -8,6 +8,7 @@ import { executionSignature } from '../../src/classify.mjs';
 import { buildBundle, BundleReconciliationError } from '../../src/coverage.mjs';
 import { evaluateClarification } from '../../src/clarification.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
+import { compileBendReviewGolden } from '../helpers/v4-bend-review-golden.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const bundleSchema = JSON.parse(await readFile(path.join(
@@ -17,8 +18,51 @@ const fixture = JSON.parse(await readFile(path.join(
   repositoryRoot, 'test/fixtures/journeys/final-critical-gaps.json'
 ), 'utf8'));
 
+test('[P-10][BR-12][BR-15] v4 coverage conserves every B-end business outcome and fails when one loses its only Case', async () => {
+  const complete = await compileBendReviewGolden();
+  assert.equal(complete.compilation.status, 'compiled');
+  assert.equal(complete.compilation.bundle.cases.length, 7);
+  assert.deepEqual(complete.compilation.bundle.coverage.primary, {
+    reviewed_formal_test_point_count: 7,
+    covered_formal_test_point_count: 7,
+    not_applicable_formal_test_point_count: 0
+  });
+  assert.equal(new Set(complete.compilation.bundle.cases.map(
+    (/** @type {any} */ item) => item.primary_test_point_id
+  )).size, 7);
+
+  const omitted = await compileBendReviewGolden({ retain_case_count: 6 });
+  assert.equal(omitted.compilation.status, 'fatal');
+  assert.equal(omitted.compilation.result_kind, 'quality_failure');
+  assert.equal(omitted.compilation.reason_code, 'FORMAL_TEST_POINT_UNCOVERED');
+  assert.equal(omitted.compilation.diagnostics.length, 1);
+  assert.equal(omitted.compilation.diagnostics[0].code, 'FORMAL_TEST_POINT_UNCOVERED');
+});
+
 function context() {
   return structuredClone(fixture);
+}
+
+function selectedVectorContext() {
+  const input = context();
+  const obligation = input.obligations_artifact.obligations.find(
+    (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
+  );
+  obligation.kind = 'interaction';
+  obligation.combination_vector = {
+    policy_id: 'twise-candidate-cap-v1', strength: 3,
+    owner: {
+      view_id: 'view_checkout', fact_ids: ['fact_grounded'],
+      view_element_refs: [{ view_id: 'view_checkout', element_id: 'submit' }]
+    },
+    assignments: [
+      { parameter_id: 'a', value_id: '0', evidence_claim_id: 'claim_grounded' },
+      { parameter_id: 'b', value_id: '0', evidence_claim_id: 'claim_grounded' },
+      { parameter_id: 'c', value_id: '0', evidence_claim_id: 'claim_grounded' }
+    ],
+    forbid_evidence_refs: []
+  };
+  return input;
 }
 
 // Synthetic Oracle-graph responsibilities share the fixture's actual execution
@@ -312,45 +356,22 @@ test('a routed resource gap keeps requirement coverage blocked beside an executa
 });
 
 test('coverage independently replays selected-vector strength and owner fact routes', () => {
-  /** @returns {any} */
-  const vectorContext = () => {
-    const input = context();
-    const obligation = input.obligations_artifact.obligations.find(
-      (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
-    );
-    obligation.kind = 'interaction';
-    obligation.combination_vector = {
-      policy_id: 'twise-candidate-cap-v1', strength: 3,
-      owner: {
-        view_id: 'view_checkout', fact_ids: ['fact_grounded'],
-        view_element_refs: [{ view_id: 'view_checkout', element_id: 'submit' }]
-      },
-      assignments: [
-        { parameter_id: 'a', value_id: '0', evidence_claim_id: 'claim_grounded' },
-        { parameter_id: 'b', value_id: '0', evidence_claim_id: 'claim_grounded' },
-        { parameter_id: 'c', value_id: '0', evidence_claim_id: 'claim_grounded' }
-      ],
-      forbid_evidence_refs: []
-    };
-    return input;
-  };
-
-  assert.equal(buildBundle(vectorContext()).grounded.length, 1);
-  const strengthAboveAssignments = vectorContext();
+  assert.equal(buildBundle(selectedVectorContext()).grounded.length, 1);
+  const strengthAboveAssignments = selectedVectorContext();
   strengthAboveAssignments.obligations_artifact.obligations.find(
     (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
   ).combination_vector.strength = 4;
   assert.equal(diagnosticCodes(() => buildBundle(strengthAboveAssignments)).includes(
     'TWISE_VECTOR_CONTRACT_INVALID'
   ), true);
-  const missingRoute = vectorContext();
+  const missingRoute = selectedVectorContext();
   missingRoute.obligations_artifact.fact_routes.find(
     (/** @type {any} */ route) => route.fact_id === 'fact_grounded'
   ).obligation_ids = ['obligation_blocked'];
   assert.equal(diagnosticCodes(() => buildBundle(missingRoute)).includes(
     'TWISE_OWNER_FACT_ROUTE_MISSING'
   ), true);
-  const mismatchedOwnerView = vectorContext();
+  const mismatchedOwnerView = selectedVectorContext();
   mismatchedOwnerView.obligations_artifact.obligations.find(
     (/** @type {any} */ item) => item.obligation_id === 'obligation_grounded'
   ).combination_vector.owner.view_id = 'view_other';
@@ -1421,6 +1442,21 @@ test('coverage uses captured Array intrinsics', () => {
     }
     assert.equal(reads, 0, method);
   }
+});
+
+test('coverage selected-vector replay uses the captured map intrinsic', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'map');
+  let reads = 0;
+  try {
+    Object.defineProperty(Array.prototype, 'map', {
+      configurable: true,
+      get() { reads += 1; return descriptor?.value; }
+    });
+    assert.equal(buildBundle(selectedVectorContext()).grounded.length, 1);
+  } finally {
+    if (descriptor) Object.defineProperty(Array.prototype, 'map', descriptor);
+  }
+  assert.equal(reads, 0);
 });
 
 test('entry snapshot never invokes inherited numeric array setters while copying data', () => {

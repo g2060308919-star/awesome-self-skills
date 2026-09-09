@@ -3,6 +3,16 @@ import { normalizeScope } from './decision-record.mjs';
 import sourcePackSchema from '../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
 import { validateAgainstSchema } from './schema-validator.mjs';
 
+export {
+  applySemanticClarificationEventsV4,
+  applyRequestDeliveryV4,
+  compileSemanticClarificationCheckpointV4,
+  constructSemanticClarificationEventV4,
+  replayNoInformationGainV4,
+  validateSemanticClarificationCheckpointV4,
+  validateSemanticPresentationV4
+} from './clarification-v4.mjs';
+
 const POLICIES = new Set(['pause_for_clarification', 'record_only']);
 const RISKS = new Set(['critical', 'high', 'medium', 'low']);
 const EVIDENCE_LEVELS = new Set(['E0', 'E1', 'E2', 'E3']);

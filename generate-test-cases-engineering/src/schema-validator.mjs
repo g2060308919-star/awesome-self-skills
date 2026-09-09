@@ -16,6 +16,7 @@ const NATIVE_ARRAY_MAP = Array.prototype.map;
 const NATIVE_ARRAY_SLICE = Array.prototype.slice;
 const NATIVE_ARRAY_SOME = Array.prototype.some;
 const NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+const NATIVE_HAS_OWN = Object.hasOwn;
 
 /** @template T @param {T[]} values @param {(value:T,index:number,values:T[])=>boolean} predicate */
 function everyArray(values, predicate) {
@@ -150,11 +151,14 @@ export function validateAgainstSchema(value, schema) {
 
 /** @param {Record<string, unknown>} root @param {string} reference */
 function resolveReference(root, reference) {
-  const segments = reference.slice(2).split('/').map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'));
+  const segments = mapArray(
+    reference.slice(2).split('/'),
+    (part) => part.replaceAll('~1', '/').replaceAll('~0', '~')
+  );
   /** @type {unknown} */
   let current = root;
   for (const segment of segments) {
-    if (!isSchemaObject(current) || !Object.hasOwn(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
+    if (!isSchemaObject(current) || !NATIVE_HAS_OWN(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
     current = current[segment];
   }
   if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
@@ -176,7 +180,7 @@ function validate(value, schema, path, root, parentEvaluatedProperties) {
   if (schema.type && !matchesType(value, schema.type)) {
     return [diagnostic('TYPE_MISMATCH', pointer, `must be ${Array.isArray(schema.type) ? joinArray(schema.type, ' or ') : schema.type}`)];
   }
-  if (Object.hasOwn(schema, 'const') && canonicalStringify(value) !== canonicalStringify(schema.const)) {
+  if (NATIVE_HAS_OWN(schema, 'const') && canonicalStringify(value) !== canonicalStringify(schema.const)) {
     pushArray(diagnostics, diagnostic('CONST_MISMATCH', pointer, 'must equal the schema constant'));
   }
   if (Array.isArray(schema.enum) && !someArray(schema.enum, (item) => canonicalStringify(item) === canonicalStringify(value))) {
@@ -218,23 +222,23 @@ function validate(value, schema, path, root, parentEvaluatedProperties) {
       ? /** @type {Record<string, Record<string, unknown>>} */ (schema.properties) : {};
     if (Array.isArray(schema.required)) {
       for (const key of schema.required) {
-        if (typeof key === 'string' && !Object.hasOwn(object, key)) pushArray(diagnostics, diagnostic('REQUIRED_FIELD_MISSING', childPointer(path, key), 'required field is missing'));
+        if (typeof key === 'string' && !NATIVE_HAS_OWN(object, key)) pushArray(diagnostics, diagnostic('REQUIRED_FIELD_MISSING', childPointer(path, key), 'required field is missing'));
       }
     }
     if (schema.additionalProperties === false) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) pushArray(diagnostics, diagnostic('ADDITIONAL_PROPERTY', childPointer(path, key), 'additional properties are not allowed'));
+        if (!NATIVE_HAS_OWN(properties, key)) pushArray(diagnostics, diagnostic('ADDITIONAL_PROPERTY', childPointer(path, key), 'additional properties are not allowed'));
       }
     } else if (schema.additionalProperties === true || isSchemaObject(schema.additionalProperties)) {
       for (const key of Object.keys(object)) {
-        if (!Object.hasOwn(properties, key)) {
+        if (!NATIVE_HAS_OWN(properties, key)) {
           evaluatedProperties.add(key);
           if (isSchemaObject(schema.additionalProperties)) pushArray(diagnostics, ...validate(object[key], schema.additionalProperties, childPointer(path, key), root));
         }
       }
     }
     for (const [key, childSchema] of Object.entries(properties)) {
-      if (Object.hasOwn(object, key)) {
+      if (NATIVE_HAS_OWN(object, key)) {
         evaluatedProperties.add(key);
         pushArray(diagnostics, ...validate(object[key], childSchema, childPointer(path, key), root));
       }
@@ -263,7 +267,7 @@ function validate(value, schema, path, root, parentEvaluatedProperties) {
   if (isSchemaObject(schema.not) && validate(value, schema.not, path, root).length === 0) {
     pushArray(diagnostics, diagnostic('NOT_MATCHED', pointer, 'must not match the prohibited schema'));
   }
-  if (isSchemaObject(value) && Object.hasOwn(schema, 'unevaluatedProperties')) {
+  if (isSchemaObject(value) && NATIVE_HAS_OWN(schema, 'unevaluatedProperties')) {
     for (const key of Object.keys(value)) {
       if (evaluatedProperties.has(key)) continue;
       if (schema.unevaluatedProperties === false) {
@@ -289,7 +293,7 @@ function matchesDiscriminator(value, schema, root) {
   const properties = schema.properties;
   if (!isSchemaObject(properties)) return false;
   /** @type {Array<[string, Record<string, unknown>]>} */
-  const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && Object.hasOwn(candidate, 'const') ? [[key, candidate]] : []);
+  const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && NATIVE_HAS_OWN(candidate, 'const') ? [[key, candidate]] : []);
   return constants.length > 0 && everyArray(constants, ([key, candidate]) => canonicalStringify(/** @type {Record<string, unknown>} */ (value)[key]) === canonicalStringify(candidate.const));
 }
 
@@ -338,6 +342,6 @@ function findCollections(value, segments, pointer = '') {
     return flatMapArray(value, (item, index) => item && typeof item === 'object' && !Array.isArray(item)
       ? findCollections(/** @type {Record<string, unknown>} */ (item), rest, `${pointer}/${index}`) : []);
   }
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, segment)) return [];
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !NATIVE_HAS_OWN(value, segment)) return [];
   return findCollections(/** @type {Record<string, unknown>} */ (value)[segment], rest, `${pointer}/${segment}`);
 }

@@ -3,112 +3,468 @@
   "$id": "current-pointer.schema.json",
   "oneOf": [
     {
-      "type": "object",
-      "required": [
-        "status",
-        "run_instance_id",
-        "source_revision",
-        "bundle_path",
-        "bundle_digest",
-        "plan_digest"
-      ],
-      "properties": {
-        "status": {
-          "const": "ready"
-        },
-        "run_instance_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_revision": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "bundle_path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "bundle_digest": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "plan_digest": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        }
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/legacyV3"
     },
     {
-      "type": "object",
-      "required": [
-        "status",
-        "run_instance_id",
-        "active_source_revision",
-        "reason",
-        "previous_ready_revision"
-      ],
-      "properties": {
-        "status": {
-          "const": "stale"
-        },
-        "run_instance_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "active_source_revision": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "reason": {
-          "const": "higher_revision_not_ready"
-        },
-        "previous_ready_revision": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
-        }
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/caseDocumentManifest"
     },
     {
-      "type": "object",
-      "required": [
-        "status",
-        "run_instance_id",
-        "source_revision",
-        "bundle_path",
-        "bundle_digest",
-        "plan_digest"
-      ],
-      "properties": {
-        "status": {
-          "const": "document_only"
-        },
-        "run_instance_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_revision": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "bundle_path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "bundle_digest": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "plan_digest": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        }
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/executionManifest"
     }
-  ]
+  ],
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "path",
+        "digest"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/text"
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": false
+    },
+    "legacyV3": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "run_instance_id",
+            "source_revision",
+            "bundle_path",
+            "bundle_digest",
+            "plan_digest"
+          ],
+          "properties": {
+            "status": {
+              "const": "ready"
+            },
+            "run_instance_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bundle_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "plan_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "run_instance_id",
+            "active_source_revision",
+            "reason",
+            "previous_ready_revision"
+          ],
+          "properties": {
+            "status": {
+              "const": "stale"
+            },
+            "run_instance_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "active_source_revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reason": {
+              "const": "higher_revision_not_ready"
+            },
+            "previous_ready_revision": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "run_instance_id",
+            "source_revision",
+            "bundle_path",
+            "bundle_digest",
+            "plan_digest"
+          ],
+          "properties": {
+            "status": {
+              "const": "document_only"
+            },
+            "run_instance_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bundle_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "plan_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "caseDocumentManifest": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "revision",
+        "schema_version",
+        "compiler_version",
+        "delivery_intent",
+        "authority",
+        "result_kind",
+        "completed_at",
+        "bundle",
+        "markdown",
+        "execution_worksheet",
+        "render_options",
+        "case_count",
+        "blocked_root_count",
+        "closed_for_delivery_root_count",
+        "not_applicable_count",
+        "exploratory_count"
+      ],
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/text"
+        },
+        "revision": {
+          "$ref": "#/$defs/count"
+        },
+        "schema_version": {
+          "const": "4.0.0"
+        },
+        "compiler_version": {
+          "const": "0.5.0"
+        },
+        "delivery_intent": {
+          "const": "case_document"
+        },
+        "authority": {
+          "const": "canonical"
+        },
+        "result_kind": {
+          "enum": [
+            "delivered_cases",
+            "delivered_with_gaps",
+            "blocked_only",
+            "no_applicable_cases"
+          ]
+        },
+        "completed_at": {
+          "$ref": "#/$defs/text"
+        },
+        "bundle": {
+          "$ref": "#/$defs/artifact"
+        },
+        "markdown": {
+          "$ref": "#/$defs/artifact"
+        },
+        "execution_worksheet": {
+          "type": "object",
+          "required": [
+            "path",
+            "digest",
+            "format"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/text"
+            },
+            "digest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "format": {
+              "const": "csv"
+            }
+          },
+          "additionalProperties": false
+        },
+        "render_options": {
+          "type": "object",
+          "required": [
+            "include_audit_appendix"
+          ],
+          "properties": {
+            "include_audit_appendix": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "case_count": {
+          "$ref": "#/$defs/count"
+        },
+        "blocked_root_count": {
+          "$ref": "#/$defs/count"
+        },
+        "closed_for_delivery_root_count": {
+          "$ref": "#/$defs/count"
+        },
+        "not_applicable_count": {
+          "$ref": "#/$defs/count"
+        },
+        "exploratory_count": {
+          "$ref": "#/$defs/count"
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "result_kind": {
+              "const": "delivered_cases"
+            },
+            "case_count": {
+              "minimum": 1
+            },
+            "blocked_root_count": {
+              "const": 0
+            },
+            "closed_for_delivery_root_count": {
+              "const": 0
+            }
+          }
+        },
+        {
+          "properties": {
+            "result_kind": {
+              "const": "delivered_with_gaps"
+            },
+            "case_count": {
+              "minimum": 1
+            },
+            "blocked_root_count": {
+              "minimum": 1
+            },
+            "closed_for_delivery_root_count": {
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "result_kind": {
+              "const": "blocked_only"
+            },
+            "case_count": {
+              "const": 0
+            },
+            "blocked_root_count": {
+              "minimum": 1
+            },
+            "closed_for_delivery_root_count": {
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "result_kind": {
+              "const": "no_applicable_cases"
+            },
+            "case_count": {
+              "const": 0
+            },
+            "blocked_root_count": {
+              "const": 0
+            },
+            "closed_for_delivery_root_count": {
+              "const": 0
+            },
+            "not_applicable_count": {
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    },
+    "executionManifest": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "revision",
+        "schema_version",
+        "compiler_version",
+        "delivery_intent",
+        "authority",
+        "result_kind",
+        "completed_at",
+        "case_document_ref",
+        "execution_plan_artifact",
+        "runner_projection",
+        "runner_ready"
+      ],
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/text"
+        },
+        "revision": {
+          "$ref": "#/$defs/count"
+        },
+        "schema_version": {
+          "const": "4.0.0"
+        },
+        "compiler_version": {
+          "const": "0.5.0"
+        },
+        "delivery_intent": {
+          "const": "execution_plan"
+        },
+        "authority": {
+          "const": "canonical"
+        },
+        "result_kind": {
+          "enum": [
+            "execution_ready",
+            "no_execution_selected"
+          ]
+        },
+        "completed_at": {
+          "$ref": "#/$defs/text"
+        },
+        "case_document_ref": {
+          "type": "object",
+          "required": [
+            "run_id",
+            "revision",
+            "manifest_digest",
+            "bundle_digest"
+          ],
+          "properties": {
+            "run_id": {
+              "$ref": "#/$defs/text"
+            },
+            "revision": {
+              "$ref": "#/$defs/count"
+            },
+            "manifest_digest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "bundle_digest": {
+              "$ref": "#/$defs/sha256"
+            }
+          },
+          "additionalProperties": false
+        },
+        "execution_plan_artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "runner_projection": {
+          "type": "object",
+          "required": [
+            "case_ids",
+            "case_ids_digest"
+          ],
+          "properties": {
+            "case_ids": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/text"
+              },
+              "uniqueItems": true
+            },
+            "case_ids_digest": {
+              "$ref": "#/$defs/sha256"
+            }
+          },
+          "additionalProperties": false
+        },
+        "runner_ready": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "result_kind": {
+              "const": "execution_ready"
+            },
+            "runner_ready": {
+              "const": true
+            },
+            "runner_projection": {
+              "properties": {
+                "case_ids": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "result_kind": {
+              "const": "no_execution_selected"
+            },
+            "runner_ready": {
+              "const": false
+            },
+            "runner_projection": {
+              "properties": {
+                "case_ids": {
+                  "maxItems": 0
+                },
+                "case_ids_digest": {
+                  "const": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
 }

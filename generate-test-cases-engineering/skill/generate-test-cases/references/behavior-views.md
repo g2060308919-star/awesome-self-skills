@@ -1,86 +1,66 @@
-# Behavior Views
+# Behavior Views Policy
 
-Build only views signaled by accepted facts, then run the fixed interaction audit. Every element, relation, condition, and result must trace to an accepted claim or an allowed E2 model element.
+Read this policy before writing `behavior_views`. Confirm the runner requested `behavior_views` with `behavior-views.schema.json`. Views express only accepted source semantics; a structurally valid shape is not permission to invent behavior.
 
-Discharge each accepted fact's `required_view_kinds` with dedicated views linked to its primary Claim. A same-scope view for a different fact, or renaming a custom responsibility, cannot discharge that contract. Use the existing dedicated-view context bindings to close each boundary and branch, including separate before/equal/after timing responsibilities. If the requirement cannot yet be modeled, keep its own validated Blocked terminal route; never claim it covered. Review the declarations against the source: syntactic view closure does not prove that every source branch was discovered.
+## Model sparsely
 
-Before writing, confirm the runner requested the schema-validated `behavior_views` stage with `behavior-views.schema.json`. Reject any other stage/schema pairing instead of treating a compiler-derived artifact as Agent-writable.
+Build a view only when an accepted Fact signals it:
 
-## Select views from requirement signals
-
-| Signal | View | Formal responsibilities |
+| Source-backed signal | `type` | Responsibility |
 |---|---|---|
-| ordered actions, main/alternate paths | `flow` | explicit edges, terminals, sourced exceptions, declared loop bounds |
-| conditions determine outcomes | `decision` | every explicit valid rule, priority, condition, and sourced result |
-| named states and changes | `state` | every explicit valid transition and sourced invalid-transition rule |
-| ranges, enums, formats | `input-domain` | sourced classes, inclusive boundaries, and explicit invalid classes |
-| roles or permissions | `role` | sourced allow, deny, visibility, and scope combinations |
-| windows, timeout, retry, ordering | `timing` | before/equal/after thresholds and sourced timeout/retry behavior |
-| interfaces, events, callbacks, side effects | `integration` | requests, responses, persistence, messages, compensation, invariants |
+| ordered business actions/path | `flow` | stated path and outcome |
+| conditions choose outcomes | `decision` | stated condition/outcome rules |
+| named state change | `state` | stated transition and outcome |
+| enum, format, or supported range | `input-domain` | stated partitions and expected behavior |
+| role or permission | `role` | stated allow/deny/visibility outcome |
+| time window/order/retry | `timing` | stated temporal condition and outcome |
+| request/response/storage/event/etc. | `integration` | stated interface surfaces and outcome |
 
-Choose the view from the requirement's semantic role, not a number or punctuation in its text. An input-domain describes values accepted as product inputs. A generated output's maximum duration, count, or aspect ratio is not automatically an input-domain, and a duration limit is not automatically an event-timing rule. Model a stated output property as its sourced result/response contract or invariant with the matching supported view. Never invent a lower bound, resolution, input parameter, or event just to populate another view's required fields. Review each fact's `required_view_kinds` with this distinction before writing evidence. A known product rule that the chosen model cannot represent is an Adapter modeling error to repair, not an unknown business rule to ask the user to restate.
+Each v4 view has `view_id`, source-backed `module_id`, `type`, `scope`, `source_claim_ids`, `elements`, and `relations`. Every element belongs to exactly one atomic `fact_id`, states exactly one primary `business_outcome`, and includes field-level `evidence_bindings` for every semantic value it declares.
 
-Every view element and relation must cite accepted evidence that directly states that exact state, transition, condition, result, permission, boundary, or integration surface. Perform a read-only field-level source rebuttal: the union of an element's `source_claim_ids` must directly state or legally derive every semantic field, including `state`, `from_state`, `event`, `to_state`, `condition`, and `result`. A general path claim covers only the states and transitions it actually names; it cannot support an omitted state or transition described by a different Claim. Same scope, the same owner fact, or support for a neighboring transition is not semantic support. Test-process scope, output-format, classification, and traceability instructions never become product flow nodes, edges, terminal states, or obligations. Before submitting the artifact, compare each element and relation independently against its cited Claim rather than relying on a view-level source list.
+Use sparse `surfaces`; do not invent a request, response, persistence, event, callback, compensation, side effect, external observer, state, timing bound, default, cleanup, or post-state to populate a record. An enum does not force lower/upper. An output duration/count is not automatically an input-domain or timing input. Model only the semantic responsibility the source actually states.
 
-Do not generate formal negative behavior merely because a technique suggests it. If a formal requirement exists but its result is missing, route it to Blocked. Sourced risks retain independent Exploratory evidence and interaction-route validation. An unsourced generic risk can instead be a clearly labelled `origin: heuristic` Case-draft suggestion with a closed category, hypothesis, and rationale, with no evidence level, Oracle, formal fact, or obligation references; it has no formal coverage and no runner eligibility. See `case-writing-policy.md` for the exact shape.
+For `integration`, list only evidenced `surfaces[{kind,assertion}]`. For other declared outcomes use source-backed `condition` and `expected`; omit optional surfaces/effects when absent. `semantic_effects` is allowed only for a real source-backed business state change, with field-level Claim proof.
 
-Model inverse operations, each explicit enum partition, each field, and each observation surface independently so Case `scenario.operation_ref` can select one modeled operation and its typed assertion can select one subject and surface. Compatibility dimensions need sourced baseline comparisons. Structured identifiers and typed operands constrain submitted declarations; they do not prove that the adapter extracted every independent behavior from natural-language or image sources. Review this semantic correspondence before submission.
+Every evidence binding points to the exact element field (for example `/business_outcome`, `/condition`, `/expected`, or `/surfaces/0/assertion`) and nonempty accepted Claim IDs that state or legally derive that value. A same-scope or neighboring Claim is insufficient. Run a field-by-field source rebuttal before submission.
 
-Keep every explicitly named unresolved in-scope scenario separate. Each formal ambiguous Fact needs its own modeled or terminal route and its own Blocked Test Point; never merge several named missing outcomes into one generic reason or root.
+## Derive business outcomes, not surface counts
 
-## Supply obligation inputs with the views
+A formal Test Point corresponds to one independently decidable business outcome, not each technical surface. A Fact may produce several outcomes when each has a different expected result (for example separate enum values). UI/API/storage observations of the same outcome are supporting observations, not extra primary Test Points.
 
-Every `behavior_views` artifact must contain the closed `obligation_inputs` object with these four arrays: `view_contexts`, `terminal_fact_routes`, `custom_responsibilities`, and `combination_requests`. Read the Behavior Views schema before writing any nonempty obligation input; submit only its public semantic fields and never an obligation or root ID. A custom responsibility's `semantic_key` is an audit label only: changing it never creates a new responsibility. Identity comes from `responsibility_type`, normalized `owner`, and `scope`; with no separate semantics payload, two records with those same fields describe one responsibility. `view_contexts` may be empty only when the artifact has no `input-domain`, `role`, `timing`, or `integration` view.
+Do not unconditionally expand flow edges, before/equal/after, lower/upper, or every integration surface. Formal negative behavior needs normative evidence. An unsourced generic risk is Exploratory; a sourced requirement with missing result is a semantic gap and remains Blocked.
 
-The compiler first runs a structural and modeling pass that records modeled routes without deciding terminal interaction routes. It then compiles obligation inputs, built-in strategies, and custom responsibilities. Only the single final reconciliation may decide modeled versus terminal fact routes or Formal View, Blocked, and Exploratory interaction routes; a missing, multiple, or invalid route remains a revision error.
+Every Fact, outcome, Test Point, and later Case retains `acceptance_role`: `primary_acceptance`, `dependency_contract`, or `context_only`. Primary coverage counts only primary acceptance. Boundary-contract coverage is reported separately. Context-only material is traceability, not a formal denominator.
 
-Use `terminal_fact_routes` only for a formal fact that has no modeled view route. A Blocked terminal fact supplies a typed `issue_intent`; its terminal issue scope must cover the fact scope. Every evidence reference must exist in accepted evidence, cover the issue scope, and be directionally connected to that fact subject. A NotApplicable terminal fact supplies its independently supported E3/E2 exclusion and review. The exclusion Claim is proof metadata, not another product responsibility: set the Claim to `kind = description` and its Fact Ledger entry to `status = diagnostic`; never model it as a view element, decision rule, custom responsibility, or obligation. Before setting `support_review` to `supported`, perform an independent semantic review and confirm that the separate E3/E2 claim directly proves the exclusion for this fact. A generic same-scope claim, a non-exhaustive inclusion list, the fact's own primary claim, or evidence level alone does not prove exclusion. If no independent claim directly supports the exclusion, route the fact as Blocked with the applicable typed `issue_intent`. Never submit a root key, root ID, obligation ID, or final fact route. The compiler derives one `caseable=false` requirement-gap obligation for a Blocked fact and performs the single final modeled-xor-terminal reconciliation.
+## Respect compiler-owned scope and ordering
 
-A custom responsibility uses one closed `responsibility_type` and an owner of either `facts` or `view-elements`. Every owner must resolve unambiguously to real modeled facts; for a fact owner, its fact scope must contain the custom responsibility scope, just as a view-element owner's view scope must contain it. The compiler derives its responsibility key and obligation ID and enriches each owner's single modeled fact route. A custom responsibility cannot create a requirement-gap, and its `semantic_key` cannot split one semantic responsibility into several Test Points.
+Modules and boundaries come only from the closed `scope_manifest` after topology review. Interaction expectations must use those module IDs; the matrix cannot create, rename, or delete a module. Do not infer ordering or dependencies in Behavior Views. Business flow, page action, and outcome dependency registries are compiler-owned from exact source locators and accepted Claims/Decisions.
 
-One custom responsibility must resolve to exactly one atomic formal fact. Split independently failing facts into separate responsibilities, preserving source, persistence, display, and other independently assertable outcomes. Multiple element references are legal only when they resolve to that same atomic fact. A specialist custom responsibility additionally requires its owning dedicated state/input/timing/integration view; it does not replace the view's generated responsibilities.
+For v4 Case ordering, the Adapter later references compiler registry IDs or null. It never submits `depends_on_case_ids`, rank values, or an invented flow.
 
-Provide exactly one context for each of those four view types. A context contains only `view_id` and `bindings`. Every binding contains only `selector`, `risk`, `source_claim_ids`, `required_oracle_refs`, and `required_capabilities`. Bind every required responsibility exactly once:
+## Complete the interaction audit without inventing semantics
 
-- input-domain: one `{kind: "equivalence-class", element_id, class_id}` selector per class and one `{kind: "boundary", element_id, boundary}` selector for each of `lower` and `upper`;
-- role: one `{kind: "permission", element_id, permission}` selector per permission;
-- timing: `{kind: "before"|"equal"|"after", element_id}`, plus a `{kind: "timeout"|"retry", element_id, signal_claim_id}` selector only when an accepted signal claim supports it;
-- integration: one selector for each of `request`, `response`, `persistence`, `event`, `callback`, and `compensation`; `{kind: "side-effect", element_id, side_effect_kind, target}` for each side effect; and a signal-backed selector for `invariant`, `contract-compatibility`, `concurrency`, `idempotency`, or `security-abuse` when applicable.
+Audit all declared modules and relevant module pairs across `shared-entity`, `role`, `client`, `interface-event`, `time`, `concurrency`, and `side-effect`. A candidate must carry nonempty `source_claim_ids` and closed `semantic_subject_refs` to actual facts, view elements, model elements, or integration surfaces. A side-effect surface is identified by `(side_effect_kind, target)`.
 
-Within one integration element, each `(side_effect_kind, target)` pair must be unique. Include `signal_claim_id` in that binding's `source_claim_ids`. Empty `required_oracle_refs` and `required_capabilities` are legal prebindings: they do not invent an Oracle or capability and do not prevent Test Point compilation. Do not submit a context for flow, decision, or state; the compiler derives those contexts.
+Route every candidate through the schema's closed formal, blocker, or exploratory disposition. A blocker submits a typed `issue_intent`, never a root key or root ID. Provenance does not define root identity; the compiler uses normalized module IDs, dimension, and semantic subjects. Keep one shared real gap instead of cloning it per Case.
 
-Selectors are semantic identities, not array positions. Reordering bindings, claims, or side effects must not change the resulting Test Point IDs. Never calculate or submit obligation IDs, root IDs, internal hashes, a `test_obligations` artifact, or any fifth artifact stage; the compiler owns them.
+The v4 artifact still contains closed `obligation_inputs` for compiler reconciliation. Submit only schema-defined semantic selectors; IDs and formal obligation/root records are compiler-owned. A custom responsibility cannot discharge a missing dedicated view. Combination coverage never supplies a product Oracle, and a forbidden tuple without closed evidence stays blocked instead of being silently dropped.
 
-Use `combination_requests` only when there are at least three independent parameters, material combination growth, and sourced interaction risk. Each request has one closed owner: an existing `view_id`, nonempty `fact_ids`, and nonempty `{view_id, element_id}` references from that same view. The owner view and every owner fact's primary scope must contain the request scope. Every declared fact must connect directionally to a selected element and every selected element must resolve to a declared fact; do not attach a broad request to a narrower owner or add unrelated owner elements.
+## Review all nine general risks
 
-For every parameter provide a stable public `parameter_id`; for each value provide only `value_id` and its accepted `evidence_claim_id`. Selected-value evidence must exist, be non-diagnostic, cover the request scope, and connect to the owner. Supply the required strength, closed `interaction_risk`, zero or more sourced `forbid` constraints, and zero or more exact `vector_oracles`. Every `vector_oracles` mapping describes one complete vector: its assignments must name every declared `parameter_id` exactly once, pair each parameter with one declared `value_id`, and contain no missing, duplicate, or extra parameter. Never submit a partial Oracle mapping. A forbid may eliminate candidates only when every evidence reference is related, scope-covering, supported E3/E2; E1, diagnostic, or unrelated evidence fails closed and never becomes an Oracle. `vector_oracles` are optional prebindings, so an empty array or empty `required_oracle_refs` does not pre-block a selected vector; when no full-vector prebinding exists, keep the array empty instead of inventing a partial mapping.
+For each primary module, ensure the compiler can derive one `risk_review_ledger` record for every required kind: `null_or_missing`, `unknown_enum`, `api_failure`, `loading_failure`, `sync_delay`, `long_content`, `pagination`, `refresh`, and `business_permission_boundary`.
 
-Submit one `forbid` constraint for every source-defined forbidden tuple. Its assignments must be that exact tuple, and its `evidence_refs` must cite the tuple's replayable E2 outcome prepared during Evidence Claims, not a broad enum or the individual value Claims. Keep an explicit partial forbid partial: do not add a parameter that its source rule leaves unspecified or clone it across that parameter's domain. Only an authoritative exclusive rule that exhaustively proves the combination permits exactly one value may expand into complement tuples, and only with an authoritative closed enumeration. `constraints` may be empty only after a read-only source rebuttal finds no explicit invalid-combination rule. If the compiler rejects a tuple proof, do not drop the constraint and allow forbidden vectors; the accepted Evidence Claims are missing a closed E2 tuple outcome, so stop at the repair boundary rather than weakening combination coverage. Do not submit an unconstrained request when the source contains a forbid whose closed proof is unavailable; preserve the affected combination responsibility as Blocked.
+Each item must end in exactly one closed branch:
 
-Never submit `maxCandidates`, a sampling policy, selected vectors, or generated IDs. Candidate capacity and policy version are compiler-private. The compiler invokes the deterministic t-wise selector, emits one caseable interaction Test Point for each selected vector, attaches it to every owner fact route, and carries every owner root plus each selected-value claim. If the private cap is exceeded, it emits one owner-linked, non-answerable `resource_limit` requirement gap and never samples. The derived `combination_vector` is compiler-only audit data for Case authoring; read its assignments and obligation ID but never copy that field into `behavior_views`.
+- `formal` with evidence basis and formal Test Point refs;
+- `semantic_gap` with semantic-gap-analysis basis and semantic gap refs;
+- `exploratory` with risk-catalog basis and Exploratory refs;
+- `not_applicable` with verified-evidence or scope-Decision basis and NotApplicable refs.
 
-## Audit module interaction
+Wrong basis/ref combinations or extra fields are invalid. “The PRD does not mention this risk” is never enough for NotApplicable. The ledger records review; it must not create unsupported formal behavior.
 
-Use exactly these seven dimensions: `shared-entity`, `role`, `client`, `interface-event`, `time`, `concurrency`, and `side-effect`. For one declared module, record all seven `single-module` cells using that one module ID. For multiple declared modules, record all seven cells for every unordered module pair. Mark every cell as either `checked-no-signal` or `candidate`. Do not use an empty list as proof of checking.
+## Preserve terminal accounting
 
-Route each candidate to exactly one destination:
+Every applicable formal Fact has exactly one final route to outcomes/Test Points or a typed semantic gap. Missing meaning, condition, expected result, authority, or Oracle stays visible. NotApplicable needs independent exclusion evidence; Exploratory does not satisfy formal coverage. Final reconciliation, not an early view-shape check, proves route completeness.
 
-- a sourced formal interaction view;
-- Blocked with a concrete missing rule, Oracle, scope, or capability;
-- independent Exploratory with accepted diagnostic evidence.
-
-Every interaction candidate supplies distinct nonempty `source_claim_ids` and distinct nonempty `semantic_subject_refs`. Semantic subjects use only `fact`, `view-element`, `model-element`, or `integration-surface`; a side-effect surface is selected uniquely by `(side_effect_kind, target)`. Every selector must exist, overlap a named module, and remain related to the candidate provenance. Provenance is validated but is not part of root identity: identity comes from canonical `module_ids`, `dimension`, and `semantic_subject_refs`, so evidence, candidate ID, wording, risk, revision, and array reorder do not change it.
-
-A Blocked candidate supplies a typed `issue_intent`; its interaction issue scope must overlap a candidate module and cover every semantic subject scope. Every issue evidence reference must exist, cover that issue scope, and connect directionally to a semantic subject; never calculate or submit its root key or root ID. The compiler creates its `caseable=false` requirement-gap obligation and links that gap, root, and interaction route. Different semantic subjects in the same matrix cell remain separate candidates with separate compiler-owned routes.
-
-Check shared quotas, cross-role and cross-client consistency, asynchronous callbacks, duplicate submission, concurrency, long state chains, and external side effects only when a recorded signal exists.
-
-## Enumerate obligations before Cases
-
-Create at least one formal Test Point for every in-scope normative and testable atomic fact. Preserve temporarily untestable facts as Blocked. Require explicit exclusions for NotApplicable.
-
-Cover every explicit decision rule, valid state transition, input class/boundary, flow edge/terminal/sourced exception, sourced role permission, and sourced integration invariant. Do not target an arbitrary Case count, enumerate every possible path, stamp generic field templates, or put Exploratory items into the formal denominator.
-
-Selection chooses input vectors; every vector still needs a product Oracle that is source-backed and independent of coverage-selection metadata, either directly or through a legal E2 derivation. Coverage strength, the selected vector, and a coverage record cannot supply that Oracle. E1 selected-value evidence makes the eventual Case at most Conditional, even when its Oracle is stronger.
-
-Give each accepted fact exactly one route and each formal Test Point exactly one final disposition. Keep bidirectional links among facts, Test Points, Cases, and concrete expectations.
+Legacy v3 view/interaction/obligation-input shapes remain readable for validation and migration only. A v3 validation success is never a fallback when a v4 sparse model fails.

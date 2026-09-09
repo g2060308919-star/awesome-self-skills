@@ -1,5 +1,17 @@
 import { stableId } from './canonical.mjs';
 import { normalizeScope, scopeContains, validateDecisionRecords } from './decision-record.mjs';
+import { resolveV4SourceComposition } from './source-subjects-v4.mjs';
+
+/** v4 adds rule-internal semantic composition without replacing v3 precedence.
+ * @param {any} sourcePack @param {any[]} claims @param {object} subjectRegistry
+ */
+export function resolveSourcePolicyWithComposition(sourcePack, claims, subjectRegistry) {
+  const policy = resolveSourcePolicy(sourcePack);
+  const composition = resolveV4SourceComposition(sourcePack, claims, subjectRegistry);
+  return { ...policy, effective_claim_ids: composition.effective_claim_ids,
+    conflicts: [...policy.conflicts, ...composition.conflicts],
+    diagnostics: [...policy.diagnostics, ...composition.diagnostics], composition_audit: composition.audit };
+}
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isObject(value) {

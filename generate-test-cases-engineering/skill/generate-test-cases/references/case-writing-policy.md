@@ -1,108 +1,72 @@
 # Case Writing Policy
 
-Submit complete candidate `case_drafts` after formal Test Points exist; this stage must precede any compiler `need_user_answers` reply. Draft Cases for obligations with enough sourced information, and route missing facts, Oracles, or capabilities to `blocker` obligation dispositions. Never turn gaps into guessed Cases. Clarification convergence or `request_delivery` controls entry into execution closure, not finalization and not whether candidate drafts may be submitted.
+Read this policy before writing `case_drafts` and before presenting a Case Document. Confirm that the runner requested `case_drafts` with `case-drafts.schema.json`; never invent fields, a fifth Agent artifact, compiler-owned ordering dependencies, or a manual final.
 
-A Case is the atomic execution unit. Execution closure may select the whole Case, exclude the whole Case, or pause; it cannot partially execute selected steps, split responsibilities after classification, or generate automation. A distinct executable responsibility must pass through normal evidence, Test Point, Oracle, and Case generation before it can become its own Case.
+## Write logical Cases without execution-resource gating
 
-Keep one independently diagnosable business outcome per Case. A shared transaction or precondition is not enough to merge unrelated assertions. When one failure could leave the tester unable to tell which business rule failed, split the Case before submission.
+Case generation does not inspect or require real environment URLs, accounts, observers, controls, credentials, test-data availability, cleanup access, or runner capability. Those are checked only by a separately requested Execution Plan.
 
-## Structured scenario, preparation, and risk
+A logical Case may and should describe source-backed business role/permission, business preconditions, data conditions, ordered actions, observable business results, and relative baseline contracts. These describe what a human tester must exercise, not proof that today's environment can execute it. Never submit v3 `testability_profile`, setup-resource locator, or execution-readiness fields in a v4 Case.
 
-Every new Case supplies `scenario` with a single `operation_id`, `operation_ref`, `partition_id`, `subject_ref`, and `intent`. Copy `operation_ref` from the linked formal Test Point's compiler-produced `primary_operation_refs`, and copy `partition_id` from its `scenario_partition_ref`. Every linked Test Point must allow that primary operation and have the same partition. Preserve the complete `view_element_refs`: from/to nodes or states are supporting traceability, not additional operations. Every step declares the same `operation_id`; every data item declares the same compiler partition. Split inverse actions and independent enum partitions into separate Cases. Do not put a list or a sentence into an identifier. The compiler validates declared identity and references, not whether arbitrary source prose secretly contains another operation.
+Keep exactly one independently diagnosable primary business outcome per Case. One Case has one `primary_test_point_id`; API, storage, event, and UI observations of that same outcome may be supporting oracles/observations. Split two independently failing business results even if they share setup or actions. Case remains the atomic execution unit; a later plan cannot select only some steps.
 
-Each Oracle requires `assertion` containing one `subject_ref`, one `surface`, one `operator`, and a scalar typed `operand` (`string`, `number`, `boolean`, or `null`, paired with `value`). Subject must equal the scenario subject; subject and surface must match the resolved observer's `subject_ref` and `surface_id`. Multiple observation surfaces are separate Cases. Keep `comparison` equal to `operator`; legacy `expected_value`, `expected_state`, `expected_event`, or `expected_side_effect` is display text exactly equal to the string rendering of `operand.value`. A typed string is a literal value, never a sentence encoding several assertions. `within` needs a numeric operand and the existing tolerance/window bound; text operators need string operands. Structured assertions, scenario identity, and stable observer/target references participate in execution signatures.
+## Use only the closed v4 CaseSpec
 
-For `intent: compatibility`, supply `compatibility.baseline_ref` referencing a concrete sourced setup resource and exactly one comparison `dimensions` entry. Split value domain, format, default, permission, interaction, and failure behavior dimensions as source-supported Cases. An existence check cannot substitute for compatibility review. The compiler verifies the declared baseline and dimension; the adapter must still check that these represent the source's actual compatibility promise.
+Every Case supplies:
 
-Each precondition's `setup` names `resource_kind`, `resource_ref`, a typed `completion` predicate, and explicit `mutation_effects`. Resolve `resource_ref` to exactly one `testability_profile.setup_resources` item with matching `kind`, concrete URI or absolute entry `locator`, and accepted `evidence_ref`. Resource evidence belongs in the Case's exact direct evidence summary and is subject to normal evidence scope and E1 caps. A completion predicate states when preparation is ready; it does not claim preparation has been executed. Do not use “business team prepares data” as a resource anchor.
+- `case_id`, `title`, `module_id`, and `priority`;
+- `ordering.business_flow_ref` and `ordering.page_action_ref`, each either a compiler-owned source-backed registry ref or null;
+- `acceptance_role`, `fact_ids`, one `primary_test_point_id`, and `supporting_observation_ids`;
+- `business_preconditions`, `data_conditions`, `steps`, and `oracles`;
+- optional `semantic_effects`, `baseline_spec`, and `test_values` only when supported.
 
-Declare setup mutations even when formal execution is read-only, and declare execution mutations separately in `execution_effects`. `cleanup.resolved_effects` must equal the union of both sets. Any effect requires cleanup steps and evidence; `required: false` is allowed only for an empty effect set. The compiler checks declared effects and cleanup accounting; source review must identify omitted mutations.
+Do not submit `depends_on_case_ids`, ranks, registry records, obligation IDs, root IDs, or other compiler-owned fields. Ordering input comes only from `/module_id`, `/ordering/business_flow_ref`, `/ordering/page_action_ref`, `/priority`, and `/title`. Null ordering refs mean unsequenced; never infer sequence from a natural-language title.
 
-Keep the existing risk enum and add `risk_basis.impact`, `.likelihood`, and `.exposure` with concrete rationales. Include affected users, loss, dependencies, or compliance concerns when supported. The compiler requires rationale structure but cannot prove a probability or derive an objectively correct risk level from prose.
+Each business precondition has `precondition_id` and `description`; each data condition has `condition_id` and `description`; each step has a Case-local unique `step_id` and executable `action`. These IDs are bindings for canonical JSON, not prose the user must interpret.
 
-## Unsourced exploratory suggestions
+## Bind every Oracle to a step
 
-An unsourced generic risk may be an `exploratory_candidates` item with exactly `exploratory_id`, `title`, `scope`, `risk`, `origin: heuristic`, `category`, `hypothesis`, and `rationale`. Categories are `boundary`, `concurrency`, `failure`, `degradation`, `security`, and `usability`. This is a visibly unsourced suggestion, not E0 evidence: omit E-levels, Oracle assertions, accepted Claim IDs, Fact IDs, and formal Test Point references. It contributes no formal coverage and is never runner eligible. Sourced Exploratory candidates retain their existing independent accepted-evidence and interaction-route gates. Missing formal source behavior remains Blocked; do not reclassify it as a heuristic.
+Every Oracle has `oracle_id`, `observe_after_step_id`, `surface`, concrete `expected`, and nonempty `claim_ids`. `observe_after_step_id` must reference exactly one existing step in the same Case. A dangling or cross-Case ref is a modeling error and cannot enter a formal result.
 
-The compiler rejects a Case whose obligation-closing expectations carry more than one distinct typed outcome signature. Split different expected values, states, events, side effects, observation targets, or business outcomes into separate Case candidates even when their setup or trigger is shared. Auxiliary observations may remain only when they support the same atomic outcome and do not conceal a second formal responsibility.
+Write a concrete business expectation, not “works”, “normal”, “correct”, or “successful”. Name the exact value/state/event/side effect, where it is observed, and any sourced comparison or time bound. An observation surface alone is not an Oracle. A generic boundary technique, common practice, model consensus, or coverage selection cannot supply expected product truth.
 
-Confirm the runner requested the schema-validated `case_drafts` stage with `case-drafts.schema.json` before writing. Reject any other stage/schema pairing and never write compiler-derived coverage, verification, or obligations as a fifth Agent artifact.
+Markdown places each expected result immediately after its owning step. CSV serializes `steps` as `N. action` and `expected_results` as `步骤N：预期`, using the same step order. JSON, Markdown, and CSV derive from one canonical Case document; never edit them independently.
 
-## Build Oracle-gated Cases
+## Record semantic effects only when real
 
-Read `derived/rNNN/test-obligations.json` before drafting, using the zero-padded revision requested by the runner. Treat it as compiler output, never edit it. For each Case, copy only the caseable formal obligation IDs it actually covers. Create exactly one `obligation-oracle` expectation for each linked obligation and set its single `closes_obligation_id` to that compiler-returned obligation ID. Its nonempty, unique `oracle_evidence_refs` must include its `evidence_ref`, cover every optional `required_oracle_refs` prebinding, and consist only of accepted, scope-covering Oracle evidence that the compiler can verify from the obligation sources, owner facts, prebindings, or legal E2 ancestry. An unrelated same-scope E3 claim is not a valid shortcut. If accepted evidence cannot close the obligation, submit a blocker instead of merging unrelated expectations or inventing an aggregate.
+Use optional `semantic_effects` only for a source-backed business change. Each closed item is `{effect_id, kind, subject, before?, after, claim_ids}` with nonempty Claim refs. Omit the field when no business state change is specified. Never invent persistence, cleanup, post-state, callback, or compensation to fill a shape.
 
-An `auxiliary` expectation has the same typed Oracle, evidence, scope, and support gates but has no `closes_obligation_id` and never counts toward formal coverage. Use it only for an additional observable assertion. A requirement gap, Blocked obligation, or NotApplicable obligation cannot be closed by either expectation kind. Empty `required_oracle_refs` and vector Oracle lists are optional prebindings, not an automatic blocker; the Case-supplied Oracle is still mandatory.
+## Make relative baselines executable later
 
-For a compiler-derived combination Test Point, require a product Oracle that is source-backed and independent of coverage-selection metadata, either directly or through a legal E2 derivation. Coverage strength, the selected vector, or a coverage record is test-process metadata and must not become a business Oracle. If no accepted source or legal E2 derivation supplies the product outcome for that vector, block the Test Point rather than invent an expectation.
+Use `baseline_spec` only for a source-backed compatibility or “same as current online” rule. It uses `kind=declared_reference`, `acquisition=capture_at_execution`, a stable business `reference`, a closed `comparison_contract`, and Claim refs.
 
-Never resubmit a compiler-owned requirement-gap obligation in `obligation_dispositions`. It is marked `caseable=false` and remains compiler-owned Blocked output. Never calculate or submit a root key or root ID, and never let a Case, NotApplicable disposition, or expectation close a requirement gap.
+`capture_at_execution` deliberately does not contain an environment URL, account, screenshot, captured value, or capability proof at generation time. The Case states which fields are compared and the permitted differences. The execution system captures the actual baseline later. “Same as baseline” without that contract is not an executable Oracle and remains a semantic gap.
 
-When several caseable Test Points share one real missing rule or resource, submit one grouped blocker with nonempty disjoint `affected_obligation_ids`, one typed `subject`, and one typed `issue_intent`. The subject must be reachable from every affected Test Point and use exactly one closed kind: facts, view elements, capabilities, or evidence conflict. Use accepted related evidence in the intent; the compiler derives the root and expands the group into formal per-Test-Point dispositions.
+## Label every test value origin
 
-For a shared missing execution environment, entry point, sample, or observation resource, use `missing_type: "execution-preparation"` (or `testability`), not a missing product-rule intent. Group the same scope and same concrete unresolved prerequisite once; do not append each Test Point's expected result to the reason and turn one prerequisite into per-point questions. A `capabilities` subject may reference only compiler-declared required capabilities. If no such capability is declared, do not invent one: a grouped `facts` subject may use the union of actual owner Fact IDs, each reachable from the affected Test Points. Keep unrelated prerequisites separate. Grouped intent `evidence_refs` must be related to every affected Test Point; ordinary PRD outcome claims do not prove that execution resources are available or missing. Use an empty array when there is no accepted common resource evidence instead of splitting a genuinely shared gap merely to attach per-rule claims. Preserve the fact-to-Test-Point routes and the real Blocked classification.
+Each `test_values` item identifies `value_id`, semantic `subject_ref`, business JSON Pointer `field_path`, typed `value`, nonempty Case-local `used_by_refs`, and exactly one `value_origin` branch:
 
-For each candidate, bind this sequence:
+- `requirement`: nonempty `claim_ids` directly require the value.
+- `example`: nonempty `claim_ids` and `replaceable=true`; it is illustrative and never a fixed expected value merely because it appeared as an example.
+- `derived`: nonempty `input_claim_ids`, deterministic `derivation` (`method_id`, `method_version`, `inputs_digest`), and `evidence_level=derived`.
+- `temporary_assumption`: `assumption_id`, nonempty `semantic_gap_ids`, `reason`, and `requires_case_status=Conditional`.
 
-```text
-formal Test Point
--> minimum scenario skeleton
--> concrete expected result and observation point
--> constructible precondition and data
--> executable ordered actions
--> final Case classification
-```
+Never mix fields from different branches, relabel an example as a requirement, or treat a derived result as an authorized rule. `used_by_refs` may name only an existing precondition, condition, step, oracle, or semantic effect in this Case. An E1 or temporary-assumption input caps the Case at Conditional even if its Oracle is stronger.
 
-Each Case needs a stable ID, title, scope, risk, linked facts and Test Points, reachable preconditions, concrete sourced data, role, ordered actions, action-local expectations, postcondition, cleanup or a no-cleanup reason, evidence references, and any temporary assumption with its invalidation condition.
+## Preserve evidence and risk boundaries
 
-Before submission, recompute the Case summary mechanically. `evidence_refs` must equal the exact sorted union of direct evidence roots named by its role, `source_claim_ids`, linked facts and obligations, preconditions, data, action and expectation references (including every `oracle_evidence_refs` entry), Testability profile, post-state, cleanup, and temporary assumption. Include no ancestor merely because it is reachable and omit no direct reference. Set Agent `execution_signature.oracle_refs` to the exact distinct expectation IDs. The Agent execution signature contains no Test Point or obligation IDs; do not submit `test_point_ids` or any substitute association field.
+Every expected value/state and every optional semantic field needs direct accepted Claim evidence or a legal replayable E2 derivation. Run a read-only source rebuttal pass before submission: try to disprove every proposed fact, condition, action, and Oracle. The review must never introduce a new business fact. Contradicted or uncertain semantics remain a gap; do not invent an assumption to rescue them.
 
-Immediately before writing `staging/case-drafts.json`, mechanically compare each Case: `sort(unique(execution_signature.oracle_refs))` must equal `sort(unique(expectation_id values from all Case expectations))`. Use the Agent-authored expectation IDs such as `expect-payment-success`; never copy a compiler-owned `oracle_*` semantic ID from derived or final output. A mismatch is a repairable `case_drafts` error, never a business blocker or clarification root.
+An unsourced generic risk may become a clearly labelled Exploratory record, never a formal Case or Oracle. Missing formal source behavior remains a semantic gap, not Exploratory. `risk_review_ledger` is compiler-owned from the complete module review; Case drafts must not create or hide its nine mandatory categories.
 
-One Case may cover several Test Points only when each owns a distinct locatable `obligation-oracle` expectation. The compiler derives stable typed Oracle semantic IDs for final execution signatures. Evidence refs, expectation IDs, closure IDs, obligation IDs, support review, and expectation order do not change execution identity; a different typed expected value, state, event, or side effect does. Merge only identical execution signatures—role, pre-state, data partition or boundary, action path, and typed Oracle semantics must all match—and never merge Cases across Grounded and Conditional lanes. Preserve every Case, fact, Test Point, source, evidence, and explicit closure association in the merged disposition.
+## Render a business-first Case Document
 
-## Write concrete Oracles
+The document begins with one scenario per line, in the compiler's canonical order, showing module, priority, title, and semantic status. Primary Cases and boundary-contract Cases have separate sections. Show preconditions and data before actions, then place each expected result immediately after its step.
 
-Never write “works”, “correct”, “normal”, or “successful” as the entire expected result. For every key expectation state:
+Display a shared semantic root once with all affected business items. Default business content must not expose root, Fact, Claim, obligation, Test Point, Case, Oracle, or other internal IDs. IDs are permitted only in canonical JSON or when `render_options.include_audit_appendix=true`.
 
-- the business assertion and exact expected value, state, event, or side effect;
-- the preceding action that triggers observation;
-- the observer and UI/API/database/event/permission/clock/post-state target;
-- comparison, tolerance, or time window;
-- the accepted evidence or replayable E2 derivation.
+Coverage wording is exactly bounded as “已审阅 formal test-point 覆盖” (or a faithful localized equivalent). Name primary and boundary counts and separately show semantic gap, Exploratory, and NotApplicable counts. Never use a bare risk tuple or claim “requirements are 100% covered”.
 
-An expected business outcome must not come from a boundary technique, generic practice, model consensus, or an observation target alone.
+`blocked_only` titles the output as an unresolved report and must not claim Cases were generated. `no_applicable_cases` requires evidence-backed exclusions for every reviewed applicable lane. A canonical failure permits diagnostics only; it never permits a hand-written Markdown, spreadsheet, or test-case fallback.
 
-“Same as baseline”, “unchanged from before”, or similar shorthand is not an executable Oracle unless the Case also names the baseline version or state, the exact compared fields, and the expected values or permitted differences. Otherwise keep the obligation Blocked and request the missing baseline material.
-
-Treat an example as a test-data candidate, not as an authoritative boundary or exhaustive enumeration. Label it as an example in the Case. Only a sourced constraint or a legal E2 derivation may establish a boundary, partition, or closed set.
-
-When an assertion is derived or assumed, make that status explicit in the human wording and trace it to its E2 derivation or E1 temporary assumption; never present it as a directly confirmed rule.
-
-Do not submit `value_origin` in `case_drafts`; it is compiler-owned final-delivery metadata derived from each data item's accepted Claim. Set `provenance.type = derivation` only when `provenance.ref` names an accepted `claim_form = derived` Claim; use `evidence` for direct or Decision Record Claims. The compiler rejects a mismatched pair and derives the final label from the Claim form rather than trusting the submitted type. In the final Case, read `value_origin` literally: `requirement` is a directly required value, `source_description` is merely source-described, `example` is illustrative rather than exhaustive, `derived` is a replayable E2 construction, and `temporary_assumption` is valid only under its E1 invalidation condition. Never relabel an example, derived value, or temporary assumption as a confirmed requirement.
-
-## Prove Testability separately
-
-Record capability, observer, control, setup, data injection, execution, observation, and cleanup status. Use:
-
-- `provided` or `verified` for Grounded eligibility;
-- `approved-assumption` for Conditional eligibility;
-- `unavailable` or `unknown` for Blocked.
-
-A requirement that says a database row or event should exist does not prove the tester can inspect it. Test capability needs separate evidence.
-
-## Run the source rebuttal pass
-
-Before submitting `case_drafts`, perform a read-only source rebuttal pass. Try to disprove every factual assertion from the accepted sources and record exactly:
-
-```text
-support_review = supported | contradicted | uncertain
-```
-
-Never introduce a new business fact during review. Do not create an assumption to rescue a contradiction. Grounded requires every factual assertion to be supported. Contradicted or uncertain content becomes Blocked; an E1 assumption cannot override E3/E2.
-
-Submit the structured support review in `case_drafts` and let the compiler recompute classification and coverage. Never patch the final bundle.
-
-## Keep user-facing wording traceable
-
-Use product language from accepted sources. Make roles, scope, data, actions, and expected results executable by a human tester. Separate Grounded, Conditional, Blocked, NotApplicable, and Exploratory output. State limitations without claiming that pipeline completion proves requirement completeness.
+Legacy v3 Cases remain readable for validation/migration. Their obligation-oracle, execution-signature, support-review, and Testability shapes are v3-only and must never become a fallback when a v4 artifact fails.

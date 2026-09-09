@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
-import { deriveCandidateBinding } from './candidate-binding.mjs';
+import { applyReportExitCode } from './cli-exit-code.mjs';
+import { deriveCandidateBinding, reconcileCandidateBindings } from './candidate-binding.mjs';
+import { materializeCandidateRuntime } from './candidate-runtime.mjs';
 import {
   OPERATOR_TASK_ID,
   OPERATOR_WITNESS_METHOD,
@@ -22,16 +24,76 @@ const repositoryRoot = path.resolve(fileURLToPath(new URL('../', import.meta.url
 const manifestPath = path.join(repositoryRoot, 'benchmark/release/v1/manifest.json');
 const catalogPath = path.join(repositoryRoot, 'benchmark/public-pilot/v1/catalog.json');
 const operatorRoot = path.join(repositoryRoot, 'benchmark/release/v1/operator-work');
-const runnerPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/test-compiler.mjs');
 const STAGE_FILES = Object.freeze({
   source_pack: 'source-pack.json', evidence_claims: 'evidence-claims.json',
   behavior_views: 'behavior-views.json', case_drafts: 'case-drafts.json'
 });
 const MAX_AGENT_ARTIFACT_BYTES = 16 * 1024 * 1024;
+const SHA256 = /^[a-f0-9]{64}$/u;
+const REVISION = /^[a-f0-9]{40}$/u;
+const CANDIDATE_DIGEST_FIELDS = Object.freeze([
+  'compiler_sha256', 'schema_sha256', 'schema_manifest_sha256', 'skill_sha256', 'bundle_sha256'
+]);
+const CAPTURE_DIGEST_KEYS = Object.freeze([
+  'compiler', 'schema', 'schema_manifest', 'skill', 'bundle'
+]);
 
 /** @param {any} bytes */
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+async function currentCandidateBinding() {
+  const manifestBytes = await readFile(manifestPath);
+  return deriveCandidateBinding(manifestPath, sha256(manifestBytes), repositoryRoot);
+}
+
+/** @param {any} binding */
+function requireCleanCandidateBinding(binding) {
+  if (binding?.worktree_clean !== true
+    || typeof binding.final_candidate_sha !== 'string'
+    || !REVISION.test(binding.final_candidate_sha)
+    || CANDIDATE_DIGEST_FIELDS.some((field) => (
+      typeof binding[field] !== 'string' || !SHA256.test(binding[field])
+    ))) throw new Error('Capture requires a clean candidate binding.');
+  return binding;
+}
+
+/** @param {any} binding */
+function captureArtifactDigests(binding) {
+  return {
+    compiler: binding.compiler_sha256,
+    schema: binding.schema_sha256,
+    schema_manifest: binding.schema_manifest_sha256,
+    skill: binding.skill_sha256,
+    bundle: binding.bundle_sha256
+  };
+}
+
+/** @param {any} state @param {any} binding @param {any} item */
+function requireStateCandidateBinding(state, binding, item) {
+  requireCleanCandidateBinding(binding);
+  const digests = state?.artifact_digests;
+  const digestRecord = digests && typeof digests === 'object' && !Array.isArray(digests)
+    ? /** @type {Record<string,unknown>} */ (digests) : {};
+  const expectedDigests = /** @type {Record<string,string>} */ (captureArtifactDigests(binding));
+  const actualKeys = Object.keys(digestRecord).sort();
+  if (state?.system !== 'generate-test-cases'
+    || state?.runtime_revision !== binding.final_candidate_sha
+    || state?.source_sha256 !== item?.source?.sha256
+    || state?.task_sha256 !== item?.task?.sha256
+    || actualKeys.length !== CAPTURE_DIGEST_KEYS.length
+    || !CAPTURE_DIGEST_KEYS.every((key) => actualKeys.includes(key)
+      && digestRecord[key] === expectedDigests[key])) {
+    throw new Error('Capture state no longer matches the clean candidate binding.');
+  }
+  return binding;
+}
+
+/** @param {any} initial */
+async function reconcileCurrentCandidate(initial) {
+  const final = await currentCandidateBinding();
+  return requireCleanCandidateBinding(reconcileCandidateBindings(initial, final));
 }
 
 /** @param {string} root @param {string} candidate */
@@ -54,16 +116,29 @@ function normalizeReply(reply, runDirectory) {
   return normalized;
 }
 
-/** @param {string} runDirectory */
-async function invokeRunner(runDirectory) {
-  const result = await execFileAsync(process.execPath, [runnerPath, runDirectory], {
-    cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024,
+/** @param {string} candidateRunnerPath @param {string} runDirectory */
+async function invokeRunner(candidateRunnerPath, runDirectory) {
+  const result = await execFileAsync(process.execPath, [candidateRunnerPath, runDirectory], {
+    cwd: path.dirname(candidateRunnerPath), encoding: 'utf8', maxBuffer: 4 * 1024 * 1024,
     timeout: 30_000, killSignal: 'SIGKILL'
   });
   if (result.stderr !== '') throw new Error(`Runner wrote stderr: ${result.stderr}`);
   const lines = result.stdout.trimEnd().split('\n');
   if (lines.length !== 1) throw new Error(`Runner emitted ${lines.length} lines.`);
   return JSON.parse(lines[0]);
+}
+
+/** @param {any} binding @param {string} runDirectory */
+async function invokeCandidateRunner(binding, runDirectory) {
+  const runtime = await materializeCandidateRuntime(repositoryRoot, binding.final_candidate_sha);
+  try {
+    if (sha256(await readFile(runtime.runnerPath)) !== binding.bundle_sha256) {
+      throw new Error('Materialized runner does not match the clean candidate binding.');
+    }
+    return await invokeRunner(runtime.runnerPath, runDirectory);
+  } finally {
+    await runtime.cleanup();
+  }
 }
 
 /** @param {string} workspace */
@@ -99,12 +174,15 @@ async function start(workspace, caseId, repeat, agentTaskId) {
   if (parentReal !== operatorRootReal && !isInside(operatorRootReal, parentReal)) {
     throw new Error('Capture workspace parent resolved outside operator-work.');
   }
+  const initialBinding = requireCleanCandidateBinding(await currentCandidateBinding());
   await mkdir(workspace);
   const runDirectory = path.join(workspace, 'run');
   await mkdir(runDirectory);
-  const manifestBytes = await readFile(manifestPath);
-  const binding = await deriveCandidateBinding(manifestPath, sha256(manifestBytes), repositoryRoot);
-  if (!binding.final_candidate_sha) throw new Error('Cannot derive the capture runtime revision.');
+  const reply = await invokeCandidateRunner(initialBinding, runDirectory);
+  if (reply.status !== 'need_artifact' || reply.stage !== 'source_pack') {
+    throw new Error('Fresh capture did not request source_pack.');
+  }
+  const binding = await reconcileCurrentCandidate(initialBinding);
   const state = {
     schema_version: '1.0.0',
     capture_id: `${caseId}-r${repeat}`,
@@ -115,13 +193,7 @@ async function start(workspace, caseId, repeat, agentTaskId) {
     source_sha256: item.source.sha256,
     task_sha256: item.task.sha256,
     runtime_revision: binding.final_candidate_sha,
-    artifact_digests: {
-      compiler: binding.compiler_sha256,
-      schema: binding.schema_sha256,
-      schema_manifest: binding.schema_manifest_sha256,
-      skill: binding.skill_sha256,
-      bundle: binding.bundle_sha256
-    },
+    artifact_digests: captureArtifactDigests(binding),
     operator_witness: {
       method: OPERATOR_WITNESS_METHOD, operator_task_id: OPERATOR_TASK_ID,
       agent_task_id: agentTaskId, observation_id: `observation-${randomUUID()}`
@@ -129,10 +201,6 @@ async function start(workspace, caseId, repeat, agentTaskId) {
     expected_stage: 'source_pack',
     events: []
   };
-  const reply = await invokeRunner(runDirectory);
-  if (reply.status !== 'need_artifact' || reply.stage !== 'source_pack') {
-    throw new Error('Fresh capture did not request source_pack.');
-  }
   await writeFile(path.join(workspace, 'capture-state.json'), `${JSON.stringify(state, null, 2)}\n`);
   return { status: 'started', workspace, reply };
 }
@@ -152,6 +220,13 @@ async function submit(workspace, artifactPath) {
     || state.operator_witness.observation_id.trim().length === 0) {
     throw new Error('Capture state no longer matches the witnessed Agent assignment.');
   }
+  const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
+  const item = catalog.items.find((/** @type {any} */ candidate) => (
+    candidate.pilot_id === state.case_id && candidate.status === 'pilot-admitted'
+  ));
+  const initialBinding = requireStateCandidateBinding(
+    state, await currentCandidateBinding(), item
+  );
   const absoluteArtifact = path.resolve(artifactPath);
   if (!path.isAbsolute(artifactPath) || !isInside(workspace, absoluteArtifact)) {
     throw new Error('Submitted artifact must be an absolute file inside the capture workspace.');
@@ -195,7 +270,10 @@ async function submit(workspace, artifactPath) {
   const staging = path.join(workspace, 'run/staging');
   await mkdir(staging, { recursive: true });
   await writeFile(path.join(staging, stageFile), `${JSON.stringify(artifact)}\n`);
-  const reply = await invokeRunner(path.join(workspace, 'run'));
+  const reply = await invokeCandidateRunner(initialBinding, path.join(workspace, 'run'));
+  requireStateCandidateBinding(
+    state, await reconcileCurrentCandidate(initialBinding), item
+  );
   const normalized = normalizeReply(reply, path.join(workspace, 'run'));
   state.events.push({ stage, artifact, reply: normalized });
   if (reply.status === 'need_artifact' || reply.status === 'need_revision') {
@@ -224,8 +302,10 @@ async function submit(workspace, artifactPath) {
   } else throw new Error('Runner returned an unsupported capture status.');
   await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
   return {
-    status: reply.status === 'finished' ? 'sealed' : 'awaiting_submission',
+    status: reply.status === 'finished' ? 'sealed'
+      : reply.status === 'fatal' ? 'fatal' : 'awaiting_submission',
     workspace, reply,
+    ...(reply.status === 'fatal' ? { message: reply.message ?? 'Runner returned fatal.' } : {}),
     transcript_path: reply.status === 'finished' ? path.join(workspace, 'transcript.json') : null
   };
 }
@@ -239,10 +319,13 @@ async function main() {
       ? await submit(workspace, args[0])
       : { status: 'fatal', message: 'Use start <workspace> <case-id> <repeat> <agent-task-id> or submit <workspace> <artifact-path>.' };
   process.stdout.write(`${JSON.stringify(result)}\n`);
+  applyReportExitCode(result);
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   main().catch((error) => {
-    process.stdout.write(`${JSON.stringify({ status: 'fatal', message: error instanceof Error ? error.message : String(error) })}\n`);
+    const report = { status: 'fatal', message: error instanceof Error ? error.message : String(error) };
+    process.stdout.write(`${JSON.stringify(report)}\n`);
+    applyReportExitCode(report);
   });
 }

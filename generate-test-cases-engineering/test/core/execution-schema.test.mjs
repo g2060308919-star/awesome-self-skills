@@ -87,7 +87,9 @@ test('run instance and current pointer schemas reject mixed state', async () => 
     active_source_revision: 3, reason: 'higher_revision_not_ready', previous_ready_revision: 2,
     bundle_path: 'output/r002/test-bundle.json'
   };
-  assert.equal(validateAgainstSchema(mixed, current).some((item) => item.code === 'ADDITIONAL_PROPERTY'), true);
+  assert.equal(validateAgainstSchema(mixed, {$defs:current.$defs,$ref:'#/$defs/legacyV3'}).some((item) => item.code === 'ADDITIONAL_PROPERTY'), true);
+  assert.notDeepEqual(validateAgainstSchema(mixed, current), []);
+  assert.notDeepEqual(validateAgainstSchema({...mixed,schema_version:'4.0.0',delivery_intent:'execution_plan'}, current), []);
 });
 
 test('post-ready preview schema binds open replace and cancel as closed operations', async () => {
@@ -158,13 +160,30 @@ test('source pack uses closed decisions for supersession and version-bound Explo
   }, contract), []);
 });
 
-test('all artifact schemas use protocol version 3.0.0', async () => {
+test('artifact schemas retain the v3 branch and discriminate new v4 envelopes', async () => {
   for (const name of [
     'source-pack.schema.json', 'evidence-claims.schema.json', 'behavior-views.schema.json',
     'test-obligations.schema.json', 'case-drafts.schema.json', 'checkpoint.schema.json',
     'test-bundle.schema.json'
   ]) {
     const contract = await schema(name);
-    assert.equal(contract.properties?.schema_version?.const, '3.0.0', name);
+    // Follow the real envelope discriminator, including local $defs and allOf;
+    // a shared root enum is not the v3 branch and does not weaken either shape.
+    /** @param {any} node @param {string} version @returns {any} */
+    function variant(node, version) {
+      if (node.$ref) return variant(node.$ref.slice(2).split('/').reduce((/** @type {any} */ parent, /** @type {string} */ key) => parent[key], contract), version);
+      if (node.properties?.schema_version?.const === version) return node;
+      for (const child of [...(node.oneOf ?? []), ...(node.allOf ?? [])]) {
+        const found = variant(child, version); if (found) return found;
+      }
+      return undefined;
+    }
+    const legacy = variant(contract, '3.0.0');
+    assert.equal(legacy?.properties?.schema_version?.const, '3.0.0', name);
+    const v4Branch = variant(contract, '4.0.0');
+    if (['source-pack.schema.json', 'evidence-claims.schema.json', 'test-bundle.schema.json', 'case-drafts.schema.json'].includes(name) || v4Branch) {
+      assert.equal(v4Branch.properties.schema_version.const, '4.0.0');
+      assert.notDeepEqual(validateAgainstSchema({schema_version:'3.0.0'},{$defs:contract.$defs,...v4Branch}),[]);
+    }
   }
 });

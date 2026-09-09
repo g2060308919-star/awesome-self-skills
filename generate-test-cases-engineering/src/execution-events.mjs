@@ -1,5 +1,345 @@
 import { canonicalStringify, digest } from './canonical.mjs';
+import sourcePackSchema from '../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
+import replySchema from '../skill/generate-test-cases/scripts/schemas/reply.schema.json' with { type: 'json' };
+import { validateAgainstSchema } from './schema-validator.mjs';
 import { scopeContains } from './decision-record.mjs';
+/** @typedef {{semantic_reopen_handler?:(event:any)=>any, verify_and_recompute_readiness?:(input:any)=>Promise<{verified:boolean,ready:boolean,receipt:any}>|{verified:boolean,ready:boolean,receipt:any}}} V4ExecutionServices */
+
+const CAPABILITY_PROOF_POLICY = Object.freeze({
+  type: 'testability_availability',
+  policy_id: 'compiler.testability-availability',
+  policy_version: '1.0.0',
+  allowed_values: Object.freeze(['verified_available', 'verified_unavailable'])
+});
+
+/** @param {unknown} value @returns {value is Record<string,any>} */
+function record(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Execution-readiness roots are compiler-owned and deliberately disjoint from
+ * Case Document semantic-gap roots. The stable root follows the Case identity;
+ * its version binds the complete immutable Case Document reference and proof
+ * policy, so a receipt cannot be replayed across document revisions.
+ * @param {any} caseDocumentRef @param {string} caseId
+ */
+export function deriveV4ExecutionReadinessTarget(caseDocumentRef, caseId) {
+  if (!record(caseDocumentRef) || typeof caseId !== 'string' || !caseId) {
+    throw new TypeError('EXECUTION_READINESS_TARGET_INVALID');
+  }
+  const rootIssueId = `EXECROOT-${digest({
+    kind: 'case_execution_readiness',
+    case_document_run_id: caseDocumentRef.run_id,
+    case_id: caseId
+  })}`;
+  const rootRef = {
+    root_issue_id: rootIssueId,
+    root_version_digest: `sha256:${digest({
+      root_issue_id: rootIssueId,
+      case_document_ref: caseDocumentRef,
+      case_id: caseId,
+      proof_policy: {
+        policy_id: CAPABILITY_PROOF_POLICY.policy_id,
+        policy_version: CAPABILITY_PROOF_POLICY.policy_version
+      }
+    })}`
+  };
+  return {
+    case_ids: [caseId],
+    root_refs: [rootRef],
+    proof_contract: {
+      type: CAPABILITY_PROOF_POLICY.type,
+      allowed_values: [...CAPABILITY_PROOF_POLICY.allowed_values]
+    }
+  };
+}
+
+/** @param {any} proof */
+function capabilityReadiness(proof) {
+  if (!record(proof) || Object.keys(proof).length !== 2
+    || typeof proof.type !== 'string' || !proof.type
+    || typeof proof.value !== 'string' || !proof.value) {
+    throw new TypeError('EXECUTION_PROOF_INVALID');
+  }
+  if (proof.type !== CAPABILITY_PROOF_POLICY.type) {
+    throw new TypeError('EXECUTION_PROOF_TYPE_UNSUPPORTED');
+  }
+  if (!CAPABILITY_PROOF_POLICY.allowed_values.includes(proof.value)) {
+    throw new TypeError('EXECUTION_PROOF_VALUE_UNSUPPORTED');
+  }
+  return proof.value === 'verified_available';
+}
+
+/**
+ * Validate a compiler-issued capability receipt and independently recompute its
+ * readiness. The receipt is operational testability provenance only: no field
+ * can alter semantic status, Case content, or an Oracle.
+ * @param {any} receipt @param {{case_document_ref?:any,case_id?:string,root_refs?:any[]}} [expected]
+ */
+export function validateV4CapabilityReceipt(receipt, expected = {}) {
+  const keys = [
+    'domain', 'verification_policy', 'case_document_ref', 'case_ids', 'root_refs',
+    'proof', 'ready', 'receipt_digest'
+  ];
+  if (!record(receipt) || Object.keys(receipt).length !== keys.length
+    || keys.some((key) => !Object.hasOwn(receipt, key))
+    || receipt.domain !== 'testability'
+    || !record(receipt.verification_policy)
+    || canonicalStringify(receipt.verification_policy) !== canonicalStringify({
+      policy_id: CAPABILITY_PROOF_POLICY.policy_id,
+      policy_version: CAPABILITY_PROOF_POLICY.policy_version
+    })
+    || !Array.isArray(receipt.case_ids) || receipt.case_ids.length !== 1
+    || typeof receipt.case_ids[0] !== 'string' || !receipt.case_ids[0]
+    || !Array.isArray(receipt.root_refs) || receipt.root_refs.length !== 1
+    || typeof receipt.ready !== 'boolean'
+    || !/^sha256:[0-9a-f]{64}$/.test(receipt.receipt_digest)) {
+    throw new TypeError('EXECUTION_CAPABILITY_RECEIPT_INVALID');
+  }
+  const caseId = receipt.case_ids[0];
+  const target = deriveV4ExecutionReadinessTarget(receipt.case_document_ref, caseId);
+  if (canonicalStringify(target.root_refs) !== canonicalStringify(receipt.root_refs)
+    || (expected.case_document_ref !== undefined
+      && canonicalStringify(expected.case_document_ref) !== canonicalStringify(receipt.case_document_ref))
+    || (expected.case_id !== undefined && expected.case_id !== caseId)
+    || (expected.root_refs !== undefined
+      && canonicalStringify(expected.root_refs) !== canonicalStringify(receipt.root_refs))) {
+    throw new TypeError('EXECUTION_CAPABILITY_RECEIPT_BINDING_INVALID');
+  }
+  const ready = capabilityReadiness(receipt.proof);
+  const body = structuredClone(receipt);
+  delete body.receipt_digest;
+  if (receipt.ready !== ready || receipt.receipt_digest !== `sha256:${digest(body)}`) {
+    throw new TypeError('EXECUTION_CAPABILITY_RECEIPT_DIGEST_INVALID');
+  }
+  return structuredClone(receipt);
+}
+
+/**
+ * Built-in production verifier. Accepted proof semantics live in this private,
+ * versioned registry rather than the public event schema. Only the exact
+ * compiler-derived execution target can produce a receipt.
+ * @param {{root_refs:any[],case_ids:string[],proof:any,state:any}} input
+ */
+export function verifyAndRecomputeV4ExecutionReadiness(input) {
+  const targets = Array.isArray(input?.state?.execution_readiness_targets)
+    ? input.state.execution_readiness_targets : [];
+  const target = targets.find((/** @type {any} */ candidate) => (
+    canonicalStringify(candidate?.root_refs) === canonicalStringify(input?.root_refs)
+    && canonicalStringify(candidate?.case_ids) === canonicalStringify(input?.case_ids)
+  ));
+  if (!target || canonicalStringify(target.proof_contract) !== canonicalStringify({
+    type: CAPABILITY_PROOF_POLICY.type,
+    allowed_values: [...CAPABILITY_PROOF_POLICY.allowed_values]
+  })) throw new TypeError('EXECUTION_PROOF_TARGET_INVALID');
+  const ready = capabilityReadiness(input.proof);
+  const body = {
+    domain: 'testability',
+    verification_policy: {
+      policy_id: CAPABILITY_PROOF_POLICY.policy_id,
+      policy_version: CAPABILITY_PROOF_POLICY.policy_version
+    },
+    case_document_ref: structuredClone(input.state.case_document_ref),
+    case_ids: structuredClone(input.case_ids),
+    root_refs: structuredClone(input.root_refs),
+    proof: structuredClone(input.proof),
+    ready
+  };
+  const receipt = { ...body, receipt_digest: `sha256:${digest(body)}` };
+  validateV4CapabilityReceipt(receipt, {
+    case_document_ref: input.state.case_document_ref,
+    case_id: input.case_ids[0],
+    root_refs: input.root_refs
+  });
+  return { verified: true, ready, receipt };
+}
+/** @param {any} state @returns {any} */
+function v4ExecutionContext(state) {
+  const value = Object.fromEntries(['run_id','presentation_id','case_document_ref','case_ids','root_refs'].map(key=>[key,structuredClone(state[key])]));
+  if (validateAgainstSchema(value, {$defs:sourcePackSchema.$defs,$ref:'#/$defs/v4ExecutionContext'}).length) {
+    throw new TypeError('EXECUTION_CONTEXT_INVALID');
+  }
+  return value;
+}
+
+/** Pure presentation projection; no execution or semantic parent mutation.
+ * @param {any} state @param {V4ExecutionServices} services
+ */
+export function createV4ExecutionPresentation(state, services) {
+  if (state.delivery_intent !== 'execution_plan') throw new TypeError('EXECUTION_INTENT_REQUIRED');
+  if (state.phase !== 'execution_closure') throw new TypeError('EXECUTION_PHASE_REQUIRED');
+  const context = v4ExecutionContext(state);
+  /** @type {any[]} */ const items = [];
+  /** @param {string} action @param {string[]} case_ids @param {any[]} root_refs @param {string} why @param {string} decision_impact @param {string} unresolved_outcome */
+  const add = (action, case_ids, root_refs, why, decision_impact, unresolved_outcome, proofContract = null) => {
+    const action_context = {...context,case_ids,root_refs};
+    if (action === 'reopen_semantic_question') action_context.reopen_event_id = 'EVENT-' + digest(action_context);
+    items.push({case_ids,root_refs,case_document_ref:context.case_document_ref,
+      available_actions:[action],action_context,why,decision_impact,unresolved_outcome,
+      ...(proofContract ? { proof_contract: structuredClone(proofContract) } : {})});
+  };
+  for (const id of context.case_ids) add('set_execution_disposition',[id],[],
+    '需要确认这条用例是否纳入本次执行。','仅更新这条用例的执行选择，不修改业务用例。','未选择时保持待处理，不进入执行队列。');
+  if (typeof services.verify_and_recompute_readiness === 'function') {
+    for (const target of Array.isArray(state.execution_readiness_targets)
+      ? state.execution_readiness_targets : []) {
+      const expectedTarget = deriveV4ExecutionReadinessTarget(
+        context.case_document_ref, target?.case_ids?.[0]
+      );
+      if (!context.case_ids.includes(target?.case_ids?.[0])
+        || canonicalStringify(target) !== canonicalStringify(expectedTarget)) {
+        throw new TypeError('EXECUTION_READINESS_TARGET_INVALID');
+      }
+      add(
+        'provide_capability_proof', target.case_ids, target.root_refs,
+        '需要核验这项执行准备的证明。','核验后仅重算这项准备状态，不改变业务分类。','未通过核验时保持待处理。',
+        target.proof_contract
+      );
+    }
+  }
+  for (const root of context.root_refs) {
+    if (typeof services.semantic_reopen_handler === 'function') add('reopen_semantic_question',[],[root],
+      '需要在新的用例文档运行中重新确认这项业务问题。','通过独立运行处理目标问题，不直接修改父文档。','未重开时保留当前业务结论。');
+  }
+  add('pause_execution',[],[],'本次执行准备可以暂停。','暂停不会修改业务用例或执行选择。','执行继续保持待处理。');
+  return {
+    phase:'execution_closure',run_id:context.run_id,presentation_id:context.presentation_id,
+    run_actions:['cancel_run'],
+    cancel_context:{
+      run_id:context.run_id,phase:'execution_closure',
+      phase_version:Number.isSafeInteger(state.source_revision) ? state.source_revision : 0
+    },
+    items
+  };
+}
+
+/** @param {Record<string,unknown>} body */
+function identifiedV4RunEvent(body) {
+  return { event_id:`EVENT-${digest(body)}`, ...structuredClone(body) };
+}
+
+/**
+ * Build the compiler-owned final-confirmation snapshot from the exact plan that
+ * was returned to the operator. Its action context is the complete public
+ * payload needed to confirm that same source revision and plan.
+ * @param {{run_id:string,source_revision:number,case_document_ref:any,result_kind:string,runner_projection:any,plan_digest:string}} input
+ */
+export function createV4FinalConfirmationPresentation(input) {
+  const signature = {
+    run_id:input.run_id,phase:'final_confirmation',source_revision:input.source_revision,
+    case_document_ref:structuredClone(input.case_document_ref),
+    result_kind:input.result_kind,runner_projection:structuredClone(input.runner_projection),
+    presented_plan_digest:input.plan_digest
+  };
+  const presentationId = `PRES-${digest(signature)}`;
+  const actionContext = {
+    run_id:input.run_id,phase:'final_confirmation',phase_version:input.source_revision,
+    presented_presentation_id:presentationId,presented_plan_digest:input.plan_digest,
+    presented_source_revision:input.source_revision
+  };
+  const presentation = {
+    phase:'final_confirmation',run_id:input.run_id,presentation_id:presentationId,
+    source_revision:input.source_revision,case_document_ref:structuredClone(input.case_document_ref),
+    presented_plan_digest:input.plan_digest,
+    runner_projection:structuredClone(input.runner_projection),result_kind:input.result_kind,
+    available_actions:['confirm_execution_plan'],action_context:actionContext,
+    run_actions:['cancel_run'],
+    cancel_context:{run_id:input.run_id,phase:'final_confirmation',phase_version:input.source_revision},
+    why:'发布前必须确认这一版实际展示的完整执行清单。',
+    decision_impact:'确认后才会生成执行计划交付与 runner Case 投影；不会自动启动 E2E。',
+    unresolved_outcome:'未确认或确认已过期时保持未交付状态。'
+  };
+  if (validateAgainstSchema(presentation, {
+    $defs:replySchema.$defs,$ref:'#/$defs/v4FinalConfirmationPresentation'
+  }).length) throw new TypeError('FINAL_CONFIRMATION_PRESENTATION_INVALID');
+  return presentation;
+}
+
+/** Construct either advertised run-level event from its exact displayed context.
+ * @param {any} presentation @param {'confirm_execution_plan'|'cancel_run'} eventType
+ */
+export function constructV4ExecutionRunEvent(presentation, eventType) {
+  if (eventType === 'confirm_execution_plan') {
+    if (presentation?.phase !== 'final_confirmation'
+      || !presentation.available_actions?.includes(eventType)) {
+      throw new TypeError('EXECUTION_ACTION_NOT_ADVERTISED');
+    }
+    return identifiedV4RunEvent({event_type:eventType,...structuredClone(presentation.action_context)});
+  }
+  if (eventType === 'cancel_run' && presentation?.run_actions?.includes(eventType)) {
+    return identifiedV4RunEvent({event_type:eventType,...structuredClone(presentation.cancel_context)});
+  }
+  throw new TypeError('EXECUTION_ACTION_NOT_ADVERTISED');
+}
+
+/** @param {any} presentation @param {any} event */
+export function validateV4FinalConfirmationEvent(presentation, event) {
+  if (validateAgainstSchema(event, {
+    $defs:sourcePackSchema.$defs,$ref:'#/$defs/v4ExecutionEvent'
+  }).length || event?.event_type !== 'confirm_execution_plan') {
+    throw new TypeError('FINAL_CONFIRMATION_EVENT_INVALID');
+  }
+  const body = structuredClone(event); delete body.event_id;
+  if (canonicalStringify(event) !== canonicalStringify(identifiedV4RunEvent(body))
+    || canonicalStringify(body) !== canonicalStringify({
+      event_type:'confirm_execution_plan',...structuredClone(presentation?.action_context)
+    })) throw new TypeError('FINAL_CONFIRMATION_STALE');
+  return structuredClone(event);
+}
+
+/**
+ * Validate the exact displayed context before routing. Proofs are recorded, not
+ * trusted as readiness; the execution binding layer must independently verify.
+ * T10 owns durable semantic reopen, including idempotency and sibling creation.
+ * @param {any} state @param {any} presentation @param {any} event
+ * @param {V4ExecutionServices} services
+ * @returns {Promise<any>}
+ */
+export async function applyV4ExecutionAction(state, presentation, event, services) {
+  const expected = createV4ExecutionPresentation(state,services);
+  const snapshot = structuredClone(event);
+  if (validateAgainstSchema(snapshot, {$defs:sourcePackSchema.$defs,$ref:'#/$defs/v4ExecutionEvent'}).length) {
+    throw new TypeError('EXECUTION_ACTION_INVALID');
+  }
+  const eventContext = v4ExecutionContext(snapshot);
+  if (snapshot.reopen_event_id !== undefined) eventContext.reopen_event_id = snapshot.reopen_event_id;
+  const target = expected.items.find(item => canonicalStringify(item.action_context) === canonicalStringify(eventContext));
+  if (canonicalStringify(presentation) !== canonicalStringify(expected)
+    || !target) {
+    throw new TypeError('EXECUTION_ACTION_STALE');
+  }
+  if (!target.available_actions.includes(snapshot.event_type)) throw new TypeError('EXECUTION_ACTION_UNAVAILABLE');
+  if (snapshot.event_type === 'reopen_semantic_question') {
+    return await services.semantic_reopen_handler?.(structuredClone(snapshot));
+  }
+  const next = structuredClone(state);
+  // A pause applies to the revision that records it.  The next accepted
+  // execution decision is an explicit resumption, so it must not leave the
+  // execution plan permanently pending.
+  next.paused = snapshot.event_type === 'pause_execution';
+  if (snapshot.event_type === 'set_execution_disposition') {
+    next.dispositions = {...next.dispositions};
+    for (const id of snapshot.case_ids) next.dispositions[id] = snapshot.disposition;
+  }
+  if (snapshot.event_type === 'provide_capability_proof') {
+    const verified = await services.verify_and_recompute_readiness?.(structuredClone({
+      root_refs:snapshot.root_refs,case_ids:snapshot.case_ids,proof:snapshot.proof,state
+    }));
+    if (verified?.verified !== true || typeof verified.ready !== 'boolean' || !verified.receipt) {
+      throw new TypeError('EXECUTION_PROOF_UNVERIFIED');
+    }
+    const receipt = validateV4CapabilityReceipt(verified.receipt, {
+      case_document_ref: state.case_document_ref,
+      case_id: snapshot.case_ids[0],
+      root_refs: snapshot.root_refs
+    });
+    if (receipt.ready !== verified.ready) throw new TypeError('EXECUTION_PROOF_UNVERIFIED');
+    next.readiness = {...next.readiness,[snapshot.root_refs[0].root_issue_id]:verified.ready};
+    next.capability_receipts = [...(next.capability_receipts ?? []), receipt];
+  }
+  return {state:next};
+}
 
 /** @param {string} code @param {string} path @param {string} message */
 function diagnostic(code, path, message) {

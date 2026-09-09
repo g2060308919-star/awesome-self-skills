@@ -1,7 +1,212 @@
 import { normalizeScope, scopeContains, validateDecisionRecords } from './decision-record.mjs';
-import { stableId } from './canonical.mjs';
-import { resolveSourcePolicy } from './source-policy.mjs';
-import { validateAssetClaims } from './source-audit.mjs';
+import { canonicalStringify, stableId } from './canonical.mjs';
+import { resolveSourcePolicy, resolveSourcePolicyWithComposition } from './source-policy.mjs';
+import { validateAssetClaims, validateV4SourceReviews, validateV4ClaimLocators } from './source-audit.mjs';
+import { canonicalSourceSubject } from './source-subjects-v4.mjs';
+import { validateAgainstSchema } from './schema-validator.mjs';
+import evidenceSchema from '../skill/generate-test-cases/scripts/schemas/evidence-claims.schema.json' with { type: 'json' };
+
+/** @param {string[]} values */
+function sortedUniqueStringsV4(values) {
+  return [...new Set(values.map((value) => value.normalize('NFC'))) ].sort((left, right) => {
+    const a = Array.from(left); const b = Array.from(right);
+    for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+      const delta = (a[index].codePointAt(0) ?? 0) - (b[index].codePointAt(0) ?? 0);
+      if (delta !== 0) return delta;
+    }
+    return a.length - b.length;
+  });
+}
+
+/**
+ * Materialize accepted v4 Decisions into the Evidence/Fact candidate rather
+ * than merely toggling clarification state. The original claim remains as an
+ * auditable superseded record; every subject Fact points at the Decision Claim.
+ * This is a pure candidate compiler so T10 can atomically commit it with Source,
+ * checkpoint and clarification state.
+ * @param {unknown} submittedEvidence
+ * @param {unknown} submittedDecisions
+ * @param {unknown} submittedBindings
+ */
+export function compileV4DecisionEvidenceOverlay(submittedEvidence, submittedDecisions, submittedBindings) {
+  if (!isObject(submittedEvidence) || submittedEvidence.schema_version !== '4.0.0'
+    || !Array.isArray(submittedEvidence.claims) || !Array.isArray(submittedEvidence.fact_ledger)
+    || !Array.isArray(submittedDecisions) || !Array.isArray(submittedBindings)) {
+    throw new TypeError('DECISION_EVIDENCE_INPUT_INVALID');
+  }
+  const evidence = structuredClone(submittedEvidence);
+  const claims = /** @type {any[]} */ (evidence.claims);
+  const facts = /** @type {any[]} */ (evidence.fact_ledger);
+  const claimById = new Map(claims.map((claim) => [claim.claim_id, claim]));
+  const bindings = /** @type {any[]} */ (submittedBindings);
+  /** @type {any[]} */
+  const audit = [];
+  for (const rawDecision of submittedDecisions) {
+    if (!isObject(rawDecision) || !isObject(rawDecision.target) || typeof rawDecision.decision_id !== 'string') {
+      throw new TypeError('DECISION_EVIDENCE_DECISION_INVALID');
+    }
+    const decision = /** @type {any} */ (rawDecision);
+    const matchingBindings = bindings.filter((binding) => isObject(binding)
+      && binding.root_issue_id === decision.target.root_issue_id
+      && binding.root_version_digest === decision.target.root_version_digest);
+    if (matchingBindings.length !== 1) throw new TypeError('DECISION_EVIDENCE_BINDING_AMBIGUOUS');
+    const binding = matchingBindings[0];
+    if (typeof binding.source_locator_id !== 'string' || !binding.source_locator_id) {
+      throw new TypeError('DECISION_EVIDENCE_LOCATOR_REQUIRED');
+    }
+    const subjectFactIds = new Set(stringArray(decision.subject_fact_ids));
+    const subjectFacts = facts.filter((fact) => subjectFactIds.has(fact.fact_id));
+    if (subjectFacts.length !== subjectFactIds.size) throw new TypeError('DECISION_EVIDENCE_FACT_UNKNOWN');
+    if (subjectFacts.some((fact) => fact.status !== 'ambiguous' && fact.status !== 'conflicted')) {
+      throw new TypeError('DECISION_EVIDENCE_FACT_NOT_AMBIGUOUS');
+    }
+    /** @type {Map<string, {priorClaimIds:string[],facts:any[]}>} */
+    const factsByPriorClaimSet = new Map();
+    for (const fact of subjectFacts) {
+      const priorClaimIds = sortedUniqueStringsV4(Array.isArray(fact.claim_ids)
+        ? stringArray(fact.claim_ids) : typeof fact.claim_id === 'string' ? [fact.claim_id] : []);
+      if (priorClaimIds.length === 0) throw new TypeError('DECISION_EVIDENCE_CLAIM_UNKNOWN');
+      const key = JSON.stringify(priorClaimIds);
+      const grouped = factsByPriorClaimSet.get(key) ?? { priorClaimIds, facts: [] };
+      grouped.facts.push(fact); factsByPriorClaimSet.set(key, grouped);
+    }
+    const supersessionOwners = new Set();
+    for (const { priorClaimIds, facts: groupedFacts } of factsByPriorClaimSet.values()) {
+      const priorClaims = priorClaimIds.map((claimId) => claimById.get(claimId));
+      if (priorClaims.some((claim) => !claim)) throw new TypeError('DECISION_EVIDENCE_CLAIM_UNKNOWN');
+      const priorClaim = /** @type {any} */ (priorClaims[0]);
+      if (binding.field_path !== undefined && binding.field_path !== priorClaim.field_path) {
+        throw new TypeError('DECISION_EVIDENCE_SUBJECT_INVALID');
+      }
+      const decisionClaimId = stableId('CLM', {
+        decision_id: decision.decision_id,
+        prior_claim_ids: priorClaimIds,
+        root_issue_id: decision.target.root_issue_id,
+        root_version_digest: decision.target.root_version_digest
+      });
+      const decisionClaim = {
+        claim_id: decisionClaimId,
+        claim_form: 'decision-record',
+        level: decision.evidence_level,
+        kind: 'requirement',
+        scope: priorClaim.scope,
+        value: decision.answer,
+        source_locator_ids: [binding.source_locator_id],
+        decision_id: decision.decision_id,
+        authority: decision.authority,
+        domain: priorClaim.domain ?? 'business',
+        field_path: priorClaim.field_path,
+        document_level_claim: false,
+        subject_descriptor: structuredClone(priorClaim.subject_descriptor),
+        semantic_value: decision.answer
+      };
+      if (!isObject(decisionClaim.subject_descriptor) || typeof decisionClaim.scope !== 'string'
+        || typeof decisionClaim.field_path !== 'string') throw new TypeError('DECISION_EVIDENCE_SUBJECT_INVALID');
+      for (const candidate of priorClaims) {
+        const claim = /** @type {any} */ (candidate);
+        if (supersessionOwners.has(claim.claim_id)) throw new TypeError('DECISION_EVIDENCE_SHARED_CLAIM_AMBIGUOUS');
+        supersessionOwners.add(claim.claim_id);
+        claim.superseded_by = decisionClaimId;
+      }
+      claims.push(decisionClaim); claimById.set(decisionClaimId, decisionClaim);
+      for (const fact of groupedFacts) {
+        fact.status = 'active';
+        if (Array.isArray(fact.claim_ids)) fact.claim_ids = [decisionClaimId];
+        else {
+          fact.claim_id = decisionClaimId;
+          fact.source_claim_ids = sortedUniqueStringsV4([...stringArray(fact.source_claim_ids), decisionClaimId]);
+        }
+      }
+      audit.push({
+        decision_id: decision.decision_id, root_issue_id: decision.target.root_issue_id,
+        prior_claim_ids: priorClaimIds, decision_claim_id: decisionClaimId,
+        completed_fact_ids: groupedFacts.map((fact) => fact.fact_id).sort()
+      });
+    }
+  }
+  return { evidence, audit };
+}
+
+/** v4 source boundary: strict source/locator/review/composition checks precede the
+ * existing E3/E2/E1 ancestry/oracle gates. Registry is separate compiler state.
+ * This does not acquire bytes or validate a durable run; the runner owns that I/O.
+ * @param {any} pack @param {any} artifact @param {object} subjectRegistry
+ */
+export function validateV4EvidenceSourceBoundary(pack, artifact, subjectRegistry) {
+  /** @type {any[]} */ const diagnostics = validateAgainstSchema(artifact, evidenceSchema);
+  if (artifact?.schema_version !== '4.0.0') diagnostics.push(diagnostic('schema', 'V4_EVIDENCE_REQUIRED', '/schema_version', 'The v4 source boundary requires v4 evidence.'));
+  if (diagnostics.length) return { claimsById: new Map(), diagnostics, source_conflicts: [], composition_audit: [] };
+  const direct = artifact.claims.filter((/** @type {any} */ claim) => claim.claim_form === 'direct');
+  diagnostics.push(...validateV4SourceReviews(pack), ...validateV4ClaimLocators(pack, direct));
+  // Unit reviews replace v3 span reviews, not their no-silent-loss guarantee.
+  for (const review of pack.source_reviews ?? []) {
+    const source = (pack.sources ?? []).find((/** @type {any} */ item) => item.source_id === review.source_id);
+    for (const reviewed of review.units ?? []) {
+      if (!['normative', 'uncertain'].includes(reviewed.classification)) continue;
+      const unit = source?.semantic_projection?.structure?.find((/** @type {any} */ item) => item.unit_id === reviewed.unit_id);
+      if (!unit || typeof unit.text !== 'string') continue;
+      const characters = Array.from(unit.text);
+      const covered = new Set();
+      for (const claim of direct.filter((/** @type {any} */ item) => item.source_id === source.source_id)) for (const id of claim.source_locator_ids) {
+        const loc = (pack.locators ?? []).find((/** @type {any} */ item) => item.locator_id === id && item.unit_id === unit.unit_id);
+        if (!loc) continue;
+        const range = loc.type === 'text_block_range' ? loc.range : loc.type === 'user_statement' ? loc.answer_span : { start: 0, end: characters.length };
+        if (!range || !Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end)) continue;
+        for (let position = Math.max(0, range.start); position < Math.min(characters.length, range.end); position += 1) covered.add(position);
+      }
+      if (characters.some((character, index) => character.trim() && !covered.has(index))) {
+        diagnostics.push(diagnostic('traceability', 'SOURCE_UNIT_UNCLAIMED', '/source_reviews/' + review.source_id, 'Every normative or uncertain retained unit must be represented by precise Claim locators.'));
+      }
+    }
+  }
+  const canonicalSubjects = new Map();
+  for (const [index, claim] of artifact.claims.entries()) {
+    if (claim.kind !== 'requirement') continue;
+    try {
+      const canonical = canonicalSourceSubject(claim.subject_descriptor, subjectRegistry);
+      if (canonical.subject_descriptor.field_path !== claim.field_path) throw new TypeError('SOURCE_SUBJECT_INVALID');
+      canonicalSubjects.set(claim.claim_id, canonical);
+    } catch { diagnostics.push(diagnostic('traceability', 'SOURCE_SUBJECT_INVALID', '/claims/' + index, 'The Claim must bind a registered canonical semantic subject.')); }
+    if (claim.claim_form === 'direct') {
+      const review = (pack.source_reviews ?? []).find((/** @type {any} */ item) => item.source_id === claim.source_id);
+      const normative = claim.source_locator_ids.every((/** @type {string} */ id) => {
+        const locator = (pack.locators ?? []).find((/** @type {any} */ item) => item.locator_id === id);
+        return locator && review?.units?.some((/** @type {any} */ item) => item.unit_id === locator.unit_id && item.classification === 'normative');
+      });
+      if (!normative) diagnostics.push(diagnostic('classification', 'SOURCE_UNIT_NOT_NORMATIVE', '/claims/' + index, 'Normative evidence must come from normative reviewed units.'));
+    }
+  }
+  if (diagnostics.length) return { claimsById: new Map(), diagnostics, source_conflicts: [], composition_audit: [] };
+  const policy = resolveSourcePolicyWithComposition(pack, artifact.claims, subjectRegistry);
+  const effective = new Set(policy.effective_claim_ids);
+  const selected = artifact.claims.filter((/** @type {any} */ claim) => claim.claim_form !== 'direct' || claim.kind !== 'requirement' || effective.has(claim.claim_id));
+  // v4 unit reviews were verified above; legacy span accounting must not consume
+  // this differently shaped ledger. All other ancestry and authority gates remain.
+  const graph = validateEvidenceGraph({ ...pack, source_reviews: [] }, { ...artifact, claims: selected });
+  const claimsById = new Map([...graph.claimsById].map(([id, claim]) => [id, { ...claim, ...(canonicalSubjects.get(id) ?? {}) }]));
+  const factDiagnostics = [];
+  for (const [index, fact] of artifact.fact_ledger.entries()) {
+    const factPath = `/fact_ledger/${index}`;
+    const subjects = fact.claim_ids.map((/** @type {string} */ claimId) => {
+      if (!claimsById.has(claimId)) {
+        factDiagnostics.push(diagnostic('reference', 'FACT_CLAIM_DANGLING', `${factPath}/claim_ids`, `fact references an unaccepted Claim "${claimId}"`));
+        return null;
+      }
+      return canonicalSubjects.get(claimId)?.subject_descriptor ?? null;
+    }).filter(Boolean);
+    const subjectModules = [...new Set(subjects.map((/** @type {any} */ subject) => subject.module_id))].sort(compareStrings);
+    const submittedModules = [...fact.module_refs].sort(compareStrings);
+    if (canonicalStringify(subjectModules) !== canonicalStringify(submittedModules)) {
+      factDiagnostics.push(diagnostic('traceability', 'FACT_MODULE_SUBJECT_MISMATCH', `${factPath}/module_refs`, 'Fact modules must equal the modules of its accepted canonical Claim subjects.'));
+    }
+    if (subjects.some((/** @type {any} */ subject) => subject.field_path !== fact.field_path)) {
+      factDiagnostics.push(diagnostic('traceability', 'FACT_FIELD_SUBJECT_MISMATCH', `${factPath}/field_path`, 'Fact field path must equal every accepted canonical Claim subject path.'));
+    }
+  }
+  const combinedDiagnostics = [...policy.diagnostics, ...graph.diagnostics, ...factDiagnostics];
+  return { claimsById: combinedDiagnostics.length ? new Map() : claimsById, diagnostics: combinedDiagnostics,
+    source_conflicts: policy.conflicts, composition_audit: policy.composition_audit };
+}
 
 export const E2_TARGETS = Object.freeze({
   formula: Object.freeze(['test-data', 'expected-value']),
@@ -463,8 +668,10 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
         diagnostics.push(diagnostic('reference', 'DECISION_RECORD_DANGLING', `/claims/${index}/decision_id`, `claim references unknown Decision Record "${decisionId}"`));
         valid = false;
       } else {
-        const evidenceDisposition = decision.disposition === 'final' || decision.disposition === 'temporary';
-        const expectedClaimLevel = decision.disposition === 'final' ? 'E3' : decision.disposition === 'temporary' ? 'E1' : null;
+        const v4Decision = isObject(decision.target) && isObject(decision.answer_origin);
+        const disposition = v4Decision ? decision.resolution : decision.disposition;
+        const evidenceDisposition = disposition === 'final' || disposition === 'temporary';
+        const expectedClaimLevel = disposition === 'final' ? 'E3' : disposition === 'temporary' ? 'E1' : null;
         if (!evidenceDisposition) {
           diagnostics.push(diagnostic(
             'classification',
@@ -478,28 +685,36 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
             'classification',
             'DECISION_CLAIM_LEVEL_MISMATCH',
             `/claims/${index}/level`,
-            `${decision.disposition} Decision Record requires a ${expectedClaimLevel} claim`
+            `${disposition} Decision Record requires a ${expectedClaimLevel} claim`
           ));
           valid = false;
         }
-        const sharedValid = decision.disposition === 'final' ? decisionValidation.validFinalDecisionIds.has(decisionId)
-          : decision.disposition === 'temporary' ? decisionValidation.validTemporaryDecisionIds.has(decisionId) : false;
+        const sharedValid = disposition === 'final' ? decisionValidation.validFinalDecisionIds.has(decisionId)
+          : disposition === 'temporary' ? decisionValidation.validTemporaryDecisionIds.has(decisionId) : false;
         if (!sharedValid) valid = false;
-        if (typeof decision.evidence_ref === 'string' && locators.has(decision.evidence_ref)
-          && !stringArray(claim.source_locator_ids).includes(decision.evidence_ref)) {
+        const decisionLocatorIds = v4Decision ? [...locators].filter(([, locator]) => {
+          const origin = /** @type {Record<string, unknown>} */ (decision.answer_origin);
+          const span = isObject(origin.answer_span) ? origin.answer_span : {};
+          return locator.type === 'user_statement' && locator.presentation_id === origin.presentation_id
+            && locator.message_digest === origin.message_digest && isObject(locator.answer_span)
+            && locator.answer_span.start === span.start_scalar && locator.answer_span.end === span.end_scalar;
+        }).map(([id]) => id) : typeof decision.evidence_ref === 'string' ? [decision.evidence_ref] : [];
+        if (decisionLocatorIds.some((locatorId) => locators.has(locatorId)
+          && !stringArray(claim.source_locator_ids).includes(locatorId))) {
           diagnostics.push(diagnostic('reference', 'DECISION_EVIDENCE_MISMATCH', `/claims/${index}/source_locator_ids`, 'Decision Record evidence must be included in the claim locator references'));
           valid = false;
         }
-        if (typeof claim.authority !== 'string' || typeof decision.authority_scope !== 'string'
-          || normalizeScope(claim.authority) !== normalizeScope(decision.authority_scope)) {
+        const decisionAuthority = v4Decision ? decision.authority : decision.authority_scope;
+        if (typeof claim.authority !== 'string' || typeof decisionAuthority !== 'string'
+          || normalizeScope(claim.authority) !== normalizeScope(decisionAuthority)) {
           diagnostics.push(diagnostic('classification', 'DECISION_AUTHORITY_MISMATCH', `/claims/${index}/authority`, 'claim authority must match the Decision Record authority scope'));
           valid = false;
         }
-        if (typeof claim.scope !== 'string' || typeof decision.authority_scope !== 'string' || !scopeContains(decision.authority_scope, claim.scope)) {
+        if (!v4Decision && (typeof claim.scope !== 'string' || typeof decision.authority_scope !== 'string' || !scopeContains(decision.authority_scope, claim.scope))) {
           diagnostics.push(diagnostic('classification', 'DECISION_AUTHORITY_SCOPE_MISMATCH', `/claims/${index}/scope`, 'Decision Record authority does not cover the claim scope'));
           valid = false;
         }
-        if (typeof claim.scope !== 'string' || typeof decision.effective_scope !== 'string' || !scopeContains(decision.effective_scope, claim.scope)) {
+        if (!v4Decision && (typeof claim.scope !== 'string' || typeof decision.effective_scope !== 'string' || !scopeContains(decision.effective_scope, claim.scope))) {
           diagnostics.push(diagnostic('classification', 'DECISION_SCOPE_MISMATCH', `/claims/${index}/scope`, 'Decision Record does not cover the claim scope'));
           valid = false;
         }
@@ -508,12 +723,13 @@ export function validateEvidenceGraph(sourcePack, evidenceClaims) {
           valid = false;
         }
         const claimScope = typeof claim.scope === 'string' ? claim.scope : null;
-        const decisionRootIds = new Set(stringArray(decision.root_issue_ids));
+        const decisionRootIds = new Set(v4Decision && typeof decision.target.root_issue_id === 'string'
+          ? [decision.target.root_issue_id] : stringArray(decision.root_issue_ids));
         const namesOverlappingConflict = claimScope !== null && (
           policy.conflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope) && decisionRootIds.has(conflict.root_issue_id))
           || factConflicts.some((conflict) => scopesIntersect(conflict.scope, claimScope) && decisionRootIds.has(conflict.root_issue_id))
         );
-        if (decision.disposition === 'temporary' && sharedValid && claim.level === 'E1' && namesOverlappingConflict) {
+        if (disposition === 'temporary' && sharedValid && claim.level === 'E1' && namesOverlappingConflict) {
           diagnostics.push(diagnostic('classification', 'E1_CANNOT_OVERRIDE_CONFLICT', `/claims/${index}`, 'temporary evidence cannot override an unresolved E3/E2 source conflict'));
           valid = false;
         }

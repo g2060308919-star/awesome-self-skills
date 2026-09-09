@@ -25,6 +25,17 @@ const symlink = fsPromises.symlink;
 const link = fsPromises.link;
 const execFileAsync = promisify(execFile);
 
+/** @param {string} executable @param {string[]} args @param {any} [options] */
+async function execFileResult(executable, args, options) {
+  try {
+    const result = await execFileAsync(executable, args, options);
+    return { ...result, exitCode: 0 };
+  } catch (error) {
+    const failure = /** @type {any} */ (error);
+    return { stdout: failure.stdout ?? '', stderr: failure.stderr ?? '', exitCode: failure.code };
+  }
+}
+
 function candidateBindingPolicy() {
   return {
     mode: 'runtime-derived-clean-checkout', digest_algorithm: 'sha256',
@@ -1166,15 +1177,29 @@ test('benchmark scoring remains offline and never invokes fetch or network/model
 });
 
 test('benchmark CLI binds its report to the actual checkout and frozen artifact bytes', async () => {
-  const { stdout, stderr } = /** @type {any} */ (await execFileAsync(
+  const { stdout, stderr, exitCode } = /** @type {any} */ (await execFileResult(
     process.execPath, ['benchmark/score.mjs', 'benchmark/v1/manifest.json'], { cwd: root }
   ));
+  assert.equal(exitCode, 1);
   assert.equal(stderr, '');
   const report = JSON.parse(stdout);
+  assert.equal(report.status, 'insufficient_evidence');
   const binding = report.metrics.candidate_binding;
   const { stdout: head } = /** @type {any} */ (await execFileAsync(
     'git', ['rev-parse', 'HEAD'], { cwd: root }
   ));
+  const { stdout: gitRootOutput } = /** @type {any} */ (await execFileAsync(
+    'git', ['rev-parse', '--show-toplevel'], { cwd: root }
+  ));
+  const projectPrefix = path.relative(gitRootOutput.trim(), root).split(path.sep).join('/');
+  /** @param {string} repositoryPath */
+  const committedBytes = async (repositoryPath) => {
+    const treePath = projectPrefix.length > 0 ? `${projectPrefix}/${repositoryPath}` : repositoryPath;
+    const { stdout: bytes } = /** @type {any} */ (await execFileAsync(
+      'git', ['show', `${head.trim()}:${treePath}`], { cwd: root, maxBuffer: 4 * 1024 * 1024 }
+    ));
+    return bytes;
+  };
   assert.equal(binding.final_candidate_sha, head.trim());
   assert.equal(typeof binding.worktree_clean, 'boolean');
   for (const field of [
@@ -1182,13 +1207,9 @@ test('benchmark CLI binds its report to the actual checkout and frozen artifact 
     'skill_sha256', 'bundle_sha256', 'benchmark_manifest_sha256'
   ]) assert.match(binding[field], /^[a-f0-9]{64}$/u, field);
   const sha256 = (/** @type {any} */ bytes) => createHash('sha256').update(bytes).digest('hex');
-  assert.equal(binding.skill_sha256, sha256(await readFile(path.join(root, 'skill/generate-test-cases/SKILL.md'))));
-  assert.equal(binding.bundle_sha256, sha256(await readFile(path.join(root, 'skill/generate-test-cases/scripts/test-compiler.mjs'))));
-  assert.equal(binding.schema_manifest_sha256, sha256(await readFile(path.join(root, 'skill/generate-test-cases/scripts/schema-manifest.json'))));
-  const { stdout: gitRootOutput } = /** @type {any} */ (await execFileAsync(
-    'git', ['rev-parse', '--show-toplevel'], { cwd: root }
-  ));
-  const projectPrefix = path.relative(gitRootOutput.trim(), root).split(path.sep).join('/');
+  assert.equal(binding.skill_sha256, sha256(await committedBytes('skill/generate-test-cases/SKILL.md')));
+  assert.equal(binding.bundle_sha256, sha256(await committedBytes('skill/generate-test-cases/scripts/test-compiler.mjs')));
+  assert.equal(binding.schema_manifest_sha256, sha256(await committedBytes('skill/generate-test-cases/scripts/schema-manifest.json')));
   const manifestTreePath = projectPrefix.length > 0
     ? `${projectPrefix}/benchmark/v1/manifest.json`
     : 'benchmark/v1/manifest.json';

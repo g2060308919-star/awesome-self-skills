@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { buildBundle } from '../../src/coverage.mjs';
+import { classifyFinalOutcomeV4 } from '../../src/final-outcome-v4.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixture = JSON.parse(await readFile(path.join(
@@ -13,6 +14,37 @@ const fixture = JSON.parse(await readFile(path.join(
 function base() {
   return structuredClone(fixture);
 }
+
+test('[P-08][BR-15][BR-16][BR-17] v4 zero-Case states are explicit success, clarification, cancellation, or quality failure—not ordinary completion', () => {
+  /** @param {Record<string,unknown>} [overrides] */
+  const state = (overrides = {}) => ({
+    delivery_intent: 'case_document', cancelled: false,
+    case_count: 0, applicable_formal_test_point_count: 0,
+    decidable_primary_acceptance_count: 0, blocked_root_count: 0,
+    closed_for_delivery_root_count: 0, open_semantic_gap_count: 0,
+    not_applicable_count: 0, all_reviewed_formal_points_not_applicable: false,
+    delivery_requested: false, ...overrides
+  });
+  assert.deepEqual(classifyFinalOutcomeV4(state({
+    not_applicable_count: 1, all_reviewed_formal_points_not_applicable: true
+  })), {
+    status: 'finished', result_kind: 'no_applicable_cases',
+    reason_code: 'ALL_REVIEWED_FORMAL_POINTS_NOT_APPLICABLE'
+  });
+  assert.deepEqual(classifyFinalOutcomeV4(state({
+    applicable_formal_test_point_count: 1, decidable_primary_acceptance_count: 1
+  })), {
+    status: 'fatal', result_kind: 'quality_failure',
+    reason_code: 'APPLICABLE_PRIMARY_OUTCOME_WITHOUT_CASE'
+  });
+  assert.equal(classifyFinalOutcomeV4(state({
+    applicable_formal_test_point_count: 1, blocked_root_count: 1,
+    open_semantic_gap_count: 1
+  })).status, 'need_user_answers');
+  assert.deepEqual(classifyFinalOutcomeV4(state({ cancelled: true })), {
+    status: 'cancelled', result_kind: 'cancelled', reason_code: 'USER_CANCELLED'
+  });
+});
 
 /** @param {any} input @param {string[]} obligationIds */
 function retain(input, obligationIds) {

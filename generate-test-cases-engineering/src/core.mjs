@@ -9,7 +9,8 @@ import { buildBundle, BundleReconciliationError } from './coverage.mjs';
 import { scopeContains, validateSourceIntegrity } from './decision-record.mjs';
 import { validateEvidenceGraph } from './evidence.mjs';
 import {
-  compileExecutionPlan, normalizeSemantic, projectReadyExecutionPlan, semanticResultDigest
+  compileCaseDocument, compileExecutionPlan, compileExecutionPlanFromCaseDocument,
+  normalizeSemantic, projectReadyExecutionPlan, semanticResultDigest
 } from './execution-plan.mjs';
 import { createPresentationSnapshot } from './execution-events.mjs';
 import {
@@ -20,6 +21,8 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 import { resolveSourcePolicy } from './source-policy.mjs';
 import { capabilityLabel } from './testability-links.mjs';
 import { isExecutionPreparationGap } from './gap-kinds.mjs';
+
+export { compileCaseDocument, compileExecutionPlanFromCaseDocument };
 
 /** @typedef {{category:string,code:string,path:string,message:string,related_id?:string}} Diagnostic */
 

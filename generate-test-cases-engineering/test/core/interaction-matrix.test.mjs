@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { expectedInteractionCellsV4, validateInteractionReviewV4 } from '../../src/scope-manifest-v4.mjs';
 import {
   auditInteractionMatrix, INTERACTION_DIMENSIONS, reconcileInteractionMatrix
 } from '../../src/views/interaction-matrix.mjs';
@@ -14,6 +15,34 @@ const behaviorViewsSchema = JSON.parse(await readFile(path.join(
   repositoryRoot,
   'skill/generate-test-cases/scripts/schemas/behavior-views.schema.json'
 ), 'utf8'));
+
+test('[P-17][BR-10] v4 derives every module-pair interaction cell and rejects a review that omits one', () => {
+  const scopeManifest = {
+    primary_surface: 'admin',
+    modules: [
+      { module_id: 'admin', name: '评价中台', role: 'primary', claim_ids: ['CLM-scope'] },
+      { module_id: 'client', name: 'C 端', role: 'upstream', claim_ids: ['CLM-scope'] },
+      { module_id: 'content', name: '内容服务', role: 'upstream', claim_ids: ['CLM-scope'] }
+    ],
+    boundaries: []
+  };
+  const expected = expectedInteractionCellsV4(scopeManifest);
+  assert.equal(expected.length, 21);
+  const claim = {
+    claim_id: 'CLM-scope', candidate_ids: [], authorized_topology_roles: ['primary', 'upstream'],
+    authorized_boundaries: [], reviewable_interaction_cells: expected
+  };
+  const reviewed = expected.map(cell => ({
+    ...cell, status: 'checked-no-signal', reviewed_claim_ids: [claim.claim_id],
+    review_basis: '已逐一审阅该模块对在此维度的规范性来源。'
+  }));
+  assert.deepEqual(validateInteractionReviewV4(scopeManifest, reviewed, {
+    verified_claims: [claim]
+  }), []);
+  assert.equal(validateInteractionReviewV4(scopeManifest, reviewed.slice(1), {
+    verified_claims: [claim]
+  }).some(item => item.code === 'INTERACTION_REVIEW_INCOMPLETE'), true);
+});
 
 /** @param {string} name @returns {Promise<any>} */
 async function fixture(name) {

@@ -13,7 +13,7 @@ import {
   cleanupTemporaryFiles, discardPostReadyPreviewRequest, discardStagingSnapshot,
   obligationsPath, outputPaths, postReadyPreviewRequestPath,
   ensureRunInstance, prepareRunStore, promoteArtifact, readJson, readJsonIfPresent, readTextIfPresent,
-  readCurrentState, recoverStagingClaims,
+  readCurrentState, recoverStagingClaims, loadMigrationReplaySeed,
   runStoreIntrinsicsIntact, stagingPath, STAGE_FILES, writeCheckpoint, writeFinalOutput,
   writeNonReadyCurrent, writeReadyCurrent
 } from './run-store.mjs';
@@ -24,6 +24,8 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 import { resolveSourcePolicy } from './source-policy.mjs';
 import { appendedRepair, repairDiagnostics, reusableStages, unconfirmedWorkflow } from './artifact-repair.mjs';
 import { groupRiskCounts } from './presentation-summary.mjs';
+import { advanceStrictV4Locked, detectV4Run } from './advance-v4.mjs';
+import { verifyResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
 
 const moduleDirectory = path.dirname(realpathSync(fileURLToPath(import.meta.url)));
 const schemaDirectory = path.resolve(
@@ -157,6 +159,39 @@ function migrationRequired() {
 /** @param {unknown} value */
 function supportedArtifactSchemaVersion(value) {
   return value === '3.0.0' || value === '4.0.0';
+}
+
+/** @param {string} runDirectory @param {string} runId */
+function migrationCatalogRoot(runDirectory, runId) {
+  const runsDirectory = path.dirname(runDirectory);
+  if (path.basename(runsDirectory) !== 'runs' || path.basename(runDirectory) !== runId) {
+    throw new TypeError('MIGRATION_SIBLING_PATH_INVALID');
+  }
+  return path.dirname(runsDirectory);
+}
+
+/** Revalidate every immutable migration relation before the v4 runner can
+ * inspect or promote a staged Source Pack. The loader binds the sibling to the
+ * completed catalog transaction, report, replay seed and frozen legacy bytes.
+ * @param {string} runDirectory @param {any} runInstance */
+async function verifyMigrationSibling(runDirectory, runInstance) {
+  if (runInstance?.schema_version !== '4.0.0'
+    || runInstance.lineage?.creation_reason !== 'migration_v3'
+    || typeof runInstance.run_id !== 'string') {
+    throw new TypeError('MIGRATION_SIBLING_VERSION_INVALID');
+  }
+  const catalogRoot = migrationCatalogRoot(runDirectory, runInstance.run_id);
+  const seed = await loadMigrationReplaySeed(catalogRoot, runDirectory);
+  if (seed.run_id !== runInstance.run_id
+    || seed.parent_run_id !== runInstance.lineage.parent_run_id
+    || seed.creation_reason !== runInstance.lineage.creation_reason) {
+    throw new TypeError('MIGRATION_SIBLING_LINEAGE_INVALID');
+  }
+  if (seed.outcome !== 'migrated') {
+    throw new TypeError(seed.outcome === 'migration_review_required'
+      ? 'MIGRATION_REVIEW_REQUIRED' : 'MIGRATION_SOURCE_UNAVAILABLE');
+  }
+  return seed;
 }
 
 /** @param {unknown} error */
@@ -648,9 +683,23 @@ async function replayPreviewHistory(runDirectory, result, registry, state, runIn
   if (!arrayIsArray(stored.value) || result.status !== 'finished'
     || result.bundle.execution_plan.status !== 'ready') throw new Error('Preview history requires a ready revision and a request array.');
   let current = state;
+  const deliveryCompilerVersion = String(
+    result.bundle?.quality?.compiler_version
+      ?? current?.compiler_version
+      ?? registry.compilerVersion
+  );
   for (const request of stored.value) {
     if (artifactDiagnostics(request, registry.schemas.get('post-ready-preview-request.schema.json')).length > 0) throw new Error('Preview history request failed its closed schema.');
-    const next = processPreviewRequest({ request, state: current, ready: previewReady(result, runInstanceId), compilerVersion: registry.compilerVersion });
+    const next = processPreviewRequest({
+      request,
+      state: current,
+      ready: previewReady(result, runInstanceId),
+      // A recovered v3 delivery keeps its frozen 0.4.0 preview namespace even
+      // when the installed runner's registry has moved to v4/0.5.0. Otherwise
+      // the request ID shown by the finished reply cannot be replayed on the
+      // very next invocation.
+      compilerVersion: deliveryCompilerVersion
+    });
     if (next.kind === 'rejected' || next.state.preview_epoch <= current.preview_epoch) throw new Error('Preview history contains a stale, reordered, or invalid request: ' + canonicalStringify(next.diagnostics));
     current = next.state;
   }
@@ -941,9 +990,50 @@ async function advanceStrictExclusive(runDirectory) {
     try {
       if (!runStoreIntrinsicsIntact()) throw new CoreIntrinsicMutationError();
       runDirectory = await guardedAwait(() => prepareRunStore(runDirectory));
-      const runInstance = await guardedAwait(() => ensureRunInstance(runDirectory));
+      const runInstanceSnapshot = await guardedAwait(() => readJsonIfPresent(
+        runDirectory, path.join(runDirectory, 'run-instance.json')
+      ));
+      const runInstanceValue = /** @type {any} */ (runInstanceSnapshot?.value);
+      const migrationSeedPresent = await guardedAwait(() => readTextIfPresent(
+        runDirectory, path.join(runDirectory, 'derived', 'migration-replay-seed.json')
+      )) !== null;
+      const declaredV4 = runInstanceValue?.schema_version === '4.0.0';
+      if ((migrationSeedPresent || declaredV4)
+        && (runInstanceValue?.schema_version !== '4.0.0'
+          || artifactDiagnostics(
+            runInstanceValue, registry.schemas.get('run-instance.schema.json')
+          ).length > 0)) {
+        throw new TypeError(migrationSeedPresent
+          ? 'MIGRATION_SIBLING_VERSION_INVALID' : 'IMMUTABLE_V4_RUN_INSTANCE_INVALID');
+      }
+      let migrationSeed = null;
+      if (migrationSeedPresent
+        || runInstanceValue?.lineage?.creation_reason === 'migration_v3') {
+        migrationSeed = await guardedAwait(() => verifyMigrationSibling(
+          runDirectory, runInstanceValue
+        ));
+      } else if (runInstanceValue?.lineage?.creation_reason === 'resume_cancelled') {
+        await guardedAwait(() => verifyResumeCancelledSiblingV4(
+          runDirectory, runInstanceValue
+        ));
+      }
+      // A migration sibling is verified before staging recovery or cleanup can
+      // mutate even compiler-owned coordination residue in that directory.
       await guardedAwait(() => recoverStagingClaims(runDirectory));
       await guardedAwait(() => cleanupTemporaryFiles(runDirectory));
+      const isV4Run = migrationSeedPresent || declaredV4
+        || await guardedAwait(() => detectV4Run(runDirectory));
+      let runInstance;
+      if (isV4Run) {
+        runInstance = runInstanceValue?.schema_version === '4.0.0'
+          ? { ...runInstanceValue, run_instance_id: runInstanceValue.run_id }
+          : await guardedAwait(() => ensureRunInstance(runDirectory));
+      } else runInstance = await guardedAwait(() => ensureRunInstance(runDirectory));
+      if (isV4Run) {
+        return await guardedAwait(() => advanceStrictV4Locked(
+          runDirectory, registry, runInstance, releaseRunLock, migrationSeed
+        ));
+      }
       let revisions = await guardedAwait(() => acceptedSourceRevisions(runDirectory));
     const acceptedAudit = await guardedAwait(() =>
       acceptedRunIntegrity(runDirectory, revisions, registry, runInstance)
@@ -1203,7 +1293,7 @@ async function advanceStrictExclusive(runDirectory) {
           confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest,
           items: result.bundle.execution_plan.items
         },
-        compilerVersion: registry.compilerVersion
+        compilerVersion: String(storedCheckpoint.compiler_version)
       });
       if (processed.kind === 'rejected') return revisionReply(
         runDirectory, 'source_pack', result.source_revision,
@@ -1268,7 +1358,7 @@ async function advanceStrictExclusive(runDirectory) {
           bundle_digest: result.bundle_digest,
           plan_digest: result.bundle.execution_plan.plan_digest,
           confirmation_semantic_digest: result.bundle.execution_plan.confirmation.confirmation_semantic_digest
-        }, updatedCheckpoint, registry.compilerVersion),
+        }, updatedCheckpoint, String(updatedCheckpoint.compiler_version)),
         diagnostics: []
       };
     }

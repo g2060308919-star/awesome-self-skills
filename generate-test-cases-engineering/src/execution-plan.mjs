@@ -1,5 +1,12 @@
 import { canonicalStringify, digest } from './canonical.mjs';
-import { createPresentationSnapshot, replayWorkflowHistory } from './execution-events.mjs';
+import { createHash } from 'node:crypto';
+import currentPointerSchema from '../skill/generate-test-cases/scripts/schemas/current-pointer.schema.json' with { type: 'json' };
+import { validateAgainstSchema } from './schema-validator.mjs';
+import { validateCanonicalManifestRelations } from './contracts.mjs';
+import {
+  createPresentationSnapshot, replayWorkflowHistory, validateV4CapabilityReceipt
+} from './execution-events.mjs';
+import { compileSemanticCaseDocumentV4 } from './case-semantics-v4.mjs';
 
 const REASON_CODES = new Set([
   'selected_for_run', 'not_applicable', 'user_deferred', 'temporary_rule_unconfirmed',
@@ -524,4 +531,124 @@ export function semanticResultDigest(bundle) {
   const projection = normalizeSemantic(structuredClone(bundle));
   if (projection?.execution_plan) delete projection.execution_plan.semantic_result_digest;
   return digest(projection);
+}
+/**
+ * Pure semantic boundary. The injected compiler owns T04/T06 CaseSpec validation;
+ * execution metadata is deliberately not passed across this boundary.
+ * @param {any} request @param {{semantic_compiler?:(input:any)=>any, execution_compiler?:Function}} [services]
+ */
+export function compileCaseDocument(request, services = {}) {
+  if (request?.delivery_intent !== 'case_document' || request.case_document_ref !== undefined) {
+    throw new TypeError('CASE_DOCUMENT_INTENT_REQUIRED');
+  }
+  const compiler = typeof services?.semantic_compiler === 'function'
+    ? services.semantic_compiler : compileSemanticCaseDocumentV4;
+  const result = compiler(structuredClone(request.semantic_input));
+  if (!result || typeof result !== 'object' || [
+    'execution_plan', 'runner_projection', 'runner_case_ids', 'runner_ready',
+    'resource_readiness', 'execution_disposition'
+  ].some(key => Object.hasOwn(result, key))) throw new TypeError('CASE_DOCUMENT_EXECUTION_FIELD');
+  return structuredClone(result);
+}
+
+/**
+ * T03 structural boundary, not a substitute for T04/T06 semantic admission.
+ * The trusted resolver returns immutable bytes by run identity, never caller paths.
+ * Bindings are verified execution-layer projections, not Adapter resource claims.
+ * @param {any} request
+ * @param {{resolve:(ref:any)=>any, bindings:any[]}} services
+ */
+export async function compileExecutionPlanFromCaseDocument(request, services) {
+  const ref = request?.case_document_ref;
+  const keys = ['run_id', 'revision', 'manifest_digest', 'bundle_digest'];
+  if (request?.delivery_intent !== 'execution_plan'
+    || Object.keys(request).some(key => !['delivery_intent','case_document_ref'].includes(key))
+    || !ref || typeof ref !== 'object' || Array.isArray(ref)
+    || Object.keys(ref).length !== keys.length || keys.some(key => !Object.hasOwn(ref,key))
+    || typeof ref.run_id !== 'string' || !ref.run_id.trim()
+    || !Number.isSafeInteger(ref.revision) || ref.revision < 0
+    || !/^sha256:[0-9a-f]{64}$/.test(ref.manifest_digest)
+    || !/^sha256:[0-9a-f]{64}$/.test(ref.bundle_digest)) throw new TypeError('CASE_DOCUMENT_REFERENCE_INVALID');
+  const reference = structuredClone(ref);
+  const bytes = await services.resolve(structuredClone(reference));
+  const manifestBytes = bytes?.manifest_bytes;
+  const bundleBytes = bytes?.bundle_bytes;
+  if (typeof manifestBytes !== 'string' || typeof bundleBytes !== 'string') {
+    throw new TypeError('CANONICAL_BYTES_REQUIRED');
+  }
+  const byteDigest = (/** @type {string} */ value) => 'sha256:' + createHash('sha256').update(value,'utf8').digest('hex');
+  if (byteDigest(manifestBytes) !== reference.manifest_digest
+    || byteDigest(bundleBytes) !== reference.bundle_digest) throw new TypeError('CASE_DOCUMENT_DIGEST_MISMATCH');
+  const manifest = JSON.parse(manifestBytes);
+  if (validateAgainstSchema(manifest, currentPointerSchema).length
+    || validateCanonicalManifestRelations(manifest).length
+    || manifest.authority !== 'canonical' || manifest.delivery_intent !== 'case_document'
+    || !['delivered_cases','delivered_with_gaps'].includes(manifest.result_kind)
+    || manifest.run_id !== reference.run_id || manifest.revision !== reference.revision
+    || manifest.bundle.digest !== reference.bundle_digest) throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
+  const bundle = JSON.parse(bundleBytes);
+  if (bundle.schema_version !== '4.0.0' || bundle.compiler_version !== '0.5.0'
+    || bundle.delivery_intent !== 'case_document' || bundle.source_revision !== reference.revision
+    || !Array.isArray(bundle.cases) || !bundle.cases.length
+    || bundle.cases.length !== manifest.case_count
+    || ['execution_plan','runner_projection','runner_case_ids','runner_ready','resource_readiness'].some(key => Object.hasOwn(bundle,key))) {
+    throw new TypeError('CASE_DOCUMENT_STRUCTURE_INVALID');
+  }
+  const submittedCases = bundle.cases;
+  const submittedIds = submittedCases.map((/** @type {any} */ item) => item?.case_id);
+  const orderedIds = bundle.ordered_case_ids;
+  const byId = new Map(submittedCases.map((/** @type {any} */ item) => [item?.case_id, item]));
+  const ids = Array.isArray(orderedIds) ? orderedIds : [];
+  if (ids.some((/** @type {unknown} */ id) => typeof id !== 'string' || !id.trim())
+    || new Set(ids).size !== ids.length
+    || ids.length !== submittedIds.length
+    || submittedIds.some((/** @type {unknown} */ id) => !ids.includes(id))
+    || submittedCases.some((/** @type {any} */ item) => !['Grounded','Conditional'].includes(item.semantic_status))) {
+    throw new TypeError('CASE_DOCUMENT_CASE_IDENTITY_INVALID');
+  }
+  // Execution decisions and the runner projection inherit the one canonical
+  // business order from the immutable Case Document, not its storage order.
+  const cases = ids.map((id) => byId.get(id));
+  const bindings = structuredClone(services.bindings);
+  if (!Array.isArray(bindings) || new Set(bindings.map(item=>item.case_id)).size !== bindings.length
+    || bindings.some(item => !item || typeof item !== 'object' || Array.isArray(item)
+      || Object.keys(item).some(key => !['case_id','disposition','availability','capability_receipt'].includes(key))
+      || !ids.includes(item.case_id)
+      || !['pending','execute','do_not_execute'].includes(item.disposition)
+      || !['unknown','unavailable','verified'].includes(item.availability)
+      || (item.availability === 'unknown'
+        ? item.capability_receipt !== undefined
+        : !item.capability_receipt))) {
+    throw new TypeError('EXECUTION_BINDING_INVALID');
+  }
+  try {
+    for (const binding of bindings) if (binding.capability_receipt) {
+      const receipt = validateV4CapabilityReceipt(binding.capability_receipt, {
+        case_document_ref: reference, case_id: binding.case_id
+      });
+      if ((binding.availability === 'verified') !== receipt.ready) {
+        throw new TypeError('EXECUTION_BINDING_READINESS_MISMATCH');
+      }
+    }
+  } catch {
+    throw new TypeError('EXECUTION_BINDING_INVALID');
+  }
+  const bindingById = new Map(bindings.map(item=>[item.case_id,item]));
+  const items = cases.map((/** @type {any} */ item) => {
+    const binding = bindingById.get(item.case_id);
+    return {case_id:item.case_id,semantic_status:item.semantic_status,
+      disposition:binding?.disposition ?? 'pending',
+      ready:item.semantic_status === 'Grounded' && binding?.availability === 'verified'};
+  });
+  const settled = items.every((/** @type {any} */ item) => item.disposition === 'do_not_execute'
+    || (item.disposition === 'execute' && item.ready));
+  const selected = settled ? items.filter((/** @type {any} */ item)=>item.disposition === 'execute').map((/** @type {any} */ item)=>item.case_id) : [];
+  return {
+    schema_version:'4.0.0',compiler_version:'0.5.0',delivery_intent:'execution_plan',
+    status:settled ? 'finished' : 'need_user_answers',
+    result_kind:settled ? (selected.length ? 'execution_ready' : 'no_execution_selected') : null,
+    case_document_ref:reference, items,
+    runner_ready:settled && selected.length > 0,
+    runner_projection:{case_ids:selected,case_ids_digest:'sha256:'+digest(selected)}
+  };
 }

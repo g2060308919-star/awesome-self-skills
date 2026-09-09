@@ -1,0 +1,271 @@
+{
+  "valid": [
+    {
+      "name": "complete_v4_case_document_source_pack_reviews_content_assets_and_artifact_inputs",
+      "reason": "The complete v4 Case Document source pack binds canonical content, exact locators, review coverage, composition conflict review and both safe artifact-input branches.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
+        "run_scope": "评价中台",
+        "sources": [
+          {
+            "source_id": "source_prd",
+            "kind": "prd",
+            "version": "1",
+            "status": "effective",
+            "authority": "owner",
+            "content": "来源 22 显示打车去过",
+            "content_digest": "900b1e536720331c27db1dafd15470047687c6c4cce4850e4e57e650898461ad",
+            "scope": "评价中台",
+            "domain": "business",
+            "capture_digest": "sha256:900b1e536720331c27db1dafd15470047687c6c4cce4850e4e57e650898461ad",
+            "semantic_digest": "sha256:c2386a83ac2fbdbcfbe7b7b8f11cd8b8f793f34d33ec384d8e852f6300fecd75",
+            "semantic_projection": {
+              "stable_source_id": "source_prd",
+              "source_type": "prd",
+              "content": "来源 22 显示打车去过",
+              "assets": [],
+              "structure": [
+                {
+                  "unit_id": "unit_source_rule",
+                  "type": "text_block",
+                  "text": "来源 22 显示打车去过",
+                  "section_id": "section_source"
+                }
+              ]
+            },
+            "capture_audit": {
+              "capture_digest": "sha256:900b1e536720331c27db1dafd15470047687c6c4cce4850e4e57e650898461ad",
+              "units": [
+                {
+                  "capture_unit_id": "capture_document",
+                  "capture_unit_digest": "sha256:900b1e536720331c27db1dafd15470047687c6c4cce4850e4e57e650898461ad",
+                  "capture_scalar_count": 14,
+                  "semantic_scalar_count": 14,
+                  "retained_spans": [{ "start": 0, "end": 14, "semantic_start": 0, "semantic_end": 14 }]
+                }
+              ],
+              "semantic_exclusions": []
+            }
+          }
+        ],
+        "locators": [
+          {
+            "locator_id": "locator_source_rule",
+            "source_id": "source_prd",
+            "semantic_digest": "sha256:c2386a83ac2fbdbcfbe7b7b8f11cd8b8f793f34d33ec384d8e852f6300fecd75",
+            "type": "text_block_range",
+            "unit_id": "unit_source_rule",
+            "section_id": "section_source",
+            "range": { "start": 0, "end": 14 },
+            "excerpt": "来源 22 显示打车去过",
+            "excerpt_digest": "sha256:900b1e536720331c27db1dafd15470047687c6c4cce4850e4e57e650898461ad",
+            "domain": "business",
+            "field_path": "/source/22"
+          }
+        ],
+        "source_reviews": [
+          {
+            "source_id": "source_prd",
+            "semantic_digest": "sha256:c2386a83ac2fbdbcfbe7b7b8f11cd8b8f793f34d33ec384d8e852f6300fecd75",
+            "units": [
+              { "unit_id": "unit_source_rule", "content_digest": "sha256:900b1e536720331c27db1dafd15470047687c6c4cce4850e4e57e650898461ad", "classification": "normative" }
+            ]
+          }
+        ],
+        "source_policy": {
+          "rules": [
+            {
+              "rule_id": "policy_prd",
+              "source_ids": ["source_prd"],
+              "scope": "评价中台",
+              "authority": "owner",
+              "status": "effective",
+              "composition_mode": "single_source",
+              "rule_internal_conflict_review": [
+                { "subject_key": "sha256:abababababababababababababababababababababababababababababababab", "left_claim_id": "CLM-old", "right_claim_id": "CLM-new", "status": "consistent" }
+              ]
+            }
+          ]
+        },
+        "decision_records": [
+          {
+            "decision_id": "DEC-7777777777777777777777777777777777777777777777777777777777777777",
+            "target": {
+              "presentation_id": "PRES-8888888888888888888888888888888888888888888888888888888888888888",
+              "question_part_id": "QP-9999999999999999999999999999999999999999999999999999999999999999",
+              "root_issue_id": "ROOT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "root_version_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "subject_fact_ids": ["FACT-empty-display"],
+            "missing_aspect": "空值展示",
+            "answer": "暂时使用短横线",
+            "answer_origin": {
+              "type": "user_statement",
+              "presentation_id": "PRES-8888888888888888888888888888888888888888888888888888888888888888",
+              "message_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "answer_span": {
+                "start_scalar": 0,
+                "end_scalar": 8,
+                "excerpt_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              }
+            },
+            "authority": "task_scoped",
+            "resolution": "temporary",
+            "evidence_level": "E1",
+            "accepted_from_superseded_presentation": false,
+            "supersedes_decision_ids": [],
+            "obligation_audit": {
+              "previous_obligation_ids": ["OBL-empty-v1"],
+              "current_obligation_ids": ["OBL-empty-v2"],
+              "mappings": [{ "previous_obligation_id": "OBL-empty-v1", "current_obligation_ids": ["OBL-empty-v2"] }]
+            }
+          }
+        ],
+        "clarification_events": [],
+        "execution_events": [],
+        "source_assets": [
+          {
+            "asset_id": "ASSET-source-table",
+            "source_id": "source_prd",
+            "locator_id": "locator_source_rule",
+            "status": "reviewed",
+            "classification": "normative",
+            "review_basis": { "reviewer": "fixture-author", "method": "visual inspection", "evidence": "来源枚举表" },
+            "canonical_uri": "asset://source-table",
+            "asset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "delivery_intent": "case_document",
+        "artifact_events": [
+          {
+            "event_id": "EVENT-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "event_type": "provide_artifact",
+            "artifact_request_id": "ARQ-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "request_version_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "resume_ref": {
+              "run_id": "RUN-v4",
+              "committed_revision": 3,
+              "committed_checkpoint_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "request_set_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            "input": { "kind": "stable_resource_id", "provider": "prd-platform", "provider_contract_version": "1.0", "resource_id": "document-1/image-2" }
+          },
+          {
+            "event_id": "EVENT-1111111111111111111111111111111111111111111111111111111111111111",
+            "event_type": "provide_artifact",
+            "artifact_request_id": "ARQ-2222222222222222222222222222222222222222222222222222222222222222",
+            "request_version_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+            "resume_ref": {
+              "run_id": "RUN-v4",
+              "committed_revision": 3,
+              "committed_checkpoint_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "request_set_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+            },
+            "input": {
+              "kind": "safe_upload_ref",
+              "upload_id": "upload-image-2",
+              "media_type": "image/png",
+              "byte_length": 128,
+              "content_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "complete_v4_execution_source_pack_binds_case_document_and_action_context",
+      "reason": "The execution-plan source pack keeps its own run and binds each event to the immutable Case Document identity.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 0,
+        "run_instance_id": "RUN-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "run_scope": "execution",
+        "sources": [],
+        "locators": [],
+        "source_reviews": [],
+        "source_policy": { "rules": [] },
+        "decision_records": [],
+        "clarification_events": [],
+        "execution_events": [
+          {
+            "event_type": "set_execution_disposition",
+            "run_id": "RUN-execution",
+            "presentation_id": "PRES-execution",
+            "case_document_ref": {
+              "run_id": "RUN-case-document",
+              "revision": 4,
+              "manifest_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+              "bundle_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+            },
+            "case_ids": ["CASE-source-22"],
+            "root_refs": [{ "root_issue_id": "ROOT-source", "root_version_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999" }],
+            "disposition": "execute"
+          }
+        ],
+        "source_assets": [],
+        "delivery_intent": "execution_plan",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "bundle_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+        },
+        "artifact_events": []
+      }
+    },
+    {
+      "name": "complete_v3_source_pack_remains_readable_history",
+      "reason": "The preserved v3 root still validates its historical source, locator, review, policy and asset arrays.",
+      "value": {
+        "schema_version": "3.0.0",
+        "source_revision": 0,
+        "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
+        "run_scope": "*",
+        "sources": [
+          { "source_id": "source_prd", "kind": "prd", "version": "1", "status": "effective", "authority": "owner", "content": "Frozen journey requirements.", "content_digest": "db7da313067d997653c31f7c416cfadb79ed6b5c26c2d0db8f62a733c9a2dbe3", "scope": "*" }
+        ],
+        "locators": [
+          { "locator_id": "locator_checkout", "source_id": "source_prd", "type": "text-range", "text_range": { "start": 0, "end": 1 }, "content_digest": "db7da313067d997653c31f7c416cfadb79ed6b5c26c2d0db8f62a733c9a2dbe3", "extraction_integrity": "verified" }
+        ],
+        "source_reviews": [
+          {
+            "source_id": "source_prd",
+            "content_digest": "db7da313067d997653c31f7c416cfadb79ed6b5c26c2d0db8f62a733c9a2dbe3",
+            "spans": [
+              { "span_id": "review_source_prd_001", "start": 0, "end": 1, "classification": "normative", "rationale": "Covered by a direct Claim locator.", "review_basis": { "reviewer": "fixture-author", "method": "fixture inspection", "evidence": "F" } }
+            ]
+          }
+        ],
+        "source_policy": { "rules": [{ "rule_id": "policy_prd", "source_ids": ["source_prd"], "scope": "*", "authority": "owner", "status": "effective" }] },
+        "decision_records": [],
+        "clarification_events": [],
+        "execution_events": [],
+        "source_assets": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "v4_case_document_source_pack_rejects_execution_event",
+      "reason": "Case generation is resource-independent and cannot carry execution-preparation events in its source pack.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 0,
+        "run_instance_id": "RUN-12345678-1234-4234-8234-123456789abc",
+        "run_scope": "*",
+        "sources": [],
+        "locators": [],
+        "source_reviews": [],
+        "source_policy": { "rules": [] },
+        "decision_records": [],
+        "clarification_events": [],
+        "execution_events": [{ "event_type": "pause_execution" }],
+        "source_assets": [],
+        "delivery_intent": "case_document",
+        "artifact_events": []
+      }
+    }
+  ]
+}

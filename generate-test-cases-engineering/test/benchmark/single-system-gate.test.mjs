@@ -17,6 +17,17 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const checkedInManifest = path.join(repositoryRoot, 'benchmark/release/v1/manifest.json');
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 
+/** @param {string} executable @param {string[]} args @param {any} [options] */
+async function execFileResult(executable, args, options) {
+  try {
+    const result = await execFileAsync(executable, args, options);
+    return { ...result, exitCode: 0 };
+  } catch (error) {
+    const failure = /** @type {any} */ (error);
+    return { stdout: failure.stdout ?? '', stderr: failure.stderr ?? '', exitCode: failure.code };
+  }
+}
+
 /** @param {string} value */
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -30,12 +41,12 @@ const SHA_E = 'e'.repeat(64);
 const REVISION = '1'.repeat(40);
 const CASE_PREFIXES = Object.freeze(['TR', 'ID', 'WF', 'FM', 'AS', 'TM']);
 const AGENT_BY_STRATUM = Object.freeze([
-  '/root/formal_defect_gate_audit',
-  '/root/formal_defect_gate_audit',
-  '/root/time_quota_defect_expansion',
-  '/root/time_quota_defect_expansion',
-  '/root/time_quota_defect_expansion/standards_review',
-  '/root/time_quota_defect_expansion/standards_review'
+  '/root/v4_pressure_transactions_identity',
+  '/root/v4_pressure_transactions_identity',
+  '/root/v4_pressure_workflow_forms',
+  '/root/v4_pressure_workflow_forms',
+  '/root/v4_pressure_async_time',
+  '/root/v4_pressure_async_time'
 ]);
 
 function passingInput() {
@@ -189,7 +200,7 @@ test('single-system release fails closed for forged provenance and observed proc
 
 test('single-system release rejects an allowed Agent assigned to the wrong PRD stratum', () => {
   const input = passingInput();
-  input.captures[0].operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
+  input.captures[0].operator_witness.agent_task_id = '/root/v4_pressure_workflow_forms';
 
   const report = evaluateSingleSystemRelease(input);
 
@@ -211,18 +222,18 @@ test('single-system release keeps blocked or unreadable captures incomplete rath
   assert.equal(report.issues.some((issue) => issue.code === 'CAPTURE_EVIDENCE_UNAVAILABLE'), true);
 });
 
-test('checked-in release manifest admits the 30 real PRDs without requiring comparators or experts', async () => {
+test('checked-in stale pre-v4 captures cannot satisfy the single-system release gate', async () => {
   const report = await loadSingleSystemRelease(checkedInManifest, repositoryRoot);
 
-  assert.equal(report.status, 'pass');
-  assert.equal(report.release_eligible, true);
+  assert.equal(report.status, 'fail');
+  assert.equal(report.release_eligible, false);
   assert.equal(report.counts.cases, 30);
   assert.deepEqual(Object.values(report.counts.by_stratum), [5, 5, 5, 5, 5, 5]);
-  assert.equal(report.counts.captures, 90);
-  assert.equal(report.counts.completed_captures, 90);
+  assert.equal(report.counts.captures, 0);
+  assert.equal(report.counts.completed_captures, 0);
   assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.includes('COMPARATOR')), false);
   assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code.includes('EXPERT')), false);
-  assert.deepEqual(report.issues, []);
+  assert.equal(report.issues.some((/** @type {any} */ issue) => issue.code === 'CAPTURE_EVIDENCE_FORGED'), true);
   assert.match(report.candidate_binding.final_candidate_sha, /^[a-f0-9]{40}$/u);
   assert.match(report.candidate_binding.bundle_sha256, /^[a-f0-9]{64}$/u);
   assert.equal(report.evidence_binding.release_manifest_sha256, sha256(await fsPromises.readFile(checkedInManifest)));
@@ -232,14 +243,16 @@ test('checked-in release manifest admits the 30 real PRDs without requiring comp
 
 test('single-system release CLI emits one JSON line and rejects any argument count except one', async () => {
   const entry = path.join(repositoryRoot, 'benchmark/single-system-gate.mjs');
-  const accepted = await execFileAsync(process.execPath, [entry, path.join(repositoryRoot, 'missing-release-manifest.json')], { cwd: repositoryRoot });
+  const accepted = await execFileResult(process.execPath, [entry, path.join(repositoryRoot, 'missing-release-manifest.json')], { cwd: repositoryRoot });
+  assert.equal(accepted.exitCode, 1);
   assert.equal(accepted.stderr, '');
   assert.equal(accepted.stdout.trim().split('\n').length, 1);
   assert.equal(JSON.parse(accepted.stdout).issues[0].code, 'RELEASE_MANIFEST_UNREADABLE');
 
   for (const args of [[], [checkedInManifest, checkedInManifest]]) {
-    const rejected = await execFileAsync(process.execPath, [entry, ...args], { cwd: repositoryRoot });
+    const rejected = await execFileResult(process.execPath, [entry, ...args], { cwd: repositoryRoot });
     const report = JSON.parse(rejected.stdout);
+    assert.equal(rejected.exitCode, 1);
     assert.equal(rejected.stderr, '');
     assert.equal(rejected.stdout.trim().split('\n').length, 1);
     assert.equal(report.status, 'fail');

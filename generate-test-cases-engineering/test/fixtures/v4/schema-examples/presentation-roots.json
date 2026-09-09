@@ -1,0 +1,106 @@
+{
+  "valid": [
+    {
+      "name": "semantic_presentation_binds_business_question_and_recovery",
+      "reason": "The v4 presentation exposes business meaning, replay-safe action context and partial-answer recovery without internal display IDs.",
+      "value": {
+        "schema_version": "4.0.0",
+        "presentation_id": "PRES-1111111111111111111111111111111111111111111111111111111111111111",
+        "phase": "requirements_analysis",
+        "supersedes_presentation_id": null,
+        "answered_part_ids": [],
+        "remaining_part_ids": ["QP-2222222222222222222222222222222222222222222222222222222222222222"],
+        "cycle_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "run_actions": ["cancel_run"],
+        "recovery": {
+          "mode": "append_clarification_event",
+          "run_id": "RUN-v4",
+          "committed_revision": 2,
+          "committed_checkpoint_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "after_partial_answer": "issue_successor_for_remaining_parts"
+        },
+        "question_parts": [
+          {
+            "question_part_id": "QP-2222222222222222222222222222222222222222222222222222222222222222",
+            "root_issue_id": "ROOT-5555555555555555555555555555555555555555555555555555555555555555",
+            "root_version_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+            "question": "IP 列代表什么？",
+            "why_needed": "需要明确业务含义。",
+            "decision_impact": "决定用例数据与预期。",
+            "unresolved_outcome": "该场景保持待确认。",
+            "affected_facts": ["IP 列"],
+            "answer_options": ["网络 IP", "定位城市"],
+            "risk_level": "high",
+            "available_actions": ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"],
+            "action_context": {
+              "presentation_id": "PRES-1111111111111111111111111111111111111111111111111111111111111111",
+              "question_part_id": "QP-2222222222222222222222222222222222222222222222222222222222222222",
+              "root_issue_id": "ROOT-5555555555555555555555555555555555555555555555555555555555555555",
+              "root_version_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy_presentation_remains_a_valid_v3_history_record",
+      "reason": "The preserved v3 branch remains readable as historical state and is not used as a v4 fallback.",
+      "value": {
+        "presentation_id": "PRES-v3",
+        "purpose": "semantic_clarification",
+        "entry_context": "active_analysis",
+        "post_ready_control": null,
+        "run_instance_id": "RUN-v3",
+        "source_revision": 3,
+        "plan_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "plan_change_head_seq": 0,
+        "groups": [
+          {
+            "group_id": "GROUP-v3",
+            "question_id": "QUESTION-v3",
+            "question": "是否确认？",
+            "item_refs": [
+              {
+                "item_kind": "case",
+                "item_id": "CASE-v3",
+                "title": "历史用例",
+                "item_semantic_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "item_semantic_change_head_seq": 0
+              }
+            ],
+            "allowed_options": [
+              { "option_code": "confirm", "label": "确认", "meaning": "确认当前计划" }
+            ],
+            "answer_example": "确认",
+            "proposed_change": null
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "semantic_presentation_rejects_hidden_freeform_recovery",
+      "reason": "The closed v4 presentation rejects an unbound recovery hint that could bypass the persisted action context.",
+      "value": {
+        "schema_version": "4.0.0",
+        "presentation_id": "PRES-1111111111111111111111111111111111111111111111111111111111111111",
+        "phase": "requirements_analysis",
+        "supersedes_presentation_id": null,
+        "answered_part_ids": [],
+        "remaining_part_ids": [],
+        "cycle_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "run_actions": ["cancel_run"],
+        "recovery": {
+          "mode": "append_clarification_event",
+          "run_id": "RUN-v4",
+          "committed_revision": 2,
+          "committed_checkpoint_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "after_partial_answer": "issue_successor_for_remaining_parts",
+          "manual_resume_hint": "retry"
+        },
+        "question_parts": []
+      }
+    }
+  ]
+}

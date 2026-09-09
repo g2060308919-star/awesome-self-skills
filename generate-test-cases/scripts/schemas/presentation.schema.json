@@ -46,25 +46,100 @@
         "proposed_change": { "$ref": "#/$defs/proposed_change" }
       },
       "additionalProperties": false
+    },
+    "v3Presentation": {
+      "type": "object",
+      "required": ["presentation_id", "purpose", "entry_context", "post_ready_control", "run_instance_id", "source_revision", "plan_digest", "plan_change_head_seq", "groups"],
+      "properties": {
+        "presentation_id": { "type": "string", "minLength": 1 },
+        "purpose": { "enum": ["semantic_clarification", "execution_closure", "final_confirmation"] },
+        "entry_context": { "enum": ["active_analysis", "post_ready_change"] },
+        "post_ready_control": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "required": ["preview_epoch", "originating_request_instance_id"], "properties": { "preview_epoch": { "type": "integer", "minimum": 1 }, "originating_request_instance_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+          ]
+        },
+        "run_instance_id": { "type": "string", "minLength": 1 },
+        "source_revision": { "type": "integer", "minimum": 0 },
+        "plan_digest": { "$ref": "#/$defs/sha256" },
+        "plan_change_head_seq": { "type": "integer", "minimum": 0 },
+        "groups": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/group" } }
+      },
+      "additionalProperties": false
+    },
+    "v4Sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "v4ActionContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presentation_id", "question_part_id", "root_issue_id", "root_version_digest"],
+      "properties": {
+        "presentation_id": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
+        "question_part_id": { "type": "string", "pattern": "^QP-[0-9a-f]{64}$" },
+        "root_issue_id": { "type": "string", "pattern": "^ROOT-[0-9a-f]{64}$" },
+        "root_version_digest": { "$ref": "#/$defs/v4Sha256" }
+      }
+    },
+    "v4QuestionPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_part_id", "root_issue_id", "root_version_digest", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_facts", "answer_options", "risk_level", "available_actions", "action_context"],
+      "properties": {
+        "question_part_id": { "type": "string", "pattern": "^QP-[0-9a-f]{64}$" },
+        "root_issue_id": { "type": "string", "pattern": "^ROOT-[0-9a-f]{64}$" },
+        "root_version_digest": { "$ref": "#/$defs/v4Sha256" },
+        "question": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "why_needed": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "decision_impact": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "unresolved_outcome": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "affected_facts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "answer_options": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "risk_level": { "enum": ["critical", "high", "medium", "low"] },
+        "available_actions": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "prefixItems": [
+            { "const": "answer_question_part" },
+            { "const": "defer_question_part" },
+            { "const": "mark_question_unknown" },
+            { "const": "request_delivery" }
+          ],
+          "items": false
+        },
+        "action_context": { "$ref": "#/$defs/v4ActionContext" }
+      }
+    },
+    "v4Recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "run_id", "committed_revision", "committed_checkpoint_digest", "after_partial_answer"],
+      "properties": {
+        "mode": { "const": "append_clarification_event" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "committed_revision": { "type": "integer", "minimum": 0 },
+        "committed_checkpoint_digest": { "$ref": "#/$defs/v4Sha256" },
+        "after_partial_answer": { "const": "issue_successor_for_remaining_parts" }
+      }
+    },
+    "v4SemanticPresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
+      "properties": {
+        "schema_version": { "const": "4.0.0" },
+        "presentation_id": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
+        "phase": { "enum": ["requirements_analysis", "case_design"] },
+        "supersedes_presentation_id": { "type": ["string", "null"], "pattern": "^PRES-[0-9a-f]{64}$" },
+        "answered_part_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^QP-[0-9a-f]{64}$" } },
+        "remaining_part_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^QP-[0-9a-f]{64}$" } },
+        "cycle_digest": { "$ref": "#/$defs/v4Sha256" },
+        "run_actions": { "type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{ "const": "cancel_run" }], "items": false },
+        "recovery": { "$ref": "#/$defs/v4Recovery" },
+        "question_parts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/v4QuestionPart" } }
+      }
     }
   },
-  "type": "object",
-  "required": ["presentation_id", "purpose", "entry_context", "post_ready_control", "run_instance_id", "source_revision", "plan_digest", "plan_change_head_seq", "groups"],
-  "properties": {
-    "presentation_id": { "type": "string", "minLength": 1 },
-    "purpose": { "enum": ["semantic_clarification", "execution_closure", "final_confirmation"] },
-    "entry_context": { "enum": ["active_analysis", "post_ready_change"] },
-    "post_ready_control": {
-      "oneOf": [
-        { "type": "null" },
-        { "type": "object", "required": ["preview_epoch", "originating_request_instance_id"], "properties": { "preview_epoch": { "type": "integer", "minimum": 1 }, "originating_request_instance_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
-      ]
-    },
-    "run_instance_id": { "type": "string", "minLength": 1 },
-    "source_revision": { "type": "integer", "minimum": 0 },
-    "plan_digest": { "$ref": "#/$defs/sha256" },
-    "plan_change_head_seq": { "type": "integer", "minimum": 0 },
-    "groups": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/group" } }
-  },
-  "additionalProperties": false
+  "oneOf": [
+    { "$ref": "#/$defs/v3Presentation" },
+    { "$ref": "#/$defs/v4SemanticPresentation" }
+  ]
 }

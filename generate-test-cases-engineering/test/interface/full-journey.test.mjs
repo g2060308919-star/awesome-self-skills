@@ -56,10 +56,8 @@ test('full journey: installed-shape runner accepts the complete all-E3 artifact 
       'need_artifact/behavior_views',
       'need_artifact/case_drafts',
       'need_user_answers/done',
-      // Execution-only confirmation carries immutable semantic stages forward.
-      'finished/done',
-      'finished/done',
-      'finished/done',
+      // The helper records only submissions that actually reached the runner;
+      // no stale semantic stages are submitted after the terminal reply.
       'finished/done'
     ]);
     assert.equal(run.reply.status, 'finished');

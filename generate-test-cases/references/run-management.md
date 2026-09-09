@@ -1,41 +1,57 @@
-# Private run management
+# Private Run Management
 
-This is Adapter orchestration metadata, not an additional semantic artifact or public interface. The compiler still accepts exactly the four stage artifacts and one absolute run directory. Never put the catalog under `staging`, accepted artifacts, or the installation.
+Read this policy before creating, recovering, resuming, repairing, replacing, or cancelling a run. Run management is private Adapter orchestration, not a fifth semantic artifact or a public interface.
 
-## Durable catalog
+## Keep one durable identity
 
-Keep `run-catalog.json` in the current task's persistent private run parent. Read `scripts/schemas/run-catalog.schema.json` before creating or editing it. Capture real absolute canonical directories and compiler-issued run IDs, never invented IDs. Keep exactly one active directory at a time (or null). Each row records the immutable source-content digest and scope, last reply kind, error codes, and predecessor/successor IDs.
+Store a run in a persistent private directory owned by the current task, never under the Skill installation or OS temporary storage. The canonical absolute directory path is its durable identity. A spelling with `..` that resolves to the same path is the same run.
 
-- After the first runner reply, register the run as active. On resumption, locate it from the catalog and invoke that runner first.
-- After `finished`, mark it completed; completion may be document-only, not execution-ready.
-- On a terminal protocol/runtime failure or `PIPELINE_NO_PROGRESS`, mark it failed, retain diagnostics and all run files. A corrected retry may reactivate the same run; append a lifecycle event recording the transition.
-- A changed original source or material scope needs a new run. Create and invoke it first; only after obtaining its actual run ID update both catalog rows: the old run becomes superseded and names `superseded_by`, and the new row names `supersedes`. Append one transition event; never erase the old row or history. The catalog is a relationship index, not authority to mutate an old run.
-- A catalog disagreement with actual runner identity is a process error. Stop that operation and report the conflicting paths/IDs. Do not choose whichever has a ready pointer or highest-looking directory name.
+Create a fresh v4 run only through the installed bundle's private `createV4RunDirectory(<catalog-root>, delivery_intent)` Adapter helper. It returns only after the compiler-issued ID is durably coupled to the canonical `<catalog-root>/runs/<run-id>` directory needed for sibling lookup. A process crash may leave an unreturned empty orphan directory, but never a usable run with a partial identity. Do not preselect an ID, rename or move the returned directory, or hand-write `run-instance.json`.
 
-Write catalog changes atomically from a validated in-memory copy. A completed/failed run remains recoverable. No deletion, source rewriting, or installation is part of catalog maintenance.
+For a cancelled parent, pass the closed
+`{ parent_run_id, creation_reason: 'resume_cancelled' }` object as the same
+helper's second argument. Copy the parent ID from the cancelled reply/recovery
+context. The helper verifies that parent, derives its original delivery intent,
+issues the sibling ID, and durably writes the lineage; never call a lower-level
+constructor, supply a sibling ID, or choose a new intent yourself.
 
-## Repair accepted generated artifacts
+Use `run-catalog.json` only as a relationship index. Record real canonical directories and compiler-issued IDs, delivery intent, immutable source/scope identity, current lifecycle, last reply, and predecessor/successor links. The compiler's validated checkpoint/current manifest remains authority; a catalog row never overrides it.
 
-Generated extraction/modeling mistakes do not change original PRD truth and do not require a sibling run. For an unaccepted artifact, fix the staging file at the same revision. For an accepted artifact, preserve its bytes and append a new Source Pack revision containing one `artifact_repairs` record:
+For every recovery or resume, invoke the runner on the same absolute directory first. Do not infer the next stage from chat history, directory listing, a disposable checkpoint, or a highest-looking revision. Validate the returned recovery references before appending anything.
 
-```json
-{
-  "repair_seq": 1,
-  "base_source_revision": 0,
-  "stage": "evidence_claims",
-  "accepted_artifact_digest": "copy the actual accepted artifact SHA-256",
-  "reason": "Describe the observed generation error and the frozen source to re-read."
-}
-```
+## Preserve append-only revisions
 
-The example digest is descriptive, never a literal submission. Compute the canonical digest of the accepted artifact using the same canonical JSON semantics as the compiler, or copy the digest from the runner's diagnostic/checkpoint; never hash arbitrary pretty-printed bytes. Preserve all existing repair records exactly. The new record uses the next repair sequence and immediately prior source revision. It is not a Decision Record, evidence, or a user business answer; it shares no clarification sequence. Do not append business/execution events in the same repair revision.
+Accepted Source Packs, Decisions, semantic controls, execution actions, lifecycle events, presentations, checkpoints, and preview history are append-only. One accepted user response advances the source revision once. Do not edit or delete an accepted revision, reorder events, reuse an event sequence, or combine unrelated user messages into a fabricated event.
 
-Copy the prior Source Pack, increment `source_revision` once, append the record and call the runner. It validates the exact target, carries only earlier safe stages forward, invalidates all downstream artifacts and confirmations, and returns the first artifact to regenerate. This works even when the previous revision was incomplete. Remove only stale *staging* copies after confirming they are not the original source or accepted files; regenerate them at the newly returned revision. Never edit accepted/derived/output files.
+A candidate append stays in staging until all schema, presentation/version, digest, sequence, and semantic checks pass. Failure changes no committed revision. Checkpoints are written from validated state and use write-temp-then-rename; their exact canonical bytes are digest-bound recovery material.
 
-`source_pack` repairs may correct extraction locators, source review/asset review, or delivery presentation settings; original source bytes, source set, scope, and source authority policy remain frozen. New authoritative business material follows normal Decision/source-change rules, never a repair loophole.
+Before any revision that invalidates ready output, commit a current tombstone/stale state. A higher non-ready revision always dominates an older ready pointer. Crash recovery completes or rolls forward the journaled transition; it never restores old ready/current merely because those files still exist.
 
-## Avoid redundant work
+`output/current.json` is the only authoritative delivery manifest. Finished recovery re-reads it and all referenced artifact digests. Stray Markdown/CSV/JSON files, older current files, or partially written output are never official delivery.
 
-For small readable requirements, read the needed source/evidence/view schemas and policies once. You may stage `source_pack`, `evidence_claims`, and `behavior_views` together after completing their semantic review, then call the runner; each still passes its normal individual gate. Do not prewrite Case obligation IDs: inspect the compiler's derived Test Points before writing `case_drafts`. There is no batch parameter or alternative runner call.
+## Repair without rewriting history
 
-A valid execution-only Source Pack append reuses already accepted Evidence, Behavior Views and Cases mechanically. Submit only the Source Pack; do not re-extract or resubmit the other artifacts unless the runner explicitly requests them. Business-rule updates and reanalysis still regenerate affected artifacts. Always invoke the runner after a crash to reconstruct progress; never manually skip validation based on the catalog.
+Fix an unaccepted artifact in staging at the same candidate revision. For an accepted Agent artifact, append a digest-bound `artifact_repairs` record naming `base_source_revision`, semantic `stage`, exact accepted canonical artifact digest, and reason. Increment revision once, let the compiler carry forward safe predecessors, then regenerate the returned downstream stage. Never edit accepted/derived/output files.
+
+An original source-byte change, new authoritative source, or material scope change is not a repair; it requires `NEW_RUN_REQUIRED`, preserving the old run and creating a linked sibling. A business answer is a Decision, never an artifact repair.
+
+Count no-progress repairs by normalized stage and root cause. Permit three repair attempts. The fourth identical no-progress result is `PIPELINE_NO_PROGRESS`; administrative revision/carry-forward does not reset the counter.
+
+## Cancel at every user wait
+
+`cancel_run` is a real schema-valid action in all four waiting phases: source acquisition, semantic clarification, execution closure, and final confirmation. Bind exact run ID plus phase/version returned by the latest reply. Repeating the same cancellation is idempotent and cannot overwrite an earlier valid delivery manifest.
+
+A cancelled run is terminal for appends. To continue, use the ordinary
+`createV4RunDirectory` entry with the closed resume argument above. The sibling
+records the verified parent lineage but begins as a fresh run at the returned
+source request. It does not copy, mutate, or revive the cancelled journal.
+
+## Maintain safe sibling relationships
+
+For changed source/scope, create and successfully identify the new run before atomically linking old `superseded_by` and new `supersedes` rows. For execution `reopen_semantic_question`, create the sibling Case Document durably before marking the execution run `superseded_by_semantic_reopen`. Concurrent replays converge on the same transaction/sibling; same identity with different payload is a conflict.
+
+Never reset, restore, delete, or repurpose another run. Preserve completed, failed, superseded, cancelled, and migrated histories for audit. A catalog disagreement with compiler identity is a process error; report it instead of selecting whichever directory looks newer.
+
+## Keep v3 migration read-only
+
+Legacy v3 bytes and digests never change. Migration creates one durable v4 sibling plus a bidirectional index; incomplete, unavailable, ambiguous, or mutated legacy input receives its explicit migration terminal status. A migrated v4 output comes only from that sibling. v3 remains readable for audit but is never a v4 workflow fallback.

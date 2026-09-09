@@ -2,9 +2,9 @@ export const OPERATOR_WITNESS_METHOD = 'operator-observed-codex-subagent-v1';
 export const OPERATOR_TASK_ID = '/root';
 
 export const ALLOWED_AGENT_TASK_IDS = Object.freeze([
-  '/root/formal_defect_gate_audit',
-  '/root/time_quota_defect_expansion',
-  '/root/time_quota_defect_expansion/standards_review'
+  '/root/v4_pressure_transactions_identity',
+  '/root/v4_pressure_workflow_forms',
+  '/root/v4_pressure_async_time'
 ]);
 
 const AGENT_BY_CASE_PREFIX = Object.freeze({

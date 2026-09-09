@@ -5,128 +5,123 @@ description: Use when a PRD, module description, module-description, 需求文�
 
 # Generate Test Cases
 
-Produce evidence-grounded manual functional test Cases through the bundled deterministic compiler. Treat the compiler as the sole owner of validation, classification, coverage, stable identity, checkpoints, and final rendering.
+Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
 
-## Load policy only when needed
+The compiler owns validation, stable identity, Facts, scope topology, formal Test Points, semantic roots, classification, coverage, ordering, checkpoints, canonical results, and rendering. The Agent writes only the four requested semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
 
-- Read `references/run-management.md` before creating, recovering, repairing, replacing, or batching a run. Maintain its private `run-catalog.json` with real compiler-issued identities and explicit active/completed/failed/superseded relationships.
-- Read `references/evidence-policy.md` when collecting sources, resolving authority, creating locators, or writing `source_pack` and `evidence_claims`; read it before writing either artifact.
-- Read `references/behavior-views.md` when routing accepted facts, supplying `obligation_inputs`, and checking formal Test Point coverage; read it before writing `behavior_views`.
-- Read `references/clarification-policy.md` when handling `need_user_answers`, interpreting answers, delivering now, or reopening suppressed root issues.
-- Read `references/case-writing-policy.md` when constructing `case_drafts`, Oracles, Testability profiles, support reviews, or user-facing Case wording; read it before writing `case_drafts`.
-- Read `references/execution-closure-policy.md` before writing or handling any execution decision, pause/resume, final confirmation, `runner_case_ids`, or post-ready change request.
+## Load the matching policy before acting
 
-Read the requested `scripts/schemas/<schema_ref>` before writing an artifact. Do not preload every reference or schema.
+- Read `references/run-management.md` before creating, recovering, resuming, repairing, replacing, or cancelling with `cancel_run`.
+- Read `references/evidence-policy.md` before collecting sources, creating locators, or writing `source_pack` or `evidence_claims`.
+- Read `references/behavior-views.md` before writing `behavior_views`.
+- Read `references/case-writing-policy.md` before writing `case_drafts` or presenting the business Case document.
+- Read `references/clarification-policy.md` before presenting questions or submitting `answer_question_part`, `defer_question_part`, `mark_question_unknown`, or `request_delivery`.
+- Read `references/execution-closure-policy.md` before submitting `provide_capability_proof`, `set_execution_disposition`, `pause_execution`, or `reopen_semantic_question`, and before presenting or confirming an execution plan.
 
-## Gate the input once
+Read the runner-requested `scripts/schemas/<schema_ref>` before writing that artifact or event. Do not invent a field absent from the closed Schema, rename a result kind, or expose a private working shape.
 
-Try every supplied path, attachment, and inline source. If no requirement content is readable, ask once for an accessible PRD, module description, or pasted requirement text. If content remains unavailable, end with `INPUT_UNAVAILABLE`; do not create an empty or generic normal bundle.
+## Select one delivery boundary
 
-If any requirement content is readable, continue. Record partial extraction gaps and uncertain regions instead of asking for every missing input before analysis. Never fill a product fact from generic domain knowledge.
+For ordinary requests to generate test Cases, test points, or a test document, use `delivery_intent=case_document`. Case generation does not check real environment URLs, accounts, observer access, control access, test-data availability, or cleanup resources. Logical business roles, permissions, preconditions, data conditions, actions, Oracles, and relative baselines are still semantic inputs.
 
-Freeze the requested product, module, role, client, version, region, and environment scope before extracting facts. Do not broaden or narrow that scope merely because later analysis discovers more material. If the user's original request did not state a dimension, record it as unspecified rather than choosing one; a later material scope change requires `NEW_RUN_REQUIRED`.
+Use `delivery_intent=execution_plan` only when the user explicitly asks to select or confirm an execution list. An execution plan is a separate downstream run bound to an immutable `case_document_ref` containing the exact `manifest_digest` and `bundle_digest`. Only this path checks current execution capabilities and dispositions. Do not ask for execution resources or an execution-plan preference during ordinary Case generation.
 
-Set `output_language` to the user's requested language (`zh-CN` or `en`), otherwise use the language of their request. Preserve source quotations and technical names verbatim. Set `delivery_intent=case_document` for ordinary requests to generate test Cases, a test document, or test points. Set `execution_plan` only when the user explicitly asks to select and confirm a downstream execution list. Do not ask for an execution-plan preference just to generate a document.
+This Skill creates and, when explicitly requested, confirms an execution plan. It does not automatically start E2E, invoke a browser or API runner, generate automation code, or record execution results.
+
+## Gate and freeze input
+
+Try every supplied path, attachment, and inline source. If no requirement content is readable, ask once for accessible source material. If it remains unavailable, end with `INPUT_UNAVAILABLE`; never create a generic or empty Case document.
+
+Freeze product, module, role, client, version, region, environment, original source set, and material scope. An unspecified dimension remains unspecified. Do not broaden or narrow scope because later analysis discovers more material. New authoritative source bytes or a material scope change requires `NEW_RUN_REQUIRED`; preserve the old run.
+
+Set `output_language` to the user's requested `zh-CN` or `en`, otherwise use the request language. Preserve source quotations and technical names verbatim. Never fill product truth from generic domain knowledge.
+
+When a business Claim carries compiler-consumed structure inside `semantic_value`, use only the exact assertion families and closed item shapes documented in `references/evidence-policy.md`: `relative_baseline_assertions`, `test_value_assertions`, `test_value_derivations`, `risk_review_assertions`, `not_applicable_assertions`, and `ordering_assertions`. Do not place execution readiness or a self-authored compiler ID in these fields.
 
 ## Run the private workflow
 
-Resolve `<skill-dir>` to the directory containing this file. Freeze the run identity as a canonical absolute path inside a persistent private directory owned by the current task. Never place a run in the Skill installation directory or an OS temporary directory. A spelling that contains `..` and resolves to the same canonical path identifies the same canonical run.
+Resolve `<skill-dir>` to this Skill directory. Create a persistent private run directory owned by the current task, outside the Skill installation and outside OS temporary storage. Its canonical absolute path is durable run identity; a spelling containing `..` that resolves to it is the same canonical run.
 
-For context recovery, use the same run directory and invoke the runner first. Never infer the next stage from conversation history, a checkpoint, or directory contents. For a new run, create the private run directory and invoke exactly:
+Maintain `run-catalog.json` only as the private relationship index described by `references/run-management.md`. Accepted semantic repairs use its append-only `artifact_repairs` procedure; neither structure is a fifth Agent-writable artifact or an authority over the runner checkpoint.
+
+For context recovery, resume the same run directory and invoke the runner first. Do not infer state from conversation history, filenames, a stale checkpoint, or an old current manifest. Invoke exactly:
 
 ```text
 node <skill-dir>/scripts/test-compiler.mjs <absolute-run-directory>
 ```
 
-Capture the single JSON object from stdout. Validate the single JSON reply against `scripts/schemas/reply.schema.json` before inspecting or handling its status and before writing any artifact. The four valid stage and `schema_ref` pairs are one-to-one: `source_pack`/`source-pack.schema.json`, `evidence_claims`/`evidence-claims.schema.json`, `behavior_views`/`behavior-views.schema.json`, and `case_drafts`/`case-drafts.schema.json`. Treat an unknown stage, mismatched schema reference, malformed JSON, extra reply field, or any other schema failure as `PIPELINE_PROTOCOL_ERROR`; write no artifact. Treat stderr as diagnostics only. Use no extra mode or configuration argument.
+The runner receives one absolute run-directory argument and stdout contains one JSON reply. Validate it against `scripts/schemas/reply.schema.json` before inspecting status or writing anything. Unknown status/stage, a stage/schema mismatch, malformed JSON, extra reply fields, or unverifiable recovery bindings is `PIPELINE_PROTOCOL_ERROR`; write no artifact. stderr is diagnostics only.
 
-Follow this loop:
+Import the private installed Adapter helpers `createV4RunDirectory`, `constructV4Action`, and `stageV4SourceAcquisitionAction` from `<skill-dir>/scripts/test-compiler.mjs`. Create each Case Document or Execution Plan sibling with `createV4RunDirectory(<catalog-root>, delivery_intent)` so the compiler issues the run ID and canonical `runs/<run-id>` directory together; never mint a run ID or move an established run directory. Before submitting a displayed action, pass the validated reply plus only the user's semantic answer or choice to `constructV4Action`, then append exactly the returned event to the next Source Pack revision. Never mint or compute an event ID, digest, presentation binding, request binding, or other protocol ID. A stale or unadvertised action is a protocol error; do not hand-build a substitute event.
+
+Follow this order:
 
 ```text
-Create private run directory
--> normalize sources into requested artifact
--> call private runner
--> handle need_artifact or need_revision
--> on need_user_answers, present one merged batch
--> append presentation-bound Decision Records, clarification controls, or execution events and increment source_revision once
--> call runner again
--> only for execution_plan delivery, handle execution_closure and show the complete final_confirmation plan
--> on finished, present generated Markdown and canonical JSON paths without starting tests
+source acquisition and canonical capture
+-> source review, atomic Facts, topology review, and scope manifest
+-> pre-case clarification
+-> sparse Behavior Views, business outcomes, formal Test Points, and Case Drafts
+-> post-case clarification for newly discovered semantic gaps only
+-> canonical Case Document delivery
+-> optional explicit Execution Plan bound to that immutable Case Document
 ```
 
-Complete the full workflow analysis before interrupting the user:
+The pre-case clarification occurs after source review, atomic fact extraction, and scope manifest closure, but before Behavior Views and Cases. The post-case clarification occurs only after Case design reveals a genuinely new semantic gap. In both phases, present one business-readable batch.
 
-- A — receive sources, preserve scope/version/status, and create typed locators.
-- B — establish explicit source authority, scope, and supersession rules.
-- C — extract atomic sourced facts and their evidence levels.
-- D — build every behavior view signaled by the accepted facts.
-- E — enumerate formal Test Points before drafting Cases.
-- F — bind concrete Oracles, observation points, and Testability capabilities.
-- G — classify every formal Test Point and independent risk hypothesis.
-
-Always complete A–G analysis before asking clarification. The only earlier question allowed is the single inaccessible-input request.
+For a partial answer, submit only reliably bound answered parts. Unanswered parts remain `presented` and pending; blank, unparseable, or not reliably bound text writes no answer and cannot suppress an item or advance its revision. Only an explicit `defer_question_part` or `mark_question_unknown` changes that part to deferred or unknown. `request_delivery` closes only the explicitly referenced parts for delivery.
 
 ## Handle runner replies
 
+Every user-visible stop path must state: current state, produced artifacts, incomplete reason, concrete next actions, and recovery. Use only actions returned by the validated reply.
+
 ### Handle `need_artifact`
 
-Open the named `schema_ref`. Create the requested stage artifact for the returned `source_revision`, write it to the corresponding `staging` filename, and call the runner again. For a small fully readable requirement, the run-management policy permits a bounded source/evidence/views staging batch after reading each schema and policy; every stage retains its normal compiler checks. Never batch Case Drafts before reading compiler-derived obligation IDs. Preserve all accepted artifacts and compiler-owned derived files.
+Report current state, produced artifacts, why acquisition or the requested semantic artifact is incomplete, the advertised `provide_artifact`/`cancel_run` next actions, and the exact `resume_ref` recovery. Never retain a signed retrieval URL. For source acquisition, collect the complete batch named by `artifact_requests`, review the safe canonical Source Pack, and call `stageV4SourceAcquisitionAction` with the validated reply, that Source Pack, each request's safe input, and its exact material bytes; then call the runner again. The helper derives all events and computed Source fields and atomically stages only the safe resumed Source Pack plus short-lived material.
 
-Use these fixed staging names:
+For an ordinary semantic stage artifact, open the named Schema and matching policy, write only its fixed staging file, and call the runner again:
 
-- `source_pack` → `staging/source-pack.json`
-- `evidence_claims` → `staging/evidence-claims.json`
-- `behavior_views` → `staging/behavior-views.json`
-- `case_drafts` → `staging/case-drafts.json`
+- `source_pack` -> `staging/source-pack.json`
+- `evidence_claims` -> `staging/evidence-claims.json`
+- `behavior_views` -> `staging/behavior-views.json`
+- `case_drafts` -> `staging/case-drafts.json`
 
-Any other requested stage is `PIPELINE_PROTOCOL_ERROR`; write no artifact and never invent a process surface.
-
-For `source_pack`, recompute each Source SHA-256 and add one exhaustive `source_reviews` entry whose ordered spans account for every non-whitespace part as normative, non-normative, or uncertain with review basis. Inventory `source_assets`; actually read every relevant image/media, or record its unread/unavailable state without pretending its rules were reviewed. For `evidence_claims`, explicitly review each fact's `required_view_kinds`; a custom responsibility cannot replace a required specialized view. For `case_drafts`, keep distinct business outcomes in distinct Cases and never submit compiler-owned `value_origin` or final IDs. Follow the loaded evidence and Case-writing policies for exact semantic rules.
-
-### Handle `need_revision`
-
-Group diagnostics by normalized stage, code, path, and root cause. An unaccepted artifact is repaired at the same staged revision. If the returned stage was already accepted, or the diagnostic is `ACCEPTED_ARTIFACT_REPAIR_REQUIRED`, follow run-management's digest-bound `artifact_repairs` append instead; preserve accepted bytes and regenerate downstream at the new revision. Re-run the compiler after each repair. Testability reference mismatches are Adapter corrections, not business questions or proof of missing environment.
-
-Allow at most three repair attempts for the same normalized root cause at the same stage. On the fourth identical no-progress result, stop as `PIPELINE_NO_PROGRESS`, report the last diagnostics and last valid checkpoint, and do not recast the result as a business Blocked item or compiler `fatal`.
-
-Reset the repair counter only when the stage or normalized root cause materially changes.
-
-A digest-bound accepted-artifact repair must retain the counter for the original semantic stage/root. The intermediate Source Pack append, revision increment, and compiler carry-forward are administrative progress and do not reset that counter.
+Any other Agent-writable stage is `PIPELINE_PROTOCOL_ERROR`. Never invent a fifth artifact.
 
 ### Handle `need_user_answers`
 
-Read the closure policy and branch on the closed `purpose` instead of treating all questions as blockers:
+Report current state, produced artifacts, why the run needs decisions, available actions, and recovery from the committed checkpoint. Present compiler questions in business language: concrete question, `why_needed`, `decision_impact`, `unresolved_outcome`, affected business items, and named risk counts. Keep root, Fact, Claim, obligation, digest, and other protocol IDs hidden in the submission context.
 
-- `semantic_clarification`: present every returned blocker as one merged, risk-ordered set using the business-readable rules in the clarification policy. Ask once per stable root, label scope and each risk count, and offer only the returned options. Keep compiler identifiers in memory for the append; do not make the user interpret them.
-- `execution_closure`: present every pending Case, formal Test Point, and Exploratory item by readable title. Record exactly one explicit Execute, DoNotExecute, or pause result for each answered item. Only a Grounded Case may be Execute. Preserve unanswered items as pending.
-- `final_confirmation`: show the complete plan the compiler returned, including every item, disposition, and DoNotExecute reason. Append `confirm_execution_plan` only when the answer binds that exact prompt, source revision, plan digest, and plan-change head. A request to modify the plan appends a disposition event instead and requires a newly rendered confirmation page.
+For semantic clarification, allow only `answer_question_part`, `defer_question_part`, `mark_question_unknown`, `request_delivery`, and `cancel_run` when advertised. For an explicitly requested execution plan, execution closure uses only `provide_capability_proof`, `set_execution_disposition`, `pause_execution`, `reopen_semantic_question`, and `cancel_run` when advertised. Copy all presentation, version, item, run, and checkpoint bindings exactly; do not compute IDs.
 
-For `entry_context=post_ready_change`, accept only the latest compiler-owned presentation and group. The first natural-language modification request is not itself a decision: write a bound `staging/post-ready-preview-request.json` using the latest `preview_control`, re-invoke the runner, and only append a real event or Decision Record after the user confirms that preview. Replace and cancel use fresh compiler-issued request IDs; never replay an older epoch.
+### Handle `need_revision`
 
-Apply the exact semantic-answer rules in `references/clarification-policy.md` and all disposition/event rules in `references/execution-closure-policy.md`. Copy compiler IDs, item digests, change heads, group IDs, `next_event_seq`, and run identity exactly. Append one immutable Source Pack revision per user reply, increment `source_revision` exactly once for the whole accepted group, and call the runner again. Never modify an accepted revision. Ambiguous phrases such as “these” or “use the recommendation” write no record until the target set is unique.
+Report current state, accepted artifacts, exact validation reason, the artifact/action that can be corrected next, and recovery from the last committed checkpoint. Repair an unaccepted staging artifact at the same revision. Repair an accepted semantic artifact only through the digest-bound append procedure in `run-management.md`; never edit accepted, derived, or output bytes.
 
-For an execution-only append submit only the Source Pack. The compiler carries forward the accepted semantic artifacts. Do not copy or reauthor evidence/views/Cases unless requested.
+Allow three repair attempts for the same normalized stage and root cause. The fourth identical no-progress result is `PIPELINE_NO_PROGRESS`, not a compiler fatal or business Blocked item. Reset the counter only on material stage or cause change.
 
 ### Handle `finished`
 
-Return the real `markdown_path` and canonical `bundle_path`, source revision, bundle/plan digest, separate Case/Test Point/Exploratory counts, and the short modification hint. Lead with a business-readable summary and keep internal IDs and digests only in an audit section or behind the file links. Describe coverage as declared-scope accounting, not complete product-behavior coverage. State that the confirmed `runner_case_ids` contains only Grounded + Execute Cases, that the Markdown worksheet is blank until a downstream operator records results, and that this Skill does not automatically start E2E tests. Do not ask for another confirmation or repeat the full item list.
+Re-read `output/current.json`, treat it as the only authoritative manifest, and validate every referenced file and digest before reporting success. Report current state, canonical result kind, produced files/counts, any retained gaps or execution exclusion reason, next available action, and exact recovery run reference.
 
-When `runner_ready=false`, say the document is delivered but no execution plan has been confirmed; `runner_case_ids` is empty and pending is not DoNotExecute or NotApplicable. Do not prompt for execution confirmation. The current pointer is `document_only`, never ready. Mark the catalog row completed. When `runner_ready=true`, the existing confirmation and preview protections apply unchanged.
+Case Document JSON, business Markdown, and execution worksheet CSV are deterministic views of the same canonical bundle. Markdown begins with a one-scenario-per-line overview showing module, priority, title, and status; it labels coverage as “已审阅 formal test-point 覆盖” and separately names semantic gap, Exploratory, and NotApplicable counts. Never claim unbounded “100% requirement coverage”. Internal IDs appear only in canonical JSON or an explicitly enabled audit appendix.
 
-Never edit final JSON, rewrite Markdown, add a Case, improve a classification, or recompute coverage after `finished`. For a confirmed execution plan, use the bound post-ready preview flow for user-requested changes. For a document-only result, generation corrections use a digest-bound repair; an explicit later request for an execution list uses a Source Pack repair to change `delivery_intent` and regenerates the plan, requiring a newly displayed confirmation. Business answers remain Decision Records, never repair records. Original source or material scope changes require `NEW_RUN_REQUIRED` and linked catalog entries.
+`blocked_only` is a delivered unresolved report and must not claim Cases were generated. `no_applicable_cases`, `delivered_cases`, and `delivered_with_gaps` retain their exact meaning. Execution-only `execution_ready` requires nonempty `runner_projection.case_ids`; `no_execution_selected` is not ready. Only Grounded + Execute Cases enter that projection.
+
+Never produce a hand-written official final, alternate Markdown, spreadsheet, or test-case fallback. A fatal or failed canonical gate means no unbound file is an official result.
 
 ### Handle `fatal`
 
-Report the compiler diagnostics and the last valid checkpoint, if one exists. Do not repair around integrity, schema-registry, runtime, or coordination failures. Do not convert a process failure into a business Blocked item.
+Report current state, the last valid produced artifacts, diagnostic reason, safe next action if any, and checkpoint recovery. On fatal, produce no Markdown, spreadsheet, test cases, or other fallback final. Never convert process failure into semantic Blocked.
 
-## Preserve adapter boundaries
+### Handle `cancelled`
 
-- Generate only the four semantic artifacts in the requested workflow; private catalog metadata and approved bounded staging batches follow run-management and never become a fifth stage.
-- Copy the compiler-issued `run_instance_id` from the first `need_artifact` reply into every Source Pack revision; never invent or replace it.
-- Clarification answers, `request_delivery`, `reopen_root_issues`, and supplements for unresolved business facts must append to the same run. These are source revisions, not new run identities.
-- If the original PRD, a supplementary source, or the material task scope changes, return `NEW_RUN_REQUIRED`, preserve the old run, and create or use a sibling private run only for an actual user source or scope change. Never silently repurpose the old run.
-- Keep normal workflow replies on exit code 0; treat a nonzero process exit as inability to form a JSON reply.
-- Keep user-visible content limited to the requested final files, a merged clarification set, `INPUT_UNAVAILABLE`, `PIPELINE_NO_PROGRESS`, or fatal diagnostics.
-- Never weaken evidence, invent an Oracle, hide a formal Test Point in Exploratory, or remove a Blocked item to improve coverage.
-- Never publish or document an alternate process entry point.
-- Never invoke an E2E Runner, browser automation, API automation, or any downstream executor. This Skill ends after document delivery or an explicitly requested execution-list confirmation.
+Report current state, produced and preserved prior artifacts, incomplete reason (the cancellation phase/reason), the next action, and recovery. The cancelled run accepts no more appends. `cancel_run` is valid during source acquisition, semantic clarification, execution closure, and final confirmation; repeat cancellation is idempotent. To resume, call the installed bundle's ordinary `createV4RunDirectory` helper with `{ parent_run_id, creation_reason: 'resume_cancelled' }` as its second argument; the compiler derives the original delivery intent and issues the sibling ID. Never append to the cancelled run, mint its ID, or choose a different intent.
+
+## Preserve truth and delivery integrity
+
+- Keep evidence status separate from execution disposition. DoNotExecute never means NotApplicable and cannot upgrade evidence or alter an Oracle.
+- Keep one independently diagnosable primary business outcome per Case. Every Oracle binds an existing step with `observe_after_step_id`.
+- Never fabricate a Behavior View field, business rule, ordering dependency, observer, execution resource, or Schema field. Multiple unrelated atomic Claims must not share a whole-document locator.
+- `request_delivery` may close selected semantic gaps for delivery; it never fabricates answers, deletes formal Test Points, or makes an execution plan ready.
+- JSON is normative. Markdown and CSV are mechanical views of the same canonical result, never independently edited.
+- Execution results and defect records belong downstream and bind the delivered bundle digest plus Case ID; they are never written into the canonical Case Document.

@@ -2006,6 +2006,44 @@ export async function atomicWriteText(runDirectory, targetPath, content) {
   }
 }
 
+/**
+ * Atomically replace one private binary material object. This uses the same
+ * no-symlink, fsync, rename and directory-sync discipline as canonical text
+ * writes while preserving the exact submitted bytes.
+ * @param {string} runDirectory
+ * @param {string} targetPath
+ * @param {Uint8Array} content
+ */
+export async function atomicWriteBytes(runDirectory, targetPath, content) {
+  if (!(content instanceof Uint8Array)) throw new TypeError('RUN_STORE_BYTES_INVALID');
+  const directory = pathDirname(targetPath);
+  await ensureDirectory(runDirectory, directory);
+  await assertNoSymlinkPath(runDirectory, targetPath);
+  temporarySequence += 1;
+  const temporaryPath = pathJoin(
+    directory, `.${pathBasename(targetPath)}.tmp-${NATIVE_PROCESS_PID}-${temporarySequence}`
+  );
+  let handle;
+  try {
+    handle = await open(
+      temporaryPath,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+      0o600
+    );
+    await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_WRITE_FILE, handle, [content]);
+    await NATIVE_REFLECT_APPLY(NATIVE_FILE_HANDLE_SYNC, handle, []);
+    await closeFileHandle(handle);
+    handle = undefined;
+    await assertNoSymlinkPath(runDirectory, targetPath);
+    await rename(temporaryPath, targetPath);
+    await syncDirectory(directory);
+  } catch (error) {
+    if (handle) await closeFileHandle(handle).catch(() => {});
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 /** @param {string} runDirectory @param {string} targetPath @param {unknown} value */
 export async function atomicWriteJson(runDirectory, targetPath, value) {
   requireRunStoreIntrinsics();
@@ -2097,6 +2135,8 @@ export function outputPaths(runDirectory, sourceRevision) {
     directory,
     bundle: pathJoin(directory, 'test-bundle.json'),
     markdown: pathJoin(directory, 'test-cases.md'),
+    worksheet: pathJoin(directory, 'execution-worksheet.csv'),
+    executionPlan: pathJoin(directory, 'execution-plan.json'),
     current: pathJoin(runDirectory, 'output', 'current.json')
   };
 }
@@ -2238,4 +2278,19 @@ export async function writeNonReadyCurrent(runDirectory, runInstanceId, activeSo
     reason: 'higher_revision_not_ready',
     previous_ready_revision: previousReadyRevision ?? null
   });
+}
+
+/** Catalog-scoped migration never writes to the legacy run. @param {string} catalogRoot @param {string} legacyRunDirectory */
+export async function migrateLegacyRun(catalogRoot, legacyRunDirectory) {
+  return (await import('./migrate-v3-run.mjs')).migrateLegacyRun(catalogRoot, legacyRunDirectory);
+}
+
+/** Bidirectional immutable migration lookup. @param {string} catalogRoot @param {string} runId */
+export async function queryLegacyMigration(catalogRoot, runId) {
+  return (await import('./migrate-v3-run.mjs')).queryLegacyMigration(catalogRoot, runId);
+}
+
+/** Read and reverify a sibling seed before the v4 runner performs source reanalysis. @param {string} catalogRoot @param {string} siblingDirectory */
+export async function loadMigrationReplaySeed(catalogRoot, siblingDirectory) {
+  return (await import('./migrate-v3-run.mjs')).loadMigrationReplaySeed(catalogRoot, siblingDirectory);
 }

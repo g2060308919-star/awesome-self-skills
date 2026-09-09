@@ -1,0 +1,679 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "migration-index.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "transactions",
+    "source_mutations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "4.0.0"
+    },
+    "transactions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/transaction"
+      }
+    },
+    "source_mutations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "migration_txn_id",
+          "code",
+          "observed_snapshot_digest"
+        ],
+        "properties": {
+          "migration_txn_id": {
+            "type": "string",
+            "pattern": "^MIG-[a-f0-9]{64}$"
+          },
+          "code": {
+            "const": "legacy_source_mutated"
+          },
+          "observed_snapshot_digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "migration_txn_id",
+        "v3_run_id",
+        "source_identity",
+        "source_snapshot_digest",
+        "legacy_run_directory",
+        "source_revision",
+        "legacy_status",
+        "phase",
+        "phase_version",
+        "outcome",
+        "v4_run_id",
+        "report",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "migration_txn_id": {
+          "type": "string",
+          "pattern": "^MIG-[a-f0-9]{64}$"
+        },
+        "v3_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_identity": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "revision_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "complete_revision"
+                },
+                "revision_digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "snapshot_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "raw_run_snapshot"
+                },
+                "snapshot_digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            }
+          ]
+        },
+        "source_snapshot_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "legacy_run_directory": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "source_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "legacy_status": {
+          "enum": [
+            "finished",
+            "active",
+            "cancelled"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "reserved",
+            "sibling_created",
+            "report_committed",
+            "index_committed",
+            "complete"
+          ]
+        },
+        "phase_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "outcome": {
+          "enum": [
+            null,
+            "migrated",
+            "migration_review_required",
+            "migration_blocked_source_unavailable"
+          ]
+        },
+        "v4_run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "report": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "digest"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^migrations/v4/reports/MIG-[a-f0-9]{64}\\.json$"
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "updated_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "phase",
+                "phase_version",
+                "outcome",
+                "v4_run_id",
+                "report"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "reserved"
+                },
+                "phase_version": {
+                  "const": 1
+                },
+                "outcome": {
+                  "type": "null"
+                },
+                "report": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "phase",
+                "phase_version",
+                "outcome",
+                "v4_run_id",
+                "report"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "sibling_created"
+                },
+                "phase_version": {
+                  "const": 2
+                },
+                "outcome": {
+                  "type": "null"
+                },
+                "v4_run_id": {
+                  "type": "string",
+                  "pattern": "^RUN-[a-f0-9-]{36}$"
+                },
+                "report": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "phase",
+                "phase_version",
+                "outcome",
+                "v4_run_id",
+                "report"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "report_committed"
+                },
+                "phase_version": {
+                  "const": 3
+                },
+                "outcome": {
+                  "type": "null"
+                },
+                "v4_run_id": {
+                  "type": "string",
+                  "pattern": "^RUN-[a-f0-9-]{36}$"
+                },
+                "report": {
+                  "type": "object"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "phase",
+                "phase_version",
+                "outcome",
+                "v4_run_id",
+                "report"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "index_committed"
+                },
+                "phase_version": {
+                  "const": 4
+                },
+                "outcome": {
+                  "type": "null"
+                },
+                "v4_run_id": {
+                  "type": "string",
+                  "pattern": "^RUN-[a-f0-9-]{36}$"
+                },
+                "report": {
+                  "type": "object"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "phase",
+                "phase_version",
+                "outcome",
+                "v4_run_id",
+                "report"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "complete"
+                },
+                "phase_version": {
+                  "const": 5
+                },
+                "outcome": {
+                  "enum": [
+                    "migrated",
+                    "migration_review_required",
+                    "migration_blocked_source_unavailable"
+                  ]
+                },
+                "v4_run_id": {
+                  "type": "string",
+                  "pattern": "^RUN-[a-f0-9-]{36}$"
+                },
+                "report": {
+                  "type": "object"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "authority",
+        "migration_txn_id",
+        "run_id",
+        "parent_run_id",
+        "creation_reason",
+        "legacy_run_directory",
+        "source_identity",
+        "source_snapshot_digest",
+        "source_revision",
+        "replay_mode",
+        "legacy_artifacts",
+        "legacy_status",
+        "clarification_mapping",
+        "remaining_root_ids",
+        "diagnostics",
+        "outcome"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "4.0.0"
+        },
+        "authority": {
+          "const": "migration_seed"
+        },
+        "migration_txn_id": {
+          "type": "string",
+          "pattern": "^MIG-[a-f0-9]{64}$"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "creation_reason": {
+          "enum": [
+            "migration_v3",
+            "resume_cancelled"
+          ]
+        },
+        "legacy_run_directory": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "source_identity": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "revision_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "complete_revision"
+                },
+                "revision_digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "snapshot_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "raw_run_snapshot"
+                },
+                "snapshot_digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            }
+          ]
+        },
+        "source_snapshot_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "source_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "replay_mode": {
+          "const": "source_reanalysis"
+        },
+        "legacy_artifacts": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "stage",
+              "path",
+              "byte_length",
+              "byte_sha256"
+            ],
+            "properties": {
+              "stage": {
+                "enum": [
+                  "source_pack",
+                  "evidence_claims",
+                  "behavior_views",
+                  "case_drafts"
+                ]
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^accepted/r[0-9]+/(source-pack|evidence-claims|behavior-views|case-drafts)\\.json$"
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "byte_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "legacy_status": {
+          "enum": [
+            "finished",
+            "active",
+            "cancelled"
+          ]
+        },
+        "clarification_mapping": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "legacy_root_id",
+              "root_issue_id",
+              "status",
+              "reason_code"
+            ],
+            "properties": {
+              "legacy_root_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "root_issue_id": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^ROOT-[a-f0-9]{64}$"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "presented",
+                  "resolved_final",
+                  "resolved_temporary",
+                  "deferred_by_user",
+                  "unknown_by_user",
+                  "closed_for_delivery",
+                  "execution_only"
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "remaining_root_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "outcome": {
+          "enum": [
+            "migrated",
+            "migration_review_required",
+            "migration_blocked_source_unavailable"
+          ]
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "migration_txn_id",
+        "v3_run_id",
+        "v4_run_id",
+        "source_identity",
+        "outcome",
+        "legacy_status",
+        "result_kind",
+        "sibling_run_directory",
+        "seed_digest",
+        "diagnostics",
+        "user_next_steps"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "4.0.0"
+        },
+        "migration_txn_id": {
+          "type": "string",
+          "pattern": "^MIG-[a-f0-9]{64}$"
+        },
+        "v3_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "v4_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_identity": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "revision_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "complete_revision"
+                },
+                "revision_digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "snapshot_digest"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "raw_run_snapshot"
+                },
+                "snapshot_digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                }
+              }
+            }
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "migrated",
+            "migration_review_required",
+            "migration_blocked_source_unavailable"
+          ]
+        },
+        "legacy_status": {
+          "enum": [
+            "finished",
+            "active",
+            "cancelled"
+          ]
+        },
+        "result_kind": {
+          "enum": [
+            "legacy_noncanonical",
+            "migration_diagnostic"
+          ]
+        },
+        "sibling_run_directory": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "seed_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "diagnostics": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "user_next_steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

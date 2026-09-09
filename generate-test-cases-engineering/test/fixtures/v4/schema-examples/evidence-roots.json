@@ -1,0 +1,176 @@
+{
+  "valid": [
+    {
+      "name": "complete_v4_evidence_root_binds_claims_facts_topology_scope_and_gap_review",
+      "reason": "The complete root combines typed evidence with compiler discovery, reviewer dispositions, scope boundaries, interaction coverage and exact acceptance roles.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "claims": [
+          {
+            "claim_id": "CLM-source-22",
+            "claim_form": "direct",
+            "level": "E3",
+            "kind": "requirement",
+            "scope": "admin.review-list",
+            "value": "source=22 表示打车去过",
+            "source_locator_ids": ["LOC-source-22"],
+            "source_id": "SRC-prd",
+            "domain": "business",
+            "field_path": "/response/source",
+            "document_level_claim": false,
+            "locator_roles": [{ "locator_id": "LOC-source-22", "role": "assertion" }],
+            "subject_descriptor": {
+              "scope_ref": "admin.review-list",
+              "module_id": "admin",
+              "entity_type": "review",
+              "entity_key": "source",
+              "field_path": "/response/source",
+              "condition": { "source": 22 }
+            },
+            "semantic_value": { "display": "打车去过" }
+          }
+        ],
+        "fact_ledger": [
+          {
+            "fact_id": "FACT-source-22",
+            "statement": "source=22 表示打车去过",
+            "status": "active",
+            "acceptance_role": "primary_acceptance",
+            "claim_ids": ["CLM-source-22"],
+            "module_refs": ["admin"],
+            "field_path": "/response/source"
+          }
+        ],
+        "semantic_gaps": [
+          {
+            "category": "semantic_gap",
+            "code": "UNKNOWN_ENUM_OUTCOME",
+            "subject_fact_ids": ["FACT-source-22"],
+            "missing_aspect": "未知 source 值的展示结果",
+            "scope_ref": "admin.review-list",
+            "question": "未知 source 值应显示什么？",
+            "why_needed": "需要确定未知枚举场景的业务结果。",
+            "decision_impact": "决定是否形成正式未知值测试点。",
+            "unresolved_outcome": "未知枚举场景保持待确认。",
+            "answer_options": ["显示未知", "显示原值"],
+            "risk_level": "high",
+            "source_claim_ids": ["CLM-source-22"],
+            "discovery_phase": "pre_case",
+            "affected_test_point_ids": []
+          }
+        ],
+        "topology_discovery": {
+          "source_structure_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "discovery_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "scanned_units": { "reviewed_block_ids": ["BLOCK-prd"], "reviewed_table_ids": ["TABLE-source"], "reviewed_asset_digests": [] },
+          "topology_candidates": [
+            {
+              "candidate_id": "TC-3333333333333333333333333333333333333333333333333333333333333333",
+              "kind": "module_mention",
+              "label": "评价中台",
+              "locator_ids": ["LOC-admin"],
+              "discovery_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          ]
+        },
+        "topology_review": {
+          "reviewed_block_ids": ["BLOCK-prd"],
+          "reviewed_table_ids": ["TABLE-source"],
+          "reviewed_asset_digests": [],
+          "unresolved_candidate_ids": []
+        },
+        "topology_dispositions": [
+          {
+            "candidate_id": "TC-3333333333333333333333333333333333333333333333333333333333333333",
+            "disposition": "module",
+            "module_ref": "admin",
+            "role": "primary",
+            "review_basis_claim_ids": ["CLM-admin"]
+          }
+        ],
+        "scope_manifest": {
+          "primary_surface": "admin",
+          "modules": [
+            { "module_id": "admin", "name": "评价中台", "role": "primary", "claim_ids": ["CLM-admin"] },
+            { "module_id": "gateway", "name": "评价网关", "role": "upstream", "claim_ids": ["CLM-gateway"] }
+          ],
+          "boundaries": [
+            { "from": "gateway", "to": "admin", "channel": "HTTP 响应", "acceptance_scope": "contract_only", "claim_ids": ["CLM-boundary"] }
+          ]
+        },
+        "interaction_review": [
+          { "module_ids": ["admin"], "dimension": "shared-entity", "status": "candidate" },
+          { "module_ids": ["admin", "gateway"], "dimension": "interface-event", "status": "checked-no-signal", "reviewed_claim_ids": ["CLM-boundary"], "review_basis": "已核对网关响应契约" }
+        ],
+        "acceptance_role_assignments": [
+          {
+            "entity_kind": "fact",
+            "entity_id": "FACT-source-22",
+            "scope_ref": "admin.review-list",
+            "acceptance_role": "primary_acceptance",
+            "parent_entity_ids": [],
+            "role_basis_claim_ids": ["CLM-source-22"]
+          },
+          {
+            "entity_kind": "test_point",
+            "entity_id": "TP-gateway-admin",
+            "scope_ref": "gateway.admin",
+            "acceptance_role": "dependency_contract",
+            "parent_entity_ids": ["FACT-source-22"],
+            "role_basis_decision_ids": ["DEC-scope"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "complete_v3_evidence_root_remains_readable_history",
+      "reason": "The preserved v3 discriminator validates its legacy direct Claim and Fact without accepting v4 scope witnesses.",
+      "value": {
+        "schema_version": "3.0.0",
+        "source_revision": 3,
+        "claims": [
+          {
+            "claim_id": "CLM-v3",
+            "claim_form": "direct",
+            "level": "E3",
+            "kind": "requirement",
+            "scope": "checkout",
+            "value": "checkout accepted",
+            "source_locator_ids": ["LOC-v3"],
+            "source_id": "SRC-v3"
+          }
+        ],
+        "fact_ledger": [
+          {
+            "fact_id": "FACT-v3",
+            "claim_id": "CLM-v3",
+            "status": "active",
+            "source_claim_ids": ["CLM-v3"],
+            "required_view_kinds": ["decision"],
+            "view_review_basis": "历史 v3 评审记录"
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "v4_evidence_root_rejects_legacy_fact_projection",
+      "reason": "A v4 Fact must state its business meaning, module, role and field path instead of reusing the legacy claim pointer shape.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "claims": [],
+        "fact_ledger": [{ "fact_id": "FACT-source", "claim_id": "CLM-source", "status": "active", "source_claim_ids": ["CLM-source"], "required_view_kinds": [], "view_review_basis": "legacy" }],
+        "semantic_gaps": [],
+        "topology_discovery": { "source_structure_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "discovery_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "scanned_units": { "reviewed_block_ids": [], "reviewed_table_ids": [], "reviewed_asset_digests": [] }, "topology_candidates": [] },
+        "topology_review": { "reviewed_block_ids": [], "reviewed_table_ids": [], "reviewed_asset_digests": [], "unresolved_candidate_ids": [] },
+        "topology_dispositions": [],
+        "scope_manifest": { "primary_surface": "admin", "modules": [{ "module_id": "admin", "name": "评价中台", "role": "primary", "claim_ids": ["CLM-admin"] }], "boundaries": [] },
+        "interaction_review": [],
+        "acceptance_role_assignments": []
+      }
+    }
+  ]
+}

@@ -18,3 +18,18 @@ test('generality P20: the private run catalog is closed metadata, not a fifth se
   assert.deepEqual(validateAgainstSchema(catalog, catalogSchema), []);
   assert.notDeepEqual(validateAgainstSchema({ ...catalog, fact_routes: [] }, catalogSchema), []);
 });
+
+test('T12 run catalog can record terminal cancellation without inventing a delivery', () => {
+  const catalog = {
+    catalog_version: 1, active_run_directory: null,
+    runs: [{
+      run_instance_id: 'RUN-cancelled', run_directory: '/tmp/RUN-cancelled',
+      source_content_digest: 'a'.repeat(64), scope: 'case_document', status: 'cancelled',
+      last_reply_kind: 'cancelled', error_codes: [], supersedes: null, superseded_by: null
+    }],
+    events: [{
+      sequence: 1, run_instance_id: 'RUN-cancelled', status: 'cancelled', reason: 'USER_CANCELLED'
+    }]
+  };
+  assert.deepEqual(validateAgainstSchema(catalog, catalogSchema), []);
+});

@@ -1,0 +1,135 @@
+{
+  "valid": [
+    {
+      "name": "complete_v4_obligation_root_accounts_for_formal_gap_exploratory_and_exclusion",
+      "reason": "The v4 artifact accounts for business outcomes, formal Test Points, observations and all four evidence-bound risk dispositions.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "outcomes": [
+          {
+            "outcome_id": "OUT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fact_id": "FACT-source",
+            "condition": { "source": 22 },
+            "expected": "来源列显示打车去过",
+            "acceptance_role": "primary_acceptance",
+            "claim_ids": ["CLM-source"]
+          }
+        ],
+        "formal_test_points": [
+          {
+            "formal_test_point_id": "TP-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "outcome_id": "OUT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "semantic_gap_refs": []
+          }
+        ],
+        "supporting_observations": [
+          {
+            "supporting_observation_id": "OBS-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "outcome_id": "OUT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "surface": "response",
+            "assertion": "响应 source 原值为 22",
+            "claim_ids": ["CLM-source"]
+          }
+        ],
+        "risk_review_ledger": [
+          {
+            "module_id": "admin",
+            "risk_kind": "null_or_missing",
+            "acceptance_role": "primary_acceptance",
+            "status": "formal",
+            "review_basis": { "kind": "evidence", "claim_ids": ["CLM-null"] },
+            "formal_test_point_ids": ["TP-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
+          },
+          {
+            "module_id": "admin",
+            "risk_kind": "unknown_enum",
+            "acceptance_role": "primary_acceptance",
+            "status": "semantic_gap",
+            "review_basis": { "kind": "semantic_gap_analysis", "subject_fact_ids": ["FACT-source"], "missing_aspect": "未知枚举值结果" },
+            "semantic_gap_ids": ["SG-source"]
+          },
+          {
+            "module_id": "admin",
+            "risk_kind": "loading_failure",
+            "acceptance_role": "primary_acceptance",
+            "status": "exploratory",
+            "review_basis": { "kind": "risk_catalog", "policy_id": "risk.loading_failure", "policy_version": "1.0.0" },
+            "exploratory_ids": ["EXP-loading"]
+          },
+          {
+            "module_id": "admin",
+            "risk_kind": "pagination",
+            "acceptance_role": "primary_acceptance",
+            "status": "not_applicable",
+            "review_basis": { "kind": "evidence", "claim_ids": ["CLM-single-page"] },
+            "not_applicable_record_ids": ["NA-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"]
+          }
+        ],
+        "not_applicable_records": [
+          {
+            "not_applicable_record_id": "NA-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "subject": { "kind": "risk", "module_id": "admin", "risk_kind": "pagination" },
+            "acceptance_role": "primary_acceptance",
+            "reason_code": "out_of_scope",
+            "reason": "本次范围明确排除分页。",
+            "basis": { "kind": "scope_decision", "decision_ids": ["DEC-scope"] }
+          },
+          {
+            "not_applicable_record_id": "NA-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "subject": { "kind": "formal_test_point", "formal_test_point_id": "TP-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+            "acceptance_role": "dependency_contract",
+            "reason_code": "superseded_requirement",
+            "reason": "旧契约已由新需求替代。",
+            "basis": { "kind": "evidence", "claim_ids": ["CLM-superseded"] }
+          }
+        ],
+        "exploratory": [
+          {
+            "module_id": "admin",
+            "risk_kind": "loading_failure",
+            "acceptance_role": "primary_acceptance",
+            "exploratory_id": "EXP-loading",
+            "policy_id": "risk.loading_failure",
+            "policy_version": "1.0.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty_v3_obligation_root_remains_valid_history",
+      "reason": "The complete v3 discriminator remains readable with its three closed historical route arrays.",
+      "value": {
+        "schema_version": "3.0.0",
+        "source_revision": 3,
+        "obligations": [],
+        "fact_routes": [],
+        "interaction_routes": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "v4_obligation_root_rejects_unreviewed_risk_shortcut",
+      "reason": "The closed v4 artifact does not accept a risk item without an evidence-bound review basis.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "outcomes": [],
+        "formal_test_points": [],
+        "supporting_observations": [],
+        "risk_review_ledger": [
+          {
+            "module_id": "admin",
+            "risk_kind": "refresh",
+            "acceptance_role": "primary_acceptance",
+            "status": "exploratory",
+            "exploratory_ids": ["EXP-refresh"]
+          }
+        ],
+        "not_applicable_records": [],
+        "exploratory": []
+      }
+    }
+  ]
+}

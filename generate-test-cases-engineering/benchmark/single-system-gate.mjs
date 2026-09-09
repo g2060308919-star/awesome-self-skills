@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
+import { applyReportExitCode } from './cli-exit-code.mjs';
 import { validateReleaseCorpus } from './release-corpus.mjs';
 import { verifyCaptureTranscript } from './replay-capture.mjs';
 import { materializeCandidateRuntime } from './candidate-runtime.mjs';
@@ -761,15 +762,20 @@ export async function loadSingleSystemRelease(manifestPath, candidateRoot = DEFA
 
 async function main() {
   if (process.argv.length !== 3) {
-    process.stdout.write(`${JSON.stringify(loadFailureReport('RELEASE_ARGUMENTS_INVALID', 'Exactly one release manifest path is required.'))}\n`);
+    const report = loadFailureReport('RELEASE_ARGUMENTS_INVALID', 'Exactly one release manifest path is required.');
+    process.stdout.write(`${JSON.stringify(report)}\n`);
+    applyReportExitCode(report);
     return;
   }
   const report = await loadSingleSystemRelease(process.argv[2]);
   process.stdout.write(`${JSON.stringify(report)}\n`);
+  applyReportExitCode(report);
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   main().catch((error) => {
-    process.stdout.write(`${JSON.stringify(loadFailureReport('RELEASE_INTERNAL_ERROR', error instanceof Error ? error.message : String(error)))}\n`);
+    const report = loadFailureReport('RELEASE_INTERNAL_ERROR', error instanceof Error ? error.message : String(error));
+    process.stdout.write(`${JSON.stringify(report)}\n`);
+    applyReportExitCode(report);
   });
 }

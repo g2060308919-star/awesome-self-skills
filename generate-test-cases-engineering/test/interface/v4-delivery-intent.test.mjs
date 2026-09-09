@@ -28,6 +28,7 @@ function sourcePack(deliveryIntent) {
     source_policy: { rules: [] },
     decision_records: [],
     clarification_events: [],
+    artifact_events: [],
     execution_events: []
   };
 }
@@ -78,6 +79,7 @@ test('BR-02: case-document intent prohibits an execution reference, including nu
 
 test('BR-01: v3 remains readable without adopting the v4 required intent', () => {
   const value = { ...sourcePack(), schema_version: '3.0.0' };
+  delete value.artifact_events;
   assert.deepEqual(validateAgainstSchema(value, contract), []);
 });
 

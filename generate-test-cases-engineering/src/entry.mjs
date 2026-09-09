@@ -2,8 +2,16 @@ import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { advanceStrict } from './advance-strict.mjs';
+import { constructV4Action } from './agent-action-adapter-v4.mjs';
+import {
+  sourceAcquisitionMaterialPathV4, stageV4SourceAcquisitionAction
+} from './source-acquisition-v4.mjs';
+import { createV4RunDirectory } from './run-bootstrap-v4.mjs';
 
-export { advanceStrict };
+export {
+  advanceStrict, constructV4Action, createV4RunDirectory, sourceAcquisitionMaterialPathV4,
+  stageV4SourceAcquisitionAction
+};
 
 /** @param {string} code @param {string} message */
 function fatalReply(code, message) {

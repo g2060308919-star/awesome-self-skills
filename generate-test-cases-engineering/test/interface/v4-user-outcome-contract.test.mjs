@@ -1,225 +1,155 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { advanceStrict } from '../../src/advance-strict.mjs';
-import { stableId } from '../../src/canonical.mjs';
-import { evaluateClarification } from '../../src/clarification.mjs';
-import { STAGE_FILES } from '../../src/run-store.mjs';
-import { validateAgainstSchema } from '../../src/schema-validator.mjs';
-import { journeyRule, revisionFromRules } from '../helpers/run-journey.mjs';
 
-// Task 01 characterization of compiler 0.4.0 / schema 3.0.0, not v4-format
-// fixtures or rewritten v3 goldens. Each test first proves valid old input,
-// then asserts the replacement user outcome. RED must be semantic, not parsing.
-// Minimal projections isolate each defect; these are not the full T15 journey.
-// In particular, no synthetic setup URI is supplied to satisfy v3 Case gates.
+import {
+  applySemanticClarificationEventsV4,
+  compileSemanticClarificationCheckpointV4,
+  constructSemanticClarificationEventV4
+} from '../../src/clarification.mjs';
+import { digest, stableId } from '../../src/canonical.mjs';
+import {
+  canonicalizeSourceCapture, createSourceProviderRegistry
+} from '../../src/source-canonicalization.mjs';
+import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
+import { deriveV4SystemContext } from '../../src/v4-system-context.mjs';
+import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
+
+// Task 01 characterization was recorded against compiler 0.4.0/schema 3.0.0
+// in precursor commit 4277522: missing execution resources blocked Case
+// delivery, partial answers suppressed omitted questions, signed-query churn
+// changed semantic identity, and an applicable zero-Case path completed. Those
+// failures reached valid v3 semantic paths rather than fixture/schema errors.
+// The four tests below are their v4 GREEN contracts; v3 goldens stay unchanged.
 const fixtureRoot = new URL('../fixtures/v4/bend-review-platform/', import.meta.url);
-const sourceFixture = JSON.parse(await readFile(new URL('source-pack.json', fixtureRoot), 'utf8'));
-const partialAnswers = JSON.parse(await readFile(new URL('partial-answers.json', fixtureRoot), 'utf8'));
-const prd = await readFile(new URL('prd.md', fixtureRoot), 'utf8');
-const schemaRoot = new URL('../../skill/generate-test-cases/scripts/schemas/', import.meta.url);
-const sourceSchema = JSON.parse(await readFile(new URL('source-pack.schema.json', schemaRoot), 'utf8'));
 
-/** @param {string} content */
-const rawDigest = (content) => createHash('sha256').update(content, 'utf8').digest('hex');
-
-/** @param {string} content */
-function sourcePackFor(content) {
-  const pack = structuredClone(sourceFixture);
-  pack.sources[0].content = content;
-  pack.sources[0].content_digest = rawDigest(content);
-  pack.locators = [];
-  pack.source_reviews = [{
-    source_id: 'source_prd', content_digest: rawDigest(content),
-    spans: [{
-      span_id: 'review_projected_requirement', start: 0, end: content.length,
-      classification: 'normative',
-      rationale: 'Minimal characterization excerpt; full fixture coverage is a later journey.',
-      review_basis: { reviewer: 'fixture-author', method: 'exact excerpt review', evidence: content }
-    }]
-  }];
-  assert.deepEqual(validateAgainstSchema(pack, sourceSchema), [], 'Source Pack must be v3 Schema-valid');
-  return pack;
+/** @param {string} value */
+function byteDigest(value) {
+  return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
 
-/** @param {any} input */
-async function assertV3Artifacts(input) {
-  assert.equal(sourceFixture.sources[0].content, prd, 'fixture source text must be the actual PRD');
-  assert.equal(sourceFixture.sources[0].content_digest, rawDigest(prd));
-  assert.deepEqual(validateAgainstSchema(sourceFixture, sourceSchema), []);
-  for (const [stage, artifactFile] of Object.entries(STAGE_FILES)) {
-    const schemaFile = artifactFile.replace('.json', '.schema.json');
-    const schema = JSON.parse(await readFile(new URL(schemaFile, schemaRoot), 'utf8'));
-    assert.deepEqual(validateAgainstSchema(input[stage], schema), [], stage + ' must pass the current v3 Schema');
+test('v4 user outcome: missing execution resources do not become Case Document blockers', () => {
+  const input = v4PipelineFixture();
+  const system = deriveV4SystemContext(input.artifacts);
+  assert.equal(Object.hasOwn(system, 'execution_resources'), false);
+
+  const result = compileCaseDocumentRevisionV4(input.artifacts, system);
+
+  assert.equal(result.status, 'compiled', JSON.stringify(result));
+  assert.equal(result.bundle.cases.length, 1);
+  assert.equal(result.bundle.coverage.semantic_gap_count, 0);
+  for (const forbidden of ['execution_resources', 'execution_plan', 'runner_projection', 'runner_case_ids']) {
+    assert.equal(Object.hasOwn(result.bundle, forbidden), false, forbidden);
   }
-}
-
-/** @param {string} directory @param {keyof typeof STAGE_FILES} stage @param {any} artifact */
-async function submit(directory, stage, artifact) {
-  await mkdir(path.join(directory, 'staging'), { recursive: true });
-  await writeFile(path.join(directory, 'staging', STAGE_FILES[stage]), JSON.stringify(artifact));
-}
-
-/** @param {string} directory */
-async function stageResourceGap(directory) {
-  const excerpt = prd.split('\n').find((/** @type {string} */ line) => line.startsWith('当 source=22'));
-  assert.ok(excerpt, 'source=22 business rule must exist in the fixture');
-  const rule = journeyRule('source22', {
-    scope: 'review-platform', conditions: ['source=22'], result: excerpt, mode: 'blocker'
-  });
-  const input = revisionFromRules([rule]);
-  input.source_pack = sourcePackFor(excerpt);
-  input.source_pack.locators = [{
-    locator_id: rule.locatorId, source_id: 'source_prd', type: 'text-range',
-    text_range: { start: 0, end: excerpt.length },
-    content_digest: rawDigest(excerpt), extraction_integrity: 'verified'
-  }];
-  // This is the existing official adapter seam for genuinely absent resources,
-  // not an invented environment, capability proof, or missing business Oracle.
-  input.case_drafts.obligation_dispositions[0].issue_intent = {
-    missing_type: 'execution-preparation', scope: rule.scope, answerable: false,
-    risk: rule.risk, reasons: ['EXECUTION_RESOURCES_NOT_PROVIDED'], evidence_refs: []
-  };
-  const initial = await advanceStrict(directory);
-  assert.equal(initial.status, 'need_artifact', JSON.stringify(initial));
-  input.source_pack.run_instance_id = initial.scope.run_instance_id;
-  await assertV3Artifacts(input);
-  for (const stage of /** @type {Array<keyof typeof STAGE_FILES>} */ (Object.keys(STAGE_FILES))) {
-    await submit(directory, stage, input[stage]);
-  }
-  const reply = await advanceStrict(directory);
-  assert.notEqual(reply.status, 'need_revision', 'valid old artifacts must not fail Schema/model validation: ' + JSON.stringify(reply));
-  assert.equal(reply.diagnostics?.length ?? 0, 0, JSON.stringify(reply));
-  assert.ok(reply.bundle_path, 'characterization must reach the old real delivery path: ' + JSON.stringify(reply));
-  const bundle = JSON.parse(await readFile(reply.bundle_path, 'utf8'));
-  assert.ok(bundle.coverage.formal.total > 0, 'applicable formal Test Points must not disappear');
-  return { reply, bundle };
-}
-
-test('v4 user outcome RED: missing execution resources do not become Case Document blockers', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'v4-resource-characterization-'));
-  try {
-    const { bundle } = await stageResourceGap(directory);
-    const resourceBlocked = bundle.blocked.filter((/** @type {any} */ item) =>
-      JSON.stringify(item).includes('execution-preparation'));
-    assert.equal(resourceBlocked.length, 0,
-      'v3 incorrectly retains an execution-preparation blocker for the fully specified source=22 business outcome');
-  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-/** @param {string[]} groundedKeys */
-function clarificationContext(groundedKeys = []) {
-  const questions = partialAnswers.questions;
-  const points = questions.map((/** @type {any} */ question) => ({
-    obligation_id: 'obligation_' + question.key,
-    evidence_level: groundedKeys.includes(question.key) ? 'E3' : 'E0',
-    classification: groundedKeys.includes(question.key) ? 'grounded' : 'blocked',
-    blocked_reason: groundedKeys.includes(question.key) ? null : 'FORMAL_ORACLE_MISSING'
+function partialAnswerCheckpoint() {
+  /** @type {Array<[string,string,string,string[]]>} */
+  const definitions = [
+    ['ip', 'IP 列', 'IP 表示网络地址还是定位城市？', ['网络 IP', '定位城市']],
+    ['empty', '空值展示', '空值显示为空白还是横线？', ['空白', '—']],
+    ['sort', '默认排序', '默认排序是升序还是降序？', ['升序', '降序']]
+  ];
+  const facts = definitions.map(([key, statement]) => ({
+    fact_id: `FACT-${key}`, statement, claim_ids: [`CLM-${key}`]
   }));
-  const ids = (/** @type {string} */ lane) => points.filter((/** @type {any} */ point) =>
-    point.classification === lane).map((/** @type {any} */ point) => point.obligation_id).sort();
-  return {
-    source_revision: 0,
-    blocked_obligations: questions.filter((/** @type {any} */ question) => !groundedKeys.includes(question.key))
-      .map((/** @type {any} */ question) => ({
-        obligation_id: 'obligation_' + question.key, missing_type: 'oracle',
-        semantic_refs: ['fact_' + question.key], scope: 'review-platform', risk: 'high',
-        reason: 'FORMAL_ORACLE_MISSING', evidence_refs: ['claim_' + question.key],
-        answerable: true, question: question.question
-      })),
-    prior_state: {
-      source_revision: 0, clarification_event_seq: 0, asked_root_issue_ids: [],
-      root_issue_dispositions: [], last_pending_root_issue_ids: [], last_question_set_digest: '',
-      clarification_stop: null, semantic_snapshot: null, root_snapshot_ledger: []
-    },
-    append_batch: { decision_records: [], clarification_events: [], execution_events: [] },
-    semantic_snapshot: {
-      formal_test_points: points, coverage_denominator: points.length,
-      delivery_sections: {
-        grounded: ids('grounded'), conditional: [], blocked: ids('blocked'), exploratory: [],
-        coverage: { formal_denominator: points.length },
-        quality: { delivery_status: groundedKeys.length ? 'executable_subset_ready' : 'no_deterministic_cases' }
+  const diagnostic_candidates = definitions.map(([key, _statement, question, answer_options]) => ({
+    category: 'semantic_gap', code: `${key.toUpperCase()}_UNRESOLVED`,
+    subject_fact_ids: [`FACT-${key}`], missing_aspect: `${key}_meaning`,
+    scope_ref: `review.${key}`, question,
+    why_needed: `需要明确${question}`, decision_impact: `答案决定 ${key} 的测试预期。`,
+    unresolved_outcome: `${key} 场景保持待确认。`, answer_options,
+    risk_level: 'high', source_claim_ids: [`CLM-${key}`], discovery_phase: 'pre_case',
+    affected_test_point_ids: []
+  }));
+  return compileSemanticClarificationCheckpointV4({
+    run_id: 'RUN-user-outcome', committed_revision: 0,
+    committed_checkpoint_bytes: new TextEncoder().encode('{}\n'),
+    discovery_phase: 'pre_case',
+    source_review_witness: { expected_unit_ids: ['BLOCK-prd'], reviewed_unit_ids: ['BLOCK-prd'] },
+    fact_ledger_digest: `sha256:${digest(facts)}`,
+    scope_manifest_digest: `sha256:${digest({ primary_surface: 'review' })}`,
+    behavior_views_digest: null, case_drafts_digest: null,
+    facts, diagnostic_candidates, prior_checkpoint: null
+  });
+}
+
+test('v4 user outcome: answering IP alone keeps the other two presented questions pending', () => {
+  const initial = partialAnswerCheckpoint();
+  const ip = initial.presentation.question_parts.find((/** @type {any} */ part) => part.question.includes('IP'));
+  assert.ok(ip);
+  const answer = ip.answer_options[0];
+  const message = `IP 口径：${answer}`;
+  const characters = Array.from(message); const answerCharacters = Array.from(answer);
+  const start = characters.join('').indexOf(answer);
+  const event = constructSemanticClarificationEventV4(
+    initial.presentation, ip, 'answer_question_part', {
+      answer, resolution: 'temporary', authority: 'task_scoped',
+      answer_origin: {
+        type: 'user_statement', presentation_id: initial.presentation.presentation_id,
+        message_digest: byteDigest(message),
+        answer_span: {
+          start_scalar: start, end_scalar: start + answerCharacters.length,
+          excerpt_digest: byteDigest(answer)
+        }
       }
     }
-  };
-}
+  );
+  const obligations = initial.checkpoint.semantic_gap_ledger.map((/** @type {any} */ root) => ({
+    root_issue_id: root.root_issue_id, obligation_ids: [`OBL-${root.missing_aspect}`]
+  }));
 
-test('v4 user outcome RED: answering IP alone keeps the other two presented questions pending', () => {
-  const first = evaluateClarification(clarificationContext(), 'pause_for_clarification');
-  assert.deepEqual(first.diagnostics, [], 'old clarification input must be valid');
-  assert.equal(first.pending_root_issues.length, 3);
-  const answer = partialAnswers.rounds[0].answers[0];
-  assert.equal(answer.key, 'ip');
-  const answeredRoot = first.pending_root_issues.find((/** @type {any} */ root) =>
-    root.affected_obligation_ids.includes('obligation_ip'));
-  const remainingIds = first.pending_root_issues.filter((/** @type {any} */ root) =>
-    root.root_issue_id !== answeredRoot.root_issue_id).map((/** @type {any} */ root) => root.root_issue_id).sort();
-  const secondInput = clarificationContext(['ip']);
-  secondInput.source_revision = 1;
-  secondInput.prior_state = first.state;
-  secondInput.append_batch.decision_records = /** @type {any} */ ([{
-    decision_id: 'decision_ip', question_id: stableId('question', { root_issue_ids: [answeredRoot.root_issue_id] }),
-    presentation_id: 'PRESENTATION-characterization-three-questions', decision_group_ids: ['GROUP-ip'],
-    root_issue_ids: [answeredRoot.root_issue_id], affected_obligation_ids: ['obligation_ip'],
-    clarification_event_seq: 1, confirmer: 'review-platform-owner', confirmed_at: '2026-09-09',
-    question: answeredRoot.question, answer: answer.answer, disposition: answer.disposition,
-    authority_scope: 'review-platform', effective_scope: 'review-platform',
-    evidence_ref: 'locator_user_ip_answer', evidence_level: 'E3'
+  const result = applySemanticClarificationEventsV4({
+    checkpoint: initial.checkpoint, clarification_events: [event], existing_decisions: [],
+    presentation_history: [initial.presentation], normalized_user_messages: [message],
+    previous_obligations_by_root: obligations, current_obligations_by_root: obligations
+  });
+
+  assert.equal(result.commit_required, true);
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.presentation.question_parts.length, 2);
+  assert.equal(result.checkpoint.clarification_state.remaining_part_ids.length, 2);
+  assert.equal(result.checkpoint.clarification_state.root_states.filter(
+    (/** @type {any} */ state) => state.status === 'resolved_temporary'
+  ).length, 1);
+  assert.equal(result.checkpoint.clarification_state.root_states.filter(
+    (/** @type {any} */ state) => state.status === 'presented'
+  ).length, 2);
+});
+
+test('v4 user outcome: signed-source refresh preserves semantic identity and generated identities', async () => {
+  const providers = createSourceProviderRegistry([{
+    provider: 'cooper', version: '1',
+    hosts: ['prd-assets.example.invalid'], kind: 'cooper', query_order: 'sensitive'
   }]);
-  assert.deepEqual(validateAgainstSchema(secondInput.append_batch.decision_records,
-    sourceSchema.properties.decision_records), [], 'the partial Decision must also satisfy the v3 public artifact schema');
-  const second = evaluateClarification(secondInput, 'pause_for_clarification');
-  assert.deepEqual(second.diagnostics, [], 'partial answer must be accepted, not rejected as a malformed event');
-  assert.equal(second.state.root_issue_dispositions.find((/** @type {any} */ item) =>
-    item.root_issue_id === answeredRoot.root_issue_id).status, 'resolved_final', 'the IP answer must take effect first');
-  const remaining = second.state.root_issue_dispositions.filter((/** @type {any} */ item) =>
-    remainingIds.includes(item.root_issue_id));
-  assert.deepEqual(remaining.map((/** @type {any} */ item) => item.status), ['asked', 'asked'],
-    'v3 silently changes the two omitted questions to suppressed_deferred');
-  assert.deepEqual([...second.state.last_pending_root_issue_ids].sort(), remainingIds);
+  const capture = (/** @type {string} */ content) => canonicalizeSourceCapture({
+    stable_source_id: 'SOURCE-review', source_type: 'prd',
+    capture_bytes: new TextEncoder().encode(content), assets: []
+  }, providers);
+  const a = capture(await readFile(new URL('signed-source-a.md', fixtureRoot), 'utf8'));
+  const b = capture(await readFile(new URL('signed-source-b.md', fixtureRoot), 'utf8'));
+
+  assert.equal(a.status, 'canonical');
+  assert.equal(b.status, 'canonical');
+  assert.notEqual(a.capture_digest, b.capture_digest);
+  assert.equal(a.semantic_digest, b.semantic_digest);
+  assert.equal(stableId('fact', { subject: 'source22', source: a.semantic_digest }),
+    stableId('fact', { subject: 'source22', source: b.semantic_digest }));
+  assert.equal(stableId('case', { outcome: 'source22-label', source: a.semantic_digest }),
+    stableId('case', { outcome: 'source22-label', source: b.semantic_digest }));
 });
 
-test('v4 user outcome RED: signed-source refresh does not force a semantic new run', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'v4-signed-source-characterization-'));
-  try {
-    const a = await readFile(new URL('signed-source-a.md', fixtureRoot), 'utf8');
-    const b = await readFile(new URL('signed-source-b.md', fixtureRoot), 'utf8');
-    // Whitelist exactly the two changed signing parameters. versionId and all
-    // business text remain intact; this is not a test that drops every query.
-    const unsigned = (/** @type {string} */ content) => content
-      .replace(/X-Amz-Date=[^&)]*/gu, 'X-Amz-Date=<capture>')
-      .replace(/X-Amz-Signature=[^&)]*/gu, 'X-Amz-Signature=<signature>');
-    assert.notEqual(rawDigest(a), rawDigest(b), 'raw captures are allowed to differ');
-    assert.equal(unsigned(a), unsigned(b), 'only temporary signing fields may change');
-    const firstRequest = await advanceStrict(directory);
-    const sourceA = sourcePackFor(a);
-    sourceA.run_instance_id = firstRequest.scope.run_instance_id;
-    await submit(directory, 'source_pack', sourceA);
-    const accepted = await advanceStrict(directory);
-    assert.equal(accepted.status, 'need_artifact', JSON.stringify(accepted));
-    assert.equal(accepted.stage, 'evidence_claims', 'first source must be genuinely accepted');
-    const sourceB = sourcePackFor(b);
-    sourceB.run_instance_id = sourceA.run_instance_id;
-    sourceB.source_revision = 1;
-    await submit(directory, 'source_pack', sourceB);
-    const refreshed = await advanceStrict(directory);
-    assert.notEqual(refreshed.status, 'need_revision', 'not a malformed v3 Source Pack: ' + JSON.stringify(refreshed));
-    assert.equal(refreshed.diagnostics?.some((/** @type {any} */ item) => item.code === 'NEW_RUN_REQUIRED') ?? false, false,
-      'v3 compares signed raw source bytes as immutable semantic identity: ' + JSON.stringify(refreshed));
-    assert.equal(refreshed.scope?.source_revision, 0, 'authentication-only refresh must retain semantic revision');
-  } finally { await rm(directory, { recursive: true, force: true }); }
-});
+test('v4 user outcome: applicable zero-Case output is fatal quality_failure', () => {
+  const input = v4PipelineFixture();
+  input.artifacts.case_drafts.cases = [];
 
-test('v4 user outcome RED: applicable zero-Case output cannot be reported as completed', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'v4-zero-case-characterization-'));
-  try {
-    const { reply, bundle } = await stageResourceGap(directory);
-    assert.equal(bundle.grounded.length + bundle.conditional.length, 0, 'old zero-Case path must actually be reached');
-    assert.equal(bundle.quality.delivery_status, 'no_deterministic_cases');
-    assert.equal(reply.status, 'fatal',
-      'v3 returns finished for applicable zero-Case output without an explicit semantic-gap delivery decision');
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  const result = compileCaseDocumentRevisionV4(
+    input.artifacts, deriveV4SystemContext(input.artifacts)
+  );
+
+  assert.equal(result.status, 'fatal', JSON.stringify(result));
+  assert.equal(result.result_kind, 'quality_failure');
+  assert.equal(result.reason_code, 'APPLICABLE_PRIMARY_OUTCOME_WITHOUT_CASE');
+  assert.equal(Object.hasOwn(result, 'bundle'), false);
 });

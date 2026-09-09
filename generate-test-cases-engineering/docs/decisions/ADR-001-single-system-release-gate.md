@@ -57,6 +57,12 @@ reports, adjudication, and defect ledgers remain in the repository to preserve
 historical tests and prior research, but they are not called or consumed by the
 release path and are not release authorities.
 
+The `public-pilot` preflight likewise derives `captures_ready` only from a valid
+30-PRD, six-stratum corpus. It does not resolve or digest-check the retained
+four-system comparator registry. This prevents historical comparator state from
+blocking the approved single-system operator-witness workflow while preserving
+the old files as non-authoritative research material.
+
 ## Removed release prerequisites
 
 The release gate no longer requires or reports:
@@ -93,9 +99,9 @@ in the legacy expert scorer. Removing that scorer from the release path prevents
 it from granting release eligibility; this ADR does not claim the legacy scorer
 was repaired.
 
-Installation and an RC tag remain separate actions. They are allowed only after
-the single-system gate passes on the frozen candidate and the user explicitly
-authorizes installation or update.
+Installation and repository tagging are separate from this development gate and
+are not implied by it. They occur only when separately requested; the current v4
+development contract requires neither installation nor an RC tag.
 
 ## Alternatives considered
 

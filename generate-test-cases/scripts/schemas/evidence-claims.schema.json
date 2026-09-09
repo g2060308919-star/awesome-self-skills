@@ -10,397 +10,1960 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "3.0.0"
+      "enum": [
+        "3.0.0",
+        "4.0.0"
+      ]
     },
     "source_revision": {
       "type": "integer",
       "minimum": 0
     },
     "claims": {
-      "type": "array",
-      "items": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "claim_id",
-              "claim_form",
-              "level",
-              "kind",
-              "scope",
-              "value",
-              "source_locator_ids",
-              "source_id"
-            ],
-            "properties": {
-              "claim_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "claim_form": {
-                "const": "direct"
-              },
-              "level": {
-                "const": "E3"
-              },
-              "kind": {
-                "enum": [
-                  "requirement",
-                  "description",
-                  "example",
-                  "diagnostic"
-                ]
-              },
-              "scope": {
-                "type": "string",
-                "minLength": 1
-              },
-              "value": {
-                "type": "string",
-                "minLength": 1
-              },
-              "source_locator_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "minItems": 1,
-                "uniqueItems": true
-              },
-              "source_id": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "claim_id",
-              "claim_form",
-              "level",
-              "kind",
-              "scope",
-              "value",
-              "source_locator_ids",
-              "decision_id",
-              "authority"
-            ],
-            "properties": {
-              "claim_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "claim_form": {
-                "const": "decision-record"
-              },
-              "level": {
-                "enum": [
-                  "E1",
-                  "E3"
-                ]
-              },
-              "kind": {
-                "enum": [
-                  "requirement",
-                  "assumption"
-                ]
-              },
-              "scope": {
-                "type": "string",
-                "minLength": 1
-              },
-              "value": {
-                "type": "string",
-                "minLength": 1
-              },
-              "source_locator_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "minItems": 1,
-                "uniqueItems": true
-              },
-              "decision_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "authority": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "claim_id",
-              "claim_form",
-              "level",
-              "kind",
-              "scope",
-              "value",
-              "source_locator_ids",
-              "derivation_kind",
-              "derivation_target",
-              "parent_claim_ids",
-              "parameters",
-              "rule_input"
-            ],
-            "properties": {
-              "claim_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "claim_form": {
-                "const": "derived"
-              },
-              "level": {
-                "const": "E2"
-              },
-              "kind": {
-                "enum": [
-                  "test-data",
-                  "expected-value",
-                  "model-element"
-                ]
-              },
-              "scope": {
-                "type": "string",
-                "minLength": 1
-              },
-              "value": {
-                "type": "string",
-                "minLength": 1
-              },
-              "source_locator_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "minItems": 1,
-                "uniqueItems": true
-              },
-              "derivation_kind": {
-                "enum": [
-                  "formula",
-                  "decision-table-instance",
-                  "boundary-representative",
-                  "enumeration-complement",
-                  "graph-reachability"
-                ]
-              },
-              "derivation_target": {
-                "enum": [
-                  "test-data",
-                  "expected-value",
-                  "model-element"
-                ]
-              },
-              "parent_claim_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "minItems": 1,
-                "uniqueItems": true
-              },
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "formula_id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "table_id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "domain_id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "enumeration_id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "graph_id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "unit": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "precision": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "rounding": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "additionalProperties": false
-              },
-              "rule_input": {
-                "type": "object",
-                "properties": {
-                  "formula": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "inputs": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "name",
-                        "value"
-                      ],
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "value": {
-                          "type": [
-                            "number",
-                            "string"
-                          ]
-                        },
-                        "unit": {
-                          "type": "string",
-                          "minLength": 1
-                        }
-                      },
-                      "additionalProperties": false
-                    },
-                    "uniqueItems": true
-                  },
-                  "unit": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "precision": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "rounding": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "conditions": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "uniqueItems": true
-                  },
-                  "outcome": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "lower": {
-                    "type": "number"
-                  },
-                  "upper": {
-                    "type": "number"
-                  },
-                  "inclusive": {
-                    "type": "boolean"
-                  },
-                  "enumerated_values": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "uniqueItems": true
-                  },
-                  "closed_world": {
-                    "type": "boolean"
-                  },
-                  "from": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "to": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      }
+      "type": "array"
     },
     "fact_ledger": {
+      "type": "array"
+    },
+    "semantic_gaps": {
+      "type": "array"
+    },
+    "topology_discovery": {
+      "$ref": "#/$defs/topologyDiscovery"
+    },
+    "topology_review": {
+      "$ref": "#/$defs/topologyReview"
+    },
+    "topology_dispositions": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "fact_id",
-          "claim_id",
-          "status",
-          "source_claim_ids",
-          "required_view_kinds",
-          "view_review_basis"
-        ],
-        "properties": {
-          "fact_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "claim_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "status": {
-            "enum": [
-              "active",
-              "conflicted",
-              "ambiguous",
-              "diagnostic"
-            ]
-          },
-          "source_claim_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "uniqueItems": true
-          },
-          "required_view_kinds": {
-            "type": "array",
-            "items": {
-              "enum": [
-                "flow",
-                "decision",
-                "state",
-                "input-domain",
-                "role",
-                "timing",
-                "integration"
-              ]
-            },
-            "uniqueItems": true
-          },
-          "view_review_basis": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "\\S"
-          }
-        },
-        "additionalProperties": false
-      }
+      "items": { "$ref": "#/$defs/topologyDisposition" }
+    },
+    "scope_manifest": {
+      "$ref": "#/$defs/scopeManifest"
+    },
+    "interaction_review": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/interactionReviewItem" }
+    },
+    "acceptance_role_assignments": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/acceptanceRoleAssignment" }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "schema_version": {
+              "const": "3.0.0"
+            },
+            "claims": {
+              "items": {
+                "$ref": "#/$defs/v3EvidenceClaim"
+              }
+            },
+            "fact_ledger": {
+              "items": { "$ref": "#/$defs/v3Fact" }
+            }
+          },
+          "allOf": [
+            { "not": { "required": ["semantic_gaps"] } },
+            { "not": { "required": ["topology_discovery"] } },
+            { "not": { "required": ["topology_review"] } },
+            { "not": { "required": ["topology_dispositions"] } },
+            { "not": { "required": ["scope_manifest"] } },
+            { "not": { "required": ["interaction_review"] } },
+            { "not": { "required": ["acceptance_role_assignments"] } }
+          ]
+        },
+        {
+          "required": [
+            "semantic_gaps",
+            "topology_discovery",
+            "topology_review",
+            "topology_dispositions",
+            "scope_manifest",
+            "interaction_review",
+            "acceptance_role_assignments"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "4.0.0"
+            },
+            "claims": {
+              "items": {
+                "$ref": "#/$defs/v4EvidenceClaim"
+              }
+            },
+            "fact_ledger": {
+              "items": { "$ref": "#/$defs/v4Fact" }
+            },
+            "semantic_gaps": {
+              "items": { "$ref": "#/$defs/v4SemanticGapInput" }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "v4Text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "v4IdSet": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/v4Text" }
+    },
+    "v4OptionalIdSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/v4Text" }
+    },
+    "v3Fact": {
+      "type": "object",
+      "required": [
+        "fact_id",
+        "claim_id",
+        "status",
+        "source_claim_ids",
+        "required_view_kinds",
+        "view_review_basis"
+      ],
+      "properties": {
+        "fact_id": { "$ref": "#/$defs/v4Text" },
+        "claim_id": { "$ref": "#/$defs/v4Text" },
+        "status": { "enum": ["active", "conflicted", "ambiguous", "diagnostic"] },
+        "source_claim_ids": { "$ref": "#/$defs/v4IdSet" },
+        "required_view_kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration"] }
+        },
+        "view_review_basis": { "$ref": "#/$defs/v4Text" }
+      },
+      "additionalProperties": false
+    },
+    "v4Fact": {
+      "type": "object",
+      "required": [
+        "fact_id",
+        "statement",
+        "status",
+        "acceptance_role",
+        "claim_ids",
+        "module_refs",
+        "field_path"
+      ],
+      "properties": {
+        "fact_id": { "$ref": "#/$defs/v4Text" },
+        "statement": { "$ref": "#/$defs/v4Text" },
+        "status": { "enum": ["active", "conflicted", "ambiguous", "diagnostic"] },
+        "acceptance_role": { "enum": ["primary_acceptance", "dependency_contract", "context_only"] },
+        "claim_ids": { "$ref": "#/$defs/v4IdSet" },
+        "module_refs": { "$ref": "#/$defs/v4IdSet" },
+        "field_path": { "type": "string", "pattern": "^/(?:[^/~]|~0|~1)+(?:/(?:[^/~]|~0|~1)+)*$" }
+      },
+      "additionalProperties": false
+    },
+    "topologyCandidate": {
+      "type": "object",
+      "required": ["candidate_id", "kind", "label", "locator_ids", "discovery_digest"],
+      "properties": {
+        "candidate_id": { "type": "string", "pattern": "^TC-[0-9a-f]{64}$" },
+        "kind": { "enum": ["module_mention", "boundary_signal"] },
+        "label": { "$ref": "#/$defs/v4Text" },
+        "locator_ids": { "$ref": "#/$defs/v4IdSet" },
+        "discovery_digest": { "$ref": "#/$defs/v4SourceSha256" }
+      },
+      "additionalProperties": false
+    },
+    "topologyDiscovery": {
+      "type": "object",
+      "required": ["source_structure_digest", "discovery_digest", "scanned_units", "topology_candidates"],
+      "properties": {
+        "source_structure_digest": { "$ref": "#/$defs/v4SourceSha256" },
+        "discovery_digest": { "$ref": "#/$defs/v4SourceSha256" },
+        "scanned_units": {
+          "type": "object",
+          "required": ["reviewed_block_ids", "reviewed_table_ids", "reviewed_asset_digests"],
+          "properties": {
+            "reviewed_block_ids": { "$ref": "#/$defs/v4OptionalIdSet" },
+            "reviewed_table_ids": { "$ref": "#/$defs/v4OptionalIdSet" },
+            "reviewed_asset_digests": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/v4SourceSha256" }
+            }
+          },
+          "additionalProperties": false
+        },
+        "topology_candidates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/topologyCandidate" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "topologyReview": {
+      "type": "object",
+      "required": ["reviewed_block_ids", "reviewed_table_ids", "reviewed_asset_digests", "unresolved_candidate_ids"],
+      "properties": {
+        "reviewed_block_ids": { "$ref": "#/$defs/v4OptionalIdSet" },
+        "reviewed_table_ids": { "$ref": "#/$defs/v4OptionalIdSet" },
+        "reviewed_asset_digests": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/v4SourceSha256" }
+        },
+        "unresolved_candidate_ids": { "$ref": "#/$defs/v4OptionalIdSet" }
+      },
+      "additionalProperties": false
+    },
+    "topologyDisposition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["candidate_id", "disposition", "module_ref", "role", "review_basis_claim_ids"],
+          "properties": {
+            "candidate_id": { "$ref": "#/$defs/v4Text" },
+            "disposition": { "const": "module" },
+            "module_ref": { "$ref": "#/$defs/v4Text" },
+            "role": { "enum": ["primary", "upstream", "downstream", "external"] },
+            "review_basis_claim_ids": { "$ref": "#/$defs/v4IdSet" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["candidate_id", "disposition", "from_module_ref", "to_module_ref", "channel", "acceptance_scope", "review_basis_claim_ids"],
+          "properties": {
+            "candidate_id": { "$ref": "#/$defs/v4Text" },
+            "disposition": { "const": "boundary" },
+            "from_module_ref": { "$ref": "#/$defs/v4Text" },
+            "to_module_ref": { "$ref": "#/$defs/v4Text" },
+            "channel": { "$ref": "#/$defs/v4Text" },
+            "acceptance_scope": { "const": "contract_only" },
+            "review_basis_claim_ids": { "$ref": "#/$defs/v4IdSet" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["candidate_id", "disposition", "reason", "review_basis"],
+          "properties": {
+            "candidate_id": { "$ref": "#/$defs/v4Text" },
+            "disposition": { "const": "not_relevant" },
+            "reason": { "$ref": "#/$defs/v4Text" },
+            "review_basis": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": ["kind", "claim_ids"],
+                  "properties": { "kind": { "const": "claim" }, "claim_ids": { "$ref": "#/$defs/v4IdSet" } },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["kind", "decision_ids"],
+                  "properties": { "kind": { "const": "decision" }, "decision_ids": { "$ref": "#/$defs/v4IdSet" } },
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "scopeModule": {
+      "type": "object",
+      "required": ["module_id", "name", "role", "claim_ids"],
+      "properties": {
+        "module_id": { "$ref": "#/$defs/v4Text" },
+        "name": { "$ref": "#/$defs/v4Text" },
+        "role": { "enum": ["primary", "upstream", "downstream", "external"] },
+        "claim_ids": { "$ref": "#/$defs/v4IdSet" }
+      },
+      "additionalProperties": false
+    },
+    "scopeBoundary": {
+      "type": "object",
+      "required": ["from", "to", "channel", "acceptance_scope", "claim_ids"],
+      "properties": {
+        "from": { "$ref": "#/$defs/v4Text" },
+        "to": { "$ref": "#/$defs/v4Text" },
+        "channel": { "$ref": "#/$defs/v4Text" },
+        "acceptance_scope": { "const": "contract_only" },
+        "claim_ids": { "$ref": "#/$defs/v4IdSet" }
+      },
+      "additionalProperties": false
+    },
+    "scopeManifest": {
+      "type": "object",
+      "required": ["primary_surface", "modules", "boundaries"],
+      "properties": {
+        "primary_surface": { "$ref": "#/$defs/v4Text" },
+        "modules": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/scopeModule" } },
+        "boundaries": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/scopeBoundary" } }
+      },
+      "additionalProperties": false
+    },
+    "interactionCellBase": {
+      "type": "object",
+      "required": ["module_ids", "dimension", "status"],
+      "properties": {
+        "module_ids": { "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/v4Text" } },
+        "dimension": { "enum": ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] },
+        "status": { "enum": ["candidate", "checked-no-signal"] }
+      }
+    },
+    "interactionReviewItem": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/interactionCellBase" },
+            { "type": "object", "required": ["status"], "properties": { "status": { "const": "candidate" } } }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/interactionCellBase" },
+            {
+              "type": "object",
+              "required": ["status", "reviewed_claim_ids", "review_basis"],
+              "properties": {
+                "status": { "const": "checked-no-signal" },
+                "reviewed_claim_ids": { "$ref": "#/$defs/v4IdSet" },
+                "review_basis": { "$ref": "#/$defs/v4Text" }
+              }
+            }
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "acceptanceRoleAssignmentBase": {
+      "type": "object",
+      "required": ["entity_kind", "entity_id", "scope_ref", "acceptance_role", "parent_entity_ids"],
+      "properties": {
+        "entity_kind": { "enum": ["fact", "test_point", "case"] },
+        "entity_id": { "$ref": "#/$defs/v4Text" },
+        "scope_ref": { "$ref": "#/$defs/v4Text" },
+        "acceptance_role": { "enum": ["primary_acceptance", "dependency_contract", "context_only"] },
+        "parent_entity_ids": { "$ref": "#/$defs/v4OptionalIdSet" }
+      }
+    },
+    "acceptanceRoleAssignment": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/acceptanceRoleAssignmentBase" },
+            { "type": "object", "required": ["role_basis_claim_ids"], "properties": { "role_basis_claim_ids": { "$ref": "#/$defs/v4IdSet" } } }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/acceptanceRoleAssignmentBase" },
+            { "type": "object", "required": ["role_basis_decision_ids"], "properties": { "role_basis_decision_ids": { "$ref": "#/$defs/v4IdSet" } } }
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "v4SemanticGapInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "code", "subject_fact_ids", "missing_aspect", "scope_ref", "question", "why_needed", "decision_impact", "unresolved_outcome", "answer_options", "risk_level", "source_claim_ids", "discovery_phase", "affected_test_point_ids"],
+      "properties": {
+        "category": { "const": "semantic_gap" },
+        "code": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "subject_fact_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "missing_aspect": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "scope_ref": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "question": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "why_needed": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "decision_impact": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "unresolved_outcome": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "answer_options": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "risk_level": { "enum": ["critical", "high", "medium", "low"] },
+        "source_claim_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "discovery_phase": { "enum": ["pre_case", "post_case"] },
+        "affected_test_point_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "v4SourceSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "v4SourceJsonValue": {
+      "oneOf": [
+        {
+          "type": [
+            "null",
+            "boolean",
+            "number",
+            "string"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/v4SourceJsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/v4SourceJsonValue"
+          }
+        }
+      ]
+    },
+    "v4SourceSubjectDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_ref",
+        "module_id",
+        "entity_type",
+        "entity_key",
+        "field_path",
+        "condition"
+      ],
+      "properties": {
+        "scope_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "module_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entity_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entity_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/"
+        },
+        "condition": {
+          "$ref": "#/$defs/v4SourceJsonValue"
+        }
+      }
+    },
+    "v4SourceLocatorRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "locator_id",
+        "role"
+      ],
+      "properties": {
+        "locator_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "v4SourceReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "semantic_digest",
+        "units"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantic_digest": {
+          "$ref": "#/$defs/v4SourceSha256"
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "unit_id",
+              "content_digest",
+              "classification"
+            ],
+            "properties": {
+              "unit_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_digest": {
+                "$ref": "#/$defs/v4SourceSha256"
+              },
+              "classification": {
+                "enum": [
+                  "normative",
+                  "non_normative",
+                  "uncertain"
+                ]
+              }
+            }
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "v4SourceLocator": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "locator_id",
+            "source_id",
+            "semantic_digest",
+            "unit_id",
+            "excerpt",
+            "excerpt_digest",
+            "domain",
+            "field_path",
+            "type",
+            "section_id",
+            "range"
+          ],
+          "properties": {
+            "locator_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "semantic_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "excerpt": {
+              "type": "string"
+            },
+            "excerpt_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "type": {
+              "const": "text_block_range"
+            },
+            "section_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "range": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "locator_id",
+            "source_id",
+            "semantic_digest",
+            "unit_id",
+            "excerpt",
+            "excerpt_digest",
+            "domain",
+            "field_path",
+            "type",
+            "table_id",
+            "row",
+            "column"
+          ],
+          "properties": {
+            "locator_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "semantic_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "excerpt": {
+              "type": "string"
+            },
+            "excerpt_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "type": {
+              "const": "table_cell"
+            },
+            "table_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "row": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "column": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "locator_id",
+            "source_id",
+            "semantic_digest",
+            "unit_id",
+            "excerpt",
+            "excerpt_digest",
+            "domain",
+            "field_path",
+            "type",
+            "asset_digest",
+            "page_id",
+            "image_id",
+            "rect"
+          ],
+          "properties": {
+            "locator_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "semantic_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "excerpt": {
+              "type": "string"
+            },
+            "excerpt_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "type": {
+              "const": "image_region"
+            },
+            "asset_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "page_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "image_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rect": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y",
+                "width",
+                "height"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "locator_id",
+            "source_id",
+            "semantic_digest",
+            "unit_id",
+            "excerpt",
+            "excerpt_digest",
+            "domain",
+            "field_path",
+            "type",
+            "presentation_id",
+            "message_digest",
+            "answer_span"
+          ],
+          "properties": {
+            "locator_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "semantic_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "excerpt": {
+              "type": "string"
+            },
+            "excerpt_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "type": {
+              "const": "user_statement"
+            },
+            "presentation_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "answer_span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "v4SourceUnit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "unit_id",
+            "text",
+            "type",
+            "section_id"
+          ],
+          "properties": {
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "text_block",
+                "heading",
+                "list",
+                "code",
+                "image"
+              ]
+            },
+            "section_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "unit_id",
+            "text",
+            "type",
+            "table_id",
+            "row",
+            "column"
+          ],
+          "properties": {
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "table_cell"
+            },
+            "table_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "row": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "column": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "unit_id",
+            "text",
+            "type",
+            "asset_digest",
+            "page_id",
+            "image_id",
+            "rect"
+          ],
+          "properties": {
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "image_region"
+            },
+            "asset_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "page_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "image_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rect": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y",
+                "width",
+                "height"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "unit_id",
+            "text",
+            "type",
+            "presentation_id",
+            "message_digest",
+            "answer_span"
+          ],
+          "properties": {
+            "unit_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "user_statement"
+            },
+            "presentation_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message_digest": {
+              "$ref": "#/$defs/v4SourceSha256"
+            },
+            "answer_span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "v4SourceCanonicalProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_source_id",
+        "source_type",
+        "content",
+        "structure",
+        "assets"
+      ],
+      "properties": {
+        "stable_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "type": "string"
+        },
+        "structure": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/v4SourceUnit"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "canonical_uri",
+              "asset_digest"
+            ],
+            "properties": {
+              "canonical_uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "asset_digest": {
+                "$ref": "#/$defs/v4SourceSha256"
+              }
+            }
+          }
+        }
+      }
+    },
+    "v4SourceCanonicalRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "domain",
+        "semantic_digest",
+        "semantic_projection"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "enum": [
+            "business",
+            "execution_binding"
+          ]
+        },
+        "semantic_digest": {
+          "$ref": "#/$defs/v4SourceSha256"
+        },
+        "semantic_projection": {
+          "$ref": "#/$defs/v4SourceCanonicalProjection"
+        }
+      }
+    },
+    "v4SourceConflictReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_key",
+        "left_claim_id",
+        "right_claim_id",
+        "status"
+      ],
+      "properties": {
+        "subject_key": {
+          "$ref": "#/$defs/v4SourceSha256"
+        },
+        "left_claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "right_claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "consistent",
+            "conflicted",
+            "superseded"
+          ]
+        }
+      }
+    },
+    "v3EvidenceClaim": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "claim_id",
+            "claim_form",
+            "level",
+            "kind",
+            "scope",
+            "value",
+            "source_locator_ids",
+            "source_id"
+          ],
+          "properties": {
+            "claim_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "claim_form": {
+              "const": "direct"
+            },
+            "level": {
+              "const": "E3"
+            },
+            "kind": {
+              "enum": [
+                "requirement",
+                "description",
+                "example",
+                "diagnostic"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_locator_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "claim_id",
+            "claim_form",
+            "level",
+            "kind",
+            "scope",
+            "value",
+            "source_locator_ids",
+            "decision_id",
+            "authority"
+          ],
+          "properties": {
+            "claim_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "claim_form": {
+              "const": "decision-record"
+            },
+            "level": {
+              "enum": [
+                "E1",
+                "E3"
+              ]
+            },
+            "kind": {
+              "enum": [
+                "requirement",
+                "assumption"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_locator_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "decision_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "claim_id",
+            "claim_form",
+            "level",
+            "kind",
+            "scope",
+            "value",
+            "source_locator_ids",
+            "derivation_kind",
+            "derivation_target",
+            "parent_claim_ids",
+            "parameters",
+            "rule_input"
+          ],
+          "properties": {
+            "claim_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "claim_form": {
+              "const": "derived"
+            },
+            "level": {
+              "const": "E2"
+            },
+            "kind": {
+              "enum": [
+                "test-data",
+                "expected-value",
+                "model-element"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_locator_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "derivation_kind": {
+              "enum": [
+                "formula",
+                "decision-table-instance",
+                "boundary-representative",
+                "enumeration-complement",
+                "graph-reachability"
+              ]
+            },
+            "derivation_target": {
+              "enum": [
+                "test-data",
+                "expected-value",
+                "model-element"
+              ]
+            },
+            "parent_claim_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "formula_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "table_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "domain_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "enumeration_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "graph_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rounding": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "rule_input": {
+              "type": "object",
+              "properties": {
+                "formula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "value"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "value": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "unit": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "uniqueItems": true
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rounding": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "outcome": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "lower": {
+                  "type": "number"
+                },
+                "upper": {
+                  "type": "number"
+                },
+                "inclusive": {
+                  "type": "boolean"
+                },
+                "enumerated_values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "closed_world": {
+                  "type": "boolean"
+                },
+                "from": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "to": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "v4EvidenceClaim": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "claim_id",
+            "claim_form",
+            "level",
+            "kind",
+            "scope",
+            "value",
+            "source_locator_ids",
+            "source_id",
+            "domain",
+            "field_path",
+            "document_level_claim"
+          ],
+          "properties": {
+            "claim_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "claim_form": {
+              "const": "direct"
+            },
+            "level": {
+              "const": "E3"
+            },
+            "kind": {
+              "enum": [
+                "requirement",
+                "description",
+                "example",
+                "diagnostic"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_locator_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "document_level_claim": {
+              "type": "boolean"
+            },
+            "locator_roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/v4SourceLocatorRole"
+              }
+            },
+            "subject_descriptor": {
+              "$ref": "#/$defs/v4SourceSubjectDescriptor"
+            },
+            "semantic_value": {
+              "$ref": "#/$defs/v4SourceJsonValue"
+            },
+            "superseded_by": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "oneOf": [
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "requirement"
+                    }
+                  },
+                  "required": [
+                    "subject_descriptor",
+                    "semantic_value"
+                  ]
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "not": {
+                        "const": "requirement"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "claim_id",
+            "claim_form",
+            "level",
+            "kind",
+            "scope",
+            "value",
+            "source_locator_ids",
+            "decision_id",
+            "authority",
+            "domain",
+            "field_path",
+            "document_level_claim"
+          ],
+          "properties": {
+            "claim_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "claim_form": {
+              "const": "decision-record"
+            },
+            "level": {
+              "enum": [
+                "E1",
+                "E3"
+              ]
+            },
+            "kind": {
+              "enum": [
+                "requirement",
+                "assumption"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_locator_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "decision_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "document_level_claim": {
+              "type": "boolean"
+            },
+            "locator_roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/v4SourceLocatorRole"
+              }
+            },
+            "subject_descriptor": {
+              "$ref": "#/$defs/v4SourceSubjectDescriptor"
+            },
+            "semantic_value": {
+              "$ref": "#/$defs/v4SourceJsonValue"
+            },
+            "superseded_by": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "oneOf": [
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "requirement"
+                    }
+                  },
+                  "required": [
+                    "subject_descriptor",
+                    "semantic_value"
+                  ]
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "not": {
+                        "const": "requirement"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "claim_id",
+            "claim_form",
+            "level",
+            "kind",
+            "scope",
+            "value",
+            "source_locator_ids",
+            "derivation_kind",
+            "derivation_target",
+            "parent_claim_ids",
+            "parameters",
+            "rule_input",
+            "domain",
+            "field_path",
+            "document_level_claim"
+          ],
+          "properties": {
+            "claim_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "claim_form": {
+              "const": "derived"
+            },
+            "level": {
+              "const": "E2"
+            },
+            "kind": {
+              "enum": [
+                "test-data",
+                "expected-value",
+                "model-element"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_locator_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "derivation_kind": {
+              "enum": [
+                "formula",
+                "decision-table-instance",
+                "boundary-representative",
+                "enumeration-complement",
+                "graph-reachability"
+              ]
+            },
+            "derivation_target": {
+              "enum": [
+                "test-data",
+                "expected-value",
+                "model-element"
+              ]
+            },
+            "parent_claim_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "formula_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "table_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "domain_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "enumeration_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "graph_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rounding": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "rule_input": {
+              "type": "object",
+              "properties": {
+                "formula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "value"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "value": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "unit": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "uniqueItems": true
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rounding": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "outcome": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "lower": {
+                  "type": "number"
+                },
+                "upper": {
+                  "type": "number"
+                },
+                "inclusive": {
+                  "type": "boolean"
+                },
+                "enumerated_values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "closed_world": {
+                  "type": "boolean"
+                },
+                "from": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "to": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "domain": {
+              "enum": [
+                "business",
+                "execution_binding"
+              ]
+            },
+            "field_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "document_level_claim": {
+              "type": "boolean"
+            },
+            "locator_roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/v4SourceLocatorRole"
+              }
+            },
+            "subject_descriptor": {
+              "$ref": "#/$defs/v4SourceSubjectDescriptor"
+            },
+            "semantic_value": {
+              "$ref": "#/$defs/v4SourceJsonValue"
+            },
+            "superseded_by": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "oneOf": [
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "requirement"
+                    }
+                  },
+                  "required": [
+                    "subject_descriptor",
+                    "semantic_value"
+                  ]
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "not": {
+                        "const": "requirement"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
 }

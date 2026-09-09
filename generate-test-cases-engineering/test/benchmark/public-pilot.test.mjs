@@ -24,17 +24,16 @@ const validatorPath = fileURLToPath(new URL('../../benchmark/public-pilot/valida
 const schemaPath = fileURLToPath(new URL('../../benchmark/public-pilot/catalog.schema.json', import.meta.url));
 const checkedInCatalogPath = fileURLToPath(new URL('../../benchmark/public-pilot/v1/catalog.json', import.meta.url));
 const checkedInComparatorsPath = fileURLToPath(new URL('../../benchmark/public-pilot/v1/comparators.json', import.meta.url));
-const checkedInRepositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const catalogSchema = JSON.parse(await readFile(schemaPath, 'utf8'));
 
 /** @param {string} executable @param {string[]} args */
-async function execFileAsync(executable, args) {
-  return new Promise((resolve, reject) => {
+async function execFileResult(executable, args) {
+  return new Promise((resolve) => {
     childProcess.execFile(executable, args, { encoding: 'utf8' }, (
       /** @type {any} */ error,
       /** @type {string} */ stdout,
       /** @type {string} */ stderr
-    ) => error ? reject(error) : resolve({ stdout, stderr }));
+    ) => resolve({ stdout, stderr, exitCode: error?.code ?? 0 }));
   });
 }
 
@@ -575,46 +574,35 @@ test('public pilot can never claim release eligibility', async (context) => {
   assert.equal(report.status, 'pilot_ready');
   assert.equal(report.release_eligible, false);
   assert.equal(report.release_status, 'insufficient_evidence');
-  assert.equal(report.captures_ready, false);
+  assert.equal(report.captures_ready, true);
   assert.deepEqual(Object.keys(report.counts.by_stratum), [...FROZEN_STRATA]);
   assert.deepEqual(Object.values(report.counts.by_stratum), [5, 5, 5, 5, 5, 5]);
 });
 
-test('checked-in public pilot stays bound to the current target artifacts', async () => {
+test('checked-in public corpus is ready without consuming retained comparator assets', async () => {
   const report = await validatePublicPilot(checkedInCatalogPath);
   const registry = JSON.parse(await readFile(checkedInComparatorsPath, 'utf8'));
 
   assert.equal(report.status, 'pilot_ready');
   assert.equal(report.release_eligible, false);
   assert.equal(report.release_status, 'insufficient_evidence');
-  assert.equal(report.captures_ready, false);
-  assert.equal(hasIssue(report.issues, 'COMPARATOR_ARTIFACT_DIGEST_MISMATCH'), false);
-
-  for (const system of registry.systems.filter((/** @type {any} */ item) => item.status === 'frozen')) {
-    await execFileAsync('git', [
-      '-C', checkedInRepositoryRoot, 'cat-file', '-e', `${system.repository_revision}^{commit}`
-    ]);
-    for (const artifact of system.artifacts) {
-      const { stdout } = /** @type {{ stdout: string }} */ (await execFileAsync('git', [
-        '-C', checkedInRepositoryRoot, 'show',
-        `${system.repository_revision}:${artifact.repository_path}`
-      ]));
-      assert.equal(sha256(stdout), artifact.sha256);
-    }
-  }
+  assert.equal(report.captures_ready, true);
+  assert.equal(report.issues.some((issue) => issue.code.startsWith('COMPARATOR_')), false);
+  assert.equal(registry.systems.length, 4);
+  assert.equal(registry.systems.filter((/** @type {any} */ system) => system.status === 'unresolved').length, 3);
 });
 
-test('captures stay closed while any comparator identity is unresolved', async (context) => {
+test('retained unresolved comparator identities do not block single-system captures', async (context) => {
   const fixture = await createFixture(context);
 
   const report = await validatePublicPilot(fixture.catalogPath);
 
   assert.equal(report.status, 'pilot_ready');
-  assert.equal(report.captures_ready, false);
-  assert.equal(hasIssue(report.issues, 'COMPARATOR_UNRESOLVED'), true);
+  assert.equal(report.captures_ready, true);
+  assert.equal(report.issues.some((issue) => issue.code.startsWith('COMPARATOR_')), false);
 });
 
-test('frozen comparators require exact artifact digests, version, model identity, and run recipe', async (context) => {
+test('malformed historical comparator metadata is not a public-corpus gate', async (context) => {
   const fixture = await createFixture(context);
   await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
     registry.systems[1].status = 'frozen';
@@ -623,96 +611,9 @@ test('frozen comparators require exact artifact digests, version, model identity
 
   const report = await validatePublicPilot(fixture.catalogPath);
 
-  assert.equal(report.status, 'invalid');
-  assert.equal(report.captures_ready, false);
-  assert.equal(hasIssue(report.issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID'), true);
-});
-
-test('captures become ready only after all four comparator identities are frozen', async (context) => {
-  const fixture = await createFixture(context);
-  const baselineDigests = new Map();
-  for (const systemId of ['long-prompt', 'test-case-designer', 'technique-router']) {
-    const repositoryPath = `comparators/${systemId}.md`;
-    baselineDigests.set(systemId, {
-      repositoryPath,
-      digest: await writeRetained(fixture.base, repositoryPath, `# ${systemId} frozen prompt\n`)
-    });
-  }
-  await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
-    const template = registry.systems[0];
-    for (const system of registry.systems.slice(1)) {
-      Object.assign(system, {
-        status: 'frozen',
-        version: '1.0.0',
-        repository_revision: '2'.repeat(40),
-        artifacts: [{
-          artifact_id: `${system.system_id}-prompt`,
-          kind: 'prompt',
-          repository_path: baselineDigests.get(system.system_id).repositoryPath,
-          sha256: baselineDigests.get(system.system_id).digest
-        }],
-        model_identity: { ...template.model_identity },
-        run_recipe: { ...template.run_recipe, recipe_id: `${system.system_id}-run-v1` }
-      });
-      delete system.missing_fields;
-      delete system.resolution_note;
-    }
-    registry.captures_allowed = true;
-  });
-  await saveCatalog(fixture);
-
-  const report = await validatePublicPilot(fixture.catalogPath);
-
   assert.equal(report.status, 'pilot_ready');
   assert.equal(report.captures_ready, true);
-  assert.equal(hasIssue(report.issues, 'COMPARATOR_UNRESOLVED'), false);
-
-  fixture.catalog.release_eligible = true;
-  await saveCatalog(fixture);
-  const invalidReport = await validatePublicPilot(fixture.catalogPath);
-  assert.equal(invalidReport.status, 'invalid');
-  assert.equal(invalidReport.captures_ready, false);
-});
-
-test('frozen comparator artifacts are read and digest-verified inside the repository root', async (context) => {
-  await context.test('tampered bytes', async (/** @type {any} */ childContext) => {
-    const fixture = await createFixture(childContext);
-    await appendFile(path.join(fixture.base, 'skill/generate-test-cases/SKILL.md'), 'tampered\n');
-
-    const report = await validatePublicPilot(fixture.catalogPath);
-
-    assert.equal(report.status, 'invalid');
-    assert.equal(report.captures_ready, false);
-    assert.equal(hasIssue(report.issues, 'COMPARATOR_ARTIFACT_DIGEST_MISMATCH'), true);
-  });
-
-  await context.test('missing path', async (/** @type {any} */ childContext) => {
-    const fixture = await createFixture(childContext);
-    await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
-      registry.systems[0].artifacts[0].repository_path = 'skill/generate-test-cases/MISSING.md';
-    });
-    await saveCatalog(fixture);
-
-    const report = await validatePublicPilot(fixture.catalogPath);
-
-    assert.equal(report.status, 'invalid');
-    assert.equal(report.captures_ready, false);
-    assert.equal(hasIssue(report.issues, 'RETAINED_FILE_UNREADABLE'), true);
-  });
-
-  await context.test('parent traversal', async (/** @type {any} */ childContext) => {
-    const fixture = await createFixture(childContext);
-    await updateRetainedJson(fixture, fixture.catalog.comparators, (registry) => {
-      registry.systems[0].artifacts[0].repository_path = '../outside.md';
-    });
-    await saveCatalog(fixture);
-
-    const report = await validatePublicPilot(fixture.catalogPath);
-
-    assert.equal(report.status, 'invalid');
-    assert.equal(report.captures_ready, false);
-    assert.equal(hasIssue(report.issues, 'COMPARATOR_FROZEN_IDENTITY_INVALID'), true);
-  });
+  assert.equal(report.issues.some((issue) => issue.code.startsWith('COMPARATOR_')), false);
 });
 
 test('machine reviewers cannot be encoded as external experts', async (context) => {
@@ -1276,10 +1177,23 @@ test('a catalog attempt to set release_eligible true is invalid and cannot chang
 
 test('the offline CLI emits exactly one JSON report', async (context) => {
   const fixture = await createFixture(context);
-  const { stdout, stderr } = /** @type {any} */ (await execFileAsync(process.execPath, [validatorPath, fixture.catalogPath]));
+  const { stdout, stderr, exitCode } = await execFileResult(process.execPath, [validatorPath, fixture.catalogPath]);
   const lines = stdout.trimEnd().split('\n');
 
+  assert.equal(exitCode, 0);
   assert.equal(stderr, '');
   assert.equal(lines.length, 1);
   assert.deepEqual(JSON.parse(lines[0]), await validatePublicPilot(fixture.catalogPath));
+});
+
+test('the offline CLI exits nonzero when the catalog report is invalid', async (context) => {
+  const fixture = await createFixture(context);
+  fixture.catalog.release_eligible = true;
+  await saveCatalog(fixture);
+
+  const result = await execFileResult(process.execPath, [validatorPath, fixture.catalogPath]);
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.stderr, '');
+  assert.equal(JSON.parse(result.stdout).status, 'invalid');
 });

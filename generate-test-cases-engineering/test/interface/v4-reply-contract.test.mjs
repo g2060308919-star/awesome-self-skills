@@ -30,12 +30,36 @@ const resumeRef = {
 const common = {
   run_id: 'RUN-v4', produced_artifacts: [], non_blocking_diagnostics: []
 };
+const semanticPresentation = {
+  schema_version: '4.0.0', presentation_id: `PRES-${'1'.repeat(64)}`,
+  phase: 'requirements_analysis', supersedes_presentation_id: null,
+  answered_part_ids: [], remaining_part_ids: [`QP-${'2'.repeat(64)}`],
+  cycle_digest: `sha256:${'3'.repeat(64)}`, run_actions: ['cancel_run'],
+  recovery: {
+    mode: 'append_clarification_event', run_id: 'RUN-v4', committed_revision: 2,
+    committed_checkpoint_digest: `sha256:${'4'.repeat(64)}`,
+    after_partial_answer: 'issue_successor_for_remaining_parts'
+  },
+  question_parts: [{
+    question_part_id: `QP-${'2'.repeat(64)}`, root_issue_id: `ROOT-${'5'.repeat(64)}`,
+    root_version_digest: `sha256:${'6'.repeat(64)}`, question: 'IP 列代表什么？',
+    why_needed: '需要明确业务含义。', decision_impact: '决定用例数据与预期。',
+    unresolved_outcome: '该场景保持待确认。', affected_facts: ['IP 列'],
+    answer_options: ['网络 IP', '定位城市'], risk_level: 'high',
+    available_actions: ['answer_question_part', 'defer_question_part', 'mark_question_unknown', 'request_delivery'],
+    action_context: {
+      presentation_id: `PRES-${'1'.repeat(64)}`, question_part_id: `QP-${'2'.repeat(64)}`,
+      root_issue_id: `ROOT-${'5'.repeat(64)}`, root_version_digest: `sha256:${'6'.repeat(64)}`
+    }
+  }]
+};
 const replies = {
   need_user_answers: {
     ...common, status: 'need_user_answers', phase: 'requirements_analysis',
     incomplete_reason: { code: 'SEMANTIC_GAP', summary: 'IP 列的业务含义尚未明确。' },
     user_next_steps: [{ action: 'answer_question_part', description: '确认 IP 列展示网络地址还是城市。' }],
-    recovery: { mode: 'append_clarification_event', description: '在当前运行中提交问题答案。' }
+    recovery: { mode: 'append_clarification_event', description: '在当前运行中提交问题答案。' },
+    semantic_presentation: semanticPresentation
   },
   need_artifact: {
     ...common, status: 'need_artifact', phase: 'source_acquisition',
@@ -43,10 +67,17 @@ const replies = {
     user_next_steps: [{ action: 'provide_artifact', description: '提供图片的稳定资源 ID 或安全上传引用。' }],
     recovery: { mode: 'resume_from_committed_checkpoint', description: '验证材料后从已提交检查点重试。' },
     artifact_requests: [artifactRequest], resume_ref: resumeRef,
-    available_actions: ['provide_artifact', 'cancel_run']
+    available_actions: ['provide_artifact', 'cancel_run'],
+    cancel_context: { run_id: 'RUN-v4', phase: 'source_acquisition', phase_version: 2 }
   },
   need_revision: {
     ...common, status: 'need_revision', phase: 'case_design',
+    stage: 'case_drafts', schema_ref: 'case-drafts.schema.json', source_revision: 2,
+    artifact_path: '/tmp/run/staging/case-drafts.json', artifact_digest: '7'.repeat(64),
+    diagnostics: [{
+      category: 'schema', code: 'CASE_DRAFT_INVALID', path: '/cases/0',
+      message: '一条用例的预期结果尚未关联测试点。'
+    }],
     incomplete_reason: { code: 'CASE_DRAFT_INVALID', summary: '一条用例的预期结果尚未关联测试点。' },
     user_next_steps: [{ action: 'revise_artifact', description: '修正对应工件并重新提交。' }],
     recovery: { mode: 'retry_current_run', description: '保留已接受 revision，重新提交修正工件。' }
@@ -70,6 +101,15 @@ const replies = {
     user_next_steps: [{ action: 'create_new_run', description: '需要继续时创建关联原运行的新运行。' }],
     recovery: { mode: 'create_sibling_run', description: '新运行引用原 run ID，保留历史交付。' }
   }
+};
+
+const stageArtifactReply = {
+  ...common, status: 'need_artifact', phase: 'execution_closure',
+  stage: 'source_pack', schema_ref: 'source-pack.schema.json',
+  scope: { source_revision: 0, run_instance_id: 'RUN-v4' }, diagnostics: [],
+  incomplete_reason: { code: 'STAGE_ARTIFACT_REQUIRED', summary: '仍需 execution Source Pack。' },
+  user_next_steps: [{ action: 'write_stage_artifact', description: '写入请求的 Source Pack。' }],
+  recovery: { mode: 'write_staging_artifact', description: '在同一运行目录补齐工件。' }
 };
 
 for (const [status, reply] of Object.entries(replies)) {
@@ -127,6 +167,25 @@ test('v4 need_artifact requires every frozen recovery field and rejects v3 or ex
     delete missing[key];
     assert.notDeepEqual(validateAgainstSchema({ ...reply, resume_ref: missing }, replySchema), [], `resume missing ${key}`);
   }
+});
+
+test('v4 stage-artifact stop is a closed BR-16 reply for execution and generation stages', () => {
+  assert.deepEqual(validateAgainstSchema(stageArtifactReply, replySchema), []);
+  assert.deepEqual(validateAgainstSchema({
+    ...stageArtifactReply, phase: 'requirements_analysis', stage: 'evidence_claims',
+    schema_ref: 'evidence-claims.schema.json'
+  }, replySchema), []);
+  for (const key of [
+    'phase', 'run_id', 'produced_artifacts', 'incomplete_reason',
+    'user_next_steps', 'recovery', 'non_blocking_diagnostics'
+  ]) {
+    const invalid = /** @type {Record<string, any>} */ ({ ...stageArtifactReply });
+    delete invalid[key];
+    assert.notDeepEqual(validateAgainstSchema(invalid, replySchema), [], `missing ${key}`);
+  }
+  assert.notDeepEqual(validateAgainstSchema({
+    ...stageArtifactReply, phase: 'case_design'
+  }, replySchema), [], 'source_pack cannot claim the case-design phase');
 });
 
 test('v4 need_artifact freezes provide_artifact then cancel_run as its exact two actions', () => {

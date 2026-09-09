@@ -1,0 +1,59 @@
+{
+  "valid": [
+    {
+      "name": "complete_ordering_registry_uses_sourced_and_confirmed_dependencies",
+      "reason": "The complete registry reaches business flow, page action, locator order and both closed dependency-basis branches.",
+      "value": {
+        "business_flows": [
+          {
+            "flow_id": "FLOW-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "module_id": "admin",
+            "locator_order_key": [0, 0, [2], 4],
+            "claim_ids": ["CLM-flow"]
+          }
+        ],
+        "page_actions": [
+          {
+            "action_id": "ACTION-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "flow_id": "FLOW-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "locator_order_key": [0, 1, [2, 1], 0],
+            "claim_ids": ["CLM-action"]
+          }
+        ],
+        "dependency_rules": [
+          {
+            "dependency_rule_id": "DEP-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "predecessor_outcome_id": "OUT-create",
+            "successor_outcome_id": "OUT-view",
+            "basis": { "kind": "evidence", "claim_ids": ["CLM-dependency"] }
+          },
+          {
+            "dependency_rule_id": "DEP-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "predecessor_outcome_id": "OUT-review",
+            "successor_outcome_id": "OUT-export",
+            "basis": { "kind": "decision", "decision_ids": ["DEC-dependency"] }
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "ordering_registry_rejects_adapter_authored_rank",
+      "reason": "The closed registry accepts only compiler-derived locator order keys and rejects a fictional rank field.",
+      "value": {
+        "business_flows": [
+          {
+            "flow_id": "FLOW-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "module_id": "admin",
+            "locator_order_key": [0, 0, [2], 4],
+            "claim_ids": ["CLM-flow"],
+            "rank": 1
+          }
+        ],
+        "page_actions": [],
+        "dependency_rules": []
+      }
+    }
+  ]
+}

@@ -1,64 +1,63 @@
 # Clarification Policy
 
-Clarify only after the complete A–G analysis. Merge current fresh answerable root issues into one risk-ordered set; do not ask per Case or impose a fixed total round count.
+Read this policy before presenting any semantic question or submitting `answer_question_part`, `defer_question_part`, `mark_question_unknown`, or `request_delivery`. Copy the compiler-provided presentation, question-part, root-version, run, revision, and recovery bindings exactly. Never mint or infer protocol IDs from wording.
 
-Read `references/clarification-policy.md` before writing any higher Source Pack revision. On context recovery, resume the same canonical absolute run directory, re-invoke the runner first, and never guess the stage from chat history or files. Clarification, delivery, reopen, and unresolved-business-fact supplements append to that same run.
+## Clarify at two semantic boundaries
 
-If the original PRD, any supplementary source, or the material task scope changes, return `NEW_RUN_REQUIRED` and preserve the old run. Create or select a sibling private run only for that actual user source or scope change. A path spelling containing `..` that resolves to the frozen directory is the same run, not a sibling.
+For a v4 Case Document, run pre-case semantic-gap discovery only after complete source review, an atomic fact ledger, and a complete scope manifest, and before Behavior Views or Case Drafts. It closes only source-backed semantic gaps that must be decided before modeling.
 
-Only an answerable, open/fresh, and unsuppressed compiler root is eligible for a question. Non-answerable compiler-owned gaps remain Blocked with their recovery guidance and never become questions. Copy terminal-fact, interaction, and case-blocker root IDs exactly from the runner reply into a Decision or `reopen_root_issues` event. Never recompute, infer, or mint those IDs from wording, evidence, risk, or affected Test Points.
+The post-case (`case_design`) clarification happens after Case design. Merge only genuinely new roots with old roots that are still pending; never repeat resolved roots or execution-preparation gaps. Do not move known pre-case gaps into this later phase. Both `requirements_analysis` and `case_design` contain only `semantic_gap` questions. Environment URLs, accounts, data availability, query tools, observers, controls, and cleanup access are execution resources, not Case Document questions.
 
-## Present one convergent set
+At either phase, merge all current fresh answerable roots into one risk-ordered presentation. Do not ask per Case and do not impose a fixed total round count. Non-answerable source, evidence, or process gaps retain their compiler status and recovery guidance; they never become business questions.
 
-The runner's IDs are protocol bindings, not user language. Never show `root_issue_id`, `question_id`, obligation IDs, Fact IDs, Claim IDs, digests, or raw enum codes in a normal clarification. Retain them privately and copy them unchanged into the next artifact. Show them only when the user explicitly requests an audit or when reporting a protocol failure.
+## Present business decisions, not protocol
 
-For each returned root issue show a numbered business title, the concrete missing rule or capability in the frozen `output_language`, its scope, why it is being asked, and what remains blocked without an answer. Spell risk counts out with localized labels (`严重/高/中/低` for Chinese); never present an unlabeled tuple such as `0/10/2/0`. End with a short answer form. Ask every current fresh root in the returned reply. Technical or environmental blockers that a user answer cannot resolve remain Blocked without becoming business questions. Unknown observer/capability references are internal modeling mistakes to repair; a declared but genuinely unavailable shared capability is one scope-bound root with all affected Test Points.
+For each question part show, in the frozen output language:
 
-One displayed question must request one independently answerable business decision. If a compiler root describes several independent decisions, preserve the root binding but present separate clearly labeled subquestions and require an answer for each before creating one Decision Record. Do not compress role, state, timing, interface, and exception decisions into one vague paragraph.
+- one concrete `question` about one independently answerable business dimension;
+- the business object and affected business items;
+- `why_needed`;
+- `decision_impact`;
+- `unresolved_outcome`;
+- answer options and available action names;
+- named risk counts whose denominator is distinct affected formal Test Points.
 
-Separate the presentation into business-rule gaps, execution-preparation gaps, scope exclusions, and source or evidence gaps. These headings are display-only; they never change the compiler's true classification. Use direct prompts such as “退款失败后订单应处于什么状态？” instead of asking the user to define an abstract “observation capability” when the missing material can be named concretely.
+Never show root, Fact, Claim, obligation, question-part, digest, or other internal ID in normal business content. Keep `root_issue_id`, `root_version_digest`, `question_part_id`, `presentation_id`, and `action_context` hidden for event construction. An explicit audit may display them separately.
 
-In every semantic, execution-confirmation, or post-ready preview group, `risk_counts` counts distinct affected formal Test Points using their compiler-assigned risk. Cases map to their related formal Test Points; a Test Point shared by multiple Cases is counted once. Exploratory suggestions do not contribute to this count. Label it “受影响正式测试点风险” in Chinese (or “affected formal Test Point risk” in English); do not describe it as Case counts or Case-authored risk ratings. `counts_by_kind` separately counts the displayed decision objects.
+Spell risk labels out (`严重/高/中/低` or localized equivalents) and state what was counted. Never show a bare tuple. Separate semantic-rule gaps, source/evidence acquisition gaps, scope exclusions, and execution preparation in the presentation without changing their true categories.
 
-Offer these answer natures:
+## Apply partial answers exactly
 
-- authorized final rule for the current declared scope;
-- explicit temporary assumption;
-- unknown, skip, or defer;
-- answer text without a declared nature.
+One user response is one atomic append group and creates one Source Pack revision only after compiler validation.
 
-## Interpret answers exactly
+- A reliably bound final answer becomes an authorized task-scoped E3 Decision for its declared scope.
+- A reliably bound temporary answer becomes an explicit temporary assumption at E1; dependent Cases are at most Conditional.
+- An answer without a declared nature defaults to E1. Do not ask a nature-only follow-up.
+- A valid answer changes only its target question part/root version.
+- Every unanswered item remains presented and pending; it is not deferred or suppressed by omission. It reappears in the successor presentation.
+- Blank or unparseable text, or text that cannot be reliably bound, writes no Decision or control and changes neither root state nor revision.
+- `no_information_gain` returns the same pending set without suppressing any root and without committing a revision.
 
-- An authorized final rule with explicit authority scope becomes task-scoped E3.
-- An explicit temporary assumption becomes E1 and may support only Conditional Cases.
-- Unknown, skip, or defer remains Blocked and suppressed; use the matching unknown or deferred disposition.
-- An answer without declared nature defaults to E1. Do not ask a nature-only follow-up question.
-- Every unanswered item in the current set becomes deferred, stays Blocked, and is suppressed.
+Only explicit controls change an unanswered part:
 
-Create Decision Records from business answers. Preserve question and root IDs, affected obligation IDs, confirmer, time, answer, disposition, authority/effective scope, evidence reference and level. Decision Records are append-only and apply only to their declared scope.
+- `defer_question_part` -> `deferred_by_user`;
+- `mark_question_unknown` -> `unknown_by_user`;
+- `request_delivery` -> `closed_for_delivery`, only for its explicit question-part refs.
 
-Use one monotonically increasing clarification event sequence across decisions and controls. Apply one user response as one append group and create exactly one new Source Pack revision.
+Unknown, skip, or defer remains a visible semantic gap in the Case Document. It is not NotApplicable and does not create an execution disposition. Never automatically defer omitted parts and never treat a partial reply as an answer to the entire presentation.
 
-Keep the candidate revision in staging until the compiler validates the complete append against the prior clarification lifecycle. A rejected Decision, delivery, or reopen event must remain correctable at the same staged revision and must not create an accepted revision or advance the checkpoint.
+## Construct only advertised events
 
-## Deliver now without fabricating answers
+An `answer_question_part` binds the latest presentation ID, question part ID, root issue ID, root version digest, answer, and `final` or `temporary` nature. `defer_question_part` and `mark_question_unknown` bind the same latest refs. `request_delivery` closes only explicit presentation-bound question-part refs. A request to deliver every current gap carries the complete pending-root set; it never pre-closes a future root discovered by recompilation.
 
-When the user requests immediate delivery, append `request_delivery` with the complete pending-root set from the current `need_user_answers` reply. Submit it as a new Source Pack revision. Do not encode delivery as a business answer.
+Show `why_needed`, `decision_impact`, `unresolved_outcome`, action labels, and `recovery` instructions. Keep exact `available_actions` and `action_context` from the validated presentation as hidden submission bindings. A stale presentation, stale root version, missing context field, or cross-part target writes no event. Candidate changes remain in staging until the compiler commits the entire append; a rejected group creates no accepted revision or checkpoint.
 
-The compiler defers the current pending set and any new roots revealed while recompiling the same answer group. In case-document delivery it then delivers a document retaining those Blocked and pending entries, never runner-ready. In execution-plan delivery it enters execution closure and cannot finish until the user resolves every disposition and confirms the displayed plan. Never infer defaults, delete blockers, or hand-edit final files.
+When the user asks for delivery, do not fabricate answers or delete gaps. Submit `request_delivery` for only the explicitly selected current parts. The compiler determines `blocked_only` or `delivered_with_gaps`; those results preserve closed roots and formal coverage accounting.
 
-## Reopen suppressed issues
+## Reopen without mutating history
 
-When the user explicitly reopens issues, append `reopen_root_issues` with only the selected suppressed IDs and submit a new Source Pack revision. Do not fabricate a business answer.
+During execution closure, `reopen_semantic_question` is the only route back to business clarification. It supersedes the current execution run and creates a sibling Case Document run bound to the immutable parent `case_document_ref`, semantic root/version refs, `parent_execution_run_id`, and `creation_reason=reopen_semantic_question`. It never edits the execution run or reactivates suspended old Decisions.
 
-After recompilation, present every fresh issue returned by the compiler, including issues newly revealed outside the selected subset. Reopening controls which suppressed roots return to open; it does not limit the next fresh-root calculation.
+After the sibling recompiles, present every fresh root it returns. A new answer must bind the reopened root version. The old Decision remains auditable as suspended; it cannot silently regain effect. After a new Case Document is delivered, a future execution plan must be a new run referencing that new immutable manifest.
 
-## Converge without arbitrary round limits
-
-Continue only while new information reveals fresh answerable roots. Stop when no fresh roots remain, the user requests delivery, or the answer group has no information gain. Unknown, deferred, and unanswered roots are not automatically asked again; only an explicit reopen changes that state.
-
-Suppression affects business questioning only; it does not select an execution disposition. “Only execute the currently available Cases” must become explicit per-item decisions for every non-NotApplicable exclusion, normally using `scope_excluded_for_run`, followed by display and confirmation of the complete plan. A reply with some valid answers leaves omitted items pending rather than silently deciding or pausing them. An entirely non-informative or explicit stop response uses a presentation-bound pause event.
-
-A `request_reanalysis` is a non-evidence control. It may cite only existing source locators and current displayed item versions, adds no business outcome, and invalidates the affected downstream artifacts for recompilation. Original source text or material scope changes require a new run instead.
-
-If every formal Oracle remains unknown, a valid result can contain zero Grounded/Conditional Cases and a complete Blocked ledger. That is an evidence outcome, not a pipeline error.
+For legacy v3 input, migration is read-only. A v3 part that was automatically `suppressed_deferred` only because it was omitted becomes pending in the v4 sibling; an explicitly deferred part stays deferred. v3 is never used as a live v4 fallback.

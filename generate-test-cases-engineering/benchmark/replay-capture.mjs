@@ -6,6 +6,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { canonicalStringify, digest as semanticDigest } from '../src/canonical.mjs';
+import { createPresentationSnapshot } from '../src/execution-events.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from '../src/schema-validator.mjs';
 import {
   OPERATOR_TASK_ID,
@@ -194,6 +195,209 @@ async function replayOnce(options) {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-release-replay-'));
   const deadline = Math.min(options.deadline ?? Number.POSITIVE_INFINITY, Date.now() + REPLAY_TIMEOUT_MS);
   try {
+    // A durable run identity is compiler-owned.  A retained transcript proves
+    // that its first Source Pack matched the identity shown by the original
+    // empty-run reply, but a replay necessarily receives a fresh identity.
+    // Rebind that one opaque nonce while preserving every semantic byte and
+    // compare replies after the inverse alpha-renaming.
+    const originalRunId = options.transcript.events[0]?.artifact?.run_instance_id;
+    if (typeof originalRunId !== 'string' || !/^RUN-[0-9a-f-]{36}$/u.test(originalRunId)) {
+      throw new Error('Transcript Source Pack has no valid compiler-issued run identity.');
+    }
+    const initialReply = await invokeCli(options.runnerPath, runDirectory, deadline - Date.now());
+    const initialDiagnostics = validateAgainstSchema(initialReply, options.replySchema);
+    if (initialDiagnostics.length > 0) throw new Error('Fresh replay reply schema invalid.');
+    const replayRunId = initialReply?.scope?.run_instance_id ?? initialReply?.run_instance_id;
+    if (initialReply?.status !== 'need_artifact' || initialReply?.stage !== 'source_pack'
+      || typeof replayRunId !== 'string' || !/^RUN-[0-9a-f-]{36}$/u.test(replayRunId)) {
+      throw new Error('Fresh replay did not establish a compiler-owned run identity.');
+    }
+    const identityPatterns = new Map([
+      ['run', /^RUN-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u],
+      ['presentation', /^(?:PRESENTATION-[0-9a-f]{24}|PRES-[0-9a-f]{64})$/u],
+      ['group', /^GROUP-[0-9a-f]{24}$/u],
+      ['question', /^QUESTION-[0-9a-f]{24}$/u],
+      ['preview_request', /^PREVIEW-[0-9a-f]{32}$/u]
+    ]);
+    const scalarIdentityDomains = new Map([
+      ['run_instance_id', 'run'], ['run_id', 'run'],
+      ['presentation_id', 'presentation'], ['prompt_id', 'presentation'],
+      ['presented_prompt_id', 'presentation'], ['presented_presentation_id', 'presentation'],
+      ['supersedes_presentation_id', 'presentation'], ['replaces_presentation_id', 'presentation'],
+      ['cancels_presentation_id', 'presentation'], ['latest_presentation_id', 'presentation'],
+      ['group_id', 'group'], ['question_id', 'question'],
+      ['request_instance_id', 'preview_request'],
+      ['next_request_instance_id', 'preview_request'],
+      ['originating_request_instance_id', 'preview_request']
+    ]);
+    const arrayIdentityDomains = new Map([
+      ['decision_group_ids', 'group']
+    ]);
+    const identityMaps = new Map([...identityPatterns.keys()].map((domain) => [domain, {
+      transcriptToReplay: new Map(), replayToTranscript: new Map()
+    }]));
+    /** @param {string} domain @param {string} transcriptValue @param {string} replayValue @param {string} key */
+    const bindIdentity = (domain, transcriptValue, replayValue, key) => {
+      const pattern = identityPatterns.get(domain);
+      if (!pattern?.test(transcriptValue) || !pattern.test(replayValue)) {
+        throw new Error(`Replay-scoped identity type invalid for ${key}.`);
+      }
+      const maps = identityMaps.get(domain);
+      if (!maps) throw new Error(`Unknown replay-scoped identity domain for ${key}.`);
+      const priorReplay = maps.transcriptToReplay.get(transcriptValue);
+      const priorTranscript = maps.replayToTranscript.get(replayValue);
+      if ((priorReplay && priorReplay !== replayValue)
+        || (priorTranscript && priorTranscript !== transcriptValue)) {
+        throw new Error(`Replay-scoped identity conflict for ${key}.`);
+      }
+      maps.transcriptToReplay.set(transcriptValue, replayValue);
+      maps.replayToTranscript.set(replayValue, transcriptValue);
+    };
+    bindIdentity('run', originalRunId, replayRunId, 'run_instance_id');
+    /**
+     * Rewrite only fields whose closed protocol type is a compiler-owned,
+     * run-scoped identity. Equal strings in business content and digest fields
+     * are deliberately outside this alpha-renaming boundary.
+     * @param {any} value @param {'toTranscript'|'toReplay'} direction
+     * @param {string|null} [key] @param {string|null} [arrayKey] @returns {any}
+     */
+    const rewriteIdentities = (value, direction, key = null, arrayKey = null) => {
+      if (typeof value === 'string') {
+        const domain = (key && scalarIdentityDomains.get(key))
+          || (arrayKey && arrayIdentityDomains.get(arrayKey));
+        if (!domain) return value;
+        const maps = identityMaps.get(domain);
+        if (!maps) throw new Error(`Unknown replay-scoped identity domain for ${key ?? arrayKey}.`);
+        return direction === 'toTranscript'
+          ? (maps.replayToTranscript.get(value) ?? value)
+          : (maps.transcriptToReplay.get(value) ?? value);
+      }
+      if (Array.isArray(value)) {
+        const output = value.map((item) => rewriteIdentities(item, direction, null, key));
+        if (key === 'groups') output.sort((left, right) => (
+          String(left?.group_id ?? '').localeCompare(String(right?.group_id ?? ''), 'en')
+        ));
+        return output;
+      }
+      if (isRecord(value)) return Object.fromEntries(
+        Object.entries(value).map(([childKey, item]) => [
+          childKey, rewriteIdentities(item, direction, childKey, null)
+        ])
+      );
+      return value;
+    };
+    /** @param {any} expected @param {any} actual @param {string|null} [key] @returns {void} */
+    const learnReplayScopedIdentities = (expected, actual, key = null) => {
+      const domain = key ? scalarIdentityDomains.get(key) : null;
+      if (domain && typeof expected === 'string' && typeof actual === 'string' && expected !== actual) {
+        if (domain === 'run') {
+          const maps = identityMaps.get(domain);
+          if (!maps) throw new Error(`Unknown replay-scoped identity domain for ${key}.`);
+          if (maps.transcriptToReplay.get(expected) !== actual) {
+            throw new Error(`Replay-scoped identity conflict for ${key}.`);
+          }
+        } else bindIdentity(domain, expected, actual, key ?? domain);
+        return;
+      }
+      if (Array.isArray(expected) && Array.isArray(actual)) {
+        // Legacy readable groups are ordered by their run-derived IDs. Their
+        // safe pairings are learned from the canonical checkpoint below, not
+        // from array position in an untrusted transcript.
+        if (key === 'groups') return;
+        for (let index = 0; index < Math.min(expected.length, actual.length); index += 1) {
+          learnReplayScopedIdentities(expected[index], actual[index]);
+        }
+        return;
+      }
+      if (isRecord(expected) && isRecord(actual)) {
+        for (const childKey of Object.keys(expected)) {
+          if (childKey in actual) learnReplayScopedIdentities(expected[childKey], actual[childKey], childKey);
+        }
+      }
+    };
+    /** @param {any} snapshot @param {string} runId @param {any} postReadyControl */
+    const recreateLegacyPresentation = (snapshot, runId, postReadyControl) => createPresentationSnapshot({
+      runInstanceId: runId,
+      purpose: snapshot.purpose,
+      entryContext: snapshot.entry_context,
+      postReadyControl,
+      sourceRevision: snapshot.source_revision,
+      planDigest: snapshot.plan_digest,
+      planChangeHeadSeq: snapshot.plan_change_head_seq,
+      groups: snapshot.groups.map((/** @type {any} */ group) => ({
+        question: group.question,
+        items: group.item_refs,
+        allowedOptions: group.allowed_options,
+        answerExample: group.answer_example,
+        proposedChange: group.proposed_change
+      }))
+    });
+    /** @param {any} group */
+    const groupSemanticKey = (group) => canonicalStringify({
+      question: group.question, item_refs: group.item_refs,
+      allowed_options: group.allowed_options, answer_example: group.answer_example,
+      proposed_change: group.proposed_change
+    });
+    /** @param {any} expectedReply @param {any} actualReply @returns {Promise<string|null>} */
+    const verifyLegacyPresentationDigest = async (expectedReply, actualReply) => {
+      if (!('presentation_digest' in expectedReply) && !('presentation_digest' in actualReply)) return null;
+      if (typeof expectedReply.presentation_digest !== 'string'
+        || typeof actualReply.presentation_digest !== 'string') {
+        throw new Error('Recorded presentation digest mismatch.');
+      }
+      let checkpoint;
+      try {
+        checkpoint = JSON.parse((await readRunFile(runDirectory, 'checkpoint.json')).toString('utf8'));
+      } catch {
+        throw new Error('Recorded presentation digest has no canonical checkpoint.');
+      }
+      const actualSnapshot = checkpoint?.presentation_snapshot;
+      if (!isRecord(actualSnapshot) || !Array.isArray(actualSnapshot.groups)) {
+        throw new Error('Recorded presentation digest has no canonical checkpoint.');
+      }
+      const actualDigest = semanticDigest(actualSnapshot);
+      const recreatedActual = recreateLegacyPresentation(
+        actualSnapshot, replayRunId, actualSnapshot.post_ready_control
+      );
+      if (checkpoint.presentation_snapshot_digest !== actualDigest
+        || actualReply.presentation_digest !== actualDigest
+        || canonicalStringify(recreatedActual) !== canonicalStringify(actualSnapshot)) {
+        throw new Error('Replay presentation checkpoint is not canonical.');
+      }
+      const transcriptPostReadyControl = rewriteIdentities(
+        actualSnapshot.post_ready_control, 'toTranscript'
+      );
+      const transcriptSnapshot = recreateLegacyPresentation(
+        actualSnapshot, originalRunId, transcriptPostReadyControl
+      );
+      bindIdentity(
+        'presentation', transcriptSnapshot.presentation_id,
+        actualSnapshot.presentation_id, 'presentation_id'
+      );
+      const transcriptGroups = new Map();
+      for (const group of transcriptSnapshot.groups) {
+        const semanticKey = groupSemanticKey(group);
+        if (transcriptGroups.has(semanticKey)) {
+          throw new Error('Replay presentation contains ambiguous compiler-owned groups.');
+        }
+        transcriptGroups.set(semanticKey, group);
+      }
+      for (const actualGroup of actualSnapshot.groups) {
+        const transcriptGroup = transcriptGroups.get(groupSemanticKey(actualGroup));
+        if (!transcriptGroup) throw new Error('Replay presentation group semantics changed.');
+        bindIdentity('group', transcriptGroup.group_id, actualGroup.group_id, 'group_id');
+        bindIdentity('question', transcriptGroup.question_id, actualGroup.question_id, 'question_id');
+      }
+      const normalizedSnapshot = rewriteIdentities(actualSnapshot, 'toTranscript');
+      if (canonicalStringify(normalizedSnapshot) !== canonicalStringify(transcriptSnapshot)) {
+        throw new Error('Replay presentation identity normalization is incomplete.');
+      }
+      const transcriptDigest = semanticDigest(transcriptSnapshot);
+      if (expectedReply.presentation_digest !== transcriptDigest) {
+        throw new Error('Recorded presentation digest mismatch.');
+      }
+      return transcriptDigest;
+    };
     let expectedStage = 'source_pack';
     /** @type {any[]} */
     const replies = [];
@@ -209,11 +413,16 @@ async function replayOnce(options) {
         && !evidenceClaimsUseOnlySource(event.artifact, options.sourceContract.source_id)) {
         throw new Error('Transcript evidence claims are not exactly bound to the retained PRD.');
       }
-      await stageArtifact(runDirectory, event.stage, event.artifact);
+      const replayArtifact = rewriteIdentities(event.artifact, 'toReplay');
+      await stageArtifact(runDirectory, event.stage, replayArtifact);
       const actualReply = await invokeCli(options.runnerPath, runDirectory, deadline - Date.now());
       const diagnostics = validateAgainstSchema(actualReply, options.replySchema);
       if (diagnostics.length > 0) throw new Error(`Runner reply schema invalid at event ${index}.`);
-      const normalized = normalizeReply(actualReply, runDirectory);
+      const pathNormalized = normalizeReply(actualReply, runDirectory);
+      const expectedPresentationDigest = await verifyLegacyPresentationDigest(event.reply, pathNormalized);
+      learnReplayScopedIdentities(event.reply, pathNormalized);
+      const normalized = rewriteIdentities(pathNormalized, 'toTranscript');
+      if (expectedPresentationDigest !== null) normalized.presentation_digest = expectedPresentationDigest;
       if (canonicalStringify(normalized) !== canonicalStringify(event.reply)) {
         throw new Error(`Recorded runner reply mismatch at event ${index}.`);
       }
@@ -242,7 +451,7 @@ async function replayOnce(options) {
     const recoveryReply = await invokeCli(options.runnerPath, runDirectory, deadline - Date.now());
     const recoveryDiagnostics = validateAgainstSchema(recoveryReply, options.replySchema);
     if (recoveryDiagnostics.length > 0) throw new Error('Recovery CLI reply schema invalid.');
-    const normalizedRecovery = normalizeReply(recoveryReply, runDirectory);
+    const normalizedRecovery = rewriteIdentities(normalizeReply(recoveryReply, runDirectory), 'toTranscript');
     if (canonicalStringify(normalizedRecovery) !== canonicalStringify(replies.at(-1))) {
       throw new Error('Recovery CLI did not reproduce the terminal reply.');
     }
@@ -302,6 +511,12 @@ export async function verifyCaptureTranscript(options) {
     readFile(options.replySchemaPath, 'utf8').then(JSON.parse),
     readFile(options.bundleSchemaPath, 'utf8').then(JSON.parse)
   ]);
+  for (const [index, event] of transcript.events.entries()) {
+    if (!isRecord(event) || !isRecord(event.reply)
+      || validateAgainstSchema(event.reply, replySchema).length > 0) {
+      throw new Error(`Recorded runner reply schema invalid at event ${index}.`);
+    }
+  }
   const replayOptions = {
     transcript, runnerPath: options.runnerPath, replySchema, bundleSchema,
     taskContract: options.taskContract, sourceContract: options.sourceContract,

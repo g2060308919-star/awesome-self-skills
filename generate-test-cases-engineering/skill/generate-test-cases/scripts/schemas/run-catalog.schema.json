@@ -13,7 +13,7 @@
       "properties": {
         "sequence": {"type": "integer", "minimum": 1},
         "run_instance_id": {"type": "string", "minLength": 1},
-        "status": {"enum": ["active", "completed", "failed", "superseded"]},
+        "status": {"enum": ["active", "completed", "failed", "superseded", "cancelled"]},
         "reason": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
@@ -29,8 +29,8 @@
         "run_directory": {"type": "string", "pattern": "^/"},
         "source_content_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "scope": {"type": "string", "minLength": 1},
-        "status": {"enum": ["active", "completed", "failed", "superseded"]},
-        "last_reply_kind": {"enum": ["need_artifact", "need_revision", "need_user_answers", "finished", "fatal"]},
+        "status": {"enum": ["active", "completed", "failed", "superseded", "cancelled"]},
+        "last_reply_kind": {"enum": ["need_artifact", "need_revision", "need_user_answers", "finished", "fatal", "cancelled"]},
         "error_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "supersedes": {"type": ["string", "null"]},
         "superseded_by": {"type": ["string", "null"]}

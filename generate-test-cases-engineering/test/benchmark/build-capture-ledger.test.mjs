@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import {
   mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile
 } from 'node:fs/promises';
@@ -6,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const witnessSource = path.join(repositoryRoot, 'benchmark/operator-witness.mjs');
@@ -14,13 +16,26 @@ const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const randomUUID = cryptoModule.randomUUID ?? cryptoModule.default.randomUUID;
 const link = fsPromises.link;
 const builderSource = path.join(repositoryRoot, 'benchmark/build-capture-ledger.mjs');
+const cliExitCodeSource = path.join(repositoryRoot, 'benchmark/cli-exit-code.mjs');
 const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
+const execFileAsync = promisify(execFile);
+
+/** @param {string} executable @param {string[]} args @param {any} [options] */
+async function execFileResult(executable, args, options) {
+  try {
+    const result = await execFileAsync(executable, args, options);
+    return { ...result, exitCode: 0 };
+  } catch (error) {
+    const failure = /** @type {any} */ (error);
+    return { stdout: failure.stdout ?? '', stderr: failure.stderr ?? '', exitCode: failure.code };
+  }
+}
 
 /** @param {string} caseId */
 function agentForCase(caseId) {
-  if (caseId.startsWith('PF-TR-') || caseId.startsWith('PF-ID-')) return '/root/formal_defect_gate_audit';
-  if (caseId.startsWith('PF-WF-') || caseId.startsWith('PF-FM-')) return '/root/time_quota_defect_expansion';
-  return '/root/time_quota_defect_expansion/standards_review';
+  if (caseId.startsWith('PF-TR-') || caseId.startsWith('PF-ID-')) return '/root/v4_pressure_transactions_identity';
+  if (caseId.startsWith('PF-WF-') || caseId.startsWith('PF-FM-')) return '/root/v4_pressure_workflow_forms';
+  return '/root/v4_pressure_async_time';
 }
 
 /** @param {string} caseId @param {number} repeat @param {Record<string, unknown>} [overrides] */
@@ -53,7 +68,7 @@ function transcript(caseId, repeat, overrides = {}) {
 }
 
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'capture-ledger-builder-'));
+  const root = await fsPromises.realpath(await mkdtemp(path.join(os.tmpdir(), 'capture-ledger-builder-')));
   const releaseRoot = path.join(root, 'benchmark/release/v1');
   const workRoot = path.join(releaseRoot, 'operator-work');
   const evidenceRoot = path.join(releaseRoot, 'evidence');
@@ -69,6 +84,7 @@ async function fixture() {
   await mkdir(path.dirname(catalogPath), { recursive: true });
   await writeFile(copiedBuilder, await readFile(builderSource));
   await writeFile(path.join(root, 'benchmark/operator-witness.mjs'), await readFile(witnessSource));
+  await writeFile(path.join(root, 'benchmark/cli-exit-code.mjs'), await readFile(cliExitCodeSource));
   await writeFile(catalogPath, `${JSON.stringify({
     items: caseIds.map((pilot_id) => ({ pilot_id, status: 'pilot-admitted' }))
   })}\n`);
@@ -84,7 +100,7 @@ async function fixture() {
   }
   const module = await import(`${pathToFileURL(copiedBuilder).href}?fixture=${randomUUID()}`);
   return {
-    root, releaseRoot, workRoot, evidenceRoot, ledgerPath, manifestPath, caseIds,
+    root, releaseRoot, workRoot, evidenceRoot, ledgerPath, manifestPath, caseIds, copiedBuilder,
     buildCaptureLedger: module.buildCaptureLedger
   };
 }
@@ -113,6 +129,7 @@ test('builds the exact catalog case by repeat set and replaces old outputs only 
   const result = await setup.buildCaptureLedger();
   const ledger = JSON.parse(await readFile(setup.ledgerPath, 'utf8'));
 
+  assert.equal(result.status, 'valid');
   assert.equal(result.captures, 90);
   assert.equal(ledger.captures.length, 90);
   assert.equal((await readdir(setup.evidenceRoot)).includes('sentinel.txt'), false);
@@ -124,6 +141,26 @@ test('builds the exact catalog case by repeat set and replaces old outputs only 
     (await readdir(setup.releaseRoot)).filter((/** @type {string} */ entry) => entry.startsWith('.capture-ledger-')),
     []
   );
+});
+
+test('capture-ledger CLI aligns valid and fatal statuses with its exit code', async (/** @type {any} */ context) => {
+  const validSetup = await fixture();
+  context.after(() => rm(validSetup.root, { recursive: true, force: true }));
+  const valid = await execFileResult(process.execPath, [validSetup.copiedBuilder], { cwd: validSetup.root });
+
+  assert.equal(valid.exitCode, 0);
+  assert.equal(valid.stderr, '');
+  assert.equal(JSON.parse(valid.stdout).status, 'valid');
+
+  const invalidSetup = await fixture();
+  context.after(() => rm(invalidSetup.root, { recursive: true, force: true }));
+  const invalidTranscript = path.join(invalidSetup.workRoot, 'pf-tr-01/repeat-1/transcript.json');
+  await writeFile(invalidTranscript, '{}\n');
+  const invalid = await execFileResult(process.execPath, [invalidSetup.copiedBuilder], { cwd: invalidSetup.root });
+
+  assert.equal(invalid.exitCode, 1);
+  assert.equal(invalid.stderr, '');
+  assert.equal(JSON.parse(invalid.stdout).status, 'fatal');
 });
 
 test('rejects a late invalid transcript and leaves evidence, ledger, and manifest unchanged', async (/** @type {any} */ context) => {
@@ -148,7 +185,7 @@ test('rejects traversal and duplicate catalog case-repeat identities before writ
     capture_id: 'traversal-r3', session_id: 'traversal-session',
     operator_witness: {
       method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
-      agent_task_id: '/root/time_quota_defect_expansion', observation_id: 'traversal-observation'
+      agent_task_id: '/root/v4_pressure_workflow_forms', observation_id: 'traversal-observation'
     }
   }))}\n`);
 
@@ -160,7 +197,7 @@ test('rejects traversal and duplicate catalog case-repeat identities before writ
     capture_id: 'duplicate-pair', session_id: 'duplicate-pair-session',
     operator_witness: {
       method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
-      agent_task_id: '/root/formal_defect_gate_audit', observation_id: 'duplicate-pair-observation'
+      agent_task_id: '/root/v4_pressure_transactions_identity', observation_id: 'duplicate-pair-observation'
     }
   }))}\n`);
   await assert.rejects(setup.buildCaptureLedger(), /case|repeat|duplicate/iu);

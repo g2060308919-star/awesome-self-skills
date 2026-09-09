@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { canonicalStringify, stableId } from '../../src/canonical.mjs';
 import { classifyCaseDrafts } from '../../src/classify.mjs';
+import { routeGapDiagnosticV4 } from '../../src/gap-kinds-v4.mjs';
 import {
   IDS, acceptedClaim, baseCase, baseClaims, baseObligation, blockerDisposition,
   classificationContext, clone, expectedBlockerRootId, refreshExecutionSignature
@@ -14,6 +15,43 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const classificationTable = JSON.parse(await readFile(
   path.join(repositoryRoot, 'test/fixtures/micro/classification-table.json'), 'utf8'
 ));
+
+test('[P-03][P-06][BR-02][BR-03][BR-05][BR-16][BR-17] v4 keeps execution readiness out of business questions and routes it only through execution planning', () => {
+  /** @param {string} category */
+  const diagnostic = (category) => ({
+    category, code: `FIXTURE_${category.toUpperCase()}`,
+    message: '可审计的分类输入', affected_fact_ids: ['FACT-source'],
+    affected_test_point_ids: ['TP-source']
+  });
+  const semantic = routeGapDiagnosticV4(diagnostic('semantic_gap'), {
+    delivery_intent: 'case_document'
+  });
+  assert.equal(semantic.status, 'need_user_answers');
+  assert.equal(semantic.enters_business_questions, true);
+  assert.equal(semantic.semantic_status, 'Blocked');
+
+  const generation = routeGapDiagnosticV4(diagnostic('execution_readiness'), {
+    delivery_intent: 'case_document'
+  });
+  assert.equal(generation.status, 'ignored_for_case_document');
+  assert.equal(generation.enters_business_questions, false);
+  assert.equal(generation.semantic_status, null);
+  assert.equal(generation.recovery_action, 'evaluate_in_execution_plan');
+
+  const execution = routeGapDiagnosticV4(diagnostic('execution_readiness'), {
+    delivery_intent: 'execution_plan'
+  });
+  assert.equal(execution.status, 'execution_plan_only');
+  assert.equal(execution.enters_business_questions, false);
+  assert.equal(execution.semantic_status, null);
+  assert.equal(execution.recovery_action, 'provide_execution_binding');
+
+  const adapter = routeGapDiagnosticV4(diagnostic('adapter_revision'), {
+    delivery_intent: 'case_document'
+  });
+  assert.equal(adapter.status, 'need_revision');
+  assert.equal(adapter.enters_business_questions, false);
+});
 
 /** @param {string} mutation */
 function contextForMutation(mutation) {

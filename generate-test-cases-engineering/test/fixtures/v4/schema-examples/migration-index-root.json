@@ -1,0 +1,61 @@
+{
+  "valid": [
+    {
+      "name": "complete_migration_index_records_a_finished_transaction",
+      "reason": "The index binds an immutable legacy snapshot to one completed sibling-run migration transaction.",
+      "value": {
+        "schema_version": "4.0.0",
+        "transactions": [
+          {
+            "migration_txn_id": "MIG-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "v3_run_id": "RUN-v3",
+            "source_identity": { "kind": "complete_revision", "revision_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+            "source_snapshot_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "legacy_run_directory": "/runs/v3",
+            "source_revision": 3,
+            "legacy_status": "finished",
+            "phase": "complete",
+            "phase_version": 5,
+            "outcome": "migrated",
+            "v4_run_id": "RUN-12345678-1234-4234-8234-123456789abc",
+            "report": {
+              "path": "migrations/v4/reports/MIG-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+              "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            },
+            "created_at": "2026-09-09T00:00:00Z",
+            "updated_at": "2026-09-09T00:01:00Z"
+          }
+        ],
+        "source_mutations": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "migration_index_rejects_mismatched_phase_version",
+      "reason": "A completed transaction must use the frozen phase version instead of an arbitrary progress number.",
+      "value": {
+        "schema_version": "4.0.0",
+        "transactions": [
+          {
+            "migration_txn_id": "MIG-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "v3_run_id": "RUN-v3",
+            "source_identity": { "kind": "complete_revision", "revision_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+            "source_snapshot_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "legacy_run_directory": "/runs/v3",
+            "source_revision": 3,
+            "legacy_status": "finished",
+            "phase": "complete",
+            "phase_version": 4,
+            "outcome": "migrated",
+            "v4_run_id": "RUN-12345678-1234-4234-8234-123456789abc",
+            "report": { "path": "migrations/v4/reports/MIG-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json", "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" },
+            "created_at": "2026-09-09T00:00:00Z",
+            "updated_at": "2026-09-09T00:01:00Z"
+          }
+        ],
+        "source_mutations": []
+      }
+    }
+  ]
+}

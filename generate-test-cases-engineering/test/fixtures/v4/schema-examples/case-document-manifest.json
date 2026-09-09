@@ -1,0 +1,56 @@
+{
+  "valid": [
+    {
+      "name": "delivered_cases_binds_three_case_document_artifacts",
+      "reason": "A Case Document manifest binds canonical JSON, Markdown and worksheet with nonzero Cases and no gaps.",
+      "value": {
+        "run_id": "RUN-case-document",
+        "revision": 4,
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "case_document",
+        "authority": "canonical",
+        "result_kind": "delivered_cases",
+        "completed_at": "2026-09-09T00:00:00Z",
+        "bundle": { "path": "output/r004/test-bundle.json", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        "markdown": { "path": "output/r004/test-cases.md", "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+        "execution_worksheet": { "path": "output/r004/execution-worksheet.csv", "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "format": "csv" },
+        "render_options": { "include_audit_appendix": false },
+        "case_count": 1,
+        "blocked_root_count": 0,
+        "closed_for_delivery_root_count": 0,
+        "not_applicable_count": 0,
+        "exploratory_count": 0
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "case_document_rejects_execution_branch_field",
+      "reason": "Manifest branch fields are mutually exclusive even when the foreign field is false.",
+      "value": {
+        "run_id": "RUN-case-document", "revision": 4, "schema_version": "4.0.0", "compiler_version": "0.5.0",
+        "delivery_intent": "case_document", "authority": "canonical", "result_kind": "delivered_cases", "completed_at": "2026-09-09T00:00:00Z",
+        "bundle": { "path": "output/r004/test-bundle.json", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        "markdown": { "path": "output/r004/test-cases.md", "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+        "execution_worksheet": { "path": "output/r004/execution-worksheet.csv", "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "format": "csv" },
+        "render_options": { "include_audit_appendix": false },
+        "case_count": 1, "blocked_root_count": 0, "closed_for_delivery_root_count": 0, "not_applicable_count": 0, "exploratory_count": 0,
+        "runner_ready": false
+      }
+    },
+    {
+      "name": "delivered_cases_rejects_zero_case_count",
+      "reason": "result_kind=delivered_cases cannot disguise a zero-Case result.",
+      "value": {
+        "run_id": "RUN-case-document", "revision": 4, "schema_version": "4.0.0", "compiler_version": "0.5.0",
+        "delivery_intent": "case_document", "authority": "canonical", "result_kind": "delivered_cases", "completed_at": "2026-09-09T00:00:00Z",
+        "bundle": { "path": "output/r004/test-bundle.json", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        "markdown": { "path": "output/r004/test-cases.md", "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+        "execution_worksheet": { "path": "output/r004/execution-worksheet.csv", "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "format": "csv" },
+        "render_options": { "include_audit_appendix": false },
+        "case_count": 0, "blocked_root_count": 0, "closed_for_delivery_root_count": 0, "not_applicable_count": 0, "exploratory_count": 0
+      }
+    }
+  ]
+}

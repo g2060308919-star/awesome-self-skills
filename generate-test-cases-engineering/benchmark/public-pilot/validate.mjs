@@ -3,6 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { applyReportExitCode } from '../cli-exit-code.mjs';
+
 export const FROZEN_STRATA = Object.freeze([
   'transaction/order/payment',
   'identity/role/permission',
@@ -1368,8 +1370,6 @@ export async function validatePublicPilot(catalogPath) {
   const issues = [];
   const byStratum = Object.fromEntries(FROZEN_STRATA.map((stratum) => [stratum, 0]));
   const counts = { total: 0, pilot_admitted: 0, countable_defects: 0, by_stratum: byStratum };
-  let capturesReady = false;
-
   const finish = () => {
     for (const stratum of FROZEN_STRATA) {
       if (byStratum[stratum] < 5) {
@@ -1386,7 +1386,7 @@ export async function validatePublicPilot(catalogPath) {
       status,
       release_eligible: /** @type {false} */ (false),
       release_status: RELEASE_STATUS,
-      captures_ready: capturesReady && !invalid,
+      captures_ready: ready && !invalid,
       counts,
       issues
     };
@@ -1480,8 +1480,6 @@ export async function validatePublicPilot(catalogPath) {
   const finalCases = await validateAdjudication(catalogObject, snapshotDigest, reports, context);
   const linkValidity = validateReviewLinks(catalogObject, reports, finalCases, issues);
   counts.countable_defects = await validateDefectLedger(catalogObject, finalCases, baseValidity, context);
-  capturesReady = await validateComparatorRegistry(catalogObject, context);
-
   for (const item of catalogObject.items) {
     if (baseValidity.get(item.pilot_id) === true
       && item.status === 'pilot-admitted'
@@ -1500,4 +1498,5 @@ const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
 if (invokedPath === fileURLToPath(import.meta.url)) {
   const report = await validatePublicPilot(process.argv[2]);
   process.stdout.write(`${JSON.stringify(report)}\n`);
+  applyReportExitCode(report);
 }

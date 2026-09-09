@@ -5,6 +5,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { applyReportExitCode } from './cli-exit-code.mjs';
 import {
   OPERATOR_TASK_ID,
   OPERATOR_WITNESS_METHOD,
@@ -335,15 +336,20 @@ export async function buildCaptureLedger() {
     await writeFile(path.join(stageRoot, 'captures.json'), ledgerBytes);
     await writeFile(path.join(stageRoot, 'manifest.json'), manifestBytes);
     await installStagedOutputs(stageRoot);
-    return { captures: captures.length, ledger_sha256: sha256(ledgerBytes) };
+    return { status: 'valid', captures: captures.length, ledger_sha256: sha256(ledgerBytes) };
   } finally {
     await rm(stageRoot, { recursive: true, force: true });
   }
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
-  buildCaptureLedger().then(
-    (result) => process.stdout.write(`${JSON.stringify(result)}\n`),
-    (error) => process.stdout.write(`${JSON.stringify({ status: 'fatal', message: error instanceof Error ? error.message : String(error) })}\n`)
-  );
+  /** @type {{status: string, captures?: number, ledger_sha256?: string, message?: string}} */
+  let report;
+  try {
+    report = await buildCaptureLedger();
+  } catch (error) {
+    report = { status: 'fatal', message: error instanceof Error ? error.message : String(error) };
+  }
+  process.stdout.write(`${JSON.stringify(report)}\n`);
+  applyReportExitCode(report);
 }

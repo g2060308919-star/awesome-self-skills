@@ -33,6 +33,16 @@ function normalizeReply(reply, runDirectory) {
   return normalized;
 }
 
+/** @param {any} value @param {string} before @param {string} after @returns {any} */
+function replaceStringDeep(value, before, after) {
+  if (value === before) return after;
+  if (Array.isArray(value)) return value.map((item) => replaceStringDeep(item, before, after));
+  if (value !== null && typeof value === 'object') return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, replaceStringDeep(item, before, after)])
+  );
+  return value;
+}
+
 async function genuineTranscript() {
   const revision = buildJourney('all-e3');
   const sourceBytes = revision.source_pack.sources[0].content;
@@ -48,17 +58,16 @@ async function genuineTranscript() {
     task_sha256: 'f'.repeat(64), runtime_revision: '1'.repeat(40), artifact_digests: artifactDigests,
     operator_witness: {
       method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
-      agent_task_id: '/root/formal_defect_gate_audit', observation_id: 'observation-genuine-1'
+      agent_task_id: '/root/v4_pressure_transactions_identity', observation_id: 'observation-genuine-1'
     }
   };
   const run = await runInstalledRevision(revision);
-  const stages = ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'];
   const transcript = {
     schema_version: '1.0.0', ...capture,
-    events: stages.map((stage, index) => ({
-      stage,
-      artifact: revision[stage],
-      reply: normalizeReply(run.replies[index], run.runDirectory)
+    events: run.submittedEvents.map((/** @type {any} */ event) => ({
+      stage: event.stage,
+      artifact: event.artifact,
+      reply: normalizeReply(event.reply, run.runDirectory)
     }))
   };
   await rm(run.runDirectory, { recursive: true, force: true });
@@ -102,6 +111,45 @@ test('capture verifier rejects a recorded reply that the runner cannot reproduce
   );
 });
 
+test('capture verifier rejects a forged presentation digest instead of alpha-rebinding it', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const presentationEvent = transcript.events.find((/** @type {any} */ event) => (
+    event.reply?.status === 'need_user_answers' && typeof event.reply?.presentation_digest === 'string'
+  ));
+  assert.ok(presentationEvent);
+  presentationEvent.reply.presentation_digest = '0'.repeat(64);
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /Recorded presentation digest mismatch/u
+  );
+});
+
+test('capture verifier schema-validates recorded replies before learning replay identities', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const presentationEvent = transcript.events.find((/** @type {any} */ event) => (
+    event.reply?.status === 'need_user_answers' && typeof event.reply?.presentation_id === 'string'
+  ));
+  assert.ok(presentationEvent);
+  const originalPresentationId = presentationEvent.reply.presentation_id;
+  transcript.events = replaceStringDeep(
+    transcript.events, originalPresentationId, ''
+  );
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /Recorded runner reply schema invalid/u
+  );
+});
+
 test('capture verifier rejects a matching PRD used only as a decoy source', async () => {
   const { capture, transcript, sourceContract } = await genuineTranscript();
   const primary = transcript.events[0].artifact.sources[0];
@@ -142,8 +190,8 @@ test('capture verifier rejects a transcript that names an unassigned Agent task'
 
 test('capture verifier rejects an allowed Agent assigned to another PRD stratum', async () => {
   const { capture, transcript, sourceContract } = await genuineTranscript();
-  capture.operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
-  transcript.operator_witness.agent_task_id = '/root/time_quota_defect_expansion';
+  capture.operator_witness.agent_task_id = '/root/v4_pressure_workflow_forms';
+  transcript.operator_witness.agent_task_id = '/root/v4_pressure_workflow_forms';
 
   await assert.rejects(
     verifyCaptureTranscript({
