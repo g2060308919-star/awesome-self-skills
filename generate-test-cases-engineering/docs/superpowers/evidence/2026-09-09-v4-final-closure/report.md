@@ -2,37 +2,73 @@
 
 Date: 2026-09-09 (Asia/Shanghai)
 
-## Contract and candidate
+## Contract and verified code candidate
 
-- `01-problem-and-optimization-record.md` was read as problem context; SHA-256 `db325c659b00fbc4031db1eb0a55582ca603098f0048b9840184adf9c91053c4`.
-- `02-technical-design.md` was read as architecture context; SHA-256 `8696d16ddd42cea7347c4f244cdca3fd2c3fae893f088692ca9959e4aaa8a0c2`.
+- `01-problem-and-optimization-record.md` was read as context; SHA-256 `db325c659b00fbc4031db1eb0a55582ca603098f0048b9840184adf9c91053c4`.
+- `02-technical-design.md` was read as context; SHA-256 `8696d16ddd42cea7347c4f244cdca3fd2c3fae893f088692ca9959e4aaa8a0c2`.
 - `03-development-spec.md` was read as the sole normative implementation and acceptance contract; SHA-256 `36cd18a5d290bd16d09c4c75db24882253194a17f8cd29f7021a03b608dd7a45`.
 - Repository baseline: `1b16eddda0ed13a02a41d6a1dd1c5cecf23cfa02`.
-- Verified code candidate: `42a509e03034218604d86b9774a07d464855d730` on `codex/generate-test-cases-v4`.
+- Verified code candidate: `613d59a75a20c0bd521a3944d8c5ef128f2aeb0b` on `codex/generate-test-cases-v4`.
 - Development root: `generate-test-cases-engineering`.
-- Published repository Skill: `generate-test-cases`.
+- Repository-published Skill: `generate-test-cases`.
 - Runtime: Node `v24.18.0`; npm `11.16.0`.
 
-Tasks T01-T15, BR-01-BR-19, and P-01-P-20/O-01-O-03 are mapped in `docs/superpowers/plans/2026-09-09-generate-test-cases-v4.md`. Every BR has separate positive and reversal/exception coverage; no trace item is marked N/A or deferred.
+Tasks T01-T15, BR-01-BR-19, P-01-P-20 and O-01-O-03 remain fully mapped in
+`docs/superpowers/plans/2026-09-09-generate-test-cases-v4.md`. No trace item
+is marked N/A or deferred.
 
-## RED to GREEN closure found by final pressure and pre-merge review
+## Final independent review and RED to GREEN closure
 
-The first recovery pressure run on predecessor `c199c0703ce53002882c4c51b49d0258f13ce727` exposed a real P1: an answer bound to a resolved/closed root was internally classified as `stale_answer`, but the runner projected the internal diagnostic into the public warning field and produced `fatal/RUN_INTEGRITY_ERROR`. This violated Task 09's recoverable late-answer rule.
+The predecessor candidate `2818ae2b48d11e7f93bcd0b7c3398086ffd9c163`
+was invalidated after an independent pre-merge review found two contract gaps:
 
-- RED: installed-bundle test `T09 installed runner rejects a stale answer without turning the recoverable state into fatal` failed because the actual reply was `fatal` rather than the current `need_user_answers` reply.
-- First GREEN on `244f1ea`: the runner stopped converting this recoverable transition into a fatal reply, discarded stale staging, committed no revision, and resumed either the current presentation or the committed pipeline state.
-- Regression scope: stale answer while another presentation is current; stale answer after the presentation is closed; no accepted revision; staging removal; byte-identical checkpoint; empty public diagnostics; clean replay without resurrection.
-- Pre-merge review then found that the first fix had widened the public `nonBlockingDiagnostic.code` union with `STALE_ANSWER`, while normative section 5.7 permits only `FINAL_AUTHORITY_NOT_GRANTED`. This was a P1 contract mismatch even though the behavior was recoverable.
-- Second RED: the normative schema, installed-runner, reducer, and Skill-policy expectations failed 9 tests while the widened public warning remained.
-- Second GREEN: stale answers remain an internal `stale_answer` transition with an internal diagnostic, while public replies carry an empty `non_blocking_diagnostics` array and return the current committed presentation/pipeline state. The public warning union is again exactly `FINAL_AUTHORITY_NOT_GRANTED`. Targeted tests passed 15/15 and the broader stale/schema/installed-runner group passed 54/54.
+1. Ordinary missing Agent stage files were exposed as `need_artifact`, widening
+   the sole source-acquisition discriminator frozen by section 5.7 and BR-05/16.
+2. Public `non_blocking_diagnostics` inherited append order instead of the
+   required `(code, source_event_id, affected_question_part_ids)` order.
 
-## Local candidate gates
+The correction followed RED -> GREEN:
 
-All commands ran from the development root unless another directory is shown.
+- RED:
+  `node --test --test-concurrency=1 test/interface/v4-reply-contract.test.mjs test/recovery/v4-decision-recompile.test.mjs`
+  exited 1 with 21 pass / 3 fail. The failures were the intended full
+  `need_artifact` discriminator, ordinary stage routing, and warning order.
+- GREEN: the same command exited 0 with 24/24.
+- Strengthened focused gate:
+  `node --test --test-concurrency=1 test/interface/v4-reply-contract.test.mjs test/recovery/v4-decision-recompile.test.mjs test/golden/v4-canonical-delivery.test.mjs test/interface/v4-need-artifact-reply.test.mjs`
+  exited 0 with 40/40, including a direct assertion for the third tuple key.
+- A fresh pre-commit review reported no blocking finding. It confirmed source,
+  Schema, manifest, bundle, engineering Skill and repository Skill were
+  synchronized and the change did not widen scope.
+
+The resulting public boundary is:
+
+- Ordinary missing `source_pack`, `evidence_claims`, `behavior_views` or
+  `case_drafts`: closed `need_revision + STAGE_ARTIFACT_REQUIRED`, exactly
+  one `write_stage_artifact` next step and `write_staging_artifact` recovery.
+- Normative source cannot be acquired safely: the sole complete
+  `need_artifact` branch, with non-empty `artifact_requests`, digest-bound
+  `resume_ref`, and exactly `provide_artifact/cancel_run`.
+- Every public reply construction boundary clones and canonically sorts the
+  shared warning array. Stale-answer diagnostics remain internal and public
+  `non_blocking_diagnostics` stays empty for that recoverable transition.
+
+## Isolated clean-checkout gates
+
+Isolated checkout:
+`/private/tmp/gtc-v4-final-613d59a.WgX1eq/repo`.
+
+- HEAD before and after:
+  `613d59a75a20c0bd521a3944d8c5ef128f2aeb0b`.
+- `git status --porcelain=v1 --untracked-files=all`: empty before dependency
+  installation and empty after all gates.
+
+All commands below ran from the isolated development root unless noted:
 
 | Command | Exit | Result |
 |---|---:|---|
-| `npm run check` | 0 | 1442/1442 main tests; repeatability 2/2; 100 fresh installed-shape runs byte-identical; deterministic across three durable directories |
+| `npm ci --offline` | 0 | 4 packages installed; 0 vulnerabilities |
+| `npm run check` | 0 | 1447/1447 main tests; repeatability 2/2; 100 fresh installed-shape runs byte-identical |
 | `npm run test:benchmark` | 0 | 145/145 benchmark-tool and single-system gate tests |
 | `npm run public-pilot` | 0 | `pilot_ready`; 30/30 admitted, five in each of six strata; zero issues |
 | `npm run build -- --check` | 0 | modular source and generated bundle synchronized |
@@ -42,64 +78,110 @@ All commands ran from the development root unless another directory is shown.
 | official `quick_validate.py` on engineering Skill | 0 | `Skill is valid!` |
 | official `quick_validate.py` on repository Skill | 0 | `Skill is valid!` |
 
-The public-pilot result is corpus-admission evidence only. Its deliberate `release_eligible:false` / `insufficient_evidence` field is not represented as an expert-quality or external business-accuracy result, and comparator/expert scoring is outside this v4 development contract.
+Validator runtime:
+`/private/tmp/generate-test-cases-validator-py/bin/python`.
+Validator:
+`/Users/zhangxudong/.codex/skills/.system/skill-creator/scripts/quick_validate.py`.
+
+`public-pilot` is corpus-admission evidence only. Its deliberate
+`release_eligible:false` / `release_status:insufficient_evidence` fields are
+not represented as expert-quality or external business-accuracy evidence.
+Comparator/expert scoring is outside this v4 development contract.
 
 ## Three final-candidate fresh-context pressure runs
 
-Each Agent started without the implementation conversation, read the release Skill and the real Task 15 B-end PRD, used only the installed public runner in a fresh `/private/tmp` durable directory, and left the candidate worktree clean at the same SHA.
+Each pressure Agent started without the implementation conversation, verified
+the same clean candidate SHA, read the published Skill and the Task 15 B-end
+PRD, used the published bundle, wrote evidence only below `/private/tmp`, and
+reported no P0/P1 finding.
 
 ### 1. Success and canonical delivery
 
-- Result: PASS; no P0/P1.
-- Report: `/private/tmp/gtc-v4-42a509e-success-3r0LPY/success-observation.json`; SHA-256 `3f2be00606c2529b629156cdea711c25b7435fabbd785ff6718ca708a56531d1`.
-- Transcript: `/private/tmp/gtc-v4-42a509e-success-3r0LPY/success-transcript.jsonl`; SHA-256 `c9aa7b9135c57f16b102311c42cc6f24b3ce97ea25dedd2a769efccef4b03bae`.
-- Result `delivered_with_gaps` at r003; five modules; seven independent Cases/Test Points; question conservation 3 -> 2 after the IP-only answer; blank replay committed nothing; the sorting gap remained explicitly closed for delivery.
-- JSON, business Markdown and worksheet CSV have identical 7/7/7 Case membership and verified digests under one current manifest. No execution-resource question, execution plan, E2E start or fallback artifact occurred.
+- Observation:
+  `/private/tmp/gtc-v4-613-success-Iy7dqN/observation.json`;
+  SHA-256 `37c374ba97c2d7a36e07eec83fd41e48b81c6da0ae544646170da1d20c933348`.
+- Targeted run record:
+  `/private/tmp/gtc-v4-613-success-Iy7dqN/candidate-test-run.json`;
+  SHA-256 `af2c262100057033840007e1082c5e6505bd66432eaa04841c5e2fe7272241e9`.
+- Result: 11/11 installed/golden journey tests and 145 independent harness
+  assertions passed.
+- A fresh durable run converged from three questions to two after the IP-only
+  answer; a blank turn committed no revision. It produced
+  `finished/delivered_cases` with seven unique Cases and seven unique primary
+  Test Points.
+- One current manifest bound exactly one canonical JSON, business Markdown and
+  execution worksheet CSV. Digests and Case membership agreed across all three.
+- An applicable zero-Case sibling returned
+  `fatal/quality_failure/APPLICABLE_PRIMARY_OUTCOME_WITHOUT_CASE`, produced no
+  official artifact, and had no current manifest.
+- No environment/account/resource question, manual fallback, execution plan or
+  automatic E2E invocation occurred in the Case Document run.
 
-### 2. Failure chain and no fallback
+### 2. Mandatory failure chain and protocol split
 
-- Result: PASS; no P0/P1.
-- Report: `/private/tmp/gtc-v4-42a509e-failure-20260909T082332Z/report.md`; SHA-256 `6feb129b938b4dc134ce40a6afc22026e2ccb9b0bd010e03b1d18072920e2f7c`.
-- Machine evidence: `evidence.json`; SHA-256 `e289bfb2effba368bd5d261cccd6e16bcc87ea11dbb9e69e6a596ef755ffb8e4`.
-- Transcript: `cli-transcript.jsonl`; SHA-256 `1009ad30d1e16c7ccb407c898931ad307afe30c45bee9d5562bbae5ead2d7cdc`.
-- 259/259 assertions across 27 commands; 22 installed CLI calls all exited 0 with empty stderr, exactly one schema-valid JSON line; the expected SIGKILL was recovered exactly once.
-- Malformed Behavior returned `need_revision/BEHAVIOR_BINDING_MISSING` without semantic/resource laundering. Applicable zero Case returned `fatal/quality_failure/FORMAL_TEST_POINT_UNCOVERED`, with no current output. Stray Markdown/XLSX remained inert. Repair delivered seven Cases and three explicitly closed gaps. All-DNE yielded `no_execution_selected` and `[]`; the ready sibling projected exactly Grounded + Execute + ready Cases.
+- Machine evidence:
+  `/private/tmp/gtc-v4-613-failure-orXPgA/evidence.json`;
+  SHA-256 `3678152dcdcfdbe3f040d063adc2c4012c8a993bfd4f788b0051ae43491091c5`.
+- Transcript:
+  `/private/tmp/gtc-v4-613-failure-orXPgA/transcript.jsonl`;
+  SHA-256 `13f861293ad00b620414139be4bab07b0ae6a617604cb6601e5b467588a4c0de`.
+- Full subset log:
+  `/private/tmp/gtc-v4-613-failure-orXPgA/full-subset.log`;
+  SHA-256 `f182692d26e84f7d8118e083fd94d5cb772105aaabd0717c49571ce4f129e11b`.
+- Result: 22/22 installed failure/journey tests plus 19 independent release
+  bundle assertions passed.
+- Adapter modeling error remained `need_revision`; reservation crash recovery
+  preserved the answered IP decision and the two unanswered roots; applicable
+  zero Case was `fatal + quality_failure`; stray Markdown/XLSX was inert.
+- Repair delivered seven canonical Cases. An all-DNE execution sibling produced
+  `no_execution_selected`, `runner_ready=false`, and an empty projection.
+  A resource-complete sibling produced a non-empty projection equal to
+  Grounded + Execute + ready Case IDs.
+- An independent CLI probe observed ordinary stage absence as
+  `need_revision/STAGE_ARTIFACT_REQUIRED`. A real unknown signed source
+  produced the full `need_artifact` branch with one request, resume ref,
+  fixed actions, and no credential material.
 
-### 3. Recovery, partial answers and stale answers
+### 3. Recovery, warning and source safety
 
-- Result: PASS; no P0/P1.
-- Report: `/private/tmp/gtc-v4-42a509e-recovery-S9X1jV/recovery-report.json`; SHA-256 `40efc4e7064da871e9bf39bef65f3a5ab8d7b472d8f9ffe83cf6d04f7b24cb58`.
-- Transcript: `/private/tmp/gtc-v4-42a509e-recovery-S9X1jV/recovery-transcript.jsonl`; SHA-256 `56adab73686c3444b322b0ebc8fbae60dccbdeb8e802fea02c662371073cdd3d`.
-- 188/188 assertions. Questions converged exactly 3 -> 2 -> 1. Blank input wrote nothing; defer and explicit close remained distinct.
-- Both stale windows returned the exact current public state with `non_blocking_diagnostics: []`; no staging or accepted revision appeared, and checkpoint, Decision journal, clarification state and root inventory stayed unchanged. Replay did not resurrect a warning or root.
-- Reservation-boundary SIGKILL recovery and full-production signed-query semantic equivalence passed. Safe acquisition removed ephemeral material, and persisted files contained no credential/query text.
-
-## Isolated clean-checkout verification
-
-- Directory: `/private/tmp/gtc-v4-final-42a509e.wpz69q/repo`.
-- Detached HEAD before and after: `42a509e03034218604d86b9774a07d464855d730`.
-- `git status --porcelain=v1 --untracked-files=all`: empty before dependency installation and empty after all gates.
-- `npm ci --offline`: exit 0; four packages installed; zero vulnerabilities.
-- `npm run check`: exit 0; 1442/1442 plus repeatability 2/2.
-- `npm run test:benchmark`: exit 0; 145/145.
-- `npm run public-pilot`: exit 0; 30/30 admitted with no issues.
-- Both official validators: exit 0, `Skill is valid!`.
-- `npm run build -- --check`, Skill directory byte diff, bundle syntax and `git diff --check`: all exit 0.
-- Post-gate status: clean; no production, fixture, generated, or user-file drift.
+- Report:
+  `/private/tmp/gtc-v4-613-recovery-PlX8OD/report.json`;
+  SHA-256 `9ea5ed02dd971f6ad16ebf76e2b1a863b512fcdacdf5b75ca6def4e9a0a969c1`.
+- TAP:
+  `/private/tmp/gtc-v4-613-recovery-PlX8OD/targeted.tap`;
+  SHA-256 `0a9af296ed845dc85ea13c92cbd2e71f70a9d031b7ecf33b52b5262adfc15993`.
+- Result: 36/36 passed.
+- The run preserved 3 -> 2 -> 1 question conservation, blank no-write,
+  explicit defer versus close, and recoverable stale answers with public
+  warnings `[]`.
+- `FINAL_AUTHORITY_NOT_GRANTED` was ordered by the complete three-key tuple,
+  replayed deterministically for its owning append, and not resurrected later.
+- Full source acquisition replies, stage `need_revision`, reservation crash,
+  higher non-ready/current safety and signed-query-only semantic/Fact/Case/body
+  stability all passed.
 
 ## Frozen artifact digests
 
 | Artifact | SHA-256 |
 |---|---|
 | `src/advance-strict.mjs` | `a1110633d8ab23da3b5ac971b31aee7dbf112b5d7d4a7cb607fd81639b31a4cf` |
-| `src/advance-v4.mjs` | `539117c4d663fcb2fd2010fba94ad36273b9913ce5eb3f11156fcf35ff816f55` |
-| `skill/generate-test-cases/SKILL.md` | `b7e1d280b488e2430cd933d143eb271082b62dc93e70b4bb57c5dbf42aa3614f` |
-| `skill/generate-test-cases/scripts/schema-manifest.json` | `2d356f4d50a4f542b6d66ae5903b832d1d20a2e0c7cc47275ce55fe064b59f71` |
-| `skill/generate-test-cases/scripts/schemas/reply.schema.json` | `f6d82072d0a634cf85708f3d336128fd8b3f7bf2fe055faf46e8c33b4f1efa8b` |
-| `skill/generate-test-cases/scripts/test-compiler.mjs` | `22c60e987cee8919f4257665b47774cd99d7afd74db679930b8f60fcbc8e764a` |
+| `src/advance-v4.mjs` | `a96d1872bacc2e6d3eb5181ecd49e079673dc700639fce2d58a3739bd59cab9c` |
+| `src/non-blocking-diagnostics-v4.mjs` | `2b6ee6f28b7e77f4c59e7468bec6a2e00e8f2bdad828bd2d43cbbb5c6a816ebc` |
+| `skill/generate-test-cases/SKILL.md` | `866193adab7839c91f922ce8d535a214878caba511a834977950cb1e1d25a6b9` |
+| `skill/generate-test-cases/scripts/schema-manifest.json` | `08e04fc6f3c8c070ecdad5e32c2ac7d0f216ed5c960cd661878a0ea732dba9ed` |
+| `skill/generate-test-cases/scripts/schemas/reply.schema.json` | `d45887a08b08cf84e30888d2295ea2ab86103e679206e53c304f3427456074b2` |
+| `skill/generate-test-cases/scripts/test-compiler.mjs` | `496942eccb7b81fbc2e8d07f42693043ed430daa663921f5d468692092472556` |
 
-The manifest binds compiler `0.5.0`, schema `4.0.0`, and schema-set digest `75a04a5f10cda967e8f4c1eeb4437ad3e875cd2ca30b775da62918aaaacae5b6`.
+The manifest binds compiler `0.5.0`, schema `4.0.0`, and schema-set digest
+`8c0fb68b1326ded7ef01b9e1e29a690b417b31a85521b6080ab4bdaeec6f9107`.
 
 ## Closure
 
-Tasks T01-T15 and the v4 Definition of Done are satisfied for the requested development contract at verified code candidate `42a509e03034218604d86b9774a07d464855d730`. The Skill produces and confirms canonical manual functional Case Documents and, only on explicit downstream intent, an execution plan/runner Case ID projection. It does not run E2E tests. No global Skill installation, npm publication, comparator/expert benchmark claim, or RC tag is part of this closure.
+Tasks T01-T15, BR-01-BR-19, the traceability matrix, and the v4 Definition of
+Done are satisfied for verified code candidate
+`613d59a75a20c0bd521a3944d8c5ef128f2aeb0b`. The Skill produces canonical
+manual functional Case Documents and, only after explicit downstream intent,
+an execution plan/runner Case-ID projection. It never runs E2E tests.
+
+No global Skill installation, npm publication, comparator/expert benchmark
+claim, or RC tag is part of this closure.

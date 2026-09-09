@@ -115,9 +115,10 @@ Command-level evidence for this closure will be retained in `docs/superpowers/ev
 
 ## Final gate status
 
-The implementation is merge-ready at this checkpoint:
+The implementation is merge-ready at final code candidate
+`613d59a75a20c0bd521a3944d8c5ef128f2aeb0b`:
 
-- `npm run check`: exit 0; 1,442 main tests plus the 100-run and three-directory
+- `npm run check`: exit 0 in an isolated clean checkout; 1,447 main tests plus the 100-run and three-directory
   installed-shape determinism checks pass.
 - `npm run test:benchmark`: exit 0; 145/145 benchmark-tool tests pass.
 - `npm run public-pilot`: exit 0; `pilot_ready`, 30/30 admitted PRDs, five per
@@ -126,7 +127,8 @@ The implementation is merge-ready at this checkpoint:
   claim, and this v4 contract requires no such claim.
 - `npm run build -- --check`, engineering/published Skill byte comparison,
   bundle syntax, diff integrity, and the official Skill validator pass.
-- The corrected tree keeps stale-answer diagnostics internal and has passed targeted 15/15, broader 54/54, full 1,442/1,442, 100-run/two-repeatability, build, Skill synchronization, syntax, diff-integrity, and both official-validator checks.
-- Three fresh-context pressure Agent runs passed on candidate `42a509e03034218604d86b9774a07d464855d730`, including the mandatory failure/no-fallback and stale-answer recovery chains.
-- The isolated checkout at `/private/tmp/gtc-v4-final-42a509e.wpz69q/repo` was clean before and after `npm ci --offline`, all three final npm commands, both official validators, build/bundle/Skill synchronization checks and digest verification.
+- Final independent review found and the candidate closes two additional contract gaps: ordinary missing Agent stages now use closed `need_revision + STAGE_ARTIFACT_REQUIRED` replies while the full `need_artifact` discriminator is reserved for source acquisition, and public non-blocking diagnostics are sorted by the complete `(code, source_event_id, affected_question_part_ids)` tuple at every construction boundary. The RED subset first failed 3/24 tests; GREEN passed 24/24, and the strengthened three-key focused suite passed 40/40.
+- The corrected tree keeps stale-answer diagnostics internal and has passed full 1,447/1,447, 100-run/two-repeatability, build, Skill synchronization, syntax, diff-integrity, and both official-validator checks.
+- Three fresh-context pressure Agent runs are recorded against the same candidate, including the mandatory failure/no-fallback and recovery/source-protocol chains.
+- The isolated checkout at `/private/tmp/gtc-v4-final-613d59a.WgX1eq/repo` was clean before and after `npm ci --offline`, all three final npm commands, both official validators, build/bundle/Skill synchronization checks and digest verification.
 - Full command, pressure-run and digest evidence is retained in `docs/superpowers/evidence/2026-09-09-v4-final-closure/report.md`. Any later production, Schema, Skill, or generated bundle change invalidates the affected evidence and must be reverified.
