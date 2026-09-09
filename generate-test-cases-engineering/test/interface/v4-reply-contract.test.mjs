@@ -12,6 +12,11 @@ const warning = {
   message: '该答案已按临时口径接收，尚未获得最终产品口径授权。',
   source_event_id: 'EVENT-answer-1', affected_question_part_ids: ['QP-ip-meaning']
 };
+const staleWarning = {
+  code: 'STALE_ANSWER', severity: 'warning',
+  message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
+  source_event_id: 'EVENT-answer-stale', affected_question_part_ids: ['QP-ip-meaning']
+};
 const artifactRequest = {
   artifact_request_id: `ARQ-${'a'.repeat(64)}`,
   request_version_digest: `sha256:${'b'.repeat(64)}`,
@@ -116,6 +121,7 @@ for (const [status, reply] of Object.entries(replies)) {
   test(`v4 reply ${status} accepts empty or shared non-blocking diagnostics`, () => {
     assert.deepEqual(validateAgainstSchema(reply, replySchema), []);
     assert.deepEqual(validateAgainstSchema({ ...reply, non_blocking_diagnostics: [warning] }, replySchema), []);
+    assert.deepEqual(validateAgainstSchema({ ...reply, non_blocking_diagnostics: [staleWarning] }, replySchema), []);
   });
 
   test(`v4 reply ${status} requires diagnostics and rejects an incompatible warning shape`, () => {

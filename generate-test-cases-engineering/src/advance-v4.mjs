@@ -872,11 +872,16 @@ async function consumeSemanticAppend(
   }
   if (!applied.commit_required) {
     await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+    const nonBlockingDiagnostics = applied.non_blocking_diagnostics ?? [];
+    if (!applied.presentation) return {
+      kind: 'advanced', revision, artifacts, checkpoint: committed.value,
+      non_blocking_diagnostics: nonBlockingDiagnostics
+    };
     return {
       kind: 'reply',
       reply: semanticQuestionReply(
         runId, applied.presentation ?? committed.value.clarification_state.presentation,
-        applied.diagnostics ?? []
+        nonBlockingDiagnostics
       )
     };
   }
@@ -1105,10 +1110,15 @@ async function consumePostCaseAppend(
   }
   if (!applied.commit_required) {
     await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+    const nonBlockingDiagnostics = applied.non_blocking_diagnostics ?? [];
+    if (!applied.presentation) return {
+      kind: 'advanced', revision, artifacts, checkpoint: committed.value,
+      non_blocking_diagnostics: nonBlockingDiagnostics
+    };
     return {
       kind: 'reply', reply: semanticQuestionReply(
         runId, applied.presentation ?? committed.value.clarification_state.presentation,
-        applied.diagnostics ?? []
+        nonBlockingDiagnostics
       )
     };
   }

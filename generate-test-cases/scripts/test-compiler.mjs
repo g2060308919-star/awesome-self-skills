@@ -12430,9 +12430,16 @@ function applySemanticClarificationEventsV4(submitted) {
       message: "No answer could be safely bound; the same semantic questions remain pending."
     }]
   });
-  const staleAnswer = () => ({
+  const staleAnswer = (event) => ({
     ...noInformationGain(),
     status: "stale_answer",
+    non_blocking_diagnostics: [{
+      code: "STALE_ANSWER",
+      severity: "warning",
+      message: "\u8BE5\u7B54\u590D\u9488\u5BF9\u7684\u95EE\u9898\u7248\u672C\u5DF2\u5931\u6548\uFF1B\u8BF7\u4EE5\u5F53\u524D\u5C55\u793A\u7684\u95EE\u9898\u4E3A\u51C6\u3002",
+      source_event_id: event.event_id,
+      affected_question_part_ids: [event.question_part_id]
+    }],
     diagnostics: [{
       category: "reference",
       code: "STALE_ANSWER",
@@ -12469,11 +12476,11 @@ function applySemanticClarificationEventsV4(submitted) {
     if (event.event_type !== "answer_question_part" || !isRecord(event.answer_origin) || typeof event.presentation_id !== "string" || typeof event.answer !== "string" || !event.answer.trim()) return noInformationGain();
     const root = checkpoint2.semantic_gap_ledger.find((item) => item.root_issue_id === event.root_issue_id);
     const state = checkpoint2.clarification_state.root_states.find((item) => item.root_issue_id === event.root_issue_id);
-    if (!root || !state) return staleAnswer();
+    if (!root || !state) return staleAnswer(event);
     const message = messages.get(event.answer_origin.message_digest);
     if (message === void 0) return noInformationGain();
     const targetBindingCurrent = state.question_part_id === event.question_part_id && state.root_version_digest === event.root_version_digest && root.root_version_digest === event.root_version_digest;
-    if (!targetBindingCurrent) return staleAnswer();
+    if (!targetBindingCurrent) return staleAnswer(event);
     const reopenedTarget = Array.isArray(checkpoint2.reopened_targets) ? checkpoint2.reopened_targets.find((target) => target.root_issue_id === root.root_issue_id && target.reopened_root_version_digest === root.root_version_digest) : null;
     const supersedesDecisionIds = reopenedTarget ? canonicalStringSetV4(
       reopenedTarget.decision_suspension?.newly_suspended_decision_ids ?? [],
@@ -12499,7 +12506,7 @@ function applySemanticClarificationEventsV4(submitted) {
     const replay = decisions2.find((decision) => decision.decision_id === replayCandidate.decision.decision_id);
     if (replay) {
       const expectedStatus = replay.resolution === "final" ? "resolved_final" : "resolved_temporary";
-      if (state.status !== expectedStatus) return staleAnswer();
+      if (state.status !== expectedStatus) return staleAnswer(event);
       return {
         status: "replayed_decision",
         commit_required: false,
@@ -12520,7 +12527,7 @@ function applySemanticClarificationEventsV4(submitted) {
       const currentBindingUnchanged = state.status === "presented" && state.question_part_id === event.question_part_id && state.root_version_digest === event.root_version_digest && root.root_version_digest === event.root_version_digest;
       const hasIntermediateDecision = decisions2.some((decision) => decision.target?.root_issue_id === event.root_issue_id);
       const currentPresentationId = checkpoint2.clarification_state.latest_presentation_id;
-      if (matchingHistory.length !== 1 || typeof currentPresentationId !== "string" || !isUniquePresentationAncestor(event.presentation_id, currentPresentationId, history) || !currentBindingUnchanged || hasIntermediateDecision) return staleAnswer();
+      if (matchingHistory.length !== 1 || typeof currentPresentationId !== "string" || !isUniquePresentationAncestor(event.presentation_id, currentPresentationId, history) || !currentBindingUnchanged || hasIntermediateDecision) return staleAnswer(event);
       acceptedFromSuperseded = true;
     }
     let compiled;
@@ -12529,7 +12536,7 @@ function applySemanticClarificationEventsV4(submitted) {
     } catch {
       return noInformationGain();
     }
-    if (state.status !== "presented" || state.root_version_digest !== event.root_version_digest || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer();
+    if (state.status !== "presented" || state.root_version_digest !== event.root_version_digest || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer(event);
     decisions2.push(compiled.decision);
     decisionClaimSummaries.push({
       claim_id: `CLM-${sha256CanonicalV4({ decision_id: compiled.decision.decision_id }).slice("sha256:".length)}`,
@@ -28192,7 +28199,8 @@ var init_reply_schema = __esm({
           properties: {
             code: {
               enum: [
-                "FINAL_AUTHORITY_NOT_GRANTED"
+                "FINAL_AUTHORITY_NOT_GRANTED",
+                "STALE_ANSWER"
               ]
             },
             severity: {
@@ -54262,12 +54270,20 @@ async function consumeSemanticAppend(runDirectory, registry, artifacts, revision
   }
   if (!applied.commit_required) {
     await discardStagingSnapshot(runDirectory, "source_pack", candidate);
+    const nonBlockingDiagnostics = applied.non_blocking_diagnostics ?? [];
+    if (!applied.presentation) return {
+      kind: "advanced",
+      revision,
+      artifacts,
+      checkpoint: committed.value,
+      non_blocking_diagnostics: nonBlockingDiagnostics
+    };
     return {
       kind: "reply",
       reply: semanticQuestionReply(
         runId,
         applied.presentation ?? committed.value.clarification_state.presentation,
-        applied.diagnostics ?? []
+        nonBlockingDiagnostics
       )
     };
   }
@@ -54552,12 +54568,20 @@ async function consumePostCaseAppend(runDirectory, registry, artifacts, revision
   }
   if (!applied.commit_required) {
     await discardStagingSnapshot(runDirectory, "source_pack", candidate);
+    const nonBlockingDiagnostics = applied.non_blocking_diagnostics ?? [];
+    if (!applied.presentation) return {
+      kind: "advanced",
+      revision,
+      artifacts,
+      checkpoint: committed.value,
+      non_blocking_diagnostics: nonBlockingDiagnostics
+    };
     return {
       kind: "reply",
       reply: semanticQuestionReply(
         runId,
         applied.presentation ?? committed.value.clarification_state.presentation,
-        applied.diagnostics ?? []
+        nonBlockingDiagnostics
       )
     };
   }
@@ -55409,7 +55433,7 @@ var schemaDirectory = path11.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "75a04a5f10cda967e8f4c1eeb4437ad3e875cd2ca30b775da62918aaaacae5b6" : void 0;
+var embeddedManifestDigest = true ? "6bab3dfab5896cc1f1c7f61480328b540a661cfb4c4568ae08ed7fc82d7f4ecd" : void 0;
 var embeddedSchemaVersion = true ? "4.0.0" : void 0;
 var embeddedCompilerVersion = true ? "0.5.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;

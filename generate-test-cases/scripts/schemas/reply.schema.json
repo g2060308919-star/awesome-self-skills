@@ -534,7 +534,8 @@
       "properties": {
         "code": {
           "enum": [
-            "FINAL_AUTHORITY_NOT_GRANTED"
+            "FINAL_AUTHORITY_NOT_GRANTED",
+            "STALE_ANSWER"
           ]
         },
         "severity": {

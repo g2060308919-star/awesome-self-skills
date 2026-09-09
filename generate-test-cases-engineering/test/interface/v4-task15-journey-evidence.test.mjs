@@ -23,6 +23,9 @@ import { createSourceProviderRegistry } from '../../src/source-canonicalization.
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
 
 const transactionModuleUrl = new URL('../../src/revision-transaction-v4.mjs', import.meta.url).href;
+const installedRunnerModuleUrl = new URL(
+  '../../skill/generate-test-cases/scripts/test-compiler.mjs', import.meta.url
+).href;
 /** @type {any[]} */
 const providerRegistry = [{
   provider: 'cooper', version: '1', hosts: ['prd-assets.example.invalid'],
@@ -30,6 +33,14 @@ const providerRegistry = [{
 }];
 const emptyProviderRegistry = createSourceProviderRegistry([]);
 const emptyExpiryRegistry = createExpiryMatcherRegistry([]);
+
+/** @param {string} directory */
+async function installedAdvanceStrict(directory) {
+  const installed = /** @type {{advanceStrict:(directory:string)=>Promise<unknown>}} */ (
+    await import(installedRunnerModuleUrl)
+  );
+  return installed.advanceStrict(directory);
+}
 
 /** @param {string|Uint8Array} value */
 function byteDigest(value) {
@@ -95,16 +106,17 @@ function answerEvent(presentation, pattern, answer, options = {}) {
   };
 }
 
-/** @param {string} directory @param {string} runId */
-async function startQuestionJourney(directory, runId) {
+/** @param {string} directory @param {string} runId
+ * @param {(directory:string)=>Promise<unknown>} [advance] */
+async function startQuestionJourney(directory, runId, advance = advanceStrict) {
   await ensureV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
   const fixture = await bendReviewJourneyFixture(runId);
   await stage(directory, 'source_pack', fixture.artifacts.source_pack);
-  const evidenceRequest = /** @type {any} */ (await advanceStrict(directory));
+  const evidenceRequest = /** @type {any} */ (await advance(directory));
   assert.equal(evidenceRequest.status, 'need_artifact', JSON.stringify(evidenceRequest));
   assert.equal(evidenceRequest.stage, 'evidence_claims');
   await stage(directory, 'evidence_claims', fixture.artifacts.evidence_claims);
-  const pending = /** @type {any} */ (await advanceStrict(directory));
+  const pending = /** @type {any} */ (await advance(directory));
   assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
   assert.equal(pending.phase, 'requirements_analysis');
   assert.equal(pending.semantic_presentation.question_parts.length, 3);
@@ -117,6 +129,87 @@ async function readVerifiedArtifact(directory, manifest, key) {
   assert.equal(byteDigest(text), manifest[key].digest, `${key} digest`);
   return text;
 }
+
+test('T09 installed runner rejects a stale answer without turning the recoverable state into fatal', { timeout: 60_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-task09-stale-answer-'));
+  const runId = 'RUN-19191919-1919-4919-8919-191919191919';
+  try {
+    const { pending } = await startQuestionJourney(directory, runId, installedAdvanceStrict);
+    const ip = answerEvent(
+      pending.semantic_presentation, /IP/u, '发布者提交评价时的 IP 归属地'
+    );
+    const revision1 = await bendReviewJourneyFixture(runId, 1, [ip.event]);
+    await stage(directory, 'source_pack', revision1.artifacts.source_pack);
+    const afterIp = /** @type {any} */ (await installedAdvanceStrict(directory));
+    assert.equal(afterIp.status, 'need_user_answers', JSON.stringify(afterIp));
+    assert.equal(afterIp.semantic_presentation.question_parts.length, 2);
+    const pendingCheckpointBytes = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
+
+    const staleIp = answerEvent(
+      pending.semantic_presentation, /IP/u, '评价地点信息'
+    );
+    const staleRevision2 = await bendReviewJourneyFixture(
+      runId, 2, [ip.event, staleIp.event]
+    );
+    await stage(directory, 'source_pack', staleRevision2.artifacts.source_pack);
+    const staleWhilePending = /** @type {any} */ (await installedAdvanceStrict(directory));
+    assert.equal(staleWhilePending.status, 'need_user_answers', JSON.stringify(staleWhilePending));
+    assert.equal(
+      staleWhilePending.semantic_presentation.presentation_id,
+      afterIp.semantic_presentation.presentation_id
+    );
+    assert.deepEqual(staleWhilePending.non_blocking_diagnostics, [{
+      code: 'STALE_ANSWER', severity: 'warning',
+      message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
+      source_event_id: staleIp.event.event_id,
+      affected_question_part_ids: [staleIp.part.question_part_id]
+    }]);
+    assert.equal(await exists(path.join(directory, 'accepted/r002/source-pack.json')), false);
+    assert.equal(await exists(path.join(directory, 'staging/source-pack.json')), false);
+    assert.equal(
+      await readFile(path.join(directory, 'checkpoint.json'), 'utf8'),
+      pendingCheckpointBytes
+    );
+
+    const empty = answerEvent(afterIp.semantic_presentation, /空值/u, '—');
+    const sorting = answerEvent(afterIp.semantic_presentation, /排序/u, '降序');
+    const revision2 = await bendReviewJourneyFixture(
+      runId, 2, [ip.event, empty.event, sorting.event]
+    );
+    await stage(directory, 'source_pack', revision2.artifacts.source_pack);
+    const behaviorRequest = /** @type {any} */ (await installedAdvanceStrict(directory));
+    assert.equal(behaviorRequest.status, 'need_artifact', JSON.stringify(behaviorRequest));
+    assert.equal(behaviorRequest.stage, 'behavior_views');
+    const closedCheckpointBytes = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
+
+    const staleRevision3 = await bendReviewJourneyFixture(
+      runId, 3, [ip.event, empty.event, sorting.event, staleIp.event]
+    );
+    await stage(directory, 'source_pack', staleRevision3.artifacts.source_pack);
+    const staleAfterClose = /** @type {any} */ (await installedAdvanceStrict(directory));
+    assert.equal(staleAfterClose.status, 'need_artifact', JSON.stringify(staleAfterClose));
+    assert.equal(staleAfterClose.stage, 'behavior_views');
+    assert.deepEqual(staleAfterClose.non_blocking_diagnostics, [{
+      code: 'STALE_ANSWER', severity: 'warning',
+      message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
+      source_event_id: staleIp.event.event_id,
+      affected_question_part_ids: [staleIp.part.question_part_id]
+    }]);
+    assert.equal(await exists(path.join(directory, 'accepted/r003/source-pack.json')), false);
+    assert.equal(await exists(path.join(directory, 'staging/source-pack.json')), false);
+    assert.equal(
+      await readFile(path.join(directory, 'checkpoint.json'), 'utf8'),
+      closedCheckpointBytes
+    );
+
+    const cleanReplay = /** @type {any} */ (await installedAdvanceStrict(directory));
+    assert.equal(cleanReplay.status, 'need_artifact', JSON.stringify(cleanReplay));
+    assert.equal(cleanReplay.stage, 'behavior_views');
+    assert.deepEqual(cleanReplay.non_blocking_diagnostics, []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 /** @param {string} directory @param {number} revision */
 async function revisionTransactionRequest(directory, revision) {

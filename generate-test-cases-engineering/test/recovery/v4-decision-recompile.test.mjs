@@ -214,6 +214,12 @@ test('a uniquely mapped late answer is accepted once; replay is stable and stale
     assert.equal(stale.status, 'stale_answer');
     assert.equal(stale.commit_required, false);
     assert.deepEqual(stale.diagnostics.map((/** @type {any} */ item) => item.code), ['STALE_ANSWER']);
+    assert.deepEqual(stale.non_blocking_diagnostics, [{
+      code: 'STALE_ANSWER', severity: 'warning',
+      message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
+      source_event_id: lateEvent.event_id,
+      affected_question_part_ids: [oldPart.question_part_id]
+    }]);
     assert.equal(stale.committed_revision, staleBase.checkpoint.revision);
     assert.equal(stale.presentation?.presentation_id ?? null, staleBase.presentation?.presentation_id ?? null);
   }
