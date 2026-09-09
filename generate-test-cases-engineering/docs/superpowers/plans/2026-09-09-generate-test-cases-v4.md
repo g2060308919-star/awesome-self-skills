@@ -46,7 +46,7 @@ The implementation follows the specification DAG and records RED before GREEN fo
 | T12 | complete | result matrix, all four cancellation phases plus installed sibling resume, canonical read-back, Markdown/CSV and the required B-end golden are covered |
 | T13 | complete | read-only v3 migration/index/recovery and production migrated-seed reanalysis are covered |
 | T14 | complete | Skill and references contain the v4 policy; official validator and engineering/repository Skill byte sync pass |
-| T15 | local gates complete; pressure/clean-candidate pending | B-end production journeys, failure paths, no-fallback, 100-run installed repeatability, benchmark-tool tests and 30-PRD public-pilot pass; three fresh-Agent pressure runs and final clean candidate verification remain |
+| T15 | complete | B-end production journeys, failure paths, no-fallback, 100-run installed repeatability, benchmark-tool tests, 30-PRD public-pilot, three fresh-context pressure runs and final isolated clean-candidate verification pass |
 
 ## Task 02 evidence
 
@@ -113,12 +113,11 @@ Command-level evidence for this closure will be retained in `docs/superpowers/ev
 | O-02 | `test/interface/v4-two-phase-clarification.test.mjs` |
 | O-03 | `test/core/v4-partial-answer.test.mjs`; `test/recovery/v4-idempotent-append.test.mjs` |
 
-## Candidate-A gate status
+## Final gate status
 
-The implementation working tree has completed its local engineering gates but
-is not yet declared merge-ready at this checkpoint:
+The implementation is merge-ready at this checkpoint:
 
-- `npm run check`: exit 0; 1,440 main tests plus the 100-run and three-directory
+- `npm run check`: exit 0; 1,442 main tests plus the 100-run and three-directory
   installed-shape determinism checks pass.
 - `npm run test:benchmark`: exit 0; 145/145 benchmark-tool tests pass.
 - `npm run public-pilot`: exit 0; `pilot_ready`, 30/30 admitted PRDs, five per
@@ -127,6 +126,6 @@ is not yet declared merge-ready at this checkpoint:
   claim, and this v4 contract requires no such claim.
 - `npm run build -- --check`, engineering/published Skill byte comparison,
   bundle syntax, diff integrity, and the official Skill validator pass.
-- Three fresh-context pressure Agent runs and a final isolated clean-checkout
-  rerun remain before merge. Any later production, Schema, Skill, or generated
-  bundle change invalidates the affected evidence and must be reverified.
+- Three fresh-context pressure Agent runs passed on candidate `244f1ea01d4843ae88d7f64b97b512850963efd1`, including the mandatory failure/no-fallback chain.
+- The isolated checkout at `/private/tmp/gtc-v4-final.bKtqWL/repo` was clean before and after `npm ci --offline`, all three final npm commands, both official validators, build/bundle/Skill synchronization checks and digest verification.
+- Full command, pressure-run and digest evidence is retained in `docs/superpowers/evidence/2026-09-09-v4-final-closure/report.md`. Any later production, Schema, Skill, or generated bundle change invalidates the affected evidence and must be reverified.
