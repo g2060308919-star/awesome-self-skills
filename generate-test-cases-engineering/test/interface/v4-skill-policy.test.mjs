@@ -92,7 +92,7 @@ test('v4 user presentations expose business meaning and every stop path exposes 
   }
   assert.match(clarification, /question[\s\S]*why_needed[\s\S]*decision_impact[\s\S]*unresolved_outcome/iu);
   assert.match(clarification, /MUST NOT|never[\s\S]*(?:root|fact|claim|obligation)[\s\S]*ID[\s\S]*business/iu);
-  assert.match(clarification, /STALE_ANSWER[\s\S]*non-blocking[\s\S]*current committed state[\s\S]*never report compiler fatal/iu);
+  assert.match(clarification, /late answer[\s\S]*internal stale transition[\s\S]*current committed state[\s\S]*never report compiler fatal/iu);
   assert.match(execution, /`provide_capability_proof`[\s\S]*`set_execution_disposition`[\s\S]*`pause_execution`[\s\S]*`reopen_semantic_question`/u);
   assert.match(execution, /source acquisition[\s\S]*semantic clarification[\s\S]*execution closure[\s\S]*final confirmation[\s\S]*cancel_run/iu);
   for (const content of [skill, execution, runs]) {

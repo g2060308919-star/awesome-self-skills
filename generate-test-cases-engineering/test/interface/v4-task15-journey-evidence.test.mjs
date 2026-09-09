@@ -158,12 +158,7 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
       staleWhilePending.semantic_presentation.presentation_id,
       afterIp.semantic_presentation.presentation_id
     );
-    assert.deepEqual(staleWhilePending.non_blocking_diagnostics, [{
-      code: 'STALE_ANSWER', severity: 'warning',
-      message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
-      source_event_id: staleIp.event.event_id,
-      affected_question_part_ids: [staleIp.part.question_part_id]
-    }]);
+    assert.deepEqual(staleWhilePending.non_blocking_diagnostics, []);
     assert.equal(await exists(path.join(directory, 'accepted/r002/source-pack.json')), false);
     assert.equal(await exists(path.join(directory, 'staging/source-pack.json')), false);
     assert.equal(
@@ -189,12 +184,7 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
     const staleAfterClose = /** @type {any} */ (await installedAdvanceStrict(directory));
     assert.equal(staleAfterClose.status, 'need_artifact', JSON.stringify(staleAfterClose));
     assert.equal(staleAfterClose.stage, 'behavior_views');
-    assert.deepEqual(staleAfterClose.non_blocking_diagnostics, [{
-      code: 'STALE_ANSWER', severity: 'warning',
-      message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
-      source_event_id: staleIp.event.event_id,
-      affected_question_part_ids: [staleIp.part.question_part_id]
-    }]);
+    assert.deepEqual(staleAfterClose.non_blocking_diagnostics, []);
     assert.equal(await exists(path.join(directory, 'accepted/r003/source-pack.json')), false);
     assert.equal(await exists(path.join(directory, 'staging/source-pack.json')), false);
     assert.equal(

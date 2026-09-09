@@ -820,15 +820,8 @@ export function applySemanticClarificationEventsV4(submitted) {
       message: 'No answer could be safely bound; the same semantic questions remain pending.'
     }]
   });
-  /** @param {any} event */
-  const staleAnswer = (event) => ({
+  const staleAnswer = () => ({
     ...noInformationGain(), status: 'stale_answer',
-    non_blocking_diagnostics: [{
-      code: 'STALE_ANSWER', severity: 'warning',
-      message: '该答复针对的问题版本已失效；请以当前展示的问题为准。',
-      source_event_id: event.event_id,
-      affected_question_part_ids: [event.question_part_id]
-    }],
     diagnostics: [{
       category: 'reference', code: 'STALE_ANSWER', path: '/clarification_events',
       message: 'The answer target is no longer the uniquely pending version; use the current presentation.'
@@ -870,13 +863,13 @@ export function applySemanticClarificationEventsV4(submitted) {
       || typeof event.answer !== 'string' || !event.answer.trim()) return noInformationGain();
     const root = checkpoint.semantic_gap_ledger.find((/** @type {any} */ item) => item.root_issue_id === event.root_issue_id);
     const state = checkpoint.clarification_state.root_states.find((/** @type {any} */ item) => item.root_issue_id === event.root_issue_id);
-    if (!root || !state) return staleAnswer(event);
+    if (!root || !state) return staleAnswer();
     const message = messages.get(event.answer_origin.message_digest);
     if (message === undefined) return noInformationGain();
     const targetBindingCurrent = state.question_part_id === event.question_part_id
       && state.root_version_digest === event.root_version_digest
       && root.root_version_digest === event.root_version_digest;
-    if (!targetBindingCurrent) return staleAnswer(event);
+    if (!targetBindingCurrent) return staleAnswer();
     const reopenedTarget = Array.isArray(checkpoint.reopened_targets)
       ? checkpoint.reopened_targets.find((/** @type {any} */ target) =>
         target.root_issue_id === root.root_issue_id
@@ -902,7 +895,7 @@ export function applySemanticClarificationEventsV4(submitted) {
     const replay = decisions.find((decision) => decision.decision_id === replayCandidate.decision.decision_id);
     if (replay) {
       const expectedStatus = replay.resolution === 'final' ? 'resolved_final' : 'resolved_temporary';
-      if (state.status !== expectedStatus) return staleAnswer(event);
+      if (state.status !== expectedStatus) return staleAnswer();
       return {
         status: 'replayed_decision', commit_required: false, committed_revision: original.revision,
         presentation: structuredClone(original.clarification_state.presentation), checkpoint: structuredClone(original),
@@ -924,14 +917,14 @@ export function applySemanticClarificationEventsV4(submitted) {
       const currentPresentationId = checkpoint.clarification_state.latest_presentation_id;
       if (matchingHistory.length !== 1 || typeof currentPresentationId !== 'string'
         || !isUniquePresentationAncestor(event.presentation_id, currentPresentationId, history)
-        || !currentBindingUnchanged || hasIntermediateDecision) return staleAnswer(event);
+        || !currentBindingUnchanged || hasIntermediateDecision) return staleAnswer();
       acceptedFromSuperseded = true;
     }
     let compiled;
     try { compiled = acceptedFromSuperseded ? compileDecision(true) : replayCandidate; }
     catch { return noInformationGain(); }
     if (state.status !== 'presented' || state.root_version_digest !== event.root_version_digest
-      || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer(event);
+      || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer();
     decisions.push(compiled.decision);
     decisionClaimSummaries.push({
       claim_id: `CLM-${sha256CanonicalV4({ decision_id: compiled.decision.decision_id }).slice('sha256:'.length)}`,
