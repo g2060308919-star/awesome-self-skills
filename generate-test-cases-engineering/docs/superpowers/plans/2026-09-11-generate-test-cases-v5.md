@@ -135,7 +135,7 @@
 
   Expected: PASS, generated files are canonical and a second build is byte-identical.
 
-- [ ] **Step 6: Commit the frozen contracts**
+- [x] **Step 6: Commit the frozen contracts**
 
   ```bash
   git add src/v5 build/build.mjs skill/generate-test-cases/scripts test/v5
@@ -156,17 +156,17 @@
 - Consumes: canonical JSON, 28-row stable-ID registry, accepted source payload digest, lineage ID, and allowed-edge registry.
 - Produces: `stableV5Id(prefix, preimage)`, `acceptArtifactEnvelope(input)`, and `validateV5ProvenanceGraph(graph)`.
 
-- [ ] **Step 1: Write failing 28-prefix golden and no-cycle tests**
+- [x] **Step 1: Write failing 28-prefix golden and no-cycle tests**
 
   Cover every prefix, reordered canonical sets, changed ordered sequences, cross-lineage references, back edges, cycles, downstream-to-source proof attempts, unknown edge types, and resume projection edges.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
   Run: `node --test test/v5/identity.test.mjs test/v5/provenance.test.mjs`
 
   Expected: FAIL because V5 identity modules are absent.
 
-- [ ] **Step 3: Implement registry-driven identities and envelopes**
+- [x] **Step 3: Implement registry-driven identities and envelopes**
 
   ```js
   export function stableV5Id(prefix, semanticPreimage) {
@@ -179,7 +179,7 @@
   }
   ```
 
-- [ ] **Step 4: Implement directed allowed-edge validation**
+- [x] **Step 4: Implement directed allowed-edge validation**
 
   Build adjacency once, reject every non-registry edge, prove all referenced nodes exist, enforce same-run/lineage restrictions, and use iterative color marking for cycle detection.
 
