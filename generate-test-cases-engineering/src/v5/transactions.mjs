@@ -51,7 +51,7 @@ async function resolveCatalogIdempotency(catalogRoot, idempotencyKey, canonicalA
 
 /**
  * @param {string} catalogRoot
- * @param {{identity:Record<string,any>,checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,idempotencyKey:string,canonicalActionDigest:string,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>}} input
+ * @param {{identity:Record<string,any>,checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,idempotencyKey:string,canonicalActionDigest:string,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>}} input
  * @param {{failAt?:string}} [services]
  */
 export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
@@ -76,6 +76,7 @@ export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
     else if (item.digestField) await writeSealedV5Record(run.compilerState, item.record, item.digestField);
     else throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Compiler state record storage contract is missing.');
   }
+  for (const item of input.acceptedArtifacts ?? []) await writeSealedV5Record(run.acceptedArtifacts, item.record, item.digestField);
 
   validateCheckpointIdentity(input.checkpoint, input.identity);
   const identity = sealV5Record(input.identity, 'identity_digest');
@@ -87,6 +88,7 @@ export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
   const transaction = await writeSealedV5Record(run.transactions, {
     scope: { kind: 'run', run_id: input.identity.run_id }, run_id: input.identity.run_id,
     transaction_kind: 'genesis', transaction_sequence: 0, previous_run_transaction_digest: null,
+    operational_event_ref: { kind: 'none' },
     checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest,
     reply_object_digest: reply.digest, receipt_digest: null, idempotency_index_digest: index.digest
   }, 'transaction_digest');
@@ -119,8 +121,8 @@ export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
 
 /**
  * @param {string} runDirectory
- * @param {{idempotency_key:string,action:Record<string,any>}} request
- * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>}} nextState
+ * @param {Record<string,any>} request
+ * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>,renderedOutputs?:Array<{record:Record<string,any>,digestField:string}>,operationalEvent?:{record:Record<string,any>,digestField:string,refKind:string}}} nextState
  * @param {{failAt?:string}} [services]
  */
 export async function commitNormalRunTransaction(runDirectory, request, nextState, services = {}) {
@@ -141,6 +143,13 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
       else if (item.digestField) await writeSealedV5Record(current.layout.compilerState, item.record, item.digestField);
       else throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Compiler state record storage contract is missing.');
     }
+    for (const item of nextState.renderedOutputs ?? []) await writeSealedV5Record(current.layout.renderedOutputs, item.record, item.digestField);
+    /** @type {Record<string,any>} */
+    let operationalEventRef = { kind: 'none' };
+    if (nextState.operationalEvent) {
+      const event = await writeSealedV5Record(current.layout.events, nextState.operationalEvent.record, nextState.operationalEvent.digestField);
+      operationalEventRef = { kind: nextState.operationalEvent.refKind, event_digest: event.digest };
+    }
     const checkpointPayload = Object.hasOwn(nextState.checkpoint, 'checkpoint_digest') ? withoutDigest(nextState.checkpoint, 'checkpoint_digest') : nextState.checkpoint;
     const checkpoint = await writeSealedV5Record(current.layout.checkpoints, checkpointPayload, 'checkpoint_digest');
     const sidecarPayload = Object.hasOwn(nextState.selectorSidecar, 'selector_sidecar_digest') ? withoutDigest(nextState.selectorSidecar, 'selector_sidecar_digest') : nextState.selectorSidecar;
@@ -157,11 +166,12 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
       index_sequence: sequence,
       entries: [...current.index.entries, { idempotency_key: request.idempotency_key, canonical_action_digest: canonicalActionDigest, receipt_digest: receipt.digest, reply_digest: reply.digest }].sort((left, right) => left.idempotency_key.localeCompare(right.idempotency_key))
     }, 'index_digest');
-    const transactionKind = nextState.reply.status === 'fatal' ? 'normal_fatal' : 'normal';
+    const transactionKind = (nextState.reply.reply_status ?? nextState.reply.status) === 'fatal' ? 'normal_fatal' : 'normal';
     const transaction = await writeSealedV5Record(current.layout.transactions, {
       scope: { kind: 'run', run_id: current.identity.run_id }, run_id: current.identity.run_id,
       transaction_kind: transactionKind, transaction_sequence: sequence,
       previous_run_transaction_digest: current.transaction.transaction_digest,
+      operational_event_ref: operationalEventRef,
       run_genesis_record_digest: current.genesis.run_genesis_record_digest,
       checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest,
       reply_object_digest: reply.digest, receipt_digest: receipt.digest, idempotency_index_digest: index.digest

@@ -193,15 +193,21 @@ export async function readVerifiedRun(runDirectory) {
   const replyPath = path.join(layout.replies, digestFilename(transaction.reply_object_digest));
   const reply = await readCasJson(replyPath, transaction.reply_object_digest);
   const receipt = transaction.receipt_digest === null ? null : await readSealedV5Record(layout.receipts, transaction.receipt_digest, 'receipt_digest');
+  let operationalEvent = null;
+  if (transaction.operational_event_ref?.kind !== 'none') {
+    if (transaction.operational_event_ref?.kind !== 'cancel_event' || typeof transaction.operational_event_ref.event_digest !== 'string') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Operational event reference is invalid.');
+    operationalEvent = await readSealedV5Record(layout.events, transaction.operational_event_ref.event_digest, 'cancel_event_digest');
+  }
   if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Run object cross-binding is invalid.');
   if (selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest || index.index_sequence !== transaction.transaction_sequence || index.entries.length !== transaction.transaction_sequence) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Checkpoint/sidecar/index sequence binding is invalid.');
   if (receipt && (receipt.reply_object_ref.reply_digest !== transaction.reply_object_digest || !index.entries.some((/** @type {Record<string, any>} */ entry) => entry.receipt_digest === receipt.receipt_digest && entry.reply_digest === transaction.reply_object_digest))) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Receipt/index/reply binding is invalid.');
+  if (operationalEvent && (checkpoint.cancel_event_digest !== operationalEvent.cancel_event_digest || receipt?.canonical_action_digest !== operationalEvent.canonical_cancel_action_digest || transaction.previous_run_transaction_digest !== operationalEvent.previous_run_transaction_digest)) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Cancel event transaction binding is invalid.');
   for (const entry of index.entries) {
     const indexedReceipt = await readSealedV5Record(layout.receipts, entry.receipt_digest, 'receipt_digest');
     if (indexedReceipt.run_id !== identityFixed.record.run_id || indexedReceipt.idempotency_key !== entry.idempotency_key || indexedReceipt.canonical_action_digest !== entry.canonical_action_digest || indexedReceipt.reply_object_ref.reply_digest !== entry.reply_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Indexed receipt binding is invalid.');
     await readCasJson(path.join(layout.replies, digestFilename(entry.reply_digest)), entry.reply_digest);
   }
-  return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, reply };
+  return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, operationalEvent, reply };
 }
 
 /** @param {string} runDirectory @param {() => Promise<any>} operation */

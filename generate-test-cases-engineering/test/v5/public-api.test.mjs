@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -52,7 +52,7 @@ test('case creation requires a closed nonempty bootstrap with a required request
   const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-public-invalid-'));
   const before = await readdir(catalogRoot);
   const reply = await publicApi.createV5RunDirectory(catalogRoot, { idempotency_key: 'bad', delivery_intent: 'case_document', source_bootstrap: { source_request_seeds: [] }, extra: true });
-  assert.equal(reply.reply_kind, 'pre_run_error');
+  assert.equal(reply.kind, 'pre_run_error');
   assert.equal(reply.diagnostics[0].code, 'RUN_ARGUMENT_INVALID');
   assert.deepEqual(await readdir(catalogRoot), before);
 });
@@ -60,8 +60,8 @@ test('case creation requires a closed nonempty bootstrap with a required request
 test('create, inspect, and source batch advancement use deterministic advertised capabilities', async () => {
   const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-public-'));
   const created = await publicApi.createV5RunDirectory(catalogRoot, createRequest());
-  assert.equal(created.reply_kind, 'persisted_run_state');
-  assert.equal(created.status, 'need_artifact');
+  assert.equal(created.projection_kind, 'persisted_run_state');
+  assert.equal(created.reply_status, 'need_artifact');
   assert.equal(created.work_packet.kind, 'source_work');
   assert.equal(created.work_packet.source_requests.length, 16);
   assert.ok(created.work_packet.source_requests.slice(0, -1).every((/** @type {Record<string, any>} */ request) => request.required));
@@ -76,7 +76,7 @@ test('create, inspect, and source batch advancement use deterministic advertised
     source_payload: { kind: 'fulfilled_sources', source_pack: { sources: sourceKeys.map((/** @type {string} */ sourceClientKey, /** @type {number} */ index) => ({ source_client_key: sourceClientKey, media_type: 'text/markdown', content: `Accepted ${index}` })) } }
   };
   const advanced = await publicApi.advanceV5Run(created.run_directory, { idempotency_key: 'batch-1', action });
-  assert.equal(advanced.status, 'need_artifact');
+  assert.equal(advanced.reply_status, 'need_artifact');
   assert.equal(advanced.current_revision, 1);
   assert.equal(advanced.work_packet.source_requests.length, 2);
   assert.deepEqual(await publicApi.advanceV5Run(created.run_directory, { idempotency_key: 'batch-1', action }), advanced);
@@ -91,7 +91,7 @@ test('create, inspect, and source batch advancement use deterministic advertised
   assert.equal(JSON.stringify(acceptedEnvelope).includes('source-0'), false, 'temporary source client keys must not persist');
 });
 
-test('source batch mismatch and required skip are zero-revision rejections', async () => {
+test('source batch mismatch is a replayable zero-revision persisted rejection', async () => {
   const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-public-reject-'));
   const created = await publicApi.createV5RunDirectory(catalogRoot, createRequest(2));
   const pointerPath = path.join(created.run_directory, 'current-transaction.json');
@@ -104,9 +104,32 @@ test('source batch mismatch and required skip are zero-revision rejections', asy
     request_dispositions: requests.map((/** @type {Record<string, any>} */ request) => ({ request_id: request.request_id, outcome: 'skipped_optional', skip_reason: 'skip' })),
     source_payload: { kind: 'all_skipped_optional' }
   } });
-  assert.equal(reply.status, 'need_revision');
+  assert.equal(reply.reply_status, 'need_revision');
   assert.equal(reply.diagnostics[0].code, 'SCHEMA_VALIDATION_FAILED');
-  assert.deepEqual(await readFile(pointerPath), before);
+  assert.equal(reply.current_revision, 0);
+  assert.notDeepEqual(await readFile(pointerPath), before);
+  assert.deepEqual(await publicApi.advanceV5Run(created.run_directory, { idempotency_key: 'bad-batch', action: {
+    kind: 'submit_source_batch', action_token: selector.action_token,
+    request_ids: requests.map((/** @type {Record<string, any>} */ request) => request.request_id),
+    request_dispositions: requests.map((/** @type {Record<string, any>} */ request) => ({ request_id: request.request_id, outcome: 'skipped_optional', skip_reason: 'skip' })),
+    source_payload: { kind: 'all_skipped_optional' }
+  } }), reply);
+});
+
+test('inspect returns the generated read-only integrity projection without publishing state', async () => {
+  const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-public-inspect-corrupt-'));
+  const created = await publicApi.createV5RunDirectory(catalogRoot, createRequest(1));
+  const current = await readVerifiedRun(created.run_directory);
+  const replyPath = path.join(current.layout.replies, current.transaction.reply_object_digest.slice(7) + '.json');
+  await writeFile(replyPath, '{}');
+  const pointerBefore = await readFile(current.layout.currentPointer);
+  const inspected = await publicApi.inspectV5Run(created.run_directory);
+  assert.equal(inspected.kind, 'run_reply');
+  assert.equal(inspected.projection_kind, 'read_only_integrity_fatal');
+  assert.equal(inspected.reply_status, 'fatal');
+  assert.equal(inspected.last_verified_state.kind, 'checkpoint');
+  assert.equal(inspected.selector_snapshot_digest, null);
+  assert.deepEqual(await readFile(current.layout.currentPointer), pointerBefore);
 });
 
 test('create rejects relative roots, legacy requests, and idempotency conflicts without publishing a second run', async () => {

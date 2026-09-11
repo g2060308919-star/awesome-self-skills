@@ -544,6 +544,93 @@ function createNormativeRuleInventory(fsm, policy) {
   }, 'inventory_digest');
 }
 
+/** @param {Record<string,any>} fsm @param {Record<string,any>} cell */
+function nextActionTemplates(fsm, cell) {
+  const byId = new Map(fsm.action_templates.map((/** @type {Record<string,any>} */ template) => [template.template_id, template]));
+  return cell.allowed_action_template_ids.map((/** @type {string} */ id) => {
+    const template = byId.get(id);
+    if (template.action_kind === 'submit_artifact') return { kind: 'submit_artifact', artifact_kind: template.artifact_kind };
+    if (template.action_kind === 'advance_execution_plan') return { kind: 'advance_execution_plan', operation_kinds_source: 'existing_closed_union' };
+    return { kind: template.action_kind };
+  }).sort((/** @type {Record<string,any>} */ left, /** @type {Record<string,any>} */ right) => canonicalStringify(left).localeCompare(canonicalStringify(right)));
+}
+
+/** @param {string} value */
+function replyContractId(value) {
+  return `RPL.${value.toUpperCase().replaceAll(/[^A-Z0-9_.-]/gu, '.')}`;
+}
+
+/** @param {Record<string,any>} fsm */
+function createFsmReplyRows(fsm) {
+  const cells = new Map(fsm.cells.map((/** @type {Record<string,any>} */ cell) => [cell.cell_id, cell]));
+  return fsm.outcomes.map((/** @type {Record<string,any>} */ outcome) => {
+    const cell = cells.get(outcome.target_cell_id);
+    return {
+      reply_contract_id: replyContractId(`FSM.${outcome.outcome_id}`),
+      source: { kind: 'fsm_outcome', outcome_id: outcome.outcome_id },
+      exact_projection_kind: 'persisted_run_state', exact_lifecycle: cell.lifecycle,
+      exact_stage: cell.stage, exact_obligation: cell.obligation,
+      exact_last_verified_state: { kind: 'absent' }, exact_reply_status: cell.normal_reply_status,
+      exact_work_packet: cell.lifecycle === 'active' ? { kind: 'nonterminal', packet_kind: cell.work_packet_kind } : { kind: 'terminal', terminal_kind: cell.terminal_kind },
+      exact_action_templates: nextActionTemplates(fsm, cell), exact_commit: outcome.commit_projection,
+      exact_diagnostic: { kind: 'none' }
+    };
+  });
+}
+
+/** @param {Record<string,any>} fsm @param {Record<string,any>} policy */
+function createErrorReplyRows(fsm, policy) {
+  const cells = new Map(fsm.cells.map((/** @type {Record<string,any>} */ cell) => [cell.cell_id, cell]));
+  const rows = [];
+  for (const rule of policy.rules.filter((/** @type {Record<string,any>} */ candidate) => candidate.kind === 'runtime_error')) {
+    for (const response of rule.responses) {
+      const profiles = response.state_profiles ?? [null];
+      for (const profile of profiles) {
+        const trigger = profile?.trigger_state;
+        const projection = profile?.reply_projection;
+        const projectedCellId = projection?.reply_fsm_cell_id ?? projection?.terminal_fsm_cell_id ?? trigger?.fsm_cell_id;
+        const cell = projectedCellId ? cells.get(projectedCellId) : null;
+        const projectionKind = response.context === 'pre_run' ? 'pre_run_error'
+          : projection?.kind === 'read_only_integrity_fatal' ? 'read_only_integrity_fatal'
+            : projection?.kind === 'read_only_terminal_rejection' ? 'read_only_terminal_rejection' : 'persisted_run_state';
+        const stateSuffix = profile ? `.${profile.state_profile_id}` : '';
+        const source = response.context === 'pre_run'
+          ? { kind: 'runtime_error', error_code: rule.error_code, response_context: 'pre_run', response_variant_id: response.response_variant_id }
+          : { kind: 'runtime_error', error_code: rule.error_code, response_context: response.context, response_variant_id: response.response_variant_id, state_profile_id: profile.state_profile_id, trigger_state: trigger };
+        rows.push({
+          reply_contract_id: replyContractId(`ERROR.${rule.error_code}.${response.context}.${response.response_variant_id}${stateSuffix}`),
+          source, exact_projection_kind: projectionKind,
+          exact_lifecycle: response.context === 'pre_run' ? 'absent' : projectionKind === 'read_only_integrity_fatal' ? 'fatal' : cell.lifecycle,
+          exact_stage: response.context === 'pre_run' || projectionKind === 'read_only_integrity_fatal' ? 'absent' : cell.stage,
+          exact_obligation: response.context === 'pre_run' || projectionKind === 'read_only_integrity_fatal' ? 'absent' : cell.obligation,
+          exact_last_verified_state: response.context === 'pre_run' || projectionKind === 'persisted_run_state' || projectionKind === 'read_only_terminal_rejection'
+            ? { kind: 'absent' } : projection.last_verified_state_kind === 'none' ? { kind: 'none' } : { kind: 'checkpoint', fsm_cell_id: trigger.fsm_cell_id },
+          exact_reply_status: response.reply_status,
+          exact_work_packet: response.context === 'pre_run' ? { kind: 'absent' }
+            : projectionKind === 'read_only_integrity_fatal'
+              ? { kind: 'terminal', terminal_kind: trigger?.delivery_intent === 'execution_plan' || trigger?.fsm_cell_id?.startsWith('ep.') ? 'execution_plan_fatal' : 'case_document_fatal' }
+              : cell.lifecycle === 'active' ? { kind: 'nonterminal', packet_kind: cell.work_packet_kind } : { kind: 'terminal', terminal_kind: cell.terminal_kind },
+          exact_action_templates: response.context === 'pre_run' || projectionKind.startsWith('read_only') ? [] : nextActionTemplates(fsm, cell),
+          exact_commit: response.exact_commit, exact_diagnostic: { kind: 'one', error_code: rule.error_code }
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+/** @param {Record<string,any>} fsm */
+function createInspectReplyRows(fsm) {
+  return fsm.cells.map((/** @type {Record<string,any>} */ cell) => ({
+    reply_contract_id: replyContractId(`INSPECT.${cell.cell_id}`),
+    source: { kind: 'inspect_success', fsm_cell_id: cell.cell_id }, exact_projection_kind: 'persisted_run_state',
+    exact_lifecycle: cell.lifecycle, exact_stage: cell.stage, exact_obligation: cell.obligation,
+    exact_last_verified_state: { kind: 'absent' }, exact_reply_status: cell.normal_reply_status,
+    exact_work_packet: cell.lifecycle === 'active' ? { kind: 'nonterminal', packet_kind: cell.work_packet_kind } : { kind: 'terminal', terminal_kind: cell.terminal_kind },
+    exact_action_templates: nextActionTemplates(fsm, cell), exact_commit: { kind: 'none' }, exact_diagnostic: { kind: 'none' }
+  }));
+}
+
 /** @param {Record<string, any>} fsm @param {Record<string, any>} policy */
 function createReplyContracts(fsm, policy) {
   const payload = {
@@ -554,7 +641,9 @@ function createReplyContracts(fsm, policy) {
     error_codes: Object.keys(V5_ERROR_CATALOG).sort(),
     reply_branches: ['pre_run_error', 'persisted_run_state', 'read_only_integrity_fatal', 'read_only_terminal_rejection'],
     reply_statuses: ['need_artifact', 'need_revision', 'need_user_answers', 'clarification_confirmation_required', 'ready', 'finished', 'cancelled', 'protocol_error', 'fatal'],
-    work_packet_by_cell: Object.fromEntries(fsm.cells.map((/** @type {any} */ cell) => [cell.cell_id, cell.work_packet_kind]))
+    work_packet_by_cell: Object.fromEntries(fsm.cells.map((/** @type {any} */ cell) => [cell.cell_id, cell.work_packet_kind])),
+    rows: [...createFsmReplyRows(fsm), ...createErrorReplyRows(fsm, policy), ...createInspectReplyRows(fsm)]
+      .sort((left, right) => left.reply_contract_id.localeCompare(right.reply_contract_id))
   };
   return attachDigest(payload, 'rules_bundle_digest');
 }

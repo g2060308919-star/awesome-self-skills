@@ -494,23 +494,23 @@
 - Consumes: generated 16-cell FSM, complete store, cancel record contract, immutable V5 Case ref, and exact existing Execution Plan action union.
 - Produces: registry-selected actions/replies, terminal cancellation, child-local resume projections, and the compatibility execution branch.
 
-- [ ] **Step 1: Write failing 51-outcome dispatch tests**
+- [x] **Step 1: Write failing 51-outcome dispatch tests**
 
   Prove every outcome is reachable from exactly one trigger, every emitted reply matches exactly one generated reply-contract row, all unadvertised actions return `ACTION_NOT_ADVERTISED`, and error phase/priority selection is deterministic.
 
-- [ ] **Step 2: Write failing cancel/resume tests**
+- [x] **Step 2: Write failing cancel/resume tests**
 
   Cover all cancellation cells, idempotent repeat, cancel-event cross-binding, source/case/execution ResumeBase variants, parent verification, child-local accepted envelopes/receipts, no staging/preview/token inheritance, V4 parent rejection, and tampered parent closure.
 
-- [ ] **Step 3: Write failing execution compatibility tests**
+- [x] **Step 3: Write failing execution compatibility tests**
 
   Assert exact immutable V5 Case ref validation and the unchanged four existing operation kinds; reject any expanded operation or a wrapper that advertises downstream execution.
 
-- [ ] **Step 4: Implement registry-driven runtime selection**
+- [x] **Step 4: Implement registry-driven runtime selection**
 
   Do not switch on hand-written duplicate outcome lists. Resolve current cell, advertised selector, validator phase, action handler, transaction profile, and reply contract from generated registries.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   Run: `node --test test/v5/fsm-runtime.test.mjs test/v5/resume.test.mjs test/v5/execution-wrapper.test.mjs`
 

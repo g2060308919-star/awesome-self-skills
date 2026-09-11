@@ -32,7 +32,7 @@ function tokenFor(checkpoint, capability, keyRecord) {
   return `v5a.${keyRecord.key_id}.${mac}`;
 }
 
-/** @param {Record<string, any>} checkpoint @param {Array<Record<string, any>>} capabilities @param {{current:{key_id:string,key:any},retained?:Array<{key_id:string,key:any}>}} keyring */
+/** @param {Record<string, any>} checkpoint @param {Array<Record<string, any>>} capabilities @param {{current:{key_id:string,key:any},retained?:Array<{key_id:string,key:any}>}} keyring @returns {{selectors:Array<Record<string,any>>,sidecar:Record<string,any>}} */
 export function issueSelectors(checkpoint, capabilities, keyring) {
   validateKey(keyring.current);
   const selectors = capabilities.map((capability) => ({ capability: structuredClone(capability), action_token: tokenFor(checkpoint, capability, keyring.current) }));

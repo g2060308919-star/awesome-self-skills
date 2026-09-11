@@ -13,13 +13,13 @@ export function canonicalObjectDigest(value) {
   return rawBytesDigest(canonicalV5Stringify(value));
 }
 
-/** @param {Record<string, unknown>} payload @param {string} digestField */
+/** @param {Record<string, any>} payload @param {string} digestField @returns {Record<string,any>} */
 export function sealV5Record(payload, digestField) {
   if (Object.hasOwn(payload, digestField)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', `Caller must not submit compiler-owned ${digestField}.`);
   return { ...payload, [digestField]: canonicalObjectDigest(payload) };
 }
 
-/** @param {Record<string, unknown>} record @param {string} digestField */
+/** @param {Record<string, any>} record @param {string} digestField @returns {Record<string,any>} */
 export function verifyV5Record(record, digestField) {
   const declared = record[digestField];
   if (typeof declared !== 'string') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', `${digestField} is missing.`);
