@@ -88,6 +88,6 @@ test('all leaves execute twice with byte-identical normalized transcript digests
     schema_version: '5.0.0',
     requirement_groups_passed: 16,
     fixture_leaves_passed: 32,
-    transcript_digest: 'sha256:ab2710e5deb1c6907fd8d747ed40047c8a1364f7c6f5b25b43e39e0303bbb85a'
+    transcript_digest: 'sha256:33523da07b98a7c16b1339b5ad46343440e0d76fe291e7a38327691e478daecd'
   });
 });

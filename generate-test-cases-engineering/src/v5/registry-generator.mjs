@@ -432,19 +432,28 @@ function createRuntimeResponses(errorCode, catalogRow) {
   const [replyStatus, semanticCommitPolicy, recoveryInstructionKey] = catalogRow;
   const preRunCodes = new Set(['UNSUPPORTED_SCHEMA_VERSION', 'RUN_ARGUMENT_INVALID', 'RESUME_PARENT_INVALID', 'CASE_DOCUMENT_REFERENCE_INVALID']);
   if (preRunCodes.has(errorCode)) return [{ response_variant_id: 'pre_run', context: 'pre_run', response_channel: 'pre_run_error', reply_status: replyStatus, semantic_commit_policy: semanticCommitPolicy, failure_record_policy: 'none', exact_commit: { kind: 'none' }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey }];
-  if (errorCode === 'ACCEPTED_STATE_INTEGRITY_FAILURE') {
+  const acceptedClosureError = ['ACCEPTED_STATE_INTEGRITY_FAILURE', 'CLARIFICATION_IMPACT_MISMATCH', 'CANONICAL_RENDER_MISMATCH'].includes(errorCode);
+  if (acceptedClosureError) {
     /** @type {any[]} */
     const inspectProfiles = V5_ACTIVE_FSM_CELL_IDS.concat(['cd.terminal.finished', 'cd.terminal.cancelled', 'cd.terminal.fatal', 'ep.terminal.finished', 'ep.terminal.cancelled', 'ep.terminal.fatal']).map((cellId) => ({ state_profile_id: `inspect.${cellId}`, trigger_state: verifiedState(cellId), reply_projection: { kind: 'read_only_integrity_fatal', last_verified_state_kind: 'checkpoint' } }));
-    inspectProfiles.push(
+    if (errorCode === 'ACCEPTED_STATE_INTEGRITY_FAILURE') inspectProfiles.push(
       { state_profile_id: 'inspect.none.case', trigger_state: { kind: 'no_verified_fsm_cell', delivery_intent: 'case_document' }, reply_projection: { kind: 'read_only_integrity_fatal', last_verified_state_kind: 'none' } },
       { state_profile_id: 'inspect.none.execution', trigger_state: { kind: 'no_verified_fsm_cell', delivery_intent: 'execution_plan' }, reply_projection: { kind: 'read_only_integrity_fatal', last_verified_state_kind: 'none' } }
     );
-    return [
-      { response_variant_id: 'pre_run_identity', context: 'pre_run', response_channel: 'pre_run_error', reply_status: 'fatal', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'none', exact_commit: { kind: 'none' }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey },
+    /** @type {any[]} */
+    const responses = [
       { response_variant_id: 'inspect_verified', context: 'run_inspect', state_profiles: inspectProfiles, response_channel: 'run_reply', reply_status: 'fatal', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'none', exact_commit: { kind: 'none' }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey },
       { response_variant_id: 'mutation_terminalize', context: 'run_mutation', state_profiles: V5_ACTIVE_FSM_CELL_IDS.concat(['cd.terminal.finished', 'cd.terminal.cancelled', 'ep.terminal.finished', 'ep.terminal.cancelled']).map((cellId) => persistedProfile(cellId, cellId.startsWith('cd.') ? 'cd.terminal.fatal' : 'ep.terminal.fatal')), response_channel: 'run_reply', reply_status: 'fatal', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'record_terminal_fatal', exact_commit: operationalCommit('fatal_incident_recorded'), next_action_templates: [], recovery_instruction_key: recoveryInstructionKey },
       { response_variant_id: 'mutation_already_fatal', context: 'run_mutation', state_profiles: ['cd.terminal.fatal', 'ep.terminal.fatal'].map((cellId) => ({ state_profile_id: `fatal.${cellId}`, trigger_state: verifiedState(cellId), reply_projection: { kind: 'read_only_integrity_fatal', last_verified_state_kind: 'checkpoint' } })), response_channel: 'run_reply', reply_status: 'fatal', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'none', exact_commit: { kind: 'none' }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey }
     ];
+    if (errorCode === 'ACCEPTED_STATE_INTEGRITY_FAILURE') {
+      responses.unshift({ response_variant_id: 'pre_run_identity', context: 'pre_run', response_channel: 'pre_run_error', reply_status: 'fatal', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'none', exact_commit: { kind: 'none' }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey });
+      responses.splice(3, 0, { response_variant_id: 'mutation_quarantine', context: 'run_mutation', state_profiles: [
+        { state_profile_id: 'quarantine.none.case', trigger_state: { kind: 'no_verified_fsm_cell', delivery_intent: 'case_document' }, reply_projection: { kind: 'persisted_fsm_cell', reply_fsm_cell_id: 'cd.terminal.fatal' } },
+        { state_profile_id: 'quarantine.none.execution', trigger_state: { kind: 'no_verified_fsm_cell', delivery_intent: 'execution_plan' }, reply_projection: { kind: 'persisted_fsm_cell', reply_fsm_cell_id: 'ep.terminal.fatal' } }
+      ], response_channel: 'run_reply', reply_status: 'fatal', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'record_terminal_fatal', exact_commit: operationalCommit('fatal_incident_recorded'), next_action_templates: [], recovery_instruction_key: recoveryInstructionKey });
+    }
+    return responses;
   }
   const responses = [];
   if (errorCode === 'IDEMPOTENCY_CONFLICT') responses.push({ response_variant_id: 'pre_run_create', context: 'pre_run', response_channel: 'pre_run_error', reply_status: 'protocol_error', semantic_commit_policy: 'no_semantic_commit', failure_record_policy: 'none', exact_commit: { kind: 'none' }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey });

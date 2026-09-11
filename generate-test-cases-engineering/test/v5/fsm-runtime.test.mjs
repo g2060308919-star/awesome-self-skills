@@ -1,13 +1,15 @@
 // @ts-nocheck
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir } from 'node:fs/promises';
+import { mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { advanceV5Run, createV5RunDirectory } from '../../src/entry.mjs';
+import { advanceV5Run, createV5RunDirectory, inspectV5Run } from '../../src/entry.mjs';
 import { minimalOriginFromRaw } from '../../src/v5/clarification-parser.mjs';
 import { generateV5Contracts } from '../../src/v5/registry-generator.mjs';
+import { readVerifiedRun } from '../../src/v5/run-store.mjs';
+import { digestFilename } from '../../src/v5/storage-paths.mjs';
 import {
   actionTemplateForV5Action,
   selectV5Error,
@@ -76,6 +78,17 @@ test('runtime dispatches clarification preview and commit through registry outco
   const committed = await advanceV5Run(created.run_directory, { idempotency_key: 'commit', action: { kind: 'commit_clarification_response', action_token: commitSelector.action_token, presentation_id: preview.work_packet.presentation.presentation_id, semantic_root_digest: preview.work_packet.presentation.semantic_root_digest, preview_digest: preview.work_packet.clarification_preview.preview_digest, raw_confirmation: '确认提交', confirmation_range: { start_scalar: 0, end_scalar: 4 } } });
   assert.equal(committed.obligation, 'provide_behavior_views', JSON.stringify(committed));
   assert.equal(committed.current_revision, 3);
+  const committedState = await readVerifiedRun(created.run_directory);
+  const impactDigest = committedState.checkpoint.applied_clarification_impact_digest;
+  assert.match(impactDigest, /^sha256:[0-9a-f]{64}$/u);
+  await writeFile(path.join(committedState.layout.compilerState, digestFilename(impactDigest)), '{"tampered":true}');
+  const inspected = await inspectV5Run(created.run_directory);
+  assert.equal(inspected.projection_kind, 'read_only_integrity_fatal');
+  assert.equal(inspected.diagnostics[0].code, 'CLARIFICATION_IMPACT_MISMATCH');
+  const fatal = await advanceV5Run(created.run_directory, { idempotency_key: 'impact-integrity-fatal', action: { kind: 'cancel_run' } });
+  assert.equal(fatal.reply_status, 'fatal');
+  assert.equal(fatal.diagnostics[0].code, 'CLARIFICATION_IMPACT_MISMATCH');
+  assert.equal(fatal.current_revision, committedState.checkpoint.current_revision);
 });
 
 test('public runtime completes source, evidence, behavior, Case, and canonical delivery', async () => {
@@ -113,4 +126,16 @@ test('public runtime completes source, evidence, behavior, Case, and canonical d
   assert.equal(finished.reply_status, 'finished', JSON.stringify(finished));
   assert.equal(finished.work_packet.terminal_kind, 'case_document_finished');
   assert.equal((await readdir(path.join(created.run_directory, 'objects', 'rendered-outputs'))).length, 3);
+  const terminal = await readVerifiedRun(created.run_directory);
+  assert.equal(terminal.checkpoint.rendered_output_digests.length, 3);
+  const renderedDigest = terminal.checkpoint.rendered_output_digests[0];
+  await writeFile(path.join(terminal.layout.renderedOutputs, digestFilename(renderedDigest)), '{"tampered":true}');
+  const inspected = await inspectV5Run(created.run_directory);
+  assert.equal(inspected.projection_kind, 'read_only_integrity_fatal');
+  assert.equal(inspected.diagnostics[0].code, 'CANONICAL_RENDER_MISMATCH');
+  const fatal = await advanceV5Run(created.run_directory, { idempotency_key: 'render-integrity-fatal', action: { kind: 'cancel_run' } });
+  assert.equal(fatal.reply_status, 'fatal');
+  assert.equal(fatal.diagnostics[0].code, 'CANONICAL_RENDER_MISMATCH');
+  assert.equal(fatal.current_revision, terminal.checkpoint.current_revision);
+  assert.equal((await readVerifiedRun(created.run_directory)).transaction.transaction_kind, 'normal_fatal');
 });

@@ -349,6 +349,8 @@ var V5ProtocolError = class extends Error {
     super(`${code}: ${message}`);
     this.name = "V5ProtocolError";
     this.code = code;
+    this.integrity_target_kind = void 0;
+    this.affected_refs = void 0;
     if (jsonPointer !== void 0) this.json_pointer = jsonPointer;
   }
 };
@@ -1330,18 +1332,26 @@ function createRuntimeResponses(errorCode, catalogRow) {
   const [replyStatus, semanticCommitPolicy, recoveryInstructionKey] = catalogRow;
   const preRunCodes = /* @__PURE__ */ new Set(["UNSUPPORTED_SCHEMA_VERSION", "RUN_ARGUMENT_INVALID", "RESUME_PARENT_INVALID", "CASE_DOCUMENT_REFERENCE_INVALID"]);
   if (preRunCodes.has(errorCode)) return [{ response_variant_id: "pre_run", context: "pre_run", response_channel: "pre_run_error", reply_status: replyStatus, semantic_commit_policy: semanticCommitPolicy, failure_record_policy: "none", exact_commit: { kind: "none" }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey }];
-  if (errorCode === "ACCEPTED_STATE_INTEGRITY_FAILURE") {
+  const acceptedClosureError = ["ACCEPTED_STATE_INTEGRITY_FAILURE", "CLARIFICATION_IMPACT_MISMATCH", "CANONICAL_RENDER_MISMATCH"].includes(errorCode);
+  if (acceptedClosureError) {
     const inspectProfiles = V5_ACTIVE_FSM_CELL_IDS.concat(["cd.terminal.finished", "cd.terminal.cancelled", "cd.terminal.fatal", "ep.terminal.finished", "ep.terminal.cancelled", "ep.terminal.fatal"]).map((cellId) => ({ state_profile_id: `inspect.${cellId}`, trigger_state: verifiedState(cellId), reply_projection: { kind: "read_only_integrity_fatal", last_verified_state_kind: "checkpoint" } }));
-    inspectProfiles.push(
+    if (errorCode === "ACCEPTED_STATE_INTEGRITY_FAILURE") inspectProfiles.push(
       { state_profile_id: "inspect.none.case", trigger_state: { kind: "no_verified_fsm_cell", delivery_intent: "case_document" }, reply_projection: { kind: "read_only_integrity_fatal", last_verified_state_kind: "none" } },
       { state_profile_id: "inspect.none.execution", trigger_state: { kind: "no_verified_fsm_cell", delivery_intent: "execution_plan" }, reply_projection: { kind: "read_only_integrity_fatal", last_verified_state_kind: "none" } }
     );
-    return [
-      { response_variant_id: "pre_run_identity", context: "pre_run", response_channel: "pre_run_error", reply_status: "fatal", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "none", exact_commit: { kind: "none" }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey },
+    const responses2 = [
       { response_variant_id: "inspect_verified", context: "run_inspect", state_profiles: inspectProfiles, response_channel: "run_reply", reply_status: "fatal", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "none", exact_commit: { kind: "none" }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey },
       { response_variant_id: "mutation_terminalize", context: "run_mutation", state_profiles: V5_ACTIVE_FSM_CELL_IDS.concat(["cd.terminal.finished", "cd.terminal.cancelled", "ep.terminal.finished", "ep.terminal.cancelled"]).map((cellId) => persistedProfile(cellId, cellId.startsWith("cd.") ? "cd.terminal.fatal" : "ep.terminal.fatal")), response_channel: "run_reply", reply_status: "fatal", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "record_terminal_fatal", exact_commit: operationalCommit("fatal_incident_recorded"), next_action_templates: [], recovery_instruction_key: recoveryInstructionKey },
       { response_variant_id: "mutation_already_fatal", context: "run_mutation", state_profiles: ["cd.terminal.fatal", "ep.terminal.fatal"].map((cellId) => ({ state_profile_id: `fatal.${cellId}`, trigger_state: verifiedState(cellId), reply_projection: { kind: "read_only_integrity_fatal", last_verified_state_kind: "checkpoint" } })), response_channel: "run_reply", reply_status: "fatal", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "none", exact_commit: { kind: "none" }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey }
     ];
+    if (errorCode === "ACCEPTED_STATE_INTEGRITY_FAILURE") {
+      responses2.unshift({ response_variant_id: "pre_run_identity", context: "pre_run", response_channel: "pre_run_error", reply_status: "fatal", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "none", exact_commit: { kind: "none" }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey });
+      responses2.splice(3, 0, { response_variant_id: "mutation_quarantine", context: "run_mutation", state_profiles: [
+        { state_profile_id: "quarantine.none.case", trigger_state: { kind: "no_verified_fsm_cell", delivery_intent: "case_document" }, reply_projection: { kind: "persisted_fsm_cell", reply_fsm_cell_id: "cd.terminal.fatal" } },
+        { state_profile_id: "quarantine.none.execution", trigger_state: { kind: "no_verified_fsm_cell", delivery_intent: "execution_plan" }, reply_projection: { kind: "persisted_fsm_cell", reply_fsm_cell_id: "ep.terminal.fatal" } }
+      ], response_channel: "run_reply", reply_status: "fatal", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "record_terminal_fatal", exact_commit: operationalCommit("fatal_incident_recorded"), next_action_templates: [], recovery_instruction_key: recoveryInstructionKey });
+    }
+    return responses2;
   }
   const responses = [];
   if (errorCode === "IDEMPOTENCY_CONFLICT") responses.push({ response_variant_id: "pre_run_create", context: "pre_run", response_channel: "pre_run_error", reply_status: "protocol_error", semantic_commit_policy: "no_semantic_commit", failure_record_policy: "none", exact_commit: { kind: "none" }, next_action_templates: [], recovery_instruction_key: recoveryInstructionKey });
@@ -1821,6 +1831,20 @@ async function readVerifiedRun(runDirectory) {
   if (pointer.run_id !== identityFixed.record.run_id) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Run pointer identity binding is invalid.");
   const genesis = await readSealedV5Record(layout.genesisRecords, pointer.run_genesis_record_digest, "run_genesis_record_digest");
   const transaction = await readSealedV5Record(layout.transactions, pointer.head_transaction_digest, "transaction_digest");
+  if (transaction.transaction_kind === "integrity_quarantine") {
+    const checkpoint2 = await readSealedV5Record(layout.checkpoints, transaction.checkpoint_digest, "checkpoint_digest");
+    const selectorSidecar2 = await readSealedV5Record(layout.selectorSidecars, transaction.selector_sidecar_digest, "selector_sidecar_digest");
+    const index2 = await readSealedV5Record(layout.idempotencyIndexes, transaction.idempotency_index_digest, "index_digest");
+    const reply2 = await readCasJson(path2.join(layout.replies, digestFilename(transaction.reply_object_digest)), transaction.reply_object_digest);
+    const receipt2 = await readSealedV5Record(layout.receipts, transaction.receipt_digest, "receipt_digest");
+    const incident2 = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, "incident_record_digest");
+    if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || transaction.run_genesis_record_digest !== genesis.run_genesis_record_digest || transaction.previous_run_transaction_digest !== null || transaction.recovery_sequence !== 1) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine transaction identity binding is invalid.");
+    if (checkpoint2.run_id !== identityFixed.record.run_id || checkpoint2.run_lifecycle !== "fatal" || checkpoint2.fatal_incident_record_digest !== incident2.incident_record_digest || selectorSidecar2.checkpoint_digest !== checkpoint2.checkpoint_digest) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine checkpoint binding is invalid.");
+    if (index2.scope !== "run_integrity_quarantine" || index2.index_sequence !== 1 || index2.entries.length !== 1 || receipt2.scope !== "run_integrity_quarantine") throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine idempotency scope is invalid.");
+    const entry = index2.entries[0];
+    if (entry.idempotency_key !== receipt2.idempotency_key || entry.canonical_action_digest !== receipt2.canonical_action_digest || entry.receipt_digest !== receipt2.receipt_digest || entry.reply_digest !== transaction.reply_object_digest || receipt2.reply_object_ref.reply_digest !== transaction.reply_object_digest) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine receipt/index/reply binding is invalid.");
+    return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint: checkpoint2, selectorSidecar: selectorSidecar2, index: index2, receipt: receipt2, operationalEvent: null, incident: incident2, reply: reply2 };
+  }
   let chainCursor = transaction;
   let expectedSequence = transaction.transaction_sequence;
   while (chainCursor.previous_run_transaction_digest !== null) {
@@ -1837,10 +1861,16 @@ async function readVerifiedRun(runDirectory) {
   const reply = await readCasJson(replyPath, transaction.reply_object_digest);
   const receipt = transaction.receipt_digest === null ? null : await readSealedV5Record(layout.receipts, transaction.receipt_digest, "receipt_digest");
   let operationalEvent = null;
+  let incident = null;
   if (transaction.operational_event_ref?.kind !== "none") {
     if (transaction.operational_event_ref?.kind !== "cancel_event" || typeof transaction.operational_event_ref.event_digest !== "string") throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Operational event reference is invalid.");
     operationalEvent = await readSealedV5Record(layout.events, transaction.operational_event_ref.event_digest, "cancel_event_digest");
   }
+  if (transaction.transaction_kind === "normal_fatal") {
+    if (typeof transaction.incident_record_digest !== "string") throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Normal fatal transaction has no incident binding.");
+    incident = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, "incident_record_digest");
+    if (checkpoint.fatal_incident_record_digest !== incident.incident_record_digest || incident.previous_run_transaction_digest !== transaction.previous_run_transaction_digest) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Normal fatal incident binding is invalid.");
+  } else if (Object.hasOwn(transaction, "incident_record_digest")) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Non-fatal transaction unexpectedly references a fatal incident.");
   if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Run object cross-binding is invalid.");
   if (selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest || index.index_sequence !== transaction.transaction_sequence || index.entries.length !== transaction.transaction_sequence) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Checkpoint/sidecar/index sequence binding is invalid.");
   if (receipt && (receipt.reply_object_ref.reply_digest !== transaction.reply_object_digest || !index.entries.some((entry) => entry.receipt_digest === receipt.receipt_digest && entry.reply_digest === transaction.reply_object_digest))) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Receipt/index/reply binding is invalid.");
@@ -1850,7 +1880,81 @@ async function readVerifiedRun(runDirectory) {
     if (indexedReceipt.run_id !== identityFixed.record.run_id || indexedReceipt.idempotency_key !== entry.idempotency_key || indexedReceipt.canonical_action_digest !== entry.canonical_action_digest || indexedReceipt.reply_object_ref.reply_digest !== entry.reply_digest) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Indexed receipt binding is invalid.");
     await readCasJson(path2.join(layout.replies, digestFilename(entry.reply_digest)), entry.reply_digest);
   }
-  return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, operationalEvent, reply };
+  return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, operationalEvent, incident, reply };
+}
+var COMPILER_SEALED_DIGEST_FIELDS = /* @__PURE__ */ new Map([
+  ["source_acquisition_state_digest", "state_digest"],
+  ["semantic_review_seed_digest", "seed_digest"],
+  ["term_registry_digest", "registry_digest"],
+  ["behavior_contract_seed_digest", "seed_digest"],
+  ["clarification_gaps_digest", "gaps_digest"],
+  ["pending_clarification_digest", "pending_record_digest"],
+  ["test_obligations_digest", "obligations_digest"]
+]);
+function acceptedClosureFailure(code, targetKind, affectedRefs, cause) {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  const error = new V5ProtocolError(code, `${targetKind} accepted-closure verification failed: ${detail}`);
+  error.integrity_target_kind = targetKind;
+  error.affected_refs = [...affectedRefs];
+  return error;
+}
+async function verifyV5AcceptedClosure(current) {
+  const acceptedDigests = [...new Set(current.checkpoint.accepted_artifact_digests ?? [])].sort();
+  for (const digest4 of acceptedDigests) {
+    try {
+      await readSealedV5Record(current.layout.acceptedArtifacts, digest4, "envelope_digest");
+    } catch (error) {
+      throw acceptedClosureFailure("ACCEPTED_STATE_INTEGRITY_FAILURE", "accepted_artifact", [digest4], error);
+    }
+  }
+  const compilerRefs = [];
+  const scalarFields = [
+    "source_acquisition_state_digest",
+    "accepted_source_state_digest",
+    "semantic_review_seed_digest",
+    "term_registry_digest",
+    "behavior_contract_seed_digest",
+    "clarification_gaps_digest",
+    "question_part_state_set_digest",
+    "presentation_digest",
+    "preview_digest",
+    "pending_clarification_digest",
+    "test_obligations_digest",
+    "risk_ledger_digest",
+    "case_document_digest",
+    "execution_plan_digest",
+    "execution_snapshot_digest",
+    "final_execution_projection_digest"
+  ];
+  for (const field of scalarFields) if (typeof current.checkpoint[field] === "string") compilerRefs.push({ field, digest: current.checkpoint[field] });
+  const arrayFields = ["accepted_decision_digests", "accepted_execution_receipt_digests", "compiler_projection_digests"];
+  for (const field of arrayFields) for (const digest4 of current.checkpoint[field] ?? []) if (typeof digest4 === "string") compilerRefs.push({ field, digest: digest4 });
+  for (const { field, digest: digest4 } of compilerRefs.sort((left, right) => `${left.field}:${left.digest}`.localeCompare(`${right.field}:${right.digest}`))) {
+    try {
+      const digestField = COMPILER_SEALED_DIGEST_FIELDS.get(field);
+      if (digestField) await readSealedV5Record(current.layout.compilerState, digest4, digestField);
+      else await readSemanticV5Record(current.layout.compilerState, digest4);
+    } catch (error) {
+      throw acceptedClosureFailure("ACCEPTED_STATE_INTEGRITY_FAILURE", "compiler_state", [digest4], error);
+    }
+  }
+  if (typeof current.checkpoint.applied_clarification_impact_digest === "string") {
+    const digest4 = current.checkpoint.applied_clarification_impact_digest;
+    try {
+      const impact = await readSemanticV5Record(current.layout.compilerState, digest4);
+      if (impact.impact_digest !== digest4) throw new V5ProtocolError("CLARIFICATION_IMPACT_MISMATCH", "Applied clarification impact digest binding is invalid.");
+    } catch (error) {
+      throw acceptedClosureFailure("CLARIFICATION_IMPACT_MISMATCH", "compiler_projection", [digest4], error);
+    }
+  }
+  for (const digest4 of [...new Set(current.checkpoint.rendered_output_digests ?? [])].sort()) {
+    try {
+      await readSealedV5Record(current.layout.renderedOutputs, digest4, "rendered_output_digest");
+    } catch (error) {
+      throw acceptedClosureFailure("CANONICAL_RENDER_MISMATCH", "renderer_output", [digest4], error);
+    }
+  }
+  return current;
 }
 async function withV5RunLock(runDirectory, operation) {
   const layout = await resolveRunLayout(runDirectory);
@@ -2474,7 +2578,7 @@ function validateSemanticReviews(seed, artifact, context) {
 }
 
 // src/v5/transactions.mjs
-import { lstat as lstat3, mkdir as mkdir2, readFile as readFile2 } from "node:fs/promises";
+import { lstat as lstat3, mkdir as mkdir2, readFile as readFile2, readdir } from "node:fs/promises";
 import path4 from "node:path";
 
 // src/v5/runtime-services.mjs
@@ -2624,6 +2728,7 @@ async function commitNormalRunTransaction(runDirectory, request, nextState, serv
       const event = await writeSealedV5Record(current.layout.events, nextState.operationalEvent.record, nextState.operationalEvent.digestField);
       operationalEventRef = { kind: nextState.operationalEvent.refKind, event_digest: event.digest };
     }
+    const incident = nextState.incidentRecord ? await writeSealedV5Record(current.layout.incidents, nextState.incidentRecord, "incident_record_digest") : null;
     const checkpointPayload = Object.hasOwn(nextState.checkpoint, "checkpoint_digest") ? withoutDigest(nextState.checkpoint, "checkpoint_digest") : nextState.checkpoint;
     const checkpoint = await writeSealedV5Record(current.layout.checkpoints, checkpointPayload, "checkpoint_digest");
     const sidecarPayload = Object.hasOwn(nextState.selectorSidecar, "selector_sidecar_digest") ? withoutDigest(nextState.selectorSidecar, "selector_sidecar_digest") : nextState.selectorSidecar;
@@ -2650,7 +2755,7 @@ async function commitNormalRunTransaction(runDirectory, request, nextState, serv
       entries: [...current.index.entries, { idempotency_key: request.idempotency_key, canonical_action_digest: canonicalActionDigest, receipt_digest: receipt.digest, reply_digest: reply.digest }].sort((left, right) => left.idempotency_key.localeCompare(right.idempotency_key))
     }, "index_digest");
     const transactionKind = (nextState.reply.reply_status ?? nextState.reply.status) === "fatal" ? "normal_fatal" : "normal";
-    const transaction = await writeSealedV5Record(current.layout.transactions, {
+    const transactionPayload = {
       scope: { kind: "run", run_id: current.identity.run_id },
       run_id: current.identity.run_id,
       transaction_kind: transactionKind,
@@ -2663,10 +2768,91 @@ async function commitNormalRunTransaction(runDirectory, request, nextState, serv
       reply_object_digest: reply.digest,
       receipt_digest: receipt.digest,
       idempotency_index_digest: index.digest
-    }, "transaction_digest");
+    };
+    if (incident) transactionPayload.incident_record_digest = incident.digest;
+    const transaction = await writeSealedV5Record(current.layout.transactions, transactionPayload, "transaction_digest");
     if (services.failAt === "before_pointer_publish") throw new Error("INJECTED_CRASH: before_pointer_publish");
     await publishFixedRecord(current.layout.currentPointer, { kind: "run_current_transaction_pointer", schema_version: V5_SCHEMA_VERSION, run_id: current.identity.run_id, run_genesis_record_digest: current.genesis.run_genesis_record_digest, head_transaction_digest: transaction.digest }, "pointer_digest", current.pointerBytes);
     return readCasJson(path4.join(current.layout.replies, digestFilename(reply.digest)), reply.digest);
+  });
+}
+async function publishIntegrityQuarantine(runDirectory, incident, request, services = currentV5TransactionServices()) {
+  return withV5RunLock(runDirectory, async () => {
+    const layout = await resolveRunLayout(runDirectory);
+    const identityFixed = await readFixedSealedRecord(layout.identity, "identity_digest");
+    const identity = identityFixed.record;
+    let oldBytes = null;
+    try {
+      oldBytes = await readFile2(layout.currentPointer);
+    } catch {
+    }
+    let runGenesisRecordDigest = null;
+    try {
+      const pointer = await readFixedSealedRecord(layout.currentPointer, "pointer_digest");
+      if (pointer.record.run_id === identity.run_id) runGenesisRecordDigest = pointer.record.run_genesis_record_digest;
+    } catch {
+    }
+    if (typeof runGenesisRecordDigest !== "string") {
+      for (const filename of (await readdir(layout.genesisRecords)).sort()) {
+        if (!/^[0-9a-f]{64}\.json$/u.test(filename)) continue;
+        const digest4 = `sha256:${filename.slice(0, 64)}`;
+        try {
+          const genesis = await readSealedV5Record(layout.genesisRecords, digest4, "run_genesis_record_digest");
+          if (genesis.run_id === identity.run_id && genesis.identity_digest === identity.identity_digest) {
+            runGenesisRecordDigest = digest4;
+            break;
+          }
+        } catch {
+        }
+      }
+    }
+    if (typeof runGenesisRecordDigest !== "string") throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "A trusted run genesis record is required for quarantine publication.");
+    const terminalCellId = identity.delivery_intent === "case_document" ? "cd.terminal.fatal" : "ep.terminal.fatal";
+    const terminalKind = identity.delivery_intent === "case_document" ? "case_document_fatal" : "execution_plan_fatal";
+    const currentRevision = incident.last_verified_revision ?? 0;
+    const incidentRecord = await writeSealedV5Record(layout.incidents, {
+      kind: "integrity_quarantine_incident",
+      schema_version: V5_SCHEMA_VERSION,
+      run_id: identity.run_id,
+      diagnostic_code: "ACCEPTED_STATE_INTEGRITY_FAILURE",
+      affected_refs: incident.affected_refs ?? [],
+      observed_failure: incident.observed_failure,
+      last_verified_state: incident.last_verified_state ?? { kind: "none" },
+      quarantined_pointer_bytes_digest: oldBytes === null ? null : canonicalObjectDigest({ bytes_base64: oldBytes.toString("base64") })
+    }, "incident_record_digest");
+    const checkpoint = await writeSealedV5Record(layout.checkpoints, { kind: "v5_run_checkpoint", schema_version: V5_SCHEMA_VERSION, compiler_version: V5_COMPILER_VERSION, run_id: identity.run_id, case_document_lineage_id: identity.case_document_lineage_id, delivery_intent: identity.delivery_intent, run_lifecycle: "fatal", current_revision: currentRevision, fsm_cell_id: terminalCellId, stage: "delivery", obligation: "complete", fatal_incident_record_digest: incidentRecord.digest }, "checkpoint_digest");
+    const sidecar = await writeSealedV5Record(layout.selectorSidecars, { kind: "v5_selector_sidecar", schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, checkpoint_digest: checkpoint.digest, selectors: [] }, "selector_sidecar_digest");
+    const actionDigest = actionDigestV5("advance", request.action);
+    const commitReceipt = { kind: "operational_commit", committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: "fatal_incident_recorded" };
+    const reply = {
+      kind: "run_reply",
+      schema_version: V5_SCHEMA_VERSION,
+      projection_kind: "persisted_run_state",
+      reply_contract_id: incident.reply_contract_id,
+      reply_status: "fatal",
+      run_id: identity.run_id,
+      run_directory: layout.root,
+      case_document_lineage_id: identity.case_document_lineage_id,
+      delivery_intent: identity.delivery_intent,
+      run_lifecycle: "fatal",
+      stage: "delivery",
+      obligation: "complete",
+      current_revision: currentRevision,
+      checkpoint_digest: checkpoint.digest,
+      selector_snapshot_digest: sidecar.digest,
+      diagnostics: [{ code: "ACCEPTED_STATE_INTEGRITY_FAILURE", affected_refs: incident.affected_refs ?? [], message: incident.observed_failure }],
+      available_actions: [],
+      commit_receipt: commitReceipt,
+      work_packet: { kind: "terminal_work", terminal_kind: terminalKind }
+    };
+    const replyObject = await writeCasJson(layout.replies, reply);
+    const receipt = await writeSealedV5Record(layout.receipts, { kind: "v5_action_receipt", schema_version: V5_SCHEMA_VERSION, scope: "run_integrity_quarantine", run_id: identity.run_id, receipt_sequence: 1, idempotency_key: request.idempotency_key, canonical_action_digest: actionDigest, reply_object_ref: { reply_digest: replyObject.digest }, commit_receipt: commitReceipt }, "receipt_digest");
+    const index = await writeSealedV5Record(layout.idempotencyIndexes, { kind: "operational_idempotency_index", schema_version: V5_SCHEMA_VERSION, scope: "run_integrity_quarantine", run_id: identity.run_id, index_sequence: 1, entries: [{ idempotency_key: request.idempotency_key, canonical_action_digest: actionDigest, receipt_digest: receipt.digest, reply_digest: replyObject.digest }] }, "index_digest");
+    const transaction = await writeSealedV5Record(layout.transactions, { scope: { kind: "run", run_id: identity.run_id }, run_id: identity.run_id, transaction_kind: "integrity_quarantine", recovery_sequence: 1, transaction_sequence: 1, previous_run_transaction_digest: null, run_genesis_record_digest: runGenesisRecordDigest, incident_record_digest: incidentRecord.digest, checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest, reply_object_digest: replyObject.digest, receipt_digest: receipt.digest, idempotency_index_digest: index.digest }, "transaction_digest");
+    if (services.failAt === "before_pointer_publish") throw new Error("INJECTED_CRASH: before_pointer_publish");
+    await publishFixedRecord(layout.currentPointer, { kind: "run_current_transaction_pointer", schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, run_genesis_record_digest: runGenesisRecordDigest, head_transaction_digest: transaction.digest }, "pointer_digest", oldBytes);
+    if (services.failAt === "after_run_pointer") throw new Error("INJECTED_CRASH: after_run_pointer");
+    return readCasJson(path4.join(layout.replies, digestFilename(replyObject.digest)), replyObject.digest);
   });
 }
 
@@ -3883,6 +4069,80 @@ function runRejection(current, code, message, projectionKind = "persisted_run_st
   if (!row) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Run reply contract is missing for ${code}/${cellId}/${projectionKind}.`);
   return { ...structuredClone(current.reply), projection_kind: projectionKind, reply_contract_id: row.reply_contract_id, reply_status: row.exact_reply_status, available_actions: projectionKind === "read_only_terminal_rejection" ? [] : structuredClone(current.reply.available_actions), diagnostics: [{ code, affected_refs: [], message }], commit_receipt: null };
 }
+function readOnlyIntegrityReply(current, code, message, context, affectedRefs = []) {
+  const trigger = { kind: "verified_fsm_cell", fsm_cell_id: current.checkpoint.fsm_cell_id };
+  const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === code && candidate.source.response_context === context && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger) && candidate.exact_projection_kind === "read_only_integrity_fatal");
+  if (!row) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Read-only integrity reply contract is missing for ${code}/${context}/${current.checkpoint.fsm_cell_id}.`);
+  return {
+    kind: "run_reply",
+    schema_version: V5_SCHEMA_VERSION,
+    run_id: current.identity.run_id,
+    run_directory: current.layout.root,
+    case_document_lineage_id: current.identity.case_document_lineage_id,
+    delivery_intent: current.identity.delivery_intent,
+    projection_kind: "read_only_integrity_fatal",
+    reply_contract_id: row.reply_contract_id,
+    run_lifecycle: "fatal",
+    reply_status: "fatal",
+    last_verified_state: { kind: "checkpoint", fsm_cell_id: current.checkpoint.fsm_cell_id, stage: current.checkpoint.stage, obligation: current.checkpoint.obligation, current_revision: current.checkpoint.current_revision, checkpoint_digest: current.checkpoint.checkpoint_digest },
+    selector_snapshot_digest: null,
+    available_actions: [],
+    work_packet: { kind: "terminal_work", terminal_kind: current.identity.delivery_intent === "case_document" ? "case_document_fatal" : "execution_plan_fatal" },
+    commit_receipt: null,
+    diagnostics: [{ code, affected_refs: affectedRefs, message }]
+  };
+}
+async function persistAcceptedClosureFatal(current, request, error) {
+  if (current.checkpoint.run_lifecycle === "fatal") return readOnlyIntegrityReply(current, error.code, error.message, "run_mutation", Array.isArray(error.affected_refs) ? error.affected_refs : []);
+  const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === error.code && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id && candidate.exact_projection_kind === "persisted_run_state");
+  if (!row || row.exact_commit.kind !== "operational_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Fatal integrity reply contract is missing for ${error.code}/${current.checkpoint.fsm_cell_id}.`);
+  const affectedRefs = Array.isArray(error.affected_refs) ? error.affected_refs : [];
+  const actionDigest = actionDigestV5("advance", request.action);
+  const incidentRecord = sealV5Record({
+    kind: "normal_chain_fatal_incident",
+    schema_version: V5_SCHEMA_VERSION,
+    run_id: current.identity.run_id,
+    diagnostic_code: error.code,
+    target_kind: error.integrity_target_kind ?? "accepted_closure",
+    affected_refs: affectedRefs,
+    prior_checkpoint_digest: current.checkpoint.checkpoint_digest,
+    previous_run_transaction_digest: current.transaction.transaction_digest
+  }, "incident_record_digest");
+  const targetCellId = current.identity.delivery_intent === "case_document" ? "cd.terminal.fatal" : "ep.terminal.fatal";
+  const checkpointBase = {
+    ...current.checkpoint,
+    run_lifecycle: "fatal",
+    fsm_cell_id: targetCellId,
+    stage: row.exact_stage,
+    obligation: row.exact_obligation,
+    fatal_incident_record_digest: incidentRecord.incident_record_digest
+  };
+  delete checkpointBase.checkpoint_digest;
+  const selectorState = checkpointSelectors(checkpointBase, []);
+  const commitReceipt = { kind: "operational_commit", committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: row.exact_commit.effect };
+  const reply = {
+    kind: "run_reply",
+    schema_version: V5_SCHEMA_VERSION,
+    projection_kind: row.exact_projection_kind,
+    reply_contract_id: row.reply_contract_id,
+    reply_status: row.exact_reply_status,
+    run_id: current.identity.run_id,
+    run_directory: current.layout.root,
+    case_document_lineage_id: current.identity.case_document_lineage_id,
+    delivery_intent: current.identity.delivery_intent,
+    run_lifecycle: "fatal",
+    stage: row.exact_stage,
+    obligation: row.exact_obligation,
+    current_revision: current.checkpoint.current_revision,
+    checkpoint_digest: selectorState.checkpoint.checkpoint_digest,
+    selector_snapshot_digest: selectorState.sidecar.selector_sidecar_digest,
+    diagnostics: [{ code: error.code, affected_refs: affectedRefs, message: error.message }],
+    available_actions: [],
+    commit_receipt: commitReceipt,
+    work_packet: { kind: "terminal_work", terminal_kind: current.identity.delivery_intent === "case_document" ? "case_document_fatal" : "execution_plan_fatal" }
+  };
+  return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, incidentRecord });
+}
 async function persistRunRejection(current, request, code, message) {
   const reply = runRejection(current, code, message);
   const internalReceipt = { kind: "operational_commit", committed_action_digest: actionDigestV5("advance", request.action), semantic_revision_delta: 0, client_key_bindings: [], operational_effect: "idempotency_only" };
@@ -4295,7 +4555,40 @@ async function advanceV5Run(runDirectory, requestValue) {
   try {
     current = await readVerifiedRun(runDirectory);
   } catch (error) {
-    if (error instanceof V5ProtocolError) return preRunReply(error.code, error.message);
+    if (error instanceof V5ProtocolError) {
+      if (error.code === "RUN_ARGUMENT_INVALID") return preRunReply(error.code, error.message);
+      if (!plainObject2(requestValue) || !hasExactKeys(requestValue, ["idempotency_key", "action"]) || typeof requestValue.idempotency_key !== "string" || requestValue.idempotency_key.length === 0 || !plainObject2(requestValue.action)) return preRunReply("ACCEPTED_STATE_INTEGRITY_FAILURE", error.message);
+      try {
+        const layout = await resolveRunLayout(runDirectory);
+        const identity = (await readFixedSealedRecord(layout.identity, "identity_digest")).record;
+        const trigger = { kind: "no_verified_fsm_cell", delivery_intent: identity.delivery_intent };
+        const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "ACCEPTED_STATE_INTEGRITY_FAILURE" && candidate.source.response_context === "run_mutation" && candidate.source.response_variant_id === "mutation_quarantine" && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
+        if (!row) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Integrity quarantine reply contract is unavailable.");
+        let lastVerifiedState = { kind: "none" };
+        try {
+          const pointer = (await readFixedSealedRecord(layout.currentPointer, "pointer_digest")).record;
+          const transaction = await readSealedV5Record(layout.transactions, pointer.head_transaction_digest, "transaction_digest");
+          const checkpoint = await readSealedV5Record(layout.checkpoints, transaction.checkpoint_digest, "checkpoint_digest");
+          if (pointer.run_id === identity.run_id && transaction.run_id === identity.run_id && checkpoint.run_id === identity.run_id) lastVerifiedState = { kind: "checkpoint", fsm_cell_id: checkpoint.fsm_cell_id, stage: checkpoint.stage, obligation: checkpoint.obligation, current_revision: checkpoint.current_revision, checkpoint_digest: checkpoint.checkpoint_digest };
+        } catch {
+        }
+        return await publishIntegrityQuarantine(
+          layout.root,
+          {
+            observed_failure: error.message,
+            affected_refs: Array.isArray(error.affected_refs) ? error.affected_refs : [],
+            last_verified_state: lastVerifiedState,
+            last_verified_revision: lastVerifiedState.kind === "checkpoint" ? lastVerifiedState.current_revision : 0,
+            reply_contract_id: row.reply_contract_id
+          },
+          /** @type {{idempotency_key:string,action:Record<string,any>}} */
+          requestValue
+        );
+      } catch (quarantineError) {
+        if (quarantineError instanceof V5ProtocolError) return preRunReply(quarantineError.code, quarantineError.message);
+        throw quarantineError;
+      }
+    }
     throw error;
   }
   if (!plainObject2(requestValue) || !hasExactKeys(requestValue, ["idempotency_key", "action"]) || typeof requestValue.idempotency_key !== "string" || requestValue.idempotency_key.length === 0 || !plainObject2(requestValue.action)) return runRejection(current, "SCHEMA_VALIDATION_FAILED", "Advance request is invalid.");
@@ -4306,6 +4599,12 @@ async function advanceV5Run(runDirectory, requestValue) {
   try {
     const replay = await resolveRunReplay(current, request);
     if (replay) return replay;
+    try {
+      await verifyV5AcceptedClosure(current);
+    } catch (error) {
+      if (!(error instanceof V5ProtocolError)) throw error;
+      return await persistAcceptedClosureFatal(current, request, error);
+    }
     if (current.identity.schema_version !== V5_SCHEMA_VERSION) throw new V5ProtocolError("UNSUPPORTED_SCHEMA_VERSION", "Only V5 runs are operational.");
     if (current.checkpoint.run_lifecycle !== "active") return runRejection(current, "ACTION_NOT_ADVERTISED", "Terminal runs do not accept new actions.", "read_only_terminal_rejection");
     const action = request.action;
@@ -4322,7 +4621,7 @@ async function advanceV5Run(runDirectory, requestValue) {
   } catch (error) {
     if (!(error instanceof V5ProtocolError)) throw error;
     if (error.code === "ACTION_TOKEN_KEY_UNAVAILABLE") throw error;
-    if (error.code === "IDEMPOTENCY_CONFLICT") return runRejection(current, error.code, error.message);
+    if (error.code === "IDEMPOTENCY_CONFLICT") return runRejection(current, error.code, error.message, current.checkpoint.run_lifecycle === "active" ? "persisted_run_state" : "read_only_terminal_rejection");
     if (error.code === "ORACLE_SEMANTICS_REQUIRED" && current.checkpoint.fsm_cell_id === "cd.active.case.drafts") return persistOracleReroute(current, request, error.message);
     return persistRunRejection(current, request, error.code, error.message);
   }
@@ -4421,6 +4720,7 @@ async function advanceClarificationCommit(current, request) {
   else if ([...invalidated].some((ref) => String(ref).includes("requirements"))) resultKey = "requirements_invalidated";
   else if ([...invalidated].some((ref) => String(ref).includes("behavior"))) resultKey = "behavior_invalidated";
   else resultKey = current.checkpoint.case_document_ref ? "all_gates_passed" : "case_drafts_required";
+  const clarificationImpactDigest = canonicalObjectDigest(committed.impact);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: "clarification.commit", result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   let nextPresentation = presentation;
@@ -4445,6 +4745,7 @@ async function advanceClarificationCommit(current, request) {
     fsm_cell_id: outcome.target_cell_id,
     stage: targetCell.stage,
     obligation: targetCell.obligation,
+    applied_clarification_impact_digest: clarificationImpactDigest,
     accepted_decision_digests: [.../* @__PURE__ */ new Set([...current.checkpoint.accepted_decision_digests ?? [], ...committed.decisions.map((decision) => decision.decision_digest)])].sort()
   };
   for (const key of ["checkpoint_digest", "preview_digest", "pending_clarification_digest"]) delete checkpointBase[key];
@@ -4454,7 +4755,7 @@ async function advanceClarificationCommit(current, request) {
   const compilerStateRecords = [
     { record: committed.next_state_set, semanticDigest: committed.next_state_set.state_set_digest },
     { record: nextPresentation, semanticDigest: nextPresentation.presentation_digest },
-    { record: { ...committed.impact, impact_digest: canonicalObjectDigest(committed.impact) }, semanticDigest: canonicalObjectDigest(committed.impact) },
+    { record: { ...committed.impact, impact_digest: clarificationImpactDigest }, semanticDigest: clarificationImpactDigest },
     ...committed.decisions.map((decision) => ({ record: decision, semanticDigest: decision.decision_digest }))
   ];
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
@@ -4643,6 +4944,7 @@ async function advanceCaseDrafts(current, request) {
   });
   const executionPlan = projectCompatibilityExecutionPlan(document, { run_id: current.identity.run_id, revision: current.checkpoint.current_revision + 1 });
   const caseDocumentRef = executionPlan.case_document_ref;
+  const renderedOutputs = [renderedOutputRecord("application/json", renderV5Json(document)), renderedOutputRecord("text/markdown", renderV5Markdown(document)), renderedOutputRecord("text/csv", renderV5Csv(document))].map((record) => ({ record, digestField: "rendered_output_digest" }));
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: "artifact.submit_case_drafts", result_key: "all_gates_passed" });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const checkpointBase = {
@@ -4656,7 +4958,8 @@ async function advanceCaseDrafts(current, request) {
     case_drafts_artifact_digest: envelope.envelope_digest,
     case_document_ref: caseDocumentRef,
     case_document_digest: document.bundle_digest,
-    execution_plan_digest: executionPlan.plan_digest
+    execution_plan_digest: executionPlan.plan_digest,
+    rendered_output_digests: renderedOutputs.map((item) => item.record.rendered_output_digest).sort()
   };
   delete checkpointBase.checkpoint_digest;
   const workPacket = { kind: "terminal_work", terminal_kind: "case_document_finished", case_document_ref: caseDocumentRef };
@@ -4664,7 +4967,6 @@ async function advanceCaseDrafts(current, request) {
   const actionDigest = actionDigestV5("advance", action);
   const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
   const reply = persistedReply(selectorState.checkpoint, workPacket, [], commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
-  const renderedOutputs = [renderedOutputRecord("application/json", renderV5Json(document)), renderedOutputRecord("text/markdown", renderV5Markdown(document)), renderedOutputRecord("text/csv", renderV5Csv(document))].map((record) => ({ record, digestField: "rendered_output_digest" }));
   return commitNormalRunTransaction(current.layout.root, request, {
     checkpoint: selectorState.checkpoint,
     selectorSidecar: selectorState.sidecar,
@@ -4816,6 +5118,12 @@ async function inspectV5Run(runDirectory) {
     layout = await resolveRunLayout(runDirectory);
     identity = (await readFixedSealedRecord(layout.identity, "identity_digest")).record;
     const current = await readVerifiedRun(runDirectory);
+    try {
+      await verifyV5AcceptedClosure(current);
+    } catch (error) {
+      if (error instanceof V5ProtocolError) return readOnlyIntegrityReply(current, error.code, error.message, "run_inspect", Array.isArray(error.affected_refs) ? error.affected_refs : []);
+      throw error;
+    }
     return structuredClone(current.reply);
   } catch (error) {
     if (error instanceof V5ProtocolError) {
@@ -4830,7 +5138,7 @@ async function inspectV5Run(runDirectory) {
       } catch {
       }
       const trigger = lastVerifiedState.kind === "checkpoint" ? { kind: "verified_fsm_cell", fsm_cell_id: lastVerifiedState.fsm_cell_id } : { kind: "no_verified_fsm_cell", delivery_intent: identity.delivery_intent };
-      const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "ACCEPTED_STATE_INTEGRITY_FAILURE" && candidate.source.response_context === "run_inspect" && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
+      const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === error.code && candidate.source.response_context === "run_inspect" && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
       if (!row) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Inspect integrity reply contract is unavailable.");
       return {
         kind: "run_reply",
@@ -4848,7 +5156,7 @@ async function inspectV5Run(runDirectory) {
         available_actions: [],
         work_packet: { kind: "terminal_work", terminal_kind: identity.delivery_intent === "case_document" ? "case_document_fatal" : "execution_plan_fatal" },
         commit_receipt: null,
-        diagnostics: [{ code: "ACCEPTED_STATE_INTEGRITY_FAILURE", affected_refs: [], message: error.message }]
+        diagnostics: [{ code: error.code, affected_refs: Array.isArray(error.affected_refs) ? error.affected_refs : [], message: error.message }]
       };
     }
     throw error;

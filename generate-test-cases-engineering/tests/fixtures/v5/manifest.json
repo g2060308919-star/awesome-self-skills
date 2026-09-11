@@ -71,7 +71,7 @@
     },
     {
       "fixture_id": "F-C02-ambiguity.positive.baseline",
-      "requirement_ids": ["C02"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c02.json", "requests/source-c02.json", "requests/evidence-c02-gap.json"],
+      "requirement_ids": ["C02", "C04", "C05", "C06", "C07"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c02.json", "requests/source-c02.json", "requests/evidence-c02-gap.json", "requests/clarification-preview-final.json", "requests/clarification-commit-valid.json"],
       "action_sequence": [
         {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c02.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
         {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c02.json","request_bindings":[
@@ -89,12 +89,28 @@
           {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}},
           {"target_json_pointer":"/action/artifact/ambiguity_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
           {"target_json_pointer":"/action/artifact/ambiguity_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"}}
+        ]},
+        {"step_id":"preview","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/clarification-preview-final.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"evidence","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/presentation_id","value_from":{"source_step_id":"evidence","source_json_pointer":"/work_packet/presentation/presentation_id"}},
+          {"target_json_pointer":"/action/semantic_root_digest","value_from":{"source_step_id":"evidence","source_json_pointer":"/work_packet/presentation/semantic_root_digest"}},
+          {"target_json_pointer":"/action/proposed_units/0/target/display_token","value_from":{"source_step_id":"evidence","source_json_pointer":"/work_packet/presentation/parts/0/display_token"}},
+          {"target_json_pointer":"/action/proposed_units/0/target/question_part_id","value_from":{"source_step_id":"evidence","source_json_pointer":"/work_packet/presentation/parts/0/question_part_id"}},
+          {"target_json_pointer":"/action/proposed_units/0/target/root_version_digest","value_from":{"source_step_id":"evidence","source_json_pointer":"/work_packet/presentation/semantic_root_digest"}}
+        ]},
+        {"step_id":"commit","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/clarification-commit-valid.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"preview","source_json_pointer":"/available_actions/1/action_token"}},
+          {"target_json_pointer":"/action/presentation_id","value_from":{"source_step_id":"preview","source_json_pointer":"/work_packet/presentation/presentation_id"}},
+          {"target_json_pointer":"/action/semantic_root_digest","value_from":{"source_step_id":"preview","source_json_pointer":"/work_packet/presentation/semantic_root_digest"}},
+          {"target_json_pointer":"/action/preview_digest","value_from":{"source_step_id":"preview","source_json_pointer":"/work_packet/clarification_preview/preview_digest"}}
         ]}
       ],
       "expected_steps": [
         {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}},
         {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"],"forbidden_json_pointers":["/compiler_version"]}},
-        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.GAPS","reply_status":"need_user_answers","stage":"requirements_analysis","obligation":"resolve_requirements_questions","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/presentation/parts/0/question_part_id"],"forbidden_json_pointers":["/compiler_version"]}}
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.GAPS","reply_status":"need_user_answers","stage":"requirements_analysis","obligation":"resolve_requirements_questions","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/presentation/parts/0/question_part_id"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.RESOLVE.PREVIEW.CHANGED","reply_status":"clarification_confirmation_required","stage":"requirements_analysis","obligation":"confirm_clarification","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/work_packet/clarification_preview/preview_digest"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.CONFIRM.COMMIT.BEHAVIOR","reply_status":"need_revision","stage":"case_design","obligation":"provide_behavior_views","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/behavior_contract_worklist/seed_digest"],"forbidden_json_pointers":["/compiler_version"]}}
       ]
     },
     {

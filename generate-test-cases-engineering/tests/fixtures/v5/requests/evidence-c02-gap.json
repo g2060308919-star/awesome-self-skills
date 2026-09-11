@@ -10,7 +10,7 @@
       "semantic_gaps": [{
         "semantic_gap_client_key": "gap-normal",
         "target": { "origin": { "kind": "ambiguity", "ambiguity_candidate_id": { "$fixture_binding": "required" }, "ambiguity_kind": "expected_outcome" } },
-        "answer_contract": { "answer_mode": "typed_answer", "allowed_controls": ["answer", "defer", "unknown", "close_for_delivery"], "value_schema": { "kind": "text", "min_scalars": 1, "max_scalars": 128, "ambiguity_guard_set_id": "guard.normal" } },
+        "answer_contract": { "answer_mode": "typed_answer", "allowed_controls": ["answer", "defer", "unknown", "close_for_delivery"], "value_schema": { "kind": "text", "min_scalars": 1, "max_scalars": 128, "ambiguity_guard_ref": "answer.no-unresolved-vague-token.v1" } },
         "question": "正常的唯一成功标准是什么？",
         "why_needed": "需要生成可判定的预期结果。",
         "question_impact_summary": { "affected_case_keys": ["case-result"], "impact_kinds": ["oracle"] }

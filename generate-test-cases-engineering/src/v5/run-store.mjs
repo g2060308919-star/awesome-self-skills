@@ -178,6 +178,20 @@ export async function readVerifiedRun(runDirectory) {
   if (pointer.run_id !== identityFixed.record.run_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Run pointer identity binding is invalid.');
   const genesis = await readSealedV5Record(layout.genesisRecords, pointer.run_genesis_record_digest, 'run_genesis_record_digest');
   const transaction = await readSealedV5Record(layout.transactions, pointer.head_transaction_digest, 'transaction_digest');
+  if (transaction.transaction_kind === 'integrity_quarantine') {
+    const checkpoint = await readSealedV5Record(layout.checkpoints, transaction.checkpoint_digest, 'checkpoint_digest');
+    const selectorSidecar = await readSealedV5Record(layout.selectorSidecars, transaction.selector_sidecar_digest, 'selector_sidecar_digest');
+    const index = await readSealedV5Record(layout.idempotencyIndexes, transaction.idempotency_index_digest, 'index_digest');
+    const reply = await readCasJson(path.join(layout.replies, digestFilename(transaction.reply_object_digest)), transaction.reply_object_digest);
+    const receipt = await readSealedV5Record(layout.receipts, transaction.receipt_digest, 'receipt_digest');
+    const incident = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, 'incident_record_digest');
+    if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || transaction.run_genesis_record_digest !== genesis.run_genesis_record_digest || transaction.previous_run_transaction_digest !== null || transaction.recovery_sequence !== 1) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine transaction identity binding is invalid.');
+    if (checkpoint.run_id !== identityFixed.record.run_id || checkpoint.run_lifecycle !== 'fatal' || checkpoint.fatal_incident_record_digest !== incident.incident_record_digest || selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine checkpoint binding is invalid.');
+    if (index.scope !== 'run_integrity_quarantine' || index.index_sequence !== 1 || index.entries.length !== 1 || receipt.scope !== 'run_integrity_quarantine') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine idempotency scope is invalid.');
+    const entry = index.entries[0];
+    if (entry.idempotency_key !== receipt.idempotency_key || entry.canonical_action_digest !== receipt.canonical_action_digest || entry.receipt_digest !== receipt.receipt_digest || entry.reply_digest !== transaction.reply_object_digest || receipt.reply_object_ref.reply_digest !== transaction.reply_object_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine receipt/index/reply binding is invalid.');
+    return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, operationalEvent: null, incident, reply };
+  }
   let chainCursor = transaction;
   let expectedSequence = transaction.transaction_sequence;
   while (chainCursor.previous_run_transaction_digest !== null) {
@@ -194,10 +208,16 @@ export async function readVerifiedRun(runDirectory) {
   const reply = await readCasJson(replyPath, transaction.reply_object_digest);
   const receipt = transaction.receipt_digest === null ? null : await readSealedV5Record(layout.receipts, transaction.receipt_digest, 'receipt_digest');
   let operationalEvent = null;
+  let incident = null;
   if (transaction.operational_event_ref?.kind !== 'none') {
     if (transaction.operational_event_ref?.kind !== 'cancel_event' || typeof transaction.operational_event_ref.event_digest !== 'string') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Operational event reference is invalid.');
     operationalEvent = await readSealedV5Record(layout.events, transaction.operational_event_ref.event_digest, 'cancel_event_digest');
   }
+  if (transaction.transaction_kind === 'normal_fatal') {
+    if (typeof transaction.incident_record_digest !== 'string') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Normal fatal transaction has no incident binding.');
+    incident = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, 'incident_record_digest');
+    if (checkpoint.fatal_incident_record_digest !== incident.incident_record_digest || incident.previous_run_transaction_digest !== transaction.previous_run_transaction_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Normal fatal incident binding is invalid.');
+  } else if (Object.hasOwn(transaction, 'incident_record_digest')) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Non-fatal transaction unexpectedly references a fatal incident.');
   if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Run object cross-binding is invalid.');
   if (selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest || index.index_sequence !== transaction.transaction_sequence || index.entries.length !== transaction.transaction_sequence) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Checkpoint/sidecar/index sequence binding is invalid.');
   if (receipt && (receipt.reply_object_ref.reply_digest !== transaction.reply_object_digest || !index.entries.some((/** @type {Record<string, any>} */ entry) => entry.receipt_digest === receipt.receipt_digest && entry.reply_digest === transaction.reply_object_digest))) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Receipt/index/reply binding is invalid.');
@@ -207,7 +227,76 @@ export async function readVerifiedRun(runDirectory) {
     if (indexedReceipt.run_id !== identityFixed.record.run_id || indexedReceipt.idempotency_key !== entry.idempotency_key || indexedReceipt.canonical_action_digest !== entry.canonical_action_digest || indexedReceipt.reply_object_ref.reply_digest !== entry.reply_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Indexed receipt binding is invalid.');
     await readCasJson(path.join(layout.replies, digestFilename(entry.reply_digest)), entry.reply_digest);
   }
-  return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, operationalEvent, reply };
+  return { layout, identity: identityFixed.record, pointer, pointerBytes: pointerFixed.bytes, genesis, transaction, checkpoint, selectorSidecar, index, receipt, operationalEvent, incident, reply };
+}
+
+const COMPILER_SEALED_DIGEST_FIELDS = new Map([
+  ['source_acquisition_state_digest', 'state_digest'],
+  ['semantic_review_seed_digest', 'seed_digest'],
+  ['term_registry_digest', 'registry_digest'],
+  ['behavior_contract_seed_digest', 'seed_digest'],
+  ['clarification_gaps_digest', 'gaps_digest'],
+  ['pending_clarification_digest', 'pending_record_digest'],
+  ['test_obligations_digest', 'obligations_digest']
+]);
+
+/** @param {string} code @param {string} targetKind @param {string[]} affectedRefs @param {unknown} cause */
+function acceptedClosureFailure(code, targetKind, affectedRefs, cause) {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  const error = new V5ProtocolError(code, `${targetKind} accepted-closure verification failed: ${detail}`);
+  error.integrity_target_kind = targetKind;
+  error.affected_refs = [...affectedRefs];
+  return error;
+}
+
+/** @param {Record<string,any>} current */
+export async function verifyV5AcceptedClosure(current) {
+  const acceptedDigests = [...new Set(current.checkpoint.accepted_artifact_digests ?? [])].sort();
+  for (const digest of acceptedDigests) {
+    try { await readSealedV5Record(current.layout.acceptedArtifacts, digest, 'envelope_digest'); } catch (error) {
+      throw acceptedClosureFailure('ACCEPTED_STATE_INTEGRITY_FAILURE', 'accepted_artifact', [digest], error);
+    }
+  }
+
+  /** @type {Array<{field:string,digest:string}>} */
+  const compilerRefs = [];
+  const scalarFields = [
+    'source_acquisition_state_digest', 'accepted_source_state_digest', 'semantic_review_seed_digest',
+    'term_registry_digest', 'behavior_contract_seed_digest', 'clarification_gaps_digest',
+    'question_part_state_set_digest', 'presentation_digest', 'preview_digest',
+    'pending_clarification_digest', 'test_obligations_digest', 'risk_ledger_digest',
+    'case_document_digest', 'execution_plan_digest', 'execution_snapshot_digest',
+    'final_execution_projection_digest'
+  ];
+  for (const field of scalarFields) if (typeof current.checkpoint[field] === 'string') compilerRefs.push({ field, digest: current.checkpoint[field] });
+  const arrayFields = ['accepted_decision_digests', 'accepted_execution_receipt_digests', 'compiler_projection_digests'];
+  for (const field of arrayFields) for (const digest of current.checkpoint[field] ?? []) if (typeof digest === 'string') compilerRefs.push({ field, digest });
+  for (const { field, digest } of compilerRefs.sort((left, right) => `${left.field}:${left.digest}`.localeCompare(`${right.field}:${right.digest}`))) {
+    try {
+      const digestField = COMPILER_SEALED_DIGEST_FIELDS.get(field);
+      if (digestField) await readSealedV5Record(current.layout.compilerState, digest, digestField);
+      else await readSemanticV5Record(current.layout.compilerState, digest);
+    } catch (error) {
+      throw acceptedClosureFailure('ACCEPTED_STATE_INTEGRITY_FAILURE', 'compiler_state', [digest], error);
+    }
+  }
+
+  if (typeof current.checkpoint.applied_clarification_impact_digest === 'string') {
+    const digest = current.checkpoint.applied_clarification_impact_digest;
+    try {
+      const impact = await readSemanticV5Record(current.layout.compilerState, digest);
+      if (impact.impact_digest !== digest) throw new V5ProtocolError('CLARIFICATION_IMPACT_MISMATCH', 'Applied clarification impact digest binding is invalid.');
+    } catch (error) {
+      throw acceptedClosureFailure('CLARIFICATION_IMPACT_MISMATCH', 'compiler_projection', [digest], error);
+    }
+  }
+
+  for (const digest of [...new Set(current.checkpoint.rendered_output_digests ?? [])].sort()) {
+    try { await readSealedV5Record(current.layout.renderedOutputs, digest, 'rendered_output_digest'); } catch (error) {
+      throw acceptedClosureFailure('CANONICAL_RENDER_MISMATCH', 'renderer_output', [digest], error);
+    }
+  }
+  return current;
 }
 
 /** @param {string} runDirectory @param {() => Promise<any>} operation */

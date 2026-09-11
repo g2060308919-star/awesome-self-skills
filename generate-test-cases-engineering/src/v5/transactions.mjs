@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import { V5_COMPILER_VERSION, V5_SCHEMA_VERSION } from './constants.mjs';
@@ -17,7 +17,7 @@ import {
   writeSealedV5Record
 } from './run-store.mjs';
 import { resolveCatalogLayout, resolveRunLayout, digestFilename } from './storage-paths.mjs';
-import { actionDigestV5, sealV5Record } from './storage-records.mjs';
+import { actionDigestV5, canonicalObjectDigest, sealV5Record } from './storage-records.mjs';
 import { canonicalV5Stringify } from './canonical-v5.mjs';
 import { currentV5TransactionServices } from './runtime-services.mjs';
 
@@ -123,7 +123,7 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
 /**
  * @param {string} runDirectory
  * @param {Record<string,any>} request
- * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>,renderedOutputs?:Array<{record:Record<string,any>,digestField:string}>,operationalEvent?:{record:Record<string,any>,digestField:string,refKind:string}}} nextState
+ * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>,renderedOutputs?:Array<{record:Record<string,any>,digestField:string}>,operationalEvent?:{record:Record<string,any>,digestField:string,refKind:string},incidentRecord?:Record<string,any>}} nextState
  * @param {{failAt?:string}} [services]
  */
 export async function commitNormalRunTransaction(runDirectory, request, nextState, services = currentV5TransactionServices()) {
@@ -151,6 +151,9 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
       const event = await writeSealedV5Record(current.layout.events, nextState.operationalEvent.record, nextState.operationalEvent.digestField);
       operationalEventRef = { kind: nextState.operationalEvent.refKind, event_digest: event.digest };
     }
+    const incident = nextState.incidentRecord
+      ? await writeSealedV5Record(current.layout.incidents, nextState.incidentRecord, 'incident_record_digest')
+      : null;
     const checkpointPayload = Object.hasOwn(nextState.checkpoint, 'checkpoint_digest') ? withoutDigest(nextState.checkpoint, 'checkpoint_digest') : nextState.checkpoint;
     const checkpoint = await writeSealedV5Record(current.layout.checkpoints, checkpointPayload, 'checkpoint_digest');
     const sidecarPayload = Object.hasOwn(nextState.selectorSidecar, 'selector_sidecar_digest') ? withoutDigest(nextState.selectorSidecar, 'selector_sidecar_digest') : nextState.selectorSidecar;
@@ -168,7 +171,8 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
       entries: [...current.index.entries, { idempotency_key: request.idempotency_key, canonical_action_digest: canonicalActionDigest, receipt_digest: receipt.digest, reply_digest: reply.digest }].sort((left, right) => left.idempotency_key.localeCompare(right.idempotency_key))
     }, 'index_digest');
     const transactionKind = (nextState.reply.reply_status ?? nextState.reply.status) === 'fatal' ? 'normal_fatal' : 'normal';
-    const transaction = await writeSealedV5Record(current.layout.transactions, {
+    /** @type {Record<string,any>} */
+    const transactionPayload = {
       scope: { kind: 'run', run_id: current.identity.run_id }, run_id: current.identity.run_id,
       transaction_kind: transactionKind, transaction_sequence: sequence,
       previous_run_transaction_digest: current.transaction.transaction_digest,
@@ -176,7 +180,9 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
       run_genesis_record_digest: current.genesis.run_genesis_record_digest,
       checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest,
       reply_object_digest: reply.digest, receipt_digest: receipt.digest, idempotency_index_digest: index.digest
-    }, 'transaction_digest');
+    };
+    if (incident) transactionPayload.incident_record_digest = incident.digest;
+    const transaction = await writeSealedV5Record(current.layout.transactions, transactionPayload, 'transaction_digest');
     if (services.failAt === 'before_pointer_publish') throw new Error('INJECTED_CRASH: before_pointer_publish');
     await publishFixedRecord(current.layout.currentPointer, { kind: 'run_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, run_id: current.identity.run_id, run_genesis_record_digest: current.genesis.run_genesis_record_digest, head_transaction_digest: transaction.digest }, 'pointer_digest', current.pointerBytes);
     return readCasJson(path.join(current.layout.replies, digestFilename(reply.digest)), reply.digest);
@@ -190,23 +196,62 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
  * @param {Record<string,any>} incident
  * @param {{idempotency_key:string,action:Record<string,any>}} request
  */
-export async function publishIntegrityQuarantine(runDirectory, incident, request) {
+export async function publishIntegrityQuarantine(runDirectory, incident, request, services = currentV5TransactionServices()) {
   return withV5RunLock(runDirectory, async () => {
     const layout = await resolveRunLayout(runDirectory);
     const identityFixed = await readFixedSealedRecord(layout.identity, 'identity_digest');
     const identity = identityFixed.record;
-    const reply = { reply_kind: 'read_only_integrity_fatal', status: 'fatal', run_id: identity.run_id, diagnostic: { code: 'ACCEPTED_STATE_INTEGRITY_FAILURE', affected_refs: [] }, available_actions: [] };
-    const replyObject = await writeCasJson(layout.replies, reply);
-    const incidentRecord = await writeSealedV5Record(layout.incidents, { kind: 'integrity_quarantine_incident', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, ...incident }, 'incident_record_digest');
-    const checkpoint = await writeSealedV5Record(layout.checkpoints, { kind: 'v5_run_checkpoint', schema_version: V5_SCHEMA_VERSION, compiler_version: V5_COMPILER_VERSION, run_id: identity.run_id, case_document_lineage_id: identity.case_document_lineage_id, delivery_intent: identity.delivery_intent, run_lifecycle: 'fatal', current_revision: incident.last_verified_revision ?? 0, fsm_cell_id: identity.delivery_intent === 'case_document' ? 'cd.terminal.fatal' : 'ep.terminal.fatal', stage: 'delivery', obligation: 'complete', fatal_incident_record_digest: incidentRecord.digest }, 'checkpoint_digest');
-    const sidecar = await writeSealedV5Record(layout.selectorSidecars, { kind: 'v5_selector_sidecar', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, checkpoint_digest: checkpoint.digest, selectors: [] }, 'selector_sidecar_digest');
-    const actionDigest = actionDigestV5('advance', request.action);
-    const receipt = await writeSealedV5Record(layout.receipts, { kind: 'v5_action_receipt', schema_version: V5_SCHEMA_VERSION, scope: 'run_integrity_quarantine', run_id: identity.run_id, receipt_sequence: 1, idempotency_key: request.idempotency_key, canonical_action_digest: actionDigest, reply_object_ref: { reply_digest: replyObject.digest }, commit_receipt: { kind: 'operational_commit', committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: 'fatal_incident_recorded' } }, 'receipt_digest');
-    const index = await writeSealedV5Record(layout.idempotencyIndexes, { kind: 'operational_idempotency_index', schema_version: V5_SCHEMA_VERSION, scope: 'run_integrity_quarantine', run_id: identity.run_id, index_sequence: 1, entries: [{ idempotency_key: request.idempotency_key, canonical_action_digest: actionDigest, receipt_digest: receipt.digest, reply_digest: replyObject.digest }] }, 'index_digest');
     let oldBytes = null;
     try { oldBytes = await readFile(layout.currentPointer); } catch {}
-    const transaction = await writeSealedV5Record(layout.transactions, { scope: { kind: 'run', run_id: identity.run_id }, run_id: identity.run_id, transaction_kind: 'integrity_quarantine', recovery_sequence: 1, transaction_sequence: 1, previous_run_transaction_digest: null, run_genesis_record_digest: identity.run_genesis_record_digest, incident_record_digest: incidentRecord.digest, checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest, reply_object_digest: replyObject.digest, receipt_digest: receipt.digest, idempotency_index_digest: index.digest }, 'transaction_digest');
-    await publishFixedRecord(layout.currentPointer, { kind: 'run_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, run_genesis_record_digest: identity.run_genesis_record_digest, head_transaction_digest: transaction.digest }, 'pointer_digest', oldBytes);
-    return reply;
+    let runGenesisRecordDigest = null;
+    try {
+      const pointer = await readFixedSealedRecord(layout.currentPointer, 'pointer_digest');
+      if (pointer.record.run_id === identity.run_id) runGenesisRecordDigest = pointer.record.run_genesis_record_digest;
+    } catch {}
+    if (typeof runGenesisRecordDigest !== 'string') {
+      for (const filename of (await readdir(layout.genesisRecords)).sort()) {
+        if (!/^[0-9a-f]{64}\.json$/u.test(filename)) continue;
+        const digest = `sha256:${filename.slice(0, 64)}`;
+        try {
+          const genesis = await readSealedV5Record(layout.genesisRecords, digest, 'run_genesis_record_digest');
+          if (genesis.run_id === identity.run_id && genesis.identity_digest === identity.identity_digest) {
+            runGenesisRecordDigest = digest;
+            break;
+          }
+        } catch {}
+      }
+    }
+    if (typeof runGenesisRecordDigest !== 'string') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'A trusted run genesis record is required for quarantine publication.');
+
+    const terminalCellId = identity.delivery_intent === 'case_document' ? 'cd.terminal.fatal' : 'ep.terminal.fatal';
+    const terminalKind = identity.delivery_intent === 'case_document' ? 'case_document_fatal' : 'execution_plan_fatal';
+    const currentRevision = incident.last_verified_revision ?? 0;
+    const incidentRecord = await writeSealedV5Record(layout.incidents, {
+      kind: 'integrity_quarantine_incident', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id,
+      diagnostic_code: 'ACCEPTED_STATE_INTEGRITY_FAILURE', affected_refs: incident.affected_refs ?? [],
+      observed_failure: incident.observed_failure, last_verified_state: incident.last_verified_state ?? { kind: 'none' },
+      quarantined_pointer_bytes_digest: oldBytes === null ? null : canonicalObjectDigest({ bytes_base64: oldBytes.toString('base64') })
+    }, 'incident_record_digest');
+    const checkpoint = await writeSealedV5Record(layout.checkpoints, { kind: 'v5_run_checkpoint', schema_version: V5_SCHEMA_VERSION, compiler_version: V5_COMPILER_VERSION, run_id: identity.run_id, case_document_lineage_id: identity.case_document_lineage_id, delivery_intent: identity.delivery_intent, run_lifecycle: 'fatal', current_revision: currentRevision, fsm_cell_id: terminalCellId, stage: 'delivery', obligation: 'complete', fatal_incident_record_digest: incidentRecord.digest }, 'checkpoint_digest');
+    const sidecar = await writeSealedV5Record(layout.selectorSidecars, { kind: 'v5_selector_sidecar', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, checkpoint_digest: checkpoint.digest, selectors: [] }, 'selector_sidecar_digest');
+    const actionDigest = actionDigestV5('advance', request.action);
+    const commitReceipt = { kind: 'operational_commit', committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: 'fatal_incident_recorded' };
+    const reply = {
+      kind: 'run_reply', schema_version: V5_SCHEMA_VERSION, projection_kind: 'persisted_run_state',
+      reply_contract_id: incident.reply_contract_id, reply_status: 'fatal', run_id: identity.run_id, run_directory: layout.root,
+      case_document_lineage_id: identity.case_document_lineage_id, delivery_intent: identity.delivery_intent,
+      run_lifecycle: 'fatal', stage: 'delivery', obligation: 'complete', current_revision: currentRevision,
+      checkpoint_digest: checkpoint.digest, selector_snapshot_digest: sidecar.digest,
+      diagnostics: [{ code: 'ACCEPTED_STATE_INTEGRITY_FAILURE', affected_refs: incident.affected_refs ?? [], message: incident.observed_failure }],
+      available_actions: [], commit_receipt: commitReceipt, work_packet: { kind: 'terminal_work', terminal_kind: terminalKind }
+    };
+    const replyObject = await writeCasJson(layout.replies, reply);
+    const receipt = await writeSealedV5Record(layout.receipts, { kind: 'v5_action_receipt', schema_version: V5_SCHEMA_VERSION, scope: 'run_integrity_quarantine', run_id: identity.run_id, receipt_sequence: 1, idempotency_key: request.idempotency_key, canonical_action_digest: actionDigest, reply_object_ref: { reply_digest: replyObject.digest }, commit_receipt: commitReceipt }, 'receipt_digest');
+    const index = await writeSealedV5Record(layout.idempotencyIndexes, { kind: 'operational_idempotency_index', schema_version: V5_SCHEMA_VERSION, scope: 'run_integrity_quarantine', run_id: identity.run_id, index_sequence: 1, entries: [{ idempotency_key: request.idempotency_key, canonical_action_digest: actionDigest, receipt_digest: receipt.digest, reply_digest: replyObject.digest }] }, 'index_digest');
+    const transaction = await writeSealedV5Record(layout.transactions, { scope: { kind: 'run', run_id: identity.run_id }, run_id: identity.run_id, transaction_kind: 'integrity_quarantine', recovery_sequence: 1, transaction_sequence: 1, previous_run_transaction_digest: null, run_genesis_record_digest: runGenesisRecordDigest, incident_record_digest: incidentRecord.digest, checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest, reply_object_digest: replyObject.digest, receipt_digest: receipt.digest, idempotency_index_digest: index.digest }, 'transaction_digest');
+    if (services.failAt === 'before_pointer_publish') throw new Error('INJECTED_CRASH: before_pointer_publish');
+    await publishFixedRecord(layout.currentPointer, { kind: 'run_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, run_genesis_record_digest: runGenesisRecordDigest, head_transaction_digest: transaction.digest }, 'pointer_digest', oldBytes);
+    if (services.failAt === 'after_run_pointer') throw new Error('INJECTED_CRASH: after_run_pointer');
+    return readCasJson(path.join(layout.replies, digestFilename(replyObject.digest)), replyObject.digest);
   });
 }

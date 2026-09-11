@@ -10,7 +10,7 @@ import { acceptArtifactEnvelope } from './envelopes.mjs';
 import { V5ProtocolError } from './errors.mjs';
 import { actionTemplateForV5Action, selectV5Outcome } from './fsm.mjs';
 import { generateV5Contracts } from './registry-generator.mjs';
-import { readCasJson, readFixedSealedRecord, readSealedV5Record, readSemanticV5Record, readVerifiedRun, writeRawSourceBytes } from './run-store.mjs';
+import { readCasJson, readFixedSealedRecord, readSealedV5Record, readSemanticV5Record, readVerifiedRun, verifyV5AcceptedClosure, writeRawSourceBytes } from './run-store.mjs';
 import { applySourceBatch, currentSourceBatch, deriveSourceRequests, validateSourceBootstrap } from './source-acquisition.mjs';
 import { resolveCatalogLayout, resolveRunLayout, digestFilename } from './storage-paths.mjs';
 import { deriveBehaviorContractSeed, validateBehaviorContractReviews, validateRiskReviews } from './behavior-contracts.mjs';
@@ -18,7 +18,7 @@ import { deriveSemanticReviewSeed } from './semantic-seed.mjs';
 import { validateSemanticReviews } from './semantic-reviews.mjs';
 import { createSemanticRuleIndex } from './semantic-rules.mjs';
 import { actionDigestV5, canonicalObjectDigest, sealV5Record } from './storage-records.mjs';
-import { commitCatalogGenesis, commitNormalRunTransaction } from './transactions.mjs';
+import { commitCatalogGenesis, commitNormalRunTransaction, publishIntegrityQuarantine } from './transactions.mjs';
 import { createResumeInheritanceProjection, deriveResumeBase, projectInheritedArtifact, resumeTargetCell, validateResumeParent } from './resume.mjs';
 import { advanceV5ExecutionProjection, canonicalExistingExecutionReceiptPayloadDigest, createV5ExecutionProjection, projectInheritedExecutionReceipt, validateImmutableV5CaseDocumentRef } from './execution-wrapper.mjs';
 import { createClarificationPresentation, createQuestionPartStateSet } from './question-parts.mjs';
@@ -59,6 +59,60 @@ function runRejection(current, code, message, projectionKind = 'persisted_run_st
   const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === code && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === cellId && candidate.exact_projection_kind === projectionKind);
   if (!row) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Run reply contract is missing for ${code}/${cellId}/${projectionKind}.`);
   return { ...structuredClone(current.reply), projection_kind: projectionKind, reply_contract_id: row.reply_contract_id, reply_status: row.exact_reply_status, available_actions: projectionKind === 'read_only_terminal_rejection' ? [] : structuredClone(current.reply.available_actions), diagnostics: [{ code, affected_refs: [], message }], commit_receipt: null };
+}
+
+/** @param {Record<string,any>} current @param {string} code @param {string} message @param {'run_inspect'|'run_mutation'} context @param {string[]} [affectedRefs] */
+function readOnlyIntegrityReply(current, code, message, context, affectedRefs = []) {
+  const trigger = { kind: 'verified_fsm_cell', fsm_cell_id: current.checkpoint.fsm_cell_id };
+  const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === code && candidate.source.response_context === context && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger) && candidate.exact_projection_kind === 'read_only_integrity_fatal');
+  if (!row) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Read-only integrity reply contract is missing for ${code}/${context}/${current.checkpoint.fsm_cell_id}.`);
+  return {
+    kind: 'run_reply', schema_version: V5_SCHEMA_VERSION, run_id: current.identity.run_id, run_directory: current.layout.root,
+    case_document_lineage_id: current.identity.case_document_lineage_id, delivery_intent: current.identity.delivery_intent,
+    projection_kind: 'read_only_integrity_fatal', reply_contract_id: row.reply_contract_id,
+    run_lifecycle: 'fatal', reply_status: 'fatal',
+    last_verified_state: { kind: 'checkpoint', fsm_cell_id: current.checkpoint.fsm_cell_id, stage: current.checkpoint.stage, obligation: current.checkpoint.obligation, current_revision: current.checkpoint.current_revision, checkpoint_digest: current.checkpoint.checkpoint_digest },
+    selector_snapshot_digest: null, available_actions: [],
+    work_packet: { kind: 'terminal_work', terminal_kind: current.identity.delivery_intent === 'case_document' ? 'case_document_fatal' : 'execution_plan_fatal' },
+    commit_receipt: null, diagnostics: [{ code, affected_refs: affectedRefs, message }]
+  };
+}
+
+/** @param {Record<string,any>} current @param {Record<string,any>} request @param {V5ProtocolError} error */
+async function persistAcceptedClosureFatal(current, request, error) {
+  if (current.checkpoint.run_lifecycle === 'fatal') return readOnlyIntegrityReply(current, error.code, error.message, 'run_mutation', Array.isArray(error.affected_refs) ? error.affected_refs : []);
+  const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === error.code && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id && candidate.exact_projection_kind === 'persisted_run_state');
+  if (!row || row.exact_commit.kind !== 'operational_commit') throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Fatal integrity reply contract is missing for ${error.code}/${current.checkpoint.fsm_cell_id}.`);
+  const affectedRefs = Array.isArray(error.affected_refs) ? error.affected_refs : [];
+  const actionDigest = actionDigestV5('advance', request.action);
+  const incidentRecord = sealV5Record({
+    kind: 'normal_chain_fatal_incident', schema_version: V5_SCHEMA_VERSION, run_id: current.identity.run_id,
+    diagnostic_code: error.code, target_kind: error.integrity_target_kind ?? 'accepted_closure', affected_refs: affectedRefs,
+    prior_checkpoint_digest: current.checkpoint.checkpoint_digest,
+    previous_run_transaction_digest: current.transaction.transaction_digest
+  }, 'incident_record_digest');
+  const targetCellId = current.identity.delivery_intent === 'case_document' ? 'cd.terminal.fatal' : 'ep.terminal.fatal';
+  const checkpointBase = {
+    ...current.checkpoint, run_lifecycle: 'fatal', fsm_cell_id: targetCellId,
+    stage: row.exact_stage, obligation: row.exact_obligation,
+    fatal_incident_record_digest: incidentRecord.incident_record_digest
+  };
+  delete checkpointBase.checkpoint_digest;
+  const selectorState = checkpointSelectors(checkpointBase, []);
+  const commitReceipt = { kind: 'operational_commit', committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: row.exact_commit.effect };
+  const reply = {
+    kind: 'run_reply', schema_version: V5_SCHEMA_VERSION, projection_kind: row.exact_projection_kind,
+    reply_contract_id: row.reply_contract_id, reply_status: row.exact_reply_status,
+    run_id: current.identity.run_id, run_directory: current.layout.root,
+    case_document_lineage_id: current.identity.case_document_lineage_id, delivery_intent: current.identity.delivery_intent,
+    run_lifecycle: 'fatal', stage: row.exact_stage, obligation: row.exact_obligation,
+    current_revision: current.checkpoint.current_revision, checkpoint_digest: selectorState.checkpoint.checkpoint_digest,
+    selector_snapshot_digest: selectorState.sidecar.selector_sidecar_digest,
+    diagnostics: [{ code: error.code, affected_refs: affectedRefs, message: error.message }], available_actions: [],
+    commit_receipt: commitReceipt,
+    work_packet: { kind: 'terminal_work', terminal_kind: current.identity.delivery_intent === 'case_document' ? 'case_document_fatal' : 'execution_plan_fatal' }
+  };
+  return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, incidentRecord });
 }
 
 /** @param {Record<string,any>} current @param {Record<string,any>} request @param {string} code @param {string} message */
@@ -425,7 +479,33 @@ async function createResumedRun(catalog, request, parentRunId) {
 export async function advanceV5Run(runDirectory, requestValue) {
   let current;
   try { current = await readVerifiedRun(runDirectory); } catch (error) {
-    if (error instanceof V5ProtocolError) return preRunReply(error.code, error.message);
+    if (error instanceof V5ProtocolError) {
+      if (error.code === 'RUN_ARGUMENT_INVALID') return preRunReply(error.code, error.message);
+      if (!plainObject(requestValue) || !hasExactKeys(requestValue, ['idempotency_key', 'action']) || typeof requestValue.idempotency_key !== 'string' || requestValue.idempotency_key.length === 0 || !plainObject(requestValue.action)) return preRunReply('ACCEPTED_STATE_INTEGRITY_FAILURE', error.message);
+      try {
+        const layout = await resolveRunLayout(runDirectory);
+        const identity = (await readFixedSealedRecord(layout.identity, 'identity_digest')).record;
+        const trigger = { kind: 'no_verified_fsm_cell', delivery_intent: identity.delivery_intent };
+        const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'ACCEPTED_STATE_INTEGRITY_FAILURE' && candidate.source.response_context === 'run_mutation' && candidate.source.response_variant_id === 'mutation_quarantine' && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
+        if (!row) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', 'Integrity quarantine reply contract is unavailable.');
+        /** @type {Record<string,any>} */
+        let lastVerifiedState = { kind: 'none' };
+        try {
+          const pointer = (await readFixedSealedRecord(layout.currentPointer, 'pointer_digest')).record;
+          const transaction = await readSealedV5Record(layout.transactions, pointer.head_transaction_digest, 'transaction_digest');
+          const checkpoint = await readSealedV5Record(layout.checkpoints, transaction.checkpoint_digest, 'checkpoint_digest');
+          if (pointer.run_id === identity.run_id && transaction.run_id === identity.run_id && checkpoint.run_id === identity.run_id) lastVerifiedState = { kind: 'checkpoint', fsm_cell_id: checkpoint.fsm_cell_id, stage: checkpoint.stage, obligation: checkpoint.obligation, current_revision: checkpoint.current_revision, checkpoint_digest: checkpoint.checkpoint_digest };
+        } catch {}
+        return await publishIntegrityQuarantine(layout.root, {
+          observed_failure: error.message, affected_refs: Array.isArray(error.affected_refs) ? error.affected_refs : [],
+          last_verified_state: lastVerifiedState, last_verified_revision: lastVerifiedState.kind === 'checkpoint' ? lastVerifiedState.current_revision : 0,
+          reply_contract_id: row.reply_contract_id
+        }, /** @type {{idempotency_key:string,action:Record<string,any>}} */ (requestValue));
+      } catch (quarantineError) {
+        if (quarantineError instanceof V5ProtocolError) return preRunReply(quarantineError.code, quarantineError.message);
+        throw quarantineError;
+      }
+    }
     throw error;
   }
   if (!plainObject(requestValue) || !hasExactKeys(requestValue, ['idempotency_key', 'action']) || typeof requestValue.idempotency_key !== 'string' || requestValue.idempotency_key.length === 0 || !plainObject(requestValue.action)) return runRejection(current, 'SCHEMA_VALIDATION_FAILED', 'Advance request is invalid.');
@@ -433,6 +513,10 @@ export async function advanceV5Run(runDirectory, requestValue) {
   try {
     const replay = await resolveRunReplay(current, request);
     if (replay) return replay;
+    try { await verifyV5AcceptedClosure(current); } catch (error) {
+      if (!(error instanceof V5ProtocolError)) throw error;
+      return await persistAcceptedClosureFatal(current, request, error);
+    }
     if (current.identity.schema_version !== V5_SCHEMA_VERSION) throw new V5ProtocolError('UNSUPPORTED_SCHEMA_VERSION', 'Only V5 runs are operational.');
     if (current.checkpoint.run_lifecycle !== 'active') return runRejection(current, 'ACTION_NOT_ADVERTISED', 'Terminal runs do not accept new actions.', 'read_only_terminal_rejection');
     const action = request.action;
@@ -449,7 +533,7 @@ export async function advanceV5Run(runDirectory, requestValue) {
   } catch (error) {
     if (!(error instanceof V5ProtocolError)) throw error;
     if (error.code === 'ACTION_TOKEN_KEY_UNAVAILABLE') throw error;
-    if (error.code === 'IDEMPOTENCY_CONFLICT') return runRejection(current, error.code, error.message);
+    if (error.code === 'IDEMPOTENCY_CONFLICT') return runRejection(current, error.code, error.message, current.checkpoint.run_lifecycle === 'active' ? 'persisted_run_state' : 'read_only_terminal_rejection');
     if (error.code === 'ORACLE_SEMANTICS_REQUIRED' && current.checkpoint.fsm_cell_id === 'cd.active.case.drafts') return persistOracleReroute(current, request, error.message);
     return persistRunRejection(current, request, error.code, error.message);
   }
@@ -554,6 +638,7 @@ async function advanceClarificationCommit(current, request) {
   else if ([...invalidated].some((ref) => String(ref).includes('requirements'))) resultKey = 'requirements_invalidated';
   else if ([...invalidated].some((ref) => String(ref).includes('behavior'))) resultKey = 'behavior_invalidated';
   else resultKey = current.checkpoint.case_document_ref ? 'all_gates_passed' : 'case_drafts_required';
+  const clarificationImpactDigest = canonicalObjectDigest(committed.impact);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'clarification.commit', result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   let nextPresentation = presentation;
@@ -573,6 +658,7 @@ async function advanceClarificationCommit(current, request) {
     ...current.checkpoint, current_revision: current.checkpoint.current_revision + 1,
     semantic_root_digest: committed.impact.after_graph_digest, question_part_state_set_digest: committed.next_state_set.state_set_digest,
     presentation_digest: nextPresentation.presentation_digest, fsm_cell_id: outcome.target_cell_id, stage: targetCell.stage, obligation: targetCell.obligation,
+    applied_clarification_impact_digest: clarificationImpactDigest,
     accepted_decision_digests: [...new Set([...(current.checkpoint.accepted_decision_digests ?? []), ...committed.decisions.map((decision) => decision.decision_digest)])].sort()
   };
   for (const key of ['checkpoint_digest', 'preview_digest', 'pending_clarification_digest']) delete checkpointBase[key];
@@ -582,7 +668,7 @@ async function advanceClarificationCommit(current, request) {
   const compilerStateRecords = [
     { record: committed.next_state_set, semanticDigest: committed.next_state_set.state_set_digest },
     { record: nextPresentation, semanticDigest: nextPresentation.presentation_digest },
-    { record: { ...committed.impact, impact_digest: canonicalObjectDigest(committed.impact) }, semanticDigest: canonicalObjectDigest(committed.impact) },
+    { record: { ...committed.impact, impact_digest: clarificationImpactDigest }, semanticDigest: clarificationImpactDigest },
     ...committed.decisions.map((decision) => ({ record: decision, semanticDigest: decision.decision_digest }))
   ];
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
@@ -740,6 +826,7 @@ async function advanceCaseDrafts(current, request) {
   });
   const executionPlan = projectCompatibilityExecutionPlan(document, { run_id: current.identity.run_id, revision: current.checkpoint.current_revision + 1 });
   const caseDocumentRef = executionPlan.case_document_ref;
+  const renderedOutputs = [renderedOutputRecord('application/json', renderV5Json(document)), renderedOutputRecord('text/markdown', renderV5Markdown(document)), renderedOutputRecord('text/csv', renderV5Csv(document))].map((record) => ({ record, digestField: 'rendered_output_digest' }));
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'artifact.submit_case_drafts', result_key: 'all_gates_passed' });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const checkpointBase = {
@@ -747,7 +834,8 @@ async function advanceCaseDrafts(current, request) {
     fsm_cell_id: outcome.target_cell_id, stage: targetCell.stage, obligation: targetCell.obligation,
     accepted_artifact_digests: [...new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
     case_drafts_artifact_digest: envelope.envelope_digest, case_document_ref: caseDocumentRef,
-    case_document_digest: document.bundle_digest, execution_plan_digest: executionPlan.plan_digest
+    case_document_digest: document.bundle_digest, execution_plan_digest: executionPlan.plan_digest,
+    rendered_output_digests: renderedOutputs.map((item) => item.record.rendered_output_digest).sort()
   };
   delete checkpointBase.checkpoint_digest;
   const workPacket = { kind: 'terminal_work', terminal_kind: 'case_document_finished', case_document_ref: caseDocumentRef };
@@ -755,7 +843,6 @@ async function advanceCaseDrafts(current, request) {
   const actionDigest = actionDigestV5('advance', action);
   const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
   const reply = persistedReply(selectorState.checkpoint, workPacket, [], commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
-  const renderedOutputs = [renderedOutputRecord('application/json', renderV5Json(document)), renderedOutputRecord('text/markdown', renderV5Markdown(document)), renderedOutputRecord('text/csv', renderV5Csv(document))].map((record) => ({ record, digestField: 'rendered_output_digest' }));
   return commitNormalRunTransaction(current.layout.root, request, {
     checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
     acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }],
@@ -901,6 +988,10 @@ export async function inspectV5Run(runDirectory) {
     layout = await resolveRunLayout(runDirectory);
     identity = (await readFixedSealedRecord(layout.identity, 'identity_digest')).record;
     const current = await readVerifiedRun(runDirectory);
+    try { await verifyV5AcceptedClosure(current); } catch (error) {
+      if (error instanceof V5ProtocolError) return readOnlyIntegrityReply(current, error.code, error.message, 'run_inspect', Array.isArray(error.affected_refs) ? error.affected_refs : []);
+      throw error;
+    }
     return structuredClone(current.reply);
   } catch (error) {
     if (error instanceof V5ProtocolError) {
@@ -918,7 +1009,7 @@ export async function inspectV5Run(runDirectory) {
       const trigger = lastVerifiedState.kind === 'checkpoint'
         ? { kind: 'verified_fsm_cell', fsm_cell_id: lastVerifiedState.fsm_cell_id }
         : { kind: 'no_verified_fsm_cell', delivery_intent: identity.delivery_intent };
-      const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'ACCEPTED_STATE_INTEGRITY_FAILURE' && candidate.source.response_context === 'run_inspect' && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
+      const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === error.code && candidate.source.response_context === 'run_inspect' && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
       if (!row) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', 'Inspect integrity reply contract is unavailable.');
       return {
         kind: 'run_reply', schema_version: V5_SCHEMA_VERSION, run_id: identity.run_id, run_directory: layout.root,
@@ -927,7 +1018,7 @@ export async function inspectV5Run(runDirectory) {
         run_lifecycle: 'fatal', reply_status: 'fatal', last_verified_state: lastVerifiedState,
         selector_snapshot_digest: null, available_actions: [],
         work_packet: { kind: 'terminal_work', terminal_kind: identity.delivery_intent === 'case_document' ? 'case_document_fatal' : 'execution_plan_fatal' },
-        commit_receipt: null, diagnostics: [{ code: 'ACCEPTED_STATE_INTEGRITY_FAILURE', affected_refs: [], message: error.message }]
+        commit_receipt: null, diagnostics: [{ code: error.code, affected_refs: Array.isArray(error.affected_refs) ? error.affected_refs : [], message: error.message }]
       };
     }
     throw error;
