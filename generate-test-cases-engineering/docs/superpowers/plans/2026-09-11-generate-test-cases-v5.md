@@ -406,25 +406,25 @@
 - Consumes: answer/control registries, current presentation, exact `Q<n>` tokens, raw response scalars, semantic root, and Task 6/7 reducers.
 - Produces: proposed answer units, preview, Decision records, applied impact, next question-part state set, and atomic revision projection.
 
-- [ ] **Step 1: Write failing binding and authority tests**
+- [x] **Step 1: Write failing binding and authority tests**
 
   Test reordered/skipped/multiline answers, punctuation normalization, duplicate and foreign Q tokens, clone/defer/unknown/close controls, final=E3, temporary=E1, missing product scope, and answer-contract/value mismatches.
 
-- [ ] **Step 2: Write failing question FSM and impact tests**
+- [x] **Step 2: Write failing question FSM and impact tests**
 
   Assert `answered` cannot close, only delivery-close controls close unresolved parts, delivery-closed gaps stay Blocked, invalid preview writes nothing, stale preview/confirmation writes nothing, impact projections list exact created/invalidated/modified objects, and discard-pending is idempotent.
 
-- [ ] **Step 3: Run focused tests and observe RED**
+- [x] **Step 3: Run focused tests and observe RED**
 
   Run: `node --test test/v5/clarification.test.mjs`
 
   Expected: FAIL because the V5 clarification pipeline is absent.
 
-- [ ] **Step 4: Implement parse → preview → confirm**
+- [x] **Step 4: Implement parse → preview → confirm**
 
   Parse Unicode scalar ranges without guessing omitted bindings. `preview_clarification_response` never changes semantic revision. `commit_clarification_response` requires the advertised digest and exact confirmation token/range, writes Decisions plus applied impact atomically, and then recompiles the earliest outstanding obligation.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   Run: `node --test test/v5/clarification.test.mjs`
 
