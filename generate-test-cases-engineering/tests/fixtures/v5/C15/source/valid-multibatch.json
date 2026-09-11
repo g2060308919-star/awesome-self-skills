@@ -1,0 +1,1 @@
+{"fixture_id":"C15.source.valid-multibatch","expectation":"required-first deterministic batches of at most sixteen and cumulative accepted source state","source_count":18}

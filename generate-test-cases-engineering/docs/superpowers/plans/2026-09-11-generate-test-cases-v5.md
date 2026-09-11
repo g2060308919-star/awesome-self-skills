@@ -235,7 +235,7 @@
 
   Bind run ID, active lifecycle, FSM cell, revision, checkpoint, semantic root, presentation/preview digest, and exact capability. Persist only key IDs and selector sidecars; accept configured current and retained verification keys.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
   Run: `node --test test/v5/storage.test.mjs test/v5/transactions.test.mjs test/v5/action-tokens.test.mjs`
 
@@ -264,29 +264,29 @@
   export async function inspectV5Run(runDirectory) {}
   ```
 
-- [ ] **Step 1: Write failing public-export and source-batch tests**
+- [x] **Step 1: Write failing public-export and source-batch tests**
 
   Assert exactly three public exports; ordinary create rejects missing/empty bootstrap; source request IDs and batches are deterministic `required_desc_then_request_id_asc` with maximum 16; required skip, batch mismatch, hidden source input, V4 requests, relative paths, and extra properties write nothing.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
   Run: `node --test test/v5/public-api.test.mjs test/v5/source-acquisition.test.mjs`
 
   Expected: FAIL because the V5 exports do not exist.
 
-- [ ] **Step 3: Implement create genesis**
+- [x] **Step 3: Implement create genesis**
 
   Validate before allocating a run. Derive `srq5_` from role + locator + required, freeze bootstrap/policy/create-action digests, generate the closed identity record, then publish in the order run transaction → catalog genesis record → run pointer → catalog pointer.
 
-- [ ] **Step 4: Implement source batch acceptance**
+- [x] **Step 4: Implement source batch acceptance**
 
   Validate request IDs as the complete current batch; canonicalize verified source content with existing source-boundary algorithms; persist the disposition ledger; compute `AcceptedSourceStateV1.semantic_digest` from canonical source payload only; advance to the next fixed batch or semantic review.
 
-- [ ] **Step 5: Implement inspect-only CLI behavior**
+- [x] **Step 5: Implement inspect-only CLI behavior**
 
   Dynamic import is side-effect free. Direct execution accepts exactly one absolute run directory and prints one JSON reply from `inspectV5Run`; all other argument shapes return `RUN_ARGUMENT_INVALID` without filesystem mutation.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
   Run: `node --test test/v5/public-api.test.mjs test/v5/source-acquisition.test.mjs`
 

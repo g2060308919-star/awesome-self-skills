@@ -79,6 +79,39 @@ export async function writeSealedV5Record(directory, record, digestField) {
   return { digest: digestValue, path: filePath, record: sealed };
 }
 
+/**
+ * Store a canonical compiler-owned record under a semantic digest whose
+ * preimage is defined by that record's contract instead of its storage bytes.
+ * @param {string} directory
+ * @param {Record<string, unknown>} record
+ * @param {string} semanticDigest
+ */
+export async function writeSemanticV5Record(directory, record, semanticDigest) {
+  const filePath = path.join(directory, digestFilename(semanticDigest));
+  const bytes = Buffer.from(canonicalV5Stringify(record));
+  await ensureV5Directory(directory);
+  try {
+    const existing = await readFile(filePath);
+    if (!existing.equals(bytes)) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Semantic record storage collision.');
+  } catch (error) {
+    if (error instanceof V5ProtocolError) throw error;
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') await writeAtomicFile(filePath, bytes);
+    else throw error;
+  }
+  return { digest: semanticDigest, path: filePath, record };
+}
+
+/** @param {string} directory @param {string} semanticDigest */
+export async function readSemanticV5Record(directory, semanticDigest) {
+  const filePath = path.join(directory, digestFilename(semanticDigest));
+  let text;
+  try { text = await readFile(filePath, 'utf8'); } catch { throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', `Semantic record ${semanticDigest} is unavailable.`); }
+  let record;
+  try { record = JSON.parse(text); } catch { throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Semantic record is not valid JSON.'); }
+  if (canonicalV5Stringify(record) !== text) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Semantic record is not canonical JSON.');
+  return record;
+}
+
 /** @param {string} filePath @param {string} expectedDigest */
 export async function readCasJson(filePath, expectedDigest) {
   const bytes = await readFile(filePath);

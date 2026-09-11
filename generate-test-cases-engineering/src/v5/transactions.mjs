@@ -13,6 +13,7 @@ import {
   withV5RunLock,
   writeAtomicFile,
   writeCasJson,
+  writeSemanticV5Record,
   writeSealedV5Record
 } from './run-store.mjs';
 import { resolveCatalogLayout, resolveRunLayout, digestFilename } from './storage-paths.mjs';
@@ -50,7 +51,7 @@ async function resolveCatalogIdempotency(catalogRoot, idempotencyKey, canonicalA
 
 /**
  * @param {string} catalogRoot
- * @param {{identity:Record<string,any>,checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,idempotencyKey:string,canonicalActionDigest:string}} input
+ * @param {{identity:Record<string,any>,checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,idempotencyKey:string,canonicalActionDigest:string,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>}} input
  * @param {{failAt?:string}} [services]
  */
 export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
@@ -70,6 +71,11 @@ export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
   await mkdir(runDirectory);
   const run = await resolveRunLayout(runDirectory);
   for (const directory of [run.transactions, run.receipts, run.idempotencyIndexes, run.replies, run.checkpoints, run.selectorSidecars, run.genesisRecords, run.acceptedArtifacts, run.compilerState, run.renderedOutputs, run.events, run.incidents, run.rawSourceBytes, run.staging]) await ensureV5Directory(directory);
+  for (const item of input.compilerStateRecords ?? []) {
+    if (item.semanticDigest) await writeSemanticV5Record(run.compilerState, item.record, item.semanticDigest);
+    else if (item.digestField) await writeSealedV5Record(run.compilerState, item.record, item.digestField);
+    else throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Compiler state record storage contract is missing.');
+  }
 
   validateCheckpointIdentity(input.checkpoint, input.identity);
   const identity = sealV5Record(input.identity, 'identity_digest');
@@ -102,13 +108,19 @@ export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
     entries: [...priorEntries, { idempotency_key: input.idempotencyKey, canonical_action_digest: input.canonicalActionDigest, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, reply_digest: catalogReply.digest }].sort((left, right) => left.idempotency_key.localeCompare(right.idempotency_key))
   }, 'transaction_digest');
   await publishFixedRecord(catalog.currentPointer, { kind: 'catalog_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, scope: { kind: 'catalog' }, head_transaction_digest: catalogTransaction.digest }, 'pointer_digest', existing?.pointer?.bytes ?? null);
-  return { runDirectory, reply: input.reply, pointer, head: transaction.record, replayed: false };
+  return {
+    runDirectory,
+    reply: await readCasJson(path.join(run.replies, digestFilename(reply.digest)), reply.digest),
+    pointer,
+    head: transaction.record,
+    replayed: false
+  };
 }
 
 /**
  * @param {string} runDirectory
  * @param {{idempotency_key:string,action:Record<string,any>}} request
- * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>}} nextState
+ * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>}} nextState
  * @param {{failAt?:string}} [services]
  */
 export async function commitNormalRunTransaction(runDirectory, request, nextState, services = {}) {
@@ -123,6 +135,12 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
     validateCheckpointIdentity(nextState.checkpoint, current.identity);
     const semanticDelta = nextState.commitReceipt.semantic_revision_delta;
     if (![0, 1].includes(semanticDelta) || nextState.checkpoint.current_revision !== current.checkpoint.current_revision + semanticDelta) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Semantic revision delta does not match the committed checkpoint.');
+    for (const item of nextState.acceptedArtifacts ?? []) await writeSealedV5Record(current.layout.acceptedArtifacts, item.record, item.digestField);
+    for (const item of nextState.compilerStateRecords ?? []) {
+      if (item.semanticDigest) await writeSemanticV5Record(current.layout.compilerState, item.record, item.semanticDigest);
+      else if (item.digestField) await writeSealedV5Record(current.layout.compilerState, item.record, item.digestField);
+      else throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Compiler state record storage contract is missing.');
+    }
     const checkpointPayload = Object.hasOwn(nextState.checkpoint, 'checkpoint_digest') ? withoutDigest(nextState.checkpoint, 'checkpoint_digest') : nextState.checkpoint;
     const checkpoint = await writeSealedV5Record(current.layout.checkpoints, checkpointPayload, 'checkpoint_digest');
     const sidecarPayload = Object.hasOwn(nextState.selectorSidecar, 'selector_sidecar_digest') ? withoutDigest(nextState.selectorSidecar, 'selector_sidecar_digest') : nextState.selectorSidecar;
@@ -150,7 +168,7 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
     }, 'transaction_digest');
     if (services.failAt === 'before_pointer_publish') throw new Error('INJECTED_CRASH: before_pointer_publish');
     await publishFixedRecord(current.layout.currentPointer, { kind: 'run_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, run_id: current.identity.run_id, run_genesis_record_digest: current.genesis.run_genesis_record_digest, head_transaction_digest: transaction.digest }, 'pointer_digest', current.pointerBytes);
-    return nextState.reply;
+    return readCasJson(path.join(current.layout.replies, digestFilename(reply.digest)), reply.digest);
   });
 }
 
