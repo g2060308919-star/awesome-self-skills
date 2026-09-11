@@ -1,0 +1,17 @@
+{
+  "idempotency_key": "fixture-create-local",
+  "delivery_intent": "case_document",
+  "source_bootstrap": {
+    "source_request_seeds": [
+      {
+        "source_request_client_key": "fixture-local-prd",
+        "source_role": "primary_prd",
+        "locator": {
+          "kind": "local_file",
+          "absolute_path": { "$fixture_absolute_path": "required" }
+        },
+        "required": true
+      }
+    ]
+  }
+}

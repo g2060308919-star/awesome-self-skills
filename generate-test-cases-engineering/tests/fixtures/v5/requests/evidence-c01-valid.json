@@ -1,0 +1,42 @@
+{
+  "idempotency_key": "fixture-c01-evidence-valid",
+  "action": {
+    "kind": "submit_artifact",
+    "action_token": { "$fixture_binding": "required" },
+    "artifact_kind": "evidence_claims",
+    "artifact": {
+      "semantic_review_seed_digest": { "$fixture_binding": "required" },
+      "claims": [
+        {
+          "claim_client_key": "claim-save",
+          "primary_outcome_signature": { "$fixture_binding": "required" },
+          "observation_slot_digests": [{ "$fixture_binding": "required" }]
+        },
+        {
+          "claim_client_key": "claim-message",
+          "primary_outcome_signature": {
+            "subject_slot_digest": { "$fixture_binding": "required" },
+            "condition_slot_digest": { "$fixture_binding": "required" },
+            "action_slot_digest": { "$fixture_binding": "required" },
+            "primary_observation_slot_digest": { "$fixture_binding": "required" },
+            "branch_slot_digest": { "$fixture_binding": "required" }
+          },
+          "observation_slot_digests": [{ "$fixture_binding": "required" }]
+        }
+      ],
+      "semantic_gaps": [],
+      "decomposition_reviews": [
+        {
+          "seed_digest": { "$fixture_binding": "required" },
+          "candidate_id": { "$fixture_binding": "required" },
+          "disposition": {
+            "kind": "split_claims",
+            "claim_client_keys": ["claim-save", "claim-message"]
+          }
+        }
+      ],
+      "ambiguity_reviews": [],
+      "entity_resolutions": []
+    }
+  }
+}

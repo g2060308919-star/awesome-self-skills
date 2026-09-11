@@ -1,0 +1,33 @@
+{
+  "idempotency_key": "fixture-c03-evidence-valid",
+  "action": {
+    "kind": "submit_artifact",
+    "action_token": { "$fixture_binding": "required" },
+    "artifact_kind": "evidence_claims",
+    "artifact": {
+      "semantic_review_seed_digest": { "$fixture_binding": "required" },
+      "claims": [{ "claim_client_key": "claim-entity", "primary_outcome_signature": { "$fixture_binding": "required" }, "observation_slot_digests": [{ "$fixture_binding": "required" }] }],
+      "semantic_gaps": [],
+      "decomposition_reviews": [{ "seed_digest": { "$fixture_binding": "required" }, "candidate_id": { "$fixture_binding": "required" }, "disposition": { "kind": "single_claim", "claim_client_key": "claim-entity" } }],
+      "ambiguity_reviews": [],
+      "entity_resolutions": [{
+        "seed_digest": { "$fixture_binding": "required" },
+        "conflict_group_id": { "$fixture_binding": "required" },
+        "mention_candidate_ids": [{ "$fixture_binding": "required" }, { "$fixture_binding": "required" }],
+        "resolution": {
+          "kind": "resolved_clusters",
+          "clusters": [{
+            "entity_client_key": "entity-order",
+            "canonical_name": "订单",
+            "mentions": [
+              { "mention_candidate_id": { "$fixture_binding": "required" }, "name_role": "canonical_business_name" },
+              { "mention_candidate_id": { "$fixture_binding": "required" }, "name_role": "business_alias" }
+            ],
+            "basis_claim_client_keys": ["claim-entity"],
+            "basis_decision_ids": []
+          }]
+        }
+      }]
+    }
+  }
+}

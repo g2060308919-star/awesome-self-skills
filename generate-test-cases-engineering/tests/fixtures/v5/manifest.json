@@ -1,0 +1,346 @@
+{
+  "schema_version": "5.0.0",
+  "fixtures": [
+    {
+      "fixture_id": "F-C01-atomicity.positive.baseline",
+      "requirement_ids": ["C01"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c01.json", "requests/source-c01.json", "requests/evidence-c01-valid.json"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c01.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
+        {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c01.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"create","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/request_ids/0","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}},
+          {"target_json_pointer":"/action/request_dispositions/0/request_id","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}}
+        ]},
+        {"step_id":"evidence","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c01-valid.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"source","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/0/primary_outcome_signature","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"}},
+          {"target_json_pointer":"/action/artifact/claims/1/primary_outcome_signature/subject_slot_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/subject_slot_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/1/primary_outcome_signature/condition_slot_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/condition_slot_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/1/primary_outcome_signature/action_slot_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/action_slot_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/1/primary_outcome_signature/primary_observation_slot_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"}},
+          {"target_json_pointer":"/action/artifact/claims/1/primary_outcome_signature/branch_slot_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/branch_slot_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/1/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}}
+        ]}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory","/work_packet/source_requests/0/request_id"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/seed_digest"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.READY","reply_status":"need_revision","stage":"case_design","obligation":"provide_behavior_views","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/behavior_contract_worklist/seed_digest"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C01-atomicity.negative.rejection",
+      "requirement_ids": ["C01"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c01.json", "requests/source-c01.json", "requests/evidence-c01-missing.json", "requests/evidence-c01-unknown.json", "requests/evidence-c01-not-atomic.json"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c01.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
+        {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c01.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"create","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/request_ids/0","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}},
+          {"target_json_pointer":"/action/request_dispositions/0/request_id","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}}
+        ]},
+        {"step_id":"missing","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c01-missing.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"source","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}}
+        ]},
+        {"step_id":"unknown","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c01-unknown.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"missing","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}}
+        ]},
+        {"step_id":"not-atomic","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c01-not-atomic.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"unknown","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/0/primary_outcome_signature","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/1","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}}
+        ]}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/seed_digest"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.ERROR.SEMANTIC_REVIEW_CANDIDATE_MISSING.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW","reply_status":"need_revision","error_code":"SEMANTIC_REVIEW_CANDIDATE_MISSING","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.ERROR.SEMANTIC_REVIEW_CANDIDATE_UNKNOWN.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW","reply_status":"need_revision","error_code":"SEMANTIC_REVIEW_CANDIDATE_UNKNOWN","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.ERROR.ATOMIC_OUTCOME_NOT_SINGLE.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW","reply_status":"need_revision","error_code":"ATOMIC_OUTCOME_NOT_SINGLE","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C02-ambiguity.positive.baseline",
+      "requirement_ids": ["C02"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c02.json", "requests/source-c02.json", "requests/evidence-c02-gap.json"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c02.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
+        {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c02.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"create","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/request_ids/0","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}},
+          {"target_json_pointer":"/action/request_dispositions/0/request_id","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}}
+        ]},
+        {"step_id":"evidence","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c02-gap.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"source","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/0/primary_outcome_signature","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"}},
+          {"target_json_pointer":"/action/artifact/semantic_gaps/0/target/origin/ambiguity_candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/ambiguity_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/ambiguity_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"}}
+        ]}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.GAPS","reply_status":"need_user_answers","stage":"requirements_analysis","obligation":"resolve_requirements_questions","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/presentation/parts/0/question_part_id"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C02-ambiguity.negative.rejection",
+      "requirement_ids": ["C02"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c02.json", "requests/source-c02.json", "requests/evidence-c02-unresolved.json"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c02.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
+        {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c02.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"create","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/request_ids/0","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}},
+          {"target_json_pointer":"/action/request_dispositions/0/request_id","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}}
+        ]},
+        {"step_id":"unresolved","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c02-unresolved.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"source","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/0/primary_outcome_signature","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/ambiguity_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/ambiguity_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"}}
+        ]}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.ERROR.AMBIGUITY_UNRESOLVED.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW","reply_status":"need_user_answers","error_code":"AMBIGUITY_UNRESOLVED","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C03-entity.positive.baseline",
+      "requirement_ids": ["C03"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c03.json", "requests/source-c03.json", "requests/evidence-c03-valid.json"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c03.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
+        {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c03.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"create","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/request_ids/0","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}},
+          {"target_json_pointer":"/action/request_dispositions/0/request_id","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}}
+        ]},
+        {"step_id":"evidence","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c03-valid.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"source","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/0/primary_outcome_signature","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/entity_resolutions/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/entity_resolutions/0/conflict_group_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/entity_conflict_groups/0/conflict_group_id"}},
+          {"target_json_pointer":"/action/artifact/entity_resolutions/0/mention_candidate_ids/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/entity_mention_candidates/0/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/entity_resolutions/0/mention_candidate_ids/1","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/entity_mention_candidates/1/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/entity_resolutions/0/resolution/clusters/0/mentions/0/mention_candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/entity_mention_candidates/0/candidate_id"}},
+          {"target_json_pointer":"/action/artifact/entity_resolutions/0/resolution/clusters/0/mentions/1/mention_candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/entity_mention_candidates/1/candidate_id"}}
+        ]}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/entity_conflict_groups/0/conflict_group_id"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.READY","reply_status":"need_revision","stage":"case_design","obligation":"provide_behavior_views","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/context/term_registry/payload/entries/0/entity_id"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C03-entity.negative.rejection",
+      "requirement_ids": ["C03"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-c03.json", "requests/source-c03.json", "requests/evidence-c03-unresolved.json"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-c03.json","request_bindings":[],"fixture_absolute_path_bindings":[]},
+        {"step_id":"source","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/source-c03.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"create","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/request_ids/0","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}},
+          {"target_json_pointer":"/action/request_dispositions/0/request_id","value_from":{"source_step_id":"create","source_json_pointer":"/work_packet/source_requests/0/request_id"}}
+        ]},
+        {"step_id":"unresolved","api":"advanceV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"},"request_file":"requests/evidence-c03-unresolved.json","request_bindings":[
+          {"target_json_pointer":"/action/action_token","value_from":{"source_step_id":"source","source_json_pointer":"/available_actions/0/action_token"}},
+          {"target_json_pointer":"/action/artifact/semantic_review_seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/claims/0/primary_outcome_signature","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"}},
+          {"target_json_pointer":"/action/artifact/claims/0/observation_slot_digests/0","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/seed_digest","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/seed_digest"}},
+          {"target_json_pointer":"/action/artifact/decomposition_reviews/0/candidate_id","value_from":{"source_step_id":"source","source_json_pointer":"/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"}}
+        ]}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE","reply_status":"need_revision","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":1,"required_json_pointers":["/work_packet/semantic_review_seed/entity_conflict_groups/0/conflict_group_id"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.ERROR.ENTITY_RESOLUTION_UNRESOLVED.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW","reply_status":"need_user_answers","error_code":"ENTITY_RESOLUTION_UNRESOLVED","stage":"requirements_analysis","obligation":"review_semantic_seed","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C04-binding.positive.baseline",
+      "requirement_ids": ["C04"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C04-binding.negative.rejection",
+      "requirement_ids": ["C04"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C05-nature.positive.baseline",
+      "requirement_ids": ["C05"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C05-nature.negative.rejection",
+      "requirement_ids": ["C05"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C06-question-fsm.positive.baseline",
+      "requirement_ids": ["C06"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C06-question-fsm.negative.rejection",
+      "requirement_ids": ["C06"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C07-impact.positive.baseline",
+      "requirement_ids": ["C07"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C07-impact.negative.rejection",
+      "requirement_ids": ["C07"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C08-oracle.positive.baseline",
+      "requirement_ids": ["C08"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C08-oracle.negative.rejection",
+      "requirement_ids": ["C08"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C09-correspondence.positive.baseline",
+      "requirement_ids": ["C09"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C09-correspondence.negative.rejection",
+      "requirement_ids": ["C09"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C10-value-state.positive.baseline",
+      "requirement_ids": ["C10"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C10-value-state.negative.rejection",
+      "requirement_ids": ["C10"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C11-complement.positive.baseline",
+      "requirement_ids": ["C11"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C11-complement.negative.rejection",
+      "requirement_ids": ["C11"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C12-population.positive.baseline",
+      "requirement_ids": ["C12"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C12-population.negative.rejection",
+      "requirement_ids": ["C12"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C13-permission.positive.baseline",
+      "requirement_ids": ["C13"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C13-permission.negative.rejection",
+      "requirement_ids": ["C13"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C14-risk.positive.baseline",
+      "requirement_ids": ["C14"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C14-risk.negative.rejection",
+      "requirement_ids": ["C14"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C15-protocol.positive.baseline",
+      "requirement_ids": ["C15"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-local-file.json", "inputs/local-source.input"],
+      "action_sequence": [
+        {"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-local-file.json","request_bindings":[],"fixture_absolute_path_bindings":[{"target_json_pointer":"/source_bootstrap/source_request_seeds/0/locator/absolute_path","fixture_file":"inputs/local-source.input"}]},
+        {"step_id":"inspect","api":"inspectV5Run","run_directory_from":{"source_step_id":"create","source_json_pointer":"/run_directory"}}
+      ],
+      "expected_steps": [
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory","/available_actions/0/action_token","/work_packet/source_requests/0/locator/absolute_path"],"forbidden_json_pointers":["/compiler_version"]}},
+        {"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory","/checkpoint_digest"],"forbidden_json_pointers":["/compiler_version"]}}
+      ]
+    },
+    {
+      "fixture_id": "F-C15-protocol.negative.rejection",
+      "requirement_ids": ["C15"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    },
+    {
+      "fixture_id": "F-C16-provenance.positive.baseline",
+      "requirement_ids": ["C16"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-valid.json"],
+      "action_sequence": [{"step_id":"create","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-valid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"run_reply","projection_kind":"persisted_run_state","reply_contract_id":"RPL.FSM.OUT5.CREATE.CASE.INITIAL","reply_status":"need_artifact","stage":"source_acquisition","obligation":"provide_source_pack","lifecycle":"active","semantic_revision_delta":0,"required_json_pointers":["/run_directory"],"forbidden_json_pointers":["/compiler_version"]}}]
+    },
+    {
+      "fixture_id": "F-C16-provenance.negative.rejection",
+      "requirement_ids": ["C16"], "runtime_profile": "deterministic-v1", "catalog_keys": ["primary"], "input_files": ["requests/create-invalid.json"],
+      "action_sequence": [{"step_id":"reject","api":"createV5RunDirectory","catalog_key":"primary","request_file":"requests/create-invalid.json","request_bindings":[],"fixture_absolute_path_bindings":[]}],
+      "expected_steps": [{"kind":"api_reply","reply":{"reply_kind":"pre_run_error","reply_contract_id":"RPL.ERROR.RUN_ARGUMENT_INVALID.PRE_RUN.PRE_RUN","reply_status":"protocol_error","error_code":"RUN_ARGUMENT_INVALID","semantic_revision_delta":0,"required_json_pointers":["/diagnostics/0/code"],"forbidden_json_pointers":["/run_id"]}}]
+    }
+  ]
+}

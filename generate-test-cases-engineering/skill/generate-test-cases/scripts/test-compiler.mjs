@@ -4,7 +4,7 @@ import path6 from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // src/v5/runtime.mjs
-import { createHash as createHash6, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 import { readFile as readFile3 } from "node:fs/promises";
 import path5 from "node:path";
 
@@ -1192,7 +1192,7 @@ function createStableIdRegistry() {
       object_kind: objectKind,
       prefix,
       projection_id: projectionId,
-      golden_test_id: `F-C15-protocol.protocol.stable-id.${objectKind}`
+      golden_test_id: "F-C15-protocol.positive.baseline"
     })).sort((left, right) => left.object_kind.localeCompare(right.object_kind))
   }, "registry_digest");
 }
@@ -1290,7 +1290,7 @@ function createCanonicalArrayManifest() {
   }, "manifest_digest");
 }
 function createProvenancePolicy() {
-  const edge = (id, from, to, semantics, conditions) => ({ edge_rule_id: id, from_kind: from, to_kind: to, semantics, conditions, test_ids: [`F-C16-provenance.${id}`] });
+  const edge = (id, from, to, semantics, conditions) => ({ edge_rule_id: id, from_kind: from, to_kind: to, semantics, conditions, test_ids: ["F-C16-provenance.positive.baseline"] });
   const sameSemantic = [{ kind: "same_lineage" }, { kind: "current_semantic_root" }, { kind: "accepted_ancestor" }];
   return {
     unlisted_edge_policy: "deny",
@@ -1370,6 +1370,24 @@ function createRuntimeResponses(errorCode, catalogRow) {
 function createPolicyRegistry(fsm) {
   const phaseLookup = /* @__PURE__ */ new Map();
   for (const [phase, errorCodes] of Object.entries(V5_ERROR_PHASES)) errorCodes.forEach((errorCode, index) => phaseLookup.set(errorCode, { phase, priority: index + 1 }));
+  const errorRequirement = (errorCode) => {
+    if (errorCode.includes("ATOMIC_OUTCOME") || errorCode.includes("SEMANTIC_REVIEW_CANDIDATE")) return "C01-atomicity";
+    if (errorCode.includes("AMBIGUITY")) return "C02-ambiguity";
+    if (errorCode.includes("ENTITY_RESOLUTION")) return "C03-entity";
+    if (errorCode.includes("ANSWER_BINDING") || errorCode.includes("CONTROL_ORIGIN") || errorCode.includes("CLIENT_KEY")) return "C04-binding";
+    if (errorCode.includes("ANSWER_NATURE") || errorCode.includes("TEMPORARY_BASIS")) return "C05-nature";
+    if (errorCode.includes("QUESTION_PART")) return "C06-question-fsm";
+    if (errorCode.includes("CLARIFICATION")) return "C07-impact";
+    if (errorCode.includes("ORACLE")) return "C08-oracle";
+    if (errorCode.includes("FIELD_CORRESPONDENCE")) return "C09-correspondence";
+    if (errorCode.includes("VALUE_STATE")) return "C10-value-state";
+    if (errorCode.includes("DOMAIN") || errorCode.includes("COMPLEMENT")) return "C11-complement";
+    if (errorCode.includes("POPULATION")) return "C12-population";
+    if (errorCode.includes("PERMISSION")) return "C13-permission";
+    if (errorCode.includes("RISK_LEDGER")) return "C14-risk";
+    if (errorCode.includes("PROVENANCE") || errorCode.includes("DOWNSTREAM")) return "C16-provenance";
+    return "C15-protocol";
+  };
   const runtimeRules = Object.entries(V5_ERROR_CATALOG).map(([errorCode, catalogRow]) => {
     const phase = phaseLookup.get(errorCode);
     const responses = createRuntimeResponses(errorCode, catalogRow);
@@ -1379,7 +1397,7 @@ function createPolicyRegistry(fsm) {
       enforcement: ["schema", "invariant", "fsm", "transaction"],
       applicability: [...new Set(responses.map((response) => response.context))].map((context) => context === "pre_run" ? { kind: "pre_run" } : { kind: context, stages: ["source_acquisition", "requirements_analysis", "case_design", "execution_closure", "final_confirmation", "delivery"] }),
       normative_refs: [`SPEC.ERROR.${errorCode}`],
-      test_ids: [`F-C15-protocol.error.${errorCode.toLowerCase()}`],
+      test_ids: [`F-${errorRequirement(errorCode)}.negative.rejection`],
       kind: "runtime_error",
       trigger_ref: `trigger.${errorCode.toLowerCase()}`,
       error_code: errorCode,
@@ -1389,13 +1407,27 @@ function createPolicyRegistry(fsm) {
       responses
     };
   });
+  const invariantFixture = (normativeRef) => {
+    const match = /^SPEC\.FR(\d{3})$/u.exec(normativeRef);
+    if (match) {
+      const number = Number(match[1]);
+      const slugs = ["atomicity", "ambiguity", "entity", "binding", "nature", "question-fsm", "impact", "oracle", "correspondence", "value-state", "complement", "population", "permission", "risk", "protocol", "provenance"];
+      return `F-C${String(number).padStart(2, "0")}-${slugs[number - 1]}.positive.baseline`;
+    }
+    if (normativeRef === "SPEC.PROVENANCE" || normativeRef === "SPEC.OWNERSHIP") return "F-C16-provenance.positive.baseline";
+    if (normativeRef === "SPEC.BEHAVIOR") return "F-C14-risk.positive.baseline";
+    if (normativeRef === "SPEC.CLARIFICATION") return "F-C07-impact.positive.baseline";
+    if (normativeRef === "SPEC.SEMANTIC.REVIEW") return "F-C01-atomicity.positive.baseline";
+    if (normativeRef === "SPEC.RENDER") return "F-C08-oracle.positive.baseline";
+    return "F-C15-protocol.positive.baseline";
+  };
   const invariantRules = V5_INVARIANT_REFS.map((normativeRef) => ({
     rule_id: `INVARIANT.${normativeRef.slice(5)}`,
     owner: "compiler",
     enforcement: ["invariant", "ci"],
     applicability: [{ kind: "build" }, { kind: "ci" }, { kind: "release" }],
     normative_refs: [normativeRef],
-    test_ids: [`F-${normativeRef.toLowerCase().replaceAll(".", "-")}`],
+    test_ids: [invariantFixture(normativeRef)],
     kind: "invariant",
     assertion_ref: normativeRef
   }));
@@ -2444,6 +2476,29 @@ function validateSemanticReviews(seed, artifact, context) {
 // src/v5/transactions.mjs
 import { lstat as lstat3, mkdir as mkdir2, readFile as readFile2 } from "node:fs/promises";
 import path4 from "node:path";
+
+// src/v5/runtime-services.mjs
+import { createHash as createHash6, randomUUID as randomUUID2 } from "node:crypto";
+var testProfile = null;
+function runtimeV5Uuid() {
+  if (!testProfile) return randomUUID2();
+  const hex = createHash6("sha256").update(`${testProfile.seed}\0${testProfile.sequence += 1}`).digest("hex").slice(0, 32).split("");
+  hex[12] = "4";
+  hex[16] = ["8", "9", "a", "b"][Number.parseInt(hex[16], 16) % 4];
+  return `${hex.slice(0, 8).join("")}-${hex.slice(8, 12).join("")}-${hex.slice(12, 16).join("")}-${hex.slice(16, 20).join("")}-${hex.slice(20).join("")}`;
+}
+function runtimeV5ActionKeyring() {
+  if (testProfile) return { current: { key_id: "fixture-v1", key: createHash6("sha256").update(`generate-test-cases/v5/fixture-key\0${testProfile.seed}`).digest() }, retained: [] };
+  const encoded = process.env.GENERATE_TEST_CASES_V5_ACTION_TOKEN_KEY;
+  const keyId = process.env.GENERATE_TEST_CASES_V5_ACTION_TOKEN_KEY_ID ?? "default";
+  const key = typeof encoded === "string" ? Buffer.from(encoded, "base64") : Buffer.alloc(0);
+  return { current: { key_id: keyId, key }, retained: [] };
+}
+function currentV5TransactionServices() {
+  return testProfile?.crashPoint ? { failAt: testProfile.crashPoint } : {};
+}
+
+// src/v5/transactions.mjs
 function withoutDigest(value, digestField) {
   const { [digestField]: ignored, ...payload } = value;
   return payload;
@@ -2469,7 +2524,7 @@ async function resolveCatalogIdempotency(catalogRoot, idempotencyKey, canonicalA
   const reply = await readCasJson(path4.join(layout.catalogReplies, digestFilename(entry.reply_digest)), entry.reply_digest);
   return { replay: true, runDirectory: path4.join(layout.runsDirectory, entry.run_id), reply };
 }
-async function commitCatalogGenesis(catalogRoot, input, services = {}) {
+async function commitCatalogGenesis(catalogRoot, input, services = currentV5TransactionServices()) {
   const existing = await resolveCatalogIdempotency(catalogRoot, input.idempotencyKey, input.canonicalActionDigest);
   if (existing?.replay) return { runDirectory: existing.runDirectory, reply: existing.reply, replayed: true };
   const catalog = await resolveCatalogLayout(catalogRoot);
@@ -2545,7 +2600,7 @@ async function commitCatalogGenesis(catalogRoot, input, services = {}) {
     replayed: false
   };
 }
-async function commitNormalRunTransaction(runDirectory, request, nextState, services = {}) {
+async function commitNormalRunTransaction(runDirectory, request, nextState, services = currentV5TransactionServices()) {
   return withV5RunLock(runDirectory, async () => {
     const current = await readVerifiedRun(runDirectory);
     const canonicalActionDigest = actionDigestV5("advance", request.action);
@@ -3860,11 +3915,9 @@ async function persistOracleReroute(current, request, message) {
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt });
 }
 function loadActionKeyring() {
-  const encoded = process.env.GENERATE_TEST_CASES_V5_ACTION_TOKEN_KEY;
-  const keyId = process.env.GENERATE_TEST_CASES_V5_ACTION_TOKEN_KEY_ID ?? "default";
-  const key = typeof encoded === "string" ? Buffer.from(encoded, "base64") : Buffer.alloc(0);
-  if (key.length < 32) throw new V5ProtocolError("ACTION_TOKEN_KEY_UNAVAILABLE", "Configure a persistent V5 action-token master key.");
-  return { current: { key_id: keyId, key }, retained: [] };
+  const keyring = runtimeV5ActionKeyring();
+  if (keyring.current.key.length < 32) throw new V5ProtocolError("ACTION_TOKEN_KEY_UNAVAILABLE", "Configure a persistent V5 action-token master key.");
+  return keyring;
 }
 function validateCreateRequest(request) {
   if (!plainObject2(request) || typeof request.idempotency_key !== "string" || request.idempotency_key.length === 0) throw new V5ProtocolError("RUN_ARGUMENT_INVALID", "Create request is invalid.");
@@ -3941,7 +3994,7 @@ function checkpointSelectors(checkpoint, capabilities) {
 function createSourceState(request, sourceRequests) {
   const ledger = sealV5Record({
     schema_version: V5_SCHEMA_VERSION,
-    source_bootstrap_digest: `sha256:${createHash6("sha256").update(canonicalV5Stringify(request.source_bootstrap)).digest("hex")}`,
+    source_bootstrap_digest: `sha256:${createHash7("sha256").update(canonicalV5Stringify(request.source_bootstrap)).digest("hex")}`,
     source_acquisition_policy_digest: contracts.sourceAcquisitionPolicy.policy_digest,
     dispositions: [],
     accepted_source_state_digest: null,
@@ -4013,7 +4066,7 @@ async function resolveRunReplay(current, request) {
 }
 function validateAdvertisedAction(current, action, capability) {
   const sidecarEntry = current.selectorSidecar.selectors.find((selector) => canonicalV5Stringify(selector.capability) === canonicalV5Stringify(capability));
-  if (!sidecarEntry || typeof action.action_token !== "string" || sidecarEntry.token_digest !== `sha256:${createHash6("sha256").update(action.action_token).digest("hex")}`) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Action is not advertised by the current checkpoint.");
+  if (!sidecarEntry || typeof action.action_token !== "string" || sidecarEntry.token_digest !== `sha256:${createHash7("sha256").update(action.action_token).digest("hex")}`) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Action is not advertised by the current checkpoint.");
   verifySelector(current.checkpoint, capability, action.action_token, loadActionKeyring());
 }
 async function createV5RunDirectory(catalogRoot, requestValue) {
@@ -4030,8 +4083,8 @@ async function createV5RunDirectory(catalogRoot, requestValue) {
     if (branch.kind === "execution_plan") return await createExecutionRun(catalog, request, branch.caseDocumentRef);
     if (branch.kind === "resume_cancelled") return await createResumedRun(catalog, request, branch.parentRunId);
     const sourceRequests = deriveSourceRequests(branch.sourceBootstrap);
-    const runId = `RUN-${randomUUID2()}`;
-    const lineageId = `LINEAGE-${randomUUID2()}`;
+    const runId = `RUN-${runtimeV5Uuid()}`;
+    const lineageId = `LINEAGE-${runtimeV5Uuid()}`;
     const runDirectory = path5.join(catalog.runsDirectory, runId);
     const createPayload = {
       delivery_intent: "case_document",
@@ -4098,7 +4151,7 @@ async function createExecutionRun(catalog, request, caseDocumentRef) {
   if (sourceRun.identity.schema_version !== V5_SCHEMA_VERSION || sourceRun.identity.delivery_intent !== "case_document" || sourceRun.checkpoint.run_lifecycle !== "finished" || canonicalV5Stringify(sourceRun.checkpoint.case_document_ref) !== canonicalV5Stringify(caseDocumentRef) || typeof sourceRun.checkpoint.execution_plan_digest !== "string") throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Case Document reference is not a verified immutable V5 delivery.");
   const plan = await readSemanticV5Record(sourceRun.layout.compilerState, sourceRun.checkpoint.execution_plan_digest);
   const projection = createV5ExecutionProjection(plan);
-  const runId = `RUN-${randomUUID2()}`;
+  const runId = `RUN-${runtimeV5Uuid()}`;
   const runDirectory = path5.join(catalog.runsDirectory, runId);
   const createActionDigest = actionDigestV5("create", request);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "create", create_variant: "execution_plan", result_key: "initial" });
@@ -4156,7 +4209,7 @@ async function createResumedRun(catalog, request, parentRunId) {
   const targetCellId = resumeTargetCell(priorCheckpoint.fsm_cell_id);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "create", create_variant: "resume_cancelled", result_key: `target:${targetCellId}` });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
-  const runId = `RUN-${randomUUID2()}`;
+  const runId = `RUN-${runtimeV5Uuid()}`;
   const runDirectory = path5.join(catalog.runsDirectory, runId);
   const childIdentityProjection = { run_id: runId, delivery_intent: parent.identity.delivery_intent, case_document_lineage_id: parent.identity.case_document_lineage_id };
   const digestReplacements = /* @__PURE__ */ new Map();
@@ -4575,7 +4628,7 @@ async function advanceBehaviorViews(current, request) {
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, acceptedArtifacts: [{ record: envelope, digestField: "envelope_digest" }], compilerStateRecords });
 }
 function renderedOutputRecord(mediaType, content) {
-  return sealV5Record({ kind: "rendered_output", schema_version: V5_SCHEMA_VERSION, media_type: mediaType, content, content_digest: `sha256:${createHash6("sha256").update(content).digest("hex")}` }, "rendered_output_digest");
+  return sealV5Record({ kind: "rendered_output", schema_version: V5_SCHEMA_VERSION, media_type: mediaType, content, content_digest: `sha256:${createHash7("sha256").update(content).digest("hex")}` }, "rendered_output_digest");
 }
 async function advanceCaseDrafts(current, request) {
   const action = request.action;

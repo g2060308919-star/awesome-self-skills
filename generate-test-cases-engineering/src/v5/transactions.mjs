@@ -19,6 +19,7 @@ import {
 import { resolveCatalogLayout, resolveRunLayout, digestFilename } from './storage-paths.mjs';
 import { actionDigestV5, sealV5Record } from './storage-records.mjs';
 import { canonicalV5Stringify } from './canonical-v5.mjs';
+import { currentV5TransactionServices } from './runtime-services.mjs';
 
 /** @param {Record<string, unknown>} value @param {string} digestField */
 function withoutDigest(value, digestField) {
@@ -54,7 +55,7 @@ async function resolveCatalogIdempotency(catalogRoot, idempotencyKey, canonicalA
  * @param {{identity:Record<string,any>,checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,idempotencyKey:string,canonicalActionDigest:string,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>}} input
  * @param {{failAt?:string}} [services]
  */
-export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
+export async function commitCatalogGenesis(catalogRoot, input, services = currentV5TransactionServices()) {
   const existing = await resolveCatalogIdempotency(catalogRoot, input.idempotencyKey, input.canonicalActionDigest);
   if (existing?.replay) return { runDirectory: existing.runDirectory, reply: existing.reply, replayed: true };
   const catalog = await resolveCatalogLayout(catalogRoot);
@@ -125,7 +126,7 @@ export async function commitCatalogGenesis(catalogRoot, input, services = {}) {
  * @param {{checkpoint:Record<string,any>,selectorSidecar:Record<string,any>,reply:Record<string,any>,commitReceipt:Record<string,any>,acceptedArtifacts?:Array<{record:Record<string,any>,digestField:string}>,compilerStateRecords?:Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>,renderedOutputs?:Array<{record:Record<string,any>,digestField:string}>,operationalEvent?:{record:Record<string,any>,digestField:string,refKind:string}}} nextState
  * @param {{failAt?:string}} [services]
  */
-export async function commitNormalRunTransaction(runDirectory, request, nextState, services = {}) {
+export async function commitNormalRunTransaction(runDirectory, request, nextState, services = currentV5TransactionServices()) {
   return withV5RunLock(runDirectory, async () => {
     const current = await readVerifiedRun(runDirectory);
     const canonicalActionDigest = actionDigestV5('advance', request.action);

@@ -1,0 +1,10 @@
+{
+  "idempotency_key": "fixture-c02-source",
+  "action": {
+    "kind": "submit_source_batch",
+    "action_token": { "$fixture_binding": "required" },
+    "request_ids": [{ "$fixture_binding": "required" }],
+    "request_dispositions": [{ "request_id": { "$fixture_binding": "required" }, "outcome": "fulfilled", "source_client_keys": ["c02-prd"] }],
+    "source_payload": { "kind": "fulfilled_sources", "source_pack": { "sources": [{ "source_client_key": "c02-prd", "media_type": "text/markdown", "content": "结果正常。" }] } }
+  }
+}

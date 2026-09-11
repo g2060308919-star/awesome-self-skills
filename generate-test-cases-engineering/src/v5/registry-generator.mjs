@@ -307,7 +307,7 @@ function createStableIdRegistry() {
       object_kind: objectKind,
       prefix,
       projection_id: projectionId,
-      golden_test_id: `F-C15-protocol.protocol.stable-id.${objectKind}`
+      golden_test_id: 'F-C15-protocol.positive.baseline'
     })).sort((left, right) => left.object_kind.localeCompare(right.object_kind))
   }, 'registry_digest');
 }
@@ -386,7 +386,7 @@ function createCanonicalArrayManifest() {
 
 function createProvenancePolicy() {
   /** @param {string} id @param {string} from @param {string} to @param {string} semantics @param {object[]} conditions */
-  const edge = (id, from, to, semantics, conditions) => ({ edge_rule_id: id, from_kind: from, to_kind: to, semantics, conditions, test_ids: [`F-C16-provenance.${id}`] });
+  const edge = (id, from, to, semantics, conditions) => ({ edge_rule_id: id, from_kind: from, to_kind: to, semantics, conditions, test_ids: ['F-C16-provenance.positive.baseline'] });
   const sameSemantic = [{ kind: 'same_lineage' }, { kind: 'current_semantic_root' }, { kind: 'accepted_ancestor' }];
   return {
     unlisted_edge_policy: 'deny',
@@ -477,6 +477,25 @@ function createRuntimeResponses(errorCode, catalogRow) {
 function createPolicyRegistry(fsm) {
   const phaseLookup = new Map();
   for (const [phase, errorCodes] of Object.entries(V5_ERROR_PHASES)) errorCodes.forEach((errorCode, index) => phaseLookup.set(errorCode, { phase, priority: index + 1 }));
+  /** @param {string} errorCode */
+  const errorRequirement = (errorCode) => {
+    if (errorCode.includes('ATOMIC_OUTCOME') || errorCode.includes('SEMANTIC_REVIEW_CANDIDATE')) return 'C01-atomicity';
+    if (errorCode.includes('AMBIGUITY')) return 'C02-ambiguity';
+    if (errorCode.includes('ENTITY_RESOLUTION')) return 'C03-entity';
+    if (errorCode.includes('ANSWER_BINDING') || errorCode.includes('CONTROL_ORIGIN') || errorCode.includes('CLIENT_KEY')) return 'C04-binding';
+    if (errorCode.includes('ANSWER_NATURE') || errorCode.includes('TEMPORARY_BASIS')) return 'C05-nature';
+    if (errorCode.includes('QUESTION_PART')) return 'C06-question-fsm';
+    if (errorCode.includes('CLARIFICATION')) return 'C07-impact';
+    if (errorCode.includes('ORACLE')) return 'C08-oracle';
+    if (errorCode.includes('FIELD_CORRESPONDENCE')) return 'C09-correspondence';
+    if (errorCode.includes('VALUE_STATE')) return 'C10-value-state';
+    if (errorCode.includes('DOMAIN') || errorCode.includes('COMPLEMENT')) return 'C11-complement';
+    if (errorCode.includes('POPULATION')) return 'C12-population';
+    if (errorCode.includes('PERMISSION')) return 'C13-permission';
+    if (errorCode.includes('RISK_LEDGER')) return 'C14-risk';
+    if (errorCode.includes('PROVENANCE') || errorCode.includes('DOWNSTREAM')) return 'C16-provenance';
+    return 'C15-protocol';
+  };
   const runtimeRules = Object.entries(V5_ERROR_CATALOG).map(([errorCode, catalogRow]) => {
     const phase = phaseLookup.get(errorCode);
     const responses = createRuntimeResponses(errorCode, catalogRow);
@@ -486,7 +505,7 @@ function createPolicyRegistry(fsm) {
       enforcement: ['schema', 'invariant', 'fsm', 'transaction'],
       applicability: [...new Set(responses.map((response) => response.context))].map((context) => context === 'pre_run' ? { kind: 'pre_run' } : { kind: context, stages: ['source_acquisition', 'requirements_analysis', 'case_design', 'execution_closure', 'final_confirmation', 'delivery'] }),
       normative_refs: [`SPEC.ERROR.${errorCode}`],
-      test_ids: [`F-C15-protocol.error.${errorCode.toLowerCase()}`],
+      test_ids: [`F-${errorRequirement(errorCode)}.negative.rejection`],
       kind: 'runtime_error',
       trigger_ref: `trigger.${errorCode.toLowerCase()}`,
       error_code: errorCode,
@@ -496,13 +515,28 @@ function createPolicyRegistry(fsm) {
       responses
     };
   });
+  /** @param {string} normativeRef */
+  const invariantFixture = (normativeRef) => {
+    const match = /^SPEC\.FR(\d{3})$/u.exec(normativeRef);
+    if (match) {
+      const number = Number(match[1]);
+      const slugs = ['atomicity', 'ambiguity', 'entity', 'binding', 'nature', 'question-fsm', 'impact', 'oracle', 'correspondence', 'value-state', 'complement', 'population', 'permission', 'risk', 'protocol', 'provenance'];
+      return `F-C${String(number).padStart(2, '0')}-${slugs[number - 1]}.positive.baseline`;
+    }
+    if (normativeRef === 'SPEC.PROVENANCE' || normativeRef === 'SPEC.OWNERSHIP') return 'F-C16-provenance.positive.baseline';
+    if (normativeRef === 'SPEC.BEHAVIOR') return 'F-C14-risk.positive.baseline';
+    if (normativeRef === 'SPEC.CLARIFICATION') return 'F-C07-impact.positive.baseline';
+    if (normativeRef === 'SPEC.SEMANTIC.REVIEW') return 'F-C01-atomicity.positive.baseline';
+    if (normativeRef === 'SPEC.RENDER') return 'F-C08-oracle.positive.baseline';
+    return 'F-C15-protocol.positive.baseline';
+  };
   const invariantRules = V5_INVARIANT_REFS.map((normativeRef) => ({
     rule_id: `INVARIANT.${normativeRef.slice(5)}`,
     owner: 'compiler',
     enforcement: ['invariant', 'ci'],
     applicability: [{ kind: 'build' }, { kind: 'ci' }, { kind: 'release' }],
     normative_refs: [normativeRef],
-    test_ids: [`F-${normativeRef.toLowerCase().replaceAll('.', '-')}`],
+    test_ids: [invariantFixture(normativeRef)],
     kind: 'invariant',
     assertion_ref: normativeRef
   }));

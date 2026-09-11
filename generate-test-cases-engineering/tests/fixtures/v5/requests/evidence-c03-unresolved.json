@@ -1,0 +1,16 @@
+{
+  "idempotency_key": "fixture-c03-evidence-unresolved",
+  "action": {
+    "kind": "submit_artifact",
+    "action_token": { "$fixture_binding": "required" },
+    "artifact_kind": "evidence_claims",
+    "artifact": {
+      "semantic_review_seed_digest": { "$fixture_binding": "required" },
+      "claims": [{ "claim_client_key": "claim-entity", "primary_outcome_signature": { "$fixture_binding": "required" }, "observation_slot_digests": [{ "$fixture_binding": "required" }] }],
+      "semantic_gaps": [],
+      "decomposition_reviews": [{ "seed_digest": { "$fixture_binding": "required" }, "candidate_id": { "$fixture_binding": "required" }, "disposition": { "kind": "single_claim", "claim_client_key": "claim-entity" } }],
+      "ambiguity_reviews": [],
+      "entity_resolutions": []
+    }
+  }
+}

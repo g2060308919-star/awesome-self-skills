@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -28,6 +28,7 @@ import { compileV5CaseDocument, projectCompatibilityExecutionPlan } from './case
 import { renderV5Json } from './render-json.mjs';
 import { renderV5Markdown } from './render-markdown.mjs';
 import { renderV5Csv } from './render-csv.mjs';
+import { runtimeV5ActionKeyring, runtimeV5Uuid } from './runtime-services.mjs';
 
 const contracts = generateV5Contracts();
 const fsmByCell = new Map(contracts.fsmRegistry.cells.map((/** @type {Record<string, any>} */ cell) => [cell.cell_id, cell]));
@@ -89,11 +90,9 @@ async function persistOracleReroute(current, request, message) {
 }
 
 function loadActionKeyring() {
-  const encoded = process.env.GENERATE_TEST_CASES_V5_ACTION_TOKEN_KEY;
-  const keyId = process.env.GENERATE_TEST_CASES_V5_ACTION_TOKEN_KEY_ID ?? 'default';
-  const key = typeof encoded === 'string' ? Buffer.from(encoded, 'base64') : Buffer.alloc(0);
-  if (key.length < 32) throw new V5ProtocolError('ACTION_TOKEN_KEY_UNAVAILABLE', 'Configure a persistent V5 action-token master key.');
-  return { current: { key_id: keyId, key }, retained: [] };
+  const keyring = runtimeV5ActionKeyring();
+  if (keyring.current.key.length < 32) throw new V5ProtocolError('ACTION_TOKEN_KEY_UNAVAILABLE', 'Configure a persistent V5 action-token master key.');
+  return keyring;
 }
 
 /** @param {Record<string, any>} request @returns {{kind:'case_document',sourceBootstrap:{source_request_seeds:Record<string,any>[]}}|{kind:'execution_plan',caseDocumentRef:Record<string,any>}|{kind:'resume_cancelled',parentRunId:string}} */
@@ -264,8 +263,8 @@ export async function createV5RunDirectory(catalogRoot, requestValue) {
     if (branch.kind === 'execution_plan') return await createExecutionRun(catalog, request, branch.caseDocumentRef);
     if (branch.kind === 'resume_cancelled') return await createResumedRun(catalog, request, branch.parentRunId);
     const sourceRequests = deriveSourceRequests(branch.sourceBootstrap);
-    const runId = `RUN-${randomUUID()}`;
-    const lineageId = `LINEAGE-${randomUUID()}`;
+    const runId = `RUN-${runtimeV5Uuid()}`;
+    const lineageId = `LINEAGE-${runtimeV5Uuid()}`;
     const runDirectory = path.join(catalog.runsDirectory, runId);
     const createPayload = {
       delivery_intent: 'case_document',
@@ -312,7 +311,7 @@ async function createExecutionRun(catalog, request, caseDocumentRef) {
   if (sourceRun.identity.schema_version !== V5_SCHEMA_VERSION || sourceRun.identity.delivery_intent !== 'case_document' || sourceRun.checkpoint.run_lifecycle !== 'finished' || canonicalV5Stringify(sourceRun.checkpoint.case_document_ref) !== canonicalV5Stringify(caseDocumentRef) || typeof sourceRun.checkpoint.execution_plan_digest !== 'string') throw new V5ProtocolError('CASE_DOCUMENT_REFERENCE_INVALID', 'Case Document reference is not a verified immutable V5 delivery.');
   const plan = await readSemanticV5Record(sourceRun.layout.compilerState, sourceRun.checkpoint.execution_plan_digest);
   const projection = createV5ExecutionProjection(plan);
-  const runId = `RUN-${randomUUID()}`;
+  const runId = `RUN-${runtimeV5Uuid()}`;
   const runDirectory = path.join(catalog.runsDirectory, runId);
   const createActionDigest = actionDigestV5('create', request);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'create', create_variant: 'execution_plan', result_key: 'initial' });
@@ -353,7 +352,7 @@ async function createResumedRun(catalog, request, parentRunId) {
   const targetCellId = resumeTargetCell(priorCheckpoint.fsm_cell_id);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'create', create_variant: 'resume_cancelled', result_key: `target:${targetCellId}` });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
-  const runId = `RUN-${randomUUID()}`;
+  const runId = `RUN-${runtimeV5Uuid()}`;
   const runDirectory = path.join(catalog.runsDirectory, runId);
   const childIdentityProjection = { run_id: runId, delivery_intent: parent.identity.delivery_intent, case_document_lineage_id: parent.identity.case_document_lineage_id };
   /** @type {Map<string,string>} */
