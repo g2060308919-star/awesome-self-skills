@@ -3,8 +3,10 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { canonicalStringify, digest } from '../src/canonical.mjs';
+import { checkV5Contracts, writeV5Contracts } from '../src/v5/registry-generator.mjs';
 
 const schemaDirectory = 'skill/generate-test-cases/scripts/schemas';
+const policyDirectory = 'skill/generate-test-cases/scripts/policies';
 const manifestPath = 'skill/generate-test-cases/scripts/schema-manifest.json';
 const runnerPath = 'skill/generate-test-cases/scripts/test-compiler.mjs';
 const schemaVersion = '4.0.0';
@@ -17,10 +19,14 @@ const checkOnly = argumentsList[0] === '--check';
 let temporaryDirectory = null;
 
 try {
+  if (checkOnly) await checkV5Contracts(schemaDirectory, policyDirectory);
+  else await writeV5Contracts(schemaDirectory, policyDirectory);
   temporaryDirectory = checkOnly
     ? await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-build-')) : null;
   const schemaFiles = /** @type {string[]} */ (await readdir(schemaDirectory))
-    .filter((/** @type {string} */ file) => file.endsWith('.schema.json')).sort();
+    // V5 contracts are generated and checked now, then become the only bundle
+    // manifest entries at the atomic Task 12 cutover.
+    .filter((/** @type {string} */ file) => file.endsWith('.schema.json') && !file.startsWith('v5-')).sort();
   const schemas = await Promise.all(schemaFiles.map(async (/** @type {string} */ file) => {
     const schema = JSON.parse(await readFile(path.join(schemaDirectory, file), 'utf8'));
     return { file, digest: digest(schema) };

@@ -40,17 +40,17 @@
 - Consumes: current `src/entry.mjs`, `build/build.mjs`, all registered V4 Schemas, public Skill files, and the normative spec.
 - Produces: a machine-readable inventory that later dead-code and release gates consume; no production behavior.
 
-- [ ] **Step 1: Write the failing inventory test**
+- [x] **Step 1: Write the failing inventory test**
 
   Assert that the evidence JSON contains the exact baseline versions, commands, public V4 exports, registered Schemas, six policy references, clean-tree commit, and all `C01`–`C16` requirement IDs. The initial failure must be `ENOENT` for `v5-symbol-schema-map.json`.
 
-- [ ] **Step 2: Run the inventory test and observe RED**
+- [x] **Step 2: Run the inventory test and observe RED**
 
   Run: `node --test test/v5/contract-inventory.test.mjs`
 
   Expected: FAIL because the inventory does not exist.
 
-- [ ] **Step 3: Record the verified baseline**
+- [x] **Step 3: Record the verified baseline**
 
   Record commit `858fdd1de77ba31655ff57810fbf0ff8a47872c9`, Schema `4.0.0`, compiler `0.5.0`, public exports `advanceStrict`, `constructV4Action`, `createV4RunDirectory`, `sourceAcquisitionMaterialPathV4`, and `stageV4SourceAcquisitionAction`, plus the successful baseline results:
 
@@ -62,13 +62,13 @@
   }
   ```
 
-- [ ] **Step 4: Run the inventory test and observe GREEN**
+- [x] **Step 4: Run the inventory test and observe GREEN**
 
   Run: `node --test test/v5/contract-inventory.test.mjs`
 
   Expected: PASS and the inventory has no absolute machine path except the evidence-only spec reference.
 
-- [ ] **Step 5: Commit the baseline evidence**
+- [x] **Step 5: Commit the baseline evidence**
 
   ```bash
   git add docs/superpowers/evidence test/v5/contract-inventory.test.mjs
@@ -91,17 +91,17 @@
 - Consumes: `canonicalStringify`, `digest`, and the exact machine seeds frozen in spec sections 5, 6, 8, and 10.
 - Produces: `loadV5Contracts(schemaDirectory, policyDirectory)` and generated policy files used by every subsequent task.
 
-- [ ] **Step 1: Write failing policy cardinality and digest tests**
+- [x] **Step 1: Write failing policy cardinality and digest tests**
 
   Assert exactly 16 FSM cells, 51 FSM outcomes, 9 action templates, 4 read-only profiles, 40 runtime-error rows, 34 invariant rows, 28 stable-ID prefixes, exact answer/control tokens, source batch size 16, and bidirectional registry references. Assert every policy validates against its own closed Schema and every declared digest recomputes.
 
-- [ ] **Step 2: Run registry tests and observe RED**
+- [x] **Step 2: Run registry tests and observe RED**
 
   Run: `node --test test/v5/registries.test.mjs test/v5/schema-contracts.test.mjs`
 
   Expected: FAIL on missing V5 policies and Schemas.
 
-- [ ] **Step 3: Implement deterministic registry generation**
+- [x] **Step 3: Implement deterministic registry generation**
 
   Provide the exact public shape:
 
@@ -125,11 +125,11 @@
 
   Derive reply oneOf branches and policy/error references from the registries; never maintain a second hand-written list.
 
-- [ ] **Step 4: Replace the manifest generator**
+- [x] **Step 4: Integrate the V5 contract generator without an early runtime cutover**
 
-  Set `schemaVersion = '5.0.0'` and `compilerVersion = '0.6.0'`. Make `build/build.mjs` write generated policies, closed Schema manifest entries, cross-digests, and the esbuild runner to either the committed bundle or a temporary `--check` directory.
+  Make `build/build.mjs` write/check the generated V5 policies and closed Schemas while keeping the V4 runtime manifest isolated until Task 12. Task 12 atomically sets `schemaVersion = '5.0.0'`, `compilerVersion = '0.6.0'`, replaces the manifest entries, and cuts over the runner; this keeps every intermediate commit buildable and avoids a mixed-version manifest.
 
-- [ ] **Step 5: Run focused tests and build**
+- [x] **Step 5: Run focused tests and build**
 
   Run: `node --test test/v5/registries.test.mjs test/v5/schema-contracts.test.mjs && npm run build`
 
