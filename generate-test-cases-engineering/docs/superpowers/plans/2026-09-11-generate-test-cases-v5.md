@@ -362,25 +362,25 @@
 - Consumes: Seed advertisements, typed semantic rules, permission derivation registry, exact coordinate evidence, and Decisions.
 - Produces: canonical permission cells/routes/gaps, `PermissionCoordinateAnswer` reduction, and closed `OracleAssertion` validation/rendering.
 
-- [ ] **Step 1: Write failing permission derivation tests**
+- [x] **Step 1: Write failing permission derivation tests**
 
   Assert required cells derive only from source-backed coordinate domains, multi-coordinate ambiguity forms one canonical permission-scope gap with exact candidate/unresolved sets, answers select only advertised candidates, and decision/denial/data-scope counts replay from canonical cells.
 
-- [ ] **Step 2: Write failing Oracle union tests**
+- [x] **Step 2: Write failing Oracle union tests**
 
   Exercise every assertion variant's unique positive and negative verdict, observation window/scope, null and normalization rules, rule references, and empty-candidate typed creation.
 
-- [ ] **Step 3: Run focused tests and observe RED**
+- [x] **Step 3: Run focused tests and observe RED**
 
   Run: `node --test test/v5/permission.test.mjs test/v5/oracles.test.mjs`
 
   Expected: FAIL on missing reducers.
 
-- [ ] **Step 4: Implement permission reducer and Oracle validator**
+- [x] **Step 4: Implement permission reducer and Oracle validator**
 
   Produce `pac5_` cell IDs from canonical coordinate preimages. A permission answer must cover the exact unresolved coordinate set once, create one Decision, and deterministically recompile the next Seed and route with no orphan or write-back loop.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   Run: `node --test test/v5/permission.test.mjs test/v5/oracles.test.mjs`
 

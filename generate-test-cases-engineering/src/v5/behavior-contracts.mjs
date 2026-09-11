@@ -14,7 +14,7 @@ function nonblank(value) { return typeof value === 'string' && value.trim().leng
 function nonempty(value) { return Array.isArray(value) && value.length > 0; }
 
 /** @param {unknown} value */
-function validateTypedValue(value) {
+export function validateTypedValue(value) {
   if (!object(value) || typeof value.kind !== 'string') return false;
   if (value.kind === 'null' || value.kind === 'empty_string') return exact(value, ['kind']);
   if (value.kind === 'string') return exact(value, ['kind', 'value']) && nonblank(value.value);
