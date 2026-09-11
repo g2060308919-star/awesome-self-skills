@@ -183,7 +183,7 @@
 
   Build adjacency once, reject every non-registry edge, prove all referenced nodes exist, enforce same-run/lineage restrictions, and use iterative color marking for cycle detection.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   Run: `node --test test/v5/identity.test.mjs test/v5/provenance.test.mjs`
 
@@ -208,21 +208,21 @@
 - Consumes: storage layout registry, closed Schemas, internal clock/entropy/run-ID/key services.
 - Produces: `readVerifiedRun`, `commitCatalogGenesis`, `commitNormalRunTransaction`, `publishIntegrityQuarantine`, `issueSelectors`, and raw-byte CAS helpers.
 
-- [ ] **Step 1: Write failing path, CAS, crash, and tamper tests**
+- [x] **Step 1: Write failing path, CAS, crash, and tamper tests**
 
   Test safe fixed paths, no symlink traversal, catalog/run pointer self-digests, raw-byte CAS, every genesis boundary, normal fatal versus quarantine, receipt/index/reply cross-equalities, restart replay, stale selector, key rotation, and zero key-material leakage.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
   Run: `node --test test/v5/storage.test.mjs test/v5/transactions.test.mjs test/v5/action-tokens.test.mjs`
 
   Expected: FAIL on absent V5 store.
 
-- [ ] **Step 3: Implement fixed-path object storage and verification**
+- [x] **Step 3: Implement fixed-path object storage and verification**
 
   Use content-addressed object keys and write-temp/fsync/rename publication. Validate the complete current chain before returning a semantic state. A pointer/checkpoint/sidecar chain failure produces a read-only integrity fatal; accepted object failure is committed as normal fatal only after a trustworthy current chain exists.
 
-- [ ] **Step 4: Implement transaction and idempotency records**
+- [x] **Step 4: Implement transaction and idempotency records**
 
   ```js
   export async function commitNormalRunTransaction(runDirectory, request, nextState, services) {}
@@ -231,7 +231,7 @@
 
   Preserve exact action digest and reply bytes for same-key replay. Same key with different action returns `IDEMPOTENCY_CONFLICT` with zero revision change.
 
-- [ ] **Step 5: Implement HKDF selector tokens**
+- [x] **Step 5: Implement HKDF selector tokens**
 
   Bind run ID, active lifecycle, FSM cell, revision, checkpoint, semantic root, presentation/preview digest, and exact capability. Persist only key IDs and selector sidecars; accept configured current and retained verification keys.
 

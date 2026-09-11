@@ -327,6 +327,7 @@ function createStorageLayoutRegistry() {
       runs: 'runs'
     },
     run: {
+      identity: 'identity.json',
       current_pointer: 'current-transaction.json',
       transactions: 'objects/transactions',
       receipts: 'objects/receipts',
@@ -339,6 +340,7 @@ function createStorageLayoutRegistry() {
       rendered_outputs: 'objects/rendered-outputs',
       events: 'objects/events',
       incidents: 'objects/incidents',
+      run_genesis_records: 'objects/run-genesis-records',
       raw_source_bytes: 'objects/raw-source-bytes',
       staging: '.staging',
       lock: '.v5-run.lock'
