@@ -1,0 +1,45 @@
+const root = `sha256:${'a'.repeat(64)}`;
+
+/** @param {string} key @param {string} claimId @param {Record<string,any>} classification */
+function draft(key, claimId, classification = {}) {
+  const stepKey = `step-${key}`;
+  return {
+    case_client_key: key, title: `Case ${key}`, module_id: 'orders', priority: 'P1', primary_test_point_id: `tp-${key}`,
+    business_preconditions: ['已登录'], data_conditions: [{ field: '/order/status', value: { kind: 'string', value: 'draft' } }],
+    steps: [{ step_client_key: stepKey, action: `execute ${key}`, semantic_action_ref: { action_id: `action-${key}`, semantic_root_digest: root }, claim_ids: [claimId] }],
+    oracles: [{ oracle_client_key: `oracle-${key}`, oracle_semantic_contract_id: `osc-${key}`, observe_after_step_client_key: stepKey, observation_ref: { kind: 'response', logical_surface_ref: 'order-api', subject_ref: 'order', field_path: '/status' }, assertion: { kind: 'exact_text', expected_text: `done-${key}` }, evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, claim_ids: [claimId] }],
+    population_scope: { kind: 'current_response', collection_ref: { contract_id: 'collection-orders', contract_kind: 'collection', semantic_root_digest: root } },
+    canonical_names: ['Order'], claim_ids: [claimId], semantic_gap_ids: [], ...classification
+  };
+}
+
+export function caseOutputFixture() {
+  const caseDrafts = [
+    draft('grounded', 'claim-e2'),
+    draft('conditional', 'claim-e1'),
+    draft('blocked', 'claim-e2', { semantic_gap_ids: ['gap-delivery-closed'] }),
+    draft('not-applicable', 'claim-e2', { not_applicable_basis: [{ kind: 'claim', claim_id: 'claim-e2' }] }),
+    draft('exploratory', 'claim-e2', { exploratory_only: true, observation_intent: 'Observe retry latency without asserting a product requirement.' })
+  ];
+  return {
+    case_document_lineage_id: 'lineage-output', semantic_root_digest: root, source_revision: 7,
+    case_drafts: caseDrafts,
+    claim_assessments: [{ claim_id: 'claim-e2', level: 'E2', support_review: 'supported' }, { claim_id: 'claim-e1', level: 'E1', support_review: 'supported' }],
+    accepted_gap_ids: ['gap-delivery-closed'],
+    formal_test_point_ids: ['tp-grounded', 'tp-conditional', 'tp-blocked', 'tp-not-applicable'],
+    semantic_partitions: [{ partition_id: 'partition-target', disposition: 'covered' }, { partition_id: 'partition-other', disposition: 'gap' }],
+    value_instances: [{ value_instance_id: 'value-draft', disposition: 'covered' }],
+    permission_cells: [
+      { required_cell_key: 'cell-decision', permission_dimension: 'decision', action_ref: 'view', disposition: 'formal', expected: 'allow' },
+      { required_cell_key: 'cell-denial', permission_dimension: 'denial_behavior', action_ref: 'view', disposition: 'not_applicable' },
+      { required_cell_key: 'cell-scope', permission_dimension: 'data_scope', action_ref: 'view', disposition: 'semantic_gap' }
+    ],
+    risk_ledger: { reviewed_cell_count: 9, items: [{ risk_key: 'risk-api', risk_kind: 'api_failure', display_tier: 'primary' }, { risk_key: 'risk-refresh', risk_kind: 'refresh', display_tier: 'background' }] },
+    semantic_audit: {
+      value_states: [{ axes: 'data_and_render', data_state: { presence: 'present', value: { kind: 'number', value: 0 } }, render_state: { presence: 'rendered', content: { kind: 'formatted_value', value: '0', format_ref: 'decimal' } } }],
+      field_correspondences: [{ mapping_id: 'mapping-order-status', authority_side: 'right' }],
+      domains: [{ domain_contract_id: 'domain-status', kind: 'closed_enum', partition_ids: ['partition-target', 'partition-other'] }],
+      populations: [{ population_contract_id: 'population-response', scope_kind: 'current_response' }]
+    }
+  };
+}

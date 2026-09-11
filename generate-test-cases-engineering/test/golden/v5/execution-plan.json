@@ -1,0 +1,66 @@
+{
+  "schema_version": "5.0.0",
+  "compiler_version": "0.6.0",
+  "delivery_intent": "execution_plan",
+  "case_document_ref": {
+    "run_id": "run-case",
+    "revision": 9,
+    "manifest_digest": "sha256:86323f0b656f6d2150b242c0a3495b3a19342a46360760e9c3e5e577313eee50",
+    "bundle_digest": "sha256:006a9f868a332ea49c94f5b87e7b56e55213244ce90953ef4f9b5f763cefbb0c",
+    "case_document_lineage_id": "lineage-output",
+    "schema_version": "5.0.0"
+  },
+  "operation_kinds": [
+    "confirm_execution_plan",
+    "pause_execution",
+    "provide_capability_proof",
+    "set_execution_disposition"
+  ],
+  "items": [
+    {
+      "case_id": "CASE-40d94218490a73c86ce72bf40d8dd5a9f6de6fcd5ad3b28761f66ab005358f9a",
+      "title": "Case exploratory",
+      "semantic_status": "Exploratory",
+      "execution_disposition": "pending",
+      "available_actions": [
+        "set_execution_disposition"
+      ]
+    },
+    {
+      "case_id": "CASE-4eb6d560c3c307e85dd1d4c8d8dbfe08b6b464c0d2b904085609dba2a6bdeffe",
+      "title": "Case grounded",
+      "semantic_status": "Grounded",
+      "execution_disposition": "pending",
+      "available_actions": [
+        "provide_capability_proof",
+        "set_execution_disposition"
+      ]
+    },
+    {
+      "case_id": "CASE-a94945ecf16ebc6ec1ad1e4f9a736fab5b92e0bcd5fef5c8e3c1811f1f863ddc",
+      "title": "Case conditional",
+      "semantic_status": "Conditional",
+      "execution_disposition": "pending",
+      "available_actions": [
+        "set_execution_disposition"
+      ]
+    },
+    {
+      "case_id": "CASE-bb846cab510738989cbdab0f60f28ca274cb11a73eb3cc26746103f33469224f",
+      "title": "Case blocked",
+      "semantic_status": "Blocked",
+      "execution_disposition": "pending",
+      "available_actions": [
+        "set_execution_disposition"
+      ]
+    },
+    {
+      "case_id": "CASE-f74c62333350c5a401f5d937936b0333dc9cfa108679f214233b2236d9d3aedd",
+      "title": "Case not-applicable",
+      "semantic_status": "NotApplicable",
+      "execution_disposition": "pending",
+      "available_actions": []
+    }
+  ],
+  "plan_digest": "sha256:7962160eb6d955f7b491326d7b988adf4bd64dd32b446bf1925470899cc3be1a"
+}

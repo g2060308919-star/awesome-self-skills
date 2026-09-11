@@ -451,25 +451,25 @@
 - Consumes: accepted semantic graph, typed Oracles, Decisions, coverage, permission/risk ledgers, and existing compatible output algorithms.
 - Produces: one canonical V5 Case Document plus mechanical Markdown/CSV, and a compatibility-only existing-capability Execution Plan projection.
 
-- [ ] **Step 1: Write failing classification and output parity tests**
+- [x] **Step 1: Write failing classification and output parity tests**
 
   Assert final Decisions permit Grounded only through E3, temporary Decisions permit Conditional only through E1, every unresolved gap is Blocked, output membership/order/status/steps/Oracle/scope/name/coverage match across all three formats, and no output becomes upstream evidence.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
   Run: `node --test test/v5/case-output.test.mjs`
 
   Expected: FAIL because V5 output modules and goldens are absent.
 
-- [ ] **Step 3: Implement Case projection and deterministic renderers**
+- [x] **Step 3: Implement Case projection and deterministic renderers**
 
   Reuse compatible V4 algorithms only after adapting their input contracts to V5. JSON is authoritative. Markdown and CSV consume only the validated canonical bundle, never Agent prose or filesystem leftovers.
 
-- [ ] **Step 4: Add reviewed goldens**
+- [x] **Step 4: Add reviewed goldens**
 
   The golden includes at least one Grounded, Conditional, Blocked, Exploratory, and NotApplicable branch; typed field/value/domain/population/permission/oracle data; dual coverage; and provenance links. The compatibility Execution Plan uses only the pre-existing closed capability union.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
   Run: `node --test test/v5/case-output.test.mjs`
 
