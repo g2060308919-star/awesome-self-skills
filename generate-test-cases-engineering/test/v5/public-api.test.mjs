@@ -137,3 +137,38 @@ test('the direct CLI is inspect-only and rejects every non-single-absolute argum
   }
   assert.deepEqual(await readFile(path.join(created.run_directory, 'current-transaction.json')), before);
 });
+
+test('the final source batch publishes a compiler-owned semantic review seed over cumulative source context', async () => {
+  const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-seed-'));
+  const created = await publicApi.createV5RunDirectory(catalogRoot, createRequest(1));
+  const selector = created.available_actions.find((/** @type {Record<string, any>} */ item) => item.capability.kind === 'submit_source_batch');
+  const sourceRequest = created.work_packet.source_requests[0];
+  const action = {
+    kind: 'submit_source_batch', action_token: selector.action_token, request_ids: [sourceRequest.request_id],
+    request_dispositions: [{ request_id: sourceRequest.request_id, outcome: 'fulfilled', source_client_keys: ['prd'] }],
+    source_payload: { kind: 'fulfilled_sources', source_pack: { sources: [{ source_client_key: 'prd', media_type: 'text/markdown', content: '保存订单，并显示成功提示。' }] } }
+  };
+  const advanced = await publicApi.advanceV5Run(created.run_directory, { idempotency_key: 'complete-source', action });
+  assert.equal(advanced.obligation, 'review_semantic_seed');
+  assert.equal(advanced.work_packet.kind, 'semantic_review_work');
+  assert.equal(advanced.work_packet.context.source.source_packs.length, 1);
+  assert.equal(advanced.work_packet.semantic_review_seed.normative_units[0].outcome_candidates[0].required_observation_slot_digests.length, 2);
+  assert.equal(JSON.stringify(advanced.work_packet).includes('compiler_derivation_pending'), false);
+
+  const candidate = advanced.work_packet.semantic_review_seed.normative_units[0].outcome_candidates[0];
+  const claims = candidate.required_observation_slot_digests.map((/** @type {string} */ slot, /** @type {number} */ index) => ({
+    claim_client_key: `claim-${index}`, subject_ref: 'orders', intent_ref: `observation-${index}`, basis: [{ kind: 'claim', claim_id: `claim-${index}` }],
+    primary_outcome_signature: { ...candidate.atom_signature, primary_observation_slot_digest: slot }, observation_slot_digests: [slot]
+  }));
+  const evidenceSelector = advanced.available_actions.find((/** @type {Record<string,any>} */ item) => item.capability.kind === 'submit_artifact');
+  const evidenceArtifact = {
+    semantic_review_seed_digest: advanced.work_packet.semantic_review_seed.seed_digest,
+    claims, semantic_gaps: [],
+    decomposition_reviews: [{ seed_digest: advanced.work_packet.semantic_review_seed.seed_digest, candidate_id: candidate.candidate_id, disposition: { kind: 'split_claims', claim_client_keys: claims.map((/** @type {Record<string,any>} */ claim) => claim.claim_client_key) } }],
+    ambiguity_reviews: [], entity_resolutions: []
+  };
+  const behavior = await publicApi.advanceV5Run(created.run_directory, { idempotency_key: 'accept-evidence', action: { kind: 'submit_artifact', action_token: evidenceSelector.action_token, artifact_kind: 'evidence_claims', artifact: evidenceArtifact } });
+  assert.equal(behavior.obligation, 'provide_behavior_views');
+  assert.equal(behavior.work_packet.kind, 'behavior_work');
+  assert.equal(behavior.work_packet.behavior_contract_worklist.required_contracts.length, 2);
+});

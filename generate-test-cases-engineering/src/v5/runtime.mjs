@@ -10,6 +10,10 @@ import { generateV5Contracts } from './registry-generator.mjs';
 import { readCasJson, readSealedV5Record, readVerifiedRun, writeRawSourceBytes } from './run-store.mjs';
 import { applySourceBatch, currentSourceBatch, deriveSourceRequests, validateSourceBootstrap } from './source-acquisition.mjs';
 import { resolveCatalogLayout, digestFilename } from './storage-paths.mjs';
+import { deriveBehaviorContractSeed } from './behavior-contracts.mjs';
+import { deriveSemanticReviewSeed } from './semantic-seed.mjs';
+import { validateSemanticReviews } from './semantic-reviews.mjs';
+import { createSemanticRuleIndex } from './semantic-rules.mjs';
 import { actionDigestV5, canonicalObjectDigest, sealV5Record } from './storage-records.mjs';
 import { commitCatalogGenesis, commitNormalRunTransaction } from './transactions.mjs';
 
@@ -93,6 +97,17 @@ function sourceWorkPacket(state) {
     source_requests: batch,
     source_acquisition_policy: contracts.sourceAcquisitionPolicy,
     source_acquisition_state_digest: state.state_digest
+  };
+}
+
+function agentVisibleCompilerRules() {
+  return {
+    rules_bundle_digest: contracts.replyContracts.rules_bundle_digest,
+    answer_constraint_registry: contracts.answerConstraintRegistry,
+    clarification_control_registry: contracts.clarificationControlRegistry,
+    source_acquisition_policy: contracts.sourceAcquisitionPolicy,
+    permission_derivation_registry: contracts.permissionDerivationRegistry,
+    semantic_rule_index_projection: { kind: 'not_available_before_behavior' }
   };
 }
 
@@ -191,6 +206,7 @@ export async function advanceV5Run(runDirectory, requestValue) {
     if (current.checkpoint.run_lifecycle !== 'active') return runRejection(current.reply, 'ACTION_NOT_ADVERTISED', 'protocol_error', 'Terminal runs do not accept new actions.', 'read_only_terminal_rejection');
     const action = request.action;
     if (action.kind === 'submit_source_batch' && current.checkpoint.fsm_cell_id === 'cd.active.source.provide') return await advanceSourceBatch(current, request);
+    if (action.kind === 'submit_artifact' && action.artifact_kind === 'evidence_claims' && current.checkpoint.fsm_cell_id === 'cd.active.requirements.review') return await advanceEvidenceClaims(current, request);
     if (action.kind === 'cancel_run') return await advanceCancel(current, request);
     throw new V5ProtocolError('ACTION_NOT_ADVERTISED', 'Action is not advertised in the current FSM cell.');
   } catch (error) {
@@ -199,6 +215,79 @@ export async function advanceV5Run(runDirectory, requestValue) {
     const status = error.code === 'IDEMPOTENCY_CONFLICT' || error.code === 'ACTION_NOT_ADVERTISED' ? 'protocol_error' : 'need_revision';
     return runRejection(current.reply, error.code, status, error.message);
   }
+}
+
+/** @param {Record<string,any>} current */
+async function acceptedSourceContext(current) {
+  const sourcePacks = [];
+  for (const artifactDigest of current.checkpoint.accepted_artifact_digests) {
+    const envelope = await readSealedV5Record(current.layout.acceptedArtifacts, artifactDigest, 'envelope_digest');
+    if (envelope.artifact_kind === 'source_pack') sourcePacks.push({ artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload });
+  }
+  return { accepted_source_state_digest: current.checkpoint.accepted_source_state_digest, source_packs: sourcePacks.sort((left, right) => left.artifact_digest.localeCompare(right.artifact_digest)) };
+}
+
+/** @param {Record<string,any>} current @param {Record<string,any>} request */
+async function advanceEvidenceClaims(current, request) {
+  const action = request.action;
+  if (!hasExactKeys(action, ['kind', 'action_token', 'artifact_kind', 'artifact']) || action.artifact_kind !== 'evidence_claims' || !plainObject(action.artifact)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Evidence Claims action is not a closed submit_artifact request.');
+  validateAdvertisedAction(current, action, { kind: 'submit_artifact', artifact_kind: 'evidence_claims' });
+  const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, 'seed_digest');
+  const validated = validateSemanticReviews(seed, action.artifact, { acceptedDecisionIds: [] });
+  const { term_registry: provisionalTermRegistry, ...acceptedPayload } = /** @type {Record<string,any>} */ (validated);
+  const envelope = acceptArtifactEnvelope({ artifactKind: 'evidence_claims', payload: acceptedPayload, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'requirements_analysis', inputDigests: [seed.seed_digest, current.checkpoint.accepted_source_state_digest] });
+  const semanticRootDigest = canonicalObjectDigest({
+    namespace: 'generate-test-cases/v5/semantic-root', format_version: 1,
+    accepted_source_state_digest: current.checkpoint.accepted_source_state_digest,
+    evidence_claims_payload_digest: envelope.canonical_payload_digest,
+    decision_ids: []
+  });
+  const termRegistry = sealV5Record({ semantic_root_digest: semanticRootDigest, entries: provisionalTermRegistry.entries }, 'registry_digest');
+  const ruleIndex = createSemanticRuleIndex(semanticRootDigest, { registry_digest: `sha256:${'0'.repeat(64)}`, registered_rules: [], accepted_rule_contract_refs: [] });
+  const requirements = (acceptedPayload.claims ?? []).map((/** @type {Record<string,any>} */ claim) => ({
+    contract_kind: 'oracle_semantics',
+    subject_ref: claim.subject_ref ?? claim.claim_client_key,
+    intent_ref: claim.intent_ref ?? claim.claim_client_key,
+    basis: claim.basis ?? [{ kind: 'claim', claim_id: claim.claim_client_key }],
+    oracle_gap_catalog: { observation_candidates: [], assertion_candidates: [], scope_candidates: [], window_candidates: [] }
+  }));
+  const behaviorSeed = deriveBehaviorContractSeed(semanticRootDigest, { semanticRuleIndex: ruleIndex, riskModuleIds: [...new Set(requirements.map((/** @type {Record<string,any>} */ item) => item.subject_ref))], requirements });
+  const hasGaps = Array.isArray(acceptedPayload.semantic_gaps) && acceptedPayload.semantic_gaps.length > 0;
+  const checkpointBase = {
+    ...current.checkpoint,
+    current_revision: current.checkpoint.current_revision + 1,
+    fsm_cell_id: hasGaps ? 'cd.active.requirements.resolve' : 'cd.active.case.behavior',
+    stage: hasGaps ? 'requirements_analysis' : 'case_design',
+    obligation: hasGaps ? 'resolve_requirements_questions' : 'provide_behavior_views',
+    semantic_root_digest: semanticRootDigest,
+    accepted_artifact_digests: [...new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
+    evidence_claims_artifact_digest: envelope.envelope_digest,
+    term_registry_digest: termRegistry.registry_digest,
+    behavior_contract_seed_digest: behaviorSeed.seed_digest
+  };
+  delete checkpointBase.checkpoint_digest;
+  const capabilities = hasGaps
+    ? [{ kind: 'preview_clarification_response', presentation_id: 'pending-presentation', semantic_root_digest: semanticRootDigest }, { kind: 'cancel_run' }]
+    : [{ kind: 'submit_artifact', artifact_kind: 'behavior_views' }, { kind: 'cancel_run' }];
+  const selectorState = checkpointSelectors(checkpointBase, capabilities);
+  const source = await acceptedSourceContext(current);
+  const context = {
+    source,
+    semantics: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
+    term_registry: { artifact_digest: termRegistry.registry_digest, accepted_revision: envelope.accepted_revision, payload: termRegistry },
+    compiler_rules: { ...agentVisibleCompilerRules(), semantic_rule_index_projection: { kind: 'available', index: ruleIndex } }
+  };
+  const workPacket = hasGaps
+    ? { kind: 'clarification_work', context, presentation: { kind: 'compiler_presentation_pending', semantic_root_digest: semanticRootDigest } }
+    : { kind: 'behavior_work', context, permission_matrix_worklists: [], behavior_contract_worklist: behaviorSeed };
+  const actionDigest = actionDigestV5('advance', action);
+  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
+  const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root);
+  return commitNormalRunTransaction(current.layout.root, /** @type {{idempotency_key:string,action:Record<string,any>}} */ (request), {
+    checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
+    acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }],
+    compilerStateRecords: [{ record: termRegistry, digestField: 'registry_digest' }, { record: behaviorSeed, digestField: 'seed_digest' }]
+  });
 }
 
 /** @param {Record<string, any>} current @param {Record<string, any>} request */
@@ -264,12 +353,29 @@ async function advanceSourceBatch(current, request) {
   const nextCell = complete ? 'cd.active.requirements.review' : 'cd.active.source.provide';
   const revisionDelta = acceptedEnvelope ? 1 : 0;
   const acceptedArtifactDigests = [...new Set([...current.checkpoint.accepted_artifact_digests, ...(acceptedEnvelope ? [acceptedEnvelope.envelope_digest] : [])])].sort();
+  const sourceEnvelopes = [];
+  for (const artifactDigest of current.checkpoint.accepted_artifact_digests) {
+    const envelope = await readSealedV5Record(current.layout.acceptedArtifacts, artifactDigest, 'envelope_digest');
+    if (envelope.artifact_kind === 'source_pack') sourceEnvelopes.push(envelope);
+  }
+  if (acceptedEnvelope) sourceEnvelopes.push(acceptedEnvelope);
+  const sourceContext = {
+    accepted_source_state_digest: acceptedSourceStateDigest,
+    source_packs: sourceEnvelopes.map((envelope) => ({ artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload })).sort((left, right) => left.artifact_digest.localeCompare(right.artifact_digest))
+  };
+  const semanticSeed = complete ? deriveSemanticReviewSeed({
+    acceptedSourceStateDigest,
+    sourcePacks: sourceContext.source_packs,
+    permissionDerivationRegistryDigest: contracts.permissionDerivationRegistry.registry_digest
+  }) : null;
+  if (semanticSeed) compilerStateRecords.push({ record: semanticSeed, digestField: 'seed_digest' });
   const checkpointBase = {
     ...current.checkpoint, checkpoint_digest: undefined,
     current_revision: current.checkpoint.current_revision + revisionDelta,
     fsm_cell_id: nextCell, stage: complete ? 'requirements_analysis' : 'source_acquisition', obligation: complete ? 'review_semantic_seed' : 'provide_source_pack',
     source_acquisition_state_digest: nextSourceState.state_digest, accepted_artifact_digests: acceptedArtifactDigests,
-    accepted_source_payload_digests: acceptedSourcePayloadDigests, accepted_source_state_digest: acceptedSourceStateDigest
+    accepted_source_payload_digests: acceptedSourcePayloadDigests, accepted_source_state_digest: acceptedSourceStateDigest,
+    ...(semanticSeed ? { semantic_review_seed_digest: semanticSeed.seed_digest } : {})
   };
   delete checkpointBase.checkpoint_digest;
   const capabilities = complete
@@ -278,9 +384,12 @@ async function advanceSourceBatch(current, request) {
   const selectorState = checkpointSelectors(checkpointBase, capabilities);
   const workPacket = complete ? {
     kind: 'semantic_review_work',
-    context: { source: { accepted_source_state_digest: acceptedSourceStateDigest, source_pack_digests: acceptedArtifactDigests }, compiler_rules: { rules_bundle_digest: contracts.replyContracts.rules_bundle_digest } },
-    semantic_review_seed: { status: 'compiler_derivation_pending', accepted_source_state_digest: acceptedSourceStateDigest }
-  } : sourceWorkPacket(nextSourceState);
+    context: { source: sourceContext, compiler_rules: agentVisibleCompilerRules() },
+    semantic_review_seed: semanticSeed
+  } : {
+    ...sourceWorkPacket(nextSourceState),
+    accepted_source_state: { kind: 'partial', source: sourceContext }
+  };
   const committedActionDigest = actionDigestV5('advance', action);
   const commitReceipt = acceptedEnvelope
     ? { kind: 'artifact_commit', committed_action_digest: committedActionDigest, semantic_revision_delta: 1, client_key_bindings: [] }

@@ -317,29 +317,29 @@
 - Consumes: accepted source payload, exact locators, four Agent artifacts, Decisions, typed semantic-rule registry.
 - Produces: compiler-owned `SemanticReviewSeed`, review ledgers, `TermRegistry`, `FieldCorrespondence`, `ValueState`, Domain/Population contracts, risk ledger, required cells, two coverage axes, and display tiers.
 
-- [ ] **Step 1: Write failing C01/C02/C03 seed tests**
+- [x] **Step 1: Write failing C01/C02/C03 seed tests**
 
   Cover composite outcome splitting, exact clause origin coverage, missing review, bounded vague tokens, empty resolution basis, alias/distinct/unresolved entity partitions, complete mention roles, and collision-stable IDs.
 
-- [ ] **Step 2: Write failing C09–C12/C14 contract tests**
+- [x] **Step 2: Write failing C09–C12/C14 contract tests**
 
   Cover field authority/join/cardinality/null/freshness, rule-ref resolution, value/render orthogonality, complement closure, representative equivalence, population/all-data proof, nine-risk completeness, N/A/formal/gap exclusivity, and low-noise display.
 
-- [ ] **Step 3: Run focused tests and observe RED**
+- [x] **Step 3: Run focused tests and observe RED**
 
   Run: `node --test test/v5/semantic-seed.test.mjs test/v5/behavior-contracts.test.mjs`
 
   Expected: FAIL on missing compilers.
 
-- [ ] **Step 4: Implement compiler-owned candidates and review reducers**
+- [x] **Step 4: Implement compiler-owned candidates and review reducers**
 
   The Agent supplies only candidate dispositions with exact evidence. Derive outcomes, ambiguity gaps, conflict groups, roles, term entries, rules, scopes, and display from accepted source/Decision closure. Empty but typed candidate collections are legal when the source has no signal.
 
-- [ ] **Step 5: Implement typed behavior validators**
+- [x] **Step 5: Implement typed behavior validators**
 
   Use discriminated unions; reject raw rule strings and unknown digests. Keep `DataState` and `RenderState` orthogonal. Compute behavioral and selection coverage independently, never treating representative values as exhaustive proof.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
   Run: `node --test test/v5/semantic-seed.test.mjs test/v5/behavior-contracts.test.mjs`
 
