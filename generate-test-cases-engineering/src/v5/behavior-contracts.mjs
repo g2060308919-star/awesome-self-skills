@@ -144,6 +144,21 @@ export function validatePopulationContract(contract, semanticRootDigest) {
   return structuredClone(contract);
 }
 
+/** @param {Record<string,any>} proof @param {string} semanticRootDigest @param {string[]} populationClientKeys */
+export function validatePopulationProof(proof, semanticRootDigest, populationClientKeys) {
+  const fail = () => { throw new V5ProtocolError('POPULATION_CONTRACT_REQUIRED', 'Population proof must bind one current-root typed proof contract.'); };
+  if (!object(proof) || !nonblank(proof.proof_client_key) || !populationClientKeys.includes(proof.population_contract_client_key) || !object(proof.payload)) return fail();
+  const payload = proof.payload;
+  if (payload.kind === 'enumerate_population') {
+    if (!exact(proof, ['proof_client_key', 'population_contract_client_key', 'payload']) || !exact(payload, ['kind', 'enumeration_contract_ref']) || !typedRef(payload.enumeration_contract_ref, 'enumeration', semanticRootDigest)) return fail();
+  } else if (payload.kind === 'authoritative_aggregate') {
+    if (!exact(proof, ['proof_client_key', 'population_contract_client_key', 'payload', 'basis']) || !nonempty(proof.basis) || !exact(payload, ['kind', 'aggregate_contract_ref']) || !typedRef(payload.aggregate_contract_ref, 'aggregate', semanticRootDigest)) return fail();
+  } else if (payload.kind === 'sourced_invariant') {
+    if (!exact(proof, ['proof_client_key', 'population_contract_client_key', 'payload', 'basis']) || !nonempty(proof.basis) || !exact(payload, ['kind', 'invariant_contract_ref']) || !typedRef(payload.invariant_contract_ref, 'invariant', semanticRootDigest)) return fail();
+  } else return fail();
+  return structuredClone(proof);
+}
+
 export const RISK_KINDS = Object.freeze([
   'null_or_missing', 'unknown_enum', 'api_failure', 'loading_failure', 'sync_delay',
   'long_content', 'pagination', 'refresh', 'business_permission_boundary'

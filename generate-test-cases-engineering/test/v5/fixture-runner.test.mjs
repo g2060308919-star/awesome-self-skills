@@ -12,6 +12,7 @@ import {
   validateManifestRelativePath,
   validateV5FixtureManifest
 } from '../fixtures-v5-runner.mjs';
+import { V5_REQUIRED_FIXTURE_LEAF_IDS } from './fixture-inventory.mjs';
 
 const manifestPath = path.resolve('tests/fixtures/v5/manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -20,7 +21,8 @@ function cloneManifest() { return structuredClone(manifest); }
 
 test('manifest is the closed and complete discovery source for C01-C16', () => {
   const validated = validateV5FixtureManifest(cloneManifest());
-  assert.equal(validated.fixtures.length, 32);
+  assert.equal(validated.fixtures.length, V5_REQUIRED_FIXTURE_LEAF_IDS.length);
+  assert.deepEqual(validated.fixtures.map((fixture) => fixture.fixture_id).sort(), V5_REQUIRED_FIXTURE_LEAF_IDS);
   for (let index = 1; index <= 16; index += 1) {
     const requirement = `C${String(index).padStart(2, '0')}`;
     const leaves = validated.fixtures.filter((fixture) => fixture.requirement_ids.includes(requirement));
@@ -87,7 +89,7 @@ test('all leaves execute twice with byte-identical normalized transcript digests
   assert.deepEqual(first, {
     schema_version: '5.0.0',
     requirement_groups_passed: 16,
-    fixture_leaves_passed: 32,
-    transcript_digest: 'sha256:33523da07b98a7c16b1339b5ad46343440e0d76fe291e7a38327691e478daecd'
+    fixture_leaves_passed: 105,
+    transcript_digest: 'sha256:cc16f8e2d4179b02b9f83268661134d365e9d52e362c7676991a014a7a19b2a5'
   });
 });

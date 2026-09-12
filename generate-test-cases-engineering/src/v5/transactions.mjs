@@ -61,17 +61,26 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
   const catalog = await resolveCatalogLayout(catalogRoot);
   if (!/^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(input.identity.run_id) || input.identity.schema_version !== V5_SCHEMA_VERSION || input.identity.compiler_version !== V5_COMPILER_VERSION) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Run identity is invalid.');
   const runDirectory = path.join(catalog.runsDirectory, input.identity.run_id);
-  try { await lstat(runDirectory); throw new V5ProtocolError('IDEMPOTENCY_CONFLICT', 'Run directory already exists.'); } catch (error) {
-    if (error instanceof V5ProtocolError) throw error;
-    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
-  }
   await ensureV5Directory(catalog.catalogTransactions);
   await ensureV5Directory(catalog.catalogRunGenesisRecords);
   await ensureV5Directory(catalog.catalogReplies);
   await ensureV5Directory(catalog.runsDirectory);
-  await mkdir(runDirectory);
+  const identity = sealV5Record(input.identity, 'identity_digest');
+  let recoveringOrphan = false;
+  try {
+    await lstat(runDirectory);
+    const orphanLayout = await resolveRunLayout(runDirectory);
+    const orphanIdentity = await readFixedSealedRecord(orphanLayout.identity, 'identity_digest');
+    if (canonicalV5Stringify(orphanIdentity.record) !== canonicalV5Stringify(identity) || (orphanIdentity.record.canonical_create_action_digest !== undefined && orphanIdentity.record.canonical_create_action_digest !== input.canonicalActionDigest)) throw new V5ProtocolError('IDEMPOTENCY_CONFLICT', 'Run directory belongs to a different create transaction.');
+    recoveringOrphan = true;
+  } catch (error) {
+    if (error instanceof V5ProtocolError) throw error;
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+  }
+  if (!recoveringOrphan) await mkdir(runDirectory);
   const run = await resolveRunLayout(runDirectory);
   for (const directory of [run.transactions, run.receipts, run.idempotencyIndexes, run.replies, run.checkpoints, run.selectorSidecars, run.genesisRecords, run.acceptedArtifacts, run.compilerState, run.renderedOutputs, run.events, run.incidents, run.rawSourceBytes, run.staging]) await ensureV5Directory(directory);
+  await writeAtomicFile(run.identity, Buffer.from(canonicalV5Stringify(identity)));
   for (const item of input.compilerStateRecords ?? []) {
     if (item.semanticDigest) await writeSemanticV5Record(run.compilerState, item.record, item.semanticDigest);
     else if (item.digestField) await writeSealedV5Record(run.compilerState, item.record, item.digestField);
@@ -80,7 +89,6 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
   for (const item of input.acceptedArtifacts ?? []) await writeSealedV5Record(run.acceptedArtifacts, item.record, item.digestField);
 
   validateCheckpointIdentity(input.checkpoint, input.identity);
-  const identity = sealV5Record(input.identity, 'identity_digest');
   const checkpoint = await writeSealedV5Record(run.checkpoints, input.checkpoint, 'checkpoint_digest');
   const sidecarPayload = Object.hasOwn(input.selectorSidecar, 'selector_sidecar_digest') ? withoutDigest(input.selectorSidecar, 'selector_sidecar_digest') : input.selectorSidecar;
   const sidecar = await writeSealedV5Record(run.selectorSidecars, { ...sidecarPayload, schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id, checkpoint_digest: checkpoint.digest }, 'selector_sidecar_digest');
@@ -93,14 +101,24 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
     checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest,
     reply_object_digest: reply.digest, receipt_digest: null, idempotency_index_digest: index.digest
   }, 'transaction_digest');
+  if (services.failAt === 'after_run_transaction') throw new Error('INJECTED_CRASH: after_run_transaction');
   const genesis = await writeSealedV5Record(run.genesisRecords, {
     kind: 'catalog_run_genesis_record', schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id,
     identity_digest: identity.identity_digest, initial_run_transaction_digest: transaction.digest
   }, 'run_genesis_record_digest');
   await writeSealedV5Record(catalog.catalogRunGenesisRecords, genesis.record, 'run_genesis_record_digest');
-  await writeAtomicFile(run.identity, Buffer.from(canonicalV5Stringify(identity)));
-  if (services.failAt === 'after_run_transaction') throw new Error('INJECTED_CRASH: after_run_transaction');
-  const pointer = await publishFixedRecord(run.currentPointer, { kind: 'run_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, head_transaction_digest: transaction.digest }, 'pointer_digest', null);
+  if (services.failAt === 'after_catalog_genesis_record') throw new Error('INJECTED_CRASH: after_catalog_genesis_record');
+  const runPointerPayload = { kind: 'run_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, head_transaction_digest: transaction.digest };
+  let pointer;
+  try {
+    const existingPointer = await readFixedSealedRecord(run.currentPointer, 'pointer_digest');
+    const expectedPointer = sealV5Record(runPointerPayload, 'pointer_digest');
+    if (canonicalV5Stringify(existingPointer.record) !== canonicalV5Stringify(expectedPointer)) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Recovered run pointer differs from the pending genesis transaction.');
+    pointer = existingPointer.record;
+  } catch (error) {
+    if (error instanceof V5ProtocolError && !error.message.includes('unavailable')) throw error;
+    pointer = await publishFixedRecord(run.currentPointer, runPointerPayload, 'pointer_digest', null);
+  }
   if (services.failAt === 'after_run_pointer') throw new Error('INJECTED_CRASH: after_run_pointer');
 
   const catalogReply = await writeCasJson(catalog.catalogReplies, input.reply);
@@ -111,6 +129,7 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
     entries: [...priorEntries, { idempotency_key: input.idempotencyKey, canonical_action_digest: input.canonicalActionDigest, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, reply_digest: catalogReply.digest }].sort((left, right) => left.idempotency_key.localeCompare(right.idempotency_key))
   }, 'transaction_digest');
   await publishFixedRecord(catalog.currentPointer, { kind: 'catalog_current_transaction_pointer', schema_version: V5_SCHEMA_VERSION, scope: { kind: 'catalog' }, head_transaction_digest: catalogTransaction.digest }, 'pointer_digest', existing?.pointer?.bytes ?? null);
+  if (services.failAt === 'after_catalog_pointer_cas') throw new Error('INJECTED_CRASH: after_catalog_pointer_cas');
   return {
     runDirectory,
     reply: await readCasJson(path.join(run.replies, digestFilename(reply.digest)), reply.digest),

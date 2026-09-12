@@ -83,6 +83,27 @@ function validateObservation(observation, context) {
   } else if (!exact(observation, common)) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Observation has non-contract fields.');
 }
 
+/** @param {Record<string,any>} window */
+function validateObservationWindow(window) {
+  return object(window) && (
+    window.kind === 'after_step' && exact(window, ['kind']) ||
+    ['within', 'stable_for'].includes(window.kind) && exact(window, ['kind', 'duration_ms']) && Number.isSafeInteger(window.duration_ms) && window.duration_ms > 0 ||
+    window.kind === 'until_signal' && exact(window, ['kind', 'signal_ref', 'timeout_ms']) && nonblank(window.signal_ref) && Number.isSafeInteger(window.timeout_ms) && window.timeout_ms > 0
+  );
+}
+
+/** @param {Record<string,any>} contract @param {Record<string,any>} context */
+export function validateOracleSemanticContract(contract, context) {
+  const keys = ['oracle_contract_client_key', 'formal_test_point_id', 'observation_ref', 'assertion', 'evaluation_scope', 'observation_window', 'basis'];
+  if (!object(contract) || !exact(contract, keys) || !nonblank(contract.oracle_contract_client_key) || !nonblank(contract.formal_test_point_id) || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Oracle semantic contract identity or basis is incomplete.');
+  validateObservation(contract.observation_ref, context);
+  validateOracleAssertion(contract.assertion, context);
+  const scope = contract.evaluation_scope;
+  const validScope = object(scope) && (scope.kind === 'single' && exact(scope, ['kind']) || scope.kind === 'forall' && exact(scope, ['kind', 'population_contract_client_key', 'population_proof_client_key']) && nonblank(scope.population_contract_client_key) && nonblank(scope.population_proof_client_key));
+  if (!validScope || !validateObservationWindow(contract.observation_window)) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Oracle semantic scope or observation window is invalid.');
+  return structuredClone(contract);
+}
+
 /** @param {Record<string,any>} oracle @param {Record<string,any>} context */
 export function validateTypedOracle(oracle, context) {
   const keys = ['oracle_client_key', 'oracle_semantic_contract_id', 'observe_after_step_client_key', 'observation_ref', 'assertion', 'evaluation_scope', 'observation_window', 'claim_ids'];
@@ -91,7 +112,7 @@ export function validateTypedOracle(oracle, context) {
   validateOracleAssertion(oracle.assertion, context);
   if (oracle.assertion.kind === 'transition' && oracle.assertion.trigger_step_client_key !== oracle.observe_after_step_client_key) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Transition trigger and observation step must be explicitly bound.');
   const window = oracle.observation_window;
-  if (!object(window) || !(['after_step'].includes(window.kind) ? exact(window, ['kind']) : ['within', 'stable_for'].includes(window.kind) ? exact(window, ['kind', 'duration_ms']) && Number.isSafeInteger(window.duration_ms) && window.duration_ms > 0 : window.kind === 'until_signal' ? exact(window, ['kind', 'signal_ref', 'timeout_ms']) && nonblank(window.signal_ref) && Number.isSafeInteger(window.timeout_ms) && window.timeout_ms > 0 : false)) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Oracle observation window is invalid.');
+  if (!validateObservationWindow(window)) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Oracle observation window is invalid.');
   if (!(oracle.evaluation_scope?.kind === 'single' && exact(oracle.evaluation_scope, ['kind'])) && !(oracle.evaluation_scope?.kind === 'forall' && exact(oracle.evaluation_scope, ['kind', 'population_contract_id', 'population_proof_id']) && nonblank(oracle.evaluation_scope.population_contract_id) && nonblank(oracle.evaluation_scope.population_proof_id))) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Oracle evaluation scope is invalid.');
   return structuredClone(oracle);
 }

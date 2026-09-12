@@ -65,3 +65,24 @@ test('a crash before pointer publication exposes the complete old head', async (
   assert.deepEqual(await readFile(path.join(created.runDirectory, 'current-transaction.json')), beforeBytes);
   assert.equal((await readVerifiedRun(created.runDirectory)).checkpoint.current_revision, 0);
 });
+
+test('create genesis recovers idempotently after each frozen publication boundary', async () => {
+  const crashPoints = ['after_run_transaction', 'after_catalog_genesis_record', 'after_run_pointer', 'after_catalog_pointer_cas'];
+  for (const [index, failAt] of crashPoints.entries()) {
+    const catalogRoot = await mkdtemp(path.join(os.tmpdir(), `gtc-v5-genesis-${index}-`));
+    const base = genesisInput();
+    const runId = `RUN-genesis-crash-${index}`;
+    const input = {
+      ...base,
+      identity: { ...base.identity, run_id: runId },
+      checkpoint: { ...base.checkpoint, run_id: runId },
+      reply: { ...base.reply, run_id: runId }
+    };
+    await assert.rejects(() => commitCatalogGenesis(catalogRoot, input, { failAt }), new RegExp(`INJECTED_CRASH: ${failAt}`, 'u'));
+    const recovered = await commitCatalogGenesis(catalogRoot, input);
+    const verified = await readVerifiedRun(recovered.runDirectory);
+    assert.equal(verified.identity.run_id, runId);
+    assert.equal(verified.transaction.transaction_kind, 'genesis');
+    assert.equal((await commitCatalogGenesis(catalogRoot, input)).reply.run_id, runId);
+  }
+});

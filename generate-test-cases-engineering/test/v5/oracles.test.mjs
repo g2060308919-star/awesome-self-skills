@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { evaluateOracleAssertion, validateOracleAssertion, validateTypedOracle } from '../../src/v5/oracles.mjs';
+import { evaluateOracleAssertion, validateOracleAssertion, validateOracleSemanticContract, validateTypedOracle } from '../../src/v5/oracles.mjs';
 import { createSemanticRuleIndex } from '../../src/v5/semantic-rules.mjs';
 
 const root = `sha256:${'a'.repeat(64)}`;
@@ -54,4 +54,15 @@ test('TypedOracle binds observation, owning step, scope/window, claims, and tran
   };
   assert.deepEqual(validateTypedOracle(oracle, { semanticRootDigest: root, semanticRuleIndex: index, stepClientKeys: ['step-save'], acceptedClaimIds: ['claim-save'], oracleSemanticContractIds: ['osc-save'] }), oracle);
   assert.throws(() => validateTypedOracle({ ...oracle, observe_after_step_client_key: 'step-missing' }, { semanticRootDigest: root, semanticRuleIndex: index, stepClientKeys: ['step-save'], acceptedClaimIds: ['claim-save'], oracleSemanticContractIds: ['osc-save'] }), /ORACLE_SEMANTICS_REQUIRED/u);
+});
+
+test('Behavior-owned Oracle semantics are closed before Case-local step binding', () => {
+  const contract = {
+    oracle_contract_client_key: 'oracle-save', formal_test_point_id: 'tp-save',
+    observation_ref: { kind: 'response', logical_surface_ref: 'orders', subject_ref: 'order', field_path: '/status' },
+    assertion: { kind: 'transition', from_state: { kind: 'string', value: 'draft' }, to_state: { kind: 'string', value: 'saved' }, trigger_action_ref: { action_id: 'save', semantic_root_digest: root } },
+    evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, basis: [{ kind: 'claim', claim_id: 'claim-save' }]
+  };
+  assert.deepEqual(validateOracleSemanticContract(contract, { semanticRootDigest: root, semanticRuleIndex: index }), contract);
+  assert.throws(() => validateOracleSemanticContract({ ...contract, assertion: { expected: '结果正常' } }, { semanticRootDigest: root, semanticRuleIndex: index }), /ORACLE_NOT_DECIDABLE/u);
 });

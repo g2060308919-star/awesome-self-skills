@@ -109,11 +109,30 @@ test('public runtime completes source, evidence, behavior, Case, and canonical d
   const behavior = await advanceV5Run(created.run_directory, { idempotency_key: 'evidence-delivery', action: { kind: 'submit_artifact', action_token: evidenceSelector.action_token, artifact_kind: 'evidence_claims', artifact: { semantic_review_seed_digest: seed.seed_digest, claims, semantic_gaps: [], decomposition_reviews: decompositionReviews, ambiguity_reviews: seed.ambiguity_candidates.map((candidate) => ({ seed_digest: seed.seed_digest, candidate_id: candidate.candidate_id, disposition: { kind: 'resolved_by_claims', claim_client_keys: [claims[0].claim_client_key] } })), entity_resolutions: [] } } });
   assert.equal(behavior.obligation, 'provide_behavior_views');
   const behaviorSeed = behavior.work_packet.behavior_contract_worklist;
-  const oracleContracts = behaviorSeed.required_contracts.map((row, index) => ({ oracle_contract_client_key: `oracle-contract-${index}`, requirement_key: row.required_contract_key }));
+  const oracleContracts = behaviorSeed.required_contracts.map((row, index) => ({
+    oracle_contract_client_key: `oracle-contract-${index}`,
+    formal_test_point_id: `tp-${index}`,
+    observation_ref: { kind: 'response', logical_surface_ref: 'orders-api', subject_ref: row.subject_ref, field_path: '/status' },
+    assertion: { kind: 'exact_text', expected_text: 'saved' },
+    evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' },
+    basis: [{ kind: 'claim', claim_id: claims[index].claim_client_key }]
+  }));
   const riskKinds = ['null_or_missing', 'unknown_enum', 'api_failure', 'loading_failure', 'sync_delay', 'long_content', 'pagination', 'refresh', 'business_permission_boundary'];
   const riskReviews = behaviorSeed.risk_review_module_ids.flatMap((moduleRef) => riskKinds.map((riskKind) => ({ review_client_key: `risk-${moduleRef}-${riskKind}`, module_ref: moduleRef, risk_kind: riskKind, risk_signal_status: 'no_signal', review_basis: [{ kind: 'claim', claim_id: claims[0].claim_client_key }] })));
   const behaviorSelector = behavior.available_actions.find((selector) => selector.capability.kind === 'submit_artifact');
-  const caseWork = await advanceV5Run(created.run_directory, { idempotency_key: 'behavior-delivery', action: { kind: 'submit_artifact', action_token: behaviorSelector.action_token, artifact_kind: 'behavior_views', artifact: { behavior_contract_seed_digest: behaviorSeed.seed_digest, contract_reviews: behaviorSeed.required_contracts.map((row, index) => ({ seed_digest: behaviorSeed.seed_digest, required_contract_key: row.required_contract_key, disposition: { kind: 'formal', contract_client_keys: [oracleContracts[index].oracle_contract_client_key] } })), oracle_semantic_contracts: oracleContracts, risk_reviews: riskReviews, formal_test_point_ids: ['tp-save'], semantic_gaps: [] } } });
+  const behaviorArtifact = {
+    behavior_contract_seed_digest: behaviorSeed.seed_digest,
+    field_correspondences: [], value_states: [], predicate_contracts: [], domain_contracts: [], behavior_equivalence_contracts: [],
+    population_contracts: [], population_proofs: [], permission_auxiliary_contracts: [], oracle_semantic_contracts: oracleContracts,
+    behavior_contract_reviews: behaviorSeed.required_contracts.map((row, index) => ({ seed_digest: behaviorSeed.seed_digest, required_contract_key: row.required_contract_key, disposition: { kind: 'formal', contract_client_keys: [oracleContracts[index].oracle_contract_client_key] } })),
+    permission_matrix_reviews: [], risk_reviews: riskReviews, formal_test_point_ids: ['tp-save'], semantic_gap_proposals: []
+  };
+  const undecidable = structuredClone(behaviorArtifact);
+  undecidable.oracle_semantic_contracts[0].assertion = { expected: '结果正常' };
+  const rejectedBehavior = await advanceV5Run(created.run_directory, { idempotency_key: 'behavior-undecidable', action: { kind: 'submit_artifact', action_token: behaviorSelector.action_token, artifact_kind: 'behavior_views', artifact: undecidable } });
+  assert.equal(rejectedBehavior.diagnostics[0].code, 'ORACLE_NOT_DECIDABLE');
+  assert.equal(rejectedBehavior.current_revision, behavior.current_revision);
+  const caseWork = await advanceV5Run(created.run_directory, { idempotency_key: 'behavior-delivery', action: { kind: 'submit_artifact', action_token: behaviorSelector.action_token, artifact_kind: 'behavior_views', artifact: behaviorArtifact } });
   assert.equal(caseWork.obligation, 'provide_case_drafts');
   const root = behaviorSeed.semantic_root_digest;
   const claimId = claims[0].claim_client_key;

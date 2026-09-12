@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { createHash } from 'node:crypto';
-import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { chmod, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -12,6 +11,7 @@ import { readSealedV5Record, readVerifiedRun, writeAtomicFile } from '../src/v5/
 import { installV5DeterministicTestProfile } from '../src/v5/runtime-services.mjs';
 import { digestFilename } from '../src/v5/storage-paths.mjs';
 import { canonicalObjectDigest } from '../src/v5/storage-records.mjs';
+import { V5_REQUIRED_FIXTURE_LEAF_IDS } from './v5/fixture-inventory.mjs';
 
 const REQUIREMENTS = new Set(Array.from({ length: 16 }, (_, index) => `C${String(index + 1).padStart(2, '0')}`));
 const FIXTURE_ID = /^F-C(0[1-9]|1[0-6])-[a-z0-9-]+\.(positive|negative|blocked|protocol)\.[a-z0-9-]+$/u;
@@ -188,6 +188,8 @@ export function validateV5FixtureManifest(manifest) {
     const leaves = manifest.fixtures.filter((fixture) => fixture.requirement_ids.includes(requirement));
     if (!leaves.some((fixture) => fixture.fixture_id.includes('.positive.')) || !leaves.some((fixture) => /\.(negative|blocked|protocol)\./u.test(fixture.fixture_id))) fail(`${requirement} lacks positive and negative/blocked/protocol leaves`);
   }
+  const actualFixtureIds = [...fixtureIds].sort();
+  if (canonicalV5Stringify(actualFixtureIds) !== canonicalV5Stringify(V5_REQUIRED_FIXTURE_LEAF_IDS)) fail('manifest does not contain the exact normative fixture leaf inventory');
   const contracts = generateV5Contracts();
   const referencedTestIds = [
     ...contracts.policyRegistry.rules.flatMap((rule) => rule.test_ids),
@@ -321,6 +323,31 @@ async function runTamper(step, replies, catalogRoots) {
       const digest = current.checkpoint.rendered_output_digests?.[index];
       if (!digest) fail('renderer output target is unavailable');
       targetPath = path.join(current.layout.renderedOutputs, digestFilename(digest));
+    } else if (step.target.kind === 'compiler_projection') {
+      const digest = current.checkpoint.applied_clarification_impact_digest;
+      if (step.target.projection_kind !== 'applied_clarification_impact' || typeof digest !== 'string') fail('compiler projection target is unavailable');
+      targetPath = path.join(current.layout.compilerState, digestFilename(digest));
+    } else if (step.target.kind === 'compiler_state') {
+      const checkpointFieldByKind = {
+        source_acquisition_state: 'source_acquisition_state_digest',
+        question_part_state_set: 'question_part_state_set_digest',
+        clarification_pending: 'pending_clarification_digest',
+        execution_snapshot: 'execution_snapshot_digest',
+        final_execution_projection: 'final_execution_projection_digest'
+      };
+      let digest;
+      if (step.target.state_kind === 'execution_receipt') {
+        digest = step.target.target_digest;
+        if (!current.checkpoint.accepted_execution_receipt_digests?.includes(digest)) fail('execution receipt target is not in the verified checkpoint set');
+      } else if (step.target.state_kind === 'accepted_compiler_projection') {
+        digest = step.target.target_digest;
+        if (!current.checkpoint.compiler_projection_digests?.includes(digest)) fail('compiler projection target is not in the verified checkpoint set');
+      } else {
+        const field = checkpointFieldByKind[step.target.state_kind];
+        digest = field ? current.checkpoint[field] : undefined;
+      }
+      if (typeof digest !== 'string') fail('compiler-state target is unavailable');
+      targetPath = path.join(current.layout.compilerState, digestFilename(digest));
     } else fail(`unsupported logical tamper target: ${step.target.kind}`);
   }
   if (!targetPath) fail('logical tamper target is unavailable');
@@ -330,14 +357,16 @@ async function runTamper(step, replies, catalogRoots) {
   else fail(`unknown tamper mutation: ${step.mutation}`);
 }
 
-export async function runV5FixtureManifest(manifestPath) {
+export async function runV5FixtureManifest(manifestPath, options = {}) {
   const absoluteManifest = path.resolve(manifestPath);
   const fixtureRoot = path.dirname(absoluteManifest);
   const manifest = validateV5FixtureManifest(JSON.parse(await readFile(absoluteManifest, 'utf8')));
   const transcript = [];
   const requirementResults = new Map([...REQUIREMENTS].map((id) => [id, 0]));
   for (const fixture of manifest.fixtures) {
-    const tempRoot = await mkdtemp(path.join(os.tmpdir(), `gtc-v5-${fixture.fixture_id.replaceAll(/[^a-z0-9]/gu, '-')}-`));
+    const tempRoot = path.join(SANDBOX_ROOT, 'catalogs', sha256(Buffer.from(fixture.fixture_id)));
+    await rm(tempRoot, { recursive: true, force: true });
+    await mkdir(tempRoot, { recursive: true, mode: 0o700 });
     const catalogs = new Map();
     for (const key of fixture.catalog_keys) { const directory = path.join(tempRoot, key); await mkdir(directory); catalogs.set(key, await realpath(directory)); }
     const sandbox = await acquireV5FixtureSandbox(fixture.fixture_id);
@@ -392,7 +421,8 @@ export async function runV5FixtureManifest(manifestPath) {
     }
   }
   if ([...requirementResults.values()].some((count) => count < 2)) fail('not all C01-C16 requirement groups executed positive and negative leaves');
-  return { schema_version: '5.0.0', requirement_groups_passed: requirementResults.size, fixture_leaves_passed: manifest.fixtures.length, transcript_digest: canonicalObjectDigest(transcript) };
+  const summary = { schema_version: '5.0.0', requirement_groups_passed: requirementResults.size, fixture_leaves_passed: manifest.fixtures.length, transcript_digest: canonicalObjectDigest(transcript) };
+  return options.includeTranscript === true ? { ...summary, transcript } : summary;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
