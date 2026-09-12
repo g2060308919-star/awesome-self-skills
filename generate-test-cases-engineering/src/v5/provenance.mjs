@@ -1,9 +1,52 @@
 import { generateV5Contracts } from './registry-generator.mjs';
 import { V5ProtocolError } from './errors.mjs';
+import { canonicalObjectDigest } from './storage-records.mjs';
 
 const provenancePolicy = generateV5Contracts().policyRegistry.provenance_policy;
 const edgeRules = new Map(provenancePolicy.allowed_edges.map((/** @type {Record<string, any>} */ row) => [`${row.from_kind}->${row.to_kind}`, row]));
 const downstreamKinds = new Set(['behavior_contract', 'atomic_outcome', 'formal_test_point', 'case', 'case_oracle', 'case_document', 'execution_plan', 'execution_result', 'rendered_output']);
+
+/**
+ * Build the accepted Behavior provenance projection from Compiler-owned stable
+ * Claim and contract identities. Agent artifacts never provide this graph.
+ * @param {{runId:string,caseDocumentLineageId:string,semanticRootDigest:string,claims:Array<Record<string,any>>,behaviorContracts:Array<Record<string,any>>}} input
+ */
+export function compileBehaviorProvenanceGraph(input) {
+  const common = {
+    run_id: input.runId, case_document_lineage_id: input.caseDocumentLineageId,
+    semantic_root_digest: input.semanticRootDigest, accepted: true
+  };
+  const nodes = new Map();
+  const edges = [];
+  const addNode = (/** @type {Record<string,any>} */ node) => {
+    if (!node.node_id || nodes.has(node.node_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Compiler provenance identities must be nonblank and unique.');
+    nodes.set(node.node_id, node);
+  };
+  const claims = new Map();
+  for (const claim of input.claims) {
+    if (typeof claim.claim_id !== 'string' || !Array.isArray(claim.outcome_candidate_ids) || claim.outcome_candidate_ids.length === 0 || !['E1', 'E2', 'E3'].includes(claim.evidence_level)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Compiler provenance Claim projection is incomplete.');
+    addNode({ node_id: claim.claim_id, kind: 'claim', ...common, evidence_level: claim.evidence_level });
+    claims.set(claim.claim_id, claim);
+    for (const sourceUnitId of [...new Set(claim.outcome_candidate_ids)].sort()) {
+      if (!nodes.has(sourceUnitId)) addNode({ node_id: sourceUnitId, kind: 'source_unit', ...common });
+      edges.push({ from: sourceUnitId, to: claim.claim_id });
+    }
+  }
+  for (const contract of input.behaviorContracts) {
+    if (typeof contract.contract_id !== 'string' || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Compiler provenance Behavior contract projection is incomplete.');
+    addNode({ node_id: contract.contract_id, kind: 'behavior_contract', ...common });
+    for (const basis of contract.basis) {
+      if (basis.kind !== 'claim' || !claims.has(basis.claim_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Behavior provenance must resolve accepted Compiler-owned Claim basis.');
+      edges.push({ from: basis.claim_id, to: contract.contract_id });
+    }
+  }
+  const graphBase = {
+    nodes: [...nodes.values()].sort((left, right) => left.node_id.localeCompare(right.node_id)),
+    edges: [...new Map(edges.map((edge) => [`${edge.from}\0${edge.to}`, edge])).values()].sort((left, right) => `${left.from}\0${left.to}`.localeCompare(`${right.from}\0${right.to}`))
+  };
+  validateV5ProvenanceGraph(graphBase);
+  return { ...graphBase, graph_digest: canonicalObjectDigest(graphBase) };
+}
 
 /** @param {Record<string, any>} condition @param {Record<string, any>} from @param {Record<string, any>} to @param {Record<string, any>} edge */
 function conditionHolds(condition, from, to, edge) {

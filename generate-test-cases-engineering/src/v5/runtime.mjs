@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { validateAgainstSchema } from '../schema-validator.mjs';
 import { issueSelectors, verifySelector } from './action-tokens.mjs';
 import { canonicalV5Stringify } from './canonical-v5.mjs';
 import { cancelledCheckpointExtension, createV5CancelEvent } from './cancellation.mjs';
@@ -13,11 +14,11 @@ import { generateV5Contracts } from './registry-generator.mjs';
 import { readCasJson, readFixedSealedRecord, readSealedV5Record, readSemanticV5Record, readVerifiedRun, verifyV5AcceptedClosure, writeRawSourceBytes } from './run-store.mjs';
 import { applySourceBatch, currentSourceBatch, deriveSourceRequests, validateSourceBootstrap } from './source-acquisition.mjs';
 import { resolveCatalogLayout, resolveRunLayout, digestFilename } from './storage-paths.mjs';
-import { compileDomain, deriveBehaviorContractSeed, validateBehaviorContractReviews, validateFieldCorrespondence, validatePopulationContract, validatePopulationProof, validateRiskReviews, validateValueState } from './behavior-contracts.mjs';
+import { deriveBehaviorContractSeed, typedContractRefKey, validateBehaviorContractReviews, validateBehaviorEvidenceClosure, validateRiskReviews, validateValueState } from './behavior-contracts.mjs';
+import { compileBehaviorContracts } from './behavior-compiler.mjs';
 import { clarificationGapsFromAcceptedBehavior, compileBehaviorSemanticGaps } from './behavior-gaps.mjs';
-import { validateOracleSemanticContract } from './oracles.mjs';
-import { validatePermissionMatrixReview } from './permission.mjs';
-import { validateV5ProvenanceGraph } from './provenance.mjs';
+import { derivePermissionMatrices, validatePermissionMatrixReview } from './permission.mjs';
+import { compileBehaviorProvenanceGraph, validateV5ProvenanceGraph } from './provenance.mjs';
 import { deriveSemanticReviewSeed } from './semantic-seed.mjs';
 import { validateSemanticReviews } from './semantic-reviews.mjs';
 import { createSemanticRuleIndex } from './semantic-rules.mjs';
@@ -28,13 +29,15 @@ import { advanceV5ExecutionProjection, canonicalExistingExecutionReceiptPayloadD
 import { createClarificationPresentation, createQuestionPartStateSet } from './question-parts.mjs';
 import { previewClarificationResponse } from './clarification-preview.mjs';
 import { commitClarificationResponse, discardPendingClarification } from './clarification-reducer.mjs';
-import { compileV5CaseDocument, projectCompatibilityExecutionPlan } from './case-compiler.mjs';
+import { compileV5CaseDocumentTransaction, projectCompatibilityExecutionPlan } from './case-compiler.mjs';
 import { renderV5Json } from './render-json.mjs';
 import { renderV5Markdown } from './render-markdown.mjs';
 import { renderV5Csv } from './render-csv.mjs';
 import { runtimeV5ActionKeyring, runtimeV5Uuid } from './runtime-services.mjs';
+import { generateV5InterfaceSchemas } from './interface-schemas.mjs';
 
 const contracts = generateV5Contracts();
+const interfaceSchemas = generateV5InterfaceSchemas(contracts);
 const fsmByCell = new Map(contracts.fsmRegistry.cells.map((/** @type {Record<string, any>} */ cell) => [cell.cell_id, cell]));
 const replyRows = contracts.replyContracts.rows;
 
@@ -48,6 +51,42 @@ function hasExactKeys(value, expected) {
   const actual = Object.keys(value).sort();
   const sortedExpected = [...expected].sort();
   return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
+}
+
+/** @param {unknown} request @param {'create'|'advance'} kind */
+function validatePublicRequestSchema(request, kind) {
+  const schema = kind === 'create' ? interfaceSchemas.createRequest : interfaceSchemas.advanceRequest;
+  const issues = validateAgainstSchema(request, schema);
+  if (issues.length === 0) return;
+  throw new V5ProtocolError(kind === 'create' ? 'RUN_ARGUMENT_INVALID' : 'SCHEMA_VALIDATION_FAILED', `Public ${kind} request violates its closed Schema at ${issues[0].path}.`);
+}
+
+const COMPILER_OWNED_ARTIFACT_FIELDS = new Set([
+  'schema_version', 'compiler_version', 'accepted_revision', 'canonical_payload_digest', 'envelope_digest',
+  'payload_producer', 'envelope_producer', 'producer_stage', 'producer_run_id', 'case_document_lineage_id',
+  'input_digests', 'run_id', 'checkpoint_digest', 'selector_snapshot_digest', 'commit_receipt',
+  'claim_assessments', 'accepted_gap_ids', 'formal_test_point_ids', 'semantic_partitions', 'value_instances',
+  'permission_cells', 'risk_ledger', 'semantic_audit', 'provenance_graph'
+]);
+
+/** @param {Record<string,any>} artifact @param {string[]} allowed */
+function validateAgentArtifactRoot(artifact, allowed) {
+  const extra = Object.keys(artifact).filter((key) => !allowed.includes(key));
+  if (extra.some((key) => COMPILER_OWNED_ARTIFACT_FIELDS.has(key))) throw new V5ProtocolError('COMPILER_OWNED_FIELD_SUBMITTED', 'Agent artifact contains a Compiler-owned envelope or state field.');
+  if (extra.length > 0) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Agent artifact contains fields outside its closed branch.');
+}
+
+/** @param {unknown} value @param {Set<string>} acceptedClaimIds */
+function validateAcceptedClaimReferences(value, acceptedClaimIds) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => validateAcceptedClaimReferences(item, acceptedClaimIds));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  const record = /** @type {Record<string,any>} */ (value);
+  if (record.kind === 'claim' && typeof record.claim_id === 'string' && !acceptedClaimIds.has(record.claim_id)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Downstream artifacts must reference accepted Compiler-owned Claim IDs, not batch-local client keys.');
+  if (typeof record.formal_claim_id === 'string' && !acceptedClaimIds.has(record.formal_claim_id)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Formal risk requirements must reference an accepted Compiler-owned Claim ID.');
+  Object.values(record).forEach((item) => validateAcceptedClaimReferences(item, acceptedClaimIds));
 }
 
 /** @param {string} code @param {string} message */
@@ -126,139 +165,18 @@ async function persistRunRejection(current, request, code, message) {
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: current.checkpoint, selectorSidecar: current.selectorSidecar, reply, commitReceipt: internalReceipt });
 }
 
-const BEHAVIOR_GAP_ERROR_KIND = Object.freeze({
-  FIELD_CORRESPONDENCE_REQUIRED: { contractKind: 'field_correspondence', collection: 'field_correspondences', missingSemantics: 'null_policy' },
-  DOMAIN_CONTRACT_REQUIRED: { contractKind: 'domain', collection: 'domain_contracts', missingSemantics: 'domain_boundary' },
-  POPULATION_CONTRACT_REQUIRED: { contractKind: 'population', collection: 'population_contracts', missingSemantics: 'population_scope' }
+const BEHAVIOR_GAP_DIAGNOSTIC = Object.freeze({
+  null_policy: 'FIELD_CORRESPONDENCE_REQUIRED', domain_boundary: 'DOMAIN_CONTRACT_REQUIRED',
+  population_scope: 'POPULATION_CONTRACT_REQUIRED', permission_outcome: 'PERMISSION_OUTCOME_UNRESOLVED'
 });
-
-/** @param {string} missingSemantics @param {Record<string,any>} requirement @param {Record<string,any>} seed */
-function automaticBehaviorGapAnswerContract(missingSemantics, requirement, seed) {
-  const allowedControls = ['answer', 'defer', 'unknown', 'close_for_delivery'];
-  if (missingSemantics === 'null_policy') {
-    const catalog = contracts.answerConstraintRegistry.enum_catalogs.find((/** @type {Record<string,any>} */ row) => row.catalog_id === 'null_policy');
-    if (!catalog) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', 'Null-policy answer catalog is missing.');
-    return { answer_mode: 'typed_answer', allowed_controls: allowedControls, value_schema: { kind: 'enum', allowed_values: structuredClone(catalog.members) } };
-  }
-  if (missingSemantics === 'domain_boundary') return { answer_mode: 'typed_answer', allowed_controls: allowedControls, value_schema: { kind: 'text', min_scalars: 1, max_scalars: 1024, ambiguity_guard_ref: 'answer.no-unresolved-vague-token.v1' } };
-  if (missingSemantics === 'population_scope') return {
-    answer_mode: 'typed_answer', allowed_controls: allowedControls,
-    value_schema: {
-      kind: 'population_scope', existing_candidates: structuredClone(requirement.population_gap_catalog?.scope_candidates ?? []), allow_typed_creation: true,
-      creation_constraints: { allowed_scope_kinds: ['single_item', 'visible_region', 'current_page', 'current_response', 'all_pages', 'full_dataset'], semantic_root_digest: seed.semantic_root_digest }
-    }
-  };
-  throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `No V1 answer derivation exists for ${missingSemantics}.`);
-}
-
-/**
- * The frozen error catalog treats these three incomplete formal contracts as an
- * accepted Behavior gap: the invalid formal row is removed, its requirement is
- * retained, and the compiler commits a target-bound clarification atomically.
- * @param {Record<string,any>} current
- * @param {Record<string,any>} request
- * @param {V5ProtocolError} error
- */
-async function persistBehaviorContractGap(current, request, error) {
-  const profile = BEHAVIOR_GAP_ERROR_KIND[error.code];
-  if (!profile || current.checkpoint.fsm_cell_id !== 'cd.active.case.behavior') return persistRunRejection(current, request, error.code, error.message);
-  const submitted = structuredClone(request.action.artifact);
-  const priorSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, 'seed_digest');
-  const offending = submitted[profile.collection]?.[0] ?? {};
-  const fallbackBasis = priorSeed.required_contracts[0]?.basis ?? [{ kind: 'claim', claim_id: 'compiler-detected-behavior-gap' }];
-  const basis = Array.isArray(offending.basis) && offending.basis.length > 0
-    ? offending.basis
-    : Array.isArray(offending.domain?.closed_world_basis) && offending.domain.closed_world_basis.length > 0
-      ? offending.domain.closed_world_basis : fallbackBasis;
-  let requirement = priorSeed.required_contracts.find((/** @type {Record<string,any>} */ row) => row.contract_kind === profile.contractKind);
-  let seed = priorSeed;
-  if (!requirement) {
-    const subjectRef = offending.subject_ref ?? offending.left?.logical_surface_ref ?? offending.population_contract_client_key ?? priorSeed.required_contracts[0]?.subject_ref ?? 'compiler-detected-subject';
-    const intentRef = offending.intent_ref ?? offending.mapping_client_key ?? offending.domain_client_key ?? offending.population_contract_client_key ?? `${profile.contractKind}-clarification`;
-    const synthetic = { contract_kind: profile.contractKind, subject_ref: subjectRef, intent_ref: intentRef, basis, ...(profile.contractKind === 'population' ? { population_gap_catalog: { scope_candidates: [], proof_candidates: [] } } : {}) };
-    seed = deriveBehaviorContractSeed(current.checkpoint.semantic_root_digest, {
-      semanticRuleIndex: priorSeed.semantic_rule_index, riskModuleIds: priorSeed.risk_review_module_ids,
-      requirements: [...priorSeed.required_contracts, synthetic]
-    });
-    requirement = seed.required_contracts.find((/** @type {Record<string,any>} */ row) => row.contract_kind === profile.contractKind && row.subject_ref === subjectRef && row.intent_ref === intentRef);
-  }
-  if (!requirement) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Unable to preserve the ${profile.contractKind} gap requirement.`);
-  if (profile.contractKind === 'field_correspondence') submitted.field_correspondences = [];
-  if (profile.contractKind === 'domain') submitted.domain_contracts = [];
-  if (profile.contractKind === 'population') { submitted.population_contracts = []; submitted.population_proofs = []; }
-  const gapClientKey = `compiler-gap-${profile.contractKind}`;
-  const proposal = {
-    semantic_gap_client_key: gapClientKey,
-    target: { kind: 'behavior_contract', required_contract_key: requirement.required_contract_key },
-    missing_semantics: profile.missingSemantics,
-    question: profile.contractKind === 'field_correspondence' ? 'Which null policy makes this field correspondence executable?' : profile.contractKind === 'domain' ? 'What exact universe or partition boundary closes this domain?' : 'What exact population scope must this requirement quantify?',
-    answer_contract: automaticBehaviorGapAnswerContract(profile.missingSemantics, requirement, seed), basis,
-    why_needed: error.message,
-    question_impact_summary: { affected_case_keys: [], impact_kinds: [profile.missingSemantics] }
-  };
-  submitted.behavior_contract_seed_digest = seed.seed_digest;
-  submitted.semantic_gap_proposals = [...submitted.semantic_gap_proposals, proposal];
-  submitted.behavior_contract_reviews = submitted.behavior_contract_reviews
-    .filter((/** @type {Record<string,any>} */ review) => review.required_contract_key !== requirement.required_contract_key)
-    .map((/** @type {Record<string,any>} */ review) => ({ ...review, seed_digest: seed.seed_digest }));
-  submitted.behavior_contract_reviews.push({ seed_digest: seed.seed_digest, required_contract_key: requirement.required_contract_key, disposition: { kind: 'semantic_gap', gap_ref: { kind: 'same_behavior_batch', semantic_gap_client_key: gapClientKey } } });
-  submitted.behavior_contract_reviews.sort((left, right) => left.required_contract_key.localeCompare(right.required_contract_key));
-  validateBehaviorContractReviews(seed, submitted.behavior_contract_reviews, submitted);
-  const compiledGaps = compileBehaviorSemanticGaps(current.checkpoint.semantic_root_digest, seed, submitted.semantic_gap_proposals, submitted.behavior_contract_reviews);
-  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, submitted.risk_reviews);
-  const envelope = acceptArtifactEnvelope({ artifactKind: 'behavior_views', payload: submitted, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'case_design', inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
-  const testObligations = sealV5Record({ kind: 'test_obligations', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: [...new Set(submitted.formal_test_point_ids)].sort(), behavior_artifact_digest: envelope.envelope_digest }, 'obligations_digest');
-  const gaps = clarificationGapsFromAcceptedBehavior(compiledGaps.accepted_gaps);
-  const inventory = sealV5Record({ kind: 'clarification_gap_inventory', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, gaps }, 'gaps_digest');
-  const stateSet = createQuestionPartStateSet(current.identity.case_document_lineage_id, current.checkpoint.semantic_root_digest, gaps);
-  const presentation = createClarificationPresentation(stateSet, current.checkpoint.current_revision + 1, gaps);
-  const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === error.code && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
-  if (!row || row.exact_commit.kind !== 'artifact_commit') throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Behavior-gap reply contract is missing for ${error.code}.`);
-  const checkpointBase = {
-    ...current.checkpoint, current_revision: current.checkpoint.current_revision + 1,
-    fsm_cell_id: 'cd.active.case.resolve', stage: row.exact_stage, obligation: row.exact_obligation,
-    behavior_contract_seed_digest: seed.seed_digest,
-    accepted_artifact_digests: [...new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
-    behavior_views_artifact_digest: envelope.envelope_digest, test_obligations_digest: testObligations.obligations_digest,
-    risk_ledger_digest: canonicalObjectDigest(riskLedger), clarification_gaps_digest: inventory.gaps_digest,
-    question_part_state_set_digest: stateSet.state_set_digest, presentation_digest: presentation.presentation_digest
-  };
-  delete checkpointBase.checkpoint_digest;
-  const context = {
-    ...current.reply.work_packet.context,
-    behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
-    test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: testObligations }
-  };
-  const workPacket = { kind: 'clarification_work', context, presentation };
-  const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(checkpointBase.fsm_cell_id, workPacket));
-  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigestV5('advance', request.action), semantic_revision_delta: 1, client_key_bindings: compiledGaps.client_key_bindings };
-  const reply = {
-    kind: 'run_reply', schema_version: V5_SCHEMA_VERSION, projection_kind: row.exact_projection_kind, reply_contract_id: row.reply_contract_id,
-    reply_status: row.exact_reply_status, run_id: current.identity.run_id, run_directory: current.layout.root,
-    case_document_lineage_id: current.identity.case_document_lineage_id, delivery_intent: current.identity.delivery_intent,
-    run_lifecycle: 'active', stage: row.exact_stage, obligation: row.exact_obligation, current_revision: selectorState.checkpoint.current_revision,
-    checkpoint_digest: selectorState.checkpoint.checkpoint_digest, selector_snapshot_digest: selectorState.sidecar.selector_sidecar_digest,
-    diagnostics: [{ code: error.code, affected_refs: [], message: error.message }], available_actions: selectorState.selectors,
-    commit_receipt: commitReceipt, work_packet: workPacket
-  };
-  return commitNormalRunTransaction(current.layout.root, request, {
-    checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
-    acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }],
-    compilerStateRecords: [
-      ...(seed.seed_digest === priorSeed.seed_digest ? [] : [{ record: seed, digestField: 'seed_digest' }]),
-      { record: testObligations, digestField: 'obligations_digest' }, { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
-      { record: inventory, digestField: 'gaps_digest' }, { record: stateSet, semanticDigest: stateSet.state_set_digest }, { record: presentation, semanticDigest: presentation.presentation_digest },
-      ...compiledGaps.accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
-    ]
-  });
-}
+const BEHAVIOR_GAP_COMMIT_ERRORS = new Set(Object.values(BEHAVIOR_GAP_DIAGNOSTIC));
 
 /** @param {Record<string,any>} current @param {Record<string,any>} request @param {string} message */
 async function persistOracleReroute(current, request, message) {
   const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'ORACLE_SEMANTICS_REQUIRED' && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
   if (!row || row.exact_commit.kind !== 'operational_commit') throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', 'Oracle reroute reply contract is unavailable.');
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, 'seed_digest');
-  const workPacket = { kind: 'behavior_work', context: current.reply.work_packet.context, permission_matrix_worklists: [], behavior_contract_worklist: seed };
+  const workPacket = { kind: 'behavior_work', context: current.reply.work_packet.context, permission_matrix_worklists: await permissionMatricesForCurrent(current, current.checkpoint.semantic_root_digest), behavior_contract_worklist: seed };
   const checkpointBase = { ...current.checkpoint, fsm_cell_id: 'cd.active.case.behavior', stage: row.exact_stage, obligation: row.exact_obligation };
   delete checkpointBase.checkpoint_digest;
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(checkpointBase.fsm_cell_id, workPacket));
@@ -283,6 +201,8 @@ function loadActionKeyring() {
 /** @param {Record<string, any>} request @returns {{kind:'case_document',sourceBootstrap:{source_request_seeds:Record<string,any>[]}}|{kind:'execution_plan',caseDocumentRef:Record<string,any>}|{kind:'resume_cancelled',parentRunId:string}} */
 function validateCreateRequest(request) {
   if (!plainObject(request) || typeof request.idempotency_key !== 'string' || request.idempotency_key.length === 0) throw new V5ProtocolError('RUN_ARGUMENT_INVALID', 'Create request is invalid.');
+  if (Object.hasOwn(request, 'schema_version') && request.schema_version !== V5_SCHEMA_VERSION) throw new V5ProtocolError('UNSUPPORTED_SCHEMA_VERSION', 'Only Schema 5.0.0 create requests are supported.');
+  validatePublicRequestSchema(request, 'create');
   if (request.delivery_intent === 'case_document') {
     if (!hasExactKeys(request, ['idempotency_key', 'delivery_intent', 'source_bootstrap'])) throw new V5ProtocolError('RUN_ARGUMENT_INVALID', 'Case create request has extra or missing fields.');
     return { kind: 'case_document', sourceBootstrap: validateSourceBootstrap(request.source_bootstrap) };
@@ -470,10 +390,13 @@ export async function createV5RunDirectory(catalogRoot, requestValue) {
     const reply = persistedReply(selectorState.checkpoint, sourceWorkPacket(sourceState), selectorState.selectors, receipt, runDirectory, createOutcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
     const identity = {
       kind: 'v5_run_identity', schema_version: V5_SCHEMA_VERSION, compiler_version: V5_COMPILER_VERSION,
-      run_id: runId, delivery_intent: 'case_document', case_document_lineage_id: lineageId,
-      source_bootstrap_digest: /** @type {Record<string, any>} */ (sourceState.ledger).source_bootstrap_digest,
-      source_acquisition_policy_digest: contracts.sourceAcquisitionPolicy.policy_digest,
-      canonical_create_action_digest: createActionDigest
+      run_id: runId, run_directory_key: runId, delivery_intent: 'case_document', case_document_lineage_id: lineageId,
+      canonical_create_request_digest: canonicalObjectDigest(request),
+      creation_binding: {
+        kind: 'case_document',
+        source_bootstrap_digest: /** @type {Record<string, any>} */ (sourceState.ledger).source_bootstrap_digest,
+        source_acquisition_policy_digest: contracts.sourceAcquisitionPolicy.policy_digest
+      }
     };
     const committed = await commitCatalogGenesis(catalog.root, {
       identity, checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply,
@@ -492,7 +415,9 @@ export async function createV5RunDirectory(catalogRoot, requestValue) {
 
 /** @param {Record<string,any>} catalog @param {Record<string,any>} request @param {Record<string,any>} caseDocumentRef */
 async function createExecutionRun(catalog, request, caseDocumentRef) {
-  const sourceRun = await readVerifiedRun(path.join(catalog.runsDirectory, caseDocumentRef.run_id));
+  let sourceRun;
+  try { sourceRun = await readVerifiedRun(path.join(catalog.runsDirectory, caseDocumentRef.run_id)); }
+  catch { throw new V5ProtocolError('CASE_DOCUMENT_REFERENCE_INVALID', 'Case Document reference does not resolve to a verified V5 delivery.'); }
   if (sourceRun.identity.schema_version !== V5_SCHEMA_VERSION || sourceRun.identity.delivery_intent !== 'case_document' || sourceRun.checkpoint.run_lifecycle !== 'finished' || canonicalV5Stringify(sourceRun.checkpoint.case_document_ref) !== canonicalV5Stringify(caseDocumentRef) || typeof sourceRun.checkpoint.execution_plan_digest !== 'string') throw new V5ProtocolError('CASE_DOCUMENT_REFERENCE_INVALID', 'Case Document reference is not a verified immutable V5 delivery.');
   const plan = await readSemanticV5Record(sourceRun.layout.compilerState, sourceRun.checkpoint.execution_plan_digest);
   const projection = createV5ExecutionProjection(plan);
@@ -515,8 +440,9 @@ async function createExecutionRun(catalog, request, caseDocumentRef) {
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, receipt, runDirectory, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
   const identity = {
     kind: 'v5_run_identity', schema_version: V5_SCHEMA_VERSION, compiler_version: V5_COMPILER_VERSION,
-    run_id: runId, delivery_intent: 'execution_plan', case_document_lineage_id: caseDocumentRef.case_document_lineage_id,
-    case_document_ref: caseDocumentRef, canonical_create_action_digest: createActionDigest
+    run_id: runId, run_directory_key: runId, delivery_intent: 'execution_plan', case_document_lineage_id: caseDocumentRef.case_document_lineage_id,
+    canonical_create_request_digest: canonicalObjectDigest(request),
+    creation_binding: { kind: 'execution_plan', case_document_ref: caseDocumentRef }
   };
   return (await commitCatalogGenesis(catalog.root, {
     identity, checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply,
@@ -527,7 +453,9 @@ async function createExecutionRun(catalog, request, caseDocumentRef) {
 
 /** @param {Record<string,any>} catalog @param {Record<string,any>} request @param {string} parentRunId */
 async function createResumedRun(catalog, request, parentRunId) {
-  const parent = await readVerifiedRun(path.join(catalog.runsDirectory, parentRunId));
+  let parent;
+  try { parent = await readVerifiedRun(path.join(catalog.runsDirectory, parentRunId)); }
+  catch { throw new V5ProtocolError('RESUME_PARENT_INVALID', 'Parent run does not resolve to a verified cancelled V5 run.'); }
   if (parent.identity.schema_version !== V5_SCHEMA_VERSION) throw new V5ProtocolError('UNSUPPORTED_SCHEMA_VERSION', 'Only V5 parents may be resumed.');
   if (parent.checkpoint.run_lifecycle !== 'cancelled' || !parent.operationalEvent || !parent.transaction.previous_run_transaction_digest) throw new V5ProtocolError('RESUME_PARENT_INVALID', 'Parent does not have a verified cancellation event.');
   const priorTransaction = await readSealedV5Record(parent.layout.transactions, parent.transaction.previous_run_transaction_digest, 'transaction_digest');
@@ -596,8 +524,9 @@ async function createResumedRun(catalog, request, parentRunId) {
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, receipt, runDirectory, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
   const identity = {
     kind: 'v5_run_identity', schema_version: V5_SCHEMA_VERSION, compiler_version: V5_COMPILER_VERSION,
-    run_id: runId, delivery_intent: parent.identity.delivery_intent, case_document_lineage_id: parent.identity.case_document_lineage_id,
-    resume_lineage: checkpointBase.resume_lineage, canonical_create_action_digest: createActionDigest
+    run_id: runId, run_directory_key: runId, delivery_intent: parent.identity.delivery_intent, case_document_lineage_id: parent.identity.case_document_lineage_id,
+    canonical_create_request_digest: canonicalObjectDigest(request),
+    creation_binding: { kind: 'resume_cancelled', ...checkpointBase.resume_lineage }
   };
   return (await commitCatalogGenesis(catalog.root, {
     identity, checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply,
@@ -615,7 +544,7 @@ export async function advanceV5Run(runDirectory, requestValue) {
       if (!plainObject(requestValue) || !hasExactKeys(requestValue, ['idempotency_key', 'action']) || typeof requestValue.idempotency_key !== 'string' || requestValue.idempotency_key.length === 0 || !plainObject(requestValue.action)) return preRunReply('ACCEPTED_STATE_INTEGRITY_FAILURE', error.message);
       try {
         const layout = await resolveRunLayout(runDirectory);
-        const identity = (await readFixedSealedRecord(layout.identity, 'identity_digest')).record;
+        const identity = (await readFixedSealedRecord(layout.identity, 'run_identity_digest')).record;
         const trigger = { kind: 'no_verified_fsm_cell', delivery_intent: identity.delivery_intent };
         const row = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'ACCEPTED_STATE_INTEGRITY_FAILURE' && candidate.source.response_context === 'run_mutation' && candidate.source.response_variant_id === 'mutation_quarantine' && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
         if (!row) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', 'Integrity quarantine reply contract is unavailable.');
@@ -666,7 +595,7 @@ export async function advanceV5Run(runDirectory, requestValue) {
     if (error.code === 'ACTION_TOKEN_KEY_UNAVAILABLE') throw error;
     if (error.code === 'IDEMPOTENCY_CONFLICT') return runRejection(current, error.code, error.message, current.checkpoint.run_lifecycle === 'active' ? 'persisted_run_state' : 'read_only_terminal_rejection');
     if (error.code === 'ORACLE_SEMANTICS_REQUIRED' && current.checkpoint.fsm_cell_id === 'cd.active.case.drafts') return persistOracleReroute(current, request, error.message);
-    if (Object.hasOwn(BEHAVIOR_GAP_ERROR_KIND, error.code) && current.checkpoint.fsm_cell_id === 'cd.active.case.behavior') return persistBehaviorContractGap(current, request, error);
+    if (current.checkpoint.fsm_cell_id === 'cd.active.case.behavior' && BEHAVIOR_GAP_COMMIT_ERRORS.has(error.code)) return persistRunRejection(current, request, 'SCHEMA_VALIDATION_FAILED', error.message);
     return persistRunRejection(current, request, error.code, error.message);
   }
 }
@@ -677,6 +606,7 @@ async function advanceExecution(current, request, templateId) {
   if (!hasExactKeys(action, ['kind', 'action_token', 'operation']) || action.kind !== 'advance_execution_plan' || !plainObject(action.operation)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Execution action is not a closed operation wrapper.');
   const capability = { kind: 'advance_execution_plan', allowed_operation_kinds: templateId === 'execution.advance_closure' ? ['provide_capability_proof', 'set_execution_disposition'] : ['pause_execution', 'confirm_execution_plan'] };
   validateAdvertisedAction(current, action, capability);
+  validatePublicRequestSchema(request, 'advance');
   const advanced = await advanceV5ExecutionProjection(current.reply.work_packet.execution_projection, action.operation);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: templateId, result_key: advanced.result_key });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
@@ -713,6 +643,7 @@ async function clarificationState(current) {
 async function advanceClarificationPreview(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ['kind', 'action_token', 'presentation_id', 'semantic_root_digest', 'preview_intent', 'raw_response', 'proposed_units']) || !['apply_units', 'discard_pending'].includes(action.preview_intent) || typeof action.raw_response !== 'string' || !Array.isArray(action.proposed_units) || (action.preview_intent === 'discard_pending' && action.proposed_units.length !== 0)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Clarification preview action is invalid.');
+  if (action.presentation_id !== current.reply.work_packet.presentation.presentation_id || action.semantic_root_digest !== current.reply.work_packet.presentation.semantic_root_digest) throw new V5ProtocolError('CLARIFICATION_PREVIEW_STALE', 'Clarification preview must bind the current presentation and semantic root.');
   validateAdvertisedAction(current, action, { kind: 'preview_clarification_response', presentation_id: current.reply.work_packet.presentation.presentation_id, semantic_root_digest: current.reply.work_packet.presentation.semantic_root_digest });
   const { stateSet, presentation, gaps } = await clarificationState(current);
   const fromConfirm = current.checkpoint.fsm_cell_id.endsWith('.confirm');
@@ -741,6 +672,7 @@ async function advanceClarificationPreview(current, request) {
     compilerStateRecords = [{ record: result.preview, semanticDigest: result.preview.preview_digest }, { record: pending, digestField: 'pending_record_digest' }];
     workPacket = { kind: 'clarification_confirmation_work', context: current.reply.work_packet.context, presentation, clarification_preview: result.preview };
   }
+  validatePublicRequestSchema(request, 'advance');
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'clarification.preview', result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   delete checkpointBase.checkpoint_digest;
@@ -749,6 +681,13 @@ async function advanceClarificationPreview(current, request) {
   const actionDigest = actionDigestV5('advance', action);
   const commitReceipt = { kind: 'operational_commit', committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: outcome.commit_projection.effect };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  if (resultKey === 'semantic_change') {
+    const confirmationRow = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'CLARIFICATION_CONFIRMATION_REQUIRED' && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id && candidate.exact_projection_kind === 'persisted_run_state');
+    if (!confirmationRow) throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', 'Clarification confirmation reply contract is unavailable.');
+    reply.reply_contract_id = confirmationRow.reply_contract_id;
+    reply.reply_status = confirmationRow.exact_reply_status;
+    reply.diagnostics = [{ code: 'CLARIFICATION_CONFIRMATION_REQUIRED', affected_refs: [], message: 'Preview is pending explicit confirmation.' }];
+  }
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, compilerStateRecords });
 }
 
@@ -756,11 +695,13 @@ async function advanceClarificationPreview(current, request) {
 async function advanceClarificationCommit(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ['kind', 'action_token', 'presentation_id', 'semantic_root_digest', 'preview_digest', 'raw_confirmation', 'confirmation_range']) || typeof action.raw_confirmation !== 'string' || !plainObject(action.confirmation_range)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Clarification commit action is invalid.');
+  if (action.presentation_id !== current.reply.work_packet.presentation.presentation_id || action.semantic_root_digest !== current.reply.work_packet.presentation.semantic_root_digest || action.preview_digest !== current.reply.work_packet.clarification_preview.preview_digest) throw new V5ProtocolError('CLARIFICATION_PREVIEW_STALE', 'Clarification commit must bind the current presentation, semantic root, and preview.');
   validateAdvertisedAction(current, action, { kind: 'commit_clarification_response', presentation_id: current.reply.work_packet.presentation.presentation_id, semantic_root_digest: current.reply.work_packet.presentation.semantic_root_digest, preview_digest: current.reply.work_packet.clarification_preview.preview_digest });
   const { stateSet, presentation, gaps } = await clarificationState(current);
   const preview = await readSemanticV5Record(current.layout.compilerState, current.checkpoint.preview_digest);
   const pending = await readSealedV5Record(current.layout.compilerState, current.checkpoint.pending_clarification_digest, 'pending_record_digest');
   const committed = commitClarificationResponse({ pending, preview, state_set: stateSet, raw_confirmation: action.raw_confirmation, confirmation_range: action.confirmation_range, control_registry: contracts.clarificationControlRegistry, current: { semantic_root_digest: current.checkpoint.semantic_root_digest, presentation_digest: current.checkpoint.presentation_digest, question_part_state_set_digest: current.checkpoint.question_part_state_set_digest, source_revision: current.checkpoint.current_revision, checkpoint_digest: pending.base_checkpoint_digest } });
+  validatePublicRequestSchema(request, 'advance');
   const unresolved = committed.next_state_set.parts.some((/** @type {Record<string,any>} */ part) => ['presented', 'deferred_by_user', 'unknown_by_user'].includes(part.current_state));
   const invalidated = new Set(preview.deterministic_projection.invalidated_artifact_ids ?? []);
   const requirementsStage = current.checkpoint.stage === 'requirements_analysis';
@@ -783,7 +724,7 @@ async function advanceClarificationCommit(current, request) {
     workPacket = { kind: 'semantic_review_work', context: current.reply.work_packet.context, semantic_review_seed: seed };
   } else if (targetCell.work_packet_kind === 'behavior_work') {
     const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, 'seed_digest');
-    workPacket = { kind: 'behavior_work', context: current.reply.work_packet.context, permission_matrix_worklists: [], behavior_contract_worklist: seed };
+    workPacket = { kind: 'behavior_work', context: current.reply.work_packet.context, permission_matrix_worklists: await permissionMatricesForCurrent(current, committed.impact.after_graph_digest), behavior_contract_worklist: seed };
   } else if (targetCell.work_packet_kind === 'case_work') workPacket = { kind: 'case_work', context: current.reply.work_packet.context };
   else throw new V5ProtocolError('CLARIFICATION_IMPACT_MISMATCH', 'Clarification cannot terminalize without a compiled delivery.');
   const checkpointBase = {
@@ -817,14 +758,91 @@ async function acceptedSourceContext(current) {
   return { accepted_source_state_digest: current.checkpoint.accepted_source_state_digest, source_packs: sourcePacks.sort((left, right) => left.artifact_digest.localeCompare(right.artifact_digest)) };
 }
 
+/** @param {Record<string,any>} current @param {Record<string,any>} semantics */
+async function behaviorEvidenceContext(current, semantics) {
+  const evidenceLevels = new Map((semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => [claim.claim_id, 'E2']));
+  for (const digest of current.checkpoint.accepted_decision_digests ?? []) {
+    const decision = await readSemanticV5Record(current.layout.compilerState, digest);
+    if (typeof decision.decision_id !== 'string' || !['E1', 'E3'].includes(decision.evidence_level)) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Accepted Decision evidence inventory is invalid.');
+    evidenceLevels.set(decision.decision_id, decision.evidence_level);
+  }
+  const sourceUnitIds = new Set();
+  if (typeof current.checkpoint.semantic_review_seed_digest === 'string') {
+    const semanticSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, 'seed_digest');
+    for (const unit of semanticSeed.normative_units ?? []) if (typeof unit.unit_id === 'string') sourceUnitIds.add(unit.unit_id);
+  }
+  return { evidenceLevels, sourceUnitIds };
+}
+
+const ACCEPTED_CONTRACT_KINDS = new Set([
+  'identity', 'region', 'collection', 'filter', 'page_model', 'termination', 'consistency', 'universe',
+  'tenant_or_region', 'snapshot', 'enumeration', 'aggregate', 'invariant', 'domain_predicate', 'locator',
+  'key_normalization', 'transform', 'value_normalization', 'null_policy', 'semantic_equivalence',
+  'denial_behavior', 'data_scope'
+]);
+
+/**
+ * The current work packet is the only public source an Agent may use when it
+ * constructs a downstream artifact. Collect only exact, current-root typed
+ * refs from that accepted projection; arbitrary contract-shaped objects in the
+ * submitted Behavior artifact are deliberately not part of this inventory.
+ * @param {unknown} value
+ * @param {string} semanticRootDigest
+ */
+function acceptedTypedContractRefs(value, semanticRootDigest) {
+  const refs = new Set();
+  const visit = (/** @type {unknown} */ current) => {
+    if (Array.isArray(current)) {
+      current.forEach(visit);
+      return;
+    }
+    if (!plainObject(current)) return;
+    if (hasExactKeys(current, ['contract_id', 'contract_kind', 'semantic_root_digest'])
+      && typeof current.contract_id === 'string' && current.contract_id.length > 0
+      && ACCEPTED_CONTRACT_KINDS.has(current.contract_kind)
+      && current.semantic_root_digest === semanticRootDigest) refs.add(typedContractRefKey(current));
+    Object.values(current).forEach(visit);
+  };
+  visit(value);
+  return refs;
+}
+
+/** @param {Record<string,any>} current */
+async function acceptedBehaviorGaps(current) {
+  if (typeof current.checkpoint.clarification_gaps_digest !== 'string') return [];
+  const inventory = await readSealedV5Record(current.layout.compilerState, current.checkpoint.clarification_gaps_digest, 'gaps_digest');
+  const gaps = [];
+  for (const view of inventory.gaps ?? []) {
+    if (view.gap_binding?.kind !== 'behavior_gap') continue;
+    const gap = await readSemanticV5Record(current.layout.compilerState, view.gap_binding.gap_payload_digest);
+    if (gap.semantic_gap_id !== view.gap_binding.gap_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Accepted Behavior gap inventory is cross-wired.');
+    gaps.push(gap);
+  }
+  return gaps;
+}
+
+/** @param {Record<string,any>} current @param {string} semanticRootDigest */
+async function permissionMatricesForCurrent(current, semanticRootDigest) {
+  if (typeof current.checkpoint.semantic_review_seed_digest !== 'string') return [];
+  const semanticSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, 'seed_digest');
+  return derivePermissionMatrices(semanticRootDigest, semanticSeed, contracts.permissionDerivationRegistry.registry_digest);
+}
+
 /** @param {Record<string,any>} current @param {Record<string,any>} request */
 async function advanceEvidenceClaims(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ['kind', 'action_token', 'artifact_kind', 'artifact']) || action.artifact_kind !== 'evidence_claims' || !plainObject(action.artifact)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Evidence Claims action is not a closed submit_artifact request.');
   validateAdvertisedAction(current, action, { kind: 'submit_artifact', artifact_kind: 'evidence_claims' });
+  validateAgentArtifactRoot(action.artifact, ['semantic_review_seed_digest', 'claims', 'semantic_gaps', 'decomposition_reviews', 'ambiguity_reviews', 'entity_resolutions']);
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, 'seed_digest');
   const validated = validateSemanticReviews(seed, action.artifact, { acceptedDecisionIds: [] });
-  const { term_registry: provisionalTermRegistry, ...acceptedPayload } = /** @type {Record<string,any>} */ (validated);
+  validatePublicRequestSchema(request, 'advance');
+  const {
+    term_registry: provisionalTermRegistry,
+    compiled_claims: compiledClaims,
+    client_key_bindings: claimClientKeyBindings,
+    ...acceptedPayload
+  } = /** @type {Record<string,any>} */ (validated);
   const envelope = acceptArtifactEnvelope({ artifactKind: 'evidence_claims', payload: acceptedPayload, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'requirements_analysis', inputDigests: [seed.seed_digest, current.checkpoint.accepted_source_state_digest] });
   const semanticRootDigest = canonicalObjectDigest({
     namespace: 'generate-test-cases/v5/semantic-root', format_version: 1,
@@ -834,13 +852,31 @@ async function advanceEvidenceClaims(current, request) {
   });
   const termRegistry = sealV5Record({ semantic_root_digest: semanticRootDigest, entries: provisionalTermRegistry.entries }, 'registry_digest');
   const ruleIndex = createSemanticRuleIndex(semanticRootDigest, { registry_digest: `sha256:${'0'.repeat(64)}`, registered_rules: [], accepted_rule_contract_refs: [] });
-  const requirements = (acceptedPayload.claims ?? []).map((/** @type {Record<string,any>} */ claim) => ({
+  const claimIdByClientKey = new Map(compiledClaims.map((/** @type {Record<string,any>} */ claim) => [claim.claim_client_key, claim.claim_id]));
+  const rewriteEvidenceRefs = (/** @type {Array<Record<string,any>>} */ refs) => refs.map((ref) => ref.kind === 'claim' && claimIdByClientKey.has(ref.claim_id) ? { ...ref, claim_id: claimIdByClientKey.get(ref.claim_id) } : structuredClone(ref));
+  const requirements = compiledClaims.map((/** @type {Record<string,any>} */ claim) => ({
     contract_kind: 'oracle_semantics',
-    subject_ref: claim.subject_ref ?? claim.claim_client_key,
-    intent_ref: claim.intent_ref ?? claim.claim_client_key,
-    basis: claim.basis ?? [{ kind: 'claim', claim_id: claim.claim_client_key }],
+    subject_ref: claim.subject_ref ?? claim.claim_id,
+    intent_ref: claim.intent_ref ?? claim.claim_id,
+    basis: claim.basis ? rewriteEvidenceRefs(claim.basis) : [{ kind: 'claim', claim_id: claim.claim_id }],
     oracle_gap_catalog: { observation_candidates: [], assertion_candidates: [], scope_candidates: [], window_candidates: [] }
   }));
+  const sourceSignalText = (seed.normative_units ?? []).map((/** @type {Record<string,any>} */ unit) => unit.outcome_candidates?.[0]?.source_span?.excerpt ?? '').join('\n');
+  const signalBasis = [{ kind: 'claim', claim_id: compiledClaims[0]?.claim_id }];
+  if (sourceSignalText.includes('字段映射要求')) requirements.push({ contract_kind: 'field_correspondence', subject_ref: compiledClaims[0].claim_id, intent_ref: 'source-signaled-field-correspondence', basis: signalBasis });
+  if (sourceSignalText.includes('状态域要求')) requirements.push({ contract_kind: 'domain', subject_ref: compiledClaims[0].claim_id, intent_ref: 'source-signaled-domain-boundary', basis: signalBasis });
+  if (sourceSignalText.includes('人口范围要求')) requirements.push({ contract_kind: 'population', subject_ref: compiledClaims[0].claim_id, intent_ref: 'source-signaled-population-scope', basis: signalBasis, population_gap_catalog: { scope_candidates: [], proof_candidates: [] } });
+  const permissionMatrices = derivePermissionMatrices(semanticRootDigest, seed, contracts.permissionDerivationRegistry.registry_digest);
+  for (const matrix of permissionMatrices) for (const cell of matrix.required_cells ?? []) {
+    if (!['denial_behavior', 'data_scope'].includes(cell.permission_dimension)) continue;
+    requirements.push({
+      contract_kind: 'permission_auxiliary', subject_ref: cell.required_cell_key,
+      intent_ref: `permission:${matrix.matrix_id}:${cell.required_cell_key}`,
+      basis: signalBasis, auxiliary_contract_kind: cell.permission_dimension,
+      permission_target: { matrix_id: matrix.matrix_id, required_cell_key: cell.required_cell_key },
+      existing_contract_refs: []
+    });
+  }
   const behaviorSeed = deriveBehaviorContractSeed(semanticRootDigest, { semanticRuleIndex: ruleIndex, riskModuleIds: [...new Set(requirements.map((/** @type {Record<string,any>} */ item) => item.subject_ref))], requirements });
   const hasGaps = Array.isArray(acceptedPayload.semantic_gaps) && acceptedPayload.semantic_gaps.length > 0;
   const clarificationGaps = hasGaps ? compilerClarificationGaps(acceptedPayload.semantic_gaps, 'requirements_gap') : [];
@@ -869,18 +905,37 @@ async function advanceEvidenceClaims(current, request) {
     : [{ kind: 'submit_artifact', artifact_kind: 'behavior_views' }, { kind: 'cancel_run' }];
   const selectorState = checkpointSelectors(checkpointBase, capabilities);
   const source = await acceptedSourceContext(current);
+  const compiledEvidencePayload = {
+    ...structuredClone(envelope.payload),
+    claims: compiledClaims.map((/** @type {Record<string,any>} */ claim) => {
+      const { claim_client_key: ignored, ...compiled } = claim;
+      return compiled;
+    })
+  };
   const context = {
     source,
-    semantics: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
+    semantics: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: compiledEvidencePayload },
     term_registry: { artifact_digest: termRegistry.registry_digest, accepted_revision: envelope.accepted_revision, payload: termRegistry },
     compiler_rules: { ...agentVisibleCompilerRules(), semantic_rule_index_projection: { kind: 'available', index: ruleIndex } }
   };
   const workPacket = hasGaps
     ? { kind: 'clarification_work', context, presentation }
-    : { kind: 'behavior_work', context, permission_matrix_worklists: [], behavior_contract_worklist: behaviorSeed };
+    : { kind: 'behavior_work', context, permission_matrix_worklists: permissionMatrices, behavior_contract_worklist: behaviorSeed };
   const actionDigest = actionDigestV5('advance', action);
-  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
+  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: claimClientKeyBindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  if (hasGaps) {
+    const origins = acceptedPayload.semantic_gaps.map((/** @type {Record<string,any>} */ gap) => gap.target?.origin?.kind);
+    const diagnosticCode = origins.includes('ambiguity') ? 'AMBIGUITY_UNRESOLVED'
+      : origins.includes('entity_resolution') ? 'ENTITY_RESOLUTION_UNRESOLVED' : null;
+    if (diagnosticCode) {
+      const errorRow = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === diagnosticCode && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
+      if (!errorRow || errorRow.exact_commit.kind !== 'artifact_commit') throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Requirements-gap reply contract is missing for ${diagnosticCode}.`);
+      reply.reply_contract_id = errorRow.reply_contract_id;
+      reply.reply_status = errorRow.exact_reply_status;
+      reply.diagnostics = [{ code: diagnosticCode, affected_refs: acceptedPayload.semantic_gaps.map((/** @type {Record<string,any>} */ gap) => gap.semantic_gap_client_key).sort(), message: 'The accepted requirements artifact contains an explicit unresolved semantic gap.' }];
+    }
+  }
   return commitNormalRunTransaction(current.layout.root, /** @type {{idempotency_key:string,action:Record<string,any>}} */ (request), {
     checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
     acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }],
@@ -896,47 +951,123 @@ async function advanceBehaviorViews(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ['kind', 'action_token', 'artifact_kind', 'artifact']) || action.artifact_kind !== 'behavior_views' || !plainObject(action.artifact)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Behavior Views action is not a closed submit_artifact request.');
   validateAdvertisedAction(current, action, { kind: 'submit_artifact', artifact_kind: 'behavior_views' });
+  if (action.artifact.provenance_graph !== undefined) {
+    validateV5ProvenanceGraph(action.artifact.provenance_graph);
+    throw new V5ProtocolError('COMPILER_OWNED_FIELD_SUBMITTED', 'Behavior provenance is derived by the Compiler and cannot be submitted by the Agent.');
+  }
+  validateAgentArtifactRoot(action.artifact, ['behavior_contract_seed_digest', 'field_correspondences', 'value_states', 'predicate_contracts', 'domain_contracts', 'behavior_equivalence_contracts', 'population_contracts', 'population_proofs', 'permission_auxiliary_contracts', 'oracle_semantic_contracts', 'behavior_contract_reviews', 'permission_matrix_reviews', 'risk_reviews', 'semantic_gap_proposals']);
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, 'seed_digest');
-  const requiredArrays = ['field_correspondences', 'value_states', 'predicate_contracts', 'domain_contracts', 'behavior_equivalence_contracts', 'population_contracts', 'population_proofs', 'permission_auxiliary_contracts', 'oracle_semantic_contracts', 'behavior_contract_reviews', 'permission_matrix_reviews', 'risk_reviews', 'semantic_gap_proposals', 'formal_test_point_ids'];
+  const semantics = current.reply.work_packet.context.semantics.payload;
+  const evidenceContext = await behaviorEvidenceContext(current, semantics);
+  const acceptedClaimIds = new Set((semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => claim.claim_id));
+  validateAcceptedClaimReferences(action.artifact, acceptedClaimIds);
+  validateBehaviorEvidenceClosure(action.artifact, evidenceContext);
+  const requiredArrays = ['field_correspondences', 'value_states', 'predicate_contracts', 'domain_contracts', 'behavior_equivalence_contracts', 'population_contracts', 'population_proofs', 'permission_auxiliary_contracts', 'oracle_semantic_contracts', 'behavior_contract_reviews', 'permission_matrix_reviews', 'risk_reviews', 'semantic_gap_proposals'];
   if (action.artifact.behavior_contract_seed_digest !== seed.seed_digest || requiredArrays.some((key) => !Array.isArray(action.artifact[key]))) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Behavior Views must bind the advertised seed and every closed collection.');
   const semanticRootDigest = current.checkpoint.semantic_root_digest;
+  const acceptedContractRefs = acceptedTypedContractRefs(current.reply.work_packet, semanticRootDigest);
   action.artifact.value_states.forEach(validateValueState);
-  action.artifact.field_correspondences.forEach((mapping) => validateFieldCorrespondence(mapping, seed.semantic_rule_index));
-  const compiledDomains = action.artifact.domain_contracts.map((domain) => compileDomain(semanticRootDigest, domain, action.artifact.predicate_contracts));
-  action.artifact.population_contracts.forEach((contract) => validatePopulationContract(contract, semanticRootDigest));
-  const populationClientKeys = action.artifact.population_contracts.map((contract) => contract.population_contract_client_key);
-  action.artifact.population_proofs.forEach((proof) => validatePopulationProof(proof, semanticRootDigest, populationClientKeys));
-  action.artifact.oracle_semantic_contracts.forEach((contract) => validateOracleSemanticContract(contract, { semanticRootDigest, semanticRuleIndex: seed.semantic_rule_index, fieldCorrespondenceIds: action.artifact.field_correspondences.map((mapping) => mapping.mapping_client_key), permissionDecisionCells: [] }));
-  validateBehaviorContractReviews(seed, action.artifact.behavior_contract_reviews, action.artifact);
+  validateBehaviorContractReviews(seed, action.artifact.behavior_contract_reviews, action.artifact, evidenceContext);
   const matrices = current.reply.work_packet.permission_matrix_worklists ?? [];
   if (action.artifact.permission_matrix_reviews.length !== matrices.length) throw new V5ProtocolError('PERMISSION_MATRIX_INCOMPLETE', 'Every advertised permission matrix must be reviewed exactly once.');
-  for (const matrix of matrices) {
-    const review = action.artifact.permission_matrix_reviews.find((candidate) => candidate.matrix_id === matrix.matrix_id);
-    if (!review) throw new V5ProtocolError('PERMISSION_MATRIX_INCOMPLETE', 'Permission matrix review is missing.');
-    validatePermissionMatrixReview(matrix, review, semanticRootDigest);
+  for (const matrix of matrices) if (!action.artifact.permission_matrix_reviews.some((candidate) => candidate.matrix_id === matrix.matrix_id)) throw new V5ProtocolError('PERMISSION_MATRIX_INCOMPLETE', 'Permission matrix review is missing.');
+  const permissionCellsForCompilation = matrices.flatMap((matrix) => matrix.required_cells.map((cell) => ({ matrix_id: matrix.matrix_id, ...cell })));
+  const compiledBehavior = compileBehaviorContracts({
+    semanticRootDigest, semanticRuleIndex: seed.semantic_rule_index, artifact: action.artifact,
+    permissionCells: permissionCellsForCompilation, acceptedContractRefs
+  });
+  const permissionAcceptedContractRefs = new Set(acceptedContractRefs);
+  for (const contract of compiledBehavior.permission_auxiliary_contracts) {
+    permissionAcceptedContractRefs.add(typedContractRefKey({
+      contract_id: contract.permission_auxiliary_contract_id,
+      contract_kind: contract.payload.contract_kind,
+      semantic_root_digest: semanticRootDigest
+    }));
   }
-  if (action.artifact.provenance_graph !== undefined) validateV5ProvenanceGraph(action.artifact.provenance_graph);
-  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, action.artifact.risk_reviews);
+  for (const matrix of matrices) {
+    const review = compiledBehavior.permission_matrix_reviews.find((candidate) => candidate.matrix_id === matrix.matrix_id);
+    validatePermissionMatrixReview(matrix, review, semanticRootDigest, { ...evidenceContext, acceptedContractRefs: permissionAcceptedContractRefs });
+  }
+  const compiledDomains = compiledBehavior.domain_contracts;
+  const requirementByKey = new Map(seed.required_contracts.map((/** @type {Record<string,any>} */ requirement) => [requirement.required_contract_key, requirement]));
+  const stableByClientKey = new Map(compiledBehavior.client_key_bindings.map((/** @type {{client_key:string,stable_id:string}} */ binding) => [binding.client_key, binding.stable_id]));
+  const provenanceContractById = new Map();
+  for (const review of action.artifact.behavior_contract_reviews) {
+    if (review.disposition?.kind !== 'formal') continue;
+    const requirement = requirementByKey.get(review.required_contract_key);
+    for (const clientKey of review.disposition.contract_client_keys) {
+      const contractId = stableByClientKey.get(clientKey);
+      if (!contractId || !requirement) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Formal Behavior provenance cannot resolve its Compiler-owned stable contract identity.');
+      const aggregate = provenanceContractById.get(contractId) ?? { contract_id: contractId, basis: [] };
+      aggregate.basis.push(...requirement.basis);
+      aggregate.basis = [...new Map(aggregate.basis.map((basis) => [canonicalV5Stringify(basis), basis])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right)));
+      provenanceContractById.set(contractId, aggregate);
+    }
+  }
+  const provenanceGraph = compileBehaviorProvenanceGraph({
+    runId: current.identity.run_id, caseDocumentLineageId: current.identity.case_document_lineage_id,
+    semanticRootDigest: current.checkpoint.semantic_root_digest,
+    claims: (semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => ({ ...claim, evidence_level: 'E2' })),
+    behaviorContracts: [...provenanceContractById.values()]
+  });
   const semanticGaps = action.artifact.semantic_gap_proposals;
-  const reviewHasGap = action.artifact.behavior_contract_reviews.some((/** @type {Record<string,any>} */ review) => review.disposition?.kind === 'semantic_gap');
+  const reviewHasGap = action.artifact.behavior_contract_reviews.some((/** @type {Record<string,any>} */ review) => review.disposition?.kind === 'semantic_gap')
+    || action.artifact.permission_matrix_reviews.some((/** @type {Record<string,any>} */ review) => review.cell_dispositions.some((/** @type {Record<string,any>} */ row) => row.disposition?.kind === 'semantic_gap'))
+    || action.artifact.risk_reviews.some((/** @type {Record<string,any>} */ review) => review.risk_item?.risk_disposition === 'semantic_gap');
   const hasGaps = reviewHasGap || semanticGaps.length > 0;
-  const compiledGaps = compileBehaviorSemanticGaps(semanticRootDigest, seed, semanticGaps, action.artifact.behavior_contract_reviews);
+  const compiledGaps = compileBehaviorSemanticGaps(semanticRootDigest, seed, semanticGaps, action.artifact.behavior_contract_reviews, { permissionMatrices: matrices, permissionMatrixReviews: action.artifact.permission_matrix_reviews, riskReviews: action.artifact.risk_reviews, acceptedBehaviorGaps: await acceptedBehaviorGaps(current) });
   if (hasGaps !== (compiledGaps.accepted_gaps.length > 0)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Behavior semantic-gap reviews require exact gap payloads.');
+  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, action.artifact.risk_reviews, evidenceContext);
+  validatePublicRequestSchema(request, 'advance');
   const envelope = acceptArtifactEnvelope({ artifactKind: 'behavior_views', payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'case_design', inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
   const resultKey = hasGaps ? 'actionable_gaps' : 'no_actionable_gap';
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'artifact.submit_behavior_views', result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
-  const testObligations = sealV5Record({ kind: 'test_obligations', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: [...new Set(action.artifact.formal_test_point_ids ?? [])].sort(), behavior_artifact_digest: envelope.envelope_digest }, 'obligations_digest');
+  const formalTestPointIds = [...new Set(compiledBehavior.oracle_semantic_contracts.map((/** @type {Record<string,any>} */ contract) => contract.formal_test_point_id))].sort();
+  const testObligations = sealV5Record({ kind: 'test_obligations', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: formalTestPointIds, behavior_artifact_digest: envelope.envelope_digest }, 'obligations_digest');
+  const permissionCells = matrices.flatMap((/** @type {Record<string,any>} */ matrix) => {
+    const review = compiledBehavior.permission_matrix_reviews.find((/** @type {Record<string,any>} */ candidate) => candidate.matrix_id === matrix.matrix_id);
+    const dispositionByCell = new Map((review?.cell_dispositions ?? []).map((/** @type {Record<string,any>} */ row) => [row.required_cell_key, row.disposition]));
+    return matrix.required_cells.map((/** @type {Record<string,any>} */ cell) => {
+      const disposition = dispositionByCell.get(cell.required_cell_key);
+      return { matrix_id: matrix.matrix_id, ...structuredClone(cell), disposition: disposition.kind, ...(disposition.kind === 'formal' ? structuredClone(disposition.outcome) : {}), ...(disposition.kind === 'semantic_gap' ? { gap_ref: structuredClone(disposition.gap_ref) } : {}), ...(disposition.kind === 'not_applicable' ? { basis: structuredClone(disposition.basis) } : {}) };
+    });
+  });
+  const caseCompilationContext = !hasGaps ? sealV5Record({
+    kind: 'case_compilation_context', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest,
+    claim_assessments: (semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => ({ claim_id: claim.claim_id ?? claim.claim_client_key, level: 'E2', support_review: 'supported' })).sort((left, right) => left.claim_id.localeCompare(right.claim_id)),
+    accepted_gap_ids: [], formal_test_point_ids: formalTestPointIds,
+    semantic_partitions: compiledDomains.flatMap((/** @type {Record<string,any>} */ domain) => domain.partitions.map((/** @type {Record<string,any>} */ partition) => ({ partition_id: partition.partition_id, disposition: 'covered' }))).sort((left, right) => left.partition_id.localeCompare(right.partition_id)),
+    value_instances: action.artifact.value_states.map((/** @type {Record<string,any>} */ valueState) => ({ value_instance_id: canonicalObjectDigest(valueState), disposition: 'covered' })).sort((left, right) => left.value_instance_id.localeCompare(right.value_instance_id)),
+    permission_cells: permissionCells.sort((left, right) => left.required_cell_key.localeCompare(right.required_cell_key)),
+    risk_ledger: riskLedger,
+    oracle_semantic_contracts: structuredClone(compiledBehavior.oracle_semantic_contracts),
+    semantic_audit: {
+      value_states: structuredClone(action.artifact.value_states),
+      field_correspondences: structuredClone(compiledBehavior.field_correspondences),
+      predicate_contracts: structuredClone(compiledBehavior.predicate_contracts),
+      domains: structuredClone(compiledDomains),
+      behavior_equivalence_contracts: structuredClone(compiledBehavior.behavior_equivalence_contracts),
+      populations: structuredClone(compiledBehavior.population_contracts),
+      population_proofs: structuredClone(compiledBehavior.population_proofs),
+      permission_auxiliary_contracts: structuredClone(compiledBehavior.permission_auxiliary_contracts),
+      provenance_graph: structuredClone(provenanceGraph)
+    },
+    semantic_rule_index: structuredClone(seed.semantic_rule_index)
+  }, 'context_digest') : null;
   /** @type {Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>} */
   const compilerStateRecords = [
     { record: testObligations, digestField: 'obligations_digest' },
     { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
-    ...compiledGaps.accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
+    { record: provenanceGraph, digestField: 'graph_digest' },
+    ...(caseCompilationContext ? [{ record: caseCompilationContext, digestField: 'context_digest' }] : []),
+    ...compiledGaps.new_accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
   ];
   let workPacket;
   const context = {
     ...current.reply.work_packet.context,
     behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
+    provenance: { artifact_digest: provenanceGraph.graph_digest, accepted_revision: envelope.accepted_revision, payload: provenanceGraph },
     test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: testObligations }
   };
   const checkpointBase = {
@@ -944,7 +1075,8 @@ async function advanceBehaviorViews(current, request) {
     fsm_cell_id: outcome.target_cell_id, stage: targetCell.stage, obligation: targetCell.obligation,
     accepted_artifact_digests: [...new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
     behavior_views_artifact_digest: envelope.envelope_digest, test_obligations_digest: testObligations.obligations_digest,
-    risk_ledger_digest: canonicalObjectDigest(riskLedger)
+    risk_ledger_digest: canonicalObjectDigest(riskLedger), provenance_graph_digest: provenanceGraph.graph_digest,
+    ...(caseCompilationContext ? { case_compilation_context_digest: caseCompilationContext.context_digest } : {})
   };
   if (hasGaps) {
     const gaps = clarificationGapsFromAcceptedBehavior(compiledGaps.accepted_gaps);
@@ -958,8 +1090,20 @@ async function advanceBehaviorViews(current, request) {
   delete checkpointBase.checkpoint_digest;
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(outcome.target_cell_id, workPacket));
   const actionDigest = actionDigestV5('advance', action);
-  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: compiledGaps.client_key_bindings };
+  const clientKeyBindings = [
+    ...compiledGaps.client_key_bindings,
+    ...compiledBehavior.client_key_bindings
+  ].sort((left, right) => left.client_key.localeCompare(right.client_key));
+  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: clientKeyBindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  const primaryGapDiagnostic = compiledGaps.accepted_gaps.map((/** @type {Record<string,any>} */ gap) => BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics]).filter(Boolean)[0];
+  if (primaryGapDiagnostic) {
+    const errorRow = replyRows.find((/** @type {Record<string,any>} */ candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === primaryGapDiagnostic && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
+    if (!errorRow || errorRow.exact_commit.kind !== 'artifact_commit') throw new V5ProtocolError('POLICY_REGISTRY_INCONSISTENT', `Explicit Behavior-gap reply contract is missing for ${primaryGapDiagnostic}.`);
+    reply.reply_contract_id = errorRow.reply_contract_id;
+    reply.reply_status = errorRow.exact_reply_status;
+    reply.diagnostics = [{ code: primaryGapDiagnostic, affected_refs: compiledGaps.accepted_gaps.filter((/** @type {Record<string,any>} */ gap) => BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics] === primaryGapDiagnostic).map((/** @type {Record<string,any>} */ gap) => gap.semantic_gap_id).sort(), message: 'The accepted Behavior artifact contains an explicit unresolved semantic gap.' }];
+  }
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }], compilerStateRecords });
 }
 
@@ -973,11 +1117,17 @@ async function advanceCaseDrafts(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ['kind', 'action_token', 'artifact_kind', 'artifact']) || action.artifact_kind !== 'case_drafts' || !plainObject(action.artifact) || !Array.isArray(action.artifact.case_drafts)) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Case Drafts action is not a closed submit_artifact request.');
   validateAdvertisedAction(current, action, { kind: 'submit_artifact', artifact_kind: 'case_drafts' });
-  const envelope = acceptArtifactEnvelope({ artifactKind: 'case_drafts', payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'case_design', inputDigests: [current.checkpoint.semantic_root_digest, current.checkpoint.test_obligations_digest] });
-  const document = compileV5CaseDocument({
-    ...action.artifact, case_document_lineage_id: current.identity.case_document_lineage_id,
+  validateAgentArtifactRoot(action.artifact, ['case_drafts']);
+  if (typeof current.checkpoint.case_compilation_context_digest !== 'string') throw new V5ProtocolError('CHECKPOINT_INVALID', 'Case compilation context is not advertised by the verified checkpoint.');
+  const caseCompilationContext = await readSealedV5Record(current.layout.compilerState, current.checkpoint.case_compilation_context_digest, 'context_digest');
+  if (caseCompilationContext.semantic_root_digest !== current.checkpoint.semantic_root_digest) throw new V5ProtocolError('CHECKPOINT_INVALID', 'Case compilation context belongs to a different semantic root.');
+  const compilation = compileV5CaseDocumentTransaction({
+    ...caseCompilationContext, case_drafts: action.artifact.case_drafts, case_document_lineage_id: current.identity.case_document_lineage_id,
     semantic_root_digest: current.checkpoint.semantic_root_digest, source_revision: current.checkpoint.current_revision + 1
   });
+  validatePublicRequestSchema(request, 'advance');
+  const document = compilation.document;
+  const envelope = acceptArtifactEnvelope({ artifactKind: 'case_drafts', payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'case_design', inputDigests: [current.checkpoint.semantic_root_digest, current.checkpoint.test_obligations_digest, caseCompilationContext.context_digest] });
   const executionPlan = projectCompatibilityExecutionPlan(document, { run_id: current.identity.run_id, revision: current.checkpoint.current_revision + 1 });
   const caseDocumentRef = executionPlan.case_document_ref;
   const renderedOutputs = [renderedOutputRecord('application/json', renderV5Json(document)), renderedOutputRecord('text/markdown', renderV5Markdown(document)), renderedOutputRecord('text/csv', renderV5Csv(document))].map((record) => ({ record, digestField: 'rendered_output_digest' }));
@@ -995,7 +1145,7 @@ async function advanceCaseDrafts(current, request) {
   const workPacket = { kind: 'terminal_work', terminal_kind: 'case_document_finished', case_document_ref: caseDocumentRef };
   const selectorState = checkpointSelectors(checkpointBase, []);
   const actionDigest = actionDigestV5('advance', action);
-  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
+  const commitReceipt = { kind: 'artifact_commit', committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: compilation.client_key_bindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, [], commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
   return commitNormalRunTransaction(current.layout.root, request, {
     checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
@@ -1012,6 +1162,7 @@ async function advanceSourceBatch(current, request) {
   const work = sourceWorkPacket(sourceState);
   const capability = { kind: 'submit_source_batch', request_ids: work.source_requests.map((/** @type {Record<string, any>} */ item) => item.request_id) };
   validateAdvertisedAction(current, action, capability);
+  validatePublicRequestSchema(request, 'advance');
   const applied = applySourceBatch(work.source_requests, action);
   const acceptedArtifacts = [];
   const compilerStateRecords = [];
@@ -1119,6 +1270,7 @@ async function advanceCancel(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ['kind', 'action_token', 'reason']) || typeof action.reason !== 'string' || action.reason.trim().length === 0) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Cancel action is invalid.');
   validateAdvertisedAction(current, action, { kind: 'cancel_run' });
+  validatePublicRequestSchema(request, 'advance');
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'run.cancel', result_key: 'cancelled' });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const digestValue = actionDigestV5('advance', action);
@@ -1140,7 +1292,7 @@ export async function inspectV5Run(runDirectory) {
   let identity;
   try {
     layout = await resolveRunLayout(runDirectory);
-    identity = (await readFixedSealedRecord(layout.identity, 'identity_digest')).record;
+    identity = (await readFixedSealedRecord(layout.identity, 'run_identity_digest')).record;
     const current = await readVerifiedRun(runDirectory);
     try { await verifyV5AcceptedClosure(current); } catch (error) {
       if (error instanceof V5ProtocolError) return readOnlyIntegrityReply(current, error.code, error.message, 'run_inspect', Array.isArray(error.affected_refs) ? error.affected_refs : []);

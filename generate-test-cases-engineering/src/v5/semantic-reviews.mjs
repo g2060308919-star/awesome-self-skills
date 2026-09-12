@@ -1,4 +1,5 @@
 import { canonicalV5Stringify } from './canonical-v5.mjs';
+import { stableId } from '../canonical.mjs';
 import { V5ProtocolError } from './errors.mjs';
 import { stableV5Id } from './identity.mjs';
 import { sealV5Record } from './storage-records.mjs';
@@ -29,6 +30,10 @@ export function validateSemanticReviews(seed, artifact, context) {
   if (decomposition.length !== candidates.length) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Every outcome candidate must be reviewed exactly once.');
   const candidateById = new Map(candidates.map((candidate) => [candidate.candidate_id, candidate]));
   const claimByKey = new Map(/** @type {Array<Record<string, any>>} */ (artifact.claims ?? []).map((claim) => [claim.claim_client_key, claim]));
+  if (claimByKey.size !== (artifact.claims ?? []).length || [...claimByKey.keys()].some((key) => typeof key !== 'string' || key.trim().length === 0)) throw new V5ProtocolError('CLIENT_KEY_INVALID', 'Evidence Claim client keys must be nonblank and unique within the batch.');
+  /** @type {Map<string, string[]>} */
+  const candidateIdsByClaimKey = new Map();
+  const bindClaimCandidate = (/** @type {string} */ claimKey, /** @type {string} */ candidateId) => candidateIdsByClaimKey.set(claimKey, [...new Set([...(candidateIdsByClaimKey.get(claimKey) ?? []), candidateId])].sort());
   const seenCandidates = new Set();
   for (const review of decomposition) {
     const candidate = candidateById.get(review.candidate_id);
@@ -38,6 +43,7 @@ export function validateSemanticReviews(seed, artifact, context) {
     if (disposition.kind === 'single_claim') {
       const claim = claimByKey.get(disposition.claim_client_key);
       if (!claim || candidate.required_observation_slot_digests.length !== 1 || !sharedSignatureMatches(claim, candidate) || claim.primary_outcome_signature.primary_observation_slot_digest !== candidate.required_observation_slot_digests[0] || !sameSet(claim.observation_slot_digests, candidate.required_observation_slot_digests)) throw new V5ProtocolError('ATOMIC_OUTCOME_NOT_SINGLE', 'Single Claim does not close exactly one advertised observation slot.');
+      bindClaimCandidate(disposition.claim_client_key, candidate.candidate_id);
     } else if (disposition.kind === 'split_claims') {
       if (!Array.isArray(disposition.claim_client_keys) || disposition.claim_client_keys.length < 2 || new Set(disposition.claim_client_keys).size !== disposition.claim_client_keys.length) throw new V5ProtocolError('ATOMIC_OUTCOME_NOT_SINGLE', 'Composite outcome must split into unique Claims.');
       const primary = [];
@@ -46,6 +52,7 @@ export function validateSemanticReviews(seed, artifact, context) {
         const primaryDigest = claim?.primary_outcome_signature?.primary_observation_slot_digest;
         if (!claim || !sharedSignatureMatches(claim, candidate) || !candidate.required_observation_slot_digests.includes(primaryDigest) || !sameSet(claim.observation_slot_digests, [primaryDigest])) throw new V5ProtocolError('ATOMIC_OUTCOME_NOT_SINGLE', 'Split Claim does not isolate one advertised observation slot.');
         primary.push(primaryDigest);
+        bindClaimCandidate(key, candidate.candidate_id);
       }
       if (!sameSet(primary, candidate.required_observation_slot_digests)) throw new V5ProtocolError('ATOMIC_OUTCOME_NOT_SINGLE', 'Split Claims do not exactly cover the composite outcome.');
     } else if (disposition.kind === 'semantic_gap') {
@@ -54,6 +61,23 @@ export function validateSemanticReviews(seed, artifact, context) {
       if (typeof disposition.reason !== 'string' || disposition.reason.trim().length === 0 || typeof disposition.source_review_id !== 'string' || disposition.source_review_id.length === 0) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Non-normative disposition needs direct review basis.');
     } else throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Outcome disposition kind is unknown.');
   }
+  if ([...claimByKey.keys()].some((claimKey) => !candidateIdsByClaimKey.has(claimKey))) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Every submitted Claim must close at least one advertised outcome candidate.');
+  const compiledClaims = [...claimByKey.entries()].map(([claimClientKey, claim]) => {
+    const semanticClaim = {
+      accepted_source_state_digest: seed.accepted_source_state_digest,
+      outcome_candidate_ids: candidateIdsByClaimKey.get(claimClientKey),
+      primary_outcome_signature: claim.primary_outcome_signature,
+      observation_slot_digests: [...claim.observation_slot_digests].sort(),
+      ...(claim.subject_ref === undefined ? {} : { subject_ref: claim.subject_ref }),
+      ...(claim.intent_ref === undefined ? {} : { intent_ref: claim.intent_ref })
+    };
+    return { ...structuredClone(claim), claim_id: stableId('claim', semanticClaim), outcome_candidate_ids: semanticClaim.outcome_candidate_ids };
+  }).sort((left, right) => left.claim_id.localeCompare(right.claim_id));
+  const claimIdByClientKey = new Map(compiledClaims.map((claim) => [claim.claim_client_key, claim.claim_id]));
+  for (const claim of compiledClaims) {
+    if (Array.isArray(claim.basis)) claim.basis = claim.basis.map((basis) => basis.kind === 'claim' && claimIdByClientKey.has(basis.claim_id) ? { ...basis, claim_id: claimIdByClientKey.get(basis.claim_id) } : basis);
+  }
+  const clientKeyBindings = compiledClaims.map((claim) => ({ client_key: claim.claim_client_key, stable_id: claim.claim_id })).sort((left, right) => left.client_key.localeCompare(right.client_key));
 
   const ambiguities = /** @type {Array<Record<string, any>>} */ (artifact.ambiguity_reviews ?? []);
   if (ambiguities.length !== seed.ambiguity_candidates.length) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Every ambiguity candidate must be reviewed exactly once.');
@@ -89,7 +113,7 @@ export function validateSemanticReviews(seed, artifact, context) {
     if (review.resolution.kind !== 'resolved_clusters' || !Array.isArray(review.resolution.clusters) || review.resolution.clusters.length === 0) throw new V5ProtocolError('ENTITY_RESOLUTION_UNRESOLVED', 'Entity resolution must be a nonempty cluster partition.');
     const covered = [];
     for (const cluster of review.resolution.clusters) {
-      const basis = [.../** @type {string[]} */ (cluster.basis_claim_client_keys ?? []).map((claimKey) => ({ kind: 'claim', claim_id: claimKey })), .../** @type {string[]} */ (cluster.basis_decision_ids ?? []).map((decisionId) => ({ kind: 'decision', decision_id: decisionId }))];
+      const basis = [.../** @type {string[]} */ (cluster.basis_claim_client_keys ?? []).map((claimKey) => ({ kind: 'claim', claim_id: claimIdByClientKey.get(claimKey) })), .../** @type {string[]} */ (cluster.basis_decision_ids ?? []).map((decisionId) => ({ kind: 'decision', decision_id: decisionId }))];
       if (!cluster.entity_client_key || !cluster.canonical_name?.trim() || !Array.isArray(cluster.mentions) || cluster.mentions.length === 0 || basis.length === 0 || /** @type {string[]} */ (cluster.basis_claim_client_keys).some((key) => !claimByKey.has(key)) || /** @type {string[]} */ (cluster.basis_decision_ids).some((id) => !context.acceptedDecisionIds.includes(id))) throw new V5ProtocolError('ENTITY_RESOLUTION_UNRESOLVED', 'Entity cluster needs canonical identity and current evidence.');
       const canonicalMentions = /** @type {Array<Record<string, any>>} */ (cluster.mentions).filter((entry) => ['canonical_business_name', 'canonical_business_name_and_exact_ui_label'].includes(entry.name_role));
       if (canonicalMentions.length !== 1 || mentionsById.get(canonicalMentions[0].mention_candidate_id)?.observed_name !== cluster.canonical_name) throw new V5ProtocolError('ENTITY_RESOLUTION_UNRESOLVED', 'Entity cluster must designate one exact canonical-name mention.');
@@ -116,5 +140,8 @@ export function validateSemanticReviews(seed, artifact, context) {
       mention_candidate_ids: mentionIds, basis
     };
   }).sort((left, right) => left.entity_id.localeCompare(right.entity_id));
-  return { ...structuredClone(artifact), term_registry: sealV5Record({ semantic_root_digest: seed.seed_digest, entries: termEntries }, 'registry_digest') };
+  return {
+    ...structuredClone(artifact), compiled_claims: compiledClaims, client_key_bindings: clientKeyBindings,
+    term_registry: sealV5Record({ semantic_root_digest: seed.seed_digest, entries: termEntries }, 'registry_digest')
+  };
 }

@@ -8,9 +8,6 @@ import { createHash as createHash7 } from "node:crypto";
 import { readFile as readFile3 } from "node:fs/promises";
 import path5 from "node:path";
 
-// src/v5/action-tokens.mjs
-import { createHash as createHash3, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
-
 // src/canonical.mjs
 import { createHash } from "node:crypto";
 var NATIVE_ARRAY_SORT = Array.prototype.sort;
@@ -21,6 +18,12 @@ function sortArray(values, compare) {
   return (
     /** @type {T[]} */
     Reflect.apply(NATIVE_ARRAY_SORT, values, [compare])
+  );
+}
+function filterArray(values, predicate) {
+  return (
+    /** @type {T[]} */
+    Reflect.apply(NATIVE_ARRAY_FILTER, values, [predicate])
   );
 }
 function joinArray(values, separator) {
@@ -35,6 +38,7 @@ function mapArray(values, project) {
     Reflect.apply(NATIVE_ARRAY_MAP, values, [project])
   );
 }
+var VOLATILE_FIELDS = /* @__PURE__ */ new Set(["source_revision", "created_at", "updated_at", "confirmed_at", "event_at", "timestamp", "position", "index", "array_index"]);
 var ORDERED_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/steps",
   "/action_path",
@@ -230,6 +234,8 @@ var SET_ARRAY_PATHS = /* @__PURE__ */ new Set([
   "/root_issue_dispositions",
   "/blockers/affected_obligation_ids"
 ]);
+var ROOT_ISSUE_ASSOCIATIONS = /* @__PURE__ */ new Set(["case_ids", "case_id", "test_point_ids", "test_point_id", "obligation_ids", "obligation_id"]);
+var EXECUTION_SIGNATURE_ASSOCIATIONS = /* @__PURE__ */ new Set(["obligation_ids", "obligation_id"]);
 var COLLECTION_ID_FIELDS = /* @__PURE__ */ new Map([
   ["/source_assets", "asset_id"],
   ["/source_reviews", "source_id"],
@@ -305,14 +311,14 @@ function stableSemanticKey(path7, value) {
   if (typeof value === "boolean") return `boolean:${value}`;
   if (value === null) return "null";
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    const object8 = (
+    const object9 = (
       /** @type {Record<string, unknown>} */
       value
     );
     const collectionPath = pathKey(path7);
     const idField = COLLECTION_ID_FIELDS.get(collectionPath);
-    if (idField && typeof object8[idField] === "string") return `id:${object8[idField]}:${JSON.stringify(object8)}`;
-    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object8.dimension, module_ids: object8.module_ids })}:${JSON.stringify(object8)}`;
+    if (idField && typeof object9[idField] === "string") return `id:${object9[idField]}:${JSON.stringify(object9)}`;
+    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object9.dimension, module_ids: object9.module_ids })}:${JSON.stringify(object9)}`;
   }
   return JSON.stringify(value);
 }
@@ -341,6 +347,364 @@ function canonicalStringify(value) {
 function digest(value) {
   return createHash("sha256").update(canonicalStringify(value)).digest("hex");
 }
+function stripForEntity(value, entity, path7 = []) {
+  if (Array.isArray(value)) return mapArray(value, (item) => stripForEntity(item, entity, path7));
+  if (!value || typeof value !== "object") return value;
+  const rootAssociations = entity === "root" && path7.length === 0;
+  const directExecutionAssociations = entity === "execution" && path7.length === 0;
+  const caseExecutionAssociations = entity === "case" && path7.length === 1 && path7[0] === "execution_signature";
+  const stableEntries = filterArray(Object.entries(value), ([key]) => !VOLATILE_FIELDS.has(key));
+  const rootEntries = filterArray(stableEntries, ([key]) => !(rootAssociations && ROOT_ISSUE_ASSOCIATIONS.has(key)));
+  const executionEntries = filterArray(rootEntries, ([key]) => !((directExecutionAssociations || caseExecutionAssociations) && EXECUTION_SIGNATURE_ASSOCIATIONS.has(key)));
+  return Object.fromEntries(mapArray(
+    executionEntries,
+    ([key, item]) => [key, stripForEntity(item, entity, [...path7, key])]
+  ));
+}
+function stripVolatileFields(value, entity = "other") {
+  return stripForEntity(value, entity === "root" ? "root" : entity === "case" ? "case" : entity === "execution" ? "execution" : "other");
+}
+function stableId(prefix, semanticSignature) {
+  const isCaseObject = Boolean(semanticSignature && typeof semanticSignature === "object" && !Array.isArray(semanticSignature) && Object.hasOwn(semanticSignature, "execution_signature"));
+  const entity = prefix === "root" || prefix === "root_issue" ? "root" : prefix === "case" ? isCaseObject ? "case" : "execution" : "other";
+  return `${prefix}_${digest(stripVolatileFields(semanticSignature, entity)).slice(0, 16)}`;
+}
+
+// src/schema-validator.mjs
+var supportedKeywords = /* @__PURE__ */ new Set([
+  "$schema",
+  "$id",
+  "$defs",
+  "$ref",
+  "type",
+  "required",
+  "properties",
+  "items",
+  "enum",
+  "const",
+  "oneOf",
+  "allOf",
+  "not",
+  "minItems",
+  "maxItems",
+  "prefixItems",
+  "minLength",
+  "pattern",
+  "minimum",
+  "maximum",
+  "uniqueItems",
+  "additionalProperties",
+  "unevaluatedProperties"
+]);
+var supportedTypes = /* @__PURE__ */ new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
+var NATIVE_ARRAY_EVERY = Array.prototype.every;
+var NATIVE_ARRAY_FILTER2 = Array.prototype.filter;
+var NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
+var NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
+var NATIVE_ARRAY_JOIN2 = Array.prototype.join;
+var NATIVE_ARRAY_MAP2 = Array.prototype.map;
+var NATIVE_ARRAY_SLICE = Array.prototype.slice;
+var NATIVE_ARRAY_SOME = Array.prototype.some;
+var NATIVE_DEFINE_PROPERTY = Object.defineProperty;
+var NATIVE_HAS_OWN = Object.hasOwn;
+function everyArray(values, predicate) {
+  return (
+    /** @type {boolean} */
+    Reflect.apply(NATIVE_ARRAY_EVERY, values, [predicate])
+  );
+}
+function filterArray2(values, predicate) {
+  return (
+    /** @type {T[]} */
+    Reflect.apply(NATIVE_ARRAY_FILTER2, values, [predicate])
+  );
+}
+function flatMapArray(values, project) {
+  return (
+    /** @type {U[]} */
+    Reflect.apply(NATIVE_ARRAY_FLAT_MAP, values, [project])
+  );
+}
+function forEachArray(values, visit) {
+  Reflect.apply(NATIVE_ARRAY_FOR_EACH, values, [visit]);
+}
+function joinArray2(values, separator) {
+  return (
+    /** @type {string} */
+    Reflect.apply(NATIVE_ARRAY_JOIN2, values, [separator])
+  );
+}
+function mapArray2(values, project) {
+  return (
+    /** @type {U[]} */
+    Reflect.apply(NATIVE_ARRAY_MAP2, values, [project])
+  );
+}
+function pushArray(values, ...items) {
+  for (let index = 0; index < items.length; index += 1) Reflect.apply(NATIVE_DEFINE_PROPERTY, Object, [
+    values,
+    String(values.length),
+    { value: items[index], writable: true, enumerable: true, configurable: true }
+  ]);
+  return values.length;
+}
+function someArray(values, predicate) {
+  return (
+    /** @type {boolean} */
+    Reflect.apply(NATIVE_ARRAY_SOME, values, [predicate])
+  );
+}
+function isSchemaObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function assertStringArray(value, keyword) {
+  if (!Array.isArray(value) || someArray(value, (item) => typeof item !== "string") || new Set(value).size !== value.length) {
+    throw new Error(`Schema ${keyword} must be an array of unique strings.`);
+  }
+}
+function diagnostic(code, path7, message) {
+  return { category: "schema", code, path: path7, message };
+}
+function escapePointerSegment(segment) {
+  return segment.replaceAll("~", "~0").replaceAll("/", "~1");
+}
+function childPointer(path7, segment) {
+  return `${path7}/${escapePointerSegment(segment)}`;
+}
+function assertSupportedSchema(schema) {
+  if (!isSchemaObject(schema)) {
+    throw new Error("Schema must be an object.");
+  }
+  for (const [key, value] of Object.entries(schema)) {
+    if (!supportedKeywords.has(key)) throw new Error(`Unsupported schema keyword: ${key}`);
+    if (key === "$schema" || key === "$id" || key === "pattern" || key === "$ref") {
+      if (typeof value !== "string") throw new Error(`Schema ${key} must be a string.`);
+      if (key === "pattern") {
+        try {
+          new RegExp(value);
+        } catch {
+          throw new Error("Schema pattern must be a valid regular expression.");
+        }
+      }
+      if (key === "$ref" && !value.startsWith("#/$defs/")) throw new Error("Schema $ref must be a local $defs reference.");
+    } else if (key === "$defs") {
+      if (!isSchemaObject(value)) throw new Error("Schema $defs must be an object.");
+      for (const child of Object.values(value)) assertSupportedSchema(child);
+    } else if (key === "type") {
+      const types = Array.isArray(value) ? value : [value];
+      if (!types.length || someArray(types, (item) => typeof item !== "string" || !supportedTypes.has(item)) || new Set(types).size !== types.length) throw new Error("Schema type must name supported unique types.");
+    } else if (key === "required") {
+      assertStringArray(value, "required");
+    } else if (key === "properties") {
+      if (!isSchemaObject(value)) throw new Error("Schema properties must be an object.");
+      for (const child of Object.values(value)) assertSupportedSchema(child);
+    } else if (key === "items") {
+      if (typeof value !== "boolean") assertSupportedSchema(value);
+    } else if (key === "not") {
+      assertSupportedSchema(value);
+    } else if (key === "oneOf" || key === "allOf" || key === "prefixItems") {
+      if (!Array.isArray(value) || value.length === 0) throw new Error(`Schema ${key} must be a non-empty array of schema objects.`);
+      for (const child of value) assertSupportedSchema(child);
+    } else if (key === "enum") {
+      if (!Array.isArray(value) || value.length === 0 || new Set(mapArray2(value, (item) => canonicalStringify(item))).size !== value.length) throw new Error("Schema enum must be a non-empty array of unique values.");
+    } else if (key === "minItems" || key === "maxItems" || key === "minLength") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`Schema ${key} must be a non-negative integer.`);
+    } else if (key === "minimum" || key === "maximum") {
+      if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Schema ${key} must be a finite number.`);
+    } else if (key === "uniqueItems") {
+      if (typeof value !== "boolean") throw new Error("Schema uniqueItems must be boolean.");
+    } else if (key === "additionalProperties" || key === "unevaluatedProperties") {
+      if (typeof value !== "boolean" && !isSchemaObject(value)) throw new Error(`Schema ${key} must be boolean or a schema object.`);
+      if (isSchemaObject(value)) assertSupportedSchema(value);
+    }
+  }
+  if (typeof schema.minimum === "number" && typeof schema.maximum === "number" && schema.minimum > schema.maximum) throw new Error("Schema minimum must not exceed maximum.");
+}
+function validateAgainstSchema(value, schema) {
+  assertSupportedSchema(schema);
+  return validate(
+    value,
+    /** @type {Record<string, unknown>} */
+    schema,
+    "",
+    /** @type {Record<string, unknown>} */
+    schema
+  );
+}
+function resolveReference(root, reference) {
+  const segments = mapArray2(
+    reference.slice(2).split("/"),
+    (part) => part.replaceAll("~1", "/").replaceAll("~0", "~")
+  );
+  let current = root;
+  for (const segment of segments) {
+    if (!isSchemaObject(current) || !NATIVE_HAS_OWN(current, segment)) throw new Error(`Schema reference does not exist: ${reference}`);
+    current = current[segment];
+  }
+  if (!isSchemaObject(current)) throw new Error(`Schema reference is not an object: ${reference}`);
+  return current;
+}
+function validate(value, schema, path7, root, parentEvaluatedProperties) {
+  const diagnostics = [];
+  const evaluatedProperties = /* @__PURE__ */ new Set();
+  const pointer = path7 || "/";
+  if (typeof schema.$ref === "string") pushArray(
+    diagnostics,
+    ...validate(value, resolveReference(root, schema.$ref), path7, root, evaluatedProperties)
+  );
+  if (schema.type && !matchesType(value, schema.type)) {
+    return [diagnostic("TYPE_MISMATCH", pointer, `must be ${Array.isArray(schema.type) ? joinArray2(schema.type, " or ") : schema.type}`)];
+  }
+  if (NATIVE_HAS_OWN(schema, "const") && canonicalStringify(value) !== canonicalStringify(schema.const)) {
+    pushArray(diagnostics, diagnostic("CONST_MISMATCH", pointer, "must equal the schema constant"));
+  }
+  if (Array.isArray(schema.enum) && !someArray(schema.enum, (item) => canonicalStringify(item) === canonicalStringify(value))) {
+    pushArray(diagnostics, diagnostic("ENUM_MISMATCH", pointer, "must be one of the allowed values"));
+  }
+  if (typeof value === "string") {
+    if (typeof schema.minLength === "number" && value.length < schema.minLength) pushArray(diagnostics, diagnostic("MIN_LENGTH", pointer, "is shorter than the minimum length"));
+    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern).test(value)) pushArray(diagnostics, diagnostic("PATTERN_MISMATCH", pointer, "does not match the required pattern"));
+  }
+  if (typeof value === "number") {
+    if (typeof schema.minimum === "number" && value < schema.minimum) pushArray(diagnostics, diagnostic("MINIMUM", pointer, "is below the minimum"));
+    if (typeof schema.maximum === "number" && value > schema.maximum) pushArray(diagnostics, diagnostic("MAXIMUM", pointer, "is above the maximum"));
+  }
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) pushArray(diagnostics, diagnostic("MIN_ITEMS", pointer, "has too few items"));
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) pushArray(diagnostics, diagnostic("MAX_ITEMS", pointer, "has too many items"));
+    if (schema.uniqueItems === true) {
+      const seen = /* @__PURE__ */ new Set();
+      forEachArray(value, (item, index) => {
+        const key = canonicalStringify(item);
+        if (seen.has(key)) pushArray(diagnostics, diagnostic("UNIQUE_ITEMS", `${path7}/${index}`, "must not contain duplicate items"));
+        seen.add(key);
+      });
+    }
+    const prefixItems = Array.isArray(schema.prefixItems) ? schema.prefixItems : [];
+    forEachArray(value, (item, index) => {
+      if (index < prefixItems.length) {
+        pushArray(diagnostics, ...validate(
+          item,
+          /** @type {Record<string, unknown>} */
+          prefixItems[index],
+          `${path7}/${index}`,
+          root
+        ));
+      } else if (schema.items === false) {
+        pushArray(diagnostics, diagnostic("ADDITIONAL_ITEM", `${path7}/${index}`, "additional items are not allowed"));
+      } else if (isSchemaObject(schema.items)) {
+        pushArray(diagnostics, ...validate(item, schema.items, `${path7}/${index}`, root));
+      }
+    });
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const object9 = (
+      /** @type {Record<string, unknown>} */
+      value
+    );
+    const properties = schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties) ? (
+      /** @type {Record<string, Record<string, unknown>>} */
+      schema.properties
+    ) : {};
+    if (Array.isArray(schema.required)) {
+      for (const key of schema.required) {
+        if (typeof key === "string" && !NATIVE_HAS_OWN(object9, key)) pushArray(diagnostics, diagnostic("REQUIRED_FIELD_MISSING", childPointer(path7, key), "required field is missing"));
+      }
+    }
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(object9)) {
+        if (!NATIVE_HAS_OWN(properties, key)) pushArray(diagnostics, diagnostic("ADDITIONAL_PROPERTY", childPointer(path7, key), "additional properties are not allowed"));
+      }
+    } else if (schema.additionalProperties === true || isSchemaObject(schema.additionalProperties)) {
+      for (const key of Object.keys(object9)) {
+        if (!NATIVE_HAS_OWN(properties, key)) {
+          evaluatedProperties.add(key);
+          if (isSchemaObject(schema.additionalProperties)) pushArray(diagnostics, ...validate(object9[key], schema.additionalProperties, childPointer(path7, key), root));
+        }
+      }
+    }
+    for (const [key, childSchema] of Object.entries(properties)) {
+      if (NATIVE_HAS_OWN(object9, key)) {
+        evaluatedProperties.add(key);
+        pushArray(diagnostics, ...validate(object9[key], childSchema, childPointer(path7, key), root));
+      }
+    }
+  }
+  if (Array.isArray(schema.allOf)) for (const child of schema.allOf) pushArray(diagnostics, ...validate(
+    value,
+    /** @type {Record<string, unknown>} */
+    child,
+    path7,
+    root,
+    evaluatedProperties
+  ));
+  if (Array.isArray(schema.oneOf)) {
+    const variants = mapArray2(schema.oneOf, (child) => {
+      const variantSchema = (
+        /** @type {Record<string, unknown>} */
+        child
+      );
+      const variantEvaluatedProperties = /* @__PURE__ */ new Set();
+      return {
+        schema: variantSchema,
+        diagnostics: validate(value, variantSchema, path7, root, variantEvaluatedProperties),
+        evaluatedProperties: variantEvaluatedProperties
+      };
+    });
+    const matching = filterArray2(variants, (child) => child.diagnostics.length === 0);
+    if (matching.length === 1) {
+      for (const key of matching[0].evaluatedProperties) evaluatedProperties.add(key);
+    } else {
+      const discriminated = filterArray2(variants, (child) => matchesDiscriminator(value, child.schema, root));
+      if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...discriminated[0].diagnostics);
+      else pushArray(diagnostics, diagnostic("ONE_OF_MISMATCH", pointer, "must match exactly one schema variant"));
+    }
+  }
+  if (isSchemaObject(schema.not) && validate(value, schema.not, path7, root).length === 0) {
+    pushArray(diagnostics, diagnostic("NOT_MATCHED", pointer, "must not match the prohibited schema"));
+  }
+  if (isSchemaObject(value) && NATIVE_HAS_OWN(schema, "unevaluatedProperties")) {
+    for (const key of Object.keys(value)) {
+      if (evaluatedProperties.has(key)) continue;
+      if (schema.unevaluatedProperties === false) {
+        pushArray(diagnostics, diagnostic("UNEVALUATED_PROPERTY", childPointer(path7, key), "unevaluated properties are not allowed"));
+      } else {
+        evaluatedProperties.add(key);
+        if (isSchemaObject(schema.unevaluatedProperties)) pushArray(diagnostics, ...validate(value[key], schema.unevaluatedProperties, childPointer(path7, key), root));
+      }
+    }
+  }
+  if (diagnostics.length === 0 && parentEvaluatedProperties) {
+    for (const key of evaluatedProperties) parentEvaluatedProperties.add(key);
+  }
+  return diagnostics;
+}
+function matchesDiscriminator(value, schema, root) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (typeof schema.$ref === "string") return matchesDiscriminator(
+    value,
+    resolveReference(root, schema.$ref),
+    root
+  );
+  const properties = schema.properties;
+  if (!isSchemaObject(properties)) return false;
+  const constants = flatMapArray(Object.entries(properties), ([key, candidate]) => isSchemaObject(candidate) && NATIVE_HAS_OWN(candidate, "const") ? [[key, candidate]] : []);
+  return constants.length > 0 && everyArray(constants, ([key, candidate]) => canonicalStringify(
+    /** @type {Record<string, unknown>} */
+    value[key]
+  ) === canonicalStringify(candidate.const));
+}
+function matchesType(value, type) {
+  if (Array.isArray(type)) return someArray(type, (candidate) => matchesType(value, candidate));
+  if (type === "array") return Array.isArray(value);
+  if (type === "object") return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  if (type === "integer") return typeof value === "number" && Number.isInteger(value);
+  if (type === "null") return value === null;
+  return typeof value === type;
+}
+
+// src/v5/action-tokens.mjs
+import { createHash as createHash3, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 
 // src/v5/errors.mjs
 var V5ProtocolError = class extends Error {
@@ -790,17 +1154,6 @@ function actionTemplateForV5Action(registry, cellId, action) {
   return structuredClone(matches[0]);
 }
 
-// src/schema-validator.mjs
-var NATIVE_ARRAY_EVERY = Array.prototype.every;
-var NATIVE_ARRAY_FILTER2 = Array.prototype.filter;
-var NATIVE_ARRAY_FLAT_MAP = Array.prototype.flatMap;
-var NATIVE_ARRAY_FOR_EACH = Array.prototype.forEach;
-var NATIVE_ARRAY_JOIN2 = Array.prototype.join;
-var NATIVE_ARRAY_MAP2 = Array.prototype.map;
-var NATIVE_ARRAY_SLICE = Array.prototype.slice;
-var NATIVE_ARRAY_SOME = Array.prototype.some;
-var NATIVE_HAS_OWN = Object.hasOwn;
-
 // src/v5/registry-validation.mjs
 function invariant(condition, message) {
   if (!condition) throw new Error(`POLICY_REGISTRY_INCONSISTENT: ${message}`);
@@ -887,6 +1240,1107 @@ function validateGeneratedV5Contracts(contracts2) {
   invariant(contracts2.sourceAcquisitionPolicy.max_requests_per_batch === 16, "source batch limit must be 16");
   invariant(contracts2.sourceAcquisitionPolicy.batch_order === "required_desc_then_request_id_asc", "source batch order mismatch");
   invariant(contracts2.permissionDerivationRegistry.rules.length === 1, "permission derivation must have one normative rule");
+}
+
+// src/v5/interface-schemas.mjs
+var V5_INTERFACE_SCHEMA_FILE_MAP = Object.freeze({
+  createRequest: "v5-create-request",
+  advanceRequest: "v5-advance-request",
+  runIdentity: "v5-run-identity",
+  reply: "v5-reply-oneof"
+});
+var DIGEST2 = "^sha256:[0-9a-f]{64}$";
+var CLIENT_KEY = "^[A-Za-z][A-Za-z0-9._:-]{0,127}$";
+var RUN_ID = "^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$";
+function closedObject(properties, required = Object.keys(properties)) {
+  return { type: "object", required, properties, additionalProperties: false };
+}
+function constant(value) {
+  return { const: value };
+}
+function arrayOf(item, minimum = 0) {
+  return { type: "array", minItems: minimum, items: item };
+}
+function nonblankString() {
+  return { type: "string", minLength: 1 };
+}
+function digestString() {
+  return { type: "string", pattern: DIGEST2 };
+}
+function clientKeyString() {
+  return { type: "string", pattern: CLIENT_KEY };
+}
+function integer() {
+  return { type: "integer" };
+}
+function nonnegativeInteger() {
+  return { type: "integer", minimum: 0 };
+}
+function positiveInteger() {
+  return { type: "integer", minimum: 1 };
+}
+function stringArray(minimum = 0) {
+  return arrayOf(nonblankString(), minimum);
+}
+function digestArray(minimum = 0) {
+  return arrayOf(digestString(), minimum);
+}
+function exactValueSchema(value) {
+  if (Array.isArray(value)) return {
+    type: "array",
+    minItems: value.length,
+    maxItems: value.length,
+    prefixItems: value.map(exactValueSchema),
+    items: false
+  };
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value);
+    return closedObject(Object.fromEntries(entries.map(([key, child]) => [key, exactValueSchema(child)])), entries.map(([key]) => key));
+  }
+  return constant(value);
+}
+function typedValueSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("null") }),
+    closedObject({ kind: constant("empty_string") }),
+    closedObject({ kind: constant("string"), value: nonblankString() }),
+    closedObject({ kind: constant("number"), value: { type: "number" } }),
+    closedObject({ kind: constant("boolean"), value: { type: "boolean" } })
+  ] };
+}
+function evidenceRefSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("claim"), claim_id: nonblankString() }),
+    closedObject({ kind: constant("decision"), decision_id: nonblankString() })
+  ] };
+}
+function requirementsEvidenceRefSchema() {
+  return { oneOf: [
+    ...evidenceRefSchema().oneOf,
+    closedObject({ kind: constant("source_unit"), source_unit_id: nonblankString(), source_digest: digestString() })
+  ] };
+}
+function reviewBasisRefSchema() {
+  return { oneOf: [
+    ...evidenceRefSchema().oneOf,
+    closedObject({ kind: constant("source_unit"), source_unit_id: nonblankString() })
+  ] };
+}
+function typedContractRefSchema(contractKind) {
+  return closedObject({ contract_id: nonblankString(), contract_kind: contractKind ? constant(contractKind) : nonblankString(), semantic_root_digest: digestString() });
+}
+function semanticRuleRefSchema() {
+  return closedObject({
+    source: constant("closed_registry"),
+    registry_digest: digestString(),
+    rule_id: nonblankString(),
+    rule_kind: nonblankString(),
+    implementation_digest: digestString()
+  });
+}
+function outcomeSignatureSchema() {
+  return closedObject({
+    subject_slot_digest: digestString(),
+    condition_slot_digest: digestString(),
+    action_slot_digest: digestString(),
+    primary_observation_slot_digest: digestString(),
+    branch_slot_digest: digestString()
+  });
+}
+function sourceSpanSchema() {
+  return closedObject({ start_scalar: nonnegativeInteger(), end_scalar: nonnegativeInteger(), excerpt: { type: "string" }, excerpt_digest: digestString() });
+}
+function locatorSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("inline_text"), media_type: { enum: ["text/plain", "text/markdown"] }, content: nonblankString() }),
+    closedObject({ kind: constant("local_file"), absolute_path: { type: "string", minLength: 1, pattern: "^/" } }),
+    closedObject({ kind: constant("https_url"), url: { type: "string", minLength: 9, pattern: "^https://" } }),
+    closedObject({ kind: constant("attachment"), attachment_ref: nonblankString() })
+  ] };
+}
+function sourceBootstrapSchema() {
+  return closedObject({ source_request_seeds: {
+    type: "array",
+    minItems: 1,
+    uniqueItems: true,
+    items: closedObject({
+      source_request_client_key: clientKeyString(),
+      source_role: { enum: ["primary_prd", "supplemental_requirement", "technical_contract", "reference"] },
+      locator: locatorSchema(),
+      required: { type: "boolean" }
+    })
+  } });
+}
+function caseDocumentRefSchema() {
+  return closedObject({
+    run_id: { type: "string", pattern: RUN_ID },
+    revision: { type: "integer", minimum: 0 },
+    manifest_digest: digestString(),
+    bundle_digest: digestString(),
+    case_document_lineage_id: nonblankString(),
+    schema_version: constant(V5_SCHEMA_VERSION)
+  });
+}
+function createRequestSchema() {
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "v5-create-request.schema.json",
+    oneOf: [
+      closedObject({ idempotency_key: nonblankString(), delivery_intent: constant("case_document"), source_bootstrap: sourceBootstrapSchema() }),
+      closedObject({ idempotency_key: nonblankString(), delivery_intent: constant("execution_plan"), case_document_ref: caseDocumentRefSchema() }),
+      closedObject({ idempotency_key: nonblankString(), creation_reason: constant("resume_cancelled"), parent_run_id: { type: "string", pattern: RUN_ID } })
+    ]
+  };
+}
+function sourceDispositionSchema() {
+  return { oneOf: [
+    closedObject({ request_id: nonblankString(), outcome: constant("fulfilled"), source_client_keys: { type: "array", minItems: 1, uniqueItems: true, items: clientKeyString() } }),
+    closedObject({ request_id: nonblankString(), outcome: constant("skipped_optional"), skip_reason: { type: "string", minLength: 1 } })
+  ] };
+}
+function sourceBatchPayloadSchema() {
+  const source = closedObject({ source_client_key: clientKeyString(), media_type: { enum: ["text/plain", "text/markdown"] }, content: nonblankString() });
+  return { oneOf: [
+    closedObject({ kind: constant("fulfilled_sources"), source_pack: closedObject({ sources: { type: "array", minItems: 1, uniqueItems: true, items: source } }) }),
+    closedObject({ kind: constant("all_skipped_optional") })
+  ] };
+}
+function answerValueContractSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("text"), min_scalars: nonnegativeInteger(), max_scalars: positiveInteger(), ambiguity_guard_ref: nonblankString() }, ["kind", "min_scalars", "max_scalars"]),
+    closedObject({ kind: constant("enum"), allowed_values: stringArray(1) }),
+    closedObject({ kind: constant("boolean") }),
+    closedObject({ kind: constant("integer"), minimum: integer(), maximum: integer() }, ["kind"]),
+    closedObject({ kind: constant("number"), minimum: { type: "number" }, maximum: { type: "number" } }, ["kind"]),
+    closedObject({ kind: constant("duration_ms"), minimum: positiveInteger(), maximum: positiveInteger() }, ["kind"]),
+    closedObject({ kind: constant("identifier"), pattern_ref: nonblankString() }),
+    closedObject({ kind: constant("set"), member_schema: nonblankString(), min_items: nonnegativeInteger() }),
+    closedObject({ kind: constant("mapping"), key_schema: nonblankString(), value_schema: nonblankString() }),
+    closedObject({ kind: constant("scope"), allowed_ref_kinds: stringArray(1) }),
+    closedObject({ kind: constant("requirements_quantifier"), allowed_values: stringArray(1) }),
+    closedObject({
+      kind: { enum: ["population_scope", "population_proof", "oracle_observation", "oracle_assertion", "oracle_scope", "oracle_window", "permission_auxiliary"] },
+      existing_candidates: stringArray(),
+      allow_typed_creation: { type: "boolean" },
+      creation_constraints: closedObject({ allowed_scope_kinds: stringArray(1), semantic_root_digest: digestString() })
+    })
+  ] };
+}
+function answerContractSchema() {
+  return closedObject({
+    answer_mode: constant("typed_answer"),
+    allowed_controls: stringArray(1),
+    value_schema: answerValueContractSchema()
+  });
+}
+function questionImpactSchema(includePartId = false) {
+  const compact = { affected_case_keys: stringArray(), impact_kinds: stringArray() };
+  if (includePartId) compact.question_part_id = nonblankString();
+  const detailed = {
+    affected_module_ids: stringArray(),
+    affected_business_refs: stringArray(),
+    affected_claim_ids: stringArray(),
+    current_test_point_ids: stringArray(),
+    blocked_count: nonnegativeInteger(),
+    conditional_count: nonnegativeInteger(),
+    unresolved_outcome: nonblankString()
+  };
+  if (includePartId) detailed.question_part_id = nonblankString();
+  return { oneOf: [closedObject(compact), closedObject(detailed)] };
+}
+function claimInputSchema() {
+  return closedObject({
+    claim_client_key: clientKeyString(),
+    primary_outcome_signature: outcomeSignatureSchema(),
+    observation_slot_digests: digestArray(1),
+    subject_ref: nonblankString(),
+    intent_ref: nonblankString(),
+    basis: arrayOf(requirementsEvidenceRefSchema(), 1)
+  }, ["claim_client_key", "primary_outcome_signature", "observation_slot_digests"]);
+}
+function claimOutputSchema() {
+  return closedObject({
+    claim_id: nonblankString(),
+    primary_outcome_signature: outcomeSignatureSchema(),
+    observation_slot_digests: digestArray(1),
+    outcome_candidate_ids: stringArray(1),
+    subject_ref: nonblankString(),
+    intent_ref: nonblankString(),
+    basis: arrayOf(requirementsEvidenceRefSchema(), 1)
+  }, ["claim_id", "primary_outcome_signature", "observation_slot_digests", "outcome_candidate_ids"]);
+}
+function sameBatchGapRefSchema() {
+  return closedObject({ kind: constant("same_behavior_batch"), semantic_gap_client_key: clientKeyString() });
+}
+function semanticGapRefSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("accepted_gap"), semantic_gap_id: nonblankString() }),
+    sameBatchGapRefSchema()
+  ] };
+}
+function requirementsGapSchema() {
+  const origin = { oneOf: [
+    closedObject({ kind: constant("outcome_decomposition"), outcome_candidate_id: nonblankString() }),
+    closedObject({ kind: constant("ambiguity"), ambiguity_candidate_id: nonblankString(), ambiguity_kind: nonblankString() }),
+    closedObject({ kind: constant("entity_resolution"), conflict_group_id: nonblankString(), mention_candidate_ids: stringArray(1) })
+  ] };
+  const target = { oneOf: [closedObject({ origin }), closedObject({ kind: nonblankString(), origin })] };
+  return closedObject({
+    semantic_gap_client_key: clientKeyString(),
+    target,
+    question: nonblankString(),
+    why_needed: nonblankString(),
+    answer_contract: answerContractSchema(),
+    question_impact_summary: questionImpactSchema()
+  });
+}
+function decompositionReviewSchema() {
+  return closedObject({
+    seed_digest: digestString(),
+    candidate_id: nonblankString(),
+    disposition: { oneOf: [
+      closedObject({ kind: constant("single_claim"), claim_client_key: clientKeyString() }),
+      closedObject({ kind: constant("split_claims"), claim_client_keys: arrayOf(clientKeyString(), 2) }),
+      closedObject({ kind: constant("semantic_gap"), semantic_gap_client_key: clientKeyString() }),
+      closedObject({ kind: constant("non_normative"), reason: nonblankString(), source_review_id: nonblankString() })
+    ] }
+  });
+}
+function ambiguityReviewSchema() {
+  return closedObject({
+    seed_digest: digestString(),
+    candidate_id: nonblankString(),
+    disposition: { oneOf: [
+      closedObject({ kind: constant("resolved_by_claims"), claim_client_keys: arrayOf(clientKeyString(), 1) }),
+      closedObject({ kind: constant("not_ambiguous"), claim_client_keys: arrayOf(clientKeyString(), 1), reason: nonblankString() }),
+      closedObject({ kind: constant("resolved_by_decision"), decision_ids: stringArray(1) }),
+      closedObject({ kind: constant("semantic_gap"), semantic_gap_client_key: clientKeyString() })
+    ] }
+  });
+}
+function entityResolutionSchema() {
+  const mention = closedObject({ mention_candidate_id: nonblankString(), name_role: { enum: ["canonical_business_name", "business_alias", "exact_ui_label"] } });
+  const cluster = closedObject({
+    entity_client_key: clientKeyString(),
+    canonical_name: nonblankString(),
+    mentions: arrayOf(mention, 1),
+    basis_claim_client_keys: arrayOf(clientKeyString()),
+    basis_decision_ids: stringArray()
+  });
+  return closedObject({
+    seed_digest: digestString(),
+    conflict_group_id: nonblankString(),
+    mention_candidate_ids: stringArray(1),
+    resolution: { oneOf: [
+      closedObject({ kind: constant("resolved_clusters"), clusters: arrayOf(cluster, 1) }),
+      closedObject({ kind: constant("unresolved"), semantic_gap_client_key: clientKeyString() })
+    ] }
+  });
+}
+function valueStateSchema() {
+  const dataState = { oneOf: [
+    closedObject({ presence: constant("missing") }),
+    closedObject({ presence: constant("present"), value: typedValueSchema() })
+  ] };
+  const content = { oneOf: [
+    closedObject({ kind: constant("empty") }),
+    closedObject({ kind: constant("text"), value: nonblankString() }),
+    closedObject({ kind: constant("formatted_value"), value: nonblankString(), format_ref: nonblankString() })
+  ] };
+  const renderState = { oneOf: [
+    closedObject({ presence: constant("not_rendered") }),
+    closedObject({ presence: constant("rendered"), content })
+  ] };
+  return { oneOf: [
+    closedObject({ axes: constant("data_only"), data_state: dataState }),
+    closedObject({ axes: constant("render_only"), render_state: renderState }),
+    closedObject({ axes: constant("data_and_render"), data_state: dataState, render_state: renderState })
+  ] };
+}
+function fieldCorrespondenceSchema() {
+  const side = closedObject({ semantic_role: { enum: ["ui", "authoritative_source", "peer_surface"] }, logical_surface_ref: nonblankString(), collection_path: nonblankString(), item_field_path: nonblankString() });
+  const join = { oneOf: [
+    closedObject({ kind: constant("singleton") }),
+    closedObject({ kind: constant("key_equality"), left_key_path: nonblankString(), right_key_path: nonblankString(), cardinality: { enum: ["one_to_one", "many_to_one", "one_to_many"] }, key_normalization_ref: semanticRuleRefSchema() }, ["kind", "left_key_path", "right_key_path", "cardinality"])
+  ] };
+  const transform = { oneOf: [closedObject({ kind: constant("identity") }), closedObject({ kind: constant("registered"), transform_ref: semanticRuleRefSchema() })] };
+  const comparison = { oneOf: [closedObject({ kind: constant("strict_equal") }), closedObject({ kind: constant("normalized_equal"), normalization_ref: semanticRuleRefSchema() })] };
+  const freshness = { oneOf: [closedObject({ kind: constant("same_logical_snapshot") }), closedObject({ kind: constant("within_business_window"), duration_ms: positiveInteger() })] };
+  return closedObject({ mapping_client_key: clientKeyString(), authority_side: { enum: ["left", "right"] }, left: side, right: side, join, transform, comparison, null_policy_ref: semanticRuleRefSchema(), freshness, basis: arrayOf(evidenceRefSchema(), 1) });
+}
+function predicateContractSchema() {
+  return closedObject({ predicate_contract_client_key: clientKeyString(), predicate_ref: typedContractRefSchema("domain_predicate"), mutual_exclusion_group: nonblankString(), exhaustiveness: { enum: ["closed_partition_set", "non_exhaustive_open_set"] }, basis: arrayOf(evidenceRefSchema(), 1) });
+}
+function domainContractSchema() {
+  const domain = { oneOf: [
+    closedObject({ kind: constant("closed_enum"), members: arrayOf(typedValueSchema(), 1), closed_world_basis: arrayOf(evidenceRefSchema(), 1) }),
+    closedObject({ kind: constant("predicate_partition"), universe_ref: typedContractRefSchema("universe"), boundary_basis: arrayOf(evidenceRefSchema(), 1) }),
+    closedObject({ kind: constant("open_domain"), boundary_description: nonblankString(), boundary_basis: arrayOf(evidenceRefSchema(), 1) })
+  ] };
+  const partition = { oneOf: [
+    closedObject({ partition_client_key: clientKeyString(), kind: constant("exact_members"), semantic_role: { enum: ["target", "other"] }, values: arrayOf(typedValueSchema(), 1) }),
+    closedObject({ partition_client_key: clientKeyString(), kind: constant("complement"), semantic_role: constant("complement"), universe: closedObject({ kind: constant("parent_domain") }), excluded_values: arrayOf(typedValueSchema()) }),
+    closedObject({ partition_client_key: clientKeyString(), kind: constant("predicate"), semantic_role: { enum: ["target", "other"] }, predicate_contract_client_key: clientKeyString() })
+  ] };
+  return closedObject({ domain_client_key: clientKeyString(), subject_ref: nonblankString(), field_path: nonblankString(), domain, partitions: arrayOf(partition, 1) });
+}
+function populationScopeSchema() {
+  const optionalFilter = { filter_ref: typedContractRefSchema("filter") };
+  return { oneOf: [
+    closedObject({ kind: constant("single_item"), identity_contract_ref: typedContractRefSchema("identity") }),
+    closedObject({ kind: constant("visible_region"), region_contract_ref: typedContractRefSchema("region") }),
+    closedObject({ kind: constant("current_page"), collection_ref: typedContractRefSchema("collection"), ...optionalFilter }, ["kind", "collection_ref"]),
+    closedObject({ kind: constant("current_response"), collection_ref: typedContractRefSchema("collection"), ...optionalFilter }, ["kind", "collection_ref"]),
+    closedObject({ kind: constant("all_pages"), collection_ref: typedContractRefSchema("collection"), filter_ref: typedContractRefSchema("filter"), page_model_ref: typedContractRefSchema("page_model"), termination_contract_ref: typedContractRefSchema("termination"), consistency_contract_ref: typedContractRefSchema("consistency") }, ["kind", "collection_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"]),
+    closedObject({ kind: constant("full_dataset"), universe_ref: typedContractRefSchema("universe"), snapshot_contract_ref: typedContractRefSchema("snapshot"), consistency_contract_ref: typedContractRefSchema("consistency"), filter_ref: typedContractRefSchema("filter"), tenant_or_region_ref: typedContractRefSchema("tenant_or_region") }, ["kind", "universe_ref", "snapshot_contract_ref", "consistency_contract_ref"])
+  ] };
+}
+function populationContractSchema() {
+  return closedObject({ population_contract_client_key: clientKeyString(), scope: populationScopeSchema() });
+}
+function populationProofSchema() {
+  return { oneOf: [
+    closedObject({ proof_client_key: clientKeyString(), population_contract_client_key: clientKeyString(), payload: closedObject({ kind: constant("enumerate_population"), enumeration_contract_ref: typedContractRefSchema("enumeration") }) }),
+    closedObject({ proof_client_key: clientKeyString(), population_contract_client_key: clientKeyString(), payload: closedObject({ kind: constant("authoritative_aggregate"), aggregate_contract_ref: typedContractRefSchema("aggregate") }), basis: arrayOf(evidenceRefSchema(), 1) }),
+    closedObject({ proof_client_key: clientKeyString(), population_contract_client_key: clientKeyString(), payload: closedObject({ kind: constant("sourced_invariant"), invariant_contract_ref: typedContractRefSchema("invariant") }), basis: arrayOf(evidenceRefSchema(), 1) })
+  ] };
+}
+function observationRefSchema() {
+  const common = { logical_surface_ref: nonblankString(), subject_ref: nonblankString(), field_path: nonblankString() };
+  return { oneOf: [
+    closedObject({ kind: constant("ui"), ...common, locator_contract_ref: semanticRuleRefSchema() }, ["kind", "logical_surface_ref", "subject_ref", "locator_contract_ref"]),
+    ...["response", "storage", "event", "system_state"].map((kind) => closedObject({ kind: constant(kind), ...common }, ["kind", "logical_surface_ref", "subject_ref"]))
+  ] };
+}
+function actionRefSchema() {
+  return closedObject({ action_id: nonblankString(), semantic_root_digest: digestString() });
+}
+function acceptedOrBatchContractRefSchema(contractKind) {
+  return { oneOf: [
+    closedObject({ kind: constant("accepted"), ref: typedContractRefSchema(contractKind) }),
+    closedObject({ kind: constant("same_behavior_batch"), contract_client_key: clientKeyString(), contract_kind: constant(contractKind) })
+  ] };
+}
+function oracleAssertionSchema() {
+  const normalization = semanticRuleRefSchema();
+  const decisionCellRef = closedObject({ matrix_id: nonblankString(), required_cell_key: nonblankString() });
+  return { oneOf: [
+    closedObject({ kind: constant("exact_text"), expected_text: nonblankString() }),
+    closedObject({ kind: constant("semantic_text"), expected_text: nonblankString(), equivalence_rule_ref: semanticRuleRefSchema() }),
+    closedObject({ kind: constant("value_equals"), expected_value: typedValueSchema(), normalization_ref: normalization }, ["kind", "expected_value"]),
+    closedObject({ kind: constant("value_state_equals"), expected_value_state: valueStateSchema() }),
+    closedObject({ kind: constant("exists") }),
+    closedObject({ kind: constant("absent") }),
+    closedObject({ kind: constant("set_contains"), expected_members: arrayOf(typedValueSchema(), 1), normalization_ref: normalization }),
+    closedObject({ kind: constant("set_equals"), expected_members: arrayOf(typedValueSchema()), order_sensitive: { type: "boolean" }, normalization_ref: normalization }),
+    closedObject({ kind: constant("count_equals"), expected_count: nonnegativeInteger() }),
+    closedObject({ kind: constant("count_at_least"), minimum_count: nonnegativeInteger() }),
+    closedObject({ kind: constant("transition"), from_state: typedValueSchema(), to_state: typedValueSchema(), trigger_action_ref: actionRefSchema(), trigger_step_client_key: clientKeyString() }, ["kind", "from_state", "to_state", "trigger_action_ref"]),
+    closedObject({ kind: constant("cross_surface_equals"), field_correspondence_id: nonblankString() }),
+    closedObject({ kind: constant("permission"), expected: constant("allow"), decision_cell_ref: decisionCellRef }),
+    closedObject({ kind: constant("permission"), expected: constant("deny"), decision_cell_ref: decisionCellRef, denial_behavior: { oneOf: [
+      closedObject({ kind: constant("not_required") }),
+      closedObject({ kind: constant("required"), denial_required_cell_key: nonblankString(), denial_contract_ref: acceptedOrBatchContractRefSchema("denial_behavior") })
+    ] } })
+  ] };
+}
+function observationWindowSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("after_step") }),
+    closedObject({ kind: constant("within"), duration_ms: positiveInteger() }),
+    closedObject({ kind: constant("stable_for"), duration_ms: positiveInteger() }),
+    closedObject({ kind: constant("until_signal"), signal_ref: nonblankString(), timeout_ms: positiveInteger() })
+  ] };
+}
+function oracleSemanticContractSchema() {
+  return closedObject({
+    oracle_contract_client_key: clientKeyString(),
+    formal_test_point_id: nonblankString(),
+    observation_ref: observationRefSchema(),
+    assertion: oracleAssertionSchema(),
+    evaluation_scope: { oneOf: [
+      closedObject({ kind: constant("single") }),
+      closedObject({ kind: constant("forall"), population_contract_client_key: clientKeyString(), population_proof_client_key: clientKeyString() })
+    ] },
+    observation_window: observationWindowSchema(),
+    basis: arrayOf(evidenceRefSchema(), 1)
+  });
+}
+function permissionAuxiliaryContractSchema() {
+  const target = closedObject({ matrix_id: nonblankString(), required_cell_key: nonblankString() });
+  return { oneOf: [
+    closedObject({ contract_client_key: clientKeyString(), permission_target: target, payload: closedObject({ contract_kind: constant("denial_behavior"), observation_ref: observationRefSchema(), assertion: oracleAssertionSchema(), observation_window: observationWindowSchema() }), basis: arrayOf(evidenceRefSchema(), 1) }),
+    closedObject({ contract_client_key: clientKeyString(), permission_target: target, payload: closedObject({ contract_kind: constant("data_scope"), scope: populationScopeSchema() }), basis: arrayOf(evidenceRefSchema(), 1) })
+  ] };
+}
+function permissionOutcomeSchema() {
+  return { oneOf: [
+    closedObject({ permission_dimension: constant("decision"), action_ref: nonblankString(), expected: { enum: ["visible", "hidden", "allow", "deny"] } }),
+    closedObject({ permission_dimension: constant("denial_behavior"), decision_cell_key: nonblankString(), denial_contract_ref: acceptedOrBatchContractRefSchema("denial_behavior") }),
+    closedObject({ permission_dimension: constant("data_scope"), data_scope_contract_ref: acceptedOrBatchContractRefSchema("data_scope") })
+  ] };
+}
+function permissionMatrixReviewSchema() {
+  const disposition = { oneOf: [
+    closedObject({ kind: constant("formal"), outcome: permissionOutcomeSchema(), basis: arrayOf(evidenceRefSchema(), 1) }),
+    closedObject({ kind: constant("semantic_gap"), gap_ref: semanticGapRefSchema() }),
+    closedObject({ kind: constant("not_applicable"), basis: arrayOf(evidenceRefSchema(), 1) })
+  ] };
+  return closedObject({ matrix_id: nonblankString(), seed_digest: digestString(), cell_dispositions: arrayOf(closedObject({ required_cell_key: nonblankString(), disposition })) });
+}
+function riskReviewSchema() {
+  const commonItem = {
+    candidate_client_key: clientKeyString(),
+    trigger_basis: arrayOf(reviewBasisRefSchema(), 1),
+    affected_refs: stringArray(1),
+    why_material: nonblankString(),
+    recommended_action: nonblankString(),
+    severity: { enum: ["low", "medium", "high", "critical"] },
+    likelihood: { enum: ["low", "medium", "high"] },
+    evidence_confidence: { enum: ["low", "medium", "high"] },
+    testability: { enum: ["low", "medium", "high"] }
+  };
+  const item = { oneOf: [
+    closedObject({ ...commonItem, risk_disposition: constant("formal_requirement"), formal_claim_id: nonblankString() }),
+    closedObject({ ...commonItem, risk_disposition: constant("semantic_gap"), gap_ref: semanticGapRefSchema() }),
+    closedObject({ ...commonItem, risk_disposition: constant("exploratory"), observation_intent: nonblankString() }),
+    closedObject({ ...commonItem, risk_disposition: constant("not_applicable"), exclusion_basis: arrayOf(evidenceRefSchema(), 1) })
+  ] };
+  const common = { review_client_key: clientKeyString(), module_ref: nonblankString(), risk_kind: nonblankString(), review_basis: arrayOf(reviewBasisRefSchema(), 1) };
+  return { oneOf: [
+    closedObject({ ...common, risk_signal_status: constant("no_signal") }),
+    closedObject({ ...common, risk_signal_status: constant("signal_found"), risk_item: item })
+  ] };
+}
+function behaviorGapSchema() {
+  const target = { oneOf: [
+    closedObject({ kind: constant("behavior_contract"), required_contract_key: nonblankString() }),
+    closedObject({ kind: constant("permission_cell"), matrix_id: nonblankString(), required_cell_key: nonblankString() }),
+    closedObject({ kind: constant("risk"), module_ref: nonblankString(), risk_kind: nonblankString() })
+  ] };
+  return closedObject({
+    semantic_gap_client_key: clientKeyString(),
+    target,
+    missing_semantics: nonblankString(),
+    question: nonblankString(),
+    answer_contract: answerContractSchema(),
+    basis: arrayOf(evidenceRefSchema(), 1),
+    why_needed: nonblankString(),
+    question_impact_summary: questionImpactSchema()
+  }, ["semantic_gap_client_key", "target", "missing_semantics", "question", "answer_contract", "basis"]);
+}
+function behaviorReviewSchema() {
+  return closedObject({ seed_digest: digestString(), required_contract_key: nonblankString(), disposition: { oneOf: [
+    closedObject({ kind: constant("formal"), contract_client_keys: arrayOf(clientKeyString(), 1) }),
+    closedObject({ kind: constant("semantic_gap"), gap_ref: semanticGapRefSchema() }),
+    closedObject({ kind: constant("not_applicable"), basis: arrayOf(evidenceRefSchema(), 1) })
+  ] } });
+}
+function behaviorEquivalenceSchema() {
+  return closedObject({
+    equivalence_contract_client_key: clientKeyString(),
+    domain_contract_client_key: clientKeyString(),
+    partition_client_key: clientKeyString(),
+    formal_test_point_id: nonblankString(),
+    oracle_semantic_contract_client_key: clientKeyString(),
+    equivalence_scope: constant("all_members_same_observable_behavior"),
+    basis: arrayOf(evidenceRefSchema(), 1)
+  });
+}
+function typedOracleSchema() {
+  return closedObject({
+    oracle_client_key: clientKeyString(),
+    oracle_semantic_contract_id: nonblankString(),
+    observe_after_step_client_key: clientKeyString(),
+    observation_ref: observationRefSchema(),
+    assertion: oracleAssertionSchema(),
+    evaluation_scope: { oneOf: [
+      closedObject({ kind: constant("single") }),
+      closedObject({ kind: constant("forall"), population_contract_id: nonblankString(), population_proof_id: nonblankString() })
+    ] },
+    observation_window: observationWindowSchema(),
+    claim_ids: stringArray(1)
+  });
+}
+function selectionMembershipSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("closed_domain_membership") }),
+    closedObject({ kind: constant("decidable_predicate"), predicate_contract_id: nonblankString() }),
+    closedObject({ kind: constant("membership_witnesses"), witnesses: arrayOf(closedObject({ selected_value_digest: digestString(), basis: arrayOf(evidenceRefSchema(), 1) }), 1) })
+  ] };
+}
+function domainSelectionSchema() {
+  const selection = { oneOf: [
+    closedObject({ kind: constant("exhaustive_members"), selected_values: arrayOf(typedValueSchema(), 1), membership: closedObject({ kind: constant("closed_domain_membership") }) }),
+    closedObject({ kind: constant("representative"), selected_values: arrayOf(typedValueSchema(), 1), behavior_equivalence_contract_id: nonblankString(), membership: selectionMembershipSchema() }),
+    closedObject({ kind: constant("sampled"), selected_values: arrayOf(typedValueSchema(), 1), residual_risk: nonblankString(), membership: selectionMembershipSchema() })
+  ] };
+  return closedObject({
+    selection_client_key: clientKeyString(),
+    case_client_key: clientKeyString(),
+    formal_test_point_id: nonblankString(),
+    oracle_semantic_contract_id: nonblankString(),
+    domain_contract_id: nonblankString(),
+    partition_id: nonblankString(),
+    selection
+  });
+}
+function caseDraftSchema() {
+  const step = closedObject({ step_client_key: clientKeyString(), action: nonblankString(), semantic_action_ref: actionRefSchema(), claim_ids: stringArray(1) });
+  const binding = closedObject({ case_client_key: clientKeyString(), step_client_key: clientKeyString(), action_ref: actionRefSchema() });
+  const dataCondition = { oneOf: [nonblankString(), closedObject({ field: nonblankString(), value: typedValueSchema() })] };
+  return closedObject({
+    case_client_key: clientKeyString(),
+    title: nonblankString(),
+    module_id: nonblankString(),
+    priority: { enum: ["P0", "P1", "P2", "P3"] },
+    primary_test_point_id: nonblankString(),
+    business_preconditions: stringArray(),
+    data_conditions: arrayOf(dataCondition),
+    steps: arrayOf(step, 1),
+    case_step_semantic_bindings: arrayOf(binding, 1),
+    domain_selections: arrayOf(domainSelectionSchema()),
+    oracles: arrayOf(typedOracleSchema(), 1),
+    canonical_names: stringArray(),
+    claim_ids: stringArray(1),
+    semantic_gap_ids: stringArray(),
+    not_applicable_basis: arrayOf(evidenceRefSchema(), 1),
+    exploratory_only: { type: "boolean" },
+    observation_intent: nonblankString()
+  }, ["case_client_key", "title", "module_id", "priority", "primary_test_point_id", "business_preconditions", "data_conditions", "steps", "case_step_semantic_bindings", "domain_selections", "oracles", "canonical_names", "claim_ids", "semantic_gap_ids"]);
+}
+function evidenceArtifactSchema() {
+  return closedObject({
+    semantic_review_seed_digest: digestString(),
+    claims: arrayOf(claimInputSchema()),
+    semantic_gaps: arrayOf(requirementsGapSchema()),
+    decomposition_reviews: arrayOf(decompositionReviewSchema()),
+    ambiguity_reviews: arrayOf(ambiguityReviewSchema()),
+    entity_resolutions: arrayOf(entityResolutionSchema())
+  });
+}
+function behaviorArtifactSchema() {
+  return closedObject({
+    behavior_contract_seed_digest: digestString(),
+    field_correspondences: arrayOf(fieldCorrespondenceSchema()),
+    value_states: arrayOf(valueStateSchema()),
+    predicate_contracts: arrayOf(predicateContractSchema()),
+    domain_contracts: arrayOf(domainContractSchema()),
+    behavior_equivalence_contracts: arrayOf(behaviorEquivalenceSchema()),
+    population_contracts: arrayOf(populationContractSchema()),
+    population_proofs: arrayOf(populationProofSchema()),
+    permission_auxiliary_contracts: arrayOf(permissionAuxiliaryContractSchema()),
+    oracle_semantic_contracts: arrayOf(oracleSemanticContractSchema()),
+    behavior_contract_reviews: arrayOf(behaviorReviewSchema()),
+    permission_matrix_reviews: arrayOf(permissionMatrixReviewSchema()),
+    risk_reviews: arrayOf(riskReviewSchema()),
+    semantic_gap_proposals: arrayOf(behaviorGapSchema())
+  });
+}
+function artifactRootSchema(artifactKind) {
+  if (artifactKind === "evidence_claims") return evidenceArtifactSchema();
+  if (artifactKind === "behavior_views") return behaviorArtifactSchema();
+  if (artifactKind === "case_drafts") return closedObject({ case_drafts: arrayOf(caseDraftSchema(), 1) });
+  throw new Error(`Unknown Agent artifact kind: ${artifactKind}`);
+}
+function originRangeSchema() {
+  return closedObject({ start_scalar: { type: "integer", minimum: 0 }, end_scalar: { type: "integer", minimum: 0 } });
+}
+function scalarAnswerValueSchema() {
+  return { oneOf: [
+    ...["text", "enum", "identifier"].map((kind) => closedObject({ kind: constant(kind), value: nonblankString() })),
+    closedObject({ kind: constant("boolean"), value: { type: "boolean" } }),
+    closedObject({ kind: constant("integer"), value: { type: "integer" } }),
+    closedObject({ kind: constant("number"), value: { type: "number" } }),
+    closedObject({ kind: constant("duration_ms"), value: { type: "integer", minimum: 1 } })
+  ] };
+}
+function answerValueSchema() {
+  const scalar = scalarAnswerValueSchema();
+  return { oneOf: [
+    ...scalar.oneOf,
+    closedObject({ kind: constant("set"), members: arrayOf(scalar) }),
+    closedObject({ kind: constant("mapping"), entries: arrayOf(closedObject({ from: scalar, to: scalar })) }),
+    closedObject({ kind: constant("scope"), included_refs: arrayOf(nonblankString()), excluded_refs: arrayOf(nonblankString()) }),
+    closedObject({ kind: constant("requirements_quantifier"), value: { enum: ["one", "some", "all", "none"] } })
+  ] };
+}
+function proposedAnswerSchema() {
+  return { oneOf: [
+    closedObject({ value: answerValueSchema(), source_text: nonblankString(), nature: constant("final") }),
+    closedObject({ value: answerValueSchema(), source_text: nonblankString(), nature: constant("temporary"), temporary_basis: closedObject({ message_digest: digestString(), range: originRangeSchema(), excerpt: nonblankString(), excerpt_digest: digestString() }) })
+  ] };
+}
+function clarificationUnitSchema() {
+  const origin = closedObject({ message_digest: digestString(), range: originRangeSchema(), excerpt: nonblankString(), excerpt_digest: digestString() });
+  const target = closedObject({ display_token: nonblankString(), question_part_id: nonblankString(), root_version_digest: digestString() });
+  const base = { unit_client_key: clientKeyString(), origin, target };
+  return { oneOf: [
+    closedObject({ ...base, action: { enum: ["defer", "unknown", "close_for_delivery"] } }),
+    closedObject({ ...base, shared_origin_group_id: clientKeyString(), action: constant("answer"), answer: proposedAnswerSchema() }, ["unit_client_key", "origin", "target", "shared_origin_group_id", "action", "answer"]),
+    closedObject({ ...base, action: constant("answer"), answer: proposedAnswerSchema() })
+  ] };
+}
+function executionOperationSchema() {
+  return { oneOf: [
+    closedObject({ kind: constant("set_execution_disposition"), case_id: nonblankString(), disposition: { enum: ["execute", "do_not_execute"] } }),
+    closedObject({ kind: constant("provide_capability_proof"), case_id: nonblankString(), proof: closedObject({ type: nonblankString(), value: nonblankString() }) }),
+    closedObject({ kind: constant("pause_execution") }),
+    closedObject({ kind: constant("confirm_execution_plan") })
+  ] };
+}
+function advanceRequestSchema() {
+  const token = nonblankString();
+  const actionBranches = [
+    closedObject({ kind: constant("cancel_run"), action_token: token, reason: nonblankString() }),
+    closedObject({ kind: constant("submit_source_batch"), action_token: token, request_ids: { type: "array", minItems: 1, uniqueItems: true, items: nonblankString() }, request_dispositions: { type: "array", minItems: 1, uniqueItems: true, items: sourceDispositionSchema() }, source_payload: sourceBatchPayloadSchema() }),
+    ...["evidence_claims", "behavior_views", "case_drafts"].map((artifactKind) => closedObject({ kind: constant("submit_artifact"), action_token: token, artifact_kind: constant(artifactKind), artifact: artifactRootSchema(artifactKind) })),
+    closedObject({ kind: constant("preview_clarification_response"), action_token: token, presentation_id: nonblankString(), semantic_root_digest: digestString(), preview_intent: { enum: ["apply_units", "discard_pending"] }, raw_response: { type: "string" }, proposed_units: arrayOf(clarificationUnitSchema()) }),
+    closedObject({ kind: constant("commit_clarification_response"), action_token: token, presentation_id: nonblankString(), semantic_root_digest: digestString(), preview_digest: digestString(), raw_confirmation: nonblankString(), confirmation_range: originRangeSchema() }),
+    closedObject({ kind: constant("advance_execution_plan"), action_token: token, operation: executionOperationSchema() })
+  ];
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "v5-advance-request.schema.json",
+    type: "object",
+    required: ["idempotency_key", "action"],
+    properties: { idempotency_key: nonblankString(), action: { oneOf: actionBranches } },
+    additionalProperties: false
+  };
+}
+function resumeLineageSchema() {
+  const acceptedSourceState = { oneOf: [
+    closedObject({ kind: constant("none") }),
+    closedObject({ kind: constant("accepted"), accepted_source_state_digest: digestString() })
+  ] };
+  const resumeBase = { oneOf: [
+    closedObject({ kind: constant("source_checkpoint"), parent_checkpoint_digest: digestString(), source_acquisition_state_digest: digestString(), accepted_source_state: acceptedSourceState }),
+    closedObject({ kind: constant("case_semantic_checkpoint"), parent_checkpoint_digest: digestString(), semantic_root_digest: digestString(), accepted_artifact_digests: arrayOf(digestString()) }),
+    closedObject({ kind: constant("execution_checkpoint"), parent_checkpoint_digest: digestString(), case_document_ref: caseDocumentRefSchema(), execution_snapshot_digest: digestString(), accepted_execution_receipt_digests: arrayOf(digestString()) })
+  ] };
+  return closedObject({
+    creation_reason: constant("resume_cancelled"),
+    parent_run_id: { type: "string", pattern: RUN_ID },
+    parent_cancel_event_digest: digestString(),
+    resume_base: resumeBase
+  });
+}
+function runIdentitySchema() {
+  const common = {
+    kind: constant("v5_run_identity"),
+    schema_version: constant(V5_SCHEMA_VERSION),
+    compiler_version: constant(V5_COMPILER_VERSION),
+    run_id: { type: "string", pattern: RUN_ID },
+    run_directory_key: { type: "string", pattern: RUN_ID },
+    delivery_intent: { enum: ["case_document", "execution_plan"] },
+    case_document_lineage_id: nonblankString(),
+    canonical_create_request_digest: digestString(),
+    run_identity_digest: digestString()
+  };
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "v5-run-identity.schema.json",
+    oneOf: [
+      closedObject({ ...common, delivery_intent: constant("case_document"), creation_binding: closedObject({ kind: constant("case_document"), source_bootstrap_digest: digestString(), source_acquisition_policy_digest: digestString() }) }),
+      closedObject({ ...common, delivery_intent: constant("execution_plan"), creation_binding: closedObject({ kind: constant("execution_plan"), case_document_ref: caseDocumentRefSchema() }) }),
+      closedObject({ ...common, creation_binding: resumeLineageSchema() })
+    ]
+  };
+}
+function diagnosticSchema(errorCode) {
+  return closedObject({
+    code: constant(errorCode),
+    json_pointer: nonblankString(),
+    affected_refs: arrayOf(nonblankString()),
+    message: nonblankString()
+  }, ["code", "affected_refs", "message"]);
+}
+function capabilitySchema(template) {
+  if (template.kind === "cancel_run") return closedObject({ kind: constant("cancel_run") });
+  if (template.kind === "submit_artifact") return closedObject({ kind: constant("submit_artifact"), artifact_kind: constant(template.artifact_kind) });
+  if (template.kind === "submit_source_batch") return closedObject({ kind: constant("submit_source_batch"), request_ids: { type: "array", minItems: 1, uniqueItems: true, items: nonblankString() } });
+  if (template.kind === "preview_clarification_response") return closedObject({ kind: constant(template.kind), presentation_id: nonblankString(), semantic_root_digest: digestString() });
+  if (template.kind === "commit_clarification_response") return closedObject({ kind: constant(template.kind), presentation_id: nonblankString(), semantic_root_digest: digestString(), preview_digest: digestString() });
+  if (template.kind === "advance_execution_plan") return closedObject({ kind: constant(template.kind), allowed_operation_kinds: { type: "array", minItems: 1, uniqueItems: true, items: { enum: ["confirm_execution_plan", "pause_execution", "provide_capability_proof", "set_execution_disposition"] } } });
+  throw new Error(`Unknown reply action template: ${template.kind}`);
+}
+function selectorsSchema(templates) {
+  if (templates.length === 0) return { type: "array", maxItems: 0, items: false };
+  return {
+    type: "array",
+    minItems: templates.length,
+    maxItems: templates.length,
+    uniqueItems: true,
+    items: { oneOf: templates.map((template) => closedObject({ capability: capabilitySchema(template), action_token: nonblankString() })) }
+  };
+}
+function sourceRequestSchema() {
+  return closedObject({
+    request_id: nonblankString(),
+    source_request_client_key: clientKeyString(),
+    source_role: { enum: ["primary_prd", "supplemental_requirement", "technical_contract", "reference"] },
+    locator: locatorSchema(),
+    required: { type: "boolean" }
+  });
+}
+function acceptedSourceContextSchema() {
+  const source = closedObject({ media_type: { enum: ["text/plain", "text/markdown"] }, content: { type: "string" }, source_object_digest: digestString() });
+  const pack = closedObject({ artifact_digest: digestString(), accepted_revision: nonnegativeInteger(), payload: closedObject({ sources: arrayOf(source, 1) }) });
+  return closedObject({ accepted_source_state_digest: digestString(), source_packs: arrayOf(pack, 1) });
+}
+function semanticRuleIndexSchema() {
+  const registeredRule = closedObject({ rule_id: nonblankString(), rule_kind: { enum: ["locator", "key_normalization", "transform", "value_normalization", "null_policy", "semantic_equivalence"] }, implementation_digest: digestString() });
+  return closedObject({
+    semantic_root_digest: digestString(),
+    registry_digest: digestString(),
+    registered_rules: arrayOf(registeredRule),
+    accepted_rule_contract_refs: arrayOf(typedContractRefSchema()),
+    index_digest: digestString()
+  });
+}
+function compilerRulesSchema(contracts2) {
+  return closedObject({
+    rules_bundle_digest: constant(contracts2.replyContracts.rules_bundle_digest),
+    answer_constraint_registry: exactValueSchema(contracts2.answerConstraintRegistry),
+    clarification_control_registry: exactValueSchema(contracts2.clarificationControlRegistry),
+    source_acquisition_policy: exactValueSchema(contracts2.sourceAcquisitionPolicy),
+    permission_derivation_registry: exactValueSchema(contracts2.permissionDerivationRegistry),
+    semantic_rule_index_projection: { oneOf: [
+      closedObject({ kind: constant("not_available_before_behavior") }),
+      closedObject({ kind: constant("available"), index: semanticRuleIndexSchema() })
+    ] }
+  });
+}
+function semanticSeedSchema() {
+  const ambiguity = closedObject({ candidate_id: nonblankString(), locator_id: nonblankString(), source_span: sourceSpanSchema(), ambiguity_kind: nonblankString(), detector_codes: stringArray(1) });
+  const outcome = closedObject({
+    candidate_id: nonblankString(),
+    locator_id: nonblankString(),
+    source_span: sourceSpanSchema(),
+    compound_signal_codes: stringArray(),
+    atom_signature: outcomeSignatureSchema(),
+    required_observation_slot_digests: digestArray(1)
+  });
+  const unit = closedObject({ unit_id: nonblankString(), locator_id: nonblankString(), unit_digest: digestString(), outcome_candidates: arrayOf(outcome, 1) });
+  const mention = closedObject({ candidate_id: nonblankString(), conflict_group_id: nonblankString(), locator_id: nonblankString(), observed_name: nonblankString(), source_span: sourceSpanSchema() });
+  const conflict = closedObject({ conflict_group_id: nonblankString(), mention_candidate_ids: stringArray(1) });
+  const requirementRef = closedObject({ kind: constant("requirements_ref"), ref: requirementsEvidenceRefSchema() });
+  const decisionDefined = closedObject({ kind: constant("decision_defined"), canonical_name: nonblankString() });
+  const coordinateValue = { oneOf: [nonblankString(), closedObject({ context_key: nonblankString() }), requirementRef, decisionDefined] };
+  const coordinateEvidence = { oneOf: [
+    closedObject({ evidence_kind: constant("source"), coordinate: nonblankString(), value: coordinateValue, locator_id: nonblankString(), source_span: sourceSpanSchema(), coordinate_evidence_digest: digestString() }),
+    closedObject({ evidence_kind: constant("decision"), coordinate: nonblankString(), value: coordinateValue, decision_id: nonblankString(), answer_value_digest: digestString(), coordinate_evidence_digest: digestString() })
+  ] };
+  const slots = closedObject({ role_candidates: arrayOf(coordinateEvidence), resource_candidates: arrayOf(coordinateEvidence), action_candidates: arrayOf(coordinateEvidence), context_candidates: arrayOf(coordinateEvidence) });
+  const permission = closedObject({ candidate_id: nonblankString(), scope_group_id: nonblankString(), locator_id: nonblankString(), source_span: sourceSpanSchema(), coordinate_slots: slots, signaled_dimensions: arrayOf(coordinateEvidence, 1), detector_codes: stringArray(1) });
+  const permissionGroup = closedObject({ scope_group_id: nonblankString(), permission_scope_candidate_ids: stringArray(1) });
+  return closedObject({
+    accepted_source_state_digest: digestString(),
+    normative_units: arrayOf(unit, 1),
+    ambiguity_candidates: arrayOf(ambiguity),
+    outcome_dedup_groups: { type: "array", maxItems: 0, items: false },
+    entity_mention_candidates: arrayOf(mention),
+    entity_conflict_groups: arrayOf(conflict),
+    permission_scope_candidates: arrayOf(permission),
+    permission_scope_groups: arrayOf(permissionGroup),
+    permission_derivation_registry_digest: digestString(),
+    seed_digest: digestString()
+  });
+}
+function semanticPayloadSchema() {
+  return closedObject({
+    semantic_review_seed_digest: digestString(),
+    claims: arrayOf(claimOutputSchema()),
+    semantic_gaps: arrayOf(requirementsGapSchema()),
+    decomposition_reviews: arrayOf(decompositionReviewSchema()),
+    ambiguity_reviews: arrayOf(ambiguityReviewSchema()),
+    entity_resolutions: arrayOf(entityResolutionSchema())
+  });
+}
+function termRegistrySchema() {
+  const entry = closedObject({
+    entity_id: nonblankString(),
+    canonical_name: nonblankString(),
+    alias_names: stringArray(),
+    exact_ui_labels: stringArray(),
+    mention_candidate_ids: stringArray(1),
+    basis: arrayOf(evidenceRefSchema(), 1)
+  });
+  return closedObject({ semantic_root_digest: digestString(), entries: arrayOf(entry), registry_digest: digestString() });
+}
+function projectionRecordSchema(payload) {
+  return closedObject({ artifact_digest: digestString(), accepted_revision: nonnegativeInteger(), payload });
+}
+function provenanceGraphSchema() {
+  const nodeBase = {
+    node_id: nonblankString(),
+    kind: { enum: ["source_unit", "claim", "behavior_contract"] },
+    run_id: { type: "string", pattern: RUN_ID },
+    case_document_lineage_id: nonblankString(),
+    semantic_root_digest: digestString(),
+    accepted: constant(true),
+    evidence_level: { enum: ["E1", "E2", "E3"] }
+  };
+  const node = closedObject(nodeBase, ["node_id", "kind", "run_id", "case_document_lineage_id", "semantic_root_digest", "accepted"]);
+  return closedObject({ nodes: arrayOf(node), edges: arrayOf(closedObject({ from: nonblankString(), to: nonblankString() })), graph_digest: digestString() });
+}
+function testObligationsSchema() {
+  return closedObject({
+    kind: constant("test_obligations"),
+    schema_version: constant(V5_SCHEMA_VERSION),
+    semantic_root_digest: digestString(),
+    formal_test_point_ids: stringArray(),
+    behavior_artifact_digest: digestString(),
+    obligations_digest: digestString()
+  });
+}
+function contextSchema(contracts2) {
+  const source = acceptedSourceContextSchema();
+  const compilerRules = compilerRulesSchema(contracts2);
+  const semantics = projectionRecordSchema(semanticPayloadSchema());
+  const termRegistry = projectionRecordSchema(termRegistrySchema());
+  const behavior = projectionRecordSchema(behaviorArtifactSchema());
+  const provenance = projectionRecordSchema(provenanceGraphSchema());
+  const testObligations = projectionRecordSchema(testObligationsSchema());
+  return { oneOf: [
+    closedObject({ source, compiler_rules: compilerRules }),
+    closedObject({ source, semantics, term_registry: termRegistry, compiler_rules: compilerRules }),
+    closedObject({ source, semantics, term_registry: termRegistry, compiler_rules: compilerRules, behavior, provenance, test_obligations: testObligations })
+  ] };
+}
+function behaviorSeedSchema() {
+  const gapCatalog = (left, right) => closedObject({ [left]: { type: "array", maxItems: 0, items: false }, [right]: { type: "array", maxItems: 0, items: false } });
+  const base = { required_contract_key: nonblankString(), contract_kind: nonblankString(), subject_ref: nonblankString(), intent_ref: nonblankString(), basis: arrayOf(evidenceRefSchema(), 1) };
+  const requirement = { oneOf: [
+    closedObject(base),
+    closedObject({ ...base, population_gap_catalog: gapCatalog("scope_candidates", "proof_candidates") }),
+    closedObject({ ...base, oracle_gap_catalog: closedObject({ observation_candidates: { type: "array", maxItems: 0, items: false }, assertion_candidates: { type: "array", maxItems: 0, items: false }, scope_candidates: { type: "array", maxItems: 0, items: false }, window_candidates: { type: "array", maxItems: 0, items: false } }) }),
+    closedObject({ ...base, auxiliary_contract_kind: { enum: ["denial_behavior", "data_scope"] }, permission_target: closedObject({ matrix_id: nonblankString(), required_cell_key: nonblankString() }) })
+  ] };
+  return closedObject({ semantic_root_digest: digestString(), semantic_rule_index: semanticRuleIndexSchema(), risk_review_module_ids: stringArray(), required_contracts: arrayOf(requirement), seed_digest: digestString() });
+}
+function coordinateRefSchema(coordinate) {
+  return closedObject({ coordinate: coordinate ? constant(coordinate) : nonblankString(), coordinate_evidence_digest: digestString() });
+}
+function permissionMatrixSchema() {
+  const requiredCell = closedObject({
+    required_cell_key: nonblankString(),
+    role_ref: coordinateRefSchema("role"),
+    resource_ref: coordinateRefSchema("resource"),
+    action_ref: nonblankString(),
+    context_key: nonblankString(),
+    permission_dimension: { enum: ["decision", "denial_behavior", "data_scope"] },
+    coordinate_refs: closedObject({ action: coordinateRefSchema("action"), context: coordinateRefSchema("context"), permission_dimension: coordinateRefSchema("permission_dimension") })
+  });
+  const route = { oneOf: [
+    closedObject({ candidate_id: nonblankString(), kind: constant("required_cells"), required_cell_keys: stringArray(1) }),
+    closedObject({ candidate_id: nonblankString(), kind: constant("semantic_gap"), semantic_gap_id: nonblankString(), unresolved_coordinates: stringArray(1) })
+  ] };
+  return closedObject({
+    matrix_id: nonblankString(),
+    semantic_root_digest: digestString(),
+    seed_digest: digestString(),
+    permission_derivation_registry_digest: digestString(),
+    scope_candidate_ids: stringArray(1),
+    candidate_routes: arrayOf(route, 1),
+    role_domain: closedObject({ role_refs: arrayOf(coordinateRefSchema("role")), basis: arrayOf(evidenceRefSchema()) }),
+    matrix_scope: closedObject({ resource_refs: arrayOf(coordinateRefSchema("resource")), action_refs: stringArray(), contexts: arrayOf(closedObject({ context_key: nonblankString(), context_ref: coordinateRefSchema("context") })), basis: arrayOf(evidenceRefSchema()) }),
+    required_cells: arrayOf(requiredCell)
+  });
+}
+function presentationSchema() {
+  const part = closedObject({
+    question_part_id: nonblankString(),
+    display_token: { type: "string", pattern: "^Q[0-9]{3,6}$" },
+    question_state: nonblankString(),
+    current_allowed_controls: stringArray(1),
+    question: nonblankString(),
+    why_needed: nonblankString(),
+    answer_contract: answerContractSchema(),
+    question_impact_summary: questionImpactSchema(true)
+  });
+  return closedObject({ presentation_id: nonblankString(), semantic_root_digest: digestString(), question_part_state_set_digest: digestString(), source_revision: nonnegativeInteger(), parts: arrayOf(part, 1), presentation_digest: digestString() });
+}
+function deterministicProjectionSchema() {
+  return closedObject({
+    resolved_gap_ids: stringArray(),
+    invalidated_artifact_ids: stringArray(),
+    semantic_changes: { type: "array", maxItems: 0, items: false },
+    status_changes: arrayOf(closedObject({ ref: nonblankString(), from: nonblankString(), to: nonblankString() })),
+    coverage_changes: { type: "array", maxItems: 0, items: false },
+    no_semantic_change: constant(false)
+  });
+}
+function clarificationPreviewSchema() {
+  const bindingBase = { unit_client_key: clientKeyString(), shared_origin_group_id: clientKeyString(), question_part_id: nonblankString(), display_token: nonblankString(), origin: closedObject({ message_digest: digestString(), range: originRangeSchema(), excerpt: nonblankString(), excerpt_digest: digestString() }) };
+  const binding = { oneOf: [
+    closedObject({ ...bindingBase, action: { enum: ["defer", "unknown", "close_for_delivery"] } }, ["unit_client_key", "question_part_id", "display_token", "action", "origin"]),
+    closedObject({ ...bindingBase, action: constant("answer"), answer: proposedAnswerSchema() }, ["unit_client_key", "question_part_id", "display_token", "action", "origin", "answer"])
+  ] };
+  return closedObject({
+    presentation_id: nonblankString(),
+    presentation_digest: digestString(),
+    semantic_root_digest: digestString(),
+    question_part_state_set_digest: digestString(),
+    source_revision: nonnegativeInteger(),
+    response_message_digest: digestString(),
+    bindings: arrayOf(binding),
+    deterministic_projection: deterministicProjectionSchema(),
+    unknown_future_effects: stringArray(),
+    preview_digest: digestString()
+  });
+}
+function executionProjectionSchema() {
+  const item = closedObject({
+    case_id: nonblankString(),
+    title: nonblankString(),
+    semantic_status: { enum: ["Grounded", "Conditional", "Blocked", "NotApplicable", "Exploratory"] },
+    execution_disposition: { enum: ["pending", "execute", "do_not_execute"] },
+    available_actions: { type: "array", uniqueItems: true, items: { enum: ["provide_capability_proof", "set_execution_disposition"] } },
+    capability_ready: { type: "boolean" }
+  }, ["case_id", "title", "semantic_status", "execution_disposition", "available_actions"]);
+  const receipt = closedObject({ kind: constant("capability_proof"), ready: { type: "boolean" }, case_id: nonblankString(), receipt_digest: digestString() });
+  return closedObject({
+    kind: constant("v5_execution_projection"),
+    schema_version: constant(V5_SCHEMA_VERSION),
+    compiler_version: constant(V5_COMPILER_VERSION),
+    case_document_ref: caseDocumentRefSchema(),
+    plan_digest: digestString(),
+    operation_kinds: { type: "array", minItems: 4, maxItems: 4, uniqueItems: true, items: { enum: ["confirm_execution_plan", "pause_execution", "provide_capability_proof", "set_execution_disposition"] } },
+    items: arrayOf(item),
+    capability_receipts: arrayOf(receipt),
+    paused: { type: "boolean" },
+    confirmed: { type: "boolean" },
+    execution_snapshot_digest: digestString()
+  });
+}
+function workPacketSchema(exactWorkPacket, contracts2) {
+  if (exactWorkPacket.kind === "terminal") {
+    const properties = { kind: constant("terminal_work"), terminal_kind: constant(exactWorkPacket.terminal_kind) };
+    const terminalKind = exactWorkPacket.terminal_kind;
+    if (terminalKind === "case_document_finished") properties.case_document_ref = caseDocumentRefSchema();
+    if (terminalKind === "execution_plan_finished") {
+      properties.case_document_ref = caseDocumentRefSchema();
+      properties.execution_projection = executionProjectionSchema();
+    }
+    if (terminalKind === "execution_plan_cancelled") {
+      properties.case_document_ref = caseDocumentRefSchema();
+      properties.last_execution_projection = executionProjectionSchema();
+    }
+    if (terminalKind === "execution_plan_fatal") {
+      properties.case_document_ref = caseDocumentRefSchema();
+      properties.last_verified_execution_projection = { oneOf: [executionProjectionSchema(), { type: "null" }] };
+    }
+    return closedObject(properties, Object.keys(properties).filter((key) => !["case_document_ref", "last_verified_execution_projection"].includes(key) || terminalKind !== "execution_plan_fatal"));
+  }
+  const kind = exactWorkPacket.packet_kind;
+  if (kind === "source_work") return closedObject({
+    kind: constant(kind),
+    accepted_source_state: { oneOf: [
+      closedObject({ kind: constant("none") }),
+      closedObject({ kind: constant("partial"), accepted_source_state_digest: digestString() }),
+      closedObject({ kind: constant("partial"), source: acceptedSourceContextSchema() })
+    ] },
+    source_requests: arrayOf(sourceRequestSchema(), 1),
+    source_acquisition_policy: exactValueSchema(contracts2.sourceAcquisitionPolicy),
+    source_acquisition_state_digest: digestString()
+  });
+  if (kind === "semantic_review_work") return closedObject({ kind: constant(kind), context: contextSchema(contracts2), semantic_review_seed: semanticSeedSchema() });
+  if (kind === "clarification_work") return closedObject({ kind: constant(kind), context: contextSchema(contracts2), presentation: presentationSchema() });
+  if (kind === "clarification_confirmation_work") return closedObject({ kind: constant(kind), context: contextSchema(contracts2), presentation: presentationSchema(), clarification_preview: clarificationPreviewSchema() });
+  if (kind === "behavior_work") return closedObject({ kind: constant(kind), context: contextSchema(contracts2), permission_matrix_worklists: arrayOf(permissionMatrixSchema()), behavior_contract_worklist: behaviorSeedSchema() });
+  if (kind === "case_work") return closedObject({ kind: constant(kind), context: contextSchema(contracts2) });
+  if (kind === "execution_work") return closedObject({ kind: constant(kind), case_document_ref: caseDocumentRefSchema(), execution_projection: executionProjectionSchema() });
+  throw new Error(`Unknown reply work packet: ${kind}`);
+}
+function bindingSchema() {
+  return closedObject({ client_key: clientKeyString(), stable_id: nonblankString() });
+}
+function commitReceiptSchema(exactCommit) {
+  if (exactCommit.kind === "none") return { type: "null" };
+  const common = { committed_action_digest: digestString(), client_key_bindings: arrayOf(bindingSchema()) };
+  if (exactCommit.kind === "artifact_commit") return closedObject({ kind: constant("artifact_commit"), ...common, semantic_revision_delta: constant(1) });
+  if (exactCommit.kind === "clarification_commit") return closedObject({
+    kind: constant("clarification_commit"),
+    ...common,
+    semantic_revision_delta: constant(1),
+    applied_clarification_impact: closedObject({
+      preview_digest: digestString(),
+      decision_ids: stringArray(),
+      before_graph_digest: digestString(),
+      after_graph_digest: digestString(),
+      actual_projection: deterministicProjectionSchema()
+    })
+  }, ["kind", "committed_action_digest", "semantic_revision_delta", "client_key_bindings"]);
+  if (exactCommit.kind === "operational_commit") return closedObject({ kind: constant("operational_commit"), ...common, semantic_revision_delta: constant(0), operational_effect: constant(exactCommit.effect) });
+  throw new Error(`Unknown reply commit kind: ${exactCommit.kind}`);
+}
+function lastVerifiedStateSchema(exactState) {
+  if (exactState.kind === "none") return closedObject({ kind: constant("none") });
+  return closedObject({ kind: constant("checkpoint"), fsm_cell_id: constant(exactState.fsm_cell_id), stage: nonblankString(), obligation: nonblankString(), current_revision: { type: "integer", minimum: 0 }, checkpoint_digest: digestString() });
+}
+function workPacketDefinitionKey(exactWorkPacket) {
+  const suffix = exactWorkPacket.kind === "terminal" ? exactWorkPacket.terminal_kind : exactWorkPacket.packet_kind;
+  return `work_packet_${suffix.replaceAll(/[^A-Za-z0-9_]/gu, "_")}`;
+}
+function replySchemaBranch(row) {
+  const diagnostics = row.exact_diagnostic.kind === "none" ? { type: "array", maxItems: 0, items: false } : { type: "array", minItems: 1, maxItems: 1, items: diagnosticSchema(row.exact_diagnostic.error_code) };
+  if (row.exact_projection_kind === "pre_run_error") return closedObject({
+    kind: constant("pre_run_error"),
+    schema_version: constant(V5_SCHEMA_VERSION),
+    reply_contract_id: constant(row.reply_contract_id),
+    reply_status: constant(row.exact_reply_status),
+    diagnostics
+  });
+  const identity = {
+    kind: constant("run_reply"),
+    schema_version: constant(V5_SCHEMA_VERSION),
+    run_id: { type: "string", pattern: RUN_ID },
+    run_directory: nonblankString(),
+    case_document_lineage_id: nonblankString(),
+    delivery_intent: { enum: ["case_document", "execution_plan"] },
+    projection_kind: constant(row.exact_projection_kind),
+    reply_contract_id: constant(row.reply_contract_id),
+    run_lifecycle: constant(row.exact_lifecycle),
+    reply_status: constant(row.exact_reply_status),
+    selector_snapshot_digest: row.exact_projection_kind === "read_only_integrity_fatal" ? { type: "null" } : digestString(),
+    available_actions: selectorsSchema(row.exact_action_templates),
+    work_packet: { $ref: `#/$defs/${workPacketDefinitionKey(row.exact_work_packet)}` },
+    commit_receipt: commitReceiptSchema(row.exact_commit),
+    diagnostics
+  };
+  if (row.exact_projection_kind === "read_only_integrity_fatal") {
+    return closedObject({ ...identity, last_verified_state: lastVerifiedStateSchema(row.exact_last_verified_state) });
+  }
+  return closedObject({
+    ...identity,
+    stage: constant(row.exact_stage),
+    obligation: constant(row.exact_obligation),
+    current_revision: { type: "integer", minimum: 0 },
+    checkpoint_digest: digestString()
+  });
+}
+function replySchema(contracts2) {
+  const workPacketDefinitions = {};
+  for (const row of contracts2.replyContracts.rows) {
+    if (row.exact_work_packet.kind === "absent") continue;
+    const key = workPacketDefinitionKey(row.exact_work_packet);
+    if (!workPacketDefinitions[key]) workPacketDefinitions[key] = workPacketSchema(row.exact_work_packet, contracts2);
+  }
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "v5-reply-oneof.schema.json",
+    $defs: workPacketDefinitions,
+    oneOf: contracts2.replyContracts.rows.map(replySchemaBranch)
+  };
+}
+function generateV5InterfaceSchemas(contracts2) {
+  return {
+    createRequest: createRequestSchema(),
+    advanceRequest: advanceRequestSchema(),
+    runIdentity: runIdentitySchema(),
+    reply: replySchema(contracts2)
+  };
 }
 
 // src/v5/registry-generator.mjs
@@ -1326,7 +2780,10 @@ function createRuntimeResponses(errorCode, catalogRow) {
     profiles = [persistedProfile(requirementsError ? "cd.active.requirements.review" : "cd.active.case.behavior", requirementsError ? "cd.active.requirements.resolve" : "cd.active.case.resolve")];
     exactCommit = artifactCommit(requirementsError ? "evidence_claims" : "behavior_views");
   } else if (semanticCommitPolicy === "preview_only") {
-    profiles = [persistedProfile("cd.active.requirements.resolve", "cd.active.requirements.confirm")];
+    profiles = [
+      persistedProfile("cd.active.requirements.resolve", "cd.active.requirements.confirm"),
+      persistedProfile("cd.active.case.resolve", "cd.active.case.confirm")
+    ];
     exactCommit = operationalCommit("clarification_pending_created");
   }
   if (errorCode === "ACTION_NOT_ADVERTISED" || errorCode === "IDEMPOTENCY_CONFLICT") profiles = profiles.concat(["cd.terminal.finished", "cd.terminal.cancelled", "cd.terminal.fatal", "ep.terminal.finished", "ep.terminal.cancelled", "ep.terminal.fatal"].map((cellId) => ({ state_profile_id: `terminal.${cellId}`, trigger_state: verifiedState(cellId), reply_projection: { kind: "read_only_terminal_rejection", terminal_fsm_cell_id: cellId } })));
@@ -1354,6 +2811,10 @@ function createPolicyRegistry(fsm) {
     if (errorCode.includes("PROVENANCE") || errorCode.includes("DOWNSTREAM")) return "C16-provenance";
     return "C15-protocol";
   };
+  const executableErrorFixture = Object.freeze({
+    ACCEPTED_STATE_INTEGRITY_FAILURE: "F-C15-protocol.protocol.read-only-integrity-fatal",
+    COMPLEMENT_COVERAGE_OVERCLAIMED: "F-C11-complement.negative.empty-finite-partition"
+  });
   const runtimeRules = Object.entries(V5_ERROR_CATALOG).map(([errorCode, catalogRow]) => {
     const phase = phaseLookup.get(errorCode);
     const responses = createRuntimeResponses(errorCode, catalogRow);
@@ -1363,7 +2824,7 @@ function createPolicyRegistry(fsm) {
       enforcement: ["schema", "invariant", "fsm", "transaction"],
       applicability: [...new Set(responses.map((response) => response.context))].map((context) => context === "pre_run" ? { kind: "pre_run" } : { kind: context, stages: ["source_acquisition", "requirements_analysis", "case_design", "execution_closure", "final_confirmation", "delivery"] }),
       normative_refs: [`SPEC.ERROR.${errorCode}`],
-      test_ids: [`F-${errorRequirement(errorCode)}.negative.rejection`],
+      test_ids: [executableErrorFixture[errorCode] ?? `F-${errorRequirement(errorCode)}.negative.rejection`],
       kind: "runtime_error",
       trigger_ref: `trigger.${errorCode.toLowerCase()}`,
       error_code: errorCode,
@@ -1781,7 +3242,7 @@ async function publishFixedRecord(fixedPath, record, digestField, expectedBytes)
 }
 async function readVerifiedRun(runDirectory) {
   const layout = await resolveRunLayout(runDirectory);
-  const identityFixed = await readFixedSealedRecord(layout.identity, "identity_digest");
+  const identityFixed = await readFixedSealedRecord(layout.identity, "run_identity_digest");
   const pointerFixed = await readFixedSealedRecord(layout.currentPointer, "pointer_digest");
   const pointer = pointerFixed.record;
   if (pointer.run_id !== identityFixed.record.run_id) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Run pointer identity binding is invalid.");
@@ -1794,7 +3255,7 @@ async function readVerifiedRun(runDirectory) {
     const reply2 = await readCasJson(path2.join(layout.replies, digestFilename(transaction.reply_object_digest)), transaction.reply_object_digest);
     const receipt2 = await readSealedV5Record(layout.receipts, transaction.receipt_digest, "receipt_digest");
     const incident2 = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, "incident_record_digest");
-    if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || transaction.run_genesis_record_digest !== genesis.run_genesis_record_digest || transaction.previous_run_transaction_digest !== null || transaction.recovery_sequence !== 1) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine transaction identity binding is invalid.");
+    if (genesis.run_id !== identityFixed.record.run_id || genesis.run_identity_digest !== identityFixed.record.run_identity_digest || canonicalV5Stringify(genesis.run_identity) !== canonicalV5Stringify(identityFixed.record) || transaction.run_id !== identityFixed.record.run_id || transaction.run_genesis_record_digest !== genesis.run_genesis_record_digest || transaction.previous_run_transaction_digest !== null || transaction.recovery_sequence !== 1) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine transaction identity binding is invalid.");
     if (checkpoint2.run_id !== identityFixed.record.run_id || checkpoint2.run_lifecycle !== "fatal" || checkpoint2.fatal_incident_record_digest !== incident2.incident_record_digest || selectorSidecar2.checkpoint_digest !== checkpoint2.checkpoint_digest) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine checkpoint binding is invalid.");
     if (index2.scope !== "run_integrity_quarantine" || index2.index_sequence !== 1 || index2.entries.length !== 1 || receipt2.scope !== "run_integrity_quarantine") throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Quarantine idempotency scope is invalid.");
     const entry = index2.entries[0];
@@ -1827,7 +3288,7 @@ async function readVerifiedRun(runDirectory) {
     incident = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, "incident_record_digest");
     if (checkpoint.fatal_incident_record_digest !== incident.incident_record_digest || incident.previous_run_transaction_digest !== transaction.previous_run_transaction_digest) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Normal fatal incident binding is invalid.");
   } else if (Object.hasOwn(transaction, "incident_record_digest")) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Non-fatal transaction unexpectedly references a fatal incident.");
-  if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Run object cross-binding is invalid.");
+  if (genesis.run_id !== identityFixed.record.run_id || genesis.run_identity_digest !== identityFixed.record.run_identity_digest || canonicalV5Stringify(genesis.run_identity) !== canonicalV5Stringify(identityFixed.record) || genesis.run_directory_key !== identityFixed.record.run_directory_key || genesis.case_document_lineage_id !== identityFixed.record.case_document_lineage_id || genesis.checkpoint_digest !== chainCursor.checkpoint_digest || genesis.selector_sidecar_digest !== chainCursor.selector_sidecar_digest || chainCursor.run_identity_digest !== identityFixed.record.run_identity_digest || path2.basename(layout.root) !== identityFixed.record.run_directory_key || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Run object cross-binding is invalid.");
   if (selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest || index.index_sequence !== transaction.transaction_sequence || index.entries.length !== transaction.transaction_sequence) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Checkpoint/sidecar/index sequence binding is invalid.");
   if (receipt && (receipt.reply_object_ref.reply_digest !== transaction.reply_object_digest || !index.entries.some((entry) => entry.receipt_digest === receipt.receipt_digest && entry.reply_digest === transaction.reply_object_digest))) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Receipt/index/reply binding is invalid.");
   if (operationalEvent && (checkpoint.cancel_event_digest !== operationalEvent.cancel_event_digest || receipt?.canonical_action_digest !== operationalEvent.canonical_cancel_action_digest || transaction.previous_run_transaction_digest !== operationalEvent.previous_run_transaction_digest)) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Cancel event transaction binding is invalid.");
@@ -1845,7 +3306,9 @@ var COMPILER_SEALED_DIGEST_FIELDS = /* @__PURE__ */ new Map([
   ["behavior_contract_seed_digest", "seed_digest"],
   ["clarification_gaps_digest", "gaps_digest"],
   ["pending_clarification_digest", "pending_record_digest"],
-  ["test_obligations_digest", "obligations_digest"]
+  ["test_obligations_digest", "obligations_digest"],
+  ["case_compilation_context_digest", "context_digest"],
+  ["provenance_graph_digest", "graph_digest"]
 ]);
 function acceptedClosureFailure(code, targetKind, affectedRefs, cause) {
   const detail = cause instanceof Error ? cause.message : String(cause);
@@ -1877,6 +3340,8 @@ async function verifyV5AcceptedClosure(current) {
     "pending_clarification_digest",
     "test_obligations_digest",
     "risk_ledger_digest",
+    "case_compilation_context_digest",
+    "provenance_graph_digest",
     "case_document_digest",
     "execution_plan_digest",
     "execution_snapshot_digest",
@@ -2127,6 +3592,37 @@ function nonblank2(value) {
 function nonempty(value) {
   return Array.isArray(value) && value.length > 0;
 }
+var EVIDENCE_LEVEL_RANK = Object.freeze({ E1: 1, E2: 2, E3: 3 });
+function validateEvidenceReference(ref, context, options = {}) {
+  const errorCode = options.errorCode ?? "SEMANTIC_REVIEW_CANDIDATE_UNKNOWN";
+  const fail = (message) => {
+    throw new V5ProtocolError(errorCode, message);
+  };
+  if (!object(ref) || !nonblank2(ref.kind)) return fail("Evidence reference is not a closed accepted reference.");
+  if (ref.kind === "source_unit") {
+    if (!options.allowSourceUnit || !exact(ref, ["kind", "source_unit_id"]) || !nonblank2(ref.source_unit_id) || !context.sourceUnitIds.has(ref.source_unit_id)) return fail("Source-unit evidence does not resolve to an accepted source unit.");
+    return ref;
+  }
+  const idField = ref.kind === "claim" ? "claim_id" : ref.kind === "decision" ? "decision_id" : null;
+  if (!idField || !exact(ref, ["kind", idField]) || !nonblank2(ref[idField])) return fail("Evidence reference must be an exact Claim or Decision reference.");
+  const level = context.evidenceLevels.get(ref[idField]);
+  const minimum = options.minimumLevel ?? "E1";
+  if (!level || EVIDENCE_LEVEL_RANK[level] < EVIDENCE_LEVEL_RANK[minimum]) return fail(`Evidence ${ref[idField]} is not accepted at ${minimum} or above.`);
+  return ref;
+}
+function validateBehaviorEvidenceClosure(value, context) {
+  const visit = (current, allowSourceUnit = false) => {
+    if (Array.isArray(current)) {
+      current.forEach((item) => visit(item, allowSourceUnit));
+      return;
+    }
+    if (!object(current)) return;
+    if (["claim", "decision", "source_unit"].includes(current.kind)) validateEvidenceReference(current, context, { allowSourceUnit });
+    for (const [key, child] of Object.entries(current)) visit(child, key === "review_basis" || key === "trigger_basis");
+  };
+  visit(value);
+  return structuredClone(value);
+}
 function validateTypedValue(value) {
   if (!object(value) || typeof value.kind !== "string") return false;
   if (value.kind === "null" || value.kind === "empty_string") return exact(value, ["kind"]);
@@ -2183,6 +3679,9 @@ function compileClosedDomain(semanticRootDigest, input) {
   const fail = (message) => {
     throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", message);
   };
+  const failComplementCoverage = (message) => {
+    throw new V5ProtocolError("COMPLEMENT_COVERAGE_OVERCLAIMED", message);
+  };
   if (!object(input) || input.domain?.kind !== "closed_enum" || !nonblank2(input.domain_client_key) || !nonblank2(input.subject_ref) || !nonblank2(input.field_path) || !nonempty(input.domain.members) || !nonempty(input.domain.closed_world_basis) || !nonempty(input.partitions)) return fail("Closed Domain is incomplete.");
   if (
     /** @type {any[]} */
@@ -2219,7 +3718,7 @@ function compileClosedDomain(semanticRootDigest, input) {
         );
         if ([...excluded].some((key) => !memberMap.has(key))) return fail("Complement exclusion escapes the universe.");
         const derived = [...memberMap.entries()].filter(([key]) => !excluded.has(key)).map(([, value]) => value);
-        if (derived.length === 0 || derived.some((value) => claimed.has(canonicalV5Stringify(value)))) return fail("Complement must be nonempty and disjoint.");
+        if (derived.length === 0 || derived.some((value) => claimed.has(canonicalV5Stringify(value)))) return failComplementCoverage("Complement coverage must be nonempty and disjoint from explicitly claimed members.");
         derived.forEach((value) => claimed.add(canonicalV5Stringify(value)));
         const normalized = { kind: partition.kind, semantic_role: partition.semantic_role, universe: partition.universe, excluded_values: partition.excluded_values };
         return { ...structuredClone(partition), derived_members: derived, partition_id: stableV5Id("domain_partition", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, normalized_partition: normalized }) };
@@ -2231,7 +3730,7 @@ function compileClosedDomain(semanticRootDigest, input) {
   const partitionIds = partitions.map((partition) => partition.partition_id).sort();
   return { ...structuredClone(input), partitions, domain_contract_id: stableV5Id("domain_contract", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, partition_ids: partitionIds }) };
 }
-function compileDomain(semanticRootDigest, input, predicateContracts = []) {
+function compileDomain(semanticRootDigest, input, predicateContracts = [], acceptedContractRefs) {
   if (input.domain?.kind === "closed_enum") return compileClosedDomain(semanticRootDigest, input);
   const fail = (message) => {
     throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", message);
@@ -2239,14 +3738,14 @@ function compileDomain(semanticRootDigest, input, predicateContracts = []) {
   if (!object(input) || !["predicate_partition", "open_domain"].includes(input.domain?.kind) || !nonblank2(input.domain_client_key) || !nonblank2(input.subject_ref) || !nonblank2(input.field_path) || !nonempty(input.partitions)) return fail("Predicate/Open Domain is incomplete.");
   const contractByKey = new Map(predicateContracts.map((contract) => [contract.predicate_contract_client_key, contract]));
   const boundaryBasis = input.domain.kind === "open_domain" ? input.domain.boundary_basis : input.domain.boundary_basis;
-  if (!nonempty(boundaryBasis) || input.domain.kind === "open_domain" && !nonblank2(input.domain.boundary_description) || input.domain.kind === "predicate_partition" && !typedRef(input.domain.universe_ref, "universe", semanticRootDigest)) return fail("Domain boundary is not closed by evidence and a typed universe.");
+  if (!nonempty(boundaryBasis) || input.domain.kind === "open_domain" && !nonblank2(input.domain.boundary_description) || input.domain.kind === "predicate_partition" && !typedRef(input.domain.universe_ref, "universe", semanticRootDigest, acceptedContractRefs)) return fail("Domain boundary is not closed by evidence and a typed universe.");
   const domainAnchorDigest = canonicalObjectDigest({ subject_ref: input.subject_ref, field_path: input.field_path, domain: input.domain });
   const partitions = (
     /** @type {Array<Record<string,any>>} */
     input.partitions.map((partition) => {
       if (!exact(partition, ["partition_client_key", "kind", "semantic_role", "predicate_contract_client_key"]) || partition.kind !== "predicate" || !["target", "other"].includes(partition.semantic_role)) return fail("Open/predicate Domains allow only predicate partitions.");
       const contract = contractByKey.get(partition.predicate_contract_client_key);
-      if (!contract || !nonempty(contract.basis) || !typedRef(contract.predicate_ref, "domain_predicate", semanticRootDigest) || input.domain.kind === "open_domain" && contract.exhaustiveness !== "non_exhaustive_open_set") return fail("Predicate partition does not resolve to an admissible typed contract.");
+      if (!contract || !nonempty(contract.basis) || !typedRef(contract.predicate_ref, "domain_predicate", semanticRootDigest, acceptedContractRefs) || input.domain.kind === "open_domain" && contract.exhaustiveness !== "non_exhaustive_open_set") return fail("Predicate partition does not resolve to an admissible typed contract.");
       const normalized = { kind: "predicate", semantic_role: partition.semantic_role, predicate_contract_client_key: partition.predicate_contract_client_key };
       return { ...structuredClone(partition), partition_id: stableV5Id("domain_partition", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, normalized_partition: normalized }) };
     })
@@ -2255,40 +3754,43 @@ function compileDomain(semanticRootDigest, input, predicateContracts = []) {
   const partitionIds = partitions.map((partition) => partition.partition_id).sort();
   return { ...structuredClone(input), partitions, domain_contract_id: stableV5Id("domain_contract", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, partition_ids: partitionIds }) };
 }
-function typedRef(ref, kind, root) {
-  return object(ref) && exact(ref, ["contract_id", "contract_kind", "semantic_root_digest"]) && nonblank2(ref.contract_id) && ref.contract_kind === kind && ref.semantic_root_digest === root;
+function typedContractRefKey(ref) {
+  return canonicalV5Stringify(ref);
 }
-function validatePopulationContract(contract, semanticRootDigest) {
+function typedRef(ref, kind, root, acceptedContractRefs) {
+  return object(ref) && exact(ref, ["contract_id", "contract_kind", "semantic_root_digest"]) && nonblank2(ref.contract_id) && ref.contract_kind === kind && ref.semantic_root_digest === root && (!acceptedContractRefs || acceptedContractRefs.has(typedContractRefKey(ref)));
+}
+function validatePopulationContract(contract, semanticRootDigest, acceptedContractRefs) {
   const fail = () => {
     throw new V5ProtocolError("POPULATION_CONTRACT_REQUIRED", "Population scope needs exact current-root typed contracts.");
   };
   if (!object(contract) || !exact(contract, ["population_contract_client_key", "scope"]) || !nonblank2(contract.population_contract_client_key) || !object(contract.scope)) return fail();
   const scope = contract.scope;
-  const optionalFilter = !scope.filter_ref || typedRef(scope.filter_ref, "filter", semanticRootDigest);
+  const optionalFilter = !scope.filter_ref || typedRef(scope.filter_ref, "filter", semanticRootDigest, acceptedContractRefs);
   let valid = false;
-  if (scope.kind === "single_item") valid = exact(scope, ["kind", "identity_contract_ref"]) && typedRef(scope.identity_contract_ref, "identity", semanticRootDigest);
-  else if (scope.kind === "visible_region") valid = exact(scope, ["kind", "region_contract_ref"]) && typedRef(scope.region_contract_ref, "region", semanticRootDigest);
-  else if (scope.kind === "current_page" || scope.kind === "current_response") valid = exact(scope, scope.filter_ref ? ["kind", "collection_ref", "filter_ref"] : ["kind", "collection_ref"]) && typedRef(scope.collection_ref, "collection", semanticRootDigest) && optionalFilter;
-  else if (scope.kind === "all_pages") valid = exact(scope, scope.filter_ref ? ["kind", "collection_ref", "filter_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"] : ["kind", "collection_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"]) && typedRef(scope.collection_ref, "collection", semanticRootDigest) && optionalFilter && typedRef(scope.page_model_ref, "page_model", semanticRootDigest) && typedRef(scope.termination_contract_ref, "termination", semanticRootDigest) && typedRef(scope.consistency_contract_ref, "consistency", semanticRootDigest);
+  if (scope.kind === "single_item") valid = exact(scope, ["kind", "identity_contract_ref"]) && typedRef(scope.identity_contract_ref, "identity", semanticRootDigest, acceptedContractRefs);
+  else if (scope.kind === "visible_region") valid = exact(scope, ["kind", "region_contract_ref"]) && typedRef(scope.region_contract_ref, "region", semanticRootDigest, acceptedContractRefs);
+  else if (scope.kind === "current_page" || scope.kind === "current_response") valid = exact(scope, scope.filter_ref ? ["kind", "collection_ref", "filter_ref"] : ["kind", "collection_ref"]) && typedRef(scope.collection_ref, "collection", semanticRootDigest, acceptedContractRefs) && optionalFilter;
+  else if (scope.kind === "all_pages") valid = exact(scope, scope.filter_ref ? ["kind", "collection_ref", "filter_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"] : ["kind", "collection_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"]) && typedRef(scope.collection_ref, "collection", semanticRootDigest, acceptedContractRefs) && optionalFilter && typedRef(scope.page_model_ref, "page_model", semanticRootDigest, acceptedContractRefs) && typedRef(scope.termination_contract_ref, "termination", semanticRootDigest, acceptedContractRefs) && typedRef(scope.consistency_contract_ref, "consistency", semanticRootDigest, acceptedContractRefs);
   else if (scope.kind === "full_dataset") {
     const keys = ["kind", "universe_ref", "snapshot_contract_ref", "consistency_contract_ref", ...scope.filter_ref ? ["filter_ref"] : [], ...scope.tenant_or_region_ref ? ["tenant_or_region_ref"] : []];
-    valid = exact(scope, keys) && typedRef(scope.universe_ref, "universe", semanticRootDigest) && optionalFilter && (!scope.tenant_or_region_ref || typedRef(scope.tenant_or_region_ref, "tenant_or_region", semanticRootDigest)) && typedRef(scope.snapshot_contract_ref, "snapshot", semanticRootDigest) && typedRef(scope.consistency_contract_ref, "consistency", semanticRootDigest);
+    valid = exact(scope, keys) && typedRef(scope.universe_ref, "universe", semanticRootDigest, acceptedContractRefs) && optionalFilter && (!scope.tenant_or_region_ref || typedRef(scope.tenant_or_region_ref, "tenant_or_region", semanticRootDigest, acceptedContractRefs)) && typedRef(scope.snapshot_contract_ref, "snapshot", semanticRootDigest, acceptedContractRefs) && typedRef(scope.consistency_contract_ref, "consistency", semanticRootDigest, acceptedContractRefs);
   }
   if (!valid) return fail();
   return structuredClone(contract);
 }
-function validatePopulationProof(proof, semanticRootDigest, populationClientKeys) {
+function validatePopulationProof(proof, semanticRootDigest, populationClientKeys, acceptedContractRefs) {
   const fail = () => {
     throw new V5ProtocolError("POPULATION_CONTRACT_REQUIRED", "Population proof must bind one current-root typed proof contract.");
   };
   if (!object(proof) || !nonblank2(proof.proof_client_key) || !populationClientKeys.includes(proof.population_contract_client_key) || !object(proof.payload)) return fail();
   const payload = proof.payload;
   if (payload.kind === "enumerate_population") {
-    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload"]) || !exact(payload, ["kind", "enumeration_contract_ref"]) || !typedRef(payload.enumeration_contract_ref, "enumeration", semanticRootDigest)) return fail();
+    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload"]) || !exact(payload, ["kind", "enumeration_contract_ref"]) || !typedRef(payload.enumeration_contract_ref, "enumeration", semanticRootDigest, acceptedContractRefs)) return fail();
   } else if (payload.kind === "authoritative_aggregate") {
-    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload", "basis"]) || !nonempty(proof.basis) || !exact(payload, ["kind", "aggregate_contract_ref"]) || !typedRef(payload.aggregate_contract_ref, "aggregate", semanticRootDigest)) return fail();
+    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload", "basis"]) || !nonempty(proof.basis) || !exact(payload, ["kind", "aggregate_contract_ref"]) || !typedRef(payload.aggregate_contract_ref, "aggregate", semanticRootDigest, acceptedContractRefs)) return fail();
   } else if (payload.kind === "sourced_invariant") {
-    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload", "basis"]) || !nonempty(proof.basis) || !exact(payload, ["kind", "invariant_contract_ref"]) || !typedRef(payload.invariant_contract_ref, "invariant", semanticRootDigest)) return fail();
+    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload", "basis"]) || !nonempty(proof.basis) || !exact(payload, ["kind", "invariant_contract_ref"]) || !typedRef(payload.invariant_contract_ref, "invariant", semanticRootDigest, acceptedContractRefs)) return fail();
   } else return fail();
   return structuredClone(proof);
 }
@@ -2311,23 +3813,31 @@ function riskTier(item) {
   if (item.risk_disposition !== "not_applicable" && nonblank2(item.recommended_action) && atLeastMedium(item.likelihood) && atLeastMedium(item.evidence_confidence) && atLeastMedium(item.testability)) return "recommended";
   return "background";
 }
-function validateRiskReviews(semanticRootDigest, moduleIds, reviews) {
+function validateRiskReviews(semanticRootDigest, moduleIds, reviews, context) {
   const expected = moduleIds.flatMap((moduleRef) => RISK_KINDS.map((riskKind) => `${moduleRef}\0${riskKind}`)).sort();
   const actual = reviews.map((review) => `${review.module_ref}\0${review.risk_kind}`).sort();
   if (new Set(actual).size !== actual.length || canonicalV5Stringify(actual) !== canonicalV5Stringify(expected)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Risk reviews must exactly cover module \xD7 nine-risk denominator.");
   const items = [];
   for (const review of reviews) {
     if (!nonblank2(review.review_client_key) || !nonempty(review.review_basis) || !RISK_KINDS.includes(review.risk_kind)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Risk review identity or basis is missing.");
+    review.review_basis.forEach((ref) => validateEvidenceReference(ref, context, { allowSourceUnit: true, errorCode: "RISK_LEDGER_INVALID" }));
     if (review.risk_signal_status === "no_signal") {
       if (Object.hasOwn(review, "risk_item")) throw new V5ProtocolError("RISK_LEDGER_INVALID", "no_signal review cannot carry a risk item.");
       continue;
     }
     const item = review.risk_item;
     if (review.risk_signal_status !== "signal_found" || !object(item) || !nonblank2(item.candidate_client_key) || !nonempty(item.trigger_basis) || !nonempty(item.affected_refs) || !nonblank2(item.why_material) || !nonblank2(item.recommended_action) || !["low", "medium", "high", "critical"].includes(item.severity) || !["low", "medium", "high"].includes(item.likelihood) || !["low", "medium", "high"].includes(item.evidence_confidence) || !["low", "medium", "high"].includes(item.testability)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Signal-found risk item is incomplete.");
-    if (item.risk_disposition === "formal_requirement" && !nonblank2(item.formal_claim_id)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Formal risk needs a Claim.");
-    if (item.risk_disposition === "semantic_gap" && !object(item.gap_ref)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Risk gap reference is missing.");
+    item.trigger_basis.forEach((ref) => validateEvidenceReference(ref, context, { allowSourceUnit: true, errorCode: "RISK_LEDGER_INVALID" }));
+    if (item.risk_disposition === "formal_requirement") {
+      if (!nonblank2(item.formal_claim_id)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Formal risk needs a Claim.");
+      validateEvidenceReference({ kind: "claim", claim_id: item.formal_claim_id }, context, { minimumLevel: "E2", errorCode: "RISK_LEDGER_INVALID" });
+    }
+    if (item.risk_disposition === "semantic_gap" && (!object(item.gap_ref) || !(item.gap_ref.kind === "accepted_gap" && exact(item.gap_ref, ["kind", "semantic_gap_id"]) && nonblank2(item.gap_ref.semantic_gap_id) || item.gap_ref.kind === "same_behavior_batch" && exact(item.gap_ref, ["kind", "semantic_gap_client_key"]) && nonblank2(item.gap_ref.semantic_gap_client_key)))) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Risk gap reference is missing or not closed.");
     if (item.risk_disposition === "exploratory" && !nonblank2(item.observation_intent)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Exploratory risk needs a nonblank observation intent.");
-    if (item.risk_disposition === "not_applicable" && !nonempty(item.exclusion_basis)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "N/A risk needs E2/E3 exclusion basis.");
+    if (item.risk_disposition === "not_applicable") {
+      if (!nonempty(item.exclusion_basis)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "N/A risk needs E2/E3 exclusion basis.");
+      item.exclusion_basis.forEach((ref) => validateEvidenceReference(ref, context, { minimumLevel: "E2", errorCode: "RISK_LEDGER_INVALID" }));
+    }
     if (!["formal_requirement", "semantic_gap", "exploratory", "not_applicable"].includes(item.risk_disposition)) throw new V5ProtocolError("RISK_LEDGER_INVALID", "Risk disposition is unknown.");
     const sourceReviewId = stableV5Id("risk_review", { input_semantic_root_digest: semanticRootDigest, module_ref: review.module_ref, risk_kind: review.risk_kind });
     items.push({
@@ -2361,7 +3871,7 @@ function deriveBehaviorContractSeed(semanticRootDigest, input) {
   if (new Set(requiredContracts.map((item) => item.required_contract_key)).size !== requiredContracts.length) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior requirement identities collide.");
   return sealV5Record({ semantic_root_digest: semanticRootDigest, semantic_rule_index: input.semanticRuleIndex, risk_review_module_ids: [...new Set(input.riskModuleIds)].sort(), required_contracts: requiredContracts }, "seed_digest");
 }
-function validateBehaviorContractReviews(seed, reviews, artifact) {
+function validateBehaviorContractReviews(seed, reviews, artifact, evidenceContext) {
   const required = (
     /** @type {Array<Record<string,any>>} */
     seed.required_contracts
@@ -2392,14 +3902,376 @@ function validateBehaviorContractReviews(seed, reviews, artifact) {
         (artifact[collectionKey] ?? []).map((item) => item[clientKey])
       );
       if (disposition.contract_client_keys.some((key) => !available.has(key))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Formal behavior disposition cites a missing or wrong-kind contract.");
-      if (requirement.contract_kind === "permission_auxiliary" && disposition.contract_client_keys.length !== 1) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Permission auxiliary requirement resolves to exactly one contract.");
+      if (requirement.contract_kind === "permission_auxiliary") {
+        if (disposition.contract_client_keys.length !== 1) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Permission auxiliary requirement resolves to exactly one contract.");
+        const contract = (
+          /** @type {Array<Record<string,any>>} */
+          artifact.permission_auxiliary_contracts.find((item) => item.contract_client_key === disposition.contract_client_keys[0])
+        );
+        if (!contract || contract.payload?.contract_kind !== requirement.auxiliary_contract_kind || canonicalV5Stringify(contract.permission_target) !== canonicalV5Stringify(requirement.permission_target)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Permission auxiliary review must bind the exact advertised kind and permission target.");
+      }
     } else if (disposition.kind === "semantic_gap") {
       if (!object(disposition.gap_ref)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Behavior gap disposition needs an exact gap reference.");
     } else if (disposition.kind === "not_applicable") {
       if (!nonempty(disposition.basis)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "N/A behavior disposition needs E2/E3 basis.");
+      if (evidenceContext) disposition.basis.forEach((ref) => validateEvidenceReference(ref, evidenceContext, { minimumLevel: "E2", errorCode: "SEMANTIC_REVIEW_CANDIDATE_MISSING" }));
     } else throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior disposition kind is unknown.");
   }
   return structuredClone(reviews);
+}
+
+// src/v5/oracles.mjs
+function object2(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function exact2(value, keys) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+function nonblank3(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function uniqueTyped(values) {
+  return new Set(values.map((value) => canonicalV5Stringify(value))).size === values.length && values.every(validateTypedValue);
+}
+function validateOracleAssertion(assertion, context) {
+  const fail = (message = "Oracle assertion is not a closed decidable branch.") => {
+    throw new V5ProtocolError("ORACLE_NOT_DECIDABLE", message);
+  };
+  if (!object2(assertion) || typeof assertion.kind !== "string") return fail();
+  if (assertion.kind === "exact_text") {
+    if (!exact2(assertion, ["kind", "expected_text"]) || !nonblank3(assertion.expected_text)) return fail();
+  } else if (assertion.kind === "semantic_text") {
+    if (!exact2(assertion, ["kind", "expected_text", "equivalence_rule_ref"]) || !nonblank3(assertion.expected_text)) return fail();
+    resolveSemanticRuleRef(assertion.equivalence_rule_ref, "semantic_equivalence", context.semanticRuleIndex);
+  } else if (assertion.kind === "value_equals") {
+    const keys = assertion.normalization_ref ? ["kind", "expected_value", "normalization_ref"] : ["kind", "expected_value"];
+    if (!exact2(assertion, keys) || !validateTypedValue(assertion.expected_value)) return fail();
+    if (assertion.normalization_ref) resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
+  } else if (assertion.kind === "value_state_equals") {
+    if (!exact2(assertion, ["kind", "expected_value_state"])) return fail();
+    try {
+      validateValueState(assertion.expected_value_state);
+    } catch {
+      return fail();
+    }
+  } else if (assertion.kind === "exists" || assertion.kind === "absent") {
+    if (!exact2(assertion, ["kind"])) return fail();
+  } else if (assertion.kind === "set_contains" || assertion.kind === "set_equals") {
+    const keys = assertion.kind === "set_contains" ? ["kind", "expected_members", "normalization_ref"] : ["kind", "expected_members", "order_sensitive", "normalization_ref"];
+    if (!exact2(assertion, keys) || !Array.isArray(assertion.expected_members) || assertion.kind === "set_contains" && assertion.expected_members.length === 0 || !uniqueTyped(assertion.expected_members) || assertion.kind === "set_equals" && typeof assertion.order_sensitive !== "boolean") return fail();
+    resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
+  } else if (assertion.kind === "count_equals" || assertion.kind === "count_at_least") {
+    const field = assertion.kind === "count_equals" ? "expected_count" : "minimum_count";
+    if (!exact2(assertion, ["kind", field]) || !Number.isSafeInteger(assertion[field]) || assertion[field] < 0) return fail();
+  } else if (assertion.kind === "transition") {
+    const keys = assertion.trigger_step_client_key ? ["kind", "from_state", "to_state", "trigger_action_ref", "trigger_step_client_key"] : ["kind", "from_state", "to_state", "trigger_action_ref"];
+    if (!exact2(assertion, keys) || !validateTypedValue(assertion.from_state) || !validateTypedValue(assertion.to_state) || !nonblank3(assertion.trigger_action_ref?.action_id) || assertion.trigger_action_ref.semantic_root_digest !== context.semanticRootDigest || assertion.trigger_step_client_key !== void 0 && !nonblank3(assertion.trigger_step_client_key)) return fail();
+  } else if (assertion.kind === "cross_surface_equals") {
+    if (!exact2(assertion, ["kind", "field_correspondence_id"]) || !context.fieldCorrespondenceIds?.includes(assertion.field_correspondence_id)) return fail();
+  } else if (assertion.kind === "permission") {
+    if (assertion.expected === "allow") {
+      if (!exact2(assertion, ["kind", "expected", "decision_cell_ref"])) return fail();
+    } else if (assertion.expected === "deny") {
+      if (!exact2(assertion, ["kind", "expected", "decision_cell_ref", "denial_behavior"]) || !object2(assertion.denial_behavior)) return fail();
+      if (assertion.denial_behavior.kind === "not_required" && !exact2(assertion.denial_behavior, ["kind"])) return fail();
+      if (assertion.denial_behavior.kind === "required" && !exact2(assertion.denial_behavior, ["kind", "denial_required_cell_key", "denial_contract_ref"])) return fail();
+      if (!["not_required", "required"].includes(assertion.denial_behavior.kind)) return fail();
+    } else return fail();
+    const cells = (
+      /** @type {Array<Record<string,any>>} */
+      context.permissionCells ?? []
+    );
+    const decisionCell = cells.find((cell) => cell.matrix_id === assertion.decision_cell_ref?.matrix_id && cell.required_cell_key === assertion.decision_cell_ref?.required_cell_key && cell.permission_dimension === "decision");
+    if (!decisionCell || decisionCell.formal_outcome?.permission_dimension !== "decision" || decisionCell.formal_outcome.expected !== assertion.expected) return fail("Permission Oracle expected value must equal the accepted formal decision cell.");
+    if (assertion.expected === "deny") {
+      const coordinateKeys = ["role_ref", "resource_ref", "action_ref", "context_key"];
+      const denialCell = cells.find((cell) => cell.matrix_id === decisionCell.matrix_id && cell.permission_dimension === "denial_behavior" && coordinateKeys.every((key) => canonicalV5Stringify(cell[key]) === canonicalV5Stringify(decisionCell[key])));
+      if (!denialCell) {
+        if (assertion.denial_behavior.kind !== "not_required") return fail("Permission Oracle supplied a denial contract for a coordinate without a required denial cell.");
+      } else {
+        const denial = assertion.denial_behavior;
+        const formalRef = denialCell.formal_outcome?.denial_contract_ref;
+        if (denial.kind !== "required" || denial.denial_required_cell_key !== denialCell.required_cell_key || denialCell.formal_outcome?.permission_dimension !== "denial_behavior" || denialCell.formal_outcome.decision_cell_key !== decisionCell.required_cell_key || canonicalV5Stringify(denial.denial_contract_ref) !== canonicalV5Stringify(formalRef)) return fail("Permission Oracle must bind the exact same-coordinate formal denial cell and contract.");
+        const ref = denial.denial_contract_ref?.ref;
+        if (denial.denial_contract_ref?.kind !== "accepted" || ref?.contract_kind !== "denial_behavior" || ref.semantic_root_digest !== context.semanticRootDigest) return fail();
+        if (context.acceptedContractRefs && !context.acceptedContractRefs.has(typedContractRefKey(ref))) return fail("Denial behavior contract does not resolve to the current accepted inventory.");
+      }
+    }
+  } else return fail();
+  return structuredClone(assertion);
+}
+function validateObservation(observation, context) {
+  if (!object2(observation) || !["ui", "response", "storage", "event", "system_state"].includes(observation.kind) || !nonblank3(observation.logical_surface_ref) || !nonblank3(observation.subject_ref)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation reference is invalid.");
+  const common = ["kind", "logical_surface_ref", "subject_ref", ...Object.hasOwn(observation, "field_path") ? ["field_path"] : []];
+  if (Object.hasOwn(observation, "field_path") && !nonblank3(observation.field_path)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation field path must be nonblank when present.");
+  if (observation.kind === "ui") {
+    if (!exact2(observation, [...common, "locator_contract_ref"])) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "UI observation has non-contract fields.");
+    resolveSemanticRuleRef(observation.locator_contract_ref, "locator", context.semanticRuleIndex);
+  } else if (!exact2(observation, common)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation has non-contract fields.");
+}
+function validateObservationWindow(window) {
+  return object2(window) && (window.kind === "after_step" && exact2(window, ["kind"]) || ["within", "stable_for"].includes(window.kind) && exact2(window, ["kind", "duration_ms"]) && Number.isSafeInteger(window.duration_ms) && window.duration_ms > 0 || window.kind === "until_signal" && exact2(window, ["kind", "signal_ref", "timeout_ms"]) && nonblank3(window.signal_ref) && Number.isSafeInteger(window.timeout_ms) && window.timeout_ms > 0);
+}
+function validateOracleSemanticContract(contract, context) {
+  const keys = ["oracle_contract_client_key", "formal_test_point_id", "observation_ref", "assertion", "evaluation_scope", "observation_window", "basis"];
+  if (!object2(contract) || !exact2(contract, keys) || !nonblank3(contract.oracle_contract_client_key) || !nonblank3(contract.formal_test_point_id) || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle semantic contract identity or basis is incomplete.");
+  validateObservation(contract.observation_ref, context);
+  validateOracleAssertion(contract.assertion, context);
+  const scope = contract.evaluation_scope;
+  const validScope = object2(scope) && (scope.kind === "single" && exact2(scope, ["kind"]) || scope.kind === "forall" && exact2(scope, ["kind", "population_contract_client_key", "population_proof_client_key"]) && nonblank3(scope.population_contract_client_key) && nonblank3(scope.population_proof_client_key));
+  if (!validScope || !validateObservationWindow(contract.observation_window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle semantic scope or observation window is invalid.");
+  return structuredClone(contract);
+}
+function validateTypedOracle(oracle, context) {
+  const keys = ["oracle_client_key", "oracle_semantic_contract_id", "observe_after_step_client_key", "observation_ref", "assertion", "evaluation_scope", "observation_window", "claim_ids"];
+  if (!object2(oracle) || !exact2(oracle, keys) || !nonblank3(oracle.oracle_client_key) || !context.oracleSemanticContractIds.includes(oracle.oracle_semantic_contract_id) || !context.stepClientKeys.includes(oracle.observe_after_step_client_key) || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0 || oracle.claim_ids.some((id) => !context.acceptedClaimIds.includes(id)) || new Set(oracle.claim_ids).size !== oracle.claim_ids.length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Typed Oracle ownership or evidence binding is invalid.");
+  validateObservation(oracle.observation_ref, context);
+  validateOracleAssertion(oracle.assertion, context);
+  if (oracle.assertion.kind === "transition" && oracle.assertion.trigger_step_client_key !== oracle.observe_after_step_client_key) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Transition trigger and observation step must be explicitly bound.");
+  const window = oracle.observation_window;
+  if (!validateObservationWindow(window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle observation window is invalid.");
+  if (!(oracle.evaluation_scope?.kind === "single" && exact2(oracle.evaluation_scope, ["kind"])) && !(oracle.evaluation_scope?.kind === "forall" && exact2(oracle.evaluation_scope, ["kind", "population_contract_id", "population_proof_id"]) && nonblank3(oracle.evaluation_scope.population_contract_id) && nonblank3(oracle.evaluation_scope.population_proof_id))) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle evaluation scope is invalid.");
+  return structuredClone(oracle);
+}
+
+// src/v5/behavior-compiler.mjs
+function object3(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function exact3(value, keys) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+function nonblank4(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function nonempty2(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+function compileBehaviorContracts(input) {
+  const { semanticRootDigest, semanticRuleIndex, artifact } = input;
+  const acceptedContractRefs = new Set(input.acceptedContractRefs ?? []);
+  const bindings = [];
+  const stableByClientKey = /* @__PURE__ */ new Map();
+  const bind = (clientKey, stableId2) => {
+    if (!nonblank4(clientKey) || stableByClientKey.has(clientKey)) throw new V5ProtocolError("CLIENT_KEY_INVALID", "Behavior client keys must be nonblank and globally unique within one batch.");
+    stableByClientKey.set(clientKey, stableId2);
+    bindings.push({ client_key: clientKey, stable_id: stableId2 });
+  };
+  const fieldCorrespondences = artifact.field_correspondences.map((mapping) => {
+    const validated = validateFieldCorrespondence(mapping, semanticRuleIndex);
+    const fieldCorrespondenceId = stableV5Id("field_correspondence", {
+      input_semantic_root_digest: semanticRootDigest,
+      authority_side: validated.authority_side,
+      left: validated.left,
+      right: validated.right,
+      join: validated.join,
+      transform: validated.transform,
+      comparison: validated.comparison,
+      null_policy_ref: validated.null_policy_ref,
+      freshness: validated.freshness,
+      basis: validated.basis
+    });
+    bind(validated.mapping_client_key, fieldCorrespondenceId);
+    return { ...validated, field_correspondence_id: fieldCorrespondenceId };
+  });
+  const fieldIdByClientKey = new Map(fieldCorrespondences.map((row) => [row.mapping_client_key, row.field_correspondence_id]));
+  const permissionCellByTarget = new Map((input.permissionCells ?? []).map((cell) => [
+    canonicalV5Stringify({ matrix_id: cell.matrix_id, required_cell_key: cell.required_cell_key }),
+    cell
+  ]));
+  const permissionAuxiliaryContracts = (artifact.permission_auxiliary_contracts ?? []).map((contract) => {
+    if (!exact3(contract, ["contract_client_key", "permission_target", "payload", "basis"]) || !nonblank4(contract.contract_client_key) || !object3(contract.permission_target) || !exact3(contract.permission_target, ["matrix_id", "required_cell_key"]) || !nonblank4(contract.permission_target.matrix_id) || !nonblank4(contract.permission_target.required_cell_key) || !object3(contract.payload) || !nonempty2(contract.basis)) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission auxiliary contract must be a closed, evidenced, same-cell contract.");
+    const targetCell = permissionCellByTarget.get(canonicalV5Stringify(contract.permission_target));
+    const contractKind = contract.payload.contract_kind;
+    if (!targetCell || !["denial_behavior", "data_scope"].includes(contractKind) || targetCell.permission_dimension !== contractKind) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission auxiliary target and contract kind must equal one advertised required cell.");
+    let payload;
+    if (contractKind === "denial_behavior") {
+      if (!exact3(contract.payload, ["contract_kind", "observation_ref", "assertion", "observation_window"]) || ["transition", "permission"].includes(contract.payload.assertion?.kind)) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Denial behavior must use one closed, non-transition, non-permission assertion.");
+      const validated = validateOracleSemanticContract({
+        oracle_contract_client_key: contract.contract_client_key,
+        formal_test_point_id: targetCell.required_cell_key,
+        observation_ref: contract.payload.observation_ref,
+        assertion: contract.payload.assertion,
+        evaluation_scope: { kind: "single" },
+        observation_window: contract.payload.observation_window,
+        basis: contract.basis
+      }, {
+        semanticRootDigest,
+        semanticRuleIndex,
+        fieldCorrespondenceIds: artifact.field_correspondences.map((mapping) => mapping.mapping_client_key),
+        permissionDecisionCells: []
+      });
+      const assertion = structuredClone(validated.assertion);
+      if (assertion.kind === "cross_surface_equals") {
+        const stableFieldId = fieldIdByClientKey.get(assertion.field_correspondence_id);
+        if (!stableFieldId) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Denial behavior cross-surface assertion must resolve a same-batch field correspondence.");
+        assertion.field_correspondence_id = stableFieldId;
+      }
+      payload = { contract_kind: contractKind, observation_ref: validated.observation_ref, assertion, observation_window: validated.observation_window };
+    } else {
+      if (!exact3(contract.payload, ["contract_kind", "scope"])) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Data-scope auxiliary contract must contain only its typed population scope.");
+      const validated = validatePopulationContract({ population_contract_client_key: contract.contract_client_key, scope: contract.payload.scope }, semanticRootDigest, acceptedContractRefs);
+      payload = { contract_kind: contractKind, scope: validated.scope };
+    }
+    const permissionAuxiliaryContractId = stableV5Id("permission_auxiliary_contract", {
+      input_semantic_root_digest: semanticRootDigest,
+      contract_kind: contractKind,
+      permission_target: contract.permission_target,
+      payload,
+      basis: contract.basis
+    });
+    acceptedContractRefs.add(typedContractRefKey({ contract_id: permissionAuxiliaryContractId, contract_kind: contractKind, semantic_root_digest: semanticRootDigest }));
+    bind(contract.contract_client_key, permissionAuxiliaryContractId);
+    return { ...structuredClone(contract), payload, permission_auxiliary_contract_id: permissionAuxiliaryContractId };
+  });
+  const auxiliaryByClientKey = new Map(permissionAuxiliaryContracts.map((contract) => [contract.contract_client_key, contract]));
+  const auxiliaryBehaviorRefs = /* @__PURE__ */ new Map();
+  for (const review of artifact.behavior_contract_reviews ?? []) {
+    if (review.disposition?.kind !== "formal") continue;
+    for (const clientKey of review.disposition.contract_client_keys ?? []) {
+      if (!auxiliaryByClientKey.has(clientKey)) continue;
+      auxiliaryBehaviorRefs.set(clientKey, (auxiliaryBehaviorRefs.get(clientKey) ?? 0) + 1);
+    }
+  }
+  const auxiliaryPermissionRefs = /* @__PURE__ */ new Map();
+  const permissionMatrixReviews = structuredClone(artifact.permission_matrix_reviews ?? []);
+  for (const review of permissionMatrixReviews) for (const row of review.cell_dispositions ?? []) {
+    if (row.disposition?.kind !== "formal") continue;
+    const refField = row.disposition.outcome?.permission_dimension === "denial_behavior" ? "denial_contract_ref" : row.disposition.outcome?.permission_dimension === "data_scope" ? "data_scope_contract_ref" : null;
+    if (!refField) continue;
+    const ref = row.disposition.outcome[refField];
+    if (ref?.kind !== "same_behavior_batch") continue;
+    const contract = auxiliaryByClientKey.get(ref.contract_client_key);
+    const target = { matrix_id: review.matrix_id, required_cell_key: row.required_cell_key };
+    if (!contract || ref.contract_kind !== contract.payload.contract_kind || canonicalV5Stringify(target) !== canonicalV5Stringify(contract.permission_target)) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Same-batch permission reference must resolve the exact auxiliary kind and target.");
+    auxiliaryPermissionRefs.set(ref.contract_client_key, (auxiliaryPermissionRefs.get(ref.contract_client_key) ?? 0) + 1);
+    row.disposition.outcome[refField] = { kind: "accepted", ref: { contract_id: contract.permission_auxiliary_contract_id, contract_kind: contract.payload.contract_kind, semantic_root_digest: semanticRootDigest } };
+  }
+  for (const contract of permissionAuxiliaryContracts) {
+    if (auxiliaryBehaviorRefs.get(contract.contract_client_key) !== 1 || auxiliaryPermissionRefs.get(contract.contract_client_key) !== 1) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Every permission auxiliary contract needs exactly one matching Behavior review and Permission cell review.");
+  }
+  const permissionDispositionByTarget = /* @__PURE__ */ new Map();
+  for (const review of permissionMatrixReviews) for (const row of review.cell_dispositions ?? []) {
+    permissionDispositionByTarget.set(canonicalV5Stringify({ matrix_id: review.matrix_id, required_cell_key: row.required_cell_key }), row.disposition);
+  }
+  const reviewedPermissionCells = (input.permissionCells ?? []).map((cell) => {
+    const disposition = permissionDispositionByTarget.get(canonicalV5Stringify({ matrix_id: cell.matrix_id, required_cell_key: cell.required_cell_key }));
+    return { ...structuredClone(cell), ...disposition?.kind === "formal" ? { formal_outcome: structuredClone(disposition.outcome) } : {} };
+  });
+  const predicateContracts = artifact.predicate_contracts.map((contract) => {
+    if (!exact3(contract, ["predicate_contract_client_key", "predicate_ref", "mutual_exclusion_group", "exhaustiveness", "basis"]) || !nonblank4(contract.predicate_contract_client_key) || !object3(contract.predicate_ref) || !exact3(contract.predicate_ref, ["contract_id", "contract_kind", "semantic_root_digest"]) || !nonblank4(contract.predicate_ref.contract_id) || contract.predicate_ref.contract_kind !== "domain_predicate" || contract.predicate_ref.semantic_root_digest !== semanticRootDigest || !acceptedContractRefs.has(typedContractRefKey(contract.predicate_ref)) || !nonblank4(contract.mutual_exclusion_group) || !["closed_partition_set", "non_exhaustive_open_set"].includes(contract.exhaustiveness) || !nonempty2(contract.basis)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Predicate contract must resolve to the advertised current-root accepted inventory.");
+    const predicateContractId = stableV5Id("predicate_contract", {
+      input_semantic_root_digest: semanticRootDigest,
+      predicate_ref: contract.predicate_ref,
+      mutual_exclusion_group: contract.mutual_exclusion_group,
+      exhaustiveness: contract.exhaustiveness,
+      basis: contract.basis
+    });
+    bind(contract.predicate_contract_client_key, predicateContractId);
+    return { ...structuredClone(contract), predicate_contract_id: predicateContractId };
+  });
+  const domains = artifact.domain_contracts.map((contract) => {
+    const compiled = compileDomain(semanticRootDigest, contract, artifact.predicate_contracts, acceptedContractRefs);
+    bind(compiled.domain_client_key, compiled.domain_contract_id);
+    for (const partition of compiled.partitions) bind(partition.partition_client_key, partition.partition_id);
+    return compiled;
+  });
+  const populations = artifact.population_contracts.map((contract) => {
+    const validated = validatePopulationContract(contract, semanticRootDigest, acceptedContractRefs);
+    const populationContractId = stableV5Id("population_contract", { input_semantic_root_digest: semanticRootDigest, scope: validated.scope });
+    bind(validated.population_contract_client_key, populationContractId);
+    return { ...validated, population_contract_id: populationContractId };
+  });
+  const populationIdByClientKey = new Map(populations.map((row) => [row.population_contract_client_key, row.population_contract_id]));
+  const populationProofs = artifact.population_proofs.map((proof) => {
+    const validated = validatePopulationProof(proof, semanticRootDigest, artifact.population_contracts.map((row) => row.population_contract_client_key), acceptedContractRefs);
+    const populationContractId = populationIdByClientKey.get(validated.population_contract_client_key);
+    if (!populationContractId) throw new V5ProtocolError("POPULATION_CONTRACT_REQUIRED", "Population proof references an unknown same-batch population.");
+    const basis = validated.payload.kind === "enumerate_population" ? [] : validated.basis;
+    const populationProofId = stableV5Id("population_proof", { input_semantic_root_digest: semanticRootDigest, population_contract_id: populationContractId, payload: validated.payload, basis });
+    bind(validated.proof_client_key, populationProofId);
+    return { ...validated, population_contract_id: populationContractId, population_proof_id: populationProofId };
+  });
+  const populationProofIdByClientKey = new Map(populationProofs.map((row) => [row.proof_client_key, row.population_proof_id]));
+  const oracleSemanticContracts = artifact.oracle_semantic_contracts.map((contract) => {
+    const candidate = structuredClone(contract);
+    const denial = candidate.assertion?.kind === "permission" && candidate.assertion.expected === "deny" && candidate.assertion.denial_behavior?.kind === "required" ? candidate.assertion.denial_behavior : null;
+    if (denial?.denial_contract_ref?.kind === "same_behavior_batch") {
+      const auxiliary = auxiliaryByClientKey.get(denial.denial_contract_ref.contract_client_key);
+      const expectedTarget = { matrix_id: candidate.assertion.decision_cell_ref?.matrix_id, required_cell_key: denial.denial_required_cell_key };
+      if (!auxiliary || denial.denial_contract_ref.contract_kind !== "denial_behavior" || auxiliary.payload.contract_kind !== "denial_behavior" || canonicalV5Stringify(auxiliary.permission_target) !== canonicalV5Stringify(expectedTarget)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle denial Behavior ref must resolve the exact same-batch auxiliary target.");
+      denial.denial_contract_ref = { kind: "accepted", ref: { contract_id: auxiliary.permission_auxiliary_contract_id, contract_kind: "denial_behavior", semantic_root_digest: semanticRootDigest } };
+    }
+    const validated = validateOracleSemanticContract(candidate, {
+      semanticRootDigest,
+      semanticRuleIndex,
+      fieldCorrespondenceIds: artifact.field_correspondences.map((mapping) => mapping.mapping_client_key),
+      permissionCells: reviewedPermissionCells,
+      acceptedContractRefs
+    });
+    const assertion = structuredClone(validated.assertion);
+    if (assertion.kind === "cross_surface_equals") {
+      const stableFieldId = fieldIdByClientKey.get(assertion.field_correspondence_id);
+      if (!stableFieldId) throw new V5ProtocolError("ORACLE_NOT_DECIDABLE", "Cross-surface Oracle must reference a same-batch FieldCorrespondence client key.");
+      assertion.field_correspondence_id = stableFieldId;
+    }
+    const evaluationScope = validated.evaluation_scope.kind === "single" ? { kind: "single" } : {
+      kind: "forall",
+      population_contract_id: populationIdByClientKey.get(validated.evaluation_scope.population_contract_client_key),
+      population_proof_id: populationProofIdByClientKey.get(validated.evaluation_scope.population_proof_client_key)
+    };
+    if (evaluationScope.kind === "forall" && (!evaluationScope.population_contract_id || !evaluationScope.population_proof_id)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Forall Oracle must resolve same-batch Population and Proof client keys.");
+    const oracleSemanticContractId = stableV5Id("oracle_semantic_contract", {
+      input_semantic_root_digest: semanticRootDigest,
+      formal_test_point_id: validated.formal_test_point_id,
+      observation_ref: validated.observation_ref,
+      assertion,
+      evaluation_scope: evaluationScope,
+      observation_window: validated.observation_window,
+      basis: validated.basis
+    });
+    bind(validated.oracle_contract_client_key, oracleSemanticContractId);
+    return { ...validated, assertion, evaluation_scope: evaluationScope, oracle_semantic_contract_id: oracleSemanticContractId };
+  });
+  const oracleIdByClientKey = new Map(oracleSemanticContracts.map((row) => [row.oracle_contract_client_key, row.oracle_semantic_contract_id]));
+  const behaviorEquivalenceContracts = artifact.behavior_equivalence_contracts.map((contract) => {
+    if (!exact3(contract, ["equivalence_contract_client_key", "domain_contract_client_key", "partition_client_key", "formal_test_point_id", "oracle_semantic_contract_client_key", "equivalence_scope", "basis"]) || !nonblank4(contract.equivalence_contract_client_key) || !nonblank4(contract.formal_test_point_id) || contract.equivalence_scope !== "all_members_same_observable_behavior" || !nonempty2(contract.basis)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Behavior equivalence contract is incomplete.");
+    const domain = domains.find((row) => row.domain_client_key === contract.domain_contract_client_key);
+    const partition = domain?.partitions.find((row) => row.partition_client_key === contract.partition_client_key);
+    const oracleSemanticContractId = oracleIdByClientKey.get(contract.oracle_semantic_contract_client_key);
+    if (!domain || !partition || !oracleSemanticContractId) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Behavior equivalence references are not closed within the same Behavior batch.");
+    const behaviorEquivalenceContractId = stableV5Id("behavior_equivalence_contract", {
+      input_semantic_root_digest: semanticRootDigest,
+      domain_contract_id: domain.domain_contract_id,
+      partition_id: partition.partition_id,
+      formal_test_point_id: contract.formal_test_point_id,
+      oracle_semantic_contract_id: oracleSemanticContractId,
+      equivalence_scope: contract.equivalence_scope,
+      basis: contract.basis
+    });
+    bind(contract.equivalence_contract_client_key, behaviorEquivalenceContractId);
+    return { ...structuredClone(contract), domain_contract_id: domain.domain_contract_id, partition_id: partition.partition_id, oracle_semantic_contract_id: oracleSemanticContractId, behavior_equivalence_contract_id: behaviorEquivalenceContractId };
+  });
+  for (const review of artifact.risk_reviews) {
+    const riskReviewId = stableV5Id("risk_review", { input_semantic_root_digest: semanticRootDigest, module_ref: review.module_ref, risk_kind: review.risk_kind });
+    bind(review.review_client_key, riskReviewId);
+  }
+  return {
+    field_correspondences: fieldCorrespondences,
+    predicate_contracts: predicateContracts,
+    domain_contracts: domains,
+    behavior_equivalence_contracts: behaviorEquivalenceContracts,
+    population_contracts: populations,
+    population_proofs: populationProofs,
+    permission_auxiliary_contracts: permissionAuxiliaryContracts,
+    permission_matrix_reviews: permissionMatrixReviews,
+    oracle_semantic_contracts: oracleSemanticContracts,
+    client_key_bindings: bindings.sort((left, right) => left.client_key.localeCompare(right.client_key))
+  };
 }
 
 // src/v5/question-parts.mjs
@@ -2417,15 +4289,15 @@ var EDGES = (
     obsolete: /* @__PURE__ */ new Set()
   })
 );
-function object2(value) {
+function object4(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function exact2(value, keys) {
+function exact4(value, keys) {
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function nonblank3(value) {
+function nonblank5(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function digest2(value) {
@@ -2441,12 +4313,12 @@ function sealStateRecord(record) {
   return { ...record, state_record_digest: canonicalObjectDigest(record) };
 }
 function createQuestionPartStateSet(caseDocumentLineageId, semanticRootDigest, gaps) {
-  if (!nonblank3(caseDocumentLineageId) || !digest2(semanticRootDigest) || !Array.isArray(gaps)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part inventory identity is invalid.");
+  if (!nonblank5(caseDocumentLineageId) || !digest2(semanticRootDigest) || !Array.isArray(gaps)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part inventory identity is invalid.");
   const parts = (
     /** @type {Array<Record<string,any>>} */
     gaps.map((gap) => {
       const binding = gap.gap_binding;
-      if (!object2(binding) || !["requirements_gap", "behavior_gap"].includes(binding.kind) || !nonblank3(binding.gap_id) || !digest2(binding.gap_payload_digest) || !object2(gap.answer_contract)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part gap or answer contract is invalid.");
+      if (!object4(binding) || !["requirements_gap", "behavior_gap"].includes(binding.kind) || !nonblank5(binding.gap_id) || !digest2(binding.gap_payload_digest) || !object4(gap.answer_contract)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part gap or answer contract is invalid.");
       const answerContractDigest = questionAnswerContractDigest(gap.answer_contract);
       return sealStateRecord({
         kind: "question_part_state",
@@ -2475,19 +4347,19 @@ function validateQuestionPartStateSet(stateSet) {
   const fail = (message) => {
     throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", message);
   };
-  if (!object2(stateSet) || !exact2(stateSet, ["kind", "case_document_lineage_id", "current_semantic_root_digest", "parts", "state_set_digest"]) || stateSet.kind !== "question_part_state_set" || !nonblank3(stateSet.case_document_lineage_id) || !digest2(stateSet.current_semantic_root_digest) || !Array.isArray(stateSet.parts)) return fail("Question Part state set shape is invalid.");
+  if (!object4(stateSet) || !exact4(stateSet, ["kind", "case_document_lineage_id", "current_semantic_root_digest", "parts", "state_set_digest"]) || stateSet.kind !== "question_part_state_set" || !nonblank5(stateSet.case_document_lineage_id) || !digest2(stateSet.current_semantic_root_digest) || !Array.isArray(stateSet.parts)) return fail("Question Part state set shape is invalid.");
   const { state_set_digest: ignored, ...statePayload } = stateSet;
   if (canonicalObjectDigest(statePayload) !== stateSet.state_set_digest) return fail("Question Part state-set digest is invalid.");
   const sorted2 = [...stateSet.parts].sort((left, right) => left.question_part_id.localeCompare(right.question_part_id));
   if (canonicalV5Stringify(sorted2.map((part) => part.question_part_id)) !== canonicalV5Stringify(stateSet.parts.map((part) => part.question_part_id)) || new Set(sorted2.map((part) => part.question_part_id)).size !== sorted2.length) return fail("Question Parts must be a sorted unique set.");
   for (const part of sorted2) {
-    if (!exact2(part, ["kind", "question_part_id", "case_document_lineage_id", "gap_binding", "initial_semantic_root_digest", "answer_contract_digest", "current_state", "transition_history", "state_record_digest"]) || part.kind !== "question_part_state" || part.case_document_lineage_id !== stateSet.case_document_lineage_id || !/^qpt5_[0-9a-f]{64}$/u.test(part.question_part_id) || !digest2(part.answer_contract_digest) || !ALL_STATES.has(part.current_state) || !Array.isArray(part.transition_history)) return fail("Question Part state-record shape is invalid.");
+    if (!exact4(part, ["kind", "question_part_id", "case_document_lineage_id", "gap_binding", "initial_semantic_root_digest", "answer_contract_digest", "current_state", "transition_history", "state_record_digest"]) || part.kind !== "question_part_state" || part.case_document_lineage_id !== stateSet.case_document_lineage_id || !/^qpt5_[0-9a-f]{64}$/u.test(part.question_part_id) || !digest2(part.answer_contract_digest) || !ALL_STATES.has(part.current_state) || !Array.isArray(part.transition_history)) return fail("Question Part state-record shape is invalid.");
     const { state_record_digest: ignoredRecord, ...recordPayload } = part;
     if (canonicalObjectDigest(recordPayload) !== part.state_record_digest) return fail("Question Part state-record digest is invalid.");
     let previous = "presented";
     for (let index = 0; index < part.transition_history.length; index += 1) {
       const transition = part.transition_history[index];
-      if (!object2(transition) || transition.transition_sequence !== index + 1 || transition.from_state !== previous || !EDGES[previous]?.has(transition.to_state)) return fail("Question Part transition history is discontinuous or illegal.");
+      if (!object4(transition) || transition.transition_sequence !== index + 1 || transition.from_state !== previous || !EDGES[previous]?.has(transition.to_state)) return fail("Question Part transition history is discontinuous or illegal.");
       const { transition_digest: ignoredTransition, ...transitionPayload } = transition;
       if (canonicalObjectDigest(transitionPayload) !== transition.transition_digest) return fail("Question Part transition digest is invalid.");
       if (transition.cause?.kind === "answer" && !["E3", "E1"].includes(transition.cause.evidence_level)) return fail("Answer transition evidence level is invalid.");
@@ -2563,31 +4435,61 @@ var COMPATIBLE_MISSING_SEMANTICS = Object.freeze({
   oracle_semantics: /* @__PURE__ */ new Set(["oracle_observation", "oracle_assertion", "oracle_scope", "oracle_window"]),
   permission_auxiliary: /* @__PURE__ */ new Set(["denial_behavior", "data_scope"])
 });
-function object3(value) {
+function object5(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function nonblank4(value) {
+function nonblank6(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function validateAnswerContract(contract) {
-  if (!object3(contract) || !Array.isArray(contract.allowed_controls) || contract.allowed_controls.length === 0 || new Set(contract.allowed_controls).size !== contract.allowed_controls.length || !object3(contract.value_schema)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior gap answer contract is invalid.");
+  if (!object5(contract) || !Array.isArray(contract.allowed_controls) || contract.allowed_controls.length === 0 || new Set(contract.allowed_controls).size !== contract.allowed_controls.length || !object5(contract.value_schema)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior gap answer contract is invalid.");
   if (contract.answer_mode === "typed_answer") {
     if (canonicalV5Stringify(contract.allowed_controls) !== '["answer","defer","unknown","close_for_delivery"]' || contract.value_schema.kind === "unavailable") throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "V1 Behavior answers must advertise the frozen typed controls and a typed value schema.");
   } else throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "V1 does not register control-only Behavior gaps.");
   return structuredClone(contract);
 }
-function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals, reviews) {
+function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals, reviews, context = {}) {
   const requirements = new Map(
     /** @type {Array<Record<string,any>>} */
     (seed.required_contracts ?? []).map((requirement) => [requirement.required_contract_key, requirement])
   );
+  const permissionCells = new Map((context.permissionMatrices ?? []).flatMap((matrix) => matrix.required_cells.map((cell) => [`${matrix.matrix_id}\0${cell.required_cell_key}`, { ...cell, matrix_id: matrix.matrix_id }])));
+  const riskKeys = new Set((seed.risk_review_module_ids ?? []).flatMap((moduleRef) => ["null_or_missing", "unknown_enum", "api_failure", "loading_failure", "sync_delay", "long_content", "pagination", "refresh", "business_permission_boundary"].map((riskKind) => `${moduleRef}\0${riskKind}`)));
   const proposalByClientKey = /* @__PURE__ */ new Map();
+  const acceptedById = /* @__PURE__ */ new Map();
   const accepted = [];
   const bindings = [];
+  for (const gap of context.acceptedBehaviorGaps ?? []) {
+    const normalized = {
+      target: structuredClone(gap.target),
+      missing_semantics: gap.missing_semantics,
+      question: gap.question,
+      answer_contract: structuredClone(gap.answer_contract),
+      basis: structuredClone(gap.basis)
+    };
+    const sourceProposalDigest = canonicalObjectDigest({ namespace: "generate-test-cases/v5/behavior-semantic-gap-proposal", format_version: 1, proposal: normalized });
+    const expectedId = stableV5Id("behavior_semantic_gap", {
+      input_semantic_root_digest: gap.semantic_root_digest,
+      target: normalized.target,
+      missing_semantics: normalized.missing_semantics,
+      answer_contract_digest: questionAnswerContractDigest(normalized.answer_contract),
+      basis: normalized.basis
+    });
+    if (!nonblank6(gap.semantic_gap_id) || acceptedById.has(gap.semantic_gap_id) || gap.source_proposal_digest !== sourceProposalDigest || gap.semantic_gap_id !== expectedId) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Accepted Behavior gap does not pass reverse identity verification.");
+    acceptedById.set(gap.semantic_gap_id, structuredClone(gap));
+  }
   for (const proposal of proposals) {
-    if (!object3(proposal) || !nonblank4(proposal.semantic_gap_client_key) || proposalByClientKey.has(proposal.semantic_gap_client_key) || !object3(proposal.target) || proposal.target.kind !== "behavior_contract" || !nonblank4(proposal.target.required_contract_key) || !nonblank4(proposal.missing_semantics) || !nonblank4(proposal.question) || !Array.isArray(proposal.basis) || proposal.basis.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap proposal identity, target, question, or basis is invalid.");
-    const requirement = requirements.get(proposal.target.required_contract_key);
-    if (!requirement || !COMPATIBLE_MISSING_SEMANTICS[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap target or missing semantics does not match the advertised requirement.");
+    if (!object5(proposal) || !nonblank6(proposal.semantic_gap_client_key) || proposalByClientKey.has(proposal.semantic_gap_client_key) || !object5(proposal.target) || !nonblank6(proposal.missing_semantics) || !nonblank6(proposal.question) || !Array.isArray(proposal.basis) || proposal.basis.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap proposal identity, target, question, or basis is invalid.");
+    if (proposal.target.kind === "behavior_contract") {
+      const requirement = requirements.get(proposal.target.required_contract_key);
+      if (!requirement || !COMPATIBLE_MISSING_SEMANTICS[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap target or missing semantics does not match the advertised requirement.");
+    } else if (proposal.target.kind === "permission_cell") {
+      const cell = permissionCells.get(`${proposal.target.matrix_id}\0${proposal.target.required_cell_key}`);
+      const requiredMissing = cell?.permission_dimension === "decision" ? "permission_outcome" : cell?.permission_dimension;
+      if (!cell || proposal.missing_semantics !== requiredMissing) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Permission gap must target one advertised cell and its exact missing semantics.");
+    } else if (proposal.target.kind === "risk") {
+      if (!riskKeys.has(`${proposal.target.module_ref}\0${proposal.target.risk_kind}`) || proposal.missing_semantics !== "risk_rule") throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Risk gap must target one advertised module \xD7 risk cell.");
+    } else throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap target kind is not registered.");
     const answerContract = validateAnswerContract(proposal.answer_contract);
     const normalized = {
       target: structuredClone(proposal.target),
@@ -2616,18 +4518,40 @@ function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals, review
     bindings.push({ client_key: proposal.semantic_gap_client_key, stable_id: semanticGapId });
   }
   const referenced = /* @__PURE__ */ new Set();
+  const referencedGaps = /* @__PURE__ */ new Map();
+  const resolveGapReference = (reference, expectedTarget, message) => {
+    let gap;
+    if (object5(reference) && reference.kind === "same_behavior_batch" && nonblank6(reference.semantic_gap_client_key)) {
+      gap = proposalByClientKey.get(reference.semantic_gap_client_key);
+      if (!gap || referenced.has(reference.semantic_gap_client_key)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", message);
+      referenced.add(reference.semantic_gap_client_key);
+    } else if (object5(reference) && reference.kind === "accepted_gap" && nonblank6(reference.semantic_gap_id)) gap = acceptedById.get(reference.semantic_gap_id);
+    else throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", message);
+    if (!gap || canonicalV5Stringify(gap.target) !== canonicalV5Stringify(expectedTarget)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", message);
+    referencedGaps.set(gap.semantic_gap_id, gap);
+    return gap;
+  };
   for (const review of reviews) {
     if (review.disposition?.kind !== "semantic_gap") continue;
     const reference = review.disposition.gap_ref;
-    if (!object3(reference) || reference.kind !== "same_behavior_batch" || !nonblank4(reference.semantic_gap_client_key)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap review must use an exact same-batch reference.");
-    const gap = proposalByClientKey.get(reference.semantic_gap_client_key);
-    if (!gap || gap.target.required_contract_key !== review.required_contract_key || referenced.has(reference.semantic_gap_client_key)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap review target is missing, duplicated, or cross-wired.");
-    referenced.add(reference.semantic_gap_client_key);
+    resolveGapReference(reference, { kind: "behavior_contract", required_contract_key: review.required_contract_key }, "Behavior gap review target is missing, duplicated, or cross-wired.");
+  }
+  for (const matrixReview of context.permissionMatrixReviews ?? []) {
+    for (const row of matrixReview.cell_dispositions ?? []) {
+      if (row.disposition?.kind !== "semantic_gap") continue;
+      const reference = row.disposition.gap_ref;
+      resolveGapReference(reference, { kind: "permission_cell", matrix_id: matrixReview.matrix_id, required_cell_key: row.required_cell_key }, "Permission gap reference is missing, duplicated, or cross-wired.");
+    }
+  }
+  for (const riskReview of context.riskReviews ?? []) {
+    if (riskReview.risk_item?.risk_disposition !== "semantic_gap") continue;
+    const reference = riskReview.risk_item.gap_ref;
+    resolveGapReference(reference, { kind: "risk", module_ref: riskReview.module_ref, risk_kind: riskReview.risk_kind }, "Risk gap reference is missing, duplicated, or cross-wired.");
   }
   if (referenced.size !== proposalByClientKey.size) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Every same-batch Behavior gap must have exactly one matching review.");
   accepted.sort((left, right) => left.semantic_gap_id.localeCompare(right.semantic_gap_id));
   bindings.sort((left, right) => left.client_key.localeCompare(right.client_key));
-  return { accepted_gaps: accepted, client_key_bindings: bindings };
+  return { accepted_gaps: [...referencedGaps.values()].sort((left, right) => left.semantic_gap_id.localeCompare(right.semantic_gap_id)), new_accepted_gaps: accepted, client_key_bindings: bindings };
 }
 function clarificationGapsFromAcceptedBehavior(acceptedGaps) {
   return acceptedGaps.map((gap) => {
@@ -2643,109 +4567,93 @@ function clarificationGapsFromAcceptedBehavior(acceptedGaps) {
   }).sort((left, right) => left.gap_binding.gap_id.localeCompare(right.gap_binding.gap_id));
 }
 
-// src/v5/oracles.mjs
-function object4(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-function exact3(value, keys) {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
-}
-function nonblank5(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-function uniqueTyped(values) {
-  return new Set(values.map((value) => canonicalV5Stringify(value))).size === values.length && values.every(validateTypedValue);
-}
-function validateOracleAssertion(assertion, context) {
-  const fail = (message = "Oracle assertion is not a closed decidable branch.") => {
-    throw new V5ProtocolError("ORACLE_NOT_DECIDABLE", message);
-  };
-  if (!object4(assertion) || typeof assertion.kind !== "string") return fail();
-  if (assertion.kind === "exact_text") {
-    if (!exact3(assertion, ["kind", "expected_text"]) || !nonblank5(assertion.expected_text)) return fail();
-  } else if (assertion.kind === "semantic_text") {
-    if (!exact3(assertion, ["kind", "expected_text", "equivalence_rule_ref"]) || !nonblank5(assertion.expected_text)) return fail();
-    resolveSemanticRuleRef(assertion.equivalence_rule_ref, "semantic_equivalence", context.semanticRuleIndex);
-  } else if (assertion.kind === "value_equals") {
-    const keys = assertion.normalization_ref ? ["kind", "expected_value", "normalization_ref"] : ["kind", "expected_value"];
-    if (!exact3(assertion, keys) || !validateTypedValue(assertion.expected_value)) return fail();
-    if (assertion.normalization_ref) resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
-  } else if (assertion.kind === "value_state_equals") {
-    if (!exact3(assertion, ["kind", "expected_value_state"])) return fail();
-    try {
-      validateValueState(assertion.expected_value_state);
-    } catch {
-      return fail();
-    }
-  } else if (assertion.kind === "exists" || assertion.kind === "absent") {
-    if (!exact3(assertion, ["kind"])) return fail();
-  } else if (assertion.kind === "set_contains" || assertion.kind === "set_equals") {
-    const keys = assertion.kind === "set_contains" ? ["kind", "expected_members", "normalization_ref"] : ["kind", "expected_members", "order_sensitive", "normalization_ref"];
-    if (!exact3(assertion, keys) || !Array.isArray(assertion.expected_members) || assertion.kind === "set_contains" && assertion.expected_members.length === 0 || !uniqueTyped(assertion.expected_members) || assertion.kind === "set_equals" && typeof assertion.order_sensitive !== "boolean") return fail();
-    resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
-  } else if (assertion.kind === "count_equals" || assertion.kind === "count_at_least") {
-    const field = assertion.kind === "count_equals" ? "expected_count" : "minimum_count";
-    if (!exact3(assertion, ["kind", field]) || !Number.isSafeInteger(assertion[field]) || assertion[field] < 0) return fail();
-  } else if (assertion.kind === "transition") {
-    const keys = assertion.trigger_step_client_key ? ["kind", "from_state", "to_state", "trigger_action_ref", "trigger_step_client_key"] : ["kind", "from_state", "to_state", "trigger_action_ref"];
-    if (!exact3(assertion, keys) || !validateTypedValue(assertion.from_state) || !validateTypedValue(assertion.to_state) || !nonblank5(assertion.trigger_action_ref?.action_id) || assertion.trigger_action_ref.semantic_root_digest !== context.semanticRootDigest || assertion.trigger_step_client_key !== void 0 && !nonblank5(assertion.trigger_step_client_key)) return fail();
-  } else if (assertion.kind === "cross_surface_equals") {
-    if (!exact3(assertion, ["kind", "field_correspondence_id"]) || !context.fieldCorrespondenceIds?.includes(assertion.field_correspondence_id)) return fail();
-  } else if (assertion.kind === "permission") {
-    if (!/** @type {Array<Record<string,any>>|undefined} */
-    context.permissionDecisionCells?.some((cell) => canonicalV5Stringify(cell) === canonicalV5Stringify(assertion.decision_cell_ref))) return fail("Permission decision cell is not accepted.");
-    if (assertion.expected === "allow") {
-      if (!exact3(assertion, ["kind", "expected", "decision_cell_ref"])) return fail();
-    } else if (assertion.expected === "deny") {
-      if (!exact3(assertion, ["kind", "expected", "decision_cell_ref", "denial_behavior"]) || !object4(assertion.denial_behavior)) return fail();
-      if (assertion.denial_behavior.kind === "not_required") {
-        if (!exact3(assertion.denial_behavior, ["kind"])) return fail();
-      } else if (assertion.denial_behavior.kind === "required") {
-        if (!exact3(assertion.denial_behavior, ["kind", "denial_required_cell_key", "denial_contract_ref"]) || assertion.denial_behavior.denial_contract_ref?.ref?.contract_kind !== "denial_behavior" || assertion.denial_behavior.denial_contract_ref.ref.semantic_root_digest !== context.semanticRootDigest) return fail();
-      } else return fail();
-    } else return fail();
-  } else return fail();
-  return structuredClone(assertion);
-}
-function validateObservation(observation, context) {
-  if (!object4(observation) || !["ui", "response", "storage", "event", "system_state"].includes(observation.kind) || !nonblank5(observation.logical_surface_ref) || !nonblank5(observation.subject_ref)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation reference is invalid.");
-  const common = ["kind", "logical_surface_ref", "subject_ref", ...Object.hasOwn(observation, "field_path") ? ["field_path"] : []];
-  if (Object.hasOwn(observation, "field_path") && !nonblank5(observation.field_path)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation field path must be nonblank when present.");
-  if (observation.kind === "ui") {
-    if (!exact3(observation, [...common, "locator_contract_ref"])) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "UI observation has non-contract fields.");
-    resolveSemanticRuleRef(observation.locator_contract_ref, "locator", context.semanticRuleIndex);
-  } else if (!exact3(observation, common)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation has non-contract fields.");
-}
-function validateObservationWindow(window) {
-  return object4(window) && (window.kind === "after_step" && exact3(window, ["kind"]) || ["within", "stable_for"].includes(window.kind) && exact3(window, ["kind", "duration_ms"]) && Number.isSafeInteger(window.duration_ms) && window.duration_ms > 0 || window.kind === "until_signal" && exact3(window, ["kind", "signal_ref", "timeout_ms"]) && nonblank5(window.signal_ref) && Number.isSafeInteger(window.timeout_ms) && window.timeout_ms > 0);
-}
-function validateOracleSemanticContract(contract, context) {
-  const keys = ["oracle_contract_client_key", "formal_test_point_id", "observation_ref", "assertion", "evaluation_scope", "observation_window", "basis"];
-  if (!object4(contract) || !exact3(contract, keys) || !nonblank5(contract.oracle_contract_client_key) || !nonblank5(contract.formal_test_point_id) || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle semantic contract identity or basis is incomplete.");
-  validateObservation(contract.observation_ref, context);
-  validateOracleAssertion(contract.assertion, context);
-  const scope = contract.evaluation_scope;
-  const validScope = object4(scope) && (scope.kind === "single" && exact3(scope, ["kind"]) || scope.kind === "forall" && exact3(scope, ["kind", "population_contract_client_key", "population_proof_client_key"]) && nonblank5(scope.population_contract_client_key) && nonblank5(scope.population_proof_client_key));
-  if (!validScope || !validateObservationWindow(contract.observation_window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle semantic scope or observation window is invalid.");
-  return structuredClone(contract);
-}
-function validateTypedOracle(oracle, context) {
-  const keys = ["oracle_client_key", "oracle_semantic_contract_id", "observe_after_step_client_key", "observation_ref", "assertion", "evaluation_scope", "observation_window", "claim_ids"];
-  if (!object4(oracle) || !exact3(oracle, keys) || !nonblank5(oracle.oracle_client_key) || !context.oracleSemanticContractIds.includes(oracle.oracle_semantic_contract_id) || !context.stepClientKeys.includes(oracle.observe_after_step_client_key) || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0 || oracle.claim_ids.some((id) => !context.acceptedClaimIds.includes(id)) || new Set(oracle.claim_ids).size !== oracle.claim_ids.length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Typed Oracle ownership or evidence binding is invalid.");
-  validateObservation(oracle.observation_ref, context);
-  validateOracleAssertion(oracle.assertion, context);
-  if (oracle.assertion.kind === "transition" && oracle.assertion.trigger_step_client_key !== oracle.observe_after_step_client_key) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Transition trigger and observation step must be explicitly bound.");
-  const window = oracle.observation_window;
-  if (!validateObservationWindow(window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle observation window is invalid.");
-  if (!(oracle.evaluation_scope?.kind === "single" && exact3(oracle.evaluation_scope, ["kind"])) && !(oracle.evaluation_scope?.kind === "forall" && exact3(oracle.evaluation_scope, ["kind", "population_contract_id", "population_proof_id"]) && nonblank5(oracle.evaluation_scope.population_contract_id) && nonblank5(oracle.evaluation_scope.population_proof_id))) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle evaluation scope is invalid.");
-  return structuredClone(oracle);
-}
-
 // src/v5/permission.mjs
 var COORDINATES = Object.freeze(["role", "resource", "action", "context", "permission_dimension"]);
-function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
+var DIMENSIONS = /* @__PURE__ */ new Set(["decision", "denial_behavior", "data_scope"]);
+function permissionCoordinateEvidenceDigest(evidence) {
+  const payload = evidence.evidence_kind === "source" ? { evidence_kind: "source", coordinate: evidence.coordinate, value: evidence.value, locator_id: evidence.locator_id, source_span: evidence.source_span } : { evidence_kind: "decision", coordinate: evidence.coordinate, value: evidence.value, decision_id: evidence.decision_id, answer_value_digest: evidence.answer_value_digest };
+  return canonicalObjectDigest(payload);
+}
+function unresolvedCoordinates(candidate) {
+  const unresolved = [];
+  const slots = candidate.coordinate_slots;
+  if (slots.role_candidates.length !== 1) unresolved.push("role");
+  if (slots.resource_candidates.length !== 1) unresolved.push("resource");
+  if (slots.action_candidates.length !== 1) unresolved.push("action");
+  if (slots.context_candidates.length !== 1) unresolved.push("context");
+  const dimensions = (
+    /** @type {Array<Record<string,any>>} */
+    candidate.signaled_dimensions.map((item) => item.value)
+  );
+  if (dimensions.length !== new Set(dimensions).size || dimensions.filter((value) => value === "decision").length !== 1 || dimensions.some((value) => !DIMENSIONS.has(value))) unresolved.push("permission_dimension");
+  return COORDINATES.filter((coordinate) => unresolved.includes(coordinate));
+}
+function verifyEvidence(evidence, coordinate) {
+  if (evidence.coordinate !== coordinate || evidence.coordinate_evidence_digest !== permissionCoordinateEvidenceDigest(evidence)) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission coordinate evidence digest is invalid.");
+}
+function derivePermissionMatrices(semanticRootDigest, seed, registryDigest) {
+  if (seed.permission_derivation_registry_digest !== registryDigest) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Permission derivation Registry digest is stale.");
+  const candidateById = new Map(
+    /** @type {Array<Record<string,any>>} */
+    seed.permission_scope_candidates.map((candidate) => [candidate.candidate_id, candidate])
+  );
+  return (
+    /** @type {Array<Record<string,any>>} */
+    seed.permission_scope_groups.map((group) => {
+      const maybeCandidates = (
+        /** @type {string[]} */
+        group.permission_scope_candidate_ids.map((id) => candidateById.get(id))
+      );
+      if (maybeCandidates.length === 0 || maybeCandidates.some((candidate) => !candidate || candidate.scope_group_id !== group.scope_group_id)) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission scope group membership is invalid.");
+      const candidates = (
+        /** @type {Array<Record<string,any>>} */
+        maybeCandidates
+      );
+      const unresolved = COORDINATES.filter((coordinate) => candidates.some((candidate) => unresolvedCoordinates(candidate).includes(coordinate)));
+      const resolvable = unresolved.length === 0;
+      const roleRefs = resolvable ? candidates.map((candidate) => ({ coordinate: "role", coordinate_evidence_digest: candidate.coordinate_slots.role_candidates[0].coordinate_evidence_digest })) : [];
+      const resourceRefs = resolvable ? candidates.map((candidate) => ({ coordinate: "resource", coordinate_evidence_digest: candidate.coordinate_slots.resource_candidates[0].coordinate_evidence_digest })) : [];
+      const actionRefs = resolvable ? candidates.map((candidate) => candidate.coordinate_slots.action_candidates[0].value) : [];
+      const contexts = resolvable ? candidates.map((candidate) => ({ context_key: candidate.coordinate_slots.context_candidates[0].value.context_key, context_ref: { coordinate: "context", coordinate_evidence_digest: candidate.coordinate_slots.context_candidates[0].coordinate_evidence_digest } })) : [];
+      const roleDomain = { role_refs: [...new Map(roleRefs.map((ref) => [canonicalV5Stringify(ref), ref])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right))), basis: [] };
+      const matrixScope = { resource_refs: [...new Map(resourceRefs.map((ref) => [canonicalV5Stringify(ref), ref])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right))), action_refs: [...new Set(actionRefs)].sort(), contexts: [...new Map(contexts.map((ref) => [canonicalV5Stringify(ref), ref])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right))), basis: [] };
+      const matrixId = stableV5Id("permission_matrix_seed", { input_semantic_root_digest: semanticRootDigest, permission_derivation_registry_digest: registryDigest, scope_candidate_ids: group.permission_scope_candidate_ids, role_domain: roleDomain, matrix_scope: matrixScope });
+      if (!resolvable) {
+        const gapId = `reqgap5_${canonicalObjectDigest({ seed_digest: seed.seed_digest, scope_group_id: group.scope_group_id, permission_scope_candidate_ids: group.permission_scope_candidate_ids, unresolved_coordinates: unresolved }).slice(7)}`;
+        return { matrix_id: matrixId, semantic_root_digest: semanticRootDigest, seed_digest: seed.seed_digest, permission_derivation_registry_digest: registryDigest, scope_candidate_ids: group.permission_scope_candidate_ids, candidate_routes: candidates.map((candidate) => ({ candidate_id: candidate.candidate_id, kind: "semantic_gap", semantic_gap_id: gapId, unresolved_coordinates: unresolved })), role_domain: roleDomain, matrix_scope: matrixScope, required_cells: [] };
+      }
+      const cells = [];
+      const routes = [];
+      for (const candidate of candidates) {
+        const role = candidate.coordinate_slots.role_candidates[0];
+        const resource = candidate.coordinate_slots.resource_candidates[0];
+        const action = candidate.coordinate_slots.action_candidates[0];
+        const context = candidate.coordinate_slots.context_candidates[0];
+        [role, resource, action, context].forEach((evidence, index) => verifyEvidence(evidence, COORDINATES[index]));
+        const candidateCellKeys = [];
+        for (const dimension of candidate.signaled_dimensions) {
+          verifyEvidence(dimension, "permission_dimension");
+          const coordinateDigests = [role, resource, action, context, dimension].map((item) => item.coordinate_evidence_digest).sort();
+          const cell = {
+            required_cell_key: stableV5Id("permission_required_cell", { matrix_id: matrixId, role_value: role.value, resource_value: resource.value, action_value: action.value, context_value: context.value, permission_dimension_value: dimension.value, coordinate_evidence_digests: coordinateDigests }),
+            role_ref: { coordinate: "role", coordinate_evidence_digest: role.coordinate_evidence_digest },
+            resource_ref: { coordinate: "resource", coordinate_evidence_digest: resource.coordinate_evidence_digest },
+            action_ref: action.value,
+            context_key: context.value.context_key,
+            permission_dimension: dimension.value,
+            coordinate_refs: { action: { coordinate: "action", coordinate_evidence_digest: action.coordinate_evidence_digest }, context: { coordinate: "context", coordinate_evidence_digest: context.coordinate_evidence_digest }, permission_dimension: { coordinate: "permission_dimension", coordinate_evidence_digest: dimension.coordinate_evidence_digest } }
+          };
+          cells.push(cell);
+          candidateCellKeys.push(cell.required_cell_key);
+        }
+        routes.push({ candidate_id: candidate.candidate_id, kind: "required_cells", required_cell_keys: candidateCellKeys.sort() });
+      }
+      const uniqueCells = [...new Map(cells.map((cell) => [cell.required_cell_key, cell])).values()].sort((left, right) => left.required_cell_key.localeCompare(right.required_cell_key));
+      return { matrix_id: matrixId, semantic_root_digest: semanticRootDigest, seed_digest: seed.seed_digest, permission_derivation_registry_digest: registryDigest, scope_candidate_ids: group.permission_scope_candidate_ids, candidate_routes: routes.sort((left, right) => left.candidate_id.localeCompare(right.candidate_id)), role_domain: roleDomain, matrix_scope: matrixScope, required_cells: uniqueCells };
+    })
+  );
+}
+function validatePermissionMatrixReview(matrix, review, semanticRootDigest, evidenceContext) {
   if (review.matrix_id !== matrix.matrix_id || review.seed_digest !== matrix.seed_digest || !Array.isArray(review.cell_dispositions) || review.cell_dispositions.length !== matrix.required_cells.length) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission review must cover every required cell exactly once.");
   const cellByKey = new Map(
     /** @type {Array<Record<string,any>>} */
@@ -2762,7 +4670,8 @@ function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
       continue;
     }
     if (disposition.kind === "not_applicable") {
-      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission N/A needs E2/E3 basis.");
+      const levels = (disposition.basis ?? []).map((ref) => evidenceContext?.evidenceLevels.get(ref.claim_id ?? ref.decision_id));
+      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0 || evidenceContext && levels.some((level) => !["E2", "E3"].includes(level))) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission N/A needs accepted E2/E3 basis.");
       continue;
     }
     if (disposition.kind !== "formal" || !Array.isArray(disposition.basis) || disposition.basis.length === 0 || disposition.outcome.permission_dimension !== cell.permission_dimension) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission formal outcome does not match its cell.");
@@ -2771,7 +4680,8 @@ function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
       const expectedAllowed = cell.action_ref === "discover" ? ["visible", "hidden"] : ["allow", "deny"];
       if (outcome.action_ref !== cell.action_ref || !expectedAllowed.includes(outcome.expected)) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission decision outcome is incompatible with the action.");
     } else if (cell.permission_dimension === "data_scope") {
-      if (outcome.data_scope_contract_ref?.ref?.contract_kind !== "data_scope" || outcome.data_scope_contract_ref.ref.semantic_root_digest !== semanticRootDigest) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Data-scope cell requires an exact current-root typed contract.");
+      const ref = outcome.data_scope_contract_ref?.ref;
+      if (outcome.data_scope_contract_ref?.kind !== "accepted" || !ref || ref.contract_kind !== "data_scope" || ref.semantic_root_digest !== semanticRootDigest || evidenceContext?.acceptedContractRefs && !evidenceContext.acceptedContractRefs.has(typedContractRefKey(ref))) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Data-scope cell requires an accepted current-root typed contract.");
     }
   }
   for (const row of review.cell_dispositions) {
@@ -2781,7 +4691,8 @@ function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
     const decisionCell = cellByKey.get(outcome.decision_cell_key);
     const decisionDisposition = dispositionByKey.get(outcome.decision_cell_key);
     const sameCoordinates = decisionCell && ["role_ref", "resource_ref", "action_ref", "context_key"].every((key) => canonicalV5Stringify(decisionCell[key]) === canonicalV5Stringify(cell[key]));
-    if (!sameCoordinates || decisionCell.permission_dimension !== "decision" || decisionDisposition?.kind !== "formal" || decisionDisposition.outcome.expected !== "deny" || outcome.denial_contract_ref?.ref?.contract_kind !== "denial_behavior" || outcome.denial_contract_ref.ref.semantic_root_digest !== semanticRootDigest) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Denial behavior must bind the same-coordinate deny decision and typed contract.");
+    const ref = outcome.denial_contract_ref?.ref;
+    if (!sameCoordinates || decisionCell.permission_dimension !== "decision" || decisionDisposition?.kind !== "formal" || decisionDisposition.outcome.expected !== "deny" || outcome.denial_contract_ref?.kind !== "accepted" || !ref || ref.contract_kind !== "denial_behavior" || ref.semantic_root_digest !== semanticRootDigest || evidenceContext?.acceptedContractRefs && !evidenceContext.acceptedContractRefs.has(typedContractRefKey(ref))) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Denial behavior must bind the same-coordinate deny decision and an accepted typed contract.");
   }
   return structuredClone(review.cell_dispositions);
 }
@@ -2790,6 +4701,44 @@ function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
 var provenancePolicy = generateV5Contracts().policyRegistry.provenance_policy;
 var edgeRules = new Map(provenancePolicy.allowed_edges.map((row) => [`${row.from_kind}->${row.to_kind}`, row]));
 var downstreamKinds = /* @__PURE__ */ new Set(["behavior_contract", "atomic_outcome", "formal_test_point", "case", "case_oracle", "case_document", "execution_plan", "execution_result", "rendered_output"]);
+function compileBehaviorProvenanceGraph(input) {
+  const common = {
+    run_id: input.runId,
+    case_document_lineage_id: input.caseDocumentLineageId,
+    semantic_root_digest: input.semanticRootDigest,
+    accepted: true
+  };
+  const nodes = /* @__PURE__ */ new Map();
+  const edges = [];
+  const addNode = (node) => {
+    if (!node.node_id || nodes.has(node.node_id)) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Compiler provenance identities must be nonblank and unique.");
+    nodes.set(node.node_id, node);
+  };
+  const claims = /* @__PURE__ */ new Map();
+  for (const claim of input.claims) {
+    if (typeof claim.claim_id !== "string" || !Array.isArray(claim.outcome_candidate_ids) || claim.outcome_candidate_ids.length === 0 || !["E1", "E2", "E3"].includes(claim.evidence_level)) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Compiler provenance Claim projection is incomplete.");
+    addNode({ node_id: claim.claim_id, kind: "claim", ...common, evidence_level: claim.evidence_level });
+    claims.set(claim.claim_id, claim);
+    for (const sourceUnitId of [...new Set(claim.outcome_candidate_ids)].sort()) {
+      if (!nodes.has(sourceUnitId)) addNode({ node_id: sourceUnitId, kind: "source_unit", ...common });
+      edges.push({ from: sourceUnitId, to: claim.claim_id });
+    }
+  }
+  for (const contract of input.behaviorContracts) {
+    if (typeof contract.contract_id !== "string" || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Compiler provenance Behavior contract projection is incomplete.");
+    addNode({ node_id: contract.contract_id, kind: "behavior_contract", ...common });
+    for (const basis of contract.basis) {
+      if (basis.kind !== "claim" || !claims.has(basis.claim_id)) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Behavior provenance must resolve accepted Compiler-owned Claim basis.");
+      edges.push({ from: basis.claim_id, to: contract.contract_id });
+    }
+  }
+  const graphBase = {
+    nodes: [...nodes.values()].sort((left, right) => left.node_id.localeCompare(right.node_id)),
+    edges: [...new Map(edges.map((edge) => [`${edge.from}\0${edge.to}`, edge])).values()].sort((left, right) => `${left.from}\0${left.to}`.localeCompare(`${right.from}\0${right.to}`))
+  };
+  validateV5ProvenanceGraph(graphBase);
+  return { ...graphBase, graph_digest: canonicalObjectDigest(graphBase) };
+}
 function conditionHolds(condition, from, to, edge) {
   if (condition.kind === "same_run") return from.run_id === to.run_id;
   if (condition.kind === "same_lineage") return from.case_document_lineage_id === to.case_document_lineage_id;
@@ -2885,6 +4834,7 @@ function deriveSemanticReviewSeed(input) {
   const normativeUnits = [];
   const ambiguityCandidates = [];
   const mentionCandidates = [];
+  const permissionCandidates = [];
   for (const pack of [...input.sourcePacks].sort((left, right) => left.artifact_digest.localeCompare(right.artifact_digest))) {
     for (const source of [...pack.payload.sources].sort((left, right) => left.source_object_digest.localeCompare(right.source_object_digest))) {
       const locatorId = `loc5_${canonicalObjectDigest({ source_object_digest: source.source_object_digest }).slice(7)}`;
@@ -2915,6 +4865,31 @@ function deriveSemanticReviewSeed(input) {
           required_observation_slot_digests: observations
         };
         normativeUnits.push({ unit_id: unitId, locator_id: locatorId, unit_digest: canonicalObjectDigest({ locator_id: locatorId, source_span: unitSpan }), outcome_candidates: [outcomeCandidate] });
+        if (line.text.includes("\u6743\u9650")) {
+          const evidence = (coordinate, value, sourceSpan) => {
+            const baseEvidence = { evidence_kind: "source", coordinate, value, locator_id: locatorId, source_span: sourceSpan };
+            return { ...baseEvidence, coordinate_evidence_digest: permissionCoordinateEvidenceDigest(baseEvidence) };
+          };
+          const roleToken = line.text.includes("\u7BA1\u7406\u5458") ? "\u7BA1\u7406\u5458" : "\u7528\u6237";
+          const resourceToken = line.text.includes("\u8BA2\u5355") ? "\u8BA2\u5355" : line.text;
+          const scalarLine = Array.from(line.text);
+          const tokenSpan = (token) => {
+            const offset = scalarLine.join("").indexOf(token);
+            const scalarOffset = Array.from(scalarLine.join("").slice(0, Math.max(0, offset))).length;
+            return span(source.content, line.start + scalarOffset, line.start + scalarOffset + Array.from(token).length);
+          };
+          const action = line.text.includes("\u67E5\u770B") ? "view" : line.text.includes("\u8FDB\u5165") ? "enter" : "mutate";
+          const dimensions = ["decision", ...line.text.includes("\u62D2\u7EDD") ? ["denial_behavior"] : [], ...line.text.includes("\u8303\u56F4") ? ["data_scope"] : []];
+          const coordinateSlots = {
+            role_candidates: [evidence("role", { kind: "requirements_ref", ref: { kind: "source_unit", source_unit_id: unitId, source_digest: input.acceptedSourceStateDigest } }, tokenSpan(roleToken))],
+            resource_candidates: [evidence("resource", { kind: "requirements_ref", ref: { kind: "source_unit", source_unit_id: unitId, source_digest: input.acceptedSourceStateDigest } }, tokenSpan(resourceToken))],
+            action_candidates: [evidence("action", action, unitSpan)],
+            context_candidates: [evidence("context", { context_key: "default" }, unitSpan)]
+          };
+          const signaledDimensions = dimensions.map((dimension) => evidence("permission_dimension", dimension, unitSpan));
+          const candidateId = stableV5Id("permission_scope_candidate", { accepted_source_state_digest: input.acceptedSourceStateDigest, locator_id: locatorId, source_span: unitSpan, coordinate_slots: coordinateSlots, signaled_dimensions: signaledDimensions });
+          permissionCandidates.push({ candidate_id: candidateId, scope_group_id: "", locator_id: locatorId, source_span: unitSpan, coordinate_slots: coordinateSlots, signaled_dimensions: signaledDimensions, detector_codes: ["permission-language"] });
+        }
         for (const [token, ambiguityKind] of AMBIGUITY_TOKENS) {
           let offset = 0;
           while (true) {
@@ -2947,6 +4922,11 @@ function deriveSemanticReviewSeed(input) {
     for (const candidate of mentionCandidates) candidate.conflict_group_id = conflictGroupId;
     entityConflictGroups.push({ conflict_group_id: conflictGroupId, mention_candidate_ids: mentionIds });
   } else mentionCandidates.length = 0;
+  const permissionGroups = permissionCandidates.map((candidate) => {
+    const scopeGroupId = stableV5Id("permission_scope_group", { permission_scope_candidate_ids: [candidate.candidate_id] });
+    candidate.scope_group_id = scopeGroupId;
+    return { scope_group_id: scopeGroupId, permission_scope_candidate_ids: [candidate.candidate_id] };
+  });
   const base = {
     accepted_source_state_digest: input.acceptedSourceStateDigest,
     normative_units: normativeUnits.sort((left, right) => left.unit_id.localeCompare(right.unit_id)),
@@ -2954,8 +4934,8 @@ function deriveSemanticReviewSeed(input) {
     outcome_dedup_groups: [],
     entity_mention_candidates: mentionCandidates.sort((left, right) => left.candidate_id.localeCompare(right.candidate_id)),
     entity_conflict_groups: entityConflictGroups,
-    permission_scope_candidates: [],
-    permission_scope_groups: [],
+    permission_scope_candidates: permissionCandidates.sort((left, right) => left.candidate_id.localeCompare(right.candidate_id)),
+    permission_scope_groups: permissionGroups.sort((left, right) => left.scope_group_id.localeCompare(right.scope_group_id)),
     permission_derivation_registry_digest: input.permissionDerivationRegistryDigest ?? `sha256:${"0".repeat(64)}`
   };
   return sealV5Record(base, "seed_digest");
@@ -2987,6 +4967,9 @@ function validateSemanticReviews(seed, artifact, context) {
     /** @type {Array<Record<string, any>>} */
     (artifact.claims ?? []).map((claim) => [claim.claim_client_key, claim])
   );
+  if (claimByKey.size !== (artifact.claims ?? []).length || [...claimByKey.keys()].some((key) => typeof key !== "string" || key.trim().length === 0)) throw new V5ProtocolError("CLIENT_KEY_INVALID", "Evidence Claim client keys must be nonblank and unique within the batch.");
+  const candidateIdsByClaimKey = /* @__PURE__ */ new Map();
+  const bindClaimCandidate = (claimKey, candidateId) => candidateIdsByClaimKey.set(claimKey, [.../* @__PURE__ */ new Set([...candidateIdsByClaimKey.get(claimKey) ?? [], candidateId])].sort());
   const seenCandidates = /* @__PURE__ */ new Set();
   for (const review of decomposition) {
     const candidate = candidateById.get(review.candidate_id);
@@ -2996,6 +4979,7 @@ function validateSemanticReviews(seed, artifact, context) {
     if (disposition.kind === "single_claim") {
       const claim = claimByKey.get(disposition.claim_client_key);
       if (!claim || candidate.required_observation_slot_digests.length !== 1 || !sharedSignatureMatches(claim, candidate) || claim.primary_outcome_signature.primary_observation_slot_digest !== candidate.required_observation_slot_digests[0] || !sameSet2(claim.observation_slot_digests, candidate.required_observation_slot_digests)) throw new V5ProtocolError("ATOMIC_OUTCOME_NOT_SINGLE", "Single Claim does not close exactly one advertised observation slot.");
+      bindClaimCandidate(disposition.claim_client_key, candidate.candidate_id);
     } else if (disposition.kind === "split_claims") {
       if (!Array.isArray(disposition.claim_client_keys) || disposition.claim_client_keys.length < 2 || new Set(disposition.claim_client_keys).size !== disposition.claim_client_keys.length) throw new V5ProtocolError("ATOMIC_OUTCOME_NOT_SINGLE", "Composite outcome must split into unique Claims.");
       const primary = [];
@@ -3004,6 +4988,7 @@ function validateSemanticReviews(seed, artifact, context) {
         const primaryDigest = claim?.primary_outcome_signature?.primary_observation_slot_digest;
         if (!claim || !sharedSignatureMatches(claim, candidate) || !candidate.required_observation_slot_digests.includes(primaryDigest) || !sameSet2(claim.observation_slot_digests, [primaryDigest])) throw new V5ProtocolError("ATOMIC_OUTCOME_NOT_SINGLE", "Split Claim does not isolate one advertised observation slot.");
         primary.push(primaryDigest);
+        bindClaimCandidate(key, candidate.candidate_id);
       }
       if (!sameSet2(primary, candidate.required_observation_slot_digests)) throw new V5ProtocolError("ATOMIC_OUTCOME_NOT_SINGLE", "Split Claims do not exactly cover the composite outcome.");
     } else if (disposition.kind === "semantic_gap") {
@@ -3013,6 +4998,23 @@ function validateSemanticReviews(seed, artifact, context) {
       if (typeof disposition.reason !== "string" || disposition.reason.trim().length === 0 || typeof disposition.source_review_id !== "string" || disposition.source_review_id.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Non-normative disposition needs direct review basis.");
     } else throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Outcome disposition kind is unknown.");
   }
+  if ([...claimByKey.keys()].some((claimKey) => !candidateIdsByClaimKey.has(claimKey))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Every submitted Claim must close at least one advertised outcome candidate.");
+  const compiledClaims = [...claimByKey.entries()].map(([claimClientKey, claim]) => {
+    const semanticClaim = {
+      accepted_source_state_digest: seed.accepted_source_state_digest,
+      outcome_candidate_ids: candidateIdsByClaimKey.get(claimClientKey),
+      primary_outcome_signature: claim.primary_outcome_signature,
+      observation_slot_digests: [...claim.observation_slot_digests].sort(),
+      ...claim.subject_ref === void 0 ? {} : { subject_ref: claim.subject_ref },
+      ...claim.intent_ref === void 0 ? {} : { intent_ref: claim.intent_ref }
+    };
+    return { ...structuredClone(claim), claim_id: stableId("claim", semanticClaim), outcome_candidate_ids: semanticClaim.outcome_candidate_ids };
+  }).sort((left, right) => left.claim_id.localeCompare(right.claim_id));
+  const claimIdByClientKey = new Map(compiledClaims.map((claim) => [claim.claim_client_key, claim.claim_id]));
+  for (const claim of compiledClaims) {
+    if (Array.isArray(claim.basis)) claim.basis = claim.basis.map((basis) => basis.kind === "claim" && claimIdByClientKey.has(basis.claim_id) ? { ...basis, claim_id: claimIdByClientKey.get(basis.claim_id) } : basis);
+  }
+  const clientKeyBindings = compiledClaims.map((claim) => ({ client_key: claim.claim_client_key, stable_id: claim.claim_id })).sort((left, right) => left.client_key.localeCompare(right.client_key));
   const ambiguities = (
     /** @type {Array<Record<string, any>>} */
     artifact.ambiguity_reviews ?? []
@@ -3065,7 +5067,7 @@ function validateSemanticReviews(seed, artifact, context) {
     const covered = [];
     for (const cluster of review.resolution.clusters) {
       const basis = [.../** @type {string[]} */
-      (cluster.basis_claim_client_keys ?? []).map((claimKey) => ({ kind: "claim", claim_id: claimKey })), .../** @type {string[]} */
+      (cluster.basis_claim_client_keys ?? []).map((claimKey) => ({ kind: "claim", claim_id: claimIdByClientKey.get(claimKey) })), .../** @type {string[]} */
       (cluster.basis_decision_ids ?? []).map((decisionId) => ({ kind: "decision", decision_id: decisionId }))];
       if (!cluster.entity_client_key || !cluster.canonical_name?.trim() || !Array.isArray(cluster.mentions) || cluster.mentions.length === 0 || basis.length === 0 || /** @type {string[]} */
       cluster.basis_claim_client_keys.some((key) => !claimByKey.has(key)) || /** @type {string[]} */
@@ -3111,7 +5113,12 @@ function validateSemanticReviews(seed, artifact, context) {
       basis
     };
   }).sort((left, right) => left.entity_id.localeCompare(right.entity_id));
-  return { ...structuredClone(artifact), term_registry: sealV5Record({ semantic_root_digest: seed.seed_digest, entries: termEntries }, "registry_digest") };
+  return {
+    ...structuredClone(artifact),
+    compiled_claims: compiledClaims,
+    client_key_bindings: clientKeyBindings,
+    term_registry: sealV5Record({ semantic_root_digest: seed.seed_digest, entries: termEntries }, "registry_digest")
+  };
 }
 
 // src/v5/transactions.mjs
@@ -3169,19 +5176,19 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
   const existing = await resolveCatalogIdempotency(catalogRoot, input.idempotencyKey, input.canonicalActionDigest);
   if (existing?.replay) return { runDirectory: existing.runDirectory, reply: existing.reply, replayed: true };
   const catalog = await resolveCatalogLayout(catalogRoot);
-  if (!/^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(input.identity.run_id) || input.identity.schema_version !== V5_SCHEMA_VERSION || input.identity.compiler_version !== V5_COMPILER_VERSION) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Run identity is invalid.");
-  const runDirectory = path4.join(catalog.runsDirectory, input.identity.run_id);
+  if (!/^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(input.identity.run_id) || input.identity.run_directory_key !== input.identity.run_id || input.identity.schema_version !== V5_SCHEMA_VERSION || input.identity.compiler_version !== V5_COMPILER_VERSION) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Run identity is invalid.");
+  const runDirectory = path4.join(catalog.runsDirectory, input.identity.run_directory_key);
   await ensureV5Directory(catalog.catalogTransactions);
   await ensureV5Directory(catalog.catalogRunGenesisRecords);
   await ensureV5Directory(catalog.catalogReplies);
   await ensureV5Directory(catalog.runsDirectory);
-  const identity = sealV5Record(input.identity, "identity_digest");
+  const identity = sealV5Record(input.identity, "run_identity_digest");
   let recoveringOrphan = false;
   try {
     await lstat3(runDirectory);
     const orphanLayout = await resolveRunLayout(runDirectory);
-    const orphanIdentity = await readFixedSealedRecord(orphanLayout.identity, "identity_digest");
-    if (canonicalV5Stringify(orphanIdentity.record) !== canonicalV5Stringify(identity) || orphanIdentity.record.canonical_create_action_digest !== void 0 && orphanIdentity.record.canonical_create_action_digest !== input.canonicalActionDigest) throw new V5ProtocolError("IDEMPOTENCY_CONFLICT", "Run directory belongs to a different create transaction.");
+    const orphanIdentity = await readFixedSealedRecord(orphanLayout.identity, "run_identity_digest");
+    if (canonicalV5Stringify(orphanIdentity.record) !== canonicalV5Stringify(identity)) throw new V5ProtocolError("IDEMPOTENCY_CONFLICT", "Run directory belongs to a different create transaction.");
     recoveringOrphan = true;
   } catch (error) {
     if (error instanceof V5ProtocolError) throw error;
@@ -3209,6 +5216,7 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
     transaction_kind: "genesis",
     transaction_sequence: 0,
     previous_run_transaction_digest: null,
+    run_identity_digest: identity.run_identity_digest,
     operational_event_ref: { kind: "none" },
     checkpoint_digest: checkpoint.digest,
     selector_sidecar_digest: sidecar.digest,
@@ -3221,7 +5229,12 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
     kind: "catalog_run_genesis_record",
     schema_version: V5_SCHEMA_VERSION,
     run_id: input.identity.run_id,
-    identity_digest: identity.identity_digest,
+    run_directory_key: input.identity.run_directory_key,
+    case_document_lineage_id: input.identity.case_document_lineage_id,
+    run_identity: identity,
+    run_identity_digest: identity.run_identity_digest,
+    checkpoint_digest: checkpoint.digest,
+    selector_sidecar_digest: sidecar.digest,
     initial_run_transaction_digest: transaction.digest
   }, "run_genesis_record_digest");
   await writeSealedV5Record(catalog.catalogRunGenesisRecords, genesis.record, "run_genesis_record_digest");
@@ -3332,7 +5345,7 @@ async function commitNormalRunTransaction(runDirectory, request, nextState, serv
 async function publishIntegrityQuarantine(runDirectory, incident, request, services = currentV5TransactionServices()) {
   return withV5RunLock(runDirectory, async () => {
     const layout = await resolveRunLayout(runDirectory);
-    const identityFixed = await readFixedSealedRecord(layout.identity, "identity_digest");
+    const identityFixed = await readFixedSealedRecord(layout.identity, "run_identity_digest");
     const identity = identityFixed.record;
     let oldBytes = null;
     try {
@@ -3351,7 +5364,7 @@ async function publishIntegrityQuarantine(runDirectory, incident, request, servi
         const digest4 = `sha256:${filename.slice(0, 64)}`;
         try {
           const genesis = await readSealedV5Record(layout.genesisRecords, digest4, "run_genesis_record_digest");
-          if (genesis.run_id === identity.run_id && genesis.identity_digest === identity.identity_digest) {
+          if (genesis.run_id === identity.run_id && genesis.run_identity_digest === identity.run_identity_digest) {
             runGenesisRecordDigest = digest4;
             break;
           }
@@ -3482,27 +5495,27 @@ function projectInheritedArtifact(parentEnvelope, projection, childIdentity, dig
 
 // src/v5/execution-wrapper.mjs
 var V5_EXECUTION_OPERATION_KINDS = Object.freeze(["confirm_execution_plan", "pause_execution", "provide_capability_proof", "set_execution_disposition"]);
-var DIGEST2 = /^sha256:[0-9a-f]{64}$/u;
-function object5(value) {
+var DIGEST3 = /^sha256:[0-9a-f]{64}$/u;
+function object6(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function exact4(value, keys) {
+function exact5(value, keys) {
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function nonblank6(value) {
+function nonblank7(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function validateImmutableV5CaseDocumentRef(value) {
-  if (!object5(value) || !exact4(value, ["run_id", "revision", "manifest_digest", "bundle_digest", "case_document_lineage_id", "schema_version"]) || value.schema_version !== "5.0.0" || !nonblank6(value.run_id) || !nonblank6(value.case_document_lineage_id) || !Number.isSafeInteger(value.revision) || value.revision < 0 || !DIGEST2.test(value.manifest_digest) || !DIGEST2.test(value.bundle_digest)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Immutable V5 Case Document reference is invalid.");
+  if (!object6(value) || !exact5(value, ["run_id", "revision", "manifest_digest", "bundle_digest", "case_document_lineage_id", "schema_version"]) || value.schema_version !== "5.0.0" || !nonblank7(value.run_id) || !nonblank7(value.case_document_lineage_id) || !Number.isSafeInteger(value.revision) || value.revision < 0 || !DIGEST3.test(value.manifest_digest) || !DIGEST3.test(value.bundle_digest)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Immutable V5 Case Document reference is invalid.");
   return structuredClone(value);
 }
 function createV5ExecutionProjection(plan) {
   validateImmutableV5CaseDocumentRef(plan?.case_document_ref);
-  if (!object5(plan) || !exact4(plan, ["schema_version", "compiler_version", "delivery_intent", "case_document_ref", "operation_kinds", "items", "plan_digest"]) || plan.schema_version !== "5.0.0" || plan.compiler_version !== "0.6.0" || plan.delivery_intent !== "execution_plan" || !Array.isArray(plan.operation_kinds) || JSON.stringify([...plan.operation_kinds].sort()) !== JSON.stringify(V5_EXECUTION_OPERATION_KINDS) || !Array.isArray(plan.items)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan is invalid.");
+  if (!object6(plan) || !exact5(plan, ["schema_version", "compiler_version", "delivery_intent", "case_document_ref", "operation_kinds", "items", "plan_digest"]) || plan.schema_version !== "5.0.0" || plan.compiler_version !== "0.6.0" || plan.delivery_intent !== "execution_plan" || !Array.isArray(plan.operation_kinds) || JSON.stringify([...plan.operation_kinds].sort()) !== JSON.stringify(V5_EXECUTION_OPERATION_KINDS) || !Array.isArray(plan.items)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan is invalid.");
   const { plan_digest: declaredPlanDigest, ...planPayload } = plan;
-  if (!DIGEST2.test(declaredPlanDigest) || canonicalObjectDigest(planPayload) !== declaredPlanDigest) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan digest is invalid.");
+  if (!DIGEST3.test(declaredPlanDigest) || canonicalObjectDigest(planPayload) !== declaredPlanDigest) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan digest is invalid.");
   const payload = {
     kind: "v5_execution_projection",
     schema_version: "5.0.0",
@@ -3518,7 +5531,7 @@ function createV5ExecutionProjection(plan) {
   return { ...payload, execution_snapshot_digest: canonicalObjectDigest(payload) };
 }
 function canonicalExistingExecutionReceiptPayloadDigest(receipt) {
-  if (!object5(receipt) || !nonblank6(receipt.kind) || !DIGEST2.test(receipt.receipt_digest)) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Existing execution receipt is not in the closed receipt union.");
+  if (!object6(receipt) || !nonblank7(receipt.kind) || !DIGEST3.test(receipt.receipt_digest)) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Existing execution receipt is not in the closed receipt union.");
   const { receipt_digest: declared, ...payload } = receipt;
   if (canonicalObjectDigest(payload) !== declared) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Existing execution receipt digest is invalid.");
   return declared;
@@ -3540,30 +5553,30 @@ function reseal(projection) {
   return { ...payload, execution_snapshot_digest: canonicalObjectDigest(payload) };
 }
 async function advanceV5ExecutionProjection(projection, operation, services = {}) {
-  if (!object5(operation) || !V5_EXECUTION_OPERATION_KINDS.includes(operation.kind) || projection?.kind !== "v5_execution_projection" || projection.confirmed === true) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution operation is not advertised.");
+  if (!object6(operation) || !V5_EXECUTION_OPERATION_KINDS.includes(operation.kind) || projection?.kind !== "v5_execution_projection" || projection.confirmed === true) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution operation is not advertised.");
   const next = structuredClone(projection);
   let receipt = null;
   if (operation.kind === "set_execution_disposition") {
-    if (!exact4(operation, ["kind", "case_id", "disposition"]) || !["execute", "do_not_execute"].includes(operation.disposition)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Execution disposition operation is invalid.");
+    if (!exact5(operation, ["kind", "case_id", "disposition"]) || !["execute", "do_not_execute"].includes(operation.disposition)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Execution disposition operation is invalid.");
     const item = next.items.find((candidate) => candidate.case_id === operation.case_id && candidate.available_actions.includes(operation.kind));
     if (!item) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution disposition target is not advertised.");
     item.execution_disposition = operation.disposition;
     next.paused = false;
   } else if (operation.kind === "provide_capability_proof") {
-    if (!exact4(operation, ["kind", "case_id", "proof"]) || typeof services.verifyCapabilityProof !== "function") throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof requires the registered external verifier.");
+    if (!exact5(operation, ["kind", "case_id", "proof"]) || !object6(operation.proof) || !exact5(operation.proof, ["type", "value"]) || !nonblank7(operation.proof.type) || !nonblank7(operation.proof.value) || typeof services.verifyCapabilityProof !== "function") throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof requires the registered external verifier and the frozen V4 proof shape.");
     const item = next.items.find((candidate) => candidate.case_id === operation.case_id && candidate.available_actions.includes(operation.kind));
     if (!item) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof target is not advertised.");
     const verified = await services.verifyCapabilityProof({ case_document_ref: structuredClone(next.case_document_ref), case_id: operation.case_id, proof: structuredClone(operation.proof) });
-    if (verified?.verified !== true || typeof verified.ready !== "boolean" || !object5(verified.receipt)) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof was not independently verified.");
+    if (verified?.verified !== true || typeof verified.ready !== "boolean" || !object6(verified.receipt)) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof was not independently verified.");
     receipt = structuredClone(verified.receipt);
     next.capability_receipts.push(receipt);
     item.capability_ready = verified.ready;
     next.paused = false;
   } else if (operation.kind === "pause_execution") {
-    if (!exact4(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Pause operation is invalid.");
+    if (!exact5(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Pause operation is invalid.");
     next.paused = true;
   } else {
-    if (!exact4(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Confirmation operation is invalid.");
+    if (!exact5(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Confirmation operation is invalid.");
     if (!next.items.every((item) => item.execution_disposition !== "pending")) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution Plan cannot be confirmed while dispositions are pending.");
     next.confirmed = true;
     next.paused = false;
@@ -3578,15 +5591,15 @@ async function advanceV5ExecutionProjection(projection, operation, services = {}
 var UNIT_ACTIONS = /* @__PURE__ */ new Set(["answer", "defer", "unknown", "close_for_delivery"]);
 var PROPER_TOKEN = /^Q[0-9]{3,6}$/u;
 var TOKENISH = /Q[0-9]+/gu;
-function object6(value) {
+function object7(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function exact5(value, keys) {
+function exact6(value, keys) {
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function nonblank7(value) {
+function nonblank8(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function scalarLength2(value) {
@@ -3597,7 +5610,7 @@ function clarificationMessageDigest(raw) {
   return canonicalObjectDigest({ namespace: "generate-test-cases/v5/clarification-message", format_version: 1, message: raw });
 }
 function minimalOriginFromRaw(raw, range) {
-  if (typeof raw !== "string" || !object6(range) || !exact5(range, ["start_scalar", "end_scalar"]) || !Number.isSafeInteger(range.start_scalar) || !Number.isSafeInteger(range.end_scalar)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin range must use safe Unicode scalar offsets.");
+  if (typeof raw !== "string" || !object7(range) || !exact6(range, ["start_scalar", "end_scalar"]) || !Number.isSafeInteger(range.start_scalar) || !Number.isSafeInteger(range.end_scalar)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin range must use safe Unicode scalar offsets.");
   const scalars = [...raw];
   if (range.start_scalar < 0 || range.end_scalar <= range.start_scalar || range.end_scalar > scalars.length) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin range is out of bounds or empty.");
   const excerpt = scalars.slice(range.start_scalar, range.end_scalar).join("");
@@ -3606,7 +5619,7 @@ function minimalOriginFromRaw(raw, range) {
 }
 function verifyOrigin(supplied, raw) {
   const expected = minimalOriginFromRaw(raw, supplied?.range);
-  if (!object6(supplied) || !exact5(supplied, ["message_digest", "range", "excerpt", "excerpt_digest"]) || canonicalV5Stringify(supplied) !== canonicalV5Stringify(expected)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin must be derived exactly from the current raw message.");
+  if (!object7(supplied) || !exact6(supplied, ["message_digest", "range", "excerpt", "excerpt_digest"]) || canonicalV5Stringify(supplied) !== canonicalV5Stringify(expected)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin must be derived exactly from the current raw message.");
   return expected;
 }
 function stripWrappers(text, punctuation) {
@@ -3620,72 +5633,72 @@ function validateAnswerValue(value, schema, registry) {
   const fail = () => {
     throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Answer value does not satisfy the frozen closed contract.");
   };
-  if (!object6(value) || value.kind !== schema.kind) return fail();
+  if (!object7(value) || value.kind !== schema.kind) return fail();
   if (value.kind === "text") {
-    if (!exact5(value, ["kind", "value"]) || !nonblank7(value.value)) return fail();
+    if (!exact6(value, ["kind", "value"]) || !nonblank8(value.value)) return fail();
     const text = value.value.trim();
     const length = scalarLength2(text);
     if (length < schema.min_scalars || length > schema.max_scalars || length > 1024 || schema.ambiguity_guard_ref !== "answer.no-unresolved-vague-token.v1") return fail();
     const guard = registry.text_ambiguity_guards.find((item) => item.guard_ref === schema.ambiguity_guard_ref);
     if (!guard || guard.match_mode !== "unicode_scalar_substring" || guard.forbidden_tokens.some((token) => text.includes(token))) return fail();
   } else if (value.kind === "boolean") {
-    if (!exact5(value, ["kind", "value"]) || typeof value.value !== "boolean") return fail();
+    if (!exact6(value, ["kind", "value"]) || typeof value.value !== "boolean") return fail();
   } else if (value.kind === "integer" || value.kind === "number") {
-    if (!exact5(value, ["kind", "value"]) || typeof value.value !== "number" || !Number.isFinite(value.value) || value.kind === "integer" && !Number.isSafeInteger(value.value) || schema.minimum !== void 0 && value.value < schema.minimum || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
+    if (!exact6(value, ["kind", "value"]) || typeof value.value !== "number" || !Number.isFinite(value.value) || value.kind === "integer" && !Number.isSafeInteger(value.value) || schema.minimum !== void 0 && value.value < schema.minimum || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
   } else if (value.kind === "duration_ms") {
-    if (!exact5(value, ["kind", "value"]) || !Number.isSafeInteger(value.value) || value.value <= 0 || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
+    if (!exact6(value, ["kind", "value"]) || !Number.isSafeInteger(value.value) || value.value <= 0 || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
   } else if (value.kind === "identifier") {
     const pattern = registry.identifier_patterns.find((item) => item.pattern_ref === schema.pattern_ref);
-    if (!exact5(value, ["kind", "value"]) || !pattern || !new RegExp(pattern.expression, "u").test(value.value)) return fail();
+    if (!exact6(value, ["kind", "value"]) || !pattern || !new RegExp(pattern.expression, "u").test(value.value)) return fail();
   } else if (value.kind === "enum") {
-    if (!exact5(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
+    if (!exact6(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
   } else if (value.kind === "set") {
-    if (!exact5(value, ["kind", "members"]) || !Array.isArray(value.members) || value.members.length < schema.min_items || schema.max_items !== void 0 && value.members.length > schema.max_items) return fail();
-    for (const member of value.members) if (!object6(member) || member.kind !== schema.member_kind || !validateScalar(member)) return fail();
+    if (!exact6(value, ["kind", "members"]) || !Array.isArray(value.members) || value.members.length < schema.min_items || schema.max_items !== void 0 && value.members.length > schema.max_items) return fail();
+    for (const member of value.members) if (!object7(member) || member.kind !== schema.member_kind || !validateScalar(member)) return fail();
     if (new Set(value.members.map((member) => canonicalV5Stringify(member))).size !== value.members.length) return fail();
     if (schema.allowed_members && value.members.some((member) => !schema.allowed_members.some((allowed) => canonicalV5Stringify(allowed) === canonicalV5Stringify(member)))) return fail();
   } else if (value.kind === "mapping") {
-    if (!exact5(value, ["kind", "entries"]) || !Array.isArray(value.entries)) return fail();
-    for (const entry of value.entries) if (!object6(entry) || !exact5(entry, ["from", "to"]) || entry.from?.kind !== schema.key_kind || entry.to?.kind !== schema.mapped_value_kind || !validateScalar(entry.from) || !validateScalar(entry.to)) return fail();
+    if (!exact6(value, ["kind", "entries"]) || !Array.isArray(value.entries)) return fail();
+    for (const entry of value.entries) if (!object7(entry) || !exact6(entry, ["from", "to"]) || entry.from?.kind !== schema.key_kind || entry.to?.kind !== schema.mapped_value_kind || !validateScalar(entry.from) || !validateScalar(entry.to)) return fail();
     if (new Set(value.entries.map((entry) => canonicalV5Stringify(entry.from))).size !== value.entries.length) return fail();
     if (schema.required_keys && !sameCanonicalSet(value.entries.map((entry) => entry.from), schema.required_keys)) return fail();
   } else if (value.kind === "scope") {
-    if (!exact5(value, ["kind", "included_refs", "excluded_refs"]) || !uniqueNonblankStrings(value.included_refs) || !uniqueNonblankStrings(value.excluded_refs) || value.included_refs.some((ref) => value.excluded_refs.includes(ref))) return fail();
+    if (!exact6(value, ["kind", "included_refs", "excluded_refs"]) || !uniqueNonblankStrings(value.included_refs) || !uniqueNonblankStrings(value.excluded_refs) || value.included_refs.some((ref) => value.excluded_refs.includes(ref))) return fail();
     const allowed = schema.allowed_refs;
     if (allowed && [...value.included_refs, ...value.excluded_refs].some((ref) => !allowed.includes(ref))) return fail();
   } else if (value.kind === "requirements_quantifier") {
-    if (!exact5(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
+    if (!exact6(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
   } else if (value.kind === "requirements_refs") {
-    if (!exact5(value, ["kind", "refs"]) || !Array.isArray(value.refs) || value.refs.length < schema.min_items || schema.max_items !== void 0 && value.refs.length > schema.max_items || !value.refs.every(object6)) return fail();
+    if (!exact6(value, ["kind", "refs"]) || !Array.isArray(value.refs) || value.refs.length < schema.min_items || schema.max_items !== void 0 && value.refs.length > schema.max_items || !value.refs.every(object7)) return fail();
     if (!sameCanonicalSubset(value.refs, schema.allowed_refs)) return fail();
   } else if (value.kind === "entity_resolution") {
     if (!validateEntityResolution(value.value, schema)) return fail();
   } else if (value.kind === "permission_coordinates") {
     if (!validatePermissionCoordinates(value.value, schema)) return fail();
   } else if (["oracle_observation", "oracle_assertion", "oracle_scope", "oracle_window", "population_scope", "population_proof"].includes(value.kind)) {
-    if (!exact5(value, ["kind", "resolution"]) || !object6(value.resolution)) return fail();
+    if (!exact6(value, ["kind", "resolution"]) || !object7(value.resolution)) return fail();
     if (value.resolution.resolution_kind === "select_candidate") {
-      if (!exact5(value.resolution, ["resolution_kind", "candidate"]) || !schema.existing_candidates?.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value.resolution.candidate))) return fail();
+      if (!exact6(value.resolution, ["resolution_kind", "candidate"]) || !schema.existing_candidates?.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value.resolution.candidate))) return fail();
     } else if (value.resolution.resolution_kind === "create_typed") {
-      if (!exact5(value.resolution, ["resolution_kind", "payload"]) || schema.allow_typed_creation !== true || !object6(value.resolution.payload)) return fail();
+      if (!exact6(value.resolution, ["resolution_kind", "payload"]) || schema.allow_typed_creation !== true || !object7(value.resolution.payload)) return fail();
     } else return fail();
   } else if (value.kind === "permission_auxiliary_contract") {
-    if (!exact5(value, ["kind", "resolution"]) || !object6(value.resolution)) return fail();
+    if (!exact6(value, ["kind", "resolution"]) || !object7(value.resolution)) return fail();
     if (value.resolution.resolution_kind === "select_candidate") {
-      if (!exact5(value.resolution, ["resolution_kind", "contract_ref"]) || !schema.existing_contract_refs?.some((ref) => canonicalV5Stringify(ref) === canonicalV5Stringify(value.resolution.contract_ref))) return fail();
-    } else if (!(value.resolution.resolution_kind === "create_typed" && exact5(value.resolution, ["resolution_kind", "payload"]) && object6(value.resolution.payload) && schema.allow_typed_creation === true)) return fail();
+      if (!exact6(value.resolution, ["resolution_kind", "contract_ref"]) || !schema.existing_contract_refs?.some((ref) => canonicalV5Stringify(ref) === canonicalV5Stringify(value.resolution.contract_ref))) return fail();
+    } else if (!(value.resolution.resolution_kind === "create_typed" && exact6(value.resolution, ["resolution_kind", "payload"]) && object7(value.resolution.payload) && schema.allow_typed_creation === true)) return fail();
   } else return fail();
   return structuredClone(value);
 }
 function validateScalar(value) {
-  if (!object6(value)) return false;
-  if (value.kind === "text" || value.kind === "identifier" || value.kind === "enum") return exact5(value, ["kind", "value"]) && nonblank7(value.value);
-  if (value.kind === "boolean") return exact5(value, ["kind", "value"]) && typeof value.value === "boolean";
-  if (value.kind === "integer" || value.kind === "duration_ms") return exact5(value, ["kind", "value"]) && Number.isSafeInteger(value.value);
-  return value.kind === "number" && exact5(value, ["kind", "value"]) && typeof value.value === "number" && Number.isFinite(value.value);
+  if (!object7(value)) return false;
+  if (value.kind === "text" || value.kind === "identifier" || value.kind === "enum") return exact6(value, ["kind", "value"]) && nonblank8(value.value);
+  if (value.kind === "boolean") return exact6(value, ["kind", "value"]) && typeof value.value === "boolean";
+  if (value.kind === "integer" || value.kind === "duration_ms") return exact6(value, ["kind", "value"]) && Number.isSafeInteger(value.value);
+  return value.kind === "number" && exact6(value, ["kind", "value"]) && typeof value.value === "number" && Number.isFinite(value.value);
 }
 function uniqueNonblankStrings(values) {
-  return Array.isArray(values) && values.every(nonblank7) && new Set(values).size === values.length;
+  return Array.isArray(values) && values.every(nonblank8) && new Set(values).size === values.length;
 }
 function sameCanonicalSet(left, right) {
   return left.length === right.length && new Set(left.map(canonicalV5Stringify)).size === left.length && left.every((value) => right.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value)));
@@ -3694,40 +5707,40 @@ function sameCanonicalSubset(values, allowed) {
   return new Set(values.map(canonicalV5Stringify)).size === values.length && values.every((value) => allowed.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value)));
 }
 function validateEntityResolution(answer, schema) {
-  if (!object6(answer) || !exact5(answer, ["conflict_group_id", "exact_mention_candidate_ids", "clusters"]) || answer.conflict_group_id !== schema.exact_conflict_group_id || !sameCanonicalSet(answer.exact_mention_candidate_ids, schema.exact_mention_candidate_ids) || !Array.isArray(answer.clusters) || answer.clusters.length === 0) return false;
+  if (!object7(answer) || !exact6(answer, ["conflict_group_id", "exact_mention_candidate_ids", "clusters"]) || answer.conflict_group_id !== schema.exact_conflict_group_id || !sameCanonicalSet(answer.exact_mention_candidate_ids, schema.exact_mention_candidate_ids) || !Array.isArray(answer.clusters) || answer.clusters.length === 0) return false;
   const mentions = [];
   for (const cluster of answer.clusters) {
-    if (!object6(cluster) || !exact5(cluster, ["canonical_name", "mentions"]) || !nonblank7(cluster.canonical_name) || !Array.isArray(cluster.mentions) || cluster.mentions.length === 0) return false;
+    if (!object7(cluster) || !exact6(cluster, ["canonical_name", "mentions"]) || !nonblank8(cluster.canonical_name) || !Array.isArray(cluster.mentions) || cluster.mentions.length === 0) return false;
     for (const mention of cluster.mentions) {
-      if (!object6(mention) || !exact5(mention, ["mention_candidate_id", "name_role"]) || !schema.allowed_name_roles.includes(mention.name_role)) return false;
+      if (!object7(mention) || !exact6(mention, ["mention_candidate_id", "name_role"]) || !schema.allowed_name_roles.includes(mention.name_role)) return false;
       mentions.push(mention.mention_candidate_id);
     }
   }
   return sameCanonicalSet(mentions, schema.exact_mention_candidate_ids);
 }
 function validatePermissionCoordinates(answer, schema) {
-  if (!object6(answer) || !exact5(answer, ["scope_group_id", "permission_scope_candidate_ids", "unresolved_coordinates", "coordinate_resolutions"]) || answer.scope_group_id !== schema.exact_scope_group_id || !sameCanonicalSet(answer.permission_scope_candidate_ids, schema.exact_permission_scope_candidate_ids) || !sameCanonicalSet(answer.unresolved_coordinates, schema.exact_unresolved_coordinates) || !Array.isArray(answer.coordinate_resolutions) || answer.coordinate_resolutions.length !== answer.unresolved_coordinates.length) return false;
+  if (!object7(answer) || !exact6(answer, ["scope_group_id", "permission_scope_candidate_ids", "unresolved_coordinates", "coordinate_resolutions"]) || answer.scope_group_id !== schema.exact_scope_group_id || !sameCanonicalSet(answer.permission_scope_candidate_ids, schema.exact_permission_scope_candidate_ids) || !sameCanonicalSet(answer.unresolved_coordinates, schema.exact_unresolved_coordinates) || !Array.isArray(answer.coordinate_resolutions) || answer.coordinate_resolutions.length !== answer.unresolved_coordinates.length) return false;
   const byCoordinate = new Map(schema.coordinate_contracts.map((contract) => [contract.coordinate, contract]));
   if (new Set(answer.coordinate_resolutions.map((row) => row.coordinate)).size !== answer.coordinate_resolutions.length) return false;
   for (const row of answer.coordinate_resolutions) {
     const contract = byCoordinate.get(row.coordinate);
-    if (!contract || !object6(row.resolution)) return false;
+    if (!contract || !object7(row.resolution)) return false;
     if (row.resolution.resolution_kind === "select_candidate") {
       if (row.coordinate === "permission_dimension") {
-        if (!exact5(row.resolution, ["resolution_kind", "coordinate_evidence_digests"]) || !sameCanonicalSubset(row.resolution.coordinate_evidence_digests, contract.existing_candidate_evidence_digests)) return false;
-      } else if (!exact5(row.resolution, ["resolution_kind", "coordinate_evidence_digest"]) || !contract.existing_candidate_evidence_digests.includes(row.resolution.coordinate_evidence_digest)) return false;
+        if (!exact6(row.resolution, ["resolution_kind", "coordinate_evidence_digests"]) || !sameCanonicalSubset(row.resolution.coordinate_evidence_digests, contract.existing_candidate_evidence_digests)) return false;
+      } else if (!exact6(row.resolution, ["resolution_kind", "coordinate_evidence_digest"]) || !contract.existing_candidate_evidence_digests.includes(row.resolution.coordinate_evidence_digest)) return false;
     } else if (row.resolution.resolution_kind === "create_typed") {
       const payload = row.resolution.payload;
-      if (!exact5(row.resolution, ["resolution_kind", "payload"]) || !object6(payload)) return false;
+      if (!exact6(row.resolution, ["resolution_kind", "payload"]) || !object7(payload)) return false;
       if (row.coordinate === "role" || row.coordinate === "resource") {
         const n = scalarLength2(payload.canonical_name);
-        if (!exact5(payload, ["canonical_name"]) || n < 1 || n > 128) return false;
+        if (!exact6(payload, ["canonical_name"]) || n < 1 || n > 128) return false;
       } else if (row.coordinate === "action") {
-        if (!exact5(payload, ["action"]) || !contract.creation_constraints.allowed_actions.includes(payload.action)) return false;
+        if (!exact6(payload, ["action"]) || !contract.creation_constraints.allowed_actions.includes(payload.action)) return false;
       } else if (row.coordinate === "context") {
         const n = scalarLength2(payload.context_key);
-        if (!exact5(payload, ["context_key"]) || n < 1 || n > 256) return false;
-      } else if (!exact5(payload, ["dimensions"]) || !sameCanonicalSubset(payload.dimensions, contract.creation_constraints.allowed_dimensions) || new Set(payload.dimensions).size !== payload.dimensions.length || !payload.dimensions.includes("decision")) return false;
+        if (!exact6(payload, ["context_key"]) || n < 1 || n > 256) return false;
+      } else if (!exact6(payload, ["dimensions"]) || !sameCanonicalSubset(payload.dimensions, contract.creation_constraints.allowed_dimensions) || new Set(payload.dimensions).size !== payload.dimensions.length || !payload.dimensions.includes("decision")) return false;
     } else return false;
   }
   return true;
@@ -3747,7 +5760,7 @@ function verifyControlOrigin(excerpt, token, action, registry, allowTokenless) {
 }
 function validateAndBindResponseUnits(input) {
   const { raw_response: raw, presentation, control_registry: controls, answer_registry: registry } = input;
-  if (typeof raw !== "string" || !object6(presentation) || !Array.isArray(presentation.parts) || !Array.isArray(input.units) || input.units.length === 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Clarification preview needs a nonempty unit set and current presentation.");
+  if (typeof raw !== "string" || !object7(presentation) || !Array.isArray(presentation.parts) || !Array.isArray(input.units) || input.units.length === 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Clarification preview needs a nonempty unit set and current presentation.");
   const partById = new Map(presentation.parts.map((part) => [part.question_part_id, part]));
   const tokens = presentation.parts.map((part) => part.display_token);
   const seenPart = /* @__PURE__ */ new Set();
@@ -3755,26 +5768,29 @@ function validateAndBindResponseUnits(input) {
   const bound = (
     /** @type {Array<Record<string,any>>} */
     input.units.map((unit) => {
-      if (!object6(unit) || !nonblank7(unit.unit_client_key) || seenKey.has(unit.unit_client_key) || !UNIT_ACTIONS.has(unit.action) || !object6(unit.target)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit shape, action, or client key is invalid.");
+      if (!object7(unit)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit must be an object.");
+      if (!nonblank8(unit.unit_client_key) || !/^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/u.test(unit.unit_client_key) || seenKey.has(unit.unit_client_key)) throw new V5ProtocolError("CLIENT_KEY_INVALID", "Response unit client key is invalid or duplicated.");
+      if (!UNIT_ACTIONS.has(unit.action) || !object7(unit.target)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit shape or action is invalid.");
       seenKey.add(unit.unit_client_key);
       const part = partById.get(unit.target.question_part_id);
-      if (!part || unit.target.display_token !== part.display_token || unit.target.root_version_digest !== presentation.semantic_root_digest || !part.current_allowed_controls.includes(unit.action)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit target is stale, unknown, or not advertised.");
+      if (!part || unit.target.display_token !== part.display_token || unit.target.root_version_digest !== presentation.semantic_root_digest) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit target is stale or unknown.");
+      if (!part.current_allowed_controls.includes(unit.action)) throw new V5ProtocolError("QUESTION_PART_TRANSITION_INVALID", "Response unit action is not legal from the current Question Part state.");
       if (seenPart.has(part.question_part_id)) throw new V5ProtocolError("QUESTION_PART_ACTION_CONFLICT", "A Question Part has conflicting response units.");
       seenPart.add(part.question_part_id);
       const origin = verifyOrigin(unit.origin, raw);
       const optionalShared = Object.hasOwn(unit, "shared_origin_group_id");
       if (!optionalShared) verifyUnitTokenBinding(origin.excerpt, part.display_token, tokens);
       const expectedKeys = ["unit_client_key", ...optionalShared ? ["shared_origin_group_id"] : [], "origin", "target", "action", ...unit.action === "answer" ? ["answer"] : []];
-      if (!exact5(unit, expectedKeys)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit contains fields outside its closed branch.");
+      if (!exact6(unit, expectedKeys)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit contains fields outside its closed branch.");
       let evidenceLevel = null;
       if (unit.action === "answer") {
-        if (part.answer_contract.answer_mode !== "typed_answer" || !object6(unit.answer) || !exact5(unit.answer, ["value", "source_text", "nature", ...Object.hasOwn(unit.answer, "temporary_basis") ? ["temporary_basis"] : []]) || !nonblank7(unit.answer.source_text) || scalarLength2(unit.answer.source_text) > 256 || !origin.excerpt.includes(unit.answer.source_text)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Answer is missing or does not bind its exact source text.");
+        if (part.answer_contract.answer_mode !== "typed_answer" || !object7(unit.answer) || !exact6(unit.answer, ["value", "source_text", "nature", ...Object.hasOwn(unit.answer, "temporary_basis") ? ["temporary_basis"] : []]) || !nonblank8(unit.answer.source_text) || scalarLength2(unit.answer.source_text) > 256 || !origin.excerpt.includes(unit.answer.source_text)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Answer is missing or does not bind its exact source text.");
         validateAnswerValue(unit.answer.value, part.answer_contract.value_schema, registry);
         if (unit.answer.nature === "final") {
           if (Object.hasOwn(unit.answer, "temporary_basis")) throw new V5ProtocolError("ANSWER_NATURE_INVALID", "Final answer cannot carry a temporary basis.");
           evidenceLevel = "E3";
         } else if (unit.answer.nature === "temporary") {
-          if (!object6(unit.answer.temporary_basis)) throw new V5ProtocolError("TEMPORARY_BASIS_REQUIRED", "Temporary answer requires an exact registered marker origin.");
+          if (!object7(unit.answer.temporary_basis)) throw new V5ProtocolError("TEMPORARY_BASIS_REQUIRED", "Temporary answer requires an exact registered marker origin.");
           const basis = verifyOrigin(unit.answer.temporary_basis, raw);
           if (!controls.temporary_marker_tokens.includes(stripWrappers(basis.excerpt, controls.control_wrapper_punctuation))) throw new V5ProtocolError("TEMPORARY_BASIS_REQUIRED", "Temporary basis must be one registered marker token.");
           evidenceLevel = "E1";
@@ -4048,14 +6064,22 @@ function deriveCaseStatus(input) {
 }
 
 // src/v5/case-compiler.mjs
-function object7(value) {
+function object8(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function nonblank8(value) {
+function exact7(value, keys) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+function nonblank9(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
+function nonempty3(value) {
+  return Array.isArray(value) && value.length > 0;
+}
 function unique(values, name) {
-  if (new Set(values).size !== values.length || values.some((value) => !nonblank8(value))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", `${name} must be a unique nonblank set.`);
+  if (new Set(values).size !== values.length || values.some((value) => !nonblank9(value))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", `${name} must be a unique nonblank set.`);
   return [...values].sort();
 }
 function records(value) {
@@ -4064,10 +6088,133 @@ function records(value) {
     value
   ) : [];
 }
+function finitePartitionMembers(domain, partition) {
+  if (domain.domain?.kind !== "closed_enum") return null;
+  if (partition.kind === "exact_members") return records(partition.values);
+  if (partition.kind === "complement") {
+    if (Array.isArray(partition.derived_members)) return records(partition.derived_members);
+    const excluded = new Set(records(partition.excluded_values).map((value) => canonicalV5Stringify(value)));
+    return records(domain.domain.members).filter((value) => !excluded.has(canonicalV5Stringify(value)));
+  }
+  return null;
+}
+function compileDomainSelections(draft, caseAnchorDigest, input, status) {
+  const domainById = new Map(records(input.semantic_audit?.domains).map((domain) => [domain.domain_contract_id, domain]));
+  const equivalenceById = new Map(records(input.semantic_audit?.behavior_equivalence_contracts).map((contract) => [contract.behavior_equivalence_contract_id, contract]));
+  const oracleIds = new Set(records(draft.oracles).map((oracle) => oracle.oracle_semantic_contract_id));
+  const seenKeys = /* @__PURE__ */ new Set();
+  const seenCoordinates = /* @__PURE__ */ new Set();
+  return records(draft.domain_selections).map((selection) => {
+    const keys = ["selection_client_key", "case_client_key", "formal_test_point_id", "oracle_semantic_contract_id", "domain_contract_id", "partition_id", "selection"];
+    if (!exact7(selection, keys) || !nonblank9(selection.selection_client_key) || seenKeys.has(selection.selection_client_key) || selection.case_client_key !== draft.case_client_key || selection.formal_test_point_id !== draft.primary_test_point_id || !oracleIds.has(selection.oracle_semantic_contract_id)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection ownership must exactly match its Case, formal Test Point, and accepted Oracle.");
+    seenKeys.add(selection.selection_client_key);
+    const coordinate = `${selection.domain_contract_id}\0${selection.partition_id}\0${selection.formal_test_point_id}\0${selection.oracle_semantic_contract_id}`;
+    if (seenCoordinates.has(coordinate)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "A Case may bind a Domain partition at most once for one Test Point and Oracle.");
+    seenCoordinates.add(coordinate);
+    const domain = domainById.get(selection.domain_contract_id);
+    const partition = records(domain?.partitions).find((candidate) => candidate.partition_id === selection.partition_id);
+    const choice = selection.selection;
+    if (!domain || !partition || !object8(choice) || !nonempty3(choice.selected_values) || choice.selected_values.some((value) => !validateTypedValue(value))) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection must resolve one current-root Domain partition and typed values.");
+    const selectedDigests = choice.selected_values.map((value) => canonicalObjectDigest(value));
+    if (new Set(selectedDigests).size !== selectedDigests.length) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection values must be unique.");
+    const finiteMembers = finitePartitionMembers(domain, partition);
+    const finiteDigests = finiteMembers === null ? null : finiteMembers.map((value) => canonicalObjectDigest(value)).sort();
+    const membership = choice.membership;
+    if (!object8(membership)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection membership evidence is required.");
+    if (membership.kind === "closed_domain_membership") {
+      if (!exact7(membership, ["kind"]) || finiteDigests === null || selectedDigests.some((digest4) => !finiteDigests.includes(digest4))) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Closed-domain membership must select only members of the bound partition.");
+    } else if (membership.kind === "decidable_predicate") {
+      if (!exact7(membership, ["kind", "predicate_contract_id"]) || partition.kind !== "predicate" || !nonblank9(membership.predicate_contract_id) || membership.predicate_contract_id !== partition.predicate_contract_id) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Predicate membership must bind the partition predicate contract exactly.");
+    } else if (membership.kind === "membership_witnesses") {
+      const witnesses = records(membership.witnesses);
+      if (!exact7(membership, ["kind", "witnesses"]) || witnesses.length === 0 || witnesses.some((witness) => !exact7(witness, ["selected_value_digest", "basis"]) || !nonempty3(witness.basis)) || canonicalV5Stringify(witnesses.map((witness) => witness.selected_value_digest).sort()) !== canonicalV5Stringify([...selectedDigests].sort())) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Membership witnesses must exactly cover the selected values with evidence.");
+    } else throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection membership kind is unknown.");
+    if (choice.kind === "exhaustive_members") {
+      if (!exact7(choice, ["kind", "selected_values", "membership"]) || membership.kind !== "closed_domain_membership" || finiteDigests === null || canonicalV5Stringify([...selectedDigests].sort()) !== canonicalV5Stringify(finiteDigests)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Exhaustive selection must enumerate the complete finite partition.");
+    } else if (choice.kind === "representative") {
+      if (!exact7(choice, ["kind", "selected_values", "behavior_equivalence_contract_id", "membership"])) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Representative selection is not closed.");
+      const equivalence = equivalenceById.get(choice.behavior_equivalence_contract_id);
+      if (!equivalence || equivalence.domain_contract_id !== selection.domain_contract_id || equivalence.partition_id !== selection.partition_id || equivalence.formal_test_point_id !== selection.formal_test_point_id || equivalence.oracle_semantic_contract_id !== selection.oracle_semantic_contract_id) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Representative selection must bind the exact accepted equivalence contract.");
+    } else if (choice.kind === "sampled") {
+      if (!exact7(choice, ["kind", "selected_values", "residual_risk", "membership"]) || !nonblank9(choice.residual_risk)) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Sampled selection requires a nonblank residual risk.");
+    } else throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection kind is unknown.");
+    return {
+      ...structuredClone(selection),
+      selected_value_digests: [...selectedDigests].sort(),
+      coverage_disposition: status === "NotApplicable" ? "not_applicable" : ["Grounded", "Conditional"].includes(status) ? "covered" : "gap",
+      domain_selection_id: stableV5Id("domain_selection", {
+        input_semantic_root_digest: input.semantic_root_digest,
+        case_anchor_digest: caseAnchorDigest,
+        formal_test_point_id: selection.formal_test_point_id,
+        oracle_semantic_contract_id: selection.oracle_semantic_contract_id,
+        domain_contract_id: selection.domain_contract_id,
+        partition_id: selection.partition_id,
+        selection: choice
+      })
+    };
+  }).sort((left, right) => left.domain_selection_id.localeCompare(right.domain_selection_id));
+}
+function deriveDomainCoverage(input, cases) {
+  const domains = records(input.semantic_audit?.domains);
+  const domainById = new Map(domains.map((domain) => [domain.domain_contract_id, domain]));
+  const selections = cases.flatMap((current) => records(current.domain_selections));
+  const groups = /* @__PURE__ */ new Map();
+  for (const selection of selections) {
+    const key = `${selection.domain_contract_id}\0${selection.formal_test_point_id}\0${selection.oracle_semantic_contract_id}`;
+    const group = groups.get(key) ?? { domain_contract_id: selection.domain_contract_id, formal_test_point_id: selection.formal_test_point_id, oracle_semantic_contract_id: selection.oracle_semantic_contract_id, selections: [] };
+    group.selections.push(selection);
+    groups.set(key, group);
+  }
+  const partitionRows = [];
+  const semanticPartitionCoverage = [];
+  for (const group of groups.values()) {
+    const domain = domainById.get(group.domain_contract_id);
+    const requiredIds = records(domain?.partitions).map((partition) => partition.partition_id).sort();
+    const byPartition = new Map(group.selections.map((selection) => [selection.partition_id, selection]));
+    const grounded = [];
+    const conditional = [];
+    const blocked = [];
+    for (const partitionId of requiredIds) {
+      const selection = byPartition.get(partitionId);
+      const currentCase = cases.find((candidate) => records(candidate.domain_selections).some((item) => item.domain_selection_id === selection?.domain_selection_id));
+      const disposition = selection?.coverage_disposition ?? "gap";
+      partitionRows.push({ partition_id: partitionId, disposition });
+      if (!selection || ["Blocked", "Exploratory"].includes(currentCase?.semantic_status)) blocked.push(partitionId);
+      else if (currentCase?.semantic_status === "Conditional") conditional.push(partitionId);
+      else if (currentCase?.semantic_status === "Grounded") grounded.push(partitionId);
+    }
+    semanticPartitionCoverage.push({
+      domain_contract_id: group.domain_contract_id,
+      formal_test_point_id: group.formal_test_point_id,
+      oracle_semantic_contract_id: group.oracle_semantic_contract_id,
+      required_partition_ids: requiredIds,
+      grounded_partition_ids: grounded.sort(),
+      conditional_partition_ids: conditional.sort(),
+      blocked_partition_ids: blocked.sort(),
+      status: blocked.length === 0 && conditional.length === 0 ? "covered" : grounded.length === 0 && conditional.length === 0 ? "blocked" : "partial"
+    });
+  }
+  const valueRows = selections.map((selection) => ({ value_instance_id: selection.domain_selection_id, disposition: selection.coverage_disposition }));
+  const valueInstanceCoverage = selections.map((selection) => {
+    const domain = domainById.get(selection.domain_contract_id);
+    const partition = records(domain?.partitions).find((candidate) => candidate.partition_id === selection.partition_id);
+    const finite = domain && partition ? finitePartitionMembers(domain, partition) : null;
+    return {
+      domain_contract_id: selection.domain_contract_id,
+      formal_test_point_id: selection.formal_test_point_id,
+      oracle_semantic_contract_id: selection.oracle_semantic_contract_id,
+      partition_id: selection.partition_id,
+      universe: finite === null ? { kind: "open_or_unknown" } : { kind: "finite", total_instances: finite.length },
+      selected_value_digests: selection.selected_value_digests,
+      status: selection.selection.kind === "exhaustive_members" ? "exhaustive" : finite === null ? "unknown" : "partial"
+    };
+  }).sort((left, right) => `${left.domain_contract_id}\0${left.partition_id}`.localeCompare(`${right.domain_contract_id}\0${right.partition_id}`));
+  return { partitionRows, valueRows, semanticPartitionCoverage, valueInstanceCoverage };
+}
 function legacyStableId(prefix, payload) {
   return `${prefix}-${canonicalObjectDigest(payload).slice(7)}`;
 }
-function deriveCoverage(input, cases) {
+function deriveCoverage(input, cases, domainCoverage) {
   const caseByPoint = new Map(cases.filter((current) => current.semantic_status !== "Exploratory").map((current) => [current.primary_test_point_id, current]));
   const formalIds = unique(input.formal_test_point_ids ?? [], "Formal Test Point IDs");
   const formal = { total: formalIds.length, covered: 0, blocked: 0, not_applicable: 0 };
@@ -4093,8 +6240,8 @@ function deriveCoverage(input, cases) {
   };
   return {
     formal_test_point: formal,
-    semantic_partition: summarize(records(input.semantic_partitions)),
-    value_instance: summarize(records(input.value_instances)),
+    semantic_partition: summarize(domainCoverage.partitionRows.length > 0 ? domainCoverage.partitionRows : records(input.semantic_partitions)),
+    value_instance: summarize(domainCoverage.valueRows.length > 0 ? domainCoverage.valueRows : records(input.value_instances)),
     permission_cell: permission,
     risk_review: { reviewed: Number(input.risk_ledger?.reviewed_cell_count ?? 0), material_items: records(input.risk_ledger?.items).length }
   };
@@ -4114,18 +6261,27 @@ function derivePermissionCoverage(cells) {
   }
   return result;
 }
-function compileV5CaseDocument(input) {
-  if (!object7(input) || !nonblank8(input.case_document_lineage_id) || !/^sha256:[0-9a-f]{64}$/u.test(input.semantic_root_digest) || !Number.isSafeInteger(input.source_revision) || input.source_revision < 0 || !Array.isArray(input.case_drafts)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case compilation input is invalid.");
+function compileV5CaseDocumentBundle(input) {
+  if (!object8(input) || !nonblank9(input.case_document_lineage_id) || !/^sha256:[0-9a-f]{64}$/u.test(input.semantic_root_digest) || !Number.isSafeInteger(input.source_revision) || input.source_revision < 0 || !Array.isArray(input.case_drafts)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case compilation input is invalid.");
   const assessmentByClaim = /* @__PURE__ */ new Map();
   for (const assessment of records(input.claim_assessments)) {
-    if (!nonblank8(assessment.claim_id) || assessmentByClaim.has(assessment.claim_id) || !["E1", "E2", "E3"].includes(assessment.level) || !["supported", "uncertain", "unsupported"].includes(assessment.support_review)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Claim assessment inventory is invalid or ambiguous.");
+    if (!nonblank9(assessment.claim_id) || assessmentByClaim.has(assessment.claim_id) || !["E1", "E2", "E3"].includes(assessment.level) || !["supported", "uncertain", "unsupported"].includes(assessment.support_review)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Claim assessment inventory is invalid or ambiguous.");
     assessmentByClaim.set(assessment.claim_id, assessment);
   }
   const acceptedGapIds = new Set(unique(input.accepted_gap_ids ?? [], "Accepted gap IDs"));
+  const oracleContractById = new Map(records(input.oracle_semantic_contracts).map((contract) => [contract.oracle_semantic_contract_id, contract]));
+  if (oracleContractById.size !== records(input.oracle_semantic_contracts).length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Accepted Oracle semantic-contract identities are duplicated.");
   const seenClientKeys = /* @__PURE__ */ new Set();
+  const clientKeyBindings = [];
+  const bindClientKey = (clientKey, stableId2) => {
+    if (!nonblank9(clientKey) || seenClientKeys.has(clientKey)) throw new V5ProtocolError("CLIENT_KEY_INVALID", "Case, Step, Oracle, and DomainSelection client keys must be globally unique within the Case batch.");
+    seenClientKeys.add(clientKey);
+    clientKeyBindings.push({ client_key: clientKey, stable_id: stableId2 });
+  };
+  const seenCaseClientKeys = /* @__PURE__ */ new Set();
   const cases = input.case_drafts.map((draft) => {
-    if (!nonblank8(draft.case_client_key) || seenClientKeys.has(draft.case_client_key) || !nonblank8(draft.title) || !nonblank8(draft.module_id) || !["P0", "P1", "P2", "P3"].includes(draft.priority) || !nonblank8(draft.primary_test_point_id) || !Array.isArray(draft.steps) || draft.steps.length === 0 || !Array.isArray(draft.oracles) || draft.oracles.length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Draft is incomplete or duplicates a client key.");
-    seenClientKeys.add(draft.case_client_key);
+    if (!nonblank9(draft.case_client_key) || seenCaseClientKeys.has(draft.case_client_key) || !nonblank9(draft.title) || !nonblank9(draft.module_id) || !["P0", "P1", "P2", "P3"].includes(draft.priority) || !nonblank9(draft.primary_test_point_id) || !Array.isArray(draft.steps) || draft.steps.length === 0 || !Array.isArray(draft.case_step_semantic_bindings) || !Array.isArray(draft.domain_selections) || !Array.isArray(draft.oracles) || draft.oracles.length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Draft is incomplete, lacks its V5 extension, or duplicates a client key.");
+    seenCaseClientKeys.add(draft.case_client_key);
     const claimIds = unique(draft.claim_ids ?? [], "Case Claim IDs");
     const assessments = claimIds.map((claimId) => assessmentByClaim.get(claimId));
     if (assessments.some((assessment) => !assessment || assessment.support_review !== "supported")) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Case references unsupported or unknown business evidence.");
@@ -4138,7 +6294,15 @@ function compileV5CaseDocument(input) {
     });
     const status = deriveCaseStatus({ evidence_levels: assessments.map((assessment) => assessment.level), unresolved_gap_ids: gapIds, not_applicable_basis_levels: notApplicableLevels, exploratory_only: draft.exploratory_only === true });
     const stepKeys = unique(draft.steps.map((step) => step.step_client_key), "Case step client keys");
-    const oracleContext = { semanticRootDigest: input.semantic_root_digest, semanticRuleIndex: input.semantic_rule_index ?? { by_id: {} }, stepClientKeys: stepKeys, acceptedClaimIds: claimIds, oracleSemanticContractIds: draft.oracles.map((oracle) => oracle.oracle_semantic_contract_id), fieldCorrespondenceIds: records(input.semantic_audit?.field_correspondences).map((row) => row.mapping_id), permissionDecisionCells: records(input.permission_cells).filter((cell) => cell.permission_dimension === "decision").map((cell) => ({ matrix_id: cell.matrix_id, required_cell_key: cell.required_cell_key })) };
+    const acceptedContractRefs = new Set(records(input.semantic_audit?.permission_auxiliary_contracts).map((contract) => typedContractRefKey({ contract_id: contract.permission_auxiliary_contract_id, contract_kind: contract.payload?.contract_kind, semantic_root_digest: input.semantic_root_digest })));
+    const permissionCells = records(input.permission_cells).map((cell) => {
+      let formalOutcome;
+      if (cell.disposition === "formal" && cell.permission_dimension === "decision") formalOutcome = { permission_dimension: "decision", action_ref: cell.action_ref, expected: cell.expected };
+      else if (cell.disposition === "formal" && cell.permission_dimension === "denial_behavior") formalOutcome = { permission_dimension: "denial_behavior", decision_cell_key: cell.decision_cell_key, denial_contract_ref: cell.denial_contract_ref };
+      else if (cell.disposition === "formal" && cell.permission_dimension === "data_scope") formalOutcome = { permission_dimension: "data_scope", data_scope_contract_ref: cell.data_scope_contract_ref };
+      return { ...structuredClone(cell), ...formalOutcome ? { formal_outcome: formalOutcome } : {} };
+    });
+    const oracleContext = { semanticRootDigest: input.semantic_root_digest, semanticRuleIndex: input.semantic_rule_index ?? { by_id: {} }, stepClientKeys: stepKeys, acceptedClaimIds: claimIds, oracleSemanticContractIds: [...oracleContractById.keys()], fieldCorrespondenceIds: records(input.semantic_audit?.field_correspondences).map((row) => row.field_correspondence_id), permissionCells, acceptedContractRefs };
     const caseAnchorDigest = canonicalObjectDigest({
       module_id: draft.module_id,
       title: draft.title,
@@ -4146,21 +6310,31 @@ function compileV5CaseDocument(input) {
       business_preconditions: draft.business_preconditions,
       data_conditions: draft.data_conditions,
       steps: draft.steps.map((step) => ({ action: step.action, semantic_action_ref: step.semantic_action_ref, claim_ids: [...step.claim_ids].sort() })),
-      oracles: draft.oracles.map((oracle) => ({ oracle_semantic_contract_id: oracle.oracle_semantic_contract_id, observation_ref: oracle.observation_ref, assertion: oracle.assertion, evaluation_scope: oracle.evaluation_scope, observation_window: oracle.observation_window, claim_ids: [...oracle.claim_ids].sort() })),
-      population_scope: draft.population_scope,
       canonical_names: [...draft.canonical_names].sort(),
       claim_ids: claimIds,
       semantic_gap_ids: gapIds,
       semantic_status: status
     });
+    const bindings = records(draft.case_step_semantic_bindings);
+    if (bindings.length !== draft.steps.length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Case step semantic bindings must exactly cover all Case steps.");
+    for (const step of draft.steps) {
+      const matches = bindings.filter((binding) => exact7(binding, ["case_client_key", "step_client_key", "action_ref"]) && binding.case_client_key === draft.case_client_key && binding.step_client_key === step.step_client_key && canonicalV5Stringify(binding.action_ref) === canonicalV5Stringify(step.semantic_action_ref));
+      if (matches.length !== 1) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Each Case step needs one exact accepted semantic-action binding.");
+    }
+    const domainSelections = compileDomainSelections(draft, caseAnchorDigest, input, status);
     const steps = draft.steps.map((step, index) => {
-      if (!nonblank8(step.action) || !Array.isArray(step.claim_ids) || step.claim_ids.some((claimId) => !claimIds.includes(claimId))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case step action or Claim binding is invalid.");
+      if (!nonblank9(step.action) || !Array.isArray(step.claim_ids) || step.claim_ids.some((claimId) => !claimIds.includes(claimId))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case step action or Claim binding is invalid.");
       return { step_id: legacyStableId("STEP", { case_anchor_digest: caseAnchorDigest, sequence: index + 1, action: step.action, semantic_action_ref: step.semantic_action_ref }), step_client_key: step.step_client_key, sequence: index + 1, action: step.action, semantic_action_ref: structuredClone(step.semantic_action_ref), claim_ids: [...step.claim_ids].sort() };
     });
     const stepIdByKey = new Map(steps.map((step) => [step.step_client_key, step.step_id]));
     const oracles = draft.oracles.map((oracle) => {
       validateTypedOracle(oracle, oracleContext);
+      const semanticContract = oracleContractById.get(oracle.oracle_semantic_contract_id);
+      const semanticAssertion = structuredClone(oracle.assertion);
+      if (semanticAssertion.kind === "transition") delete semanticAssertion.trigger_step_client_key;
+      if (!semanticContract || canonicalV5Stringify(oracle.observation_ref) !== canonicalV5Stringify(semanticContract.observation_ref) || canonicalV5Stringify(semanticAssertion) !== canonicalV5Stringify(semanticContract.assertion) || canonicalV5Stringify(oracle.evaluation_scope) !== canonicalV5Stringify(semanticContract.evaluation_scope) || canonicalV5Stringify(oracle.observation_window) !== canonicalV5Stringify(semanticContract.observation_window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Case Oracle does not exactly project its accepted semantic contract.");
       return {
+        oracle_client_key: oracle.oracle_client_key,
         oracle_id: legacyStableId("ORACLE", { case_anchor_digest: caseAnchorDigest, oracle_semantic_contract_id: oracle.oracle_semantic_contract_id, observe_after_step_id: stepIdByKey.get(oracle.observe_after_step_client_key), observation_ref: oracle.observation_ref, assertion: oracle.assertion, evaluation_scope: oracle.evaluation_scope, observation_window: oracle.observation_window, claim_ids: [...oracle.claim_ids].sort() }),
         oracle_semantic_contract_id: oracle.oracle_semantic_contract_id,
         observe_after_step_id: stepIdByKey.get(oracle.observe_after_step_client_key),
@@ -4171,22 +6345,31 @@ function compileV5CaseDocument(input) {
         claim_ids: [...oracle.claim_ids].sort()
       };
     }).sort((left, right) => left.oracle_id.localeCompare(right.oracle_id));
+    const publicSteps = steps.map(({ step_client_key: ignored, ...step }) => step);
+    const publicOracles = oracles.map(({ oracle_client_key: ignored, ...oracle }) => oracle);
     const identity = {
       module_id: draft.module_id,
       primary_test_point_id: draft.primary_test_point_id,
       title: draft.title,
       business_preconditions: draft.business_preconditions,
       data_conditions: draft.data_conditions,
-      steps: steps.map(({ step_client_key: ignored, ...step }) => step),
-      oracles,
-      population_scope: draft.population_scope,
+      steps: publicSteps,
+      oracles: publicOracles,
       canonical_names: [...draft.canonical_names].sort(),
       claim_ids: claimIds,
       semantic_gap_ids: gapIds,
       semantic_status: status
     };
+    const caseId = legacyStableId("CASE", identity);
+    bindClientKey(draft.case_client_key, caseId);
+    for (const step of steps) bindClientKey(step.step_client_key, step.step_id);
+    for (const oracle of oracles) bindClientKey(oracle.oracle_client_key, oracle.oracle_id);
+    const publicDomainSelections = domainSelections.map(({ selection_client_key: clientKey, case_client_key: ignoredCaseKey, ...selection }) => {
+      bindClientKey(clientKey, selection.domain_selection_id);
+      return { ...selection, case_id: caseId };
+    });
     return {
-      case_id: legacyStableId("CASE", identity),
+      case_id: caseId,
       title: draft.title,
       module_id: draft.module_id,
       priority: draft.priority,
@@ -4194,12 +6377,12 @@ function compileV5CaseDocument(input) {
       semantic_status: status,
       business_preconditions: structuredClone(draft.business_preconditions),
       data_conditions: structuredClone(draft.data_conditions),
-      steps,
-      oracles,
-      population_scope: structuredClone(draft.population_scope),
+      steps: publicSteps,
+      oracles: publicOracles,
       canonical_names: unique(draft.canonical_names, "Canonical names"),
       claim_ids: claimIds,
       semantic_gap_ids: gapIds,
+      domain_selections: publicDomainSelections,
       ...status === "NotApplicable" ? { not_applicable_basis: structuredClone(draft.not_applicable_basis) } : {},
       ...status === "Exploratory" ? { observation_intent: draft.observation_intent } : {}
     };
@@ -4207,6 +6390,7 @@ function compileV5CaseDocument(input) {
   if (new Set(cases.map((current) => current.case_id)).size !== cases.length) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Derived Case identities collide.");
   const classificationCounts = { Blocked: 0, Conditional: 0, Exploratory: 0, Grounded: 0, NotApplicable: 0 };
   for (const current of cases) classificationCounts[current.semantic_status] += 1;
+  const domainCoverage = deriveDomainCoverage(input, cases);
   const manifestDigest = canonicalObjectDigest({ schema_version: "5.0.0", case_document_lineage_id: input.case_document_lineage_id, semantic_root_digest: input.semantic_root_digest, case_ids: cases.map((current) => current.case_id), formal_test_point_ids: [...input.formal_test_point_ids ?? []].sort() });
   const payload = {
     schema_version: "5.0.0",
@@ -4218,23 +6402,31 @@ function compileV5CaseDocument(input) {
     manifest_digest: manifestDigest,
     cases,
     classification_counts: classificationCounts,
-    coverage: deriveCoverage(input, cases),
+    coverage: deriveCoverage(input, cases, domainCoverage),
     permission_coverage: derivePermissionCoverage(records(input.permission_cells)),
+    semantic_partition_coverage: domainCoverage.semanticPartitionCoverage,
+    value_instance_coverage: domainCoverage.valueInstanceCoverage,
     risk_ledger: structuredClone(input.risk_ledger ?? { reviewed_cell_count: 0, items: [] }),
     semantic_audit: structuredClone(input.semantic_audit ?? { value_states: [], field_correspondences: [], domains: [], populations: [] }),
     provenance: { output_role: "downstream_only", may_supply_upstream_evidence: false, semantic_root_digest: input.semantic_root_digest }
   };
-  return { ...payload, bundle_digest: canonicalObjectDigest(payload) };
+  return {
+    document: { ...payload, bundle_digest: canonicalObjectDigest(payload) },
+    client_key_bindings: clientKeyBindings.sort((left, right) => left.client_key.localeCompare(right.client_key))
+  };
+}
+function compileV5CaseDocumentTransaction(input) {
+  return compileV5CaseDocumentBundle(input);
 }
 function validateV5CaseDocument(document) {
-  if (!object7(document) || document.schema_version !== "5.0.0" || document.compiler_version !== "0.6.0" || document.delivery_intent !== "case_document" || !Array.isArray(document.cases) || document.provenance?.output_role !== "downstream_only") throw new V5ProtocolError("CANONICAL_RENDER_MISMATCH", "Canonical V5 Case Document shape is invalid.");
+  if (!object8(document) || document.schema_version !== "5.0.0" || document.compiler_version !== "0.6.0" || document.delivery_intent !== "case_document" || !Array.isArray(document.cases) || document.provenance?.output_role !== "downstream_only") throw new V5ProtocolError("CANONICAL_RENDER_MISMATCH", "Canonical V5 Case Document shape is invalid.");
   const { bundle_digest: declared, ...payload } = document;
   if (canonicalObjectDigest(payload) !== declared) throw new V5ProtocolError("CANONICAL_RENDER_MISMATCH", "Canonical V5 Case Document digest is invalid.");
   return structuredClone(document);
 }
 function projectCompatibilityExecutionPlan(document, metadata) {
   validateV5CaseDocument(document);
-  if (!nonblank8(metadata.run_id) || !Number.isSafeInteger(metadata.revision) || metadata.revision < 0) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Execution Plan requires an immutable Case Document revision.");
+  if (!nonblank9(metadata.run_id) || !Number.isSafeInteger(metadata.revision) || metadata.revision < 0) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Execution Plan requires an immutable Case Document revision.");
   const operationKinds = ["confirm_execution_plan", "pause_execution", "provide_capability_proof", "set_execution_disposition"];
   const items = document.cases.map((current) => ({ case_id: current.case_id, title: current.title, semantic_status: current.semantic_status, execution_disposition: "pending", available_actions: current.semantic_status === "Grounded" ? ["provide_capability_proof", "set_execution_disposition"] : current.semantic_status === "NotApplicable" ? [] : ["set_execution_disposition"] }));
   const payload = {
@@ -4258,7 +6450,7 @@ function renderV5Json(document) {
 // src/v5/render-markdown.mjs
 var SCOPE_LABELS = (
   /** @type {Readonly<Record<string,string>>} */
-  Object.freeze({ single_item: "\u5355\u9879", visible_region: "\u53EF\u89C1\u533A", current_page: "\u5F53\u524D\u9875", current_response: "\u5F53\u524D\u54CD\u5E94", all_pages: "\u5168\u5206\u9875", full_dataset: "\u5B8C\u6574\u5FEB\u7167" })
+  Object.freeze({ single: "\u5355\u9879", forall: "\u5168\u79F0\u8303\u56F4" })
 );
 function assertionText(assertion) {
   if (assertion.kind === "exact_text" || assertion.kind === "semantic_text") return `${assertion.kind}: ${assertion.expected_text}`;
@@ -4305,7 +6497,8 @@ function renderV5Markdown(document) {
     lines.push(`- Module: ${current.module_id}`);
     lines.push(`- Primary Test Point: ${current.primary_test_point_id}`);
     lines.push(`- Canonical names: ${current.canonical_names.join("\u3001")}`);
-    lines.push(`- Scope: ${scopeText(current.population_scope)}`);
+    const oracleScopes = [...new Set(current.oracles.map((oracle) => scopeText(oracle.evaluation_scope)))];
+    lines.push(`- Scope: ${oracleScopes.join("\u3001")}`);
     if (current.semantic_gap_ids.length > 0) lines.push(`- Blocking gaps: ${current.semantic_gap_ids.join("\u3001")}`);
     if (current.observation_intent) lines.push(`- Observation intent: ${current.observation_intent}`);
     lines.push("", "Steps:");
@@ -4344,7 +6537,7 @@ function renderV5Csv(document) {
         current.title,
         current.module_id,
         current.primary_test_point_id,
-        current.population_scope.kind,
+        [...new Set(current.oracles.map((item) => item.evaluation_scope.kind))].join("|"),
         current.canonical_names.join("|"),
         step.sequence,
         step.step_id,
@@ -4361,6 +6554,7 @@ function renderV5Csv(document) {
 
 // src/v5/runtime.mjs
 var contracts = generateV5Contracts();
+var interfaceSchemas = generateV5InterfaceSchemas(contracts);
 var fsmByCell = new Map(contracts.fsmRegistry.cells.map((cell) => [cell.cell_id, cell]));
 var replyRows = contracts.replyContracts.rows;
 function plainObject2(value) {
@@ -4370,6 +6564,57 @@ function hasExactKeys(value, expected) {
   const actual = Object.keys(value).sort();
   const sortedExpected = [...expected].sort();
   return actual.length === sortedExpected.length && actual.every((key, index) => key === sortedExpected[index]);
+}
+function validatePublicRequestSchema(request, kind) {
+  const schema = kind === "create" ? interfaceSchemas.createRequest : interfaceSchemas.advanceRequest;
+  const issues = validateAgainstSchema(request, schema);
+  if (issues.length === 0) return;
+  throw new V5ProtocolError(kind === "create" ? "RUN_ARGUMENT_INVALID" : "SCHEMA_VALIDATION_FAILED", `Public ${kind} request violates its closed Schema at ${issues[0].path}.`);
+}
+var COMPILER_OWNED_ARTIFACT_FIELDS = /* @__PURE__ */ new Set([
+  "schema_version",
+  "compiler_version",
+  "accepted_revision",
+  "canonical_payload_digest",
+  "envelope_digest",
+  "payload_producer",
+  "envelope_producer",
+  "producer_stage",
+  "producer_run_id",
+  "case_document_lineage_id",
+  "input_digests",
+  "run_id",
+  "checkpoint_digest",
+  "selector_snapshot_digest",
+  "commit_receipt",
+  "claim_assessments",
+  "accepted_gap_ids",
+  "formal_test_point_ids",
+  "semantic_partitions",
+  "value_instances",
+  "permission_cells",
+  "risk_ledger",
+  "semantic_audit",
+  "provenance_graph"
+]);
+function validateAgentArtifactRoot(artifact, allowed) {
+  const extra = Object.keys(artifact).filter((key) => !allowed.includes(key));
+  if (extra.some((key) => COMPILER_OWNED_ARTIFACT_FIELDS.has(key))) throw new V5ProtocolError("COMPILER_OWNED_FIELD_SUBMITTED", "Agent artifact contains a Compiler-owned envelope or state field.");
+  if (extra.length > 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Agent artifact contains fields outside its closed branch.");
+}
+function validateAcceptedClaimReferences(value, acceptedClaimIds) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => validateAcceptedClaimReferences(item, acceptedClaimIds));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = (
+    /** @type {Record<string,any>} */
+    value
+  );
+  if (record.kind === "claim" && typeof record.claim_id === "string" && !acceptedClaimIds.has(record.claim_id)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Downstream artifacts must reference accepted Compiler-owned Claim IDs, not batch-local client keys.");
+  if (typeof record.formal_claim_id === "string" && !acceptedClaimIds.has(record.formal_claim_id)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Formal risk requirements must reference an accepted Compiler-owned Claim ID.");
+  Object.values(record).forEach((item) => validateAcceptedClaimReferences(item, acceptedClaimIds));
 }
 function preRunReply(code, message) {
   const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === code && candidate.source.response_context === "pre_run");
@@ -4461,153 +6706,18 @@ async function persistRunRejection(current, request, code, message) {
   const internalReceipt = { kind: "operational_commit", committed_action_digest: actionDigestV5("advance", request.action), semantic_revision_delta: 0, client_key_bindings: [], operational_effect: "idempotency_only" };
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: current.checkpoint, selectorSidecar: current.selectorSidecar, reply, commitReceipt: internalReceipt });
 }
-var BEHAVIOR_GAP_ERROR_KIND = Object.freeze({
-  FIELD_CORRESPONDENCE_REQUIRED: { contractKind: "field_correspondence", collection: "field_correspondences", missingSemantics: "null_policy" },
-  DOMAIN_CONTRACT_REQUIRED: { contractKind: "domain", collection: "domain_contracts", missingSemantics: "domain_boundary" },
-  POPULATION_CONTRACT_REQUIRED: { contractKind: "population", collection: "population_contracts", missingSemantics: "population_scope" }
+var BEHAVIOR_GAP_DIAGNOSTIC = Object.freeze({
+  null_policy: "FIELD_CORRESPONDENCE_REQUIRED",
+  domain_boundary: "DOMAIN_CONTRACT_REQUIRED",
+  population_scope: "POPULATION_CONTRACT_REQUIRED",
+  permission_outcome: "PERMISSION_OUTCOME_UNRESOLVED"
 });
-function automaticBehaviorGapAnswerContract(missingSemantics, requirement, seed) {
-  const allowedControls2 = ["answer", "defer", "unknown", "close_for_delivery"];
-  if (missingSemantics === "null_policy") {
-    const catalog = contracts.answerConstraintRegistry.enum_catalogs.find((row) => row.catalog_id === "null_policy");
-    if (!catalog) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Null-policy answer catalog is missing.");
-    return { answer_mode: "typed_answer", allowed_controls: allowedControls2, value_schema: { kind: "enum", allowed_values: structuredClone(catalog.members) } };
-  }
-  if (missingSemantics === "domain_boundary") return { answer_mode: "typed_answer", allowed_controls: allowedControls2, value_schema: { kind: "text", min_scalars: 1, max_scalars: 1024, ambiguity_guard_ref: "answer.no-unresolved-vague-token.v1" } };
-  if (missingSemantics === "population_scope") return {
-    answer_mode: "typed_answer",
-    allowed_controls: allowedControls2,
-    value_schema: {
-      kind: "population_scope",
-      existing_candidates: structuredClone(requirement.population_gap_catalog?.scope_candidates ?? []),
-      allow_typed_creation: true,
-      creation_constraints: { allowed_scope_kinds: ["single_item", "visible_region", "current_page", "current_response", "all_pages", "full_dataset"], semantic_root_digest: seed.semantic_root_digest }
-    }
-  };
-  throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `No V1 answer derivation exists for ${missingSemantics}.`);
-}
-async function persistBehaviorContractGap(current, request, error) {
-  const profile = BEHAVIOR_GAP_ERROR_KIND[error.code];
-  if (!profile || current.checkpoint.fsm_cell_id !== "cd.active.case.behavior") return persistRunRejection(current, request, error.code, error.message);
-  const submitted = structuredClone(request.action.artifact);
-  const priorSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, "seed_digest");
-  const offending = submitted[profile.collection]?.[0] ?? {};
-  const fallbackBasis = priorSeed.required_contracts[0]?.basis ?? [{ kind: "claim", claim_id: "compiler-detected-behavior-gap" }];
-  const basis = Array.isArray(offending.basis) && offending.basis.length > 0 ? offending.basis : Array.isArray(offending.domain?.closed_world_basis) && offending.domain.closed_world_basis.length > 0 ? offending.domain.closed_world_basis : fallbackBasis;
-  let requirement = priorSeed.required_contracts.find((row2) => row2.contract_kind === profile.contractKind);
-  let seed = priorSeed;
-  if (!requirement) {
-    const subjectRef = offending.subject_ref ?? offending.left?.logical_surface_ref ?? offending.population_contract_client_key ?? priorSeed.required_contracts[0]?.subject_ref ?? "compiler-detected-subject";
-    const intentRef = offending.intent_ref ?? offending.mapping_client_key ?? offending.domain_client_key ?? offending.population_contract_client_key ?? `${profile.contractKind}-clarification`;
-    const synthetic = { contract_kind: profile.contractKind, subject_ref: subjectRef, intent_ref: intentRef, basis, ...profile.contractKind === "population" ? { population_gap_catalog: { scope_candidates: [], proof_candidates: [] } } : {} };
-    seed = deriveBehaviorContractSeed(current.checkpoint.semantic_root_digest, {
-      semanticRuleIndex: priorSeed.semantic_rule_index,
-      riskModuleIds: priorSeed.risk_review_module_ids,
-      requirements: [...priorSeed.required_contracts, synthetic]
-    });
-    requirement = seed.required_contracts.find((row2) => row2.contract_kind === profile.contractKind && row2.subject_ref === subjectRef && row2.intent_ref === intentRef);
-  }
-  if (!requirement) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Unable to preserve the ${profile.contractKind} gap requirement.`);
-  if (profile.contractKind === "field_correspondence") submitted.field_correspondences = [];
-  if (profile.contractKind === "domain") submitted.domain_contracts = [];
-  if (profile.contractKind === "population") {
-    submitted.population_contracts = [];
-    submitted.population_proofs = [];
-  }
-  const gapClientKey = `compiler-gap-${profile.contractKind}`;
-  const proposal = {
-    semantic_gap_client_key: gapClientKey,
-    target: { kind: "behavior_contract", required_contract_key: requirement.required_contract_key },
-    missing_semantics: profile.missingSemantics,
-    question: profile.contractKind === "field_correspondence" ? "Which null policy makes this field correspondence executable?" : profile.contractKind === "domain" ? "What exact universe or partition boundary closes this domain?" : "What exact population scope must this requirement quantify?",
-    answer_contract: automaticBehaviorGapAnswerContract(profile.missingSemantics, requirement, seed),
-    basis,
-    why_needed: error.message,
-    question_impact_summary: { affected_case_keys: [], impact_kinds: [profile.missingSemantics] }
-  };
-  submitted.behavior_contract_seed_digest = seed.seed_digest;
-  submitted.semantic_gap_proposals = [...submitted.semantic_gap_proposals, proposal];
-  submitted.behavior_contract_reviews = submitted.behavior_contract_reviews.filter((review) => review.required_contract_key !== requirement.required_contract_key).map((review) => ({ ...review, seed_digest: seed.seed_digest }));
-  submitted.behavior_contract_reviews.push({ seed_digest: seed.seed_digest, required_contract_key: requirement.required_contract_key, disposition: { kind: "semantic_gap", gap_ref: { kind: "same_behavior_batch", semantic_gap_client_key: gapClientKey } } });
-  submitted.behavior_contract_reviews.sort((left, right) => left.required_contract_key.localeCompare(right.required_contract_key));
-  validateBehaviorContractReviews(seed, submitted.behavior_contract_reviews, submitted);
-  const compiledGaps = compileBehaviorSemanticGaps(current.checkpoint.semantic_root_digest, seed, submitted.semantic_gap_proposals, submitted.behavior_contract_reviews);
-  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, submitted.risk_reviews);
-  const envelope = acceptArtifactEnvelope({ artifactKind: "behavior_views", payload: submitted, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
-  const testObligations = sealV5Record({ kind: "test_obligations", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: [...new Set(submitted.formal_test_point_ids)].sort(), behavior_artifact_digest: envelope.envelope_digest }, "obligations_digest");
-  const gaps = clarificationGapsFromAcceptedBehavior(compiledGaps.accepted_gaps);
-  const inventory = sealV5Record({ kind: "clarification_gap_inventory", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, gaps }, "gaps_digest");
-  const stateSet = createQuestionPartStateSet(current.identity.case_document_lineage_id, current.checkpoint.semantic_root_digest, gaps);
-  const presentation = createClarificationPresentation(stateSet, current.checkpoint.current_revision + 1, gaps);
-  const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === error.code && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
-  if (!row || row.exact_commit.kind !== "artifact_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Behavior-gap reply contract is missing for ${error.code}.`);
-  const checkpointBase = {
-    ...current.checkpoint,
-    current_revision: current.checkpoint.current_revision + 1,
-    fsm_cell_id: "cd.active.case.resolve",
-    stage: row.exact_stage,
-    obligation: row.exact_obligation,
-    behavior_contract_seed_digest: seed.seed_digest,
-    accepted_artifact_digests: [.../* @__PURE__ */ new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
-    behavior_views_artifact_digest: envelope.envelope_digest,
-    test_obligations_digest: testObligations.obligations_digest,
-    risk_ledger_digest: canonicalObjectDigest(riskLedger),
-    clarification_gaps_digest: inventory.gaps_digest,
-    question_part_state_set_digest: stateSet.state_set_digest,
-    presentation_digest: presentation.presentation_digest
-  };
-  delete checkpointBase.checkpoint_digest;
-  const context = {
-    ...current.reply.work_packet.context,
-    behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
-    test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: testObligations }
-  };
-  const workPacket = { kind: "clarification_work", context, presentation };
-  const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(checkpointBase.fsm_cell_id, workPacket));
-  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigestV5("advance", request.action), semantic_revision_delta: 1, client_key_bindings: compiledGaps.client_key_bindings };
-  const reply = {
-    kind: "run_reply",
-    schema_version: V5_SCHEMA_VERSION,
-    projection_kind: row.exact_projection_kind,
-    reply_contract_id: row.reply_contract_id,
-    reply_status: row.exact_reply_status,
-    run_id: current.identity.run_id,
-    run_directory: current.layout.root,
-    case_document_lineage_id: current.identity.case_document_lineage_id,
-    delivery_intent: current.identity.delivery_intent,
-    run_lifecycle: "active",
-    stage: row.exact_stage,
-    obligation: row.exact_obligation,
-    current_revision: selectorState.checkpoint.current_revision,
-    checkpoint_digest: selectorState.checkpoint.checkpoint_digest,
-    selector_snapshot_digest: selectorState.sidecar.selector_sidecar_digest,
-    diagnostics: [{ code: error.code, affected_refs: [], message: error.message }],
-    available_actions: selectorState.selectors,
-    commit_receipt: commitReceipt,
-    work_packet: workPacket
-  };
-  return commitNormalRunTransaction(current.layout.root, request, {
-    checkpoint: selectorState.checkpoint,
-    selectorSidecar: selectorState.sidecar,
-    reply,
-    commitReceipt,
-    acceptedArtifacts: [{ record: envelope, digestField: "envelope_digest" }],
-    compilerStateRecords: [
-      ...seed.seed_digest === priorSeed.seed_digest ? [] : [{ record: seed, digestField: "seed_digest" }],
-      { record: testObligations, digestField: "obligations_digest" },
-      { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
-      { record: inventory, digestField: "gaps_digest" },
-      { record: stateSet, semanticDigest: stateSet.state_set_digest },
-      { record: presentation, semanticDigest: presentation.presentation_digest },
-      ...compiledGaps.accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
-    ]
-  });
-}
+var BEHAVIOR_GAP_COMMIT_ERRORS = new Set(Object.values(BEHAVIOR_GAP_DIAGNOSTIC));
 async function persistOracleReroute(current, request, message) {
   const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "ORACLE_SEMANTICS_REQUIRED" && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
   if (!row || row.exact_commit.kind !== "operational_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Oracle reroute reply contract is unavailable.");
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, "seed_digest");
-  const workPacket = { kind: "behavior_work", context: current.reply.work_packet.context, permission_matrix_worklists: [], behavior_contract_worklist: seed };
+  const workPacket = { kind: "behavior_work", context: current.reply.work_packet.context, permission_matrix_worklists: await permissionMatricesForCurrent(current, current.checkpoint.semantic_root_digest), behavior_contract_worklist: seed };
   const checkpointBase = { ...current.checkpoint, fsm_cell_id: "cd.active.case.behavior", stage: row.exact_stage, obligation: row.exact_obligation };
   delete checkpointBase.checkpoint_digest;
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(checkpointBase.fsm_cell_id, workPacket));
@@ -4636,6 +6746,8 @@ function loadActionKeyring() {
 }
 function validateCreateRequest(request) {
   if (!plainObject2(request) || typeof request.idempotency_key !== "string" || request.idempotency_key.length === 0) throw new V5ProtocolError("RUN_ARGUMENT_INVALID", "Create request is invalid.");
+  if (Object.hasOwn(request, "schema_version") && request.schema_version !== V5_SCHEMA_VERSION) throw new V5ProtocolError("UNSUPPORTED_SCHEMA_VERSION", "Only Schema 5.0.0 create requests are supported.");
+  validatePublicRequestSchema(request, "create");
   if (request.delivery_intent === "case_document") {
     if (!hasExactKeys(request, ["idempotency_key", "delivery_intent", "source_bootstrap"])) throw new V5ProtocolError("RUN_ARGUMENT_INVALID", "Case create request has extra or missing fields.");
     return { kind: "case_document", sourceBootstrap: validateSourceBootstrap(request.source_bootstrap) };
@@ -4834,14 +6946,18 @@ async function createV5RunDirectory(catalogRoot, requestValue) {
       schema_version: V5_SCHEMA_VERSION,
       compiler_version: V5_COMPILER_VERSION,
       run_id: runId,
+      run_directory_key: runId,
       delivery_intent: "case_document",
       case_document_lineage_id: lineageId,
-      source_bootstrap_digest: (
-        /** @type {Record<string, any>} */
-        sourceState.ledger.source_bootstrap_digest
-      ),
-      source_acquisition_policy_digest: contracts.sourceAcquisitionPolicy.policy_digest,
-      canonical_create_action_digest: createActionDigest
+      canonical_create_request_digest: canonicalObjectDigest(request),
+      creation_binding: {
+        kind: "case_document",
+        source_bootstrap_digest: (
+          /** @type {Record<string, any>} */
+          sourceState.ledger.source_bootstrap_digest
+        ),
+        source_acquisition_policy_digest: contracts.sourceAcquisitionPolicy.policy_digest
+      }
     };
     const committed = await commitCatalogGenesis(catalog.root, {
       identity,
@@ -4862,7 +6978,12 @@ async function createV5RunDirectory(catalogRoot, requestValue) {
   }
 }
 async function createExecutionRun(catalog, request, caseDocumentRef) {
-  const sourceRun = await readVerifiedRun(path5.join(catalog.runsDirectory, caseDocumentRef.run_id));
+  let sourceRun;
+  try {
+    sourceRun = await readVerifiedRun(path5.join(catalog.runsDirectory, caseDocumentRef.run_id));
+  } catch {
+    throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Case Document reference does not resolve to a verified V5 delivery.");
+  }
   if (sourceRun.identity.schema_version !== V5_SCHEMA_VERSION || sourceRun.identity.delivery_intent !== "case_document" || sourceRun.checkpoint.run_lifecycle !== "finished" || canonicalV5Stringify(sourceRun.checkpoint.case_document_ref) !== canonicalV5Stringify(caseDocumentRef) || typeof sourceRun.checkpoint.execution_plan_digest !== "string") throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Case Document reference is not a verified immutable V5 delivery.");
   const plan = await readSemanticV5Record(sourceRun.layout.compilerState, sourceRun.checkpoint.execution_plan_digest);
   const projection = createV5ExecutionProjection(plan);
@@ -4898,10 +7019,11 @@ async function createExecutionRun(catalog, request, caseDocumentRef) {
     schema_version: V5_SCHEMA_VERSION,
     compiler_version: V5_COMPILER_VERSION,
     run_id: runId,
+    run_directory_key: runId,
     delivery_intent: "execution_plan",
     case_document_lineage_id: caseDocumentRef.case_document_lineage_id,
-    case_document_ref: caseDocumentRef,
-    canonical_create_action_digest: createActionDigest
+    canonical_create_request_digest: canonicalObjectDigest(request),
+    creation_binding: { kind: "execution_plan", case_document_ref: caseDocumentRef }
   };
   return (await commitCatalogGenesis(catalog.root, {
     identity,
@@ -4914,7 +7036,12 @@ async function createExecutionRun(catalog, request, caseDocumentRef) {
   })).reply;
 }
 async function createResumedRun(catalog, request, parentRunId) {
-  const parent = await readVerifiedRun(path5.join(catalog.runsDirectory, parentRunId));
+  let parent;
+  try {
+    parent = await readVerifiedRun(path5.join(catalog.runsDirectory, parentRunId));
+  } catch {
+    throw new V5ProtocolError("RESUME_PARENT_INVALID", "Parent run does not resolve to a verified cancelled V5 run.");
+  }
   if (parent.identity.schema_version !== V5_SCHEMA_VERSION) throw new V5ProtocolError("UNSUPPORTED_SCHEMA_VERSION", "Only V5 parents may be resumed.");
   if (parent.checkpoint.run_lifecycle !== "cancelled" || !parent.operationalEvent || !parent.transaction.previous_run_transaction_digest) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Parent does not have a verified cancellation event.");
   const priorTransaction = await readSealedV5Record(parent.layout.transactions, parent.transaction.previous_run_transaction_digest, "transaction_digest");
@@ -4989,10 +7116,11 @@ async function createResumedRun(catalog, request, parentRunId) {
     schema_version: V5_SCHEMA_VERSION,
     compiler_version: V5_COMPILER_VERSION,
     run_id: runId,
+    run_directory_key: runId,
     delivery_intent: parent.identity.delivery_intent,
     case_document_lineage_id: parent.identity.case_document_lineage_id,
-    resume_lineage: checkpointBase.resume_lineage,
-    canonical_create_action_digest: createActionDigest
+    canonical_create_request_digest: canonicalObjectDigest(request),
+    creation_binding: { kind: "resume_cancelled", ...checkpointBase.resume_lineage }
   };
   return (await commitCatalogGenesis(catalog.root, {
     identity,
@@ -5015,7 +7143,7 @@ async function advanceV5Run(runDirectory, requestValue) {
       if (!plainObject2(requestValue) || !hasExactKeys(requestValue, ["idempotency_key", "action"]) || typeof requestValue.idempotency_key !== "string" || requestValue.idempotency_key.length === 0 || !plainObject2(requestValue.action)) return preRunReply("ACCEPTED_STATE_INTEGRITY_FAILURE", error.message);
       try {
         const layout = await resolveRunLayout(runDirectory);
-        const identity = (await readFixedSealedRecord(layout.identity, "identity_digest")).record;
+        const identity = (await readFixedSealedRecord(layout.identity, "run_identity_digest")).record;
         const trigger = { kind: "no_verified_fsm_cell", delivery_intent: identity.delivery_intent };
         const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "ACCEPTED_STATE_INTEGRITY_FAILURE" && candidate.source.response_context === "run_mutation" && candidate.source.response_variant_id === "mutation_quarantine" && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(trigger));
         if (!row) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Integrity quarantine reply contract is unavailable.");
@@ -5078,7 +7206,7 @@ async function advanceV5Run(runDirectory, requestValue) {
     if (error.code === "ACTION_TOKEN_KEY_UNAVAILABLE") throw error;
     if (error.code === "IDEMPOTENCY_CONFLICT") return runRejection(current, error.code, error.message, current.checkpoint.run_lifecycle === "active" ? "persisted_run_state" : "read_only_terminal_rejection");
     if (error.code === "ORACLE_SEMANTICS_REQUIRED" && current.checkpoint.fsm_cell_id === "cd.active.case.drafts") return persistOracleReroute(current, request, error.message);
-    if (Object.hasOwn(BEHAVIOR_GAP_ERROR_KIND, error.code) && current.checkpoint.fsm_cell_id === "cd.active.case.behavior") return persistBehaviorContractGap(current, request, error);
+    if (current.checkpoint.fsm_cell_id === "cd.active.case.behavior" && BEHAVIOR_GAP_COMMIT_ERRORS.has(error.code)) return persistRunRejection(current, request, "SCHEMA_VALIDATION_FAILED", error.message);
     return persistRunRejection(current, request, error.code, error.message);
   }
 }
@@ -5087,6 +7215,7 @@ async function advanceExecution(current, request, templateId) {
   if (!hasExactKeys(action, ["kind", "action_token", "operation"]) || action.kind !== "advance_execution_plan" || !plainObject2(action.operation)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Execution action is not a closed operation wrapper.");
   const capability = { kind: "advance_execution_plan", allowed_operation_kinds: templateId === "execution.advance_closure" ? ["provide_capability_proof", "set_execution_disposition"] : ["pause_execution", "confirm_execution_plan"] };
   validateAdvertisedAction(current, action, capability);
+  validatePublicRequestSchema(request, "advance");
   const advanced = await advanceV5ExecutionProjection(current.reply.work_packet.execution_projection, action.operation);
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: templateId, result_key: advanced.result_key });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
@@ -5119,6 +7248,7 @@ async function clarificationState(current) {
 async function advanceClarificationPreview(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ["kind", "action_token", "presentation_id", "semantic_root_digest", "preview_intent", "raw_response", "proposed_units"]) || !["apply_units", "discard_pending"].includes(action.preview_intent) || typeof action.raw_response !== "string" || !Array.isArray(action.proposed_units) || action.preview_intent === "discard_pending" && action.proposed_units.length !== 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Clarification preview action is invalid.");
+  if (action.presentation_id !== current.reply.work_packet.presentation.presentation_id || action.semantic_root_digest !== current.reply.work_packet.presentation.semantic_root_digest) throw new V5ProtocolError("CLARIFICATION_PREVIEW_STALE", "Clarification preview must bind the current presentation and semantic root.");
   validateAdvertisedAction(current, action, { kind: "preview_clarification_response", presentation_id: current.reply.work_packet.presentation.presentation_id, semantic_root_digest: current.reply.work_packet.presentation.semantic_root_digest });
   const { stateSet, presentation, gaps } = await clarificationState(current);
   const fromConfirm = current.checkpoint.fsm_cell_id.endsWith(".confirm");
@@ -5147,6 +7277,7 @@ async function advanceClarificationPreview(current, request) {
     compilerStateRecords = [{ record: result.preview, semanticDigest: result.preview.preview_digest }, { record: pending, digestField: "pending_record_digest" }];
     workPacket = { kind: "clarification_confirmation_work", context: current.reply.work_packet.context, presentation, clarification_preview: result.preview };
   }
+  validatePublicRequestSchema(request, "advance");
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: "clarification.preview", result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   delete checkpointBase.checkpoint_digest;
@@ -5157,16 +7288,25 @@ async function advanceClarificationPreview(current, request) {
   const actionDigest = actionDigestV5("advance", action);
   const commitReceipt = { kind: "operational_commit", committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: outcome.commit_projection.effect };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  if (resultKey === "semantic_change") {
+    const confirmationRow = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "CLARIFICATION_CONFIRMATION_REQUIRED" && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id && candidate.exact_projection_kind === "persisted_run_state");
+    if (!confirmationRow) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Clarification confirmation reply contract is unavailable.");
+    reply.reply_contract_id = confirmationRow.reply_contract_id;
+    reply.reply_status = confirmationRow.exact_reply_status;
+    reply.diagnostics = [{ code: "CLARIFICATION_CONFIRMATION_REQUIRED", affected_refs: [], message: "Preview is pending explicit confirmation." }];
+  }
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, compilerStateRecords });
 }
 async function advanceClarificationCommit(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ["kind", "action_token", "presentation_id", "semantic_root_digest", "preview_digest", "raw_confirmation", "confirmation_range"]) || typeof action.raw_confirmation !== "string" || !plainObject2(action.confirmation_range)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Clarification commit action is invalid.");
+  if (action.presentation_id !== current.reply.work_packet.presentation.presentation_id || action.semantic_root_digest !== current.reply.work_packet.presentation.semantic_root_digest || action.preview_digest !== current.reply.work_packet.clarification_preview.preview_digest) throw new V5ProtocolError("CLARIFICATION_PREVIEW_STALE", "Clarification commit must bind the current presentation, semantic root, and preview.");
   validateAdvertisedAction(current, action, { kind: "commit_clarification_response", presentation_id: current.reply.work_packet.presentation.presentation_id, semantic_root_digest: current.reply.work_packet.presentation.semantic_root_digest, preview_digest: current.reply.work_packet.clarification_preview.preview_digest });
   const { stateSet, presentation, gaps } = await clarificationState(current);
   const preview = await readSemanticV5Record(current.layout.compilerState, current.checkpoint.preview_digest);
   const pending = await readSealedV5Record(current.layout.compilerState, current.checkpoint.pending_clarification_digest, "pending_record_digest");
   const committed = commitClarificationResponse({ pending, preview, state_set: stateSet, raw_confirmation: action.raw_confirmation, confirmation_range: action.confirmation_range, control_registry: contracts.clarificationControlRegistry, current: { semantic_root_digest: current.checkpoint.semantic_root_digest, presentation_digest: current.checkpoint.presentation_digest, question_part_state_set_digest: current.checkpoint.question_part_state_set_digest, source_revision: current.checkpoint.current_revision, checkpoint_digest: pending.base_checkpoint_digest } });
+  validatePublicRequestSchema(request, "advance");
   const unresolved = committed.next_state_set.parts.some((part) => ["presented", "deferred_by_user", "unknown_by_user"].includes(part.current_state));
   const invalidated = new Set(preview.deterministic_projection.invalidated_artifact_ids ?? []);
   const requirementsStage = current.checkpoint.stage === "requirements_analysis";
@@ -5189,7 +7329,7 @@ async function advanceClarificationCommit(current, request) {
     workPacket = { kind: "semantic_review_work", context: current.reply.work_packet.context, semantic_review_seed: seed };
   } else if (targetCell.work_packet_kind === "behavior_work") {
     const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, "seed_digest");
-    workPacket = { kind: "behavior_work", context: current.reply.work_packet.context, permission_matrix_worklists: [], behavior_contract_worklist: seed };
+    workPacket = { kind: "behavior_work", context: current.reply.work_packet.context, permission_matrix_worklists: await permissionMatricesForCurrent(current, committed.impact.after_graph_digest), behavior_contract_worklist: seed };
   } else if (targetCell.work_packet_kind === "case_work") workPacket = { kind: "case_work", context: current.reply.work_packet.context };
   else throw new V5ProtocolError("CLARIFICATION_IMPACT_MISMATCH", "Clarification cannot terminalize without a compiled delivery.");
   const checkpointBase = {
@@ -5225,13 +7365,89 @@ async function acceptedSourceContext(current) {
   }
   return { accepted_source_state_digest: current.checkpoint.accepted_source_state_digest, source_packs: sourcePacks.sort((left, right) => left.artifact_digest.localeCompare(right.artifact_digest)) };
 }
+async function behaviorEvidenceContext(current, semantics) {
+  const evidenceLevels = new Map((semantics.claims ?? []).map((claim) => [claim.claim_id, "E2"]));
+  for (const digest4 of current.checkpoint.accepted_decision_digests ?? []) {
+    const decision = await readSemanticV5Record(current.layout.compilerState, digest4);
+    if (typeof decision.decision_id !== "string" || !["E1", "E3"].includes(decision.evidence_level)) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Accepted Decision evidence inventory is invalid.");
+    evidenceLevels.set(decision.decision_id, decision.evidence_level);
+  }
+  const sourceUnitIds = /* @__PURE__ */ new Set();
+  if (typeof current.checkpoint.semantic_review_seed_digest === "string") {
+    const semanticSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, "seed_digest");
+    for (const unit of semanticSeed.normative_units ?? []) if (typeof unit.unit_id === "string") sourceUnitIds.add(unit.unit_id);
+  }
+  return { evidenceLevels, sourceUnitIds };
+}
+var ACCEPTED_CONTRACT_KINDS = /* @__PURE__ */ new Set([
+  "identity",
+  "region",
+  "collection",
+  "filter",
+  "page_model",
+  "termination",
+  "consistency",
+  "universe",
+  "tenant_or_region",
+  "snapshot",
+  "enumeration",
+  "aggregate",
+  "invariant",
+  "domain_predicate",
+  "locator",
+  "key_normalization",
+  "transform",
+  "value_normalization",
+  "null_policy",
+  "semantic_equivalence",
+  "denial_behavior",
+  "data_scope"
+]);
+function acceptedTypedContractRefs(value, semanticRootDigest) {
+  const refs = /* @__PURE__ */ new Set();
+  const visit = (current) => {
+    if (Array.isArray(current)) {
+      current.forEach(visit);
+      return;
+    }
+    if (!plainObject2(current)) return;
+    if (hasExactKeys(current, ["contract_id", "contract_kind", "semantic_root_digest"]) && typeof current.contract_id === "string" && current.contract_id.length > 0 && ACCEPTED_CONTRACT_KINDS.has(current.contract_kind) && current.semantic_root_digest === semanticRootDigest) refs.add(typedContractRefKey(current));
+    Object.values(current).forEach(visit);
+  };
+  visit(value);
+  return refs;
+}
+async function acceptedBehaviorGaps(current) {
+  if (typeof current.checkpoint.clarification_gaps_digest !== "string") return [];
+  const inventory = await readSealedV5Record(current.layout.compilerState, current.checkpoint.clarification_gaps_digest, "gaps_digest");
+  const gaps = [];
+  for (const view of inventory.gaps ?? []) {
+    if (view.gap_binding?.kind !== "behavior_gap") continue;
+    const gap = await readSemanticV5Record(current.layout.compilerState, view.gap_binding.gap_payload_digest);
+    if (gap.semantic_gap_id !== view.gap_binding.gap_id) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Accepted Behavior gap inventory is cross-wired.");
+    gaps.push(gap);
+  }
+  return gaps;
+}
+async function permissionMatricesForCurrent(current, semanticRootDigest) {
+  if (typeof current.checkpoint.semantic_review_seed_digest !== "string") return [];
+  const semanticSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, "seed_digest");
+  return derivePermissionMatrices(semanticRootDigest, semanticSeed, contracts.permissionDerivationRegistry.registry_digest);
+}
 async function advanceEvidenceClaims(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ["kind", "action_token", "artifact_kind", "artifact"]) || action.artifact_kind !== "evidence_claims" || !plainObject2(action.artifact)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Evidence Claims action is not a closed submit_artifact request.");
   validateAdvertisedAction(current, action, { kind: "submit_artifact", artifact_kind: "evidence_claims" });
+  validateAgentArtifactRoot(action.artifact, ["semantic_review_seed_digest", "claims", "semantic_gaps", "decomposition_reviews", "ambiguity_reviews", "entity_resolutions"]);
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.semantic_review_seed_digest, "seed_digest");
   const validated = validateSemanticReviews(seed, action.artifact, { acceptedDecisionIds: [] });
-  const { term_registry: provisionalTermRegistry, ...acceptedPayload } = (
+  validatePublicRequestSchema(request, "advance");
+  const {
+    term_registry: provisionalTermRegistry,
+    compiled_claims: compiledClaims,
+    client_key_bindings: claimClientKeyBindings,
+    ...acceptedPayload
+  } = (
     /** @type {Record<string,any>} */
     validated
   );
@@ -5245,13 +7461,33 @@ async function advanceEvidenceClaims(current, request) {
   });
   const termRegistry = sealV5Record({ semantic_root_digest: semanticRootDigest, entries: provisionalTermRegistry.entries }, "registry_digest");
   const ruleIndex = createSemanticRuleIndex(semanticRootDigest, { registry_digest: `sha256:${"0".repeat(64)}`, registered_rules: [], accepted_rule_contract_refs: [] });
-  const requirements = (acceptedPayload.claims ?? []).map((claim) => ({
+  const claimIdByClientKey = new Map(compiledClaims.map((claim) => [claim.claim_client_key, claim.claim_id]));
+  const rewriteEvidenceRefs = (refs) => refs.map((ref) => ref.kind === "claim" && claimIdByClientKey.has(ref.claim_id) ? { ...ref, claim_id: claimIdByClientKey.get(ref.claim_id) } : structuredClone(ref));
+  const requirements = compiledClaims.map((claim) => ({
     contract_kind: "oracle_semantics",
-    subject_ref: claim.subject_ref ?? claim.claim_client_key,
-    intent_ref: claim.intent_ref ?? claim.claim_client_key,
-    basis: claim.basis ?? [{ kind: "claim", claim_id: claim.claim_client_key }],
+    subject_ref: claim.subject_ref ?? claim.claim_id,
+    intent_ref: claim.intent_ref ?? claim.claim_id,
+    basis: claim.basis ? rewriteEvidenceRefs(claim.basis) : [{ kind: "claim", claim_id: claim.claim_id }],
     oracle_gap_catalog: { observation_candidates: [], assertion_candidates: [], scope_candidates: [], window_candidates: [] }
   }));
+  const sourceSignalText = (seed.normative_units ?? []).map((unit) => unit.outcome_candidates?.[0]?.source_span?.excerpt ?? "").join("\n");
+  const signalBasis = [{ kind: "claim", claim_id: compiledClaims[0]?.claim_id }];
+  if (sourceSignalText.includes("\u5B57\u6BB5\u6620\u5C04\u8981\u6C42")) requirements.push({ contract_kind: "field_correspondence", subject_ref: compiledClaims[0].claim_id, intent_ref: "source-signaled-field-correspondence", basis: signalBasis });
+  if (sourceSignalText.includes("\u72B6\u6001\u57DF\u8981\u6C42")) requirements.push({ contract_kind: "domain", subject_ref: compiledClaims[0].claim_id, intent_ref: "source-signaled-domain-boundary", basis: signalBasis });
+  if (sourceSignalText.includes("\u4EBA\u53E3\u8303\u56F4\u8981\u6C42")) requirements.push({ contract_kind: "population", subject_ref: compiledClaims[0].claim_id, intent_ref: "source-signaled-population-scope", basis: signalBasis, population_gap_catalog: { scope_candidates: [], proof_candidates: [] } });
+  const permissionMatrices = derivePermissionMatrices(semanticRootDigest, seed, contracts.permissionDerivationRegistry.registry_digest);
+  for (const matrix of permissionMatrices) for (const cell of matrix.required_cells ?? []) {
+    if (!["denial_behavior", "data_scope"].includes(cell.permission_dimension)) continue;
+    requirements.push({
+      contract_kind: "permission_auxiliary",
+      subject_ref: cell.required_cell_key,
+      intent_ref: `permission:${matrix.matrix_id}:${cell.required_cell_key}`,
+      basis: signalBasis,
+      auxiliary_contract_kind: cell.permission_dimension,
+      permission_target: { matrix_id: matrix.matrix_id, required_cell_key: cell.required_cell_key },
+      existing_contract_refs: []
+    });
+  }
   const behaviorSeed = deriveBehaviorContractSeed(semanticRootDigest, { semanticRuleIndex: ruleIndex, riskModuleIds: [...new Set(requirements.map((item) => item.subject_ref))], requirements });
   const hasGaps = Array.isArray(acceptedPayload.semantic_gaps) && acceptedPayload.semantic_gaps.length > 0;
   const clarificationGaps = hasGaps ? compilerClarificationGaps(acceptedPayload.semantic_gaps, "requirements_gap") : [];
@@ -5290,16 +7526,34 @@ async function advanceEvidenceClaims(current, request) {
   ), semantic_root_digest: semanticRootDigest }, { kind: "cancel_run" }] : [{ kind: "submit_artifact", artifact_kind: "behavior_views" }, { kind: "cancel_run" }];
   const selectorState = checkpointSelectors(checkpointBase, capabilities);
   const source = await acceptedSourceContext(current);
+  const compiledEvidencePayload = {
+    ...structuredClone(envelope.payload),
+    claims: compiledClaims.map((claim) => {
+      const { claim_client_key: ignored, ...compiled } = claim;
+      return compiled;
+    })
+  };
   const context = {
     source,
-    semantics: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
+    semantics: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: compiledEvidencePayload },
     term_registry: { artifact_digest: termRegistry.registry_digest, accepted_revision: envelope.accepted_revision, payload: termRegistry },
     compiler_rules: { ...agentVisibleCompilerRules(), semantic_rule_index_projection: { kind: "available", index: ruleIndex } }
   };
-  const workPacket = hasGaps ? { kind: "clarification_work", context, presentation } : { kind: "behavior_work", context, permission_matrix_worklists: [], behavior_contract_worklist: behaviorSeed };
+  const workPacket = hasGaps ? { kind: "clarification_work", context, presentation } : { kind: "behavior_work", context, permission_matrix_worklists: permissionMatrices, behavior_contract_worklist: behaviorSeed };
   const actionDigest = actionDigestV5("advance", action);
-  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
+  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: claimClientKeyBindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  if (hasGaps) {
+    const origins = acceptedPayload.semantic_gaps.map((gap) => gap.target?.origin?.kind);
+    const diagnosticCode = origins.includes("ambiguity") ? "AMBIGUITY_UNRESOLVED" : origins.includes("entity_resolution") ? "ENTITY_RESOLUTION_UNRESOLVED" : null;
+    if (diagnosticCode) {
+      const errorRow = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === diagnosticCode && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
+      if (!errorRow || errorRow.exact_commit.kind !== "artifact_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Requirements-gap reply contract is missing for ${diagnosticCode}.`);
+      reply.reply_contract_id = errorRow.reply_contract_id;
+      reply.reply_status = errorRow.exact_reply_status;
+      reply.diagnostics = [{ code: diagnosticCode, affected_refs: acceptedPayload.semantic_gaps.map((gap) => gap.semantic_gap_client_key).sort(), message: "The accepted requirements artifact contains an explicit unresolved semantic gap." }];
+    }
+  }
   return commitNormalRunTransaction(
     current.layout.root,
     /** @type {{idempotency_key:string,action:Record<string,any>}} */
@@ -5337,46 +7591,127 @@ async function advanceBehaviorViews(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ["kind", "action_token", "artifact_kind", "artifact"]) || action.artifact_kind !== "behavior_views" || !plainObject2(action.artifact)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior Views action is not a closed submit_artifact request.");
   validateAdvertisedAction(current, action, { kind: "submit_artifact", artifact_kind: "behavior_views" });
+  if (action.artifact.provenance_graph !== void 0) {
+    validateV5ProvenanceGraph(action.artifact.provenance_graph);
+    throw new V5ProtocolError("COMPILER_OWNED_FIELD_SUBMITTED", "Behavior provenance is derived by the Compiler and cannot be submitted by the Agent.");
+  }
+  validateAgentArtifactRoot(action.artifact, ["behavior_contract_seed_digest", "field_correspondences", "value_states", "predicate_contracts", "domain_contracts", "behavior_equivalence_contracts", "population_contracts", "population_proofs", "permission_auxiliary_contracts", "oracle_semantic_contracts", "behavior_contract_reviews", "permission_matrix_reviews", "risk_reviews", "semantic_gap_proposals"]);
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, "seed_digest");
-  const requiredArrays = ["field_correspondences", "value_states", "predicate_contracts", "domain_contracts", "behavior_equivalence_contracts", "population_contracts", "population_proofs", "permission_auxiliary_contracts", "oracle_semantic_contracts", "behavior_contract_reviews", "permission_matrix_reviews", "risk_reviews", "semantic_gap_proposals", "formal_test_point_ids"];
+  const semantics = current.reply.work_packet.context.semantics.payload;
+  const evidenceContext = await behaviorEvidenceContext(current, semantics);
+  const acceptedClaimIds = new Set((semantics.claims ?? []).map((claim) => claim.claim_id));
+  validateAcceptedClaimReferences(action.artifact, acceptedClaimIds);
+  validateBehaviorEvidenceClosure(action.artifact, evidenceContext);
+  const requiredArrays = ["field_correspondences", "value_states", "predicate_contracts", "domain_contracts", "behavior_equivalence_contracts", "population_contracts", "population_proofs", "permission_auxiliary_contracts", "oracle_semantic_contracts", "behavior_contract_reviews", "permission_matrix_reviews", "risk_reviews", "semantic_gap_proposals"];
   if (action.artifact.behavior_contract_seed_digest !== seed.seed_digest || requiredArrays.some((key) => !Array.isArray(action.artifact[key]))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior Views must bind the advertised seed and every closed collection.");
   const semanticRootDigest = current.checkpoint.semantic_root_digest;
+  const acceptedContractRefs = acceptedTypedContractRefs(current.reply.work_packet, semanticRootDigest);
   action.artifact.value_states.forEach(validateValueState);
-  action.artifact.field_correspondences.forEach((mapping) => validateFieldCorrespondence(mapping, seed.semantic_rule_index));
-  const compiledDomains = action.artifact.domain_contracts.map((domain) => compileDomain(semanticRootDigest, domain, action.artifact.predicate_contracts));
-  action.artifact.population_contracts.forEach((contract) => validatePopulationContract(contract, semanticRootDigest));
-  const populationClientKeys = action.artifact.population_contracts.map((contract) => contract.population_contract_client_key);
-  action.artifact.population_proofs.forEach((proof) => validatePopulationProof(proof, semanticRootDigest, populationClientKeys));
-  action.artifact.oracle_semantic_contracts.forEach((contract) => validateOracleSemanticContract(contract, { semanticRootDigest, semanticRuleIndex: seed.semantic_rule_index, fieldCorrespondenceIds: action.artifact.field_correspondences.map((mapping) => mapping.mapping_client_key), permissionDecisionCells: [] }));
-  validateBehaviorContractReviews(seed, action.artifact.behavior_contract_reviews, action.artifact);
+  validateBehaviorContractReviews(seed, action.artifact.behavior_contract_reviews, action.artifact, evidenceContext);
   const matrices = current.reply.work_packet.permission_matrix_worklists ?? [];
   if (action.artifact.permission_matrix_reviews.length !== matrices.length) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Every advertised permission matrix must be reviewed exactly once.");
-  for (const matrix of matrices) {
-    const review = action.artifact.permission_matrix_reviews.find((candidate) => candidate.matrix_id === matrix.matrix_id);
-    if (!review) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission matrix review is missing.");
-    validatePermissionMatrixReview(matrix, review, semanticRootDigest);
+  for (const matrix of matrices) if (!action.artifact.permission_matrix_reviews.some((candidate) => candidate.matrix_id === matrix.matrix_id)) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission matrix review is missing.");
+  const permissionCellsForCompilation = matrices.flatMap((matrix) => matrix.required_cells.map((cell) => ({ matrix_id: matrix.matrix_id, ...cell })));
+  const compiledBehavior = compileBehaviorContracts({
+    semanticRootDigest,
+    semanticRuleIndex: seed.semantic_rule_index,
+    artifact: action.artifact,
+    permissionCells: permissionCellsForCompilation,
+    acceptedContractRefs
+  });
+  const permissionAcceptedContractRefs = new Set(acceptedContractRefs);
+  for (const contract of compiledBehavior.permission_auxiliary_contracts) {
+    permissionAcceptedContractRefs.add(typedContractRefKey({
+      contract_id: contract.permission_auxiliary_contract_id,
+      contract_kind: contract.payload.contract_kind,
+      semantic_root_digest: semanticRootDigest
+    }));
   }
-  if (action.artifact.provenance_graph !== void 0) validateV5ProvenanceGraph(action.artifact.provenance_graph);
-  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, action.artifact.risk_reviews);
+  for (const matrix of matrices) {
+    const review = compiledBehavior.permission_matrix_reviews.find((candidate) => candidate.matrix_id === matrix.matrix_id);
+    validatePermissionMatrixReview(matrix, review, semanticRootDigest, { ...evidenceContext, acceptedContractRefs: permissionAcceptedContractRefs });
+  }
+  const compiledDomains = compiledBehavior.domain_contracts;
+  const requirementByKey = new Map(seed.required_contracts.map((requirement) => [requirement.required_contract_key, requirement]));
+  const stableByClientKey = new Map(compiledBehavior.client_key_bindings.map((binding) => [binding.client_key, binding.stable_id]));
+  const provenanceContractById = /* @__PURE__ */ new Map();
+  for (const review of action.artifact.behavior_contract_reviews) {
+    if (review.disposition?.kind !== "formal") continue;
+    const requirement = requirementByKey.get(review.required_contract_key);
+    for (const clientKey of review.disposition.contract_client_keys) {
+      const contractId = stableByClientKey.get(clientKey);
+      if (!contractId || !requirement) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Formal Behavior provenance cannot resolve its Compiler-owned stable contract identity.");
+      const aggregate = provenanceContractById.get(contractId) ?? { contract_id: contractId, basis: [] };
+      aggregate.basis.push(...requirement.basis);
+      aggregate.basis = [...new Map(aggregate.basis.map((basis) => [canonicalV5Stringify(basis), basis])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right)));
+      provenanceContractById.set(contractId, aggregate);
+    }
+  }
+  const provenanceGraph = compileBehaviorProvenanceGraph({
+    runId: current.identity.run_id,
+    caseDocumentLineageId: current.identity.case_document_lineage_id,
+    semanticRootDigest: current.checkpoint.semantic_root_digest,
+    claims: (semantics.claims ?? []).map((claim) => ({ ...claim, evidence_level: "E2" })),
+    behaviorContracts: [...provenanceContractById.values()]
+  });
   const semanticGaps = action.artifact.semantic_gap_proposals;
-  const reviewHasGap = action.artifact.behavior_contract_reviews.some((review) => review.disposition?.kind === "semantic_gap");
+  const reviewHasGap = action.artifact.behavior_contract_reviews.some((review) => review.disposition?.kind === "semantic_gap") || action.artifact.permission_matrix_reviews.some((review) => review.cell_dispositions.some((row) => row.disposition?.kind === "semantic_gap")) || action.artifact.risk_reviews.some((review) => review.risk_item?.risk_disposition === "semantic_gap");
   const hasGaps = reviewHasGap || semanticGaps.length > 0;
-  const compiledGaps = compileBehaviorSemanticGaps(semanticRootDigest, seed, semanticGaps, action.artifact.behavior_contract_reviews);
+  const compiledGaps = compileBehaviorSemanticGaps(semanticRootDigest, seed, semanticGaps, action.artifact.behavior_contract_reviews, { permissionMatrices: matrices, permissionMatrixReviews: action.artifact.permission_matrix_reviews, riskReviews: action.artifact.risk_reviews, acceptedBehaviorGaps: await acceptedBehaviorGaps(current) });
   if (hasGaps !== compiledGaps.accepted_gaps.length > 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Behavior semantic-gap reviews require exact gap payloads.");
+  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, action.artifact.risk_reviews, evidenceContext);
+  validatePublicRequestSchema(request, "advance");
   const envelope = acceptArtifactEnvelope({ artifactKind: "behavior_views", payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
   const resultKey = hasGaps ? "actionable_gaps" : "no_actionable_gap";
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: "artifact.submit_behavior_views", result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
-  const testObligations = sealV5Record({ kind: "test_obligations", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: [...new Set(action.artifact.formal_test_point_ids ?? [])].sort(), behavior_artifact_digest: envelope.envelope_digest }, "obligations_digest");
+  const formalTestPointIds = [...new Set(compiledBehavior.oracle_semantic_contracts.map((contract) => contract.formal_test_point_id))].sort();
+  const testObligations = sealV5Record({ kind: "test_obligations", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: formalTestPointIds, behavior_artifact_digest: envelope.envelope_digest }, "obligations_digest");
+  const permissionCells = matrices.flatMap((matrix) => {
+    const review = compiledBehavior.permission_matrix_reviews.find((candidate) => candidate.matrix_id === matrix.matrix_id);
+    const dispositionByCell = new Map((review?.cell_dispositions ?? []).map((row) => [row.required_cell_key, row.disposition]));
+    return matrix.required_cells.map((cell) => {
+      const disposition = dispositionByCell.get(cell.required_cell_key);
+      return { matrix_id: matrix.matrix_id, ...structuredClone(cell), disposition: disposition.kind, ...disposition.kind === "formal" ? structuredClone(disposition.outcome) : {}, ...disposition.kind === "semantic_gap" ? { gap_ref: structuredClone(disposition.gap_ref) } : {}, ...disposition.kind === "not_applicable" ? { basis: structuredClone(disposition.basis) } : {} };
+    });
+  });
+  const caseCompilationContext = !hasGaps ? sealV5Record({
+    kind: "case_compilation_context",
+    schema_version: V5_SCHEMA_VERSION,
+    semantic_root_digest: current.checkpoint.semantic_root_digest,
+    claim_assessments: (semantics.claims ?? []).map((claim) => ({ claim_id: claim.claim_id ?? claim.claim_client_key, level: "E2", support_review: "supported" })).sort((left, right) => left.claim_id.localeCompare(right.claim_id)),
+    accepted_gap_ids: [],
+    formal_test_point_ids: formalTestPointIds,
+    semantic_partitions: compiledDomains.flatMap((domain) => domain.partitions.map((partition) => ({ partition_id: partition.partition_id, disposition: "covered" }))).sort((left, right) => left.partition_id.localeCompare(right.partition_id)),
+    value_instances: action.artifact.value_states.map((valueState) => ({ value_instance_id: canonicalObjectDigest(valueState), disposition: "covered" })).sort((left, right) => left.value_instance_id.localeCompare(right.value_instance_id)),
+    permission_cells: permissionCells.sort((left, right) => left.required_cell_key.localeCompare(right.required_cell_key)),
+    risk_ledger: riskLedger,
+    oracle_semantic_contracts: structuredClone(compiledBehavior.oracle_semantic_contracts),
+    semantic_audit: {
+      value_states: structuredClone(action.artifact.value_states),
+      field_correspondences: structuredClone(compiledBehavior.field_correspondences),
+      predicate_contracts: structuredClone(compiledBehavior.predicate_contracts),
+      domains: structuredClone(compiledDomains),
+      behavior_equivalence_contracts: structuredClone(compiledBehavior.behavior_equivalence_contracts),
+      populations: structuredClone(compiledBehavior.population_contracts),
+      population_proofs: structuredClone(compiledBehavior.population_proofs),
+      permission_auxiliary_contracts: structuredClone(compiledBehavior.permission_auxiliary_contracts),
+      provenance_graph: structuredClone(provenanceGraph)
+    },
+    semantic_rule_index: structuredClone(seed.semantic_rule_index)
+  }, "context_digest") : null;
   const compilerStateRecords = [
     { record: testObligations, digestField: "obligations_digest" },
     { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
-    ...compiledGaps.accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
+    { record: provenanceGraph, digestField: "graph_digest" },
+    ...caseCompilationContext ? [{ record: caseCompilationContext, digestField: "context_digest" }] : [],
+    ...compiledGaps.new_accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
   ];
   let workPacket;
   const context = {
     ...current.reply.work_packet.context,
     behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
+    provenance: { artifact_digest: provenanceGraph.graph_digest, accepted_revision: envelope.accepted_revision, payload: provenanceGraph },
     test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: testObligations }
   };
   const checkpointBase = {
@@ -5388,7 +7723,9 @@ async function advanceBehaviorViews(current, request) {
     accepted_artifact_digests: [.../* @__PURE__ */ new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
     behavior_views_artifact_digest: envelope.envelope_digest,
     test_obligations_digest: testObligations.obligations_digest,
-    risk_ledger_digest: canonicalObjectDigest(riskLedger)
+    risk_ledger_digest: canonicalObjectDigest(riskLedger),
+    provenance_graph_digest: provenanceGraph.graph_digest,
+    ...caseCompilationContext ? { case_compilation_context_digest: caseCompilationContext.context_digest } : {}
   };
   if (hasGaps) {
     const gaps = clarificationGapsFromAcceptedBehavior(compiledGaps.accepted_gaps);
@@ -5402,8 +7739,20 @@ async function advanceBehaviorViews(current, request) {
   delete checkpointBase.checkpoint_digest;
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(outcome.target_cell_id, workPacket));
   const actionDigest = actionDigestV5("advance", action);
-  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: compiledGaps.client_key_bindings };
+  const clientKeyBindings = [
+    ...compiledGaps.client_key_bindings,
+    ...compiledBehavior.client_key_bindings
+  ].sort((left, right) => left.client_key.localeCompare(right.client_key));
+  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: clientKeyBindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  const primaryGapDiagnostic = compiledGaps.accepted_gaps.map((gap) => BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics]).filter(Boolean)[0];
+  if (primaryGapDiagnostic) {
+    const errorRow = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === primaryGapDiagnostic && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
+    if (!errorRow || errorRow.exact_commit.kind !== "artifact_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Explicit Behavior-gap reply contract is missing for ${primaryGapDiagnostic}.`);
+    reply.reply_contract_id = errorRow.reply_contract_id;
+    reply.reply_status = errorRow.exact_reply_status;
+    reply.diagnostics = [{ code: primaryGapDiagnostic, affected_refs: compiledGaps.accepted_gaps.filter((gap) => BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics] === primaryGapDiagnostic).map((gap) => gap.semantic_gap_id).sort(), message: "The accepted Behavior artifact contains an explicit unresolved semantic gap." }];
+  }
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, acceptedArtifacts: [{ record: envelope, digestField: "envelope_digest" }], compilerStateRecords });
 }
 function renderedOutputRecord(mediaType, content) {
@@ -5413,13 +7762,20 @@ async function advanceCaseDrafts(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ["kind", "action_token", "artifact_kind", "artifact"]) || action.artifact_kind !== "case_drafts" || !plainObject2(action.artifact) || !Array.isArray(action.artifact.case_drafts)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Drafts action is not a closed submit_artifact request.");
   validateAdvertisedAction(current, action, { kind: "submit_artifact", artifact_kind: "case_drafts" });
-  const envelope = acceptArtifactEnvelope({ artifactKind: "case_drafts", payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [current.checkpoint.semantic_root_digest, current.checkpoint.test_obligations_digest] });
-  const document = compileV5CaseDocument({
-    ...action.artifact,
+  validateAgentArtifactRoot(action.artifact, ["case_drafts"]);
+  if (typeof current.checkpoint.case_compilation_context_digest !== "string") throw new V5ProtocolError("CHECKPOINT_INVALID", "Case compilation context is not advertised by the verified checkpoint.");
+  const caseCompilationContext = await readSealedV5Record(current.layout.compilerState, current.checkpoint.case_compilation_context_digest, "context_digest");
+  if (caseCompilationContext.semantic_root_digest !== current.checkpoint.semantic_root_digest) throw new V5ProtocolError("CHECKPOINT_INVALID", "Case compilation context belongs to a different semantic root.");
+  const compilation = compileV5CaseDocumentTransaction({
+    ...caseCompilationContext,
+    case_drafts: action.artifact.case_drafts,
     case_document_lineage_id: current.identity.case_document_lineage_id,
     semantic_root_digest: current.checkpoint.semantic_root_digest,
     source_revision: current.checkpoint.current_revision + 1
   });
+  validatePublicRequestSchema(request, "advance");
+  const document = compilation.document;
+  const envelope = acceptArtifactEnvelope({ artifactKind: "case_drafts", payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [current.checkpoint.semantic_root_digest, current.checkpoint.test_obligations_digest, caseCompilationContext.context_digest] });
   const executionPlan = projectCompatibilityExecutionPlan(document, { run_id: current.identity.run_id, revision: current.checkpoint.current_revision + 1 });
   const caseDocumentRef = executionPlan.case_document_ref;
   const renderedOutputs = [renderedOutputRecord("application/json", renderV5Json(document)), renderedOutputRecord("text/markdown", renderV5Markdown(document)), renderedOutputRecord("text/csv", renderV5Csv(document))].map((record) => ({ record, digestField: "rendered_output_digest" }));
@@ -5443,7 +7799,7 @@ async function advanceCaseDrafts(current, request) {
   const workPacket = { kind: "terminal_work", terminal_kind: "case_document_finished", case_document_ref: caseDocumentRef };
   const selectorState = checkpointSelectors(checkpointBase, []);
   const actionDigest = actionDigestV5("advance", action);
-  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
+  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: compilation.client_key_bindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, [], commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
   return commitNormalRunTransaction(current.layout.root, request, {
     checkpoint: selectorState.checkpoint,
@@ -5465,6 +7821,7 @@ async function advanceSourceBatch(current, request) {
   const work = sourceWorkPacket(sourceState);
   const capability = { kind: "submit_source_batch", request_ids: work.source_requests.map((item) => item.request_id) };
   validateAdvertisedAction(current, action, capability);
+  validatePublicRequestSchema(request, "advance");
   const applied = applySourceBatch(work.source_requests, action);
   const acceptedArtifacts = [];
   const compilerStateRecords = [];
@@ -5572,6 +7929,7 @@ async function advanceCancel(current, request) {
   const action = request.action;
   if (!hasExactKeys(action, ["kind", "action_token", "reason"]) || typeof action.reason !== "string" || action.reason.trim().length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Cancel action is invalid.");
   validateAdvertisedAction(current, action, { kind: "cancel_run" });
+  validatePublicRequestSchema(request, "advance");
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: "run.cancel", result_key: "cancelled" });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const digestValue = actionDigestV5("advance", action);
@@ -5594,7 +7952,7 @@ async function inspectV5Run(runDirectory) {
   let identity;
   try {
     layout = await resolveRunLayout(runDirectory);
-    identity = (await readFixedSealedRecord(layout.identity, "identity_digest")).record;
+    identity = (await readFixedSealedRecord(layout.identity, "run_identity_digest")).record;
     const current = await readVerifiedRun(runDirectory);
     try {
       await verifyV5AcceptedClosure(current);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { evaluateOracleAssertion, validateOracleAssertion, validateOracleSemanticContract, validateTypedOracle } from '../../src/v5/oracles.mjs';
+import { typedContractRefKey } from '../../src/v5/behavior-contracts.mjs';
 import { createSemanticRuleIndex } from '../../src/v5/semantic-rules.mjs';
 
 const root = `sha256:${'a'.repeat(64)}`;
@@ -32,7 +33,7 @@ test('all closed assertion branches have one deterministic positive and negative
     [{ kind: 'permission', expected: 'allow', decision_cell_ref: { matrix_id: 'matrix', required_cell_key: 'decision' } }, 'allow', 'deny']
   ]);
   for (const [assertion, positive, negative] of rows) {
-    validateOracleAssertion(assertion, { semanticRootDigest: root, semanticRuleIndex: index, fieldCorrespondenceIds: ['mapping-1'], permissionDecisionCells: [{ matrix_id: 'matrix', required_cell_key: 'decision' }] });
+    validateOracleAssertion(assertion, { semanticRootDigest: root, semanticRuleIndex: index, fieldCorrespondenceIds: ['mapping-1'], permissionCells: [{ matrix_id: 'matrix', required_cell_key: 'decision', permission_dimension: 'decision', formal_outcome: { permission_dimension: 'decision', action_ref: 'view', expected: 'allow' } }] });
     assert.equal(evaluateOracleAssertion(assertion, positive), true, assertion.kind);
     assert.equal(evaluateOracleAssertion(assertion, negative), false, assertion.kind);
   }
@@ -41,8 +42,33 @@ test('all closed assertion branches have one deterministic positive and negative
 test('assertion branches are closed and reject prose, wrong rule kinds, and incomplete permission denial', () => {
   assert.throws(() => validateOracleAssertion({ kind: 'exact_text', expected_text: 'Saved', extra: true }, { semanticRootDigest: root, semanticRuleIndex: index }), /ORACLE_NOT_DECIDABLE/u);
   assert.throws(() => validateOracleAssertion({ kind: 'semantic_text', expected_text: 'Saved', equivalence_rule_ref: rule('value_normalization', 'normalize') }, { semanticRootDigest: root, semanticRuleIndex: index }), /ORACLE_NOT_DECIDABLE/u);
-  assert.throws(() => validateOracleAssertion({ kind: 'permission', expected: 'deny', decision_cell_ref: { matrix_id: 'm', required_cell_key: 'c' } }, { semanticRootDigest: root, semanticRuleIndex: index, permissionDecisionCells: [] }), /ORACLE_NOT_DECIDABLE/u);
+  assert.throws(() => validateOracleAssertion({ kind: 'permission', expected: 'deny', decision_cell_ref: { matrix_id: 'm', required_cell_key: 'c' } }, { semanticRootDigest: root, semanticRuleIndex: index, permissionCells: [] }), /ORACLE_NOT_DECIDABLE/u);
   assert.throws(() => validateOracleAssertion({ expected: '结果正常' }, { semanticRootDigest: root, semanticRuleIndex: index }), /ORACLE_NOT_DECIDABLE/u);
+});
+
+test('permission Oracle expected value and denial requiredness are Compiler-owned by exact matrix coordinates', () => {
+  const decisionRef = { matrix_id: 'matrix', required_cell_key: 'decision' };
+  const coordinates = { role_ref: { coordinate: 'role', coordinate_evidence_digest: 'role' }, resource_ref: { coordinate: 'resource', coordinate_evidence_digest: 'resource' }, action_ref: 'view', context_key: 'tenant:self' };
+  const denialRef = { contract_id: 'deny-ui', contract_kind: 'denial_behavior', semantic_root_digest: root };
+  const allowContext = {
+    semanticRootDigest: root, semanticRuleIndex: index,
+    permissionCells: [{ ...decisionRef, ...coordinates, permission_dimension: 'decision', formal_outcome: { permission_dimension: 'decision', action_ref: 'view', expected: 'allow' } }]
+  };
+  assert.deepEqual(validateOracleAssertion({ kind: 'permission', expected: 'allow', decision_cell_ref: decisionRef }, allowContext), { kind: 'permission', expected: 'allow', decision_cell_ref: decisionRef });
+  assert.throws(() => validateOracleAssertion({ kind: 'permission', expected: 'deny', decision_cell_ref: decisionRef, denial_behavior: { kind: 'not_required' } }, allowContext), /ORACLE_NOT_DECIDABLE/u);
+
+  const denyContext = {
+    semanticRootDigest: root, semanticRuleIndex: index, acceptedContractRefs: new Set([typedContractRefKey(denialRef)]),
+    permissionCells: [
+      { ...decisionRef, ...coordinates, permission_dimension: 'decision', formal_outcome: { permission_dimension: 'decision', action_ref: 'view', expected: 'deny' } },
+      { matrix_id: 'matrix', required_cell_key: 'denial', ...coordinates, permission_dimension: 'denial_behavior', formal_outcome: { permission_dimension: 'denial_behavior', decision_cell_key: 'decision', denial_contract_ref: { kind: 'accepted', ref: denialRef } } }
+    ]
+  };
+  const required = { kind: 'permission', expected: 'deny', decision_cell_ref: decisionRef, denial_behavior: { kind: 'required', denial_required_cell_key: 'denial', denial_contract_ref: { kind: 'accepted', ref: denialRef } } };
+  assert.deepEqual(validateOracleAssertion(required, denyContext), required);
+  assert.throws(() => validateOracleAssertion({ ...required, denial_behavior: { kind: 'not_required' } }, denyContext), /ORACLE_NOT_DECIDABLE/u);
+  assert.throws(() => validateOracleAssertion({ ...required, denial_behavior: { ...required.denial_behavior, denial_required_cell_key: 'other' } }, denyContext), /ORACLE_NOT_DECIDABLE/u);
+  assert.throws(() => validateOracleAssertion({ ...required, denial_behavior: { ...required.denial_behavior, denial_contract_ref: { kind: 'accepted', ref: { ...denialRef, contract_id: 'other' } } } }, denyContext), /ORACLE_NOT_DECIDABLE/u);
 });
 
 test('TypedOracle binds observation, owning step, scope/window, claims, and transition trigger step', () => {

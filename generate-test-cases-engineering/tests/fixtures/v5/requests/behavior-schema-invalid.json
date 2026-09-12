@@ -1,0 +1,10 @@
+{
+  "idempotency_key": "fixture-behavior-schema-invalid",
+  "action": {
+    "kind": "submit_artifact",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "artifact_kind": "behavior_views"
+  }
+}

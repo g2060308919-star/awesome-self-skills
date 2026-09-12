@@ -58,9 +58,9 @@ test('execution wrapper preserves exactly the four pre-existing operations', asy
 
 test('capability proof is verified externally and never trusted from the submitted value', async () => {
   const initial = createV5ExecutionProjection(plan);
-  await assert.rejects(() => advanceV5ExecutionProjection(initial, { kind: 'provide_capability_proof', case_id: 'CASE-one', proof: { value: 'claimed' } }), /ACTION_NOT_ADVERTISED/u);
+  await assert.rejects(() => advanceV5ExecutionProjection(initial, { kind: 'provide_capability_proof', case_id: 'CASE-one', proof: { type: 'account', value: 'claimed' } }), /ACTION_NOT_ADVERTISED/u);
   const receiptPayload = { kind: 'capability_proof', ready: true, case_id: 'CASE-one' };
-  const result = await advanceV5ExecutionProjection(initial, { kind: 'provide_capability_proof', case_id: 'CASE-one', proof: { value: 'claimed' } }, { verifyCapabilityProof: async () => ({ verified: true, ready: true, receipt: { ...receiptPayload, receipt_digest: canonicalObjectDigest(receiptPayload) } }) });
+  const result = await advanceV5ExecutionProjection(initial, { kind: 'provide_capability_proof', case_id: 'CASE-one', proof: { type: 'account', value: 'claimed' } }, { verifyCapabilityProof: async () => ({ verified: true, ready: true, receipt: { ...receiptPayload, receipt_digest: canonicalObjectDigest(receiptPayload) } }) });
   assert.equal(result.result_key, 'provide_capability_proof:closure_open');
   assert.equal(result.receipt.kind, 'capability_proof');
 });
@@ -71,7 +71,13 @@ test('public execution run wraps a verified finished V5 Case and reaches confirm
   delete storedPlanPayload.plan_digest;
   const storedPlan = { ...storedPlanPayload, plan_digest: canonicalObjectDigest(storedPlanPayload) };
   const storedRef = storedPlan.case_document_ref;
-  const identity = { kind: 'v5_run_identity', schema_version: '5.0.0', compiler_version: '0.6.0', run_id: storedRef.run_id, delivery_intent: 'case_document', case_document_lineage_id: storedRef.case_document_lineage_id };
+  const identity = {
+    kind: 'v5_run_identity', schema_version: '5.0.0', compiler_version: '0.6.0',
+    run_id: storedRef.run_id, run_directory_key: storedRef.run_id, delivery_intent: 'case_document',
+    case_document_lineage_id: storedRef.case_document_lineage_id,
+    canonical_create_request_digest: canonicalObjectDigest({ fixture: 'finished-case' }),
+    creation_binding: { kind: 'case_document', source_bootstrap_digest: `sha256:${'a'.repeat(64)}`, source_acquisition_policy_digest: `sha256:${'b'.repeat(64)}` }
+  };
   const checkpoint = { kind: 'v5_run_checkpoint', schema_version: '5.0.0', compiler_version: '0.6.0', run_id: identity.run_id, case_document_lineage_id: identity.case_document_lineage_id, delivery_intent: 'case_document', run_lifecycle: 'finished', current_revision: storedRef.revision, fsm_cell_id: 'cd.terminal.finished', stage: 'delivery', obligation: 'complete', case_document_ref: storedRef, execution_plan_digest: storedPlan.plan_digest };
   await commitCatalogGenesis(catalog, { identity, checkpoint, selectorSidecar: { kind: 'v5_selector_sidecar', selectors: [] }, reply: { kind: 'run_reply', projection_kind: 'persisted_run_state', reply_status: 'finished', run_id: identity.run_id }, idempotencyKey: 'finished-case', canonicalActionDigest: actionDigestV5('create', { fixture: 'case' }), compilerStateRecords: [{ record: storedPlan, semanticDigest: storedPlan.plan_digest }] });
 

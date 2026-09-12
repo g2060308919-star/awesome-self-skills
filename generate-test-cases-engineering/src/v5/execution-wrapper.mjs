@@ -70,7 +70,7 @@ export async function advanceV5ExecutionProjection(projection, operation, servic
     item.execution_disposition = operation.disposition;
     next.paused = false;
   } else if (operation.kind === 'provide_capability_proof') {
-    if (!exact(operation, ['kind', 'case_id', 'proof']) || typeof services.verifyCapabilityProof !== 'function') throw new V5ProtocolError('ACTION_NOT_ADVERTISED', 'Capability proof requires the registered external verifier.');
+    if (!exact(operation, ['kind', 'case_id', 'proof']) || !object(operation.proof) || !exact(operation.proof, ['type', 'value']) || !nonblank(operation.proof.type) || !nonblank(operation.proof.value) || typeof services.verifyCapabilityProof !== 'function') throw new V5ProtocolError('ACTION_NOT_ADVERTISED', 'Capability proof requires the registered external verifier and the frozen V4 proof shape.');
     const item = next.items.find((/** @type {Record<string,any>} */ candidate) => candidate.case_id === operation.case_id && candidate.available_actions.includes(operation.kind));
     if (!item) throw new V5ProtocolError('ACTION_NOT_ADVERTISED', 'Capability proof target is not advertised.');
     const verified = await services.verifyCapabilityProof({ case_document_ref: structuredClone(next.case_document_ref), case_id: operation.case_id, proof: structuredClone(operation.proof) });

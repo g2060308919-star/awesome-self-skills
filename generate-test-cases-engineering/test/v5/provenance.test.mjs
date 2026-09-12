@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateV5ProvenanceGraph } from '../../src/v5/provenance.mjs';
+import { compileBehaviorProvenanceGraph, validateV5ProvenanceGraph } from '../../src/v5/provenance.mjs';
 
 const ROOT = `sha256:${'a'.repeat(64)}`;
 
@@ -53,4 +53,23 @@ test('immutable cross-run execution derivation preserves lineage and exact diges
   const plan = node('plan', 'execution_plan', { run_id: 'RUN-2' });
   assert.equal(validateV5ProvenanceGraph({ nodes: [document, plan], edges: [{ from: 'document', to: 'plan', immutable_digest_ref: document.immutable_digest }] }).valid, true);
   assert.throws(() => validateV5ProvenanceGraph({ nodes: [document, { ...plan, case_document_lineage_id: 'LINEAGE-2' }], edges: [{ from: 'document', to: 'plan', immutable_digest_ref: document.immutable_digest }] }), (/** @type {any} */ error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
+});
+
+test('Compiler derives the accepted Source→Claim→Behavior graph from stable refs', () => {
+  const graph = compileBehaviorProvenanceGraph({
+    runId: 'RUN-1', caseDocumentLineageId: 'LINEAGE-1', semanticRootDigest: ROOT,
+    claims: [{ claim_id: 'claim_0123456789abcdef', outcome_candidate_ids: ['out5_source'], evidence_level: 'E2' }],
+    behaviorContracts: [{ contract_id: 'osc5_contract', basis: [{ kind: 'claim', claim_id: 'claim_0123456789abcdef' }] }]
+  });
+  assert.equal(validateV5ProvenanceGraph(graph).valid, true);
+  assert.deepEqual(graph.edges, [
+    { from: 'claim_0123456789abcdef', to: 'osc5_contract' },
+    { from: 'out5_source', to: 'claim_0123456789abcdef' }
+  ]);
+  assert.match(graph.graph_digest, /^sha256:[0-9a-f]{64}$/u);
+  assert.throws(() => compileBehaviorProvenanceGraph({
+    runId: 'RUN-1', caseDocumentLineageId: 'LINEAGE-1', semanticRootDigest: ROOT,
+    claims: [{ claim_id: 'claim_0123456789abcdef', outcome_candidate_ids: ['out5_source'], evidence_level: 'E2' }],
+    behaviorContracts: [{ contract_id: 'osc5_contract', basis: [{ kind: 'claim', claim_id: 'claim-client-key' }] }]
+  }), (error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
 });

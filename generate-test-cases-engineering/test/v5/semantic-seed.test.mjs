@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { deriveSemanticReviewSeed } from '../../src/v5/semantic-seed.mjs';
 import { validateSemanticReviews } from '../../src/v5/semantic-reviews.mjs';
+import { derivePermissionMatrices } from '../../src/v5/permission.mjs';
 
 const acceptedSourceStateDigest = `sha256:${'1'.repeat(64)}`;
 
@@ -27,6 +28,16 @@ test('semantic seed deterministically advertises every normative unit and splits
   assert.match(first.normative_units[0].outcome_candidates[0].candidate_id, /^out5_[0-9a-f]{64}$/u);
 });
 
+test('permission language produces Compiler-owned typed coordinates and a deterministic required cell', () => {
+  const registryDigest = `sha256:${'9'.repeat(64)}`;
+  const seed = /** @type {Record<string,any>} */ (deriveSemanticReviewSeed({ acceptedSourceStateDigest, sourcePacks: pack('管理员权限：提交后必须保存订单。'), permissionDerivationRegistryDigest: registryDigest }));
+  assert.equal(seed.permission_scope_candidates.length, 1);
+  assert.equal(seed.permission_scope_groups.length, 1);
+  const matrices = derivePermissionMatrices(`sha256:${'a'.repeat(64)}`, seed, registryDigest);
+  assert.equal(matrices.length, 1);
+  assert.deepEqual(matrices[0].required_cells.map((cell) => cell.permission_dimension), ['decision']);
+});
+
 test('semantic review requires exact candidate coverage and atomic observation-slot dispositions', () => {
   const seed = /** @type {Record<string, any>} */ (deriveSemanticReviewSeed({ acceptedSourceStateDigest, sourcePacks: pack('提交后必须保存订单，并显示成功提示。') }));
   const candidate = seed.normative_units[0].outcome_candidates[0];
@@ -43,7 +54,18 @@ test('semantic review requires exact candidate coverage and atomic observation-s
     ambiguity_reviews: [],
     entity_resolutions: []
   };
-  assert.equal(/** @type {Record<string, any>} */ (validateSemanticReviews(seed, review, { acceptedDecisionIds: [] })).claims.length, 2);
+  const accepted = /** @type {Record<string, any>} */ (validateSemanticReviews(seed, review, { acceptedDecisionIds: [] }));
+  assert.equal(accepted.claims.length, 2);
+  assert.equal(accepted.compiled_claims.length, 2);
+  assert.ok(accepted.compiled_claims.every((claim) => /^claim_[0-9a-f]{16}$/u.test(claim.claim_id)));
+  assert.deepEqual(accepted.client_key_bindings.map((binding) => binding.client_key), ['claim-0', 'claim-1']);
+  const renamed = structuredClone(review);
+  renamed.claims.forEach((claim, index) => { claim.claim_client_key = `renamed-${index}`; });
+  renamed.decomposition_reviews[0].disposition.claim_client_keys = renamed.claims.map((claim) => claim.claim_client_key);
+  assert.deepEqual(
+    /** @type {Record<string, any>} */ (validateSemanticReviews(seed, renamed, { acceptedDecisionIds: [] })).compiled_claims.map((claim) => claim.claim_id),
+    accepted.compiled_claims.map((claim) => claim.claim_id)
+  );
   assert.throws(() => validateSemanticReviews(seed, { ...review, decomposition_reviews: [] }, { acceptedDecisionIds: [] }), /SEMANTIC_REVIEW_CANDIDATE_MISSING/u);
   const bad = structuredClone(review);
   bad.claims[1].observation_slot_digests = [bad.claims[0].observation_slot_digests[0]];

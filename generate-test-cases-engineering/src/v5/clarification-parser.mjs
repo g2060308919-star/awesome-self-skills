@@ -189,10 +189,13 @@ export function validateAndBindResponseUnits(input) {
   const tokens = presentation.parts.map((/** @type {Record<string,any>} */ part) => part.display_token);
   const seenPart = new Set(); const seenKey = new Set();
   const bound = /** @type {Array<Record<string,any>>} */ (input.units.map((unit) => {
-    if (!object(unit) || !nonblank(unit.unit_client_key) || seenKey.has(unit.unit_client_key) || !UNIT_ACTIONS.has(unit.action) || !object(unit.target)) throw new V5ProtocolError('ANSWER_BINDING_INVALID', 'Response unit shape, action, or client key is invalid.');
+    if (!object(unit)) throw new V5ProtocolError('ANSWER_BINDING_INVALID', 'Response unit must be an object.');
+    if (!nonblank(unit.unit_client_key) || !/^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/u.test(unit.unit_client_key) || seenKey.has(unit.unit_client_key)) throw new V5ProtocolError('CLIENT_KEY_INVALID', 'Response unit client key is invalid or duplicated.');
+    if (!UNIT_ACTIONS.has(unit.action) || !object(unit.target)) throw new V5ProtocolError('ANSWER_BINDING_INVALID', 'Response unit shape or action is invalid.');
     seenKey.add(unit.unit_client_key);
     const part = partById.get(unit.target.question_part_id);
-    if (!part || unit.target.display_token !== part.display_token || unit.target.root_version_digest !== presentation.semantic_root_digest || !part.current_allowed_controls.includes(unit.action)) throw new V5ProtocolError('ANSWER_BINDING_INVALID', 'Response unit target is stale, unknown, or not advertised.');
+    if (!part || unit.target.display_token !== part.display_token || unit.target.root_version_digest !== presentation.semantic_root_digest) throw new V5ProtocolError('ANSWER_BINDING_INVALID', 'Response unit target is stale or unknown.');
+    if (!part.current_allowed_controls.includes(unit.action)) throw new V5ProtocolError('QUESTION_PART_TRANSITION_INVALID', 'Response unit action is not legal from the current Question Part state.');
     if (seenPart.has(part.question_part_id)) throw new V5ProtocolError('QUESTION_PART_ACTION_CONFLICT', 'A Question Part has conflicting response units.');
     seenPart.add(part.question_part_id);
     const origin = verifyOrigin(unit.origin, raw);

@@ -59,19 +59,19 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
   const existing = await resolveCatalogIdempotency(catalogRoot, input.idempotencyKey, input.canonicalActionDigest);
   if (existing?.replay) return { runDirectory: existing.runDirectory, reply: existing.reply, replayed: true };
   const catalog = await resolveCatalogLayout(catalogRoot);
-  if (!/^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(input.identity.run_id) || input.identity.schema_version !== V5_SCHEMA_VERSION || input.identity.compiler_version !== V5_COMPILER_VERSION) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Run identity is invalid.');
-  const runDirectory = path.join(catalog.runsDirectory, input.identity.run_id);
+  if (!/^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(input.identity.run_id) || input.identity.run_directory_key !== input.identity.run_id || input.identity.schema_version !== V5_SCHEMA_VERSION || input.identity.compiler_version !== V5_COMPILER_VERSION) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Run identity is invalid.');
+  const runDirectory = path.join(catalog.runsDirectory, input.identity.run_directory_key);
   await ensureV5Directory(catalog.catalogTransactions);
   await ensureV5Directory(catalog.catalogRunGenesisRecords);
   await ensureV5Directory(catalog.catalogReplies);
   await ensureV5Directory(catalog.runsDirectory);
-  const identity = sealV5Record(input.identity, 'identity_digest');
+  const identity = sealV5Record(input.identity, 'run_identity_digest');
   let recoveringOrphan = false;
   try {
     await lstat(runDirectory);
     const orphanLayout = await resolveRunLayout(runDirectory);
-    const orphanIdentity = await readFixedSealedRecord(orphanLayout.identity, 'identity_digest');
-    if (canonicalV5Stringify(orphanIdentity.record) !== canonicalV5Stringify(identity) || (orphanIdentity.record.canonical_create_action_digest !== undefined && orphanIdentity.record.canonical_create_action_digest !== input.canonicalActionDigest)) throw new V5ProtocolError('IDEMPOTENCY_CONFLICT', 'Run directory belongs to a different create transaction.');
+    const orphanIdentity = await readFixedSealedRecord(orphanLayout.identity, 'run_identity_digest');
+    if (canonicalV5Stringify(orphanIdentity.record) !== canonicalV5Stringify(identity)) throw new V5ProtocolError('IDEMPOTENCY_CONFLICT', 'Run directory belongs to a different create transaction.');
     recoveringOrphan = true;
   } catch (error) {
     if (error instanceof V5ProtocolError) throw error;
@@ -97,6 +97,7 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
   const transaction = await writeSealedV5Record(run.transactions, {
     scope: { kind: 'run', run_id: input.identity.run_id }, run_id: input.identity.run_id,
     transaction_kind: 'genesis', transaction_sequence: 0, previous_run_transaction_digest: null,
+    run_identity_digest: identity.run_identity_digest,
     operational_event_ref: { kind: 'none' },
     checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest,
     reply_object_digest: reply.digest, receipt_digest: null, idempotency_index_digest: index.digest
@@ -104,7 +105,10 @@ export async function commitCatalogGenesis(catalogRoot, input, services = curren
   if (services.failAt === 'after_run_transaction') throw new Error('INJECTED_CRASH: after_run_transaction');
   const genesis = await writeSealedV5Record(run.genesisRecords, {
     kind: 'catalog_run_genesis_record', schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id,
-    identity_digest: identity.identity_digest, initial_run_transaction_digest: transaction.digest
+    run_directory_key: input.identity.run_directory_key, case_document_lineage_id: input.identity.case_document_lineage_id,
+    run_identity: identity, run_identity_digest: identity.run_identity_digest,
+    checkpoint_digest: checkpoint.digest, selector_sidecar_digest: sidecar.digest,
+    initial_run_transaction_digest: transaction.digest
   }, 'run_genesis_record_digest');
   await writeSealedV5Record(catalog.catalogRunGenesisRecords, genesis.record, 'run_genesis_record_digest');
   if (services.failAt === 'after_catalog_genesis_record') throw new Error('INJECTED_CRASH: after_catalog_genesis_record');
@@ -218,7 +222,7 @@ export async function commitNormalRunTransaction(runDirectory, request, nextStat
 export async function publishIntegrityQuarantine(runDirectory, incident, request, services = currentV5TransactionServices()) {
   return withV5RunLock(runDirectory, async () => {
     const layout = await resolveRunLayout(runDirectory);
-    const identityFixed = await readFixedSealedRecord(layout.identity, 'identity_digest');
+    const identityFixed = await readFixedSealedRecord(layout.identity, 'run_identity_digest');
     const identity = identityFixed.record;
     let oldBytes = null;
     try { oldBytes = await readFile(layout.currentPointer); } catch {}
@@ -233,7 +237,7 @@ export async function publishIntegrityQuarantine(runDirectory, incident, request
         const digest = `sha256:${filename.slice(0, 64)}`;
         try {
           const genesis = await readSealedV5Record(layout.genesisRecords, digest, 'run_genesis_record_digest');
-          if (genesis.run_id === identity.run_id && genesis.identity_digest === identity.identity_digest) {
+          if (genesis.run_id === identity.run_id && genesis.run_identity_digest === identity.run_identity_digest) {
             runGenesisRecordDigest = digest;
             break;
           }

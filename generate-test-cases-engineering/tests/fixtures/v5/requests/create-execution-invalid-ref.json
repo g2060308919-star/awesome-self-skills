@@ -1,0 +1,12 @@
+{
+  "idempotency_key": "fixture-execution-invalid-ref",
+  "delivery_intent": "execution_plan",
+  "case_document_ref": {
+    "run_id": "RUN-NOT-FOUND",
+    "revision": 1,
+    "manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "bundle_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "case_document_lineage_id": "LINEAGE-NOT-FOUND",
+    "schema_version": "5.0.0"
+  }
+}

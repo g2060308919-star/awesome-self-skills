@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { applyPermissionCoordinateAnswer, derivePermissionMatrices, permissionCoordinateEvidenceDigest, validatePermissionMatrixReview } from '../../src/v5/permission.mjs';
+import { typedContractRefKey } from '../../src/v5/behavior-contracts.mjs';
 
 const root = `sha256:${'a'.repeat(64)}`;
 const registryDigest = `sha256:${'b'.repeat(64)}`;
@@ -62,6 +63,9 @@ test('permission matrix review covers exact cells and keeps decision, denial, an
     : cell.permission_dimension === 'denial_behavior'
       ? { kind: 'formal', outcome: { permission_dimension: 'denial_behavior', decision_cell_key: /** @type {Record<string,any>} */ (decision).required_cell_key, denial_contract_ref: { kind: 'accepted', ref: { contract_id: 'deny-ui', contract_kind: 'denial_behavior', semantic_root_digest: root } } }, basis: [{ kind: 'claim', claim_id: 'claim-permission' }] }
       : { kind: 'semantic_gap', gap_ref: { kind: 'accepted_gap', semantic_gap_id: 'gap-data-scope' } } }));
-  assert.equal(validatePermissionMatrixReview(matrix, { matrix_id: matrix.matrix_id, seed_digest: matrix.seed_digest, cell_dispositions: reviews }, root).length, 3);
+  const denialRef = reviews.find((row) => row.disposition.outcome?.permission_dimension === 'denial_behavior').disposition.outcome.denial_contract_ref.ref;
+  const evidenceContext = { evidenceLevels: new Map([['claim-permission', 'E2']]), acceptedContractRefs: new Set([typedContractRefKey(denialRef)]) };
+  assert.equal(validatePermissionMatrixReview(matrix, { matrix_id: matrix.matrix_id, seed_digest: matrix.seed_digest, cell_dispositions: reviews }, root, evidenceContext).length, 3);
   assert.throws(() => validatePermissionMatrixReview(matrix, { matrix_id: matrix.matrix_id, seed_digest: matrix.seed_digest, cell_dispositions: reviews.slice(1) }, root), /PERMISSION_MATRIX_INCOMPLETE/u);
+  assert.throws(() => validatePermissionMatrixReview(matrix, { matrix_id: matrix.matrix_id, seed_digest: matrix.seed_digest, cell_dispositions: reviews }, root, { ...evidenceContext, acceptedContractRefs: new Set() }), /PERMISSION_OUTCOME_UNRESOLVED/u);
 });

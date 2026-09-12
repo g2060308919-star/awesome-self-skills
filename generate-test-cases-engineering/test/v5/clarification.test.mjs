@@ -120,6 +120,19 @@ test('control origins accept only exact registered tokens after target and wrapp
   assert.throws(() => bind(context, raw, [{ unit_client_key: 'u-bad-control', origin: origin(raw), target: { display_token: 'Q001', question_part_id: part.question_part_id, root_version_digest: root }, action: 'defer' }]), /CONTROL_ORIGIN_REQUIRED/u);
 });
 
+test('client-key and Question Part transition failures retain their dedicated protocol codes', () => {
+  const context = setup();
+  const part = context.presentation.parts[0];
+  const raw = 'Q001：稍后回答';
+  const valid = { unit_client_key: 'u-defer', origin: origin(raw), target: { display_token: 'Q001', question_part_id: part.question_part_id, root_version_digest: root }, action: 'defer' };
+  assert.throws(() => bind(context, raw, [{ ...valid, unit_client_key: '' }]), /CLIENT_KEY_INVALID/u);
+  assert.throws(() => bind(context, raw, [valid, { ...valid }]), /CLIENT_KEY_INVALID/u);
+
+  const presentation = structuredClone(context.presentation);
+  presentation.parts[0].current_allowed_controls = ['answer'];
+  assert.throws(() => validateAndBindResponseUnits({ raw_response: raw, presentation, units: [valid], control_registry: controls, answer_registry: answers }), /QUESTION_PART_TRANSITION_INVALID/u);
+});
+
 test('a single active Question Part may omit Q token and clone is the only exact multi-token origin', () => {
   const oneGap = [gap('gap-1', '保存后应显示什么？')];
   const stateSet = createQuestionPartStateSet(lineage, root, oneGap);

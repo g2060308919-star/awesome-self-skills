@@ -18,6 +18,11 @@ import {
   V5_STABLE_ID_ROWS
 } from './constants.mjs';
 import { validateGeneratedV5Contracts } from './registry-validation.mjs';
+import {
+  V5_INTERFACE_SCHEMA_FILE_MAP,
+  generateV5InterfaceSchemas,
+  validateV5ReplySchemaRegistryAlignment
+} from './interface-schemas.mjs';
 
 export const V5_POLICY_FILE_MAP = Object.freeze({
   sourceAcquisitionPolicy: 'v5-source-acquisition-policy',
@@ -474,7 +479,10 @@ function createRuntimeResponses(errorCode, catalogRow) {
     profiles = [persistedProfile(requirementsError ? 'cd.active.requirements.review' : 'cd.active.case.behavior', requirementsError ? 'cd.active.requirements.resolve' : 'cd.active.case.resolve')];
     exactCommit = artifactCommit(requirementsError ? 'evidence_claims' : 'behavior_views');
   } else if (semanticCommitPolicy === 'preview_only') {
-    profiles = [persistedProfile('cd.active.requirements.resolve', 'cd.active.requirements.confirm')];
+    profiles = [
+      persistedProfile('cd.active.requirements.resolve', 'cd.active.requirements.confirm'),
+      persistedProfile('cd.active.case.resolve', 'cd.active.case.confirm')
+    ];
     exactCommit = operationalCommit('clarification_pending_created');
   }
   if (errorCode === 'ACTION_NOT_ADVERTISED' || errorCode === 'IDEMPOTENCY_CONFLICT') profiles = profiles.concat(['cd.terminal.finished', 'cd.terminal.cancelled', 'cd.terminal.fatal', 'ep.terminal.finished', 'ep.terminal.cancelled', 'ep.terminal.fatal'].map((cellId) => ({ state_profile_id: `terminal.${cellId}`, trigger_state: verifiedState(cellId), reply_projection: { kind: 'read_only_terminal_rejection', terminal_fsm_cell_id: cellId } })));
@@ -505,6 +513,10 @@ function createPolicyRegistry(fsm) {
     if (errorCode.includes('PROVENANCE') || errorCode.includes('DOWNSTREAM')) return 'C16-provenance';
     return 'C15-protocol';
   };
+  const executableErrorFixture = Object.freeze({
+    ACCEPTED_STATE_INTEGRITY_FAILURE: 'F-C15-protocol.protocol.read-only-integrity-fatal',
+    COMPLEMENT_COVERAGE_OVERCLAIMED: 'F-C11-complement.negative.empty-finite-partition'
+  });
   const runtimeRules = Object.entries(V5_ERROR_CATALOG).map(([errorCode, catalogRow]) => {
     const phase = phaseLookup.get(errorCode);
     const responses = createRuntimeResponses(errorCode, catalogRow);
@@ -514,7 +526,7 @@ function createPolicyRegistry(fsm) {
       enforcement: ['schema', 'invariant', 'fsm', 'transaction'],
       applicability: [...new Set(responses.map((response) => response.context))].map((context) => context === 'pre_run' ? { kind: 'pre_run' } : { kind: context, stages: ['source_acquisition', 'requirements_analysis', 'case_design', 'execution_closure', 'final_confirmation', 'delivery'] }),
       normative_refs: [`SPEC.ERROR.${errorCode}`],
-      test_ids: [`F-${errorRequirement(errorCode)}.negative.rejection`],
+      test_ids: [executableErrorFixture[errorCode] ?? `F-${errorRequirement(errorCode)}.negative.rejection`],
       kind: 'runtime_error',
       trigger_ref: `trigger.${errorCode.toLowerCase()}`,
       error_code: errorCode,
@@ -761,6 +773,14 @@ export async function writeV5Contracts(schemaDirectory, policyDirectory) {
     await writeFile(path.join(policyPath, `${fileBase}.json`), `${canonicalStringify(policy)}\n`);
     await writeFile(path.join(schemaPath, `${fileBase}.schema.json`), `${canonicalStringify(schema)}\n`);
   }
+  const interfaceSchemas = generateV5InterfaceSchemas(contracts);
+  for (const [schemaKey, fileBase] of Object.entries(V5_INTERFACE_SCHEMA_FILE_MAP)) {
+    const schema = interfaceSchemas[schemaKey];
+    if (schemaKey === 'reply' && validateV5ReplySchemaRegistryAlignment(contracts.replyContracts, schema).length > 0) {
+      throw new Error('generated Reply oneOf is inconsistent with the Reply Registry');
+    }
+    await writeFile(path.join(schemaPath, `${fileBase}.schema.json`), `${canonicalStringify(schema)}\n`);
+  }
 }
 
 /** @param {string|URL} schemaDirectory @param {string|URL} policyDirectory */
@@ -781,6 +801,15 @@ export async function checkV5Contracts(schemaDirectory, policyDirectory) {
     ]);
     if (actualPolicy !== expectedPolicy || actualSchema !== expectedSchema) throw new Error(`generated artifact is stale: ${fileBase}`);
   }
+  const interfaceSchemas = generateV5InterfaceSchemas(contracts);
+  for (const [schemaKey, fileBase] of Object.entries(V5_INTERFACE_SCHEMA_FILE_MAP)) {
+    expectedSchemaFiles.push(`${fileBase}.schema.json`);
+    const expectedSchema = `${canonicalStringify(interfaceSchemas[schemaKey])}\n`;
+    const actualSchema = await readFile(path.join(schemaPath, `${fileBase}.schema.json`), 'utf8');
+    if (actualSchema !== expectedSchema) throw new Error(`generated artifact is stale: ${fileBase}`);
+  }
+  const replyIssues = validateV5ReplySchemaRegistryAlignment(contracts.replyContracts, interfaceSchemas.reply);
+  if (replyIssues.length > 0) throw new Error(`generated Reply oneOf is inconsistent: ${replyIssues.join('; ')}`);
   const actualPolicies = (await readdir(policyPath)).filter((/** @type {string} */ file) => file.startsWith('v5-')).sort();
   const actualSchemas = (await readdir(schemaPath)).filter((/** @type {string} */ file) => file.startsWith('v5-')).sort();
   if (JSON.stringify(actualPolicies) !== JSON.stringify(expectedPolicyFiles.sort()) || JSON.stringify(actualSchemas) !== JSON.stringify(expectedSchemaFiles.sort())) throw new Error('generated V5 policy/schema inventory is stale');

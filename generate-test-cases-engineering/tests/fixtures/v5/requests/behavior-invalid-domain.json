@@ -1,5 +1,5 @@
 {
-  "idempotency_key": "fixture-behavior-domain",
+  "idempotency_key": "fixture-behavior-domain-gap",
   "action": {
     "kind": "submit_artifact",
     "action_token": {
@@ -13,24 +13,7 @@
       "field_correspondences": [],
       "value_states": [],
       "predicate_contracts": [],
-      "domain_contracts": [
-        {
-          "domain_client_key": "empty",
-          "subject_ref": "orders",
-          "field_path": "/status",
-          "domain": {
-            "kind": "closed_enum",
-            "members": [],
-            "closed_world_basis": [
-              {
-                "kind": "claim",
-                "claim_id": "claim-save"
-              }
-            ]
-          },
-          "partitions": []
-        }
-      ],
+      "domain_contracts": [],
       "behavior_equivalence_contracts": [],
       "population_contracts": [],
       "population_proofs": [],
@@ -42,7 +25,9 @@
           "observation_ref": {
             "kind": "response",
             "logical_surface_ref": "orders-api",
-            "subject_ref": "claim-save",
+            "subject_ref": {
+              "$fixture_client_key": "claim-save"
+            },
             "field_path": "/status"
           },
           "assertion": {
@@ -58,7 +43,9 @@
           "basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
@@ -68,7 +55,9 @@
           "observation_ref": {
             "kind": "response",
             "logical_surface_ref": "orders-api",
-            "subject_ref": "claim-message",
+            "subject_ref": {
+              "$fixture_client_key": "claim-message"
+            },
             "field_path": "/status"
           },
           "assertion": {
@@ -84,12 +73,29 @@
           "basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-message"
+              "claim_id": {
+                "$fixture_client_key": "claim-message"
+              }
             }
           ]
         }
       ],
       "behavior_contract_reviews": [
+        {
+          "seed_digest": {
+            "$fixture_binding": "required"
+          },
+          "required_contract_key": {
+            "$fixture_binding": "required"
+          },
+          "disposition": {
+            "kind": "semantic_gap",
+            "gap_ref": {
+              "kind": "same_behavior_batch",
+              "semantic_gap_client_key": "gap-domain"
+            }
+          }
+        },
         {
           "seed_digest": {
             "$fixture_binding": "required"
@@ -123,225 +129,328 @@
       "risk_reviews": [
         {
           "review_client_key": "risk-claim-save-null_or_missing",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "null_or_missing",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-unknown_enum",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "unknown_enum",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-api_failure",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "api_failure",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-loading_failure",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "loading_failure",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-sync_delay",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "sync_delay",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-long_content",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "long_content",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-pagination",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "pagination",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-refresh",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "refresh",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-save-business_permission_boundary",
-          "module_ref": "claim-save",
+          "module_ref": {
+            "$fixture_client_key": "claim-save"
+          },
           "risk_kind": "business_permission_boundary",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-null_or_missing",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "null_or_missing",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-unknown_enum",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "unknown_enum",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-api_failure",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "api_failure",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-loading_failure",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "loading_failure",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-sync_delay",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "sync_delay",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-long_content",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "long_content",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-pagination",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "pagination",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-refresh",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "refresh",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         },
         {
           "review_client_key": "risk-claim-message-business_permission_boundary",
-          "module_ref": "claim-message",
+          "module_ref": {
+            "$fixture_client_key": "claim-message"
+          },
           "risk_kind": "business_permission_boundary",
           "risk_signal_status": "no_signal",
           "review_basis": [
             {
               "kind": "claim",
-              "claim_id": "claim-save"
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
             }
           ]
         }
       ],
-      "semantic_gap_proposals": [],
-      "formal_test_point_ids": [
-        "tp-0",
-        "tp-1"
+      "semantic_gap_proposals": [
+        {
+          "semantic_gap_client_key": "gap-domain",
+          "target": {
+            "kind": "behavior_contract",
+            "required_contract_key": {
+              "$fixture_binding": "required"
+            }
+          },
+          "missing_semantics": "domain_boundary",
+          "question": "请明确该状态域的完整 universe 与可执行分区边界。",
+          "answer_contract": {
+            "answer_mode": "typed_answer",
+            "allowed_controls": [
+              "answer",
+              "defer",
+              "unknown",
+              "close_for_delivery"
+            ],
+            "value_schema": {
+              "kind": "text",
+              "min_scalars": 1,
+              "max_scalars": 1024,
+              "ambiguity_guard_ref": "answer.no-unresolved-vague-token.v1"
+            }
+          },
+          "basis": [
+            {
+              "kind": "claim",
+              "claim_id": {
+                "$fixture_client_key": "claim-save"
+              }
+            }
+          ]
+        }
       ]
     }
   }

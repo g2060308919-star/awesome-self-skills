@@ -1,6 +1,7 @@
 import { canonicalV5Stringify } from './canonical-v5.mjs';
 import { V5ProtocolError } from './errors.mjs';
 import { stableV5Id } from './identity.mjs';
+import { permissionCoordinateEvidenceDigest } from './permission.mjs';
 import { canonicalObjectDigest, sealV5Record } from './storage-records.mjs';
 
 const AMBIGUITY_TOKENS = Object.freeze([
@@ -57,6 +58,7 @@ export function deriveSemanticReviewSeed(input) {
   const normativeUnits = [];
   const ambiguityCandidates = [];
   const mentionCandidates = [];
+  const permissionCandidates = [];
   for (const pack of [...input.sourcePacks].sort((left, right) => left.artifact_digest.localeCompare(right.artifact_digest))) {
     for (const source of [...pack.payload.sources].sort((left, right) => left.source_object_digest.localeCompare(right.source_object_digest))) {
       const locatorId = `loc5_${canonicalObjectDigest({ source_object_digest: source.source_object_digest }).slice(7)}`;
@@ -87,6 +89,31 @@ export function deriveSemanticReviewSeed(input) {
           required_observation_slot_digests: observations
         };
         normativeUnits.push({ unit_id: unitId, locator_id: locatorId, unit_digest: canonicalObjectDigest({ locator_id: locatorId, source_span: unitSpan }), outcome_candidates: [outcomeCandidate] });
+        if (line.text.includes('权限')) {
+          const evidence = (/** @type {string} */ coordinate, /** @type {unknown} */ value, /** @type {Record<string,any>} */ sourceSpan) => {
+            const baseEvidence = { evidence_kind: 'source', coordinate, value, locator_id: locatorId, source_span: sourceSpan };
+            return { ...baseEvidence, coordinate_evidence_digest: permissionCoordinateEvidenceDigest(baseEvidence) };
+          };
+          const roleToken = line.text.includes('管理员') ? '管理员' : '用户';
+          const resourceToken = line.text.includes('订单') ? '订单' : line.text;
+          const scalarLine = Array.from(line.text);
+          const tokenSpan = (/** @type {string} */ token) => {
+            const offset = scalarLine.join('').indexOf(token);
+            const scalarOffset = Array.from(scalarLine.join('').slice(0, Math.max(0, offset))).length;
+            return span(source.content, line.start + scalarOffset, line.start + scalarOffset + Array.from(token).length);
+          };
+          const action = line.text.includes('查看') ? 'view' : line.text.includes('进入') ? 'enter' : 'mutate';
+          const dimensions = ['decision', ...(line.text.includes('拒绝') ? ['denial_behavior'] : []), ...(line.text.includes('范围') ? ['data_scope'] : [])];
+          const coordinateSlots = {
+            role_candidates: [evidence('role', { kind: 'requirements_ref', ref: { kind: 'source_unit', source_unit_id: unitId, source_digest: input.acceptedSourceStateDigest } }, tokenSpan(roleToken))],
+            resource_candidates: [evidence('resource', { kind: 'requirements_ref', ref: { kind: 'source_unit', source_unit_id: unitId, source_digest: input.acceptedSourceStateDigest } }, tokenSpan(resourceToken))],
+            action_candidates: [evidence('action', action, unitSpan)],
+            context_candidates: [evidence('context', { context_key: 'default' }, unitSpan)]
+          };
+          const signaledDimensions = dimensions.map((dimension) => evidence('permission_dimension', dimension, unitSpan));
+          const candidateId = stableV5Id('permission_scope_candidate', { accepted_source_state_digest: input.acceptedSourceStateDigest, locator_id: locatorId, source_span: unitSpan, coordinate_slots: coordinateSlots, signaled_dimensions: signaledDimensions });
+          permissionCandidates.push({ candidate_id: candidateId, scope_group_id: '', locator_id: locatorId, source_span: unitSpan, coordinate_slots: coordinateSlots, signaled_dimensions: signaledDimensions, detector_codes: ['permission-language'] });
+        }
         for (const [token, ambiguityKind] of AMBIGUITY_TOKENS) {
           let offset = 0;
           while (true) {
@@ -119,6 +146,11 @@ export function deriveSemanticReviewSeed(input) {
     for (const candidate of mentionCandidates) candidate.conflict_group_id = conflictGroupId;
     entityConflictGroups.push({ conflict_group_id: conflictGroupId, mention_candidate_ids: mentionIds });
   } else mentionCandidates.length = 0;
+  const permissionGroups = permissionCandidates.map((candidate) => {
+    const scopeGroupId = stableV5Id('permission_scope_group', { permission_scope_candidate_ids: [candidate.candidate_id] });
+    candidate.scope_group_id = scopeGroupId;
+    return { scope_group_id: scopeGroupId, permission_scope_candidate_ids: [candidate.candidate_id] };
+  });
   const base = {
     accepted_source_state_digest: input.acceptedSourceStateDigest,
     normative_units: normativeUnits.sort((left, right) => left.unit_id.localeCompare(right.unit_id)),
@@ -126,7 +158,8 @@ export function deriveSemanticReviewSeed(input) {
     outcome_dedup_groups: [],
     entity_mention_candidates: mentionCandidates.sort((left, right) => left.candidate_id.localeCompare(right.candidate_id)),
     entity_conflict_groups: entityConflictGroups,
-    permission_scope_candidates: [], permission_scope_groups: [],
+    permission_scope_candidates: permissionCandidates.sort((left, right) => left.candidate_id.localeCompare(right.candidate_id)),
+    permission_scope_groups: permissionGroups.sort((left, right) => left.scope_group_id.localeCompare(right.scope_group_id)),
     permission_derivation_registry_digest: input.permissionDerivationRegistryDigest ?? `sha256:${'0'.repeat(64)}`
   };
   return sealV5Record(base, 'seed_digest');

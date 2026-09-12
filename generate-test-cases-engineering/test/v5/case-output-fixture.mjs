@@ -7,8 +7,9 @@ function draft(key, claimId, classification = {}) {
     case_client_key: key, title: `Case ${key}`, module_id: 'orders', priority: 'P1', primary_test_point_id: `tp-${key}`,
     business_preconditions: ['已登录'], data_conditions: [{ field: '/order/status', value: { kind: 'string', value: 'draft' } }],
     steps: [{ step_client_key: stepKey, action: `execute ${key}`, semantic_action_ref: { action_id: `action-${key}`, semantic_root_digest: root }, claim_ids: [claimId] }],
+    case_step_semantic_bindings: [{ case_client_key: key, step_client_key: stepKey, action_ref: { action_id: `action-${key}`, semantic_root_digest: root } }],
+    domain_selections: [],
     oracles: [{ oracle_client_key: `oracle-${key}`, oracle_semantic_contract_id: `osc-${key}`, observe_after_step_client_key: stepKey, observation_ref: { kind: 'response', logical_surface_ref: 'order-api', subject_ref: 'order', field_path: '/status' }, assertion: { kind: 'exact_text', expected_text: `done-${key}` }, evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, claim_ids: [claimId] }],
-    population_scope: { kind: 'current_response', collection_ref: { contract_id: 'collection-orders', contract_kind: 'collection', semantic_root_digest: root } },
     canonical_names: ['Order'], claim_ids: [claimId], semantic_gap_ids: [], ...classification
   };
 }
@@ -27,6 +28,11 @@ export function caseOutputFixture() {
     claim_assessments: [{ claim_id: 'claim-e2', level: 'E2', support_review: 'supported' }, { claim_id: 'claim-e1', level: 'E1', support_review: 'supported' }],
     accepted_gap_ids: ['gap-delivery-closed'],
     formal_test_point_ids: ['tp-grounded', 'tp-conditional', 'tp-blocked', 'tp-not-applicable'],
+    oracle_semantic_contracts: caseDrafts.flatMap((current) => current.oracles.map((oracle) => ({
+      oracle_semantic_contract_id: oracle.oracle_semantic_contract_id,
+      observation_ref: oracle.observation_ref, assertion: oracle.assertion,
+      evaluation_scope: oracle.evaluation_scope, observation_window: oracle.observation_window
+    }))),
     semantic_partitions: [{ partition_id: 'partition-target', disposition: 'covered' }, { partition_id: 'partition-other', disposition: 'gap' }],
     value_instances: [{ value_instance_id: 'value-draft', disposition: 'covered' }],
     permission_cells: [

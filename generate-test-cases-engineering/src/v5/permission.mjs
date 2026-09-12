@@ -1,4 +1,5 @@
 import { canonicalV5Stringify } from './canonical-v5.mjs';
+import { typedContractRefKey } from './behavior-contracts.mjs';
 import { V5ProtocolError } from './errors.mjs';
 import { stableV5Id } from './identity.mjs';
 import { canonicalObjectDigest } from './storage-records.mjs';
@@ -127,8 +128,8 @@ export function applyPermissionCoordinateAnswer(seed, answer, decision) {
   return { ...payload, seed_digest: canonicalObjectDigest(payload) };
 }
 
-/** @param {Record<string,any>} matrix @param {Record<string,any>} review @param {string} semanticRootDigest */
-export function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
+/** @param {Record<string,any>} matrix @param {Record<string,any>} review @param {string} semanticRootDigest @param {{evidenceLevels:Map<string,string>,acceptedContractRefs?:Set<string>}} [evidenceContext] */
+export function validatePermissionMatrixReview(matrix, review, semanticRootDigest, evidenceContext) {
   if (review.matrix_id !== matrix.matrix_id || review.seed_digest !== matrix.seed_digest || !Array.isArray(review.cell_dispositions) || review.cell_dispositions.length !== matrix.required_cells.length) throw new V5ProtocolError('PERMISSION_MATRIX_INCOMPLETE', 'Permission review must cover every required cell exactly once.');
   const cellByKey = new Map(/** @type {Array<Record<string,any>>} */ (matrix.required_cells).map((cell) => [cell.required_cell_key, cell]));
   const dispositionByKey = new Map();
@@ -138,14 +139,20 @@ export function validatePermissionMatrixReview(matrix, review, semanticRootDiges
     dispositionByKey.set(row.required_cell_key, row.disposition);
     const disposition = row.disposition;
     if (disposition.kind === 'semantic_gap') { if (!disposition.gap_ref) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission gap reference is missing.'); continue; }
-    if (disposition.kind === 'not_applicable') { if (!Array.isArray(disposition.basis) || disposition.basis.length === 0) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission N/A needs E2/E3 basis.'); continue; }
+    if (disposition.kind === 'not_applicable') {
+      const levels = (disposition.basis ?? []).map((ref) => evidenceContext?.evidenceLevels.get(ref.claim_id ?? ref.decision_id));
+      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0 || (evidenceContext && levels.some((level) => !['E2', 'E3'].includes(level)))) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission N/A needs accepted E2/E3 basis.');
+      continue;
+    }
     if (disposition.kind !== 'formal' || !Array.isArray(disposition.basis) || disposition.basis.length === 0 || disposition.outcome.permission_dimension !== cell.permission_dimension) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission formal outcome does not match its cell.');
     const outcome = disposition.outcome;
     if (cell.permission_dimension === 'decision') {
       const expectedAllowed = cell.action_ref === 'discover' ? ['visible', 'hidden'] : ['allow', 'deny'];
       if (outcome.action_ref !== cell.action_ref || !expectedAllowed.includes(outcome.expected)) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission decision outcome is incompatible with the action.');
     } else if (cell.permission_dimension === 'data_scope') {
-      if (outcome.data_scope_contract_ref?.ref?.contract_kind !== 'data_scope' || outcome.data_scope_contract_ref.ref.semantic_root_digest !== semanticRootDigest) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Data-scope cell requires an exact current-root typed contract.');
+      const ref = outcome.data_scope_contract_ref?.ref;
+      if (outcome.data_scope_contract_ref?.kind !== 'accepted' || !ref || ref.contract_kind !== 'data_scope' || ref.semantic_root_digest !== semanticRootDigest
+        || (evidenceContext?.acceptedContractRefs && !evidenceContext.acceptedContractRefs.has(typedContractRefKey(ref)))) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Data-scope cell requires an accepted current-root typed contract.');
     }
   }
   for (const row of review.cell_dispositions) {
@@ -155,7 +162,10 @@ export function validatePermissionMatrixReview(matrix, review, semanticRootDiges
     const decisionCell = cellByKey.get(outcome.decision_cell_key);
     const decisionDisposition = dispositionByKey.get(outcome.decision_cell_key);
     const sameCoordinates = decisionCell && ['role_ref', 'resource_ref', 'action_ref', 'context_key'].every((key) => canonicalV5Stringify(decisionCell[key]) === canonicalV5Stringify(cell[key]));
-    if (!sameCoordinates || decisionCell.permission_dimension !== 'decision' || decisionDisposition?.kind !== 'formal' || decisionDisposition.outcome.expected !== 'deny' || outcome.denial_contract_ref?.ref?.contract_kind !== 'denial_behavior' || outcome.denial_contract_ref.ref.semantic_root_digest !== semanticRootDigest) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Denial behavior must bind the same-coordinate deny decision and typed contract.');
+    const ref = outcome.denial_contract_ref?.ref;
+    if (!sameCoordinates || decisionCell.permission_dimension !== 'decision' || decisionDisposition?.kind !== 'formal' || decisionDisposition.outcome.expected !== 'deny'
+      || outcome.denial_contract_ref?.kind !== 'accepted' || !ref || ref.contract_kind !== 'denial_behavior' || ref.semantic_root_digest !== semanticRootDigest
+      || (evidenceContext?.acceptedContractRefs && !evidenceContext.acceptedContractRefs.has(typedContractRefKey(ref)))) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Denial behavior must bind the same-coordinate deny decision and an accepted typed contract.');
   }
   return structuredClone(review.cell_dispositions);
 }

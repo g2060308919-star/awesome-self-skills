@@ -1,7 +1,7 @@
 import { canonicalV5Stringify } from './canonical-v5.mjs';
 import { validateV5CaseDocument } from './case-compiler.mjs';
 
-const SCOPE_LABELS = /** @type {Readonly<Record<string,string>>} */ (Object.freeze({ single_item: '单项', visible_region: '可见区', current_page: '当前页', current_response: '当前响应', all_pages: '全分页', full_dataset: '完整快照' }));
+const SCOPE_LABELS = /** @type {Readonly<Record<string,string>>} */ (Object.freeze({ single: '单项', forall: '全称范围' }));
 
 /** @param {Record<string,any>} assertion */
 function assertionText(assertion) {
@@ -42,7 +42,8 @@ export function renderV5Markdown(document) {
     lines.push(`- Module: ${current.module_id}`);
     lines.push(`- Primary Test Point: ${current.primary_test_point_id}`);
     lines.push(`- Canonical names: ${current.canonical_names.join('、')}`);
-    lines.push(`- Scope: ${scopeText(current.population_scope)}`);
+    const oracleScopes = [...new Set(current.oracles.map((/** @type {Record<string,any>} */ oracle) => scopeText(oracle.evaluation_scope)))];
+    lines.push(`- Scope: ${oracleScopes.join('、')}`);
     if (current.semantic_gap_ids.length > 0) lines.push(`- Blocking gaps: ${current.semantic_gap_ids.join('、')}`);
     if (current.observation_intent) lines.push(`- Observation intent: ${current.observation_intent}`);
     lines.push('', 'Steps:');

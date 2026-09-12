@@ -17,7 +17,7 @@ export function renderV5Csv(document) {
       if (oracles.length === 0) oracles.push({});
       for (const oracle of oracles) rows.push([
         current.case_id, current.semantic_status, current.title, current.module_id, current.primary_test_point_id,
-        current.population_scope.kind, current.canonical_names.join('|'), step.sequence, step.step_id, step.action,
+        [...new Set(current.oracles.map((/** @type {Record<string,any>} */ item) => item.evaluation_scope.kind))].join('|'), current.canonical_names.join('|'), step.sequence, step.step_id, step.action,
         oracle.oracle_id ?? '', oracle.assertion?.kind ?? '', oracle.assertion ? canonicalV5Stringify(oracle.assertion) : ''
       ]);
     }

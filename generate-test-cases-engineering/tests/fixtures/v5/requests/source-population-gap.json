@@ -1,0 +1,37 @@
+{
+  "idempotency_key": "fixture-population-gap-source",
+  "action": {
+    "kind": "submit_source_batch",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "request_ids": [
+      {
+        "$fixture_binding": "required"
+      }
+    ],
+    "request_dispositions": [
+      {
+        "request_id": {
+          "$fixture_binding": "required"
+        },
+        "outcome": "fulfilled",
+        "source_client_keys": [
+          "c01-prd"
+        ]
+      }
+    ],
+    "source_payload": {
+      "kind": "fulfilled_sources",
+      "source_pack": {
+        "sources": [
+          {
+            "source_client_key": "c01-prd",
+            "media_type": "text/markdown",
+            "content": "人口范围要求：提交后必须保存订单，并显示成功提示。"
+          }
+        ]
+      }
+    }
+  }
+}

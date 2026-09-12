@@ -11,7 +11,9 @@ import { commitCatalogGenesis, commitNormalRunTransaction } from '../../src/v5/t
 function genesisInput() {
   const identity = {
     kind: 'v5_run_identity', schema_version: '5.0.0', compiler_version: '0.6.0',
-    run_id: 'RUN-transaction', delivery_intent: 'case_document', case_document_lineage_id: 'LINEAGE-transaction'
+    run_id: 'RUN-transaction', run_directory_key: 'RUN-transaction', delivery_intent: 'case_document', case_document_lineage_id: 'LINEAGE-transaction',
+    canonical_create_request_digest: `sha256:${'1'.repeat(64)}`,
+    creation_binding: { kind: 'case_document', source_bootstrap_digest: `sha256:${'2'.repeat(64)}`, source_acquisition_policy_digest: `sha256:${'3'.repeat(64)}` }
   };
   const checkpoint = {
     kind: 'v5_run_checkpoint', schema_version: '5.0.0', compiler_version: '0.6.0',
@@ -55,7 +57,7 @@ test('genesis and normal transactions cross-bind reply, receipt, index, checkpoi
 
 test('a crash before pointer publication exposes the complete old head', async () => {
   const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-crash-'));
-  const created = await commitCatalogGenesis(catalogRoot, { ...genesisInput(), identity: { ...genesisInput().identity, run_id: 'RUN-crash' }, checkpoint: { ...genesisInput().checkpoint, run_id: 'RUN-crash' }, reply: { ...genesisInput().reply, run_id: 'RUN-crash' } });
+  const created = await commitCatalogGenesis(catalogRoot, { ...genesisInput(), identity: { ...genesisInput().identity, run_id: 'RUN-crash', run_directory_key: 'RUN-crash' }, checkpoint: { ...genesisInput().checkpoint, run_id: 'RUN-crash' }, reply: { ...genesisInput().reply, run_id: 'RUN-crash' } });
   const beforeBytes = await readFile(path.join(created.runDirectory, 'current-transaction.json'));
   const current = await readVerifiedRun(created.runDirectory);
   await assert.rejects(() => commitNormalRunTransaction(created.runDirectory, { idempotency_key: 'crash-key', action: { kind: 'cancel_run', reason: 'crash' } }, {
@@ -74,7 +76,7 @@ test('create genesis recovers idempotently after each frozen publication boundar
     const runId = `RUN-genesis-crash-${index}`;
     const input = {
       ...base,
-      identity: { ...base.identity, run_id: runId },
+      identity: { ...base.identity, run_id: runId, run_directory_key: runId },
       checkpoint: { ...base.checkpoint, run_id: runId },
       reply: { ...base.reply, run_id: runId }
     };

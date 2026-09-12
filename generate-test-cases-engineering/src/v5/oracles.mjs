@@ -1,5 +1,5 @@
 import { canonicalV5Stringify } from './canonical-v5.mjs';
-import { validateTypedValue, validateValueState } from './behavior-contracts.mjs';
+import { typedContractRefKey, validateTypedValue, validateValueState } from './behavior-contracts.mjs';
 import { V5ProtocolError } from './errors.mjs';
 import { resolveSemanticRuleRef } from './semantic-rules.mjs';
 
@@ -34,15 +34,30 @@ export function validateOracleAssertion(assertion, context) {
   } else if (assertion.kind === 'cross_surface_equals') {
     if (!exact(assertion, ['kind', 'field_correspondence_id']) || !context.fieldCorrespondenceIds?.includes(assertion.field_correspondence_id)) return fail();
   } else if (assertion.kind === 'permission') {
-    if (!/** @type {Array<Record<string,any>>|undefined} */ (context.permissionDecisionCells)?.some((cell) => canonicalV5Stringify(cell) === canonicalV5Stringify(assertion.decision_cell_ref))) return fail('Permission decision cell is not accepted.');
     if (assertion.expected === 'allow') { if (!exact(assertion, ['kind', 'expected', 'decision_cell_ref'])) return fail(); }
     else if (assertion.expected === 'deny') {
       if (!exact(assertion, ['kind', 'expected', 'decision_cell_ref', 'denial_behavior']) || !object(assertion.denial_behavior)) return fail();
-      if (assertion.denial_behavior.kind === 'not_required') { if (!exact(assertion.denial_behavior, ['kind'])) return fail(); }
-      else if (assertion.denial_behavior.kind === 'required') {
-        if (!exact(assertion.denial_behavior, ['kind', 'denial_required_cell_key', 'denial_contract_ref']) || assertion.denial_behavior.denial_contract_ref?.ref?.contract_kind !== 'denial_behavior' || assertion.denial_behavior.denial_contract_ref.ref.semantic_root_digest !== context.semanticRootDigest) return fail();
-      } else return fail();
+      if (assertion.denial_behavior.kind === 'not_required' && !exact(assertion.denial_behavior, ['kind'])) return fail();
+      if (assertion.denial_behavior.kind === 'required' && !exact(assertion.denial_behavior, ['kind', 'denial_required_cell_key', 'denial_contract_ref'])) return fail();
+      if (!['not_required', 'required'].includes(assertion.denial_behavior.kind)) return fail();
     } else return fail();
+    const cells = /** @type {Array<Record<string,any>>} */ (context.permissionCells ?? []);
+    const decisionCell = cells.find((cell) => cell.matrix_id === assertion.decision_cell_ref?.matrix_id && cell.required_cell_key === assertion.decision_cell_ref?.required_cell_key && cell.permission_dimension === 'decision');
+    if (!decisionCell || decisionCell.formal_outcome?.permission_dimension !== 'decision' || decisionCell.formal_outcome.expected !== assertion.expected) return fail('Permission Oracle expected value must equal the accepted formal decision cell.');
+    if (assertion.expected === 'deny') {
+      const coordinateKeys = ['role_ref', 'resource_ref', 'action_ref', 'context_key'];
+      const denialCell = cells.find((cell) => cell.matrix_id === decisionCell.matrix_id && cell.permission_dimension === 'denial_behavior' && coordinateKeys.every((key) => canonicalV5Stringify(cell[key]) === canonicalV5Stringify(decisionCell[key])));
+      if (!denialCell) {
+        if (assertion.denial_behavior.kind !== 'not_required') return fail('Permission Oracle supplied a denial contract for a coordinate without a required denial cell.');
+      } else {
+        const denial = assertion.denial_behavior;
+        const formalRef = denialCell.formal_outcome?.denial_contract_ref;
+        if (denial.kind !== 'required' || denial.denial_required_cell_key !== denialCell.required_cell_key || denialCell.formal_outcome?.permission_dimension !== 'denial_behavior' || denialCell.formal_outcome.decision_cell_key !== decisionCell.required_cell_key || canonicalV5Stringify(denial.denial_contract_ref) !== canonicalV5Stringify(formalRef)) return fail('Permission Oracle must bind the exact same-coordinate formal denial cell and contract.');
+        const ref = denial.denial_contract_ref?.ref;
+        if (denial.denial_contract_ref?.kind !== 'accepted' || ref?.contract_kind !== 'denial_behavior' || ref.semantic_root_digest !== context.semanticRootDigest) return fail();
+        if (context.acceptedContractRefs && !context.acceptedContractRefs.has(typedContractRefKey(ref))) return fail('Denial behavior contract does not resolve to the current accepted inventory.');
+      }
+    }
   } else return fail();
   return structuredClone(assertion);
 }

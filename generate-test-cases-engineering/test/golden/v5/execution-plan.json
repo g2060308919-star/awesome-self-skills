@@ -5,8 +5,8 @@
   "case_document_ref": {
     "run_id": "run-case",
     "revision": 9,
-    "manifest_digest": "sha256:86323f0b656f6d2150b242c0a3495b3a19342a46360760e9c3e5e577313eee50",
-    "bundle_digest": "sha256:006a9f868a332ea49c94f5b87e7b56e55213244ce90953ef4f9b5f763cefbb0c",
+    "manifest_digest": "sha256:79db63cbdbb89847fbca5b7ed327e4b19654327d6991d51ca80cdddaa2ea6e72",
+    "bundle_digest": "sha256:f95216d762f0b8ccecd06e6a5ec75b22b48e7c705134c2f64ff533615aedf0b2",
     "case_document_lineage_id": "lineage-output",
     "schema_version": "5.0.0"
   },
@@ -18,7 +18,16 @@
   ],
   "items": [
     {
-      "case_id": "CASE-40d94218490a73c86ce72bf40d8dd5a9f6de6fcd5ad3b28761f66ab005358f9a",
+      "case_id": "CASE-03ff3e1f1090910ecb78109cfb7981a96a80ff8b04545b26894aac597f5b8746",
+      "title": "Case conditional",
+      "semantic_status": "Conditional",
+      "execution_disposition": "pending",
+      "available_actions": [
+        "set_execution_disposition"
+      ]
+    },
+    {
+      "case_id": "CASE-17c815e07d471a1b923ee643b19cba004e110365930d4c6a48bcaa482ed4abdc",
       "title": "Case exploratory",
       "semantic_status": "Exploratory",
       "execution_disposition": "pending",
@@ -27,7 +36,7 @@
       ]
     },
     {
-      "case_id": "CASE-4eb6d560c3c307e85dd1d4c8d8dbfe08b6b464c0d2b904085609dba2a6bdeffe",
+      "case_id": "CASE-3ca646af180f861dad77b8641d6599a58809a310d6ac16bcfb21991312fa547c",
       "title": "Case grounded",
       "semantic_status": "Grounded",
       "execution_disposition": "pending",
@@ -37,16 +46,7 @@
       ]
     },
     {
-      "case_id": "CASE-a94945ecf16ebc6ec1ad1e4f9a736fab5b92e0bcd5fef5c8e3c1811f1f863ddc",
-      "title": "Case conditional",
-      "semantic_status": "Conditional",
-      "execution_disposition": "pending",
-      "available_actions": [
-        "set_execution_disposition"
-      ]
-    },
-    {
-      "case_id": "CASE-bb846cab510738989cbdab0f60f28ca274cb11a73eb3cc26746103f33469224f",
+      "case_id": "CASE-90c37e0a00f523faa1d1b5167cea77653abd72e0b2b3bd5da15642c0ed9f0062",
       "title": "Case blocked",
       "semantic_status": "Blocked",
       "execution_disposition": "pending",
@@ -55,12 +55,12 @@
       ]
     },
     {
-      "case_id": "CASE-f74c62333350c5a401f5d937936b0333dc9cfa108679f214233b2236d9d3aedd",
+      "case_id": "CASE-f853cd269e80f2e14d625b34534713eb3027ad7760747a66a056b570948cac52",
       "title": "Case not-applicable",
       "semantic_status": "NotApplicable",
       "execution_disposition": "pending",
       "available_actions": []
     }
   ],
-  "plan_digest": "sha256:7962160eb6d955f7b491326d7b988adf4bd64dd32b446bf1925470899cc3be1a"
+  "plan_digest": "sha256:916f3e12bc61b598701e8622bd041a852fd7f7e869347e30eb32560f78ece533"
 }

@@ -57,6 +57,26 @@ test('case creation requires a closed nonempty bootstrap with a required request
   assert.deepEqual(await readdir(catalogRoot), before);
 });
 
+test('created run identity is the closed self-digested projection of the complete create request', async () => {
+  const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-public-identity-'));
+  const request = createRequest(1);
+  const created = await publicApi.createV5RunDirectory(catalogRoot, request);
+  const current = await readVerifiedRun(created.run_directory);
+  assert.deepEqual(Object.keys(current.identity).sort(), [
+    'canonical_create_request_digest', 'case_document_lineage_id', 'compiler_version', 'creation_binding',
+    'delivery_intent', 'kind', 'run_directory_key', 'run_id', 'run_identity_digest', 'schema_version'
+  ].sort());
+  assert.equal(current.identity.run_directory_key, path.basename(created.run_directory));
+  assert.equal(current.identity.canonical_create_request_digest, canonicalObjectDigest(request));
+  assert.deepEqual(current.identity.creation_binding, {
+    kind: 'case_document',
+    source_bootstrap_digest: canonicalObjectDigest(request.source_bootstrap),
+    source_acquisition_policy_digest: current.reply.work_packet.source_acquisition_policy.policy_digest
+  });
+  const { run_identity_digest: declared, ...payload } = current.identity;
+  assert.equal(declared, canonicalObjectDigest(payload));
+});
+
 test('create, inspect, and source batch advancement use deterministic advertised capabilities', async () => {
   const catalogRoot = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-public-'));
   const created = await publicApi.createV5RunDirectory(catalogRoot, createRequest());
@@ -142,7 +162,7 @@ test('create rejects relative roots, legacy requests, and idempotency conflicts 
   const conflict = await publicApi.createV5RunDirectory(catalogRoot, { ...request, source_bootstrap: { source_request_seeds: [{ ...request.source_bootstrap.source_request_seeds[0], locator: { kind: 'inline_text', media_type: 'text/markdown', content: 'different' } }] } });
   assert.equal(conflict.diagnostics[0].code, 'IDEMPOTENCY_CONFLICT');
   const legacy = await publicApi.createV5RunDirectory(catalogRoot, { idempotency_key: 'v4', schema_version: '4.0.0', run_directory: catalogRoot });
-  assert.equal(legacy.diagnostics[0].code, 'RUN_ARGUMENT_INVALID');
+  assert.equal(legacy.diagnostics[0].code, 'UNSUPPORTED_SCHEMA_VERSION');
   assert.equal((await readdir(path.join(catalogRoot, 'runs'))).length, 1);
 });
 

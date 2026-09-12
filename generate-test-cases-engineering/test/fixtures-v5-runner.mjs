@@ -5,7 +5,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { advanceV5Run, createV5RunDirectory, inspectV5Run } from '../src/entry.mjs';
+import { validateAgainstSchema } from '../src/schema-validator.mjs';
 import { canonicalV5Stringify } from '../src/v5/canonical-v5.mjs';
+import { generateV5InterfaceSchemas } from '../src/v5/interface-schemas.mjs';
 import { generateV5Contracts } from '../src/v5/registry-generator.mjs';
 import { readSealedV5Record, readVerifiedRun, writeAtomicFile } from '../src/v5/run-store.mjs';
 import { installV5DeterministicTestProfile } from '../src/v5/runtime-services.mjs';
@@ -57,7 +59,7 @@ function replaceFixturePointer(value, pointer, replacement, sentinelKey) {
 
 function assertNoSentinels(value) {
   const encoded = canonicalV5Stringify(value);
-  if (encoded.includes('$fixture_binding') || encoded.includes('$fixture_absolute_path')) fail('request contains an unconsumed fixture placeholder');
+  if (encoded.includes('$fixture_binding') || encoded.includes('$fixture_absolute_path') || encoded.includes('$fixture_client_key')) fail('request contains an unconsumed fixture placeholder');
 }
 
 function validateExpectedPair(action, expected) {
@@ -89,6 +91,10 @@ function validateRequestBindings(step, allowAbsolutePaths) {
     if (!object(binding) || !exactKeys(binding, ['target_json_pointer', 'fixture_file']) || typeof binding.target_json_pointer !== 'string' || typeof binding.fixture_file !== 'string') fail('fixture absolute-path binding is not closed');
     pointerTokens(binding.target_json_pointer);
   }
+  if (step.client_key_bindings_from !== undefined) {
+    validateReplyRef(step.client_key_bindings_from);
+    if (step.client_key_bindings_from.source_json_pointer !== '/commit_receipt/client_key_bindings') fail('client-key rewrite must bind the exact committed binding list');
+  }
 }
 
 function validateTamperTarget(target) {
@@ -110,10 +116,10 @@ function validateTamperTarget(target) {
 function validateInvocation(step, nested = false) {
   const prefix = nested ? [] : ['step_id'];
   if (step.api === 'createV5RunDirectory') {
-    if (!exactKeys(step, [...prefix, 'api', 'catalog_key', 'request_file', 'request_bindings', 'fixture_absolute_path_bindings'])) fail('create invocation is not closed');
+    if (!exactKeys(step, [...prefix, 'api', 'catalog_key', 'request_file', 'request_bindings', 'fixture_absolute_path_bindings', ...(step.client_key_bindings_from === undefined ? [] : ['client_key_bindings_from'])])) fail('create invocation is not closed');
     validateRequestBindings(step, true);
   } else if (step.api === 'advanceV5Run') {
-    if (!exactKeys(step, [...prefix, 'api', 'run_directory_from', 'request_file', 'request_bindings'])) fail('advance invocation is not closed');
+    if (!exactKeys(step, [...prefix, 'api', 'run_directory_from', 'request_file', 'request_bindings', ...(step.client_key_bindings_from === undefined ? [] : ['client_key_bindings_from'])])) fail('advance invocation is not closed');
     validateReplyRef(step.run_directory_from, true);
     validateRequestBindings(step, false);
   } else if (step.api === 'inspectV5Run') {
@@ -174,7 +180,7 @@ export function validateV5FixtureManifest(manifest) {
       validateExpected(fixture.expected_steps[index]);
       validateExpectedPair(step, fixture.expected_steps[index]);
       for (const fileField of ['request_file']) if (step[fileField] !== undefined) { validateManifestRelativePath(step[fileField]); if (!fixture.input_files.includes(step[fileField])) fail(`undeclared input file: ${step[fileField]}`); }
-      for (const binding of [...(step.request_bindings ?? []), ...(step.fixture_absolute_path_bindings ?? []), ...(step.run_directory_from ? [step.run_directory_from] : [])]) {
+      for (const binding of [...(step.request_bindings ?? []), ...(step.fixture_absolute_path_bindings ?? []), ...(step.run_directory_from ? [step.run_directory_from] : []), ...(step.client_key_bindings_from ? [step.client_key_bindings_from] : [])]) {
         const sourceStepId = binding.source_step_id ?? binding.value_from?.source_step_id;
         if (sourceStepId !== undefined && (!stepIndexes.has(sourceStepId) || stepIndexes.get(sourceStepId) >= index)) fail(`binding is not backward-only: ${step.step_id}`);
       }
@@ -260,6 +266,73 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
     replaceFixturePointer(request, binding.target_json_pointer, destination, '$fixture_absolute_path');
     const locatorPointer = binding.target_json_pointer.replace(/\/absolute_path$/u, '');
     if (resolveFixturePointer(request, `${locatorPointer}/kind`) !== 'local_file') fail('absolute-path binding requires a local_file locator');
+  }
+  if (step.client_key_bindings_from) {
+    const source = replies.get(step.client_key_bindings_from.source_step_id);
+    if (!source) fail(`client-key binding source has no API reply: ${step.client_key_bindings_from.source_step_id}`);
+    const bindings = resolveFixturePointer(source, step.client_key_bindings_from.source_json_pointer);
+    if (!Array.isArray(bindings) || bindings.some((binding) => !object(binding) || typeof binding.client_key !== 'string' || typeof binding.stable_id !== 'string')) fail('committed client-key binding list is invalid');
+    const stableByClientKey = new Map(bindings.map((binding) => [binding.client_key, binding.stable_id]));
+    const rewrite = (value) => {
+      if (Array.isArray(value)) {
+        value.forEach((child, index) => {
+          const rewritten = rewrite(child);
+          if (rewritten !== undefined) value[index] = rewritten;
+        });
+        return;
+      }
+      if (!object(value)) return;
+      if (exactKeys(value, ['$fixture_client_key'])) {
+        const stableId = stableByClientKey.get(value.$fixture_client_key);
+        if (!stableId) fail(`unknown committed client key: ${String(value.$fixture_client_key)}`);
+        return stableId;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        const rewritten = rewrite(child);
+        if (rewritten !== undefined) value[key] = rewritten;
+      }
+    };
+    rewrite(request);
+  }
+  if (request.action?.artifact_kind === 'behavior_views' && object(request.action.artifact)) {
+    const seedSourceId = step.client_key_bindings_from?.source_step_id
+      ?? step.request_bindings.find((binding) => binding.target_json_pointer === '/action/artifact/behavior_contract_seed_digest')?.value_from.source_step_id;
+    const seedReply = seedSourceId ? replies.get(seedSourceId) : undefined;
+    const seed = seedReply?.work_packet?.behavior_contract_worklist;
+    const artifact = request.action.artifact;
+    if (seed && Array.isArray(seed.required_contracts) && Array.isArray(artifact.behavior_contract_reviews)) {
+      const collectionKinds = [
+        ['field_correspondence', 'field_correspondences', 'mapping_client_key'],
+        ['domain', 'domain_contracts', 'domain_client_key'],
+        ['population', 'population_contracts', 'population_contract_client_key'],
+        ['oracle_semantics', 'oracle_semantic_contracts', 'oracle_contract_client_key'],
+        ['permission_auxiliary', 'permission_auxiliary_contracts', 'contract_client_key']
+      ];
+      const contractInfo = new Map();
+      for (const [kind, collection, clientKeyField] of collectionKinds) for (const contract of artifact[collection] ?? []) contractInfo.set(contract[clientKeyField], { kind, contract });
+      const gapKind = new Map((artifact.semantic_gap_proposals ?? []).map((gap) => [gap.semantic_gap_client_key, ['authority', 'join', 'transform', 'null_policy', 'freshness'].includes(gap.missing_semantics) ? 'field_correspondence' : gap.missing_semantics === 'domain_boundary' ? 'domain' : ['population_scope', 'population_proof'].includes(gap.missing_semantics) ? 'population' : gap.missing_semantics?.startsWith('oracle_') ? 'oracle_semantics' : gap.target?.kind === 'permission_cell' ? 'permission_auxiliary' : undefined]));
+      const claimed = new Set();
+      const keyByGap = new Map();
+      for (const review of artifact.behavior_contract_reviews) {
+        let kind; let subjectRef;
+        if (review.disposition?.kind === 'formal') {
+          const info = contractInfo.get(review.disposition.contract_client_keys?.[0]);
+          kind = info?.kind;
+          subjectRef = info?.contract?.observation_ref?.subject_ref;
+        } else if (review.disposition?.kind === 'semantic_gap') {
+          const gapClientKey = review.disposition.gap_ref?.semantic_gap_client_key;
+          kind = gapKind.get(gapClientKey);
+        }
+        const candidates = seed.required_contracts.filter((candidate) => candidate.contract_kind === kind && !claimed.has(candidate.required_contract_key));
+        const selected = candidates.find((candidate) => subjectRef !== undefined && candidate.subject_ref === subjectRef) ?? candidates[0];
+        if (!selected) continue;
+        review.seed_digest = seed.seed_digest;
+        review.required_contract_key = selected.required_contract_key;
+        claimed.add(selected.required_contract_key);
+        if (review.disposition?.kind === 'semantic_gap') keyByGap.set(review.disposition.gap_ref.semantic_gap_client_key, selected.required_contract_key);
+      }
+      for (const gap of artifact.semantic_gap_proposals ?? []) if (keyByGap.has(gap.semantic_gap_client_key) && gap.target?.kind === 'behavior_contract') gap.target.required_contract_key = keyByGap.get(gap.semantic_gap_client_key);
+    }
   }
   assertNoSentinels(request);
   return request;
@@ -361,9 +434,16 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
   const absoluteManifest = path.resolve(manifestPath);
   const fixtureRoot = path.dirname(absoluteManifest);
   const manifest = validateV5FixtureManifest(JSON.parse(await readFile(absoluteManifest, 'utf8')));
+  const contracts = generateV5Contracts();
+  const replySchema = generateV5InterfaceSchemas(contracts).reply;
   const transcript = [];
   const requirementResults = new Map([...REQUIREMENTS].map((id) => [id, 0]));
+  const observedDiagnosticsByFixture = new Map();
+  let executedFixtureCount = 0;
   for (const fixture of manifest.fixtures) {
+    if (Array.isArray(options.fixtureIds) && !options.fixtureIds.includes(fixture.fixture_id)) continue;
+    executedFixtureCount += 1;
+    observedDiagnosticsByFixture.set(fixture.fixture_id, new Set());
     const tempRoot = path.join(SANDBOX_ROOT, 'catalogs', sha256(Buffer.from(fixture.fixture_id)));
     await rm(tempRoot, { recursive: true, force: true });
     await mkdir(tempRoot, { recursive: true, mode: 0o700 });
@@ -398,7 +478,17 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
             actual = await inspectV5Run(runDirectory);
           } else fail(`unknown fixture API: ${invocation.api}`);
           if (step.api === 'inject_crash') fail(`crash injection returned an API reply at ${step.crash_point}`);
+          if (typeof options.onReply === 'function') await options.onReply(structuredClone(actual), { fixture_id: fixture.fixture_id, step_id: step.step_id });
+          const replySchemaIssues = validateAgainstSchema(actual, replySchema);
+          if (replySchemaIssues.length > 0) {
+            const branch = replySchema.oneOf.find((candidate) => candidate.properties?.reply_contract_id?.const === actual.reply_contract_id);
+            const branchIssues = branch ? validateAgainstSchema(actual, { ...branch, $defs: replySchema.$defs }) : [];
+            fail(`public reply violates generated Reply oneOf: ${canonicalV5Stringify({ replySchemaIssues, branchIssues, reply_contract_id: actual.reply_contract_id })}`);
+          }
           assertExpectedReply(actual, expected.reply, priorRevision);
+          for (const diagnostic of actual.diagnostics ?? []) {
+            if (typeof diagnostic?.code === 'string') observedDiagnosticsByFixture.get(fixture.fixture_id).add(diagnostic.code);
+          }
           if (typeof actual.current_revision === 'number') priorRevision = actual.current_revision;
           replies.set(step.step_id, actual);
           const normalized = normalizeReply(actual, catalogs);
@@ -420,8 +510,16 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
       await rm(tempRoot, { recursive: true, force: true });
     }
   }
-  if ([...requirementResults.values()].some((count) => count < 2)) fail('not all C01-C16 requirement groups executed positive and negative leaves');
-  const summary = { schema_version: '5.0.0', requirement_groups_passed: requirementResults.size, fixture_leaves_passed: manifest.fixtures.length, transcript_digest: canonicalObjectDigest(transcript) };
+  const uncoveredRuntimeErrors = contracts.policyRegistry.rules
+    .filter((rule) => rule.kind === 'runtime_error')
+    .filter((rule) => !rule.test_ids.some((fixtureId) => observedDiagnosticsByFixture.get(fixtureId)?.has(rule.error_code)))
+    .map((rule) => `${rule.error_code} -> ${rule.test_ids.join(',')}`)
+    .sort();
+  const partialRun = Array.isArray(options.fixtureIds);
+  if (!partialRun && uncoveredRuntimeErrors.length > 0) fail(`Registry runtime errors lack executable leaf triggers: ${uncoveredRuntimeErrors.join('; ')}`);
+  if (!partialRun && [...requirementResults.values()].some((count) => count < 2)) fail('not all C01-C16 requirement groups executed positive and negative leaves');
+  const executedRequirements = [...requirementResults.values()].filter((count) => count > 0).length;
+  const summary = { schema_version: '5.0.0', requirement_groups_passed: partialRun ? executedRequirements : requirementResults.size, fixture_leaves_passed: partialRun ? executedFixtureCount : manifest.fixtures.length, transcript_digest: canonicalObjectDigest(transcript) };
   return options.includeTranscript === true ? { ...summary, transcript } : summary;
 }
 

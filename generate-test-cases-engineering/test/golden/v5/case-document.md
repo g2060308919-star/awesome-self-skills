@@ -2,7 +2,7 @@
 
 - Lineage: lineage-output
 - Semantic root: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-- Bundle digest: sha256:006a9f868a332ea49c94f5b87e7b56e55213244ce90953ef4f9b5f763cefbb0c
+- Bundle digest: sha256:f95216d762f0b8ccecd06e6a5ec75b22b48e7c705134c2f64ff533615aedf0b2
 
 ## Classification
 
@@ -25,62 +25,62 @@
 
 ## Cases
 
-### CASE-40d94218490a73c86ce72bf40d8dd5a9f6de6fcd5ad3b28761f66ab005358f9a — Case exploratory [Exploratory]
-
-- Module: orders
-- Primary Test Point: tp-exploratory
-- Canonical names: Order
-- Scope: 当前响应
-- Observation intent: Observe retry latency without asserting a product requirement.
-
-Steps:
-1. execute exploratory
-   - Oracle ORACLE-0295921004f548d7d2c5094face6d1cf41bce028aa97ff03e5254c730fa111fb: exact_text: done-exploratory; scope=single; window=after_step
-
-### CASE-4eb6d560c3c307e85dd1d4c8d8dbfe08b6b464c0d2b904085609dba2a6bdeffe — Case grounded [Grounded]
-
-- Module: orders
-- Primary Test Point: tp-grounded
-- Canonical names: Order
-- Scope: 当前响应
-
-Steps:
-1. execute grounded
-   - Oracle ORACLE-ce192e991378f816bc7bce337c6f0cf984286084d2e2c103552a1216e8436a7a: exact_text: done-grounded; scope=single; window=after_step
-
-### CASE-a94945ecf16ebc6ec1ad1e4f9a736fab5b92e0bcd5fef5c8e3c1811f1f863ddc — Case conditional [Conditional]
+### CASE-03ff3e1f1090910ecb78109cfb7981a96a80ff8b04545b26894aac597f5b8746 — Case conditional [Conditional]
 
 - Module: orders
 - Primary Test Point: tp-conditional
 - Canonical names: Order
-- Scope: 当前响应
+- Scope: 单项
 
 Steps:
 1. execute conditional
-   - Oracle ORACLE-9c1d997bce627c814d612bed0eaf581dacd0625446636dffdd798d879cda66fe: exact_text: done-conditional; scope=single; window=after_step
+   - Oracle ORACLE-5b57d385a1411939bea0cb4cd375b69b34888010fa56883151c9664fb2ce24e4: exact_text: done-conditional; scope=single; window=after_step
 
-### CASE-bb846cab510738989cbdab0f60f28ca274cb11a73eb3cc26746103f33469224f — Case blocked [Blocked]
+### CASE-17c815e07d471a1b923ee643b19cba004e110365930d4c6a48bcaa482ed4abdc — Case exploratory [Exploratory]
+
+- Module: orders
+- Primary Test Point: tp-exploratory
+- Canonical names: Order
+- Scope: 单项
+- Observation intent: Observe retry latency without asserting a product requirement.
+
+Steps:
+1. execute exploratory
+   - Oracle ORACLE-d6ced708308620d6da4785fc74dfd15d898222f6e35b8aca02ed83e58f5416b2: exact_text: done-exploratory; scope=single; window=after_step
+
+### CASE-3ca646af180f861dad77b8641d6599a58809a310d6ac16bcfb21991312fa547c — Case grounded [Grounded]
+
+- Module: orders
+- Primary Test Point: tp-grounded
+- Canonical names: Order
+- Scope: 单项
+
+Steps:
+1. execute grounded
+   - Oracle ORACLE-d384879658f67586969d2013223a040d19f67a4741dfb8212c212b63e0d5443a: exact_text: done-grounded; scope=single; window=after_step
+
+### CASE-90c37e0a00f523faa1d1b5167cea77653abd72e0b2b3bd5da15642c0ed9f0062 — Case blocked [Blocked]
 
 - Module: orders
 - Primary Test Point: tp-blocked
 - Canonical names: Order
-- Scope: 当前响应
+- Scope: 单项
 - Blocking gaps: gap-delivery-closed
 
 Steps:
 1. execute blocked
-   - Oracle ORACLE-e10d9ed54599923e5aa7356817431d0a9a6751e03ece57dd954102ab413a8516: exact_text: done-blocked; scope=single; window=after_step
+   - Oracle ORACLE-5c7d74351ab2708eed80fd40fa7863fd0bb303d3a7f09b52fe229513c8e47ca8: exact_text: done-blocked; scope=single; window=after_step
 
-### CASE-f74c62333350c5a401f5d937936b0333dc9cfa108679f214233b2236d9d3aedd — Case not-applicable [NotApplicable]
+### CASE-f853cd269e80f2e14d625b34534713eb3027ad7760747a66a056b570948cac52 — Case not-applicable [NotApplicable]
 
 - Module: orders
 - Primary Test Point: tp-not-applicable
 - Canonical names: Order
-- Scope: 当前响应
+- Scope: 单项
 
 Steps:
 1. execute not-applicable
-   - Oracle ORACLE-cdc4cb1215b5c43e8289be1627b8c285b2de1a003091636f9587dde63c28fe5d: exact_text: done-not-applicable; scope=single; window=after_step
+   - Oracle ORACLE-527224f206e7299e2e8f854fcd48c5f35a10e4533cda4813f2c8ff8aaeefb2c6: exact_text: done-not-applicable; scope=single; window=after_step
 
 ## Material Risks
 

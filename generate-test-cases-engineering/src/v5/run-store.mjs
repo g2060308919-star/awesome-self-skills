@@ -172,7 +172,7 @@ export async function publishFixedRecord(fixedPath, record, digestField, expecte
 /** @param {string} runDirectory */
 export async function readVerifiedRun(runDirectory) {
   const layout = await resolveRunLayout(runDirectory);
-  const identityFixed = await readFixedSealedRecord(layout.identity, 'identity_digest');
+  const identityFixed = await readFixedSealedRecord(layout.identity, 'run_identity_digest');
   const pointerFixed = await readFixedSealedRecord(layout.currentPointer, 'pointer_digest');
   const pointer = pointerFixed.record;
   if (pointer.run_id !== identityFixed.record.run_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Run pointer identity binding is invalid.');
@@ -185,7 +185,7 @@ export async function readVerifiedRun(runDirectory) {
     const reply = await readCasJson(path.join(layout.replies, digestFilename(transaction.reply_object_digest)), transaction.reply_object_digest);
     const receipt = await readSealedV5Record(layout.receipts, transaction.receipt_digest, 'receipt_digest');
     const incident = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, 'incident_record_digest');
-    if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || transaction.run_genesis_record_digest !== genesis.run_genesis_record_digest || transaction.previous_run_transaction_digest !== null || transaction.recovery_sequence !== 1) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine transaction identity binding is invalid.');
+    if (genesis.run_id !== identityFixed.record.run_id || genesis.run_identity_digest !== identityFixed.record.run_identity_digest || canonicalV5Stringify(genesis.run_identity) !== canonicalV5Stringify(identityFixed.record) || transaction.run_id !== identityFixed.record.run_id || transaction.run_genesis_record_digest !== genesis.run_genesis_record_digest || transaction.previous_run_transaction_digest !== null || transaction.recovery_sequence !== 1) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine transaction identity binding is invalid.');
     if (checkpoint.run_id !== identityFixed.record.run_id || checkpoint.run_lifecycle !== 'fatal' || checkpoint.fatal_incident_record_digest !== incident.incident_record_digest || selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine checkpoint binding is invalid.');
     if (index.scope !== 'run_integrity_quarantine' || index.index_sequence !== 1 || index.entries.length !== 1 || receipt.scope !== 'run_integrity_quarantine') throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Quarantine idempotency scope is invalid.');
     const entry = index.entries[0];
@@ -218,7 +218,7 @@ export async function readVerifiedRun(runDirectory) {
     incident = await readSealedV5Record(layout.incidents, transaction.incident_record_digest, 'incident_record_digest');
     if (checkpoint.fatal_incident_record_digest !== incident.incident_record_digest || incident.previous_run_transaction_digest !== transaction.previous_run_transaction_digest) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Normal fatal incident binding is invalid.');
   } else if (Object.hasOwn(transaction, 'incident_record_digest')) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Non-fatal transaction unexpectedly references a fatal incident.');
-  if (genesis.run_id !== identityFixed.record.run_id || genesis.identity_digest !== identityFixed.record.identity_digest || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Run object cross-binding is invalid.');
+  if (genesis.run_id !== identityFixed.record.run_id || genesis.run_identity_digest !== identityFixed.record.run_identity_digest || canonicalV5Stringify(genesis.run_identity) !== canonicalV5Stringify(identityFixed.record) || genesis.run_directory_key !== identityFixed.record.run_directory_key || genesis.case_document_lineage_id !== identityFixed.record.case_document_lineage_id || genesis.checkpoint_digest !== chainCursor.checkpoint_digest || genesis.selector_sidecar_digest !== chainCursor.selector_sidecar_digest || chainCursor.run_identity_digest !== identityFixed.record.run_identity_digest || path.basename(layout.root) !== identityFixed.record.run_directory_key || transaction.run_id !== identityFixed.record.run_id || checkpoint.run_id !== identityFixed.record.run_id || index.run_id !== identityFixed.record.run_id) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Run object cross-binding is invalid.');
   if (selectorSidecar.checkpoint_digest !== checkpoint.checkpoint_digest || index.index_sequence !== transaction.transaction_sequence || index.entries.length !== transaction.transaction_sequence) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Checkpoint/sidecar/index sequence binding is invalid.');
   if (receipt && (receipt.reply_object_ref.reply_digest !== transaction.reply_object_digest || !index.entries.some((/** @type {Record<string, any>} */ entry) => entry.receipt_digest === receipt.receipt_digest && entry.reply_digest === transaction.reply_object_digest))) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Receipt/index/reply binding is invalid.');
   if (operationalEvent && (checkpoint.cancel_event_digest !== operationalEvent.cancel_event_digest || receipt?.canonical_action_digest !== operationalEvent.canonical_cancel_action_digest || transaction.previous_run_transaction_digest !== operationalEvent.previous_run_transaction_digest)) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Cancel event transaction binding is invalid.');
@@ -237,7 +237,9 @@ const COMPILER_SEALED_DIGEST_FIELDS = new Map([
   ['behavior_contract_seed_digest', 'seed_digest'],
   ['clarification_gaps_digest', 'gaps_digest'],
   ['pending_clarification_digest', 'pending_record_digest'],
-  ['test_obligations_digest', 'obligations_digest']
+  ['test_obligations_digest', 'obligations_digest'],
+  ['case_compilation_context_digest', 'context_digest'],
+  ['provenance_graph_digest', 'graph_digest']
 ]);
 
 /** @param {string} code @param {string} targetKind @param {string[]} affectedRefs @param {unknown} cause */
@@ -265,6 +267,7 @@ export async function verifyV5AcceptedClosure(current) {
     'term_registry_digest', 'behavior_contract_seed_digest', 'clarification_gaps_digest',
     'question_part_state_set_digest', 'presentation_digest', 'preview_digest',
     'pending_clarification_digest', 'test_obligations_digest', 'risk_ledger_digest',
+    'case_compilation_context_digest', 'provenance_graph_digest',
     'case_document_digest', 'execution_plan_digest', 'execution_snapshot_digest',
     'final_execution_projection_digest'
   ];
