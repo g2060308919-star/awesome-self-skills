@@ -532,31 +532,31 @@
 - Consumes: only `tests/fixtures/v5/manifest.json`, public V5 APIs, internal test-service injection, and logical tamper/crash operations.
 - Produces: deterministic per-step projections and exact result/digest assertions for every manifest leaf.
 
-- [ ] **Step 1: Write failing harness-contract tests**
+- [x] **Step 1: Write failing harness-contract tests**
 
   Test manifest-only discovery, exact action/expected-step cardinality, backward reply bindings, unique JSON-pointer resolution, placeholder exhaustion, path traversal, non-regular files, fixed sandbox digests/modes/locks, unsupported platform blocking, logical tamper resolution, and crash wrappers that must terminate without an API reply.
 
-- [ ] **Step 2: Run harness tests and observe RED**
+- [x] **Step 2: Run harness tests and observe RED**
 
   Run: `node --test test/v5/fixture-runner.test.mjs`
 
   Expected: FAIL because the manifest and runner are absent.
 
-- [ ] **Step 3: Implement the deterministic harness**
+- [x] **Step 3: Implement the deterministic harness**
 
   Seed clock, entropy, run IDs, and master key from `fixture_id` through an internal-only service object. Normalize only the temporary catalog prefix to `fixture://catalog/<catalog_key>` before golden digest comparison. Never export test injection or tamper helpers from production.
 
-- [ ] **Step 4: Populate C01–C16 positive and negative/blocked/protocol leaves**
+- [x] **Step 4: Populate C01–C16 positive and negative/blocked/protocol leaves**
 
   Every `C01`–`C16` has at least one positive and one negative/Blocked fixture. Each policy-registry `test_id` resolves to exactly one leaf. Process-control steps are followed by inspect/advance evidence of recovery or isolation.
 
-- [ ] **Step 5: Run all fixture leaves**
+- [x] **Step 5: Run all fixture leaves**
 
   Run: `node test/fixtures-v5-runner.mjs tests/fixtures/v5/manifest.json`
 
   Expected: 16/16 requirement groups pass, all leaf projections match their exact reply/error/revision/pointer assertions, and repeated runs are byte-identical.
 
-- [ ] **Step 6: Commit the fixture contract**
+- [x] **Step 6: Commit the fixture contract**
 
   ```bash
   git add test tests/fixtures/v5
@@ -582,31 +582,31 @@
 - Consumes: complete V5 implementation and generated bundle.
 - Produces: one discoverable V5 Skill installation with no legacy operational path and a C01–C16 traceability record.
 
-- [ ] **Step 1: Write failing V4 dead-code/version and Skill behavior tests**
+- [x] **Step 1: Write failing V4 dead-code/version and Skill behavior tests**
 
   Scan production exports, dispatches, Schemas, policies, SKILL instructions, UI prompt, and built bundle for forbidden V3/V4 operational symbols/versions. Test the V5 Skill's source acquisition, typed clarification, recovery, canonical delivery, and no-E2E boundaries against the old V4 wording baseline.
 
-- [ ] **Step 2: Run tests and observe RED**
+- [x] **Step 2: Run tests and observe RED**
 
   Run: `node --test test/v5/no-v4-runtime.test.mjs test/v5/skill-contract.test.mjs`
 
   Expected: FAIL on current V4 exports, Schemas, policies, and instructions.
 
-- [ ] **Step 3: Remove unreachable legacy runtime and update public guidance**
+- [x] **Step 3: Remove unreachable legacy runtime and update public guidance**
 
   Delete only operational legacy code and its obsolete tests; retain baseline evidence and immutable historical evidence documents. Keep `SKILL.md` focused and route detailed V5 contracts to the six maintained reference policies. Update `openai.yaml` in place and keep implicit invocation unchanged.
 
-- [ ] **Step 4: Add ADR and traceability evidence**
+- [x] **Step 4: Add ADR and traceability evidence**
 
   Record why V5 is a cutover rather than a compatibility mode, which proven V4 capabilities were retained, the rollback constraint (previous approved V5 only after release), C01–C16 requirement → Schema → symbol → fixture mapping, known limitations, and every SHOULD deviation.
 
-- [ ] **Step 5: Build and synchronize the published package**
+- [x] **Step 5: Build and synchronize the published package**
 
   Run: `npm run build`
 
   Mechanically synchronize `skill/generate-test-cases/` to repository-level `../generate-test-cases/`, then run `node build/build.mjs --check` and the repository-published sync test.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
   Run: `node --test test/v5/no-v4-runtime.test.mjs test/v5/skill-contract.test.mjs test/interface/repository-published-sync.test.mjs`
 

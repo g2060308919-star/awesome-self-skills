@@ -1,127 +1,93 @@
 ---
 name: generate-test-cases
-description: Use when a PRD, module description, module-description, 需求文档, 模块说明, 功能变更, 规则变更, 验收标准, 交互说明, 接口契约, 粘贴需求, 测试用例, 测试点, or 测试场景 must become manual functional test Cases with high accuracy, high coverage, end-to-end traceability, explicit Blocked accounting, and convergent clarification. Do not use for Playwright, 浏览器 E2E, API automation, API 自动化, 接口自动化, 单元测试代码生成, code-review-only, or 仅代码审查 requests.
+description: Use when a PRD, module description, module-description, 需求文档, 模块说明, 功能变更, 规则变更, 验收标准, 交互说明, 接口契约, 粘贴需求, 测试用例, 测试点, or 测试场景 must become evidence-grounded manual functional Cases. Do not use for browser E2E, API automation, unit-test code generation, or review-only requests.
 ---
 
 # Generate Test Cases
 
-Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
+Turn authoritative requirement material into deterministic, traceable manual functional Cases with the bundled V5 compiler. The compiler owns protocol state, identities, digests, validation, provenance, rendering, and recovery. The Agent may submit only four semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
 
-The compiler owns validation, stable identity, Facts, scope topology, formal Test Points, semantic roots, classification, coverage, ordering, checkpoints, canonical results, and rendering. The Agent writes only the four requested semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
+## Read policy before acting
 
-## Load the matching policy before acting
-
-- Read `references/run-management.md` before creating, recovering, resuming, repairing, replacing, or cancelling with `cancel_run`.
-- Read `references/evidence-policy.md` before collecting sources, creating locators, or writing `source_pack` or `evidence_claims`.
+- Read `references/run-management.md` before create, inspect, advance, cancel, or resume operations.
+- Read `references/evidence-policy.md` before source acquisition or writing `source_pack` and `evidence_claims`.
 - Read `references/behavior-views.md` before writing `behavior_views`.
-- Read `references/case-writing-policy.md` before writing `case_drafts` or presenting the business Case document.
-- Read `references/clarification-policy.md` before presenting questions or submitting `answer_question_part`, `defer_question_part`, `mark_question_unknown`, or `request_delivery`.
-- Read `references/execution-closure-policy.md` before submitting `provide_capability_proof`, `set_execution_disposition`, `pause_execution`, or `reopen_semantic_question`, and before presenting or confirming an execution plan.
+- Read `references/case-writing-policy.md` before writing `case_drafts` or presenting a Case Document.
+- Read `references/clarification-policy.md` before presenting or committing clarification answers.
+- Read `references/execution-closure-policy.md` before creating or confirming an Execution Plan.
 
-Read the runner-requested `scripts/schemas/<schema_ref>` before writing that artifact or event. Do not invent a field absent from the closed Schema, rename a result kind, or expose a private working shape.
+Read every Schema named by a reply before submitting its action. Copy the advertised action object and selector unchanged. Never invent a field, stable ID, digest, token, run directory, or protocol record.
 
-## Select one delivery boundary
+## Select the delivery boundary
 
-For ordinary requests to generate test Cases, test points, or a test document, use `delivery_intent=case_document`. Case generation does not check real environment URLs, accounts, observer access, control access, test-data availability, or cleanup resources. Logical business roles, permissions, preconditions, data conditions, actions, Oracles, and relative baselines are still semantic inputs.
+Use `delivery_intent: "case_document"` for ordinary requests to generate Cases or test points. This path models business roles, permissions, preconditions, data conditions, actions, and Oracles, but does not require a live URL, account, test data, observer, control channel, or cleanup resource.
 
-Use `delivery_intent=execution_plan` only when the user explicitly asks to select or confirm an execution list. An execution plan is a separate downstream run bound to an immutable `case_document_ref` containing the exact `manifest_digest` and `bundle_digest`. Only this path checks current execution capabilities and dispositions. Do not ask for execution resources or an execution-plan preference during ordinary Case generation.
+Use `delivery_intent: "execution_plan"` only when the user explicitly requests an execution selection. It must bind an immutable `case_document_ref`. Only this path evaluates current execution capabilities and dispositions. This Skill never starts E2E, invokes a browser or API runner, generates automation code, or records execution results.
 
-This Skill creates and, when explicitly requested, confirms an execution plan. It does not automatically start E2E, invoke a browser or API runner, generate automation code, or record execution results.
+## Create and recover a run
 
-## Gate and freeze input
+Resolve `<skill-dir>` to this installed Skill directory. Import the three public APIs from `<skill-dir>/scripts/test-compiler.mjs`:
 
-Try every supplied path, attachment, and inline source. If no requirement content is readable, ask once for accessible source material. If it remains unavailable, end with `INPUT_UNAVAILABLE`; never create a generic or empty Case document.
+```js
+import {
+  createV5RunDirectory,
+  advanceV5Run,
+  inspectV5Run
+} from '<skill-dir>/scripts/test-compiler.mjs';
+```
 
-Freeze product, module, role, client, version, region, environment, original source set, and material scope. An unspecified dimension remains unspecified. Do not broaden or narrow scope because later analysis discovers more material. New authoritative source bytes or a material scope change requires `NEW_RUN_REQUIRED`; preserve the old run.
+Create a durable private catalog outside the Skill installation and OS temporary storage. Call `createV5RunDirectory(catalogRoot, request)` once. The compiler atomically creates catalog genesis, the run directory, and its first reply. Keep the returned absolute run directory as the recovery reference.
 
-Set `output_language` to the user's requested `zh-CN` or `en`, otherwise use the request language. Preserve source quotations and technical names verbatim. Never fill product truth from generic domain knowledge.
-
-When a business Claim carries compiler-consumed structure inside `semantic_value`, use only the exact assertion families and closed item shapes documented in `references/evidence-policy.md`: `relative_baseline_assertions`, `test_value_assertions`, `test_value_derivations`, `risk_review_assertions`, `not_applicable_assertions`, and `ordering_assertions`. Do not place execution readiness or a self-authored compiler ID in these fields.
-
-## Run the private workflow
-
-Resolve `<skill-dir>` to this Skill directory. Create a persistent private run directory owned by the current task, outside the Skill installation and outside OS temporary storage. Its canonical absolute path is durable run identity; a spelling containing `..` that resolves to it is the same canonical run.
-
-Maintain `run-catalog.json` only as the private relationship index described by `references/run-management.md`. Accepted semantic repairs use its append-only `artifact_repairs` procedure; neither structure is a fifth Agent-writable artifact or an authority over the runner checkpoint.
-
-For context recovery, resume the same run directory and invoke the runner first. Do not infer state from conversation history, filenames, a stale checkpoint, or an old current manifest. Invoke exactly:
+Call `inspectV5Run(runDirectory)` whenever context is missing or uncertain. Inspection is read-only and returns the current persisted reply. The command-line surface is inspection-only:
 
 ```text
 node <skill-dir>/scripts/test-compiler.mjs <absolute-run-directory>
 ```
 
-The runner receives one absolute run-directory argument and stdout contains one JSON reply. Validate it against `scripts/schemas/reply.schema.json` before inspecting status or writing anything. Unknown status/stage, a stage/schema mismatch, malformed JSON, extra reply fields, or unverifiable recovery bindings is `PIPELINE_PROTOCOL_ERROR`; write no artifact. stderr is diagnostics only.
+Submit work only through `advanceV5Run(runDirectory, submission)`. Each submission contains a new `idempotency_key` plus the exact advertised action/selector and requested payload. Reusing a key with identical canonical action bytes returns the original receipt; reusing it for different bytes is an idempotency conflict.
 
-Import the private installed Adapter helpers `createV4RunDirectory`, `constructV4Action`, and `stageV4SourceAcquisitionAction` from `<skill-dir>/scripts/test-compiler.mjs`. Create each Case Document or Execution Plan sibling with `createV4RunDirectory(<catalog-root>, delivery_intent)` so the compiler issues the run ID and canonical `runs/<run-id>` directory together; never mint a run ID or move an established run directory. Before submitting a displayed action, pass the validated reply plus only the user's semantic answer or choice to `constructV4Action`, then append exactly the returned event to the next Source Pack revision. Never mint or compute an event ID, digest, presentation binding, request binding, or other protocol ID. A stale or unadvertised action is a protocol error; do not hand-build a substitute event.
+## Acquire sources
 
-Follow this order:
+Provide a nonempty `source_bootstrap` at create time. Declare each source as inline text, local path, HTTPS URL, or attachment reference. The compiler derives the ordered Source Requests and advertises `submit_source_batch` for the current batch.
 
-```text
-source acquisition and canonical capture
--> source review, atomic Facts, topology review, and scope manifest
--> pre-case clarification
--> sparse Behavior Views, business outcomes, formal Test Points, and Case Drafts
--> post-case clarification for newly discovered semantic gaps only
--> canonical Case Document delivery
--> optional explicit Execution Plan bound to that immutable Case Document
-```
+For every request in the batch, explicitly choose `fulfilled` or `skipped_optional`. A required request cannot be skipped. Supply the exact bytes for fulfilled material; do not persist expiring retrieval credentials. The compiler owns canonicalization, content digests, Source IDs, accepted state, and batch order. New authoritative bytes or material scope changes require a new run.
 
-The pre-case clarification occurs after source review, atomic fact extraction, and scope manifest closure, but before Behavior Views and Cases. The post-case clarification occurs only after Case design reveals a genuinely new semantic gap. In both phases, present one business-readable batch.
+If no requirement content can be acquired, report `INPUT_UNAVAILABLE`; do not create generic or empty Cases.
 
-For a partial answer, submit only reliably bound answered parts. Unanswered parts remain `presented` and pending; blank, unparseable, or not reliably bound text writes no answer and cannot suppress an item or advance its revision. Only an explicit `defer_question_part` or `mark_question_unknown` changes that part to deferred or unknown. `request_delivery` closes only the explicitly referenced parts for delivery.
+## Review the four semantic artifacts
 
-## Handle runner replies
+At each advertised `submit_artifact` action, write only the named artifact and only fields allowed by its Schema:
 
-Every user-visible stop path must state: current state, produced artifacts, incomplete reason, concrete next actions, and recovery. Use only actions returned by the validated reply.
+1. `source_pack` records the accepted source structure and exact locator spans.
+2. `evidence_claims` decomposes source truth into atomic, origin-bound candidates and resolves compiler-issued review obligations.
+3. `behavior_views` supplies typed field, domain, population, permission, Oracle, and risk semantics without fabricating product truth.
+4. `case_drafts` expresses independently diagnosable scenarios whose Oracles bind existing steps.
 
-### Handle `need_artifact`
+The compiler validates each artifact, derives semantic roots, and accepts or rejects it transactionally. An unaccepted submission may be corrected with a new idempotency key. Accepted bytes are immutable.
 
-Report current state, produced artifacts, why source acquisition is incomplete, the advertised `provide_artifact`/`cancel_run` next actions, and the exact `resume_ref` recovery. Never retain a signed retrieval URL. Collect the complete batch named by `artifact_requests`, review the safe canonical Source Pack, and call `stageV4SourceAcquisitionAction` with the validated reply, that Source Pack, each request's safe input, and its exact material bytes; then call the runner again. The helper derives all events and computed Source fields and atomically stages only the safe resumed Source Pack plus short-lived material. `need_artifact` is reserved for this complete source-acquisition recovery contract.
+## Clarify in two phases
 
-### Handle `need_user_answers`
+When questions are advertised, present only the compiler's current visible question parts and business impact. Preserve every binding from the reply.
 
-Report current state, produced artifacts, why the run needs decisions, available actions, and recovery from the committed checkpoint. Present compiler questions in business language: concrete question, `why_needed`, `decision_impact`, `unresolved_outcome`, affected business items, and named risk counts. Keep root, Fact, Claim, obligation, digest, and other protocol IDs hidden in the submission context.
+1. Submit `preview_clarification_response` with reliably bound response units.
+2. Show the deterministic preview and its impact to the user.
+3. After the user confirms, submit `commit_clarification_response` with the same preview digest and an advertised confirmation token.
 
-For semantic clarification, allow only `answer_question_part`, `defer_question_part`, `mark_question_unknown`, `request_delivery`, and `cancel_run` when advertised. For an explicitly requested execution plan, execution closure uses only `provide_capability_proof`, `set_execution_disposition`, `pause_execution`, `reopen_semantic_question`, and `cancel_run` when advertised. Copy all presentation, version, item, run, and checkpoint bindings exactly; do not compute IDs.
+Partial answers change only reliably bound parts. Blank or ambiguous text changes nothing. Defer, unknown, close-for-delivery, and cloned-answer controls apply only when currently advertised and must be copied exactly. A stale preview must be regenerated. `read_only_integrity_fatal` permits inspection only and never permits clarification or semantic writes.
 
-### Handle `need_revision`
+## Deliver the canonical result
 
-Report current state, accepted artifacts, exact validation reason, the artifact/action that can be corrected next, and recovery from the last committed checkpoint. Repair an unaccepted staging artifact at the same revision. Repair an accepted semantic artifact only through the digest-bound append procedure in `run-management.md`; never edit accepted, derived, or output bytes.
+On `finished`, use `case_document_ref` and the output manifest returned by inspection. Re-read every referenced file and verify each digest before reporting success. JSON is normative; Markdown and CSV are deterministic views of the same canonical Case Document. Never hand-edit or replace them.
 
-When `incomplete_reason.code` is `STAGE_ARTIFACT_REQUIRED`, open the named Schema and matching policy, write only its fixed staging file, and call the runner again:
+Report the exact result kind and distinguish delivered Cases, retained semantic gaps, Exploratory items, NotApplicable items, and a blocked-only report. Do not claim unbounded coverage. Only Grounded, explicitly selected Cases may enter an Execution Plan projection.
 
-- `source_pack` -> `staging/source-pack.json`
-- `evidence_claims` -> `staging/evidence-claims.json`
-- `behavior_views` -> `staging/behavior-views.json`
-- `case_drafts` -> `staging/case-drafts.json`
+On `need_artifact`, `need_revision`, `need_user_answers`, or clarification confirmation, report the current persisted state, accepted artifacts, incomplete reason, exact advertised next actions, and recovery reference. On `cancelled`, preserve the terminal run and create a compiler-issued sibling only when the user asks to resume. On any integrity fatal, return the diagnostic and recovery guidance without producing an unofficial Case document.
 
-Any other Agent-writable stage is `PIPELINE_PROTOCOL_ERROR`. Never invent a fifth artifact.
+## Truth and authority rules
 
-Allow three repair attempts for the same normalized stage and root cause. The fourth identical no-progress result is `PIPELINE_NO_PROGRESS`, not a compiler fatal or business Blocked item. Reset the counter only on material stage or cause change.
-
-### Handle `finished`
-
-Re-read `output/current.json`, treat it as the only authoritative manifest, and validate every referenced file and digest before reporting success. Report current state, canonical result kind, produced files/counts, any retained gaps or execution exclusion reason, next available action, and exact recovery run reference.
-
-Case Document JSON, business Markdown, and execution worksheet CSV are deterministic views of the same canonical bundle. Markdown begins with a one-scenario-per-line overview showing module, priority, title, and status; it labels coverage as “已审阅 formal test-point 覆盖” and separately names semantic gap, Exploratory, and NotApplicable counts. Never claim unbounded “100% requirement coverage”. Internal IDs appear only in canonical JSON or an explicitly enabled audit appendix.
-
-`blocked_only` is a delivered unresolved report and must not claim Cases were generated. `no_applicable_cases`, `delivered_cases`, and `delivered_with_gaps` retain their exact meaning. Execution-only `execution_ready` requires nonempty `runner_projection.case_ids`; `no_execution_selected` is not ready. Only Grounded + Execute Cases enter that projection.
-
-Never produce a hand-written official final, alternate Markdown, spreadsheet, or test-case fallback. A fatal or failed canonical gate means no unbound file is an official result.
-
-### Handle `fatal`
-
-Report current state, the last valid produced artifacts, diagnostic reason, safe next action if any, and checkpoint recovery. On fatal, produce no Markdown, spreadsheet, test cases, or other fallback final. Never convert process failure into semantic Blocked.
-
-### Handle `cancelled`
-
-Report current state, produced and preserved prior artifacts, incomplete reason (the cancellation phase/reason), the next action, and recovery. The cancelled run accepts no more appends. `cancel_run` is valid during source acquisition, semantic clarification, execution closure, and final confirmation; repeat cancellation is idempotent. To resume, call the installed bundle's ordinary `createV4RunDirectory` helper with `{ parent_run_id, creation_reason: 'resume_cancelled' }` as its second argument; the compiler derives the original delivery intent and issues the sibling ID. Never append to the cancelled run, mint its ID, or choose a different intent.
-
-## Preserve truth and delivery integrity
-
-- Keep evidence status separate from execution disposition. DoNotExecute never means NotApplicable and cannot upgrade evidence or alter an Oracle.
-- Keep one independently diagnosable primary business outcome per Case. Every Oracle binds an existing step with `observe_after_step_id`.
-- Never fabricate a Behavior View field, business rule, ordering dependency, observer, execution resource, or Schema field. Multiple unrelated atomic Claims must not share a whole-document locator.
-- `request_delivery` may close selected semantic gaps for delivery; it never fabricates answers, deletes formal Test Points, or makes an execution plan ready.
-- JSON is normative. Markdown and CSV are mechanical views of the same canonical result, never independently edited.
-- Execution results and defect records belong downstream and bind the delivered bundle digest plus Case ID; they are never written into the canonical Case Document.
+- Source truth comes only from accepted authoritative material or explicit user clarification.
+- Evidence status and execution disposition are independent.
+- One Case has one independently diagnosable primary business outcome.
+- Every Oracle uses a typed observation and binds an existing step.
+- Downstream output can never become an authoritative input.
+- Compiler-owned records, identities, digests, selectors, receipts, pointers, and rendered files are never Agent-authored.

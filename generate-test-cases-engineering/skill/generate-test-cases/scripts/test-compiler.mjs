@@ -305,14 +305,14 @@ function stableSemanticKey(path7, value) {
   if (typeof value === "boolean") return `boolean:${value}`;
   if (value === null) return "null";
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    const object7 = (
+    const object8 = (
       /** @type {Record<string, unknown>} */
       value
     );
     const collectionPath = pathKey(path7);
     const idField = COLLECTION_ID_FIELDS.get(collectionPath);
-    if (idField && typeof object7[idField] === "string") return `id:${object7[idField]}:${JSON.stringify(object7)}`;
-    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object7.dimension, module_ids: object7.module_ids })}:${JSON.stringify(object7)}`;
+    if (idField && typeof object8[idField] === "string") return `id:${object8[idField]}:${JSON.stringify(object8)}`;
+    if (collectionPath === "/interaction_matrix") return `interaction:${JSON.stringify({ dimension: object8.dimension, module_ids: object8.module_ids })}:${JSON.stringify(object8)}`;
   }
   return JSON.stringify(value);
 }
@@ -789,50 +789,6 @@ function actionTemplateForV5Action(registry, cellId, action) {
   if (matches.length !== 1) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "The action does not match one advertised closed action template.");
   return structuredClone(matches[0]);
 }
-
-// src/contracts.mjs
-var REPLY_STATUS = Object.freeze([
-  "need_artifact",
-  "need_user_answers",
-  "need_revision",
-  "finished",
-  "fatal"
-]);
-var DIAGNOSTIC_CATEGORY = Object.freeze([
-  "schema",
-  "reference",
-  "traceability",
-  "coverage",
-  "classification"
-]);
-var STABLE_ID_COLLECTIONS = Object.freeze([
-  Object.freeze({ path: Object.freeze(["sources"]), id: "source_id" }),
-  Object.freeze({ path: Object.freeze(["locators"]), id: "locator_id" }),
-  Object.freeze({ path: Object.freeze(["source_policy", "rules"]), id: "rule_id" }),
-  Object.freeze({ path: Object.freeze(["decision_records"]), id: "decision_id" }),
-  Object.freeze({ path: Object.freeze(["clarification_events"]), id: "event_id" }),
-  Object.freeze({ path: Object.freeze(["claims"]), id: "claim_id" }),
-  Object.freeze({ path: Object.freeze(["fact_ledger"]), id: "fact_id" }),
-  Object.freeze({ path: Object.freeze(["views"]), id: "view_id" }),
-  Object.freeze({ path: Object.freeze(["views", "*", "elements"]), id: "element_id", namespace: "elements" }),
-  Object.freeze({ path: Object.freeze(["views", "*", "relations"]), id: "relation_id" }),
-  Object.freeze({ path: Object.freeze(["interaction_candidates"]), id: "candidate_id" }),
-  Object.freeze({ path: Object.freeze(["obligations"]), id: "obligation_id" }),
-  Object.freeze({ path: Object.freeze(["cases"]), id: "case_id", namespace: "cases" }),
-  Object.freeze({ path: Object.freeze(["cases", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
-  Object.freeze({ path: Object.freeze(["cases", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
-  Object.freeze({ path: Object.freeze(["exploratory_candidates"]), id: "exploratory_id" }),
-  Object.freeze({ path: Object.freeze(["root_issue_dispositions"]), id: "root_issue_id" }),
-  Object.freeze({ path: Object.freeze(["grounded"]), id: "case_id", namespace: "bundle_cases" }),
-  Object.freeze({ path: Object.freeze(["conditional"]), id: "case_id", namespace: "bundle_cases" }),
-  Object.freeze({ path: Object.freeze(["grounded", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
-  Object.freeze({ path: Object.freeze(["conditional", "*", "steps"]), id: "step_id", namespace: "case_steps", scopeSegments: 1 }),
-  Object.freeze({ path: Object.freeze(["grounded", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
-  Object.freeze({ path: Object.freeze(["conditional", "*", "steps", "*", "expectations"]), id: "expectation_id", namespace: "case_expectations", scopeSegments: 3 }),
-  Object.freeze({ path: Object.freeze(["blockers"]), id: "root_issue_id", namespace: "reply_root_issues" }),
-  Object.freeze({ path: Object.freeze(["blocked"]), id: "obligation_id" }),
-  Object.freeze({ path: Object.freeze(["exploratory"]), id: "exploratory_id" })
-]);
 
 // src/schema-validator.mjs
 var NATIVE_ARRAY_EVERY = Array.prototype.every;
@@ -2191,6 +2147,151 @@ function validateValueState(value) {
   if (value.axes === "data_and_render" && exact(value, ["axes", "data_state", "render_state"]) && validateData(value.data_state) && validateRender(value.render_state)) return structuredClone(value);
   return invalid();
 }
+function validateFieldCorrespondence(mapping, ruleIndex) {
+  const fail = (message) => {
+    throw new V5ProtocolError("FIELD_CORRESPONDENCE_REQUIRED", message);
+  };
+  try {
+    if (!object(mapping) || !nonblank2(mapping.mapping_client_key) || !["left", "right"].includes(mapping.authority_side) || !nonempty(mapping.basis)) return fail("Field mapping identity or basis is missing.");
+    const sideKeys = ["semantic_role", "logical_surface_ref", "collection_path", "item_field_path"];
+    if (!exact(mapping.left, sideKeys) || !exact(mapping.right, sideKeys) || ![mapping.left, mapping.right].every((side) => ["ui", "authoritative_source", "peer_surface"].includes(side.semantic_role) && [side.logical_surface_ref, side.collection_path, side.item_field_path].every(nonblank2))) return fail("Field sides are not closed.");
+    if (mapping[mapping.authority_side].semantic_role !== "authoritative_source" || [mapping.left, mapping.right].filter((side) => side.semantic_role === "authoritative_source").length !== 1) return fail("Exactly the authority side must be authoritative_source.");
+    if (mapping.join?.kind === "singleton") {
+      if (!exact(mapping.join, ["kind"])) return fail("Singleton join cannot contain record keys.");
+    } else if (mapping.join?.kind === "key_equality") {
+      const allowed = mapping.join.key_normalization_ref ? ["kind", "left_key_path", "right_key_path", "cardinality", "key_normalization_ref"] : ["kind", "left_key_path", "right_key_path", "cardinality"];
+      if (!exact(mapping.join, allowed) || !nonblank2(mapping.join.left_key_path) || !nonblank2(mapping.join.right_key_path) || !["one_to_one", "many_to_one", "one_to_many"].includes(mapping.join.cardinality)) return fail("Key join is incomplete.");
+      if (mapping.join.key_normalization_ref) resolveSemanticRuleRef(mapping.join.key_normalization_ref, "key_normalization", ruleIndex);
+    } else return fail("Join kind is unknown.");
+    if (mapping.transform?.kind === "identity") {
+      if (!exact(mapping.transform, ["kind"])) return fail("Identity transform is not closed.");
+    } else if (mapping.transform?.kind === "registered" && exact(mapping.transform, ["kind", "transform_ref"])) resolveSemanticRuleRef(mapping.transform.transform_ref, "transform", ruleIndex);
+    else return fail("Transform must be identity or a typed registered rule.");
+    if (mapping.comparison?.kind === "strict_equal") {
+      if (!exact(mapping.comparison, ["kind"])) return fail("Strict comparison cannot carry normalization.");
+    } else if (mapping.comparison?.kind === "normalized_equal" && exact(mapping.comparison, ["kind", "normalization_ref"])) resolveSemanticRuleRef(mapping.comparison.normalization_ref, "value_normalization", ruleIndex);
+    else return fail("Comparison branch is invalid.");
+    resolveSemanticRuleRef(mapping.null_policy_ref, "null_policy", ruleIndex);
+    if (!(mapping.freshness?.kind === "same_logical_snapshot" && exact(mapping.freshness, ["kind"])) && !(mapping.freshness?.kind === "within_business_window" && exact(mapping.freshness, ["kind", "duration_ms"]) && Number.isSafeInteger(mapping.freshness.duration_ms) && mapping.freshness.duration_ms > 0)) return fail("Freshness is not executable.");
+    return structuredClone(mapping);
+  } catch (error) {
+    if (error instanceof V5ProtocolError && error.code === "ORACLE_NOT_DECIDABLE") return fail(error.message);
+    throw error;
+  }
+}
+function compileClosedDomain(semanticRootDigest, input) {
+  const fail = (message) => {
+    throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", message);
+  };
+  if (!object(input) || input.domain?.kind !== "closed_enum" || !nonblank2(input.domain_client_key) || !nonblank2(input.subject_ref) || !nonblank2(input.field_path) || !nonempty(input.domain.members) || !nonempty(input.domain.closed_world_basis) || !nonempty(input.partitions)) return fail("Closed Domain is incomplete.");
+  if (
+    /** @type {any[]} */
+    input.domain.members.some((value) => !validateTypedValue(value))
+  ) return fail("Domain members must be typed values.");
+  const memberMap = new Map(
+    /** @type {any[]} */
+    input.domain.members.map((value) => [canonicalV5Stringify(value), value])
+  );
+  if (memberMap.size !== input.domain.members.length) return fail("Domain members must be unique.");
+  const claimed = /* @__PURE__ */ new Set();
+  let complementCount = 0;
+  const domainAnchorDigest = canonicalObjectDigest({ subject_ref: input.subject_ref, field_path: input.field_path, domain: input.domain });
+  const partitions = (
+    /** @type {Array<Record<string, any>>} */
+    input.partitions.map((partition) => {
+      if (partition.kind === "exact_members") {
+        if (!exact(partition, ["partition_client_key", "kind", "semantic_role", "values"]) || !["target", "other"].includes(partition.semantic_role) || !nonempty(partition.values)) return fail("Exact partition is invalid.");
+        const values = [...new Map(
+          /** @type {any[]} */
+          partition.values.map((value) => [canonicalV5Stringify(value), value])
+        ).values()];
+        if (values.length !== partition.values.length || values.some((value) => !memberMap.has(canonicalV5Stringify(value)) || claimed.has(canonicalV5Stringify(value)))) return fail("Exact partitions overlap or escape the universe.");
+        values.forEach((value) => claimed.add(canonicalV5Stringify(value)));
+        const normalized = { kind: partition.kind, semantic_role: partition.semantic_role, values };
+        return { ...structuredClone(partition), partition_id: stableV5Id("domain_partition", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, normalized_partition: normalized }) };
+      }
+      if (partition.kind === "complement") {
+        complementCount += 1;
+        if (complementCount > 1 || !exact(partition, ["partition_client_key", "kind", "semantic_role", "universe", "excluded_values"]) || partition.semantic_role !== "complement" || canonicalV5Stringify(partition.universe) !== '{"kind":"parent_domain"}' || !Array.isArray(partition.excluded_values)) return fail("Complement partition is invalid.");
+        const excluded = new Set(
+          /** @type {any[]} */
+          partition.excluded_values.map((value) => canonicalV5Stringify(value))
+        );
+        if ([...excluded].some((key) => !memberMap.has(key))) return fail("Complement exclusion escapes the universe.");
+        const derived = [...memberMap.entries()].filter(([key]) => !excluded.has(key)).map(([, value]) => value);
+        if (derived.length === 0 || derived.some((value) => claimed.has(canonicalV5Stringify(value)))) return fail("Complement must be nonempty and disjoint.");
+        derived.forEach((value) => claimed.add(canonicalV5Stringify(value)));
+        const normalized = { kind: partition.kind, semantic_role: partition.semantic_role, universe: partition.universe, excluded_values: partition.excluded_values };
+        return { ...structuredClone(partition), derived_members: derived, partition_id: stableV5Id("domain_partition", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, normalized_partition: normalized }) };
+      }
+      return fail("Closed enums allow only exact and complement partitions.");
+    })
+  );
+  if (claimed.size !== memberMap.size) return fail("Closed Domain partitions must cover the complete universe.");
+  const partitionIds = partitions.map((partition) => partition.partition_id).sort();
+  return { ...structuredClone(input), partitions, domain_contract_id: stableV5Id("domain_contract", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, partition_ids: partitionIds }) };
+}
+function compileDomain(semanticRootDigest, input, predicateContracts = []) {
+  if (input.domain?.kind === "closed_enum") return compileClosedDomain(semanticRootDigest, input);
+  const fail = (message) => {
+    throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", message);
+  };
+  if (!object(input) || !["predicate_partition", "open_domain"].includes(input.domain?.kind) || !nonblank2(input.domain_client_key) || !nonblank2(input.subject_ref) || !nonblank2(input.field_path) || !nonempty(input.partitions)) return fail("Predicate/Open Domain is incomplete.");
+  const contractByKey = new Map(predicateContracts.map((contract) => [contract.predicate_contract_client_key, contract]));
+  const boundaryBasis = input.domain.kind === "open_domain" ? input.domain.boundary_basis : input.domain.boundary_basis;
+  if (!nonempty(boundaryBasis) || input.domain.kind === "open_domain" && !nonblank2(input.domain.boundary_description) || input.domain.kind === "predicate_partition" && !typedRef(input.domain.universe_ref, "universe", semanticRootDigest)) return fail("Domain boundary is not closed by evidence and a typed universe.");
+  const domainAnchorDigest = canonicalObjectDigest({ subject_ref: input.subject_ref, field_path: input.field_path, domain: input.domain });
+  const partitions = (
+    /** @type {Array<Record<string,any>>} */
+    input.partitions.map((partition) => {
+      if (!exact(partition, ["partition_client_key", "kind", "semantic_role", "predicate_contract_client_key"]) || partition.kind !== "predicate" || !["target", "other"].includes(partition.semantic_role)) return fail("Open/predicate Domains allow only predicate partitions.");
+      const contract = contractByKey.get(partition.predicate_contract_client_key);
+      if (!contract || !nonempty(contract.basis) || !typedRef(contract.predicate_ref, "domain_predicate", semanticRootDigest) || input.domain.kind === "open_domain" && contract.exhaustiveness !== "non_exhaustive_open_set") return fail("Predicate partition does not resolve to an admissible typed contract.");
+      const normalized = { kind: "predicate", semantic_role: partition.semantic_role, predicate_contract_client_key: partition.predicate_contract_client_key };
+      return { ...structuredClone(partition), partition_id: stableV5Id("domain_partition", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, normalized_partition: normalized }) };
+    })
+  );
+  if (new Set(partitions.map((partition) => partition.partition_client_key)).size !== partitions.length) return fail("Predicate partition keys must be unique.");
+  const partitionIds = partitions.map((partition) => partition.partition_id).sort();
+  return { ...structuredClone(input), partitions, domain_contract_id: stableV5Id("domain_contract", { input_semantic_root_digest: semanticRootDigest, domain_anchor_digest: domainAnchorDigest, partition_ids: partitionIds }) };
+}
+function typedRef(ref, kind, root) {
+  return object(ref) && exact(ref, ["contract_id", "contract_kind", "semantic_root_digest"]) && nonblank2(ref.contract_id) && ref.contract_kind === kind && ref.semantic_root_digest === root;
+}
+function validatePopulationContract(contract, semanticRootDigest) {
+  const fail = () => {
+    throw new V5ProtocolError("POPULATION_CONTRACT_REQUIRED", "Population scope needs exact current-root typed contracts.");
+  };
+  if (!object(contract) || !exact(contract, ["population_contract_client_key", "scope"]) || !nonblank2(contract.population_contract_client_key) || !object(contract.scope)) return fail();
+  const scope = contract.scope;
+  const optionalFilter = !scope.filter_ref || typedRef(scope.filter_ref, "filter", semanticRootDigest);
+  let valid = false;
+  if (scope.kind === "single_item") valid = exact(scope, ["kind", "identity_contract_ref"]) && typedRef(scope.identity_contract_ref, "identity", semanticRootDigest);
+  else if (scope.kind === "visible_region") valid = exact(scope, ["kind", "region_contract_ref"]) && typedRef(scope.region_contract_ref, "region", semanticRootDigest);
+  else if (scope.kind === "current_page" || scope.kind === "current_response") valid = exact(scope, scope.filter_ref ? ["kind", "collection_ref", "filter_ref"] : ["kind", "collection_ref"]) && typedRef(scope.collection_ref, "collection", semanticRootDigest) && optionalFilter;
+  else if (scope.kind === "all_pages") valid = exact(scope, scope.filter_ref ? ["kind", "collection_ref", "filter_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"] : ["kind", "collection_ref", "page_model_ref", "termination_contract_ref", "consistency_contract_ref"]) && typedRef(scope.collection_ref, "collection", semanticRootDigest) && optionalFilter && typedRef(scope.page_model_ref, "page_model", semanticRootDigest) && typedRef(scope.termination_contract_ref, "termination", semanticRootDigest) && typedRef(scope.consistency_contract_ref, "consistency", semanticRootDigest);
+  else if (scope.kind === "full_dataset") {
+    const keys = ["kind", "universe_ref", "snapshot_contract_ref", "consistency_contract_ref", ...scope.filter_ref ? ["filter_ref"] : [], ...scope.tenant_or_region_ref ? ["tenant_or_region_ref"] : []];
+    valid = exact(scope, keys) && typedRef(scope.universe_ref, "universe", semanticRootDigest) && optionalFilter && (!scope.tenant_or_region_ref || typedRef(scope.tenant_or_region_ref, "tenant_or_region", semanticRootDigest)) && typedRef(scope.snapshot_contract_ref, "snapshot", semanticRootDigest) && typedRef(scope.consistency_contract_ref, "consistency", semanticRootDigest);
+  }
+  if (!valid) return fail();
+  return structuredClone(contract);
+}
+function validatePopulationProof(proof, semanticRootDigest, populationClientKeys) {
+  const fail = () => {
+    throw new V5ProtocolError("POPULATION_CONTRACT_REQUIRED", "Population proof must bind one current-root typed proof contract.");
+  };
+  if (!object(proof) || !nonblank2(proof.proof_client_key) || !populationClientKeys.includes(proof.population_contract_client_key) || !object(proof.payload)) return fail();
+  const payload = proof.payload;
+  if (payload.kind === "enumerate_population") {
+    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload"]) || !exact(payload, ["kind", "enumeration_contract_ref"]) || !typedRef(payload.enumeration_contract_ref, "enumeration", semanticRootDigest)) return fail();
+  } else if (payload.kind === "authoritative_aggregate") {
+    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload", "basis"]) || !nonempty(proof.basis) || !exact(payload, ["kind", "aggregate_contract_ref"]) || !typedRef(payload.aggregate_contract_ref, "aggregate", semanticRootDigest)) return fail();
+  } else if (payload.kind === "sourced_invariant") {
+    if (!exact(proof, ["proof_client_key", "population_contract_client_key", "payload", "basis"]) || !nonempty(proof.basis) || !exact(payload, ["kind", "invariant_contract_ref"]) || !typedRef(payload.invariant_contract_ref, "invariant", semanticRootDigest)) return fail();
+  } else return fail();
+  return structuredClone(proof);
+}
 var RISK_KINDS = Object.freeze([
   "null_or_missing",
   "unknown_enum",
@@ -2301,6 +2402,442 @@ function validateBehaviorContractReviews(seed, reviews, artifact) {
   return structuredClone(reviews);
 }
 
+// src/v5/question-parts.mjs
+var ACTIONABLE_STATES = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user"]);
+var ALL_STATES = /* @__PURE__ */ new Set([...ACTIONABLE_STATES, "resolved_final", "resolved_temporary", "closed_for_delivery", "obsolete"]);
+var EDGES = (
+  /** @type {Readonly<Record<string,ReadonlySet<string>>>} */
+  Object.freeze({
+    presented: /* @__PURE__ */ new Set(["resolved_final", "resolved_temporary", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]),
+    deferred_by_user: /* @__PURE__ */ new Set(["resolved_final", "resolved_temporary", "closed_for_delivery", "obsolete"]),
+    unknown_by_user: /* @__PURE__ */ new Set(["resolved_final", "resolved_temporary", "closed_for_delivery", "obsolete"]),
+    resolved_final: /* @__PURE__ */ new Set(["obsolete"]),
+    resolved_temporary: /* @__PURE__ */ new Set(["obsolete"]),
+    closed_for_delivery: /* @__PURE__ */ new Set(["obsolete"]),
+    obsolete: /* @__PURE__ */ new Set()
+  })
+);
+function object2(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function exact2(value, keys) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+function nonblank3(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function digest2(value) {
+  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/u.test(value);
+}
+function questionAnswerContractDigest(contract) {
+  return canonicalObjectDigest({ namespace: "generate-test-cases/v5/question-answer-contract", format_version: 1, contract });
+}
+function clarificationPresentationDigest(presentationWithoutDigest) {
+  return canonicalObjectDigest({ namespace: "generate-test-cases/v5/clarification-presentation", format_version: 1, presentation: presentationWithoutDigest });
+}
+function sealStateRecord(record) {
+  return { ...record, state_record_digest: canonicalObjectDigest(record) };
+}
+function createQuestionPartStateSet(caseDocumentLineageId, semanticRootDigest, gaps) {
+  if (!nonblank3(caseDocumentLineageId) || !digest2(semanticRootDigest) || !Array.isArray(gaps)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part inventory identity is invalid.");
+  const parts = (
+    /** @type {Array<Record<string,any>>} */
+    gaps.map((gap) => {
+      const binding = gap.gap_binding;
+      if (!object2(binding) || !["requirements_gap", "behavior_gap"].includes(binding.kind) || !nonblank3(binding.gap_id) || !digest2(binding.gap_payload_digest) || !object2(gap.answer_contract)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part gap or answer contract is invalid.");
+      const answerContractDigest = questionAnswerContractDigest(gap.answer_contract);
+      return sealStateRecord({
+        kind: "question_part_state",
+        question_part_id: stableV5Id("question_part", {
+          case_document_lineage_id: caseDocumentLineageId,
+          gap_kind: binding.kind,
+          gap_id: binding.gap_id,
+          gap_payload_digest: binding.gap_payload_digest,
+          initial_semantic_root_digest: semanticRootDigest,
+          answer_contract_digest: answerContractDigest
+        }),
+        case_document_lineage_id: caseDocumentLineageId,
+        gap_binding: structuredClone(binding),
+        initial_semantic_root_digest: semanticRootDigest,
+        answer_contract_digest: answerContractDigest,
+        current_state: "presented",
+        transition_history: []
+      });
+    }).sort((left, right) => left.question_part_id.localeCompare(right.question_part_id))
+  );
+  if (new Set(parts.map((part) => part.question_part_id)).size !== parts.length) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part gaps must be unique.");
+  const payload = { kind: "question_part_state_set", case_document_lineage_id: caseDocumentLineageId, current_semantic_root_digest: semanticRootDigest, parts };
+  return { ...payload, state_set_digest: canonicalObjectDigest(payload) };
+}
+function validateQuestionPartStateSet(stateSet) {
+  const fail = (message) => {
+    throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", message);
+  };
+  if (!object2(stateSet) || !exact2(stateSet, ["kind", "case_document_lineage_id", "current_semantic_root_digest", "parts", "state_set_digest"]) || stateSet.kind !== "question_part_state_set" || !nonblank3(stateSet.case_document_lineage_id) || !digest2(stateSet.current_semantic_root_digest) || !Array.isArray(stateSet.parts)) return fail("Question Part state set shape is invalid.");
+  const { state_set_digest: ignored, ...statePayload } = stateSet;
+  if (canonicalObjectDigest(statePayload) !== stateSet.state_set_digest) return fail("Question Part state-set digest is invalid.");
+  const sorted2 = [...stateSet.parts].sort((left, right) => left.question_part_id.localeCompare(right.question_part_id));
+  if (canonicalV5Stringify(sorted2.map((part) => part.question_part_id)) !== canonicalV5Stringify(stateSet.parts.map((part) => part.question_part_id)) || new Set(sorted2.map((part) => part.question_part_id)).size !== sorted2.length) return fail("Question Parts must be a sorted unique set.");
+  for (const part of sorted2) {
+    if (!exact2(part, ["kind", "question_part_id", "case_document_lineage_id", "gap_binding", "initial_semantic_root_digest", "answer_contract_digest", "current_state", "transition_history", "state_record_digest"]) || part.kind !== "question_part_state" || part.case_document_lineage_id !== stateSet.case_document_lineage_id || !/^qpt5_[0-9a-f]{64}$/u.test(part.question_part_id) || !digest2(part.answer_contract_digest) || !ALL_STATES.has(part.current_state) || !Array.isArray(part.transition_history)) return fail("Question Part state-record shape is invalid.");
+    const { state_record_digest: ignoredRecord, ...recordPayload } = part;
+    if (canonicalObjectDigest(recordPayload) !== part.state_record_digest) return fail("Question Part state-record digest is invalid.");
+    let previous = "presented";
+    for (let index = 0; index < part.transition_history.length; index += 1) {
+      const transition = part.transition_history[index];
+      if (!object2(transition) || transition.transition_sequence !== index + 1 || transition.from_state !== previous || !EDGES[previous]?.has(transition.to_state)) return fail("Question Part transition history is discontinuous or illegal.");
+      const { transition_digest: ignoredTransition, ...transitionPayload } = transition;
+      if (canonicalObjectDigest(transitionPayload) !== transition.transition_digest) return fail("Question Part transition digest is invalid.");
+      if (transition.cause?.kind === "answer" && !["E3", "E1"].includes(transition.cause.evidence_level)) return fail("Answer transition evidence level is invalid.");
+      if (transition.cause?.kind === "control" && !["defer", "unknown", "close_for_delivery"].includes(transition.cause.action)) return fail("Control transition action is invalid.");
+      if (transition.cause?.kind === "compiler_obsolescence" && transition.to_state !== "obsolete") return fail("Compiler obsolescence must transition to obsolete.");
+      if (!["answer", "control", "compiler_obsolescence"].includes(transition.cause?.kind)) return fail("Question Part transition cause is invalid.");
+      previous = transition.to_state;
+    }
+    if (part.current_state !== previous) return fail("Question Part current state does not match transition history.");
+  }
+  return structuredClone(stateSet);
+}
+function createClarificationPresentation(stateSet, sourceRevision, gaps) {
+  validateQuestionPartStateSet(stateSet);
+  if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Presentation source revision is invalid.");
+  const gapByBinding = new Map(gaps.map((gap) => [`${gap.gap_binding.kind}\0${gap.gap_binding.gap_id}`, gap]));
+  const active = (
+    /** @type {Array<Record<string,any>>} */
+    stateSet.parts.filter((part) => ACTIONABLE_STATES.has(part.current_state))
+  );
+  if (active.length > 999999) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Presentation exceeds the Q token namespace.");
+  const parts = active.map((part, index) => {
+    const gap = gapByBinding.get(`${part.gap_binding.kind}\0${part.gap_binding.gap_id}`);
+    if (!gap || questionAnswerContractDigest(gap.answer_contract) !== part.answer_contract_digest) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Presentation gap inventory is stale or incomplete.");
+    const controls = part.current_state === "presented" ? gap.answer_contract.allowed_controls : gap.answer_contract.allowed_controls.filter((control) => control === "answer" || control === "close_for_delivery");
+    if (!Array.isArray(controls) || controls.length === 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part has no currently allowed control.");
+    return {
+      question_part_id: part.question_part_id,
+      display_token: `Q${String(index + 1).padStart(3, "0")}`,
+      question_state: part.current_state,
+      current_allowed_controls: [...controls],
+      question: gap.question,
+      why_needed: gap.why_needed,
+      answer_contract: structuredClone(gap.answer_contract),
+      question_impact_summary: { question_part_id: part.question_part_id, ...structuredClone(gap.question_impact_summary) }
+    };
+  });
+  const presentationId = stableV5Id("clarification_presentation", {
+    case_document_lineage_id: stateSet.case_document_lineage_id,
+    input_semantic_root_digest: stateSet.current_semantic_root_digest,
+    question_part_state_set_digest: stateSet.state_set_digest,
+    visible_question_part_ids: parts.map((part) => part.question_part_id)
+  });
+  const payload = { presentation_id: presentationId, semantic_root_digest: stateSet.current_semantic_root_digest, question_part_state_set_digest: stateSet.state_set_digest, source_revision: sourceRevision, parts };
+  return { ...payload, presentation_digest: clarificationPresentationDigest(payload) };
+}
+function applyQuestionPartTransitions(stateSet, changes, nextSemanticRootDigest = stateSet.current_semantic_root_digest) {
+  validateQuestionPartStateSet(stateSet);
+  if (!digest2(nextSemanticRootDigest)) throw new V5ProtocolError("QUESTION_PART_TRANSITION_INVALID", "Next semantic root digest is invalid.");
+  const byId = new Map(changes.map((change) => [change.question_part_id, change]));
+  if (byId.size !== changes.length) throw new V5ProtocolError("QUESTION_PART_ACTION_CONFLICT", "A Question Part may transition at most once per commit.");
+  const parts = stateSet.parts.map((part) => {
+    const change = byId.get(part.question_part_id);
+    if (!change) return structuredClone(part);
+    if (!EDGES[part.current_state]?.has(change.to_state)) throw new V5ProtocolError("QUESTION_PART_TRANSITION_INVALID", "Question Part transition is not allowed from the current state.");
+    const transitionPayload = { transition_sequence: part.transition_history.length + 1, from_state: part.current_state, to_state: change.to_state, cause: structuredClone(change.cause) };
+    const transition = { ...transitionPayload, transition_digest: canonicalObjectDigest(transitionPayload) };
+    const { state_record_digest: ignored, ...payload2 } = part;
+    return sealStateRecord({ ...payload2, current_state: change.to_state, transition_history: [...part.transition_history, transition] });
+  });
+  for (const change of changes) if (!stateSet.parts.some((part) => part.question_part_id === change.question_part_id)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part transition targets an unknown part.");
+  const payload = { kind: "question_part_state_set", case_document_lineage_id: stateSet.case_document_lineage_id, current_semantic_root_digest: nextSemanticRootDigest, parts };
+  const next = { ...payload, state_set_digest: canonicalObjectDigest(payload) };
+  validateQuestionPartStateSet(next);
+  return next;
+}
+
+// src/v5/behavior-gaps.mjs
+var COMPATIBLE_MISSING_SEMANTICS = Object.freeze({
+  field_correspondence: /* @__PURE__ */ new Set(["authority", "join", "transform", "null_policy", "freshness"]),
+  domain: /* @__PURE__ */ new Set(["domain_boundary"]),
+  population: /* @__PURE__ */ new Set(["population_scope", "population_proof"]),
+  oracle_semantics: /* @__PURE__ */ new Set(["oracle_observation", "oracle_assertion", "oracle_scope", "oracle_window"]),
+  permission_auxiliary: /* @__PURE__ */ new Set(["denial_behavior", "data_scope"])
+});
+function object3(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function nonblank4(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function validateAnswerContract(contract) {
+  if (!object3(contract) || !Array.isArray(contract.allowed_controls) || contract.allowed_controls.length === 0 || new Set(contract.allowed_controls).size !== contract.allowed_controls.length || !object3(contract.value_schema)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior gap answer contract is invalid.");
+  if (contract.answer_mode === "typed_answer") {
+    if (canonicalV5Stringify(contract.allowed_controls) !== '["answer","defer","unknown","close_for_delivery"]' || contract.value_schema.kind === "unavailable") throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "V1 Behavior answers must advertise the frozen typed controls and a typed value schema.");
+  } else throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "V1 does not register control-only Behavior gaps.");
+  return structuredClone(contract);
+}
+function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals, reviews) {
+  const requirements = new Map(
+    /** @type {Array<Record<string,any>>} */
+    (seed.required_contracts ?? []).map((requirement) => [requirement.required_contract_key, requirement])
+  );
+  const proposalByClientKey = /* @__PURE__ */ new Map();
+  const accepted = [];
+  const bindings = [];
+  for (const proposal of proposals) {
+    if (!object3(proposal) || !nonblank4(proposal.semantic_gap_client_key) || proposalByClientKey.has(proposal.semantic_gap_client_key) || !object3(proposal.target) || proposal.target.kind !== "behavior_contract" || !nonblank4(proposal.target.required_contract_key) || !nonblank4(proposal.missing_semantics) || !nonblank4(proposal.question) || !Array.isArray(proposal.basis) || proposal.basis.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap proposal identity, target, question, or basis is invalid.");
+    const requirement = requirements.get(proposal.target.required_contract_key);
+    if (!requirement || !COMPATIBLE_MISSING_SEMANTICS[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap target or missing semantics does not match the advertised requirement.");
+    const answerContract = validateAnswerContract(proposal.answer_contract);
+    const normalized = {
+      target: structuredClone(proposal.target),
+      missing_semantics: proposal.missing_semantics,
+      question: proposal.question.trim(),
+      answer_contract: answerContract,
+      basis: structuredClone(proposal.basis)
+    };
+    const sourceProposalDigest = canonicalObjectDigest({ namespace: "generate-test-cases/v5/behavior-semantic-gap-proposal", format_version: 1, proposal: normalized });
+    const answerContractDigest = questionAnswerContractDigest(answerContract);
+    const semanticGapId = stableV5Id("behavior_semantic_gap", {
+      input_semantic_root_digest: semanticRootDigest,
+      target: normalized.target,
+      missing_semantics: normalized.missing_semantics,
+      answer_contract_digest: answerContractDigest,
+      basis: normalized.basis
+    });
+    const row = {
+      semantic_gap_id: semanticGapId,
+      semantic_root_digest: semanticRootDigest,
+      ...normalized,
+      source_proposal_digest: sourceProposalDigest
+    };
+    proposalByClientKey.set(proposal.semantic_gap_client_key, row);
+    accepted.push(row);
+    bindings.push({ client_key: proposal.semantic_gap_client_key, stable_id: semanticGapId });
+  }
+  const referenced = /* @__PURE__ */ new Set();
+  for (const review of reviews) {
+    if (review.disposition?.kind !== "semantic_gap") continue;
+    const reference = review.disposition.gap_ref;
+    if (!object3(reference) || reference.kind !== "same_behavior_batch" || !nonblank4(reference.semantic_gap_client_key)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap review must use an exact same-batch reference.");
+    const gap = proposalByClientKey.get(reference.semantic_gap_client_key);
+    if (!gap || gap.target.required_contract_key !== review.required_contract_key || referenced.has(reference.semantic_gap_client_key)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap review target is missing, duplicated, or cross-wired.");
+    referenced.add(reference.semantic_gap_client_key);
+  }
+  if (referenced.size !== proposalByClientKey.size) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Every same-batch Behavior gap must have exactly one matching review.");
+  accepted.sort((left, right) => left.semantic_gap_id.localeCompare(right.semantic_gap_id));
+  bindings.sort((left, right) => left.client_key.localeCompare(right.client_key));
+  return { accepted_gaps: accepted, client_key_bindings: bindings };
+}
+function clarificationGapsFromAcceptedBehavior(acceptedGaps) {
+  return acceptedGaps.map((gap) => {
+    const gapPayloadDigest = canonicalObjectDigest(gap);
+    return {
+      gap_binding: { kind: "behavior_gap", gap_id: gap.semantic_gap_id, gap_payload_digest: gapPayloadDigest },
+      answer_contract: structuredClone(gap.answer_contract),
+      target: structuredClone(gap.target),
+      question: gap.question,
+      why_needed: gap.why_needed ?? `The ${gap.missing_semantics} semantics must be resolved before dependent cases can be formal.`,
+      question_impact_summary: structuredClone(gap.question_impact_summary ?? { affected_case_keys: [], impact_kinds: [gap.missing_semantics] })
+    };
+  }).sort((left, right) => left.gap_binding.gap_id.localeCompare(right.gap_binding.gap_id));
+}
+
+// src/v5/oracles.mjs
+function object4(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function exact3(value, keys) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+function nonblank5(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function uniqueTyped(values) {
+  return new Set(values.map((value) => canonicalV5Stringify(value))).size === values.length && values.every(validateTypedValue);
+}
+function validateOracleAssertion(assertion, context) {
+  const fail = (message = "Oracle assertion is not a closed decidable branch.") => {
+    throw new V5ProtocolError("ORACLE_NOT_DECIDABLE", message);
+  };
+  if (!object4(assertion) || typeof assertion.kind !== "string") return fail();
+  if (assertion.kind === "exact_text") {
+    if (!exact3(assertion, ["kind", "expected_text"]) || !nonblank5(assertion.expected_text)) return fail();
+  } else if (assertion.kind === "semantic_text") {
+    if (!exact3(assertion, ["kind", "expected_text", "equivalence_rule_ref"]) || !nonblank5(assertion.expected_text)) return fail();
+    resolveSemanticRuleRef(assertion.equivalence_rule_ref, "semantic_equivalence", context.semanticRuleIndex);
+  } else if (assertion.kind === "value_equals") {
+    const keys = assertion.normalization_ref ? ["kind", "expected_value", "normalization_ref"] : ["kind", "expected_value"];
+    if (!exact3(assertion, keys) || !validateTypedValue(assertion.expected_value)) return fail();
+    if (assertion.normalization_ref) resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
+  } else if (assertion.kind === "value_state_equals") {
+    if (!exact3(assertion, ["kind", "expected_value_state"])) return fail();
+    try {
+      validateValueState(assertion.expected_value_state);
+    } catch {
+      return fail();
+    }
+  } else if (assertion.kind === "exists" || assertion.kind === "absent") {
+    if (!exact3(assertion, ["kind"])) return fail();
+  } else if (assertion.kind === "set_contains" || assertion.kind === "set_equals") {
+    const keys = assertion.kind === "set_contains" ? ["kind", "expected_members", "normalization_ref"] : ["kind", "expected_members", "order_sensitive", "normalization_ref"];
+    if (!exact3(assertion, keys) || !Array.isArray(assertion.expected_members) || assertion.kind === "set_contains" && assertion.expected_members.length === 0 || !uniqueTyped(assertion.expected_members) || assertion.kind === "set_equals" && typeof assertion.order_sensitive !== "boolean") return fail();
+    resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
+  } else if (assertion.kind === "count_equals" || assertion.kind === "count_at_least") {
+    const field = assertion.kind === "count_equals" ? "expected_count" : "minimum_count";
+    if (!exact3(assertion, ["kind", field]) || !Number.isSafeInteger(assertion[field]) || assertion[field] < 0) return fail();
+  } else if (assertion.kind === "transition") {
+    const keys = assertion.trigger_step_client_key ? ["kind", "from_state", "to_state", "trigger_action_ref", "trigger_step_client_key"] : ["kind", "from_state", "to_state", "trigger_action_ref"];
+    if (!exact3(assertion, keys) || !validateTypedValue(assertion.from_state) || !validateTypedValue(assertion.to_state) || !nonblank5(assertion.trigger_action_ref?.action_id) || assertion.trigger_action_ref.semantic_root_digest !== context.semanticRootDigest || assertion.trigger_step_client_key !== void 0 && !nonblank5(assertion.trigger_step_client_key)) return fail();
+  } else if (assertion.kind === "cross_surface_equals") {
+    if (!exact3(assertion, ["kind", "field_correspondence_id"]) || !context.fieldCorrespondenceIds?.includes(assertion.field_correspondence_id)) return fail();
+  } else if (assertion.kind === "permission") {
+    if (!/** @type {Array<Record<string,any>>|undefined} */
+    context.permissionDecisionCells?.some((cell) => canonicalV5Stringify(cell) === canonicalV5Stringify(assertion.decision_cell_ref))) return fail("Permission decision cell is not accepted.");
+    if (assertion.expected === "allow") {
+      if (!exact3(assertion, ["kind", "expected", "decision_cell_ref"])) return fail();
+    } else if (assertion.expected === "deny") {
+      if (!exact3(assertion, ["kind", "expected", "decision_cell_ref", "denial_behavior"]) || !object4(assertion.denial_behavior)) return fail();
+      if (assertion.denial_behavior.kind === "not_required") {
+        if (!exact3(assertion.denial_behavior, ["kind"])) return fail();
+      } else if (assertion.denial_behavior.kind === "required") {
+        if (!exact3(assertion.denial_behavior, ["kind", "denial_required_cell_key", "denial_contract_ref"]) || assertion.denial_behavior.denial_contract_ref?.ref?.contract_kind !== "denial_behavior" || assertion.denial_behavior.denial_contract_ref.ref.semantic_root_digest !== context.semanticRootDigest) return fail();
+      } else return fail();
+    } else return fail();
+  } else return fail();
+  return structuredClone(assertion);
+}
+function validateObservation(observation, context) {
+  if (!object4(observation) || !["ui", "response", "storage", "event", "system_state"].includes(observation.kind) || !nonblank5(observation.logical_surface_ref) || !nonblank5(observation.subject_ref)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation reference is invalid.");
+  const common = ["kind", "logical_surface_ref", "subject_ref", ...Object.hasOwn(observation, "field_path") ? ["field_path"] : []];
+  if (Object.hasOwn(observation, "field_path") && !nonblank5(observation.field_path)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation field path must be nonblank when present.");
+  if (observation.kind === "ui") {
+    if (!exact3(observation, [...common, "locator_contract_ref"])) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "UI observation has non-contract fields.");
+    resolveSemanticRuleRef(observation.locator_contract_ref, "locator", context.semanticRuleIndex);
+  } else if (!exact3(observation, common)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation has non-contract fields.");
+}
+function validateObservationWindow(window) {
+  return object4(window) && (window.kind === "after_step" && exact3(window, ["kind"]) || ["within", "stable_for"].includes(window.kind) && exact3(window, ["kind", "duration_ms"]) && Number.isSafeInteger(window.duration_ms) && window.duration_ms > 0 || window.kind === "until_signal" && exact3(window, ["kind", "signal_ref", "timeout_ms"]) && nonblank5(window.signal_ref) && Number.isSafeInteger(window.timeout_ms) && window.timeout_ms > 0);
+}
+function validateOracleSemanticContract(contract, context) {
+  const keys = ["oracle_contract_client_key", "formal_test_point_id", "observation_ref", "assertion", "evaluation_scope", "observation_window", "basis"];
+  if (!object4(contract) || !exact3(contract, keys) || !nonblank5(contract.oracle_contract_client_key) || !nonblank5(contract.formal_test_point_id) || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle semantic contract identity or basis is incomplete.");
+  validateObservation(contract.observation_ref, context);
+  validateOracleAssertion(contract.assertion, context);
+  const scope = contract.evaluation_scope;
+  const validScope = object4(scope) && (scope.kind === "single" && exact3(scope, ["kind"]) || scope.kind === "forall" && exact3(scope, ["kind", "population_contract_client_key", "population_proof_client_key"]) && nonblank5(scope.population_contract_client_key) && nonblank5(scope.population_proof_client_key));
+  if (!validScope || !validateObservationWindow(contract.observation_window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle semantic scope or observation window is invalid.");
+  return structuredClone(contract);
+}
+function validateTypedOracle(oracle, context) {
+  const keys = ["oracle_client_key", "oracle_semantic_contract_id", "observe_after_step_client_key", "observation_ref", "assertion", "evaluation_scope", "observation_window", "claim_ids"];
+  if (!object4(oracle) || !exact3(oracle, keys) || !nonblank5(oracle.oracle_client_key) || !context.oracleSemanticContractIds.includes(oracle.oracle_semantic_contract_id) || !context.stepClientKeys.includes(oracle.observe_after_step_client_key) || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0 || oracle.claim_ids.some((id) => !context.acceptedClaimIds.includes(id)) || new Set(oracle.claim_ids).size !== oracle.claim_ids.length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Typed Oracle ownership or evidence binding is invalid.");
+  validateObservation(oracle.observation_ref, context);
+  validateOracleAssertion(oracle.assertion, context);
+  if (oracle.assertion.kind === "transition" && oracle.assertion.trigger_step_client_key !== oracle.observe_after_step_client_key) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Transition trigger and observation step must be explicitly bound.");
+  const window = oracle.observation_window;
+  if (!validateObservationWindow(window)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle observation window is invalid.");
+  if (!(oracle.evaluation_scope?.kind === "single" && exact3(oracle.evaluation_scope, ["kind"])) && !(oracle.evaluation_scope?.kind === "forall" && exact3(oracle.evaluation_scope, ["kind", "population_contract_id", "population_proof_id"]) && nonblank5(oracle.evaluation_scope.population_contract_id) && nonblank5(oracle.evaluation_scope.population_proof_id))) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle evaluation scope is invalid.");
+  return structuredClone(oracle);
+}
+
+// src/v5/permission.mjs
+var COORDINATES = Object.freeze(["role", "resource", "action", "context", "permission_dimension"]);
+function validatePermissionMatrixReview(matrix, review, semanticRootDigest) {
+  if (review.matrix_id !== matrix.matrix_id || review.seed_digest !== matrix.seed_digest || !Array.isArray(review.cell_dispositions) || review.cell_dispositions.length !== matrix.required_cells.length) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission review must cover every required cell exactly once.");
+  const cellByKey = new Map(
+    /** @type {Array<Record<string,any>>} */
+    matrix.required_cells.map((cell) => [cell.required_cell_key, cell])
+  );
+  const dispositionByKey = /* @__PURE__ */ new Map();
+  for (const row of review.cell_dispositions) {
+    const cell = cellByKey.get(row.required_cell_key);
+    if (!cell || dispositionByKey.has(row.required_cell_key)) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission review cell is unknown or duplicated.");
+    dispositionByKey.set(row.required_cell_key, row.disposition);
+    const disposition = row.disposition;
+    if (disposition.kind === "semantic_gap") {
+      if (!disposition.gap_ref) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission gap reference is missing.");
+      continue;
+    }
+    if (disposition.kind === "not_applicable") {
+      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission N/A needs E2/E3 basis.");
+      continue;
+    }
+    if (disposition.kind !== "formal" || !Array.isArray(disposition.basis) || disposition.basis.length === 0 || disposition.outcome.permission_dimension !== cell.permission_dimension) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission formal outcome does not match its cell.");
+    const outcome = disposition.outcome;
+    if (cell.permission_dimension === "decision") {
+      const expectedAllowed = cell.action_ref === "discover" ? ["visible", "hidden"] : ["allow", "deny"];
+      if (outcome.action_ref !== cell.action_ref || !expectedAllowed.includes(outcome.expected)) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission decision outcome is incompatible with the action.");
+    } else if (cell.permission_dimension === "data_scope") {
+      if (outcome.data_scope_contract_ref?.ref?.contract_kind !== "data_scope" || outcome.data_scope_contract_ref.ref.semantic_root_digest !== semanticRootDigest) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Data-scope cell requires an exact current-root typed contract.");
+    }
+  }
+  for (const row of review.cell_dispositions) {
+    const cell = cellByKey.get(row.required_cell_key);
+    const outcome = row.disposition.outcome;
+    if (cell?.permission_dimension !== "denial_behavior" || row.disposition.kind !== "formal") continue;
+    const decisionCell = cellByKey.get(outcome.decision_cell_key);
+    const decisionDisposition = dispositionByKey.get(outcome.decision_cell_key);
+    const sameCoordinates = decisionCell && ["role_ref", "resource_ref", "action_ref", "context_key"].every((key) => canonicalV5Stringify(decisionCell[key]) === canonicalV5Stringify(cell[key]));
+    if (!sameCoordinates || decisionCell.permission_dimension !== "decision" || decisionDisposition?.kind !== "formal" || decisionDisposition.outcome.expected !== "deny" || outcome.denial_contract_ref?.ref?.contract_kind !== "denial_behavior" || outcome.denial_contract_ref.ref.semantic_root_digest !== semanticRootDigest) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Denial behavior must bind the same-coordinate deny decision and typed contract.");
+  }
+  return structuredClone(review.cell_dispositions);
+}
+
+// src/v5/provenance.mjs
+var provenancePolicy = generateV5Contracts().policyRegistry.provenance_policy;
+var edgeRules = new Map(provenancePolicy.allowed_edges.map((row) => [`${row.from_kind}->${row.to_kind}`, row]));
+var downstreamKinds = /* @__PURE__ */ new Set(["behavior_contract", "atomic_outcome", "formal_test_point", "case", "case_oracle", "case_document", "execution_plan", "execution_result", "rendered_output"]);
+function conditionHolds(condition, from, to, edge) {
+  if (condition.kind === "same_run") return from.run_id === to.run_id;
+  if (condition.kind === "same_lineage") return from.case_document_lineage_id === to.case_document_lineage_id;
+  if (condition.kind === "current_semantic_root") return from.semantic_root_digest === to.semantic_root_digest;
+  if (condition.kind === "accepted_ancestor") return from.accepted === true && to.accepted === true;
+  if (condition.kind === "immutable_digest_ref") return typeof from.immutable_digest === "string" && edge.immutable_digest_ref === from.immutable_digest;
+  if (condition.kind === "external_downstream_only") return to.external_downstream === true;
+  if (condition.kind === "evidence_level_in") return condition.levels.includes(from.evidence_level);
+  return false;
+}
+function validateV5ProvenanceGraph(graph) {
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Provenance graph must contain nodes and edges.");
+  const nodes = /* @__PURE__ */ new Map();
+  for (const node of graph.nodes) {
+    if (!node || typeof node.node_id !== "string" || typeof node.kind !== "string" || nodes.has(node.node_id)) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Provenance nodes must have unique IDs.");
+    nodes.set(node.node_id, node);
+  }
+  const adjacency = new Map(graph.nodes.map((node) => [node.node_id, []]));
+  const indegree = new Map(graph.nodes.map((node) => [node.node_id, 0]));
+  for (const edge of graph.edges) {
+    const from = nodes.get(edge.from);
+    const to = nodes.get(edge.to);
+    if (!from || !to) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Provenance edge references an unknown node.");
+    if (to.kind === "source_unit" && downstreamKinds.has(from.kind)) throw new V5ProtocolError("DOWNSTREAM_ARTIFACT_AS_SOURCE", "Downstream artifacts cannot re-enter Source.");
+    const rule = edgeRules.get(`${from.kind}->${to.kind}`);
+    if (!rule || !rule.conditions.every((condition) => conditionHolds(condition, from, to, edge))) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", `Provenance edge ${from.kind}->${to.kind} is not allowed.`);
+    adjacency.get(from.node_id)?.push(to.node_id);
+    indegree.set(to.node_id, (indegree.get(to.node_id) ?? 0) + 1);
+  }
+  const queue = [...indegree.entries()].filter(([, count]) => count === 0).map(([nodeId]) => nodeId).sort();
+  const topologicalOrder = [];
+  while (queue.length > 0) {
+    const nodeId = queue.shift();
+    if (nodeId === void 0) break;
+    topologicalOrder.push(nodeId);
+    for (const target of (adjacency.get(nodeId) ?? []).sort()) {
+      const next = (indegree.get(target) ?? 0) - 1;
+      indegree.set(target, next);
+      if (next === 0) {
+        queue.push(target);
+        queue.sort();
+      }
+    }
+  }
+  if (topologicalOrder.length !== nodes.size) throw new V5ProtocolError("PROVENANCE_CYCLE", "Provenance graph contains a cycle.");
+  return { valid: true, topological_order: topologicalOrder };
+}
+
 // src/v5/semantic-seed.mjs
 var AMBIGUITY_TOKENS = Object.freeze([
   ["\u6B63\u5E38", "expected_outcome"],
@@ -2315,7 +2852,7 @@ var AMBIGUITY_TOKENS = Object.freeze([
   ["\u5408\u7406", "other"],
   ["\u9ED8\u8BA4", "authority_source"]
 ]);
-function digest2(value) {
+function digest3(value) {
   return canonicalObjectDigest({ namespace: "generate-test-cases/v5/semantic-slot", format_version: 1, value });
 }
 function span(text, start, end) {
@@ -2354,13 +2891,13 @@ function deriveSemanticReviewSeed(input) {
       for (const line of nonblankLines(source.content)) {
         const unitSpan = span(source.content, line.start, line.end);
         const unitId = `sunit5_${canonicalObjectDigest({ source_object_digest: source.source_object_digest, source_span: unitSpan }).slice(7)}`;
-        const observations = observationPhrases(line.text).map((phrase) => digest2(`observation:${phrase}`));
+        const observations = observationPhrases(line.text).map((phrase) => digest3(`observation:${phrase}`));
         const atomSignature = {
-          subject_slot_digest: digest2(`subject:${line.text}`),
-          condition_slot_digest: digest2(`condition:${line.text}`),
-          action_slot_digest: digest2(`action:${line.text}`),
+          subject_slot_digest: digest3(`subject:${line.text}`),
+          condition_slot_digest: digest3(`condition:${line.text}`),
+          action_slot_digest: digest3(`action:${line.text}`),
           primary_observation_slot_digest: observations[0],
-          branch_slot_digest: digest2(`branch:${line.text}`)
+          branch_slot_digest: digest3(`branch:${line.text}`)
         };
         const candidatePreimage = {
           accepted_source_state_digest: input.acceptedSourceStateDigest,
@@ -2582,7 +3119,7 @@ import { lstat as lstat3, mkdir as mkdir2, readFile as readFile2, readdir } from
 import path4 from "node:path";
 
 // src/v5/runtime-services.mjs
-import { createHash as createHash6, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash6, randomBytes, randomUUID as randomUUID2 } from "node:crypto";
 var testProfile = null;
 function runtimeV5Uuid() {
   if (!testProfile) return randomUUID2();
@@ -2634,20 +3171,26 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
   const catalog = await resolveCatalogLayout(catalogRoot);
   if (!/^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$/u.test(input.identity.run_id) || input.identity.schema_version !== V5_SCHEMA_VERSION || input.identity.compiler_version !== V5_COMPILER_VERSION) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Run identity is invalid.");
   const runDirectory = path4.join(catalog.runsDirectory, input.identity.run_id);
-  try {
-    await lstat3(runDirectory);
-    throw new V5ProtocolError("IDEMPOTENCY_CONFLICT", "Run directory already exists.");
-  } catch (error) {
-    if (error instanceof V5ProtocolError) throw error;
-    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
-  }
   await ensureV5Directory(catalog.catalogTransactions);
   await ensureV5Directory(catalog.catalogRunGenesisRecords);
   await ensureV5Directory(catalog.catalogReplies);
   await ensureV5Directory(catalog.runsDirectory);
-  await mkdir2(runDirectory);
+  const identity = sealV5Record(input.identity, "identity_digest");
+  let recoveringOrphan = false;
+  try {
+    await lstat3(runDirectory);
+    const orphanLayout = await resolveRunLayout(runDirectory);
+    const orphanIdentity = await readFixedSealedRecord(orphanLayout.identity, "identity_digest");
+    if (canonicalV5Stringify(orphanIdentity.record) !== canonicalV5Stringify(identity) || orphanIdentity.record.canonical_create_action_digest !== void 0 && orphanIdentity.record.canonical_create_action_digest !== input.canonicalActionDigest) throw new V5ProtocolError("IDEMPOTENCY_CONFLICT", "Run directory belongs to a different create transaction.");
+    recoveringOrphan = true;
+  } catch (error) {
+    if (error instanceof V5ProtocolError) throw error;
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
+  }
+  if (!recoveringOrphan) await mkdir2(runDirectory);
   const run = await resolveRunLayout(runDirectory);
   for (const directory of [run.transactions, run.receipts, run.idempotencyIndexes, run.replies, run.checkpoints, run.selectorSidecars, run.genesisRecords, run.acceptedArtifacts, run.compilerState, run.renderedOutputs, run.events, run.incidents, run.rawSourceBytes, run.staging]) await ensureV5Directory(directory);
+  await writeAtomicFile(run.identity, Buffer.from(canonicalV5Stringify(identity)));
   for (const item of input.compilerStateRecords ?? []) {
     if (item.semanticDigest) await writeSemanticV5Record(run.compilerState, item.record, item.semanticDigest);
     else if (item.digestField) await writeSealedV5Record(run.compilerState, item.record, item.digestField);
@@ -2655,7 +3198,6 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
   }
   for (const item of input.acceptedArtifacts ?? []) await writeSealedV5Record(run.acceptedArtifacts, item.record, item.digestField);
   validateCheckpointIdentity(input.checkpoint, input.identity);
-  const identity = sealV5Record(input.identity, "identity_digest");
   const checkpoint = await writeSealedV5Record(run.checkpoints, input.checkpoint, "checkpoint_digest");
   const sidecarPayload = Object.hasOwn(input.selectorSidecar, "selector_sidecar_digest") ? withoutDigest(input.selectorSidecar, "selector_sidecar_digest") : input.selectorSidecar;
   const sidecar = await writeSealedV5Record(run.selectorSidecars, { ...sidecarPayload, schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id, checkpoint_digest: checkpoint.digest }, "selector_sidecar_digest");
@@ -2674,6 +3216,7 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
     receipt_digest: null,
     idempotency_index_digest: index.digest
   }, "transaction_digest");
+  if (services.failAt === "after_run_transaction") throw new Error("INJECTED_CRASH: after_run_transaction");
   const genesis = await writeSealedV5Record(run.genesisRecords, {
     kind: "catalog_run_genesis_record",
     schema_version: V5_SCHEMA_VERSION,
@@ -2682,9 +3225,18 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
     initial_run_transaction_digest: transaction.digest
   }, "run_genesis_record_digest");
   await writeSealedV5Record(catalog.catalogRunGenesisRecords, genesis.record, "run_genesis_record_digest");
-  await writeAtomicFile(run.identity, Buffer.from(canonicalV5Stringify(identity)));
-  if (services.failAt === "after_run_transaction") throw new Error("INJECTED_CRASH: after_run_transaction");
-  const pointer = await publishFixedRecord(run.currentPointer, { kind: "run_current_transaction_pointer", schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, head_transaction_digest: transaction.digest }, "pointer_digest", null);
+  if (services.failAt === "after_catalog_genesis_record") throw new Error("INJECTED_CRASH: after_catalog_genesis_record");
+  const runPointerPayload = { kind: "run_current_transaction_pointer", schema_version: V5_SCHEMA_VERSION, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, head_transaction_digest: transaction.digest };
+  let pointer;
+  try {
+    const existingPointer = await readFixedSealedRecord(run.currentPointer, "pointer_digest");
+    const expectedPointer = sealV5Record(runPointerPayload, "pointer_digest");
+    if (canonicalV5Stringify(existingPointer.record) !== canonicalV5Stringify(expectedPointer)) throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", "Recovered run pointer differs from the pending genesis transaction.");
+    pointer = existingPointer.record;
+  } catch (error) {
+    if (error instanceof V5ProtocolError && !error.message.includes("unavailable")) throw error;
+    pointer = await publishFixedRecord(run.currentPointer, runPointerPayload, "pointer_digest", null);
+  }
   if (services.failAt === "after_run_pointer") throw new Error("INJECTED_CRASH: after_run_pointer");
   const catalogReply = await writeCasJson(catalog.catalogReplies, input.reply);
   const priorEntries = existing?.transaction?.entries ?? [];
@@ -2696,6 +3248,7 @@ async function commitCatalogGenesis(catalogRoot, input, services = currentV5Tran
     entries: [...priorEntries, { idempotency_key: input.idempotencyKey, canonical_action_digest: input.canonicalActionDigest, run_id: input.identity.run_id, run_genesis_record_digest: genesis.digest, reply_digest: catalogReply.digest }].sort((left, right) => left.idempotency_key.localeCompare(right.idempotency_key))
   }, "transaction_digest");
   await publishFixedRecord(catalog.currentPointer, { kind: "catalog_current_transaction_pointer", schema_version: V5_SCHEMA_VERSION, scope: { kind: "catalog" }, head_transaction_digest: catalogTransaction.digest }, "pointer_digest", existing?.pointer?.bytes ?? null);
+  if (services.failAt === "after_catalog_pointer_cas") throw new Error("INJECTED_CRASH: after_catalog_pointer_cas");
   return {
     runDirectory,
     reply: await readCasJson(path4.join(run.replies, digestFilename(reply.digest)), reply.digest),
@@ -2930,24 +3483,24 @@ function projectInheritedArtifact(parentEnvelope, projection, childIdentity, dig
 // src/v5/execution-wrapper.mjs
 var V5_EXECUTION_OPERATION_KINDS = Object.freeze(["confirm_execution_plan", "pause_execution", "provide_capability_proof", "set_execution_disposition"]);
 var DIGEST2 = /^sha256:[0-9a-f]{64}$/u;
-function object2(value) {
+function object5(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function exact2(value, keys) {
+function exact4(value, keys) {
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function nonblank3(value) {
+function nonblank6(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function validateImmutableV5CaseDocumentRef(value) {
-  if (!object2(value) || !exact2(value, ["run_id", "revision", "manifest_digest", "bundle_digest", "case_document_lineage_id", "schema_version"]) || value.schema_version !== "5.0.0" || !nonblank3(value.run_id) || !nonblank3(value.case_document_lineage_id) || !Number.isSafeInteger(value.revision) || value.revision < 0 || !DIGEST2.test(value.manifest_digest) || !DIGEST2.test(value.bundle_digest)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Immutable V5 Case Document reference is invalid.");
+  if (!object5(value) || !exact4(value, ["run_id", "revision", "manifest_digest", "bundle_digest", "case_document_lineage_id", "schema_version"]) || value.schema_version !== "5.0.0" || !nonblank6(value.run_id) || !nonblank6(value.case_document_lineage_id) || !Number.isSafeInteger(value.revision) || value.revision < 0 || !DIGEST2.test(value.manifest_digest) || !DIGEST2.test(value.bundle_digest)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Immutable V5 Case Document reference is invalid.");
   return structuredClone(value);
 }
 function createV5ExecutionProjection(plan) {
   validateImmutableV5CaseDocumentRef(plan?.case_document_ref);
-  if (!object2(plan) || !exact2(plan, ["schema_version", "compiler_version", "delivery_intent", "case_document_ref", "operation_kinds", "items", "plan_digest"]) || plan.schema_version !== "5.0.0" || plan.compiler_version !== "0.6.0" || plan.delivery_intent !== "execution_plan" || !Array.isArray(plan.operation_kinds) || JSON.stringify([...plan.operation_kinds].sort()) !== JSON.stringify(V5_EXECUTION_OPERATION_KINDS) || !Array.isArray(plan.items)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan is invalid.");
+  if (!object5(plan) || !exact4(plan, ["schema_version", "compiler_version", "delivery_intent", "case_document_ref", "operation_kinds", "items", "plan_digest"]) || plan.schema_version !== "5.0.0" || plan.compiler_version !== "0.6.0" || plan.delivery_intent !== "execution_plan" || !Array.isArray(plan.operation_kinds) || JSON.stringify([...plan.operation_kinds].sort()) !== JSON.stringify(V5_EXECUTION_OPERATION_KINDS) || !Array.isArray(plan.items)) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan is invalid.");
   const { plan_digest: declaredPlanDigest, ...planPayload } = plan;
   if (!DIGEST2.test(declaredPlanDigest) || canonicalObjectDigest(planPayload) !== declaredPlanDigest) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Compatibility Execution Plan digest is invalid.");
   const payload = {
@@ -2965,7 +3518,7 @@ function createV5ExecutionProjection(plan) {
   return { ...payload, execution_snapshot_digest: canonicalObjectDigest(payload) };
 }
 function canonicalExistingExecutionReceiptPayloadDigest(receipt) {
-  if (!object2(receipt) || !nonblank3(receipt.kind) || !DIGEST2.test(receipt.receipt_digest)) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Existing execution receipt is not in the closed receipt union.");
+  if (!object5(receipt) || !nonblank6(receipt.kind) || !DIGEST2.test(receipt.receipt_digest)) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Existing execution receipt is not in the closed receipt union.");
   const { receipt_digest: declared, ...payload } = receipt;
   if (canonicalObjectDigest(payload) !== declared) throw new V5ProtocolError("RESUME_PARENT_INVALID", "Existing execution receipt digest is invalid.");
   return declared;
@@ -2987,30 +3540,30 @@ function reseal(projection) {
   return { ...payload, execution_snapshot_digest: canonicalObjectDigest(payload) };
 }
 async function advanceV5ExecutionProjection(projection, operation, services = {}) {
-  if (!object2(operation) || !V5_EXECUTION_OPERATION_KINDS.includes(operation.kind) || projection?.kind !== "v5_execution_projection" || projection.confirmed === true) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution operation is not advertised.");
+  if (!object5(operation) || !V5_EXECUTION_OPERATION_KINDS.includes(operation.kind) || projection?.kind !== "v5_execution_projection" || projection.confirmed === true) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution operation is not advertised.");
   const next = structuredClone(projection);
   let receipt = null;
   if (operation.kind === "set_execution_disposition") {
-    if (!exact2(operation, ["kind", "case_id", "disposition"]) || !["execute", "do_not_execute"].includes(operation.disposition)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Execution disposition operation is invalid.");
+    if (!exact4(operation, ["kind", "case_id", "disposition"]) || !["execute", "do_not_execute"].includes(operation.disposition)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Execution disposition operation is invalid.");
     const item = next.items.find((candidate) => candidate.case_id === operation.case_id && candidate.available_actions.includes(operation.kind));
     if (!item) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution disposition target is not advertised.");
     item.execution_disposition = operation.disposition;
     next.paused = false;
   } else if (operation.kind === "provide_capability_proof") {
-    if (!exact2(operation, ["kind", "case_id", "proof"]) || typeof services.verifyCapabilityProof !== "function") throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof requires the registered external verifier.");
+    if (!exact4(operation, ["kind", "case_id", "proof"]) || typeof services.verifyCapabilityProof !== "function") throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof requires the registered external verifier.");
     const item = next.items.find((candidate) => candidate.case_id === operation.case_id && candidate.available_actions.includes(operation.kind));
     if (!item) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof target is not advertised.");
     const verified = await services.verifyCapabilityProof({ case_document_ref: structuredClone(next.case_document_ref), case_id: operation.case_id, proof: structuredClone(operation.proof) });
-    if (verified?.verified !== true || typeof verified.ready !== "boolean" || !object2(verified.receipt)) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof was not independently verified.");
+    if (verified?.verified !== true || typeof verified.ready !== "boolean" || !object5(verified.receipt)) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Capability proof was not independently verified.");
     receipt = structuredClone(verified.receipt);
     next.capability_receipts.push(receipt);
     item.capability_ready = verified.ready;
     next.paused = false;
   } else if (operation.kind === "pause_execution") {
-    if (!exact2(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Pause operation is invalid.");
+    if (!exact4(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Pause operation is invalid.");
     next.paused = true;
   } else {
-    if (!exact2(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Confirmation operation is invalid.");
+    if (!exact4(operation, ["kind"])) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Confirmation operation is invalid.");
     if (!next.items.every((item) => item.execution_disposition !== "pending")) throw new V5ProtocolError("ACTION_NOT_ADVERTISED", "Execution Plan cannot be confirmed while dispositions are pending.");
     next.confirmed = true;
     next.paused = false;
@@ -3021,172 +3574,19 @@ async function advanceV5ExecutionProjection(projection, operation, services = {}
   return { projection: sealed, result_key: resultKey, ...receipt ? { receipt } : {} };
 }
 
-// src/v5/question-parts.mjs
-var ACTIONABLE_STATES = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user"]);
-var ALL_STATES = /* @__PURE__ */ new Set([...ACTIONABLE_STATES, "resolved_final", "resolved_temporary", "closed_for_delivery", "obsolete"]);
-var EDGES = (
-  /** @type {Readonly<Record<string,ReadonlySet<string>>>} */
-  Object.freeze({
-    presented: /* @__PURE__ */ new Set(["resolved_final", "resolved_temporary", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]),
-    deferred_by_user: /* @__PURE__ */ new Set(["resolved_final", "resolved_temporary", "closed_for_delivery", "obsolete"]),
-    unknown_by_user: /* @__PURE__ */ new Set(["resolved_final", "resolved_temporary", "closed_for_delivery", "obsolete"]),
-    resolved_final: /* @__PURE__ */ new Set(["obsolete"]),
-    resolved_temporary: /* @__PURE__ */ new Set(["obsolete"]),
-    closed_for_delivery: /* @__PURE__ */ new Set(["obsolete"]),
-    obsolete: /* @__PURE__ */ new Set()
-  })
-);
-function object3(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-function exact3(value, keys) {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
-}
-function nonblank4(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-function digest3(value) {
-  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/u.test(value);
-}
-function questionAnswerContractDigest(contract) {
-  return canonicalObjectDigest({ namespace: "generate-test-cases/v5/question-answer-contract", format_version: 1, contract });
-}
-function clarificationPresentationDigest(presentationWithoutDigest) {
-  return canonicalObjectDigest({ namespace: "generate-test-cases/v5/clarification-presentation", format_version: 1, presentation: presentationWithoutDigest });
-}
-function sealStateRecord(record) {
-  return { ...record, state_record_digest: canonicalObjectDigest(record) };
-}
-function createQuestionPartStateSet(caseDocumentLineageId, semanticRootDigest, gaps) {
-  if (!nonblank4(caseDocumentLineageId) || !digest3(semanticRootDigest) || !Array.isArray(gaps)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part inventory identity is invalid.");
-  const parts = (
-    /** @type {Array<Record<string,any>>} */
-    gaps.map((gap) => {
-      const binding = gap.gap_binding;
-      if (!object3(binding) || !["requirements_gap", "behavior_gap"].includes(binding.kind) || !nonblank4(binding.gap_id) || !digest3(binding.gap_payload_digest) || !object3(gap.answer_contract)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part gap or answer contract is invalid.");
-      const answerContractDigest = questionAnswerContractDigest(gap.answer_contract);
-      return sealStateRecord({
-        kind: "question_part_state",
-        question_part_id: stableV5Id("question_part", {
-          case_document_lineage_id: caseDocumentLineageId,
-          gap_kind: binding.kind,
-          gap_id: binding.gap_id,
-          gap_payload_digest: binding.gap_payload_digest,
-          initial_semantic_root_digest: semanticRootDigest,
-          answer_contract_digest: answerContractDigest
-        }),
-        case_document_lineage_id: caseDocumentLineageId,
-        gap_binding: structuredClone(binding),
-        initial_semantic_root_digest: semanticRootDigest,
-        answer_contract_digest: answerContractDigest,
-        current_state: "presented",
-        transition_history: []
-      });
-    }).sort((left, right) => left.question_part_id.localeCompare(right.question_part_id))
-  );
-  if (new Set(parts.map((part) => part.question_part_id)).size !== parts.length) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part gaps must be unique.");
-  const payload = { kind: "question_part_state_set", case_document_lineage_id: caseDocumentLineageId, current_semantic_root_digest: semanticRootDigest, parts };
-  return { ...payload, state_set_digest: canonicalObjectDigest(payload) };
-}
-function validateQuestionPartStateSet(stateSet) {
-  const fail = (message) => {
-    throw new V5ProtocolError("ACCEPTED_STATE_INTEGRITY_FAILURE", message);
-  };
-  if (!object3(stateSet) || !exact3(stateSet, ["kind", "case_document_lineage_id", "current_semantic_root_digest", "parts", "state_set_digest"]) || stateSet.kind !== "question_part_state_set" || !nonblank4(stateSet.case_document_lineage_id) || !digest3(stateSet.current_semantic_root_digest) || !Array.isArray(stateSet.parts)) return fail("Question Part state set shape is invalid.");
-  const { state_set_digest: ignored, ...statePayload } = stateSet;
-  if (canonicalObjectDigest(statePayload) !== stateSet.state_set_digest) return fail("Question Part state-set digest is invalid.");
-  const sorted2 = [...stateSet.parts].sort((left, right) => left.question_part_id.localeCompare(right.question_part_id));
-  if (canonicalV5Stringify(sorted2.map((part) => part.question_part_id)) !== canonicalV5Stringify(stateSet.parts.map((part) => part.question_part_id)) || new Set(sorted2.map((part) => part.question_part_id)).size !== sorted2.length) return fail("Question Parts must be a sorted unique set.");
-  for (const part of sorted2) {
-    if (!exact3(part, ["kind", "question_part_id", "case_document_lineage_id", "gap_binding", "initial_semantic_root_digest", "answer_contract_digest", "current_state", "transition_history", "state_record_digest"]) || part.kind !== "question_part_state" || part.case_document_lineage_id !== stateSet.case_document_lineage_id || !/^qpt5_[0-9a-f]{64}$/u.test(part.question_part_id) || !digest3(part.answer_contract_digest) || !ALL_STATES.has(part.current_state) || !Array.isArray(part.transition_history)) return fail("Question Part state-record shape is invalid.");
-    const { state_record_digest: ignoredRecord, ...recordPayload } = part;
-    if (canonicalObjectDigest(recordPayload) !== part.state_record_digest) return fail("Question Part state-record digest is invalid.");
-    let previous = "presented";
-    for (let index = 0; index < part.transition_history.length; index += 1) {
-      const transition = part.transition_history[index];
-      if (!object3(transition) || transition.transition_sequence !== index + 1 || transition.from_state !== previous || !EDGES[previous]?.has(transition.to_state)) return fail("Question Part transition history is discontinuous or illegal.");
-      const { transition_digest: ignoredTransition, ...transitionPayload } = transition;
-      if (canonicalObjectDigest(transitionPayload) !== transition.transition_digest) return fail("Question Part transition digest is invalid.");
-      if (transition.cause?.kind === "answer" && !["E3", "E1"].includes(transition.cause.evidence_level)) return fail("Answer transition evidence level is invalid.");
-      if (transition.cause?.kind === "control" && !["defer", "unknown", "close_for_delivery"].includes(transition.cause.action)) return fail("Control transition action is invalid.");
-      if (transition.cause?.kind === "compiler_obsolescence" && transition.to_state !== "obsolete") return fail("Compiler obsolescence must transition to obsolete.");
-      if (!["answer", "control", "compiler_obsolescence"].includes(transition.cause?.kind)) return fail("Question Part transition cause is invalid.");
-      previous = transition.to_state;
-    }
-    if (part.current_state !== previous) return fail("Question Part current state does not match transition history.");
-  }
-  return structuredClone(stateSet);
-}
-function createClarificationPresentation(stateSet, sourceRevision, gaps) {
-  validateQuestionPartStateSet(stateSet);
-  if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Presentation source revision is invalid.");
-  const gapByBinding = new Map(gaps.map((gap) => [`${gap.gap_binding.kind}\0${gap.gap_binding.gap_id}`, gap]));
-  const active = (
-    /** @type {Array<Record<string,any>>} */
-    stateSet.parts.filter((part) => ACTIONABLE_STATES.has(part.current_state))
-  );
-  if (active.length > 999999) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Presentation exceeds the Q token namespace.");
-  const parts = active.map((part, index) => {
-    const gap = gapByBinding.get(`${part.gap_binding.kind}\0${part.gap_binding.gap_id}`);
-    if (!gap || questionAnswerContractDigest(gap.answer_contract) !== part.answer_contract_digest) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Presentation gap inventory is stale or incomplete.");
-    const controls = part.current_state === "presented" ? gap.answer_contract.allowed_controls : gap.answer_contract.allowed_controls.filter((control) => control === "answer" || control === "close_for_delivery");
-    if (!Array.isArray(controls) || controls.length === 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part has no currently allowed control.");
-    return {
-      question_part_id: part.question_part_id,
-      display_token: `Q${String(index + 1).padStart(3, "0")}`,
-      question_state: part.current_state,
-      current_allowed_controls: [...controls],
-      question: gap.question,
-      why_needed: gap.why_needed,
-      answer_contract: structuredClone(gap.answer_contract),
-      question_impact_summary: { question_part_id: part.question_part_id, ...structuredClone(gap.question_impact_summary) }
-    };
-  });
-  const presentationId = stableV5Id("clarification_presentation", {
-    case_document_lineage_id: stateSet.case_document_lineage_id,
-    input_semantic_root_digest: stateSet.current_semantic_root_digest,
-    question_part_state_set_digest: stateSet.state_set_digest,
-    visible_question_part_ids: parts.map((part) => part.question_part_id)
-  });
-  const payload = { presentation_id: presentationId, semantic_root_digest: stateSet.current_semantic_root_digest, question_part_state_set_digest: stateSet.state_set_digest, source_revision: sourceRevision, parts };
-  return { ...payload, presentation_digest: clarificationPresentationDigest(payload) };
-}
-function applyQuestionPartTransitions(stateSet, changes, nextSemanticRootDigest = stateSet.current_semantic_root_digest) {
-  validateQuestionPartStateSet(stateSet);
-  if (!digest3(nextSemanticRootDigest)) throw new V5ProtocolError("QUESTION_PART_TRANSITION_INVALID", "Next semantic root digest is invalid.");
-  const byId = new Map(changes.map((change) => [change.question_part_id, change]));
-  if (byId.size !== changes.length) throw new V5ProtocolError("QUESTION_PART_ACTION_CONFLICT", "A Question Part may transition at most once per commit.");
-  const parts = stateSet.parts.map((part) => {
-    const change = byId.get(part.question_part_id);
-    if (!change) return structuredClone(part);
-    if (!EDGES[part.current_state]?.has(change.to_state)) throw new V5ProtocolError("QUESTION_PART_TRANSITION_INVALID", "Question Part transition is not allowed from the current state.");
-    const transitionPayload = { transition_sequence: part.transition_history.length + 1, from_state: part.current_state, to_state: change.to_state, cause: structuredClone(change.cause) };
-    const transition = { ...transitionPayload, transition_digest: canonicalObjectDigest(transitionPayload) };
-    const { state_record_digest: ignored, ...payload2 } = part;
-    return sealStateRecord({ ...payload2, current_state: change.to_state, transition_history: [...part.transition_history, transition] });
-  });
-  for (const change of changes) if (!stateSet.parts.some((part) => part.question_part_id === change.question_part_id)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Question Part transition targets an unknown part.");
-  const payload = { kind: "question_part_state_set", case_document_lineage_id: stateSet.case_document_lineage_id, current_semantic_root_digest: nextSemanticRootDigest, parts };
-  const next = { ...payload, state_set_digest: canonicalObjectDigest(payload) };
-  validateQuestionPartStateSet(next);
-  return next;
-}
-
 // src/v5/clarification-parser.mjs
 var UNIT_ACTIONS = /* @__PURE__ */ new Set(["answer", "defer", "unknown", "close_for_delivery"]);
 var PROPER_TOKEN = /^Q[0-9]{3,6}$/u;
 var TOKENISH = /Q[0-9]+/gu;
-function object4(value) {
+function object6(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function exact4(value, keys) {
+function exact5(value, keys) {
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
-function nonblank5(value) {
+function nonblank7(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function scalarLength2(value) {
@@ -3197,7 +3597,7 @@ function clarificationMessageDigest(raw) {
   return canonicalObjectDigest({ namespace: "generate-test-cases/v5/clarification-message", format_version: 1, message: raw });
 }
 function minimalOriginFromRaw(raw, range) {
-  if (typeof raw !== "string" || !object4(range) || !exact4(range, ["start_scalar", "end_scalar"]) || !Number.isSafeInteger(range.start_scalar) || !Number.isSafeInteger(range.end_scalar)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin range must use safe Unicode scalar offsets.");
+  if (typeof raw !== "string" || !object6(range) || !exact5(range, ["start_scalar", "end_scalar"]) || !Number.isSafeInteger(range.start_scalar) || !Number.isSafeInteger(range.end_scalar)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin range must use safe Unicode scalar offsets.");
   const scalars = [...raw];
   if (range.start_scalar < 0 || range.end_scalar <= range.start_scalar || range.end_scalar > scalars.length) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin range is out of bounds or empty.");
   const excerpt = scalars.slice(range.start_scalar, range.end_scalar).join("");
@@ -3206,7 +3606,7 @@ function minimalOriginFromRaw(raw, range) {
 }
 function verifyOrigin(supplied, raw) {
   const expected = minimalOriginFromRaw(raw, supplied?.range);
-  if (!object4(supplied) || !exact4(supplied, ["message_digest", "range", "excerpt", "excerpt_digest"]) || canonicalV5Stringify(supplied) !== canonicalV5Stringify(expected)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin must be derived exactly from the current raw message.");
+  if (!object6(supplied) || !exact5(supplied, ["message_digest", "range", "excerpt", "excerpt_digest"]) || canonicalV5Stringify(supplied) !== canonicalV5Stringify(expected)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Origin must be derived exactly from the current raw message.");
   return expected;
 }
 function stripWrappers(text, punctuation) {
@@ -3220,72 +3620,72 @@ function validateAnswerValue(value, schema, registry) {
   const fail = () => {
     throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Answer value does not satisfy the frozen closed contract.");
   };
-  if (!object4(value) || value.kind !== schema.kind) return fail();
+  if (!object6(value) || value.kind !== schema.kind) return fail();
   if (value.kind === "text") {
-    if (!exact4(value, ["kind", "value"]) || !nonblank5(value.value)) return fail();
+    if (!exact5(value, ["kind", "value"]) || !nonblank7(value.value)) return fail();
     const text = value.value.trim();
     const length = scalarLength2(text);
     if (length < schema.min_scalars || length > schema.max_scalars || length > 1024 || schema.ambiguity_guard_ref !== "answer.no-unresolved-vague-token.v1") return fail();
     const guard = registry.text_ambiguity_guards.find((item) => item.guard_ref === schema.ambiguity_guard_ref);
     if (!guard || guard.match_mode !== "unicode_scalar_substring" || guard.forbidden_tokens.some((token) => text.includes(token))) return fail();
   } else if (value.kind === "boolean") {
-    if (!exact4(value, ["kind", "value"]) || typeof value.value !== "boolean") return fail();
+    if (!exact5(value, ["kind", "value"]) || typeof value.value !== "boolean") return fail();
   } else if (value.kind === "integer" || value.kind === "number") {
-    if (!exact4(value, ["kind", "value"]) || typeof value.value !== "number" || !Number.isFinite(value.value) || value.kind === "integer" && !Number.isSafeInteger(value.value) || schema.minimum !== void 0 && value.value < schema.minimum || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
+    if (!exact5(value, ["kind", "value"]) || typeof value.value !== "number" || !Number.isFinite(value.value) || value.kind === "integer" && !Number.isSafeInteger(value.value) || schema.minimum !== void 0 && value.value < schema.minimum || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
   } else if (value.kind === "duration_ms") {
-    if (!exact4(value, ["kind", "value"]) || !Number.isSafeInteger(value.value) || value.value <= 0 || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
+    if (!exact5(value, ["kind", "value"]) || !Number.isSafeInteger(value.value) || value.value <= 0 || schema.maximum !== void 0 && value.value > schema.maximum) return fail();
   } else if (value.kind === "identifier") {
     const pattern = registry.identifier_patterns.find((item) => item.pattern_ref === schema.pattern_ref);
-    if (!exact4(value, ["kind", "value"]) || !pattern || !new RegExp(pattern.expression, "u").test(value.value)) return fail();
+    if (!exact5(value, ["kind", "value"]) || !pattern || !new RegExp(pattern.expression, "u").test(value.value)) return fail();
   } else if (value.kind === "enum") {
-    if (!exact4(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
+    if (!exact5(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
   } else if (value.kind === "set") {
-    if (!exact4(value, ["kind", "members"]) || !Array.isArray(value.members) || value.members.length < schema.min_items || schema.max_items !== void 0 && value.members.length > schema.max_items) return fail();
-    for (const member of value.members) if (!object4(member) || member.kind !== schema.member_kind || !validateScalar(member)) return fail();
+    if (!exact5(value, ["kind", "members"]) || !Array.isArray(value.members) || value.members.length < schema.min_items || schema.max_items !== void 0 && value.members.length > schema.max_items) return fail();
+    for (const member of value.members) if (!object6(member) || member.kind !== schema.member_kind || !validateScalar(member)) return fail();
     if (new Set(value.members.map((member) => canonicalV5Stringify(member))).size !== value.members.length) return fail();
     if (schema.allowed_members && value.members.some((member) => !schema.allowed_members.some((allowed) => canonicalV5Stringify(allowed) === canonicalV5Stringify(member)))) return fail();
   } else if (value.kind === "mapping") {
-    if (!exact4(value, ["kind", "entries"]) || !Array.isArray(value.entries)) return fail();
-    for (const entry of value.entries) if (!object4(entry) || !exact4(entry, ["from", "to"]) || entry.from?.kind !== schema.key_kind || entry.to?.kind !== schema.mapped_value_kind || !validateScalar(entry.from) || !validateScalar(entry.to)) return fail();
+    if (!exact5(value, ["kind", "entries"]) || !Array.isArray(value.entries)) return fail();
+    for (const entry of value.entries) if (!object6(entry) || !exact5(entry, ["from", "to"]) || entry.from?.kind !== schema.key_kind || entry.to?.kind !== schema.mapped_value_kind || !validateScalar(entry.from) || !validateScalar(entry.to)) return fail();
     if (new Set(value.entries.map((entry) => canonicalV5Stringify(entry.from))).size !== value.entries.length) return fail();
     if (schema.required_keys && !sameCanonicalSet(value.entries.map((entry) => entry.from), schema.required_keys)) return fail();
   } else if (value.kind === "scope") {
-    if (!exact4(value, ["kind", "included_refs", "excluded_refs"]) || !uniqueNonblankStrings(value.included_refs) || !uniqueNonblankStrings(value.excluded_refs) || value.included_refs.some((ref) => value.excluded_refs.includes(ref))) return fail();
+    if (!exact5(value, ["kind", "included_refs", "excluded_refs"]) || !uniqueNonblankStrings(value.included_refs) || !uniqueNonblankStrings(value.excluded_refs) || value.included_refs.some((ref) => value.excluded_refs.includes(ref))) return fail();
     const allowed = schema.allowed_refs;
     if (allowed && [...value.included_refs, ...value.excluded_refs].some((ref) => !allowed.includes(ref))) return fail();
   } else if (value.kind === "requirements_quantifier") {
-    if (!exact4(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
+    if (!exact5(value, ["kind", "value"]) || !schema.allowed_values?.includes(value.value)) return fail();
   } else if (value.kind === "requirements_refs") {
-    if (!exact4(value, ["kind", "refs"]) || !Array.isArray(value.refs) || value.refs.length < schema.min_items || schema.max_items !== void 0 && value.refs.length > schema.max_items || !value.refs.every(object4)) return fail();
+    if (!exact5(value, ["kind", "refs"]) || !Array.isArray(value.refs) || value.refs.length < schema.min_items || schema.max_items !== void 0 && value.refs.length > schema.max_items || !value.refs.every(object6)) return fail();
     if (!sameCanonicalSubset(value.refs, schema.allowed_refs)) return fail();
   } else if (value.kind === "entity_resolution") {
     if (!validateEntityResolution(value.value, schema)) return fail();
   } else if (value.kind === "permission_coordinates") {
     if (!validatePermissionCoordinates(value.value, schema)) return fail();
   } else if (["oracle_observation", "oracle_assertion", "oracle_scope", "oracle_window", "population_scope", "population_proof"].includes(value.kind)) {
-    if (!exact4(value, ["kind", "resolution"]) || !object4(value.resolution)) return fail();
+    if (!exact5(value, ["kind", "resolution"]) || !object6(value.resolution)) return fail();
     if (value.resolution.resolution_kind === "select_candidate") {
-      if (!exact4(value.resolution, ["resolution_kind", "candidate"]) || !schema.existing_candidates?.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value.resolution.candidate))) return fail();
+      if (!exact5(value.resolution, ["resolution_kind", "candidate"]) || !schema.existing_candidates?.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value.resolution.candidate))) return fail();
     } else if (value.resolution.resolution_kind === "create_typed") {
-      if (!exact4(value.resolution, ["resolution_kind", "payload"]) || schema.allow_typed_creation !== true || !object4(value.resolution.payload)) return fail();
+      if (!exact5(value.resolution, ["resolution_kind", "payload"]) || schema.allow_typed_creation !== true || !object6(value.resolution.payload)) return fail();
     } else return fail();
   } else if (value.kind === "permission_auxiliary_contract") {
-    if (!exact4(value, ["kind", "resolution"]) || !object4(value.resolution)) return fail();
+    if (!exact5(value, ["kind", "resolution"]) || !object6(value.resolution)) return fail();
     if (value.resolution.resolution_kind === "select_candidate") {
-      if (!exact4(value.resolution, ["resolution_kind", "contract_ref"]) || !schema.existing_contract_refs?.some((ref) => canonicalV5Stringify(ref) === canonicalV5Stringify(value.resolution.contract_ref))) return fail();
-    } else if (!(value.resolution.resolution_kind === "create_typed" && exact4(value.resolution, ["resolution_kind", "payload"]) && object4(value.resolution.payload) && schema.allow_typed_creation === true)) return fail();
+      if (!exact5(value.resolution, ["resolution_kind", "contract_ref"]) || !schema.existing_contract_refs?.some((ref) => canonicalV5Stringify(ref) === canonicalV5Stringify(value.resolution.contract_ref))) return fail();
+    } else if (!(value.resolution.resolution_kind === "create_typed" && exact5(value.resolution, ["resolution_kind", "payload"]) && object6(value.resolution.payload) && schema.allow_typed_creation === true)) return fail();
   } else return fail();
   return structuredClone(value);
 }
 function validateScalar(value) {
-  if (!object4(value)) return false;
-  if (value.kind === "text" || value.kind === "identifier" || value.kind === "enum") return exact4(value, ["kind", "value"]) && nonblank5(value.value);
-  if (value.kind === "boolean") return exact4(value, ["kind", "value"]) && typeof value.value === "boolean";
-  if (value.kind === "integer" || value.kind === "duration_ms") return exact4(value, ["kind", "value"]) && Number.isSafeInteger(value.value);
-  return value.kind === "number" && exact4(value, ["kind", "value"]) && typeof value.value === "number" && Number.isFinite(value.value);
+  if (!object6(value)) return false;
+  if (value.kind === "text" || value.kind === "identifier" || value.kind === "enum") return exact5(value, ["kind", "value"]) && nonblank7(value.value);
+  if (value.kind === "boolean") return exact5(value, ["kind", "value"]) && typeof value.value === "boolean";
+  if (value.kind === "integer" || value.kind === "duration_ms") return exact5(value, ["kind", "value"]) && Number.isSafeInteger(value.value);
+  return value.kind === "number" && exact5(value, ["kind", "value"]) && typeof value.value === "number" && Number.isFinite(value.value);
 }
 function uniqueNonblankStrings(values) {
-  return Array.isArray(values) && values.every(nonblank5) && new Set(values).size === values.length;
+  return Array.isArray(values) && values.every(nonblank7) && new Set(values).size === values.length;
 }
 function sameCanonicalSet(left, right) {
   return left.length === right.length && new Set(left.map(canonicalV5Stringify)).size === left.length && left.every((value) => right.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value)));
@@ -3294,40 +3694,40 @@ function sameCanonicalSubset(values, allowed) {
   return new Set(values.map(canonicalV5Stringify)).size === values.length && values.every((value) => allowed.some((candidate) => canonicalV5Stringify(candidate) === canonicalV5Stringify(value)));
 }
 function validateEntityResolution(answer, schema) {
-  if (!object4(answer) || !exact4(answer, ["conflict_group_id", "exact_mention_candidate_ids", "clusters"]) || answer.conflict_group_id !== schema.exact_conflict_group_id || !sameCanonicalSet(answer.exact_mention_candidate_ids, schema.exact_mention_candidate_ids) || !Array.isArray(answer.clusters) || answer.clusters.length === 0) return false;
+  if (!object6(answer) || !exact5(answer, ["conflict_group_id", "exact_mention_candidate_ids", "clusters"]) || answer.conflict_group_id !== schema.exact_conflict_group_id || !sameCanonicalSet(answer.exact_mention_candidate_ids, schema.exact_mention_candidate_ids) || !Array.isArray(answer.clusters) || answer.clusters.length === 0) return false;
   const mentions = [];
   for (const cluster of answer.clusters) {
-    if (!object4(cluster) || !exact4(cluster, ["canonical_name", "mentions"]) || !nonblank5(cluster.canonical_name) || !Array.isArray(cluster.mentions) || cluster.mentions.length === 0) return false;
+    if (!object6(cluster) || !exact5(cluster, ["canonical_name", "mentions"]) || !nonblank7(cluster.canonical_name) || !Array.isArray(cluster.mentions) || cluster.mentions.length === 0) return false;
     for (const mention of cluster.mentions) {
-      if (!object4(mention) || !exact4(mention, ["mention_candidate_id", "name_role"]) || !schema.allowed_name_roles.includes(mention.name_role)) return false;
+      if (!object6(mention) || !exact5(mention, ["mention_candidate_id", "name_role"]) || !schema.allowed_name_roles.includes(mention.name_role)) return false;
       mentions.push(mention.mention_candidate_id);
     }
   }
   return sameCanonicalSet(mentions, schema.exact_mention_candidate_ids);
 }
 function validatePermissionCoordinates(answer, schema) {
-  if (!object4(answer) || !exact4(answer, ["scope_group_id", "permission_scope_candidate_ids", "unresolved_coordinates", "coordinate_resolutions"]) || answer.scope_group_id !== schema.exact_scope_group_id || !sameCanonicalSet(answer.permission_scope_candidate_ids, schema.exact_permission_scope_candidate_ids) || !sameCanonicalSet(answer.unresolved_coordinates, schema.exact_unresolved_coordinates) || !Array.isArray(answer.coordinate_resolutions) || answer.coordinate_resolutions.length !== answer.unresolved_coordinates.length) return false;
+  if (!object6(answer) || !exact5(answer, ["scope_group_id", "permission_scope_candidate_ids", "unresolved_coordinates", "coordinate_resolutions"]) || answer.scope_group_id !== schema.exact_scope_group_id || !sameCanonicalSet(answer.permission_scope_candidate_ids, schema.exact_permission_scope_candidate_ids) || !sameCanonicalSet(answer.unresolved_coordinates, schema.exact_unresolved_coordinates) || !Array.isArray(answer.coordinate_resolutions) || answer.coordinate_resolutions.length !== answer.unresolved_coordinates.length) return false;
   const byCoordinate = new Map(schema.coordinate_contracts.map((contract) => [contract.coordinate, contract]));
   if (new Set(answer.coordinate_resolutions.map((row) => row.coordinate)).size !== answer.coordinate_resolutions.length) return false;
   for (const row of answer.coordinate_resolutions) {
     const contract = byCoordinate.get(row.coordinate);
-    if (!contract || !object4(row.resolution)) return false;
+    if (!contract || !object6(row.resolution)) return false;
     if (row.resolution.resolution_kind === "select_candidate") {
       if (row.coordinate === "permission_dimension") {
-        if (!exact4(row.resolution, ["resolution_kind", "coordinate_evidence_digests"]) || !sameCanonicalSubset(row.resolution.coordinate_evidence_digests, contract.existing_candidate_evidence_digests)) return false;
-      } else if (!exact4(row.resolution, ["resolution_kind", "coordinate_evidence_digest"]) || !contract.existing_candidate_evidence_digests.includes(row.resolution.coordinate_evidence_digest)) return false;
+        if (!exact5(row.resolution, ["resolution_kind", "coordinate_evidence_digests"]) || !sameCanonicalSubset(row.resolution.coordinate_evidence_digests, contract.existing_candidate_evidence_digests)) return false;
+      } else if (!exact5(row.resolution, ["resolution_kind", "coordinate_evidence_digest"]) || !contract.existing_candidate_evidence_digests.includes(row.resolution.coordinate_evidence_digest)) return false;
     } else if (row.resolution.resolution_kind === "create_typed") {
       const payload = row.resolution.payload;
-      if (!exact4(row.resolution, ["resolution_kind", "payload"]) || !object4(payload)) return false;
+      if (!exact5(row.resolution, ["resolution_kind", "payload"]) || !object6(payload)) return false;
       if (row.coordinate === "role" || row.coordinate === "resource") {
         const n = scalarLength2(payload.canonical_name);
-        if (!exact4(payload, ["canonical_name"]) || n < 1 || n > 128) return false;
+        if (!exact5(payload, ["canonical_name"]) || n < 1 || n > 128) return false;
       } else if (row.coordinate === "action") {
-        if (!exact4(payload, ["action"]) || !contract.creation_constraints.allowed_actions.includes(payload.action)) return false;
+        if (!exact5(payload, ["action"]) || !contract.creation_constraints.allowed_actions.includes(payload.action)) return false;
       } else if (row.coordinate === "context") {
         const n = scalarLength2(payload.context_key);
-        if (!exact4(payload, ["context_key"]) || n < 1 || n > 256) return false;
-      } else if (!exact4(payload, ["dimensions"]) || !sameCanonicalSubset(payload.dimensions, contract.creation_constraints.allowed_dimensions) || new Set(payload.dimensions).size !== payload.dimensions.length || !payload.dimensions.includes("decision")) return false;
+        if (!exact5(payload, ["context_key"]) || n < 1 || n > 256) return false;
+      } else if (!exact5(payload, ["dimensions"]) || !sameCanonicalSubset(payload.dimensions, contract.creation_constraints.allowed_dimensions) || new Set(payload.dimensions).size !== payload.dimensions.length || !payload.dimensions.includes("decision")) return false;
     } else return false;
   }
   return true;
@@ -3347,7 +3747,7 @@ function verifyControlOrigin(excerpt, token, action, registry, allowTokenless) {
 }
 function validateAndBindResponseUnits(input) {
   const { raw_response: raw, presentation, control_registry: controls, answer_registry: registry } = input;
-  if (typeof raw !== "string" || !object4(presentation) || !Array.isArray(presentation.parts) || !Array.isArray(input.units) || input.units.length === 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Clarification preview needs a nonempty unit set and current presentation.");
+  if (typeof raw !== "string" || !object6(presentation) || !Array.isArray(presentation.parts) || !Array.isArray(input.units) || input.units.length === 0) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Clarification preview needs a nonempty unit set and current presentation.");
   const partById = new Map(presentation.parts.map((part) => [part.question_part_id, part]));
   const tokens = presentation.parts.map((part) => part.display_token);
   const seenPart = /* @__PURE__ */ new Set();
@@ -3355,7 +3755,7 @@ function validateAndBindResponseUnits(input) {
   const bound = (
     /** @type {Array<Record<string,any>>} */
     input.units.map((unit) => {
-      if (!object4(unit) || !nonblank5(unit.unit_client_key) || seenKey.has(unit.unit_client_key) || !UNIT_ACTIONS.has(unit.action) || !object4(unit.target)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit shape, action, or client key is invalid.");
+      if (!object6(unit) || !nonblank7(unit.unit_client_key) || seenKey.has(unit.unit_client_key) || !UNIT_ACTIONS.has(unit.action) || !object6(unit.target)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit shape, action, or client key is invalid.");
       seenKey.add(unit.unit_client_key);
       const part = partById.get(unit.target.question_part_id);
       if (!part || unit.target.display_token !== part.display_token || unit.target.root_version_digest !== presentation.semantic_root_digest || !part.current_allowed_controls.includes(unit.action)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit target is stale, unknown, or not advertised.");
@@ -3365,16 +3765,16 @@ function validateAndBindResponseUnits(input) {
       const optionalShared = Object.hasOwn(unit, "shared_origin_group_id");
       if (!optionalShared) verifyUnitTokenBinding(origin.excerpt, part.display_token, tokens);
       const expectedKeys = ["unit_client_key", ...optionalShared ? ["shared_origin_group_id"] : [], "origin", "target", "action", ...unit.action === "answer" ? ["answer"] : []];
-      if (!exact4(unit, expectedKeys)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit contains fields outside its closed branch.");
+      if (!exact5(unit, expectedKeys)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Response unit contains fields outside its closed branch.");
       let evidenceLevel = null;
       if (unit.action === "answer") {
-        if (part.answer_contract.answer_mode !== "typed_answer" || !object4(unit.answer) || !exact4(unit.answer, ["value", "source_text", "nature", ...Object.hasOwn(unit.answer, "temporary_basis") ? ["temporary_basis"] : []]) || !nonblank5(unit.answer.source_text) || scalarLength2(unit.answer.source_text) > 256 || !origin.excerpt.includes(unit.answer.source_text)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Answer is missing or does not bind its exact source text.");
+        if (part.answer_contract.answer_mode !== "typed_answer" || !object6(unit.answer) || !exact5(unit.answer, ["value", "source_text", "nature", ...Object.hasOwn(unit.answer, "temporary_basis") ? ["temporary_basis"] : []]) || !nonblank7(unit.answer.source_text) || scalarLength2(unit.answer.source_text) > 256 || !origin.excerpt.includes(unit.answer.source_text)) throw new V5ProtocolError("ANSWER_BINDING_INVALID", "Answer is missing or does not bind its exact source text.");
         validateAnswerValue(unit.answer.value, part.answer_contract.value_schema, registry);
         if (unit.answer.nature === "final") {
           if (Object.hasOwn(unit.answer, "temporary_basis")) throw new V5ProtocolError("ANSWER_NATURE_INVALID", "Final answer cannot carry a temporary basis.");
           evidenceLevel = "E3";
         } else if (unit.answer.nature === "temporary") {
-          if (!object4(unit.answer.temporary_basis)) throw new V5ProtocolError("TEMPORARY_BASIS_REQUIRED", "Temporary answer requires an exact registered marker origin.");
+          if (!object6(unit.answer.temporary_basis)) throw new V5ProtocolError("TEMPORARY_BASIS_REQUIRED", "Temporary answer requires an exact registered marker origin.");
           const basis = verifyOrigin(unit.answer.temporary_basis, raw);
           if (!controls.temporary_marker_tokens.includes(stripWrappers(basis.excerpt, controls.control_wrapper_punctuation))) throw new V5ProtocolError("TEMPORARY_BASIS_REQUIRED", "Temporary basis must be one registered marker token.");
           evidenceLevel = "E1";
@@ -3647,102 +4047,15 @@ function deriveCaseStatus(input) {
   return input.evidence_levels.includes("E1") ? "Conditional" : "Grounded";
 }
 
-// src/v5/oracles.mjs
-function object5(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-function exact5(value, keys) {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
-}
-function nonblank6(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-function uniqueTyped(values) {
-  return new Set(values.map((value) => canonicalV5Stringify(value))).size === values.length && values.every(validateTypedValue);
-}
-function validateOracleAssertion(assertion, context) {
-  const fail = (message = "Oracle assertion is not a closed decidable branch.") => {
-    throw new V5ProtocolError("ORACLE_NOT_DECIDABLE", message);
-  };
-  if (!object5(assertion) || typeof assertion.kind !== "string") return fail();
-  if (assertion.kind === "exact_text") {
-    if (!exact5(assertion, ["kind", "expected_text"]) || !nonblank6(assertion.expected_text)) return fail();
-  } else if (assertion.kind === "semantic_text") {
-    if (!exact5(assertion, ["kind", "expected_text", "equivalence_rule_ref"]) || !nonblank6(assertion.expected_text)) return fail();
-    resolveSemanticRuleRef(assertion.equivalence_rule_ref, "semantic_equivalence", context.semanticRuleIndex);
-  } else if (assertion.kind === "value_equals") {
-    const keys = assertion.normalization_ref ? ["kind", "expected_value", "normalization_ref"] : ["kind", "expected_value"];
-    if (!exact5(assertion, keys) || !validateTypedValue(assertion.expected_value)) return fail();
-    if (assertion.normalization_ref) resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
-  } else if (assertion.kind === "value_state_equals") {
-    if (!exact5(assertion, ["kind", "expected_value_state"])) return fail();
-    try {
-      validateValueState(assertion.expected_value_state);
-    } catch {
-      return fail();
-    }
-  } else if (assertion.kind === "exists" || assertion.kind === "absent") {
-    if (!exact5(assertion, ["kind"])) return fail();
-  } else if (assertion.kind === "set_contains" || assertion.kind === "set_equals") {
-    const keys = assertion.kind === "set_contains" ? ["kind", "expected_members", "normalization_ref"] : ["kind", "expected_members", "order_sensitive", "normalization_ref"];
-    if (!exact5(assertion, keys) || !Array.isArray(assertion.expected_members) || assertion.kind === "set_contains" && assertion.expected_members.length === 0 || !uniqueTyped(assertion.expected_members) || assertion.kind === "set_equals" && typeof assertion.order_sensitive !== "boolean") return fail();
-    resolveSemanticRuleRef(assertion.normalization_ref, "value_normalization", context.semanticRuleIndex);
-  } else if (assertion.kind === "count_equals" || assertion.kind === "count_at_least") {
-    const field = assertion.kind === "count_equals" ? "expected_count" : "minimum_count";
-    if (!exact5(assertion, ["kind", field]) || !Number.isSafeInteger(assertion[field]) || assertion[field] < 0) return fail();
-  } else if (assertion.kind === "transition") {
-    const keys = assertion.trigger_step_client_key ? ["kind", "from_state", "to_state", "trigger_action_ref", "trigger_step_client_key"] : ["kind", "from_state", "to_state", "trigger_action_ref"];
-    if (!exact5(assertion, keys) || !validateTypedValue(assertion.from_state) || !validateTypedValue(assertion.to_state) || !nonblank6(assertion.trigger_action_ref?.action_id) || assertion.trigger_action_ref.semantic_root_digest !== context.semanticRootDigest || assertion.trigger_step_client_key !== void 0 && !nonblank6(assertion.trigger_step_client_key)) return fail();
-  } else if (assertion.kind === "cross_surface_equals") {
-    if (!exact5(assertion, ["kind", "field_correspondence_id"]) || !context.fieldCorrespondenceIds?.includes(assertion.field_correspondence_id)) return fail();
-  } else if (assertion.kind === "permission") {
-    if (!/** @type {Array<Record<string,any>>|undefined} */
-    context.permissionDecisionCells?.some((cell) => canonicalV5Stringify(cell) === canonicalV5Stringify(assertion.decision_cell_ref))) return fail("Permission decision cell is not accepted.");
-    if (assertion.expected === "allow") {
-      if (!exact5(assertion, ["kind", "expected", "decision_cell_ref"])) return fail();
-    } else if (assertion.expected === "deny") {
-      if (!exact5(assertion, ["kind", "expected", "decision_cell_ref", "denial_behavior"]) || !object5(assertion.denial_behavior)) return fail();
-      if (assertion.denial_behavior.kind === "not_required") {
-        if (!exact5(assertion.denial_behavior, ["kind"])) return fail();
-      } else if (assertion.denial_behavior.kind === "required") {
-        if (!exact5(assertion.denial_behavior, ["kind", "denial_required_cell_key", "denial_contract_ref"]) || assertion.denial_behavior.denial_contract_ref?.ref?.contract_kind !== "denial_behavior" || assertion.denial_behavior.denial_contract_ref.ref.semantic_root_digest !== context.semanticRootDigest) return fail();
-      } else return fail();
-    } else return fail();
-  } else return fail();
-  return structuredClone(assertion);
-}
-function validateObservation(observation, context) {
-  if (!object5(observation) || !["ui", "response", "storage", "event", "system_state"].includes(observation.kind) || !nonblank6(observation.logical_surface_ref) || !nonblank6(observation.subject_ref)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation reference is invalid.");
-  const common = ["kind", "logical_surface_ref", "subject_ref", ...Object.hasOwn(observation, "field_path") ? ["field_path"] : []];
-  if (Object.hasOwn(observation, "field_path") && !nonblank6(observation.field_path)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation field path must be nonblank when present.");
-  if (observation.kind === "ui") {
-    if (!exact5(observation, [...common, "locator_contract_ref"])) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "UI observation has non-contract fields.");
-    resolveSemanticRuleRef(observation.locator_contract_ref, "locator", context.semanticRuleIndex);
-  } else if (!exact5(observation, common)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Observation has non-contract fields.");
-}
-function validateTypedOracle(oracle, context) {
-  const keys = ["oracle_client_key", "oracle_semantic_contract_id", "observe_after_step_client_key", "observation_ref", "assertion", "evaluation_scope", "observation_window", "claim_ids"];
-  if (!object5(oracle) || !exact5(oracle, keys) || !nonblank6(oracle.oracle_client_key) || !context.oracleSemanticContractIds.includes(oracle.oracle_semantic_contract_id) || !context.stepClientKeys.includes(oracle.observe_after_step_client_key) || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0 || oracle.claim_ids.some((id) => !context.acceptedClaimIds.includes(id)) || new Set(oracle.claim_ids).size !== oracle.claim_ids.length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Typed Oracle ownership or evidence binding is invalid.");
-  validateObservation(oracle.observation_ref, context);
-  validateOracleAssertion(oracle.assertion, context);
-  if (oracle.assertion.kind === "transition" && oracle.assertion.trigger_step_client_key !== oracle.observe_after_step_client_key) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Transition trigger and observation step must be explicitly bound.");
-  const window = oracle.observation_window;
-  if (!object5(window) || !(["after_step"].includes(window.kind) ? exact5(window, ["kind"]) : ["within", "stable_for"].includes(window.kind) ? exact5(window, ["kind", "duration_ms"]) && Number.isSafeInteger(window.duration_ms) && window.duration_ms > 0 : window.kind === "until_signal" ? exact5(window, ["kind", "signal_ref", "timeout_ms"]) && nonblank6(window.signal_ref) && Number.isSafeInteger(window.timeout_ms) && window.timeout_ms > 0 : false)) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle observation window is invalid.");
-  if (!(oracle.evaluation_scope?.kind === "single" && exact5(oracle.evaluation_scope, ["kind"])) && !(oracle.evaluation_scope?.kind === "forall" && exact5(oracle.evaluation_scope, ["kind", "population_contract_id", "population_proof_id"]) && nonblank6(oracle.evaluation_scope.population_contract_id) && nonblank6(oracle.evaluation_scope.population_proof_id))) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Oracle evaluation scope is invalid.");
-  return structuredClone(oracle);
-}
-
 // src/v5/case-compiler.mjs
-function object6(value) {
+function object7(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function nonblank7(value) {
+function nonblank8(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function unique(values, name) {
-  if (new Set(values).size !== values.length || values.some((value) => !nonblank7(value))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", `${name} must be a unique nonblank set.`);
+  if (new Set(values).size !== values.length || values.some((value) => !nonblank8(value))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", `${name} must be a unique nonblank set.`);
   return [...values].sort();
 }
 function records(value) {
@@ -3802,16 +4115,16 @@ function derivePermissionCoverage(cells) {
   return result;
 }
 function compileV5CaseDocument(input) {
-  if (!object6(input) || !nonblank7(input.case_document_lineage_id) || !/^sha256:[0-9a-f]{64}$/u.test(input.semantic_root_digest) || !Number.isSafeInteger(input.source_revision) || input.source_revision < 0 || !Array.isArray(input.case_drafts)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case compilation input is invalid.");
+  if (!object7(input) || !nonblank8(input.case_document_lineage_id) || !/^sha256:[0-9a-f]{64}$/u.test(input.semantic_root_digest) || !Number.isSafeInteger(input.source_revision) || input.source_revision < 0 || !Array.isArray(input.case_drafts)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case compilation input is invalid.");
   const assessmentByClaim = /* @__PURE__ */ new Map();
   for (const assessment of records(input.claim_assessments)) {
-    if (!nonblank7(assessment.claim_id) || assessmentByClaim.has(assessment.claim_id) || !["E1", "E2", "E3"].includes(assessment.level) || !["supported", "uncertain", "unsupported"].includes(assessment.support_review)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Claim assessment inventory is invalid or ambiguous.");
+    if (!nonblank8(assessment.claim_id) || assessmentByClaim.has(assessment.claim_id) || !["E1", "E2", "E3"].includes(assessment.level) || !["supported", "uncertain", "unsupported"].includes(assessment.support_review)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Claim assessment inventory is invalid or ambiguous.");
     assessmentByClaim.set(assessment.claim_id, assessment);
   }
   const acceptedGapIds = new Set(unique(input.accepted_gap_ids ?? [], "Accepted gap IDs"));
   const seenClientKeys = /* @__PURE__ */ new Set();
   const cases = input.case_drafts.map((draft) => {
-    if (!nonblank7(draft.case_client_key) || seenClientKeys.has(draft.case_client_key) || !nonblank7(draft.title) || !nonblank7(draft.module_id) || !["P0", "P1", "P2", "P3"].includes(draft.priority) || !nonblank7(draft.primary_test_point_id) || !Array.isArray(draft.steps) || draft.steps.length === 0 || !Array.isArray(draft.oracles) || draft.oracles.length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Draft is incomplete or duplicates a client key.");
+    if (!nonblank8(draft.case_client_key) || seenClientKeys.has(draft.case_client_key) || !nonblank8(draft.title) || !nonblank8(draft.module_id) || !["P0", "P1", "P2", "P3"].includes(draft.priority) || !nonblank8(draft.primary_test_point_id) || !Array.isArray(draft.steps) || draft.steps.length === 0 || !Array.isArray(draft.oracles) || draft.oracles.length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Draft is incomplete or duplicates a client key.");
     seenClientKeys.add(draft.case_client_key);
     const claimIds = unique(draft.claim_ids ?? [], "Case Claim IDs");
     const assessments = claimIds.map((claimId) => assessmentByClaim.get(claimId));
@@ -3841,7 +4154,7 @@ function compileV5CaseDocument(input) {
       semantic_status: status
     });
     const steps = draft.steps.map((step, index) => {
-      if (!nonblank7(step.action) || !Array.isArray(step.claim_ids) || step.claim_ids.some((claimId) => !claimIds.includes(claimId))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case step action or Claim binding is invalid.");
+      if (!nonblank8(step.action) || !Array.isArray(step.claim_ids) || step.claim_ids.some((claimId) => !claimIds.includes(claimId))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case step action or Claim binding is invalid.");
       return { step_id: legacyStableId("STEP", { case_anchor_digest: caseAnchorDigest, sequence: index + 1, action: step.action, semantic_action_ref: step.semantic_action_ref }), step_client_key: step.step_client_key, sequence: index + 1, action: step.action, semantic_action_ref: structuredClone(step.semantic_action_ref), claim_ids: [...step.claim_ids].sort() };
     });
     const stepIdByKey = new Map(steps.map((step) => [step.step_client_key, step.step_id]));
@@ -3914,14 +4227,14 @@ function compileV5CaseDocument(input) {
   return { ...payload, bundle_digest: canonicalObjectDigest(payload) };
 }
 function validateV5CaseDocument(document) {
-  if (!object6(document) || document.schema_version !== "5.0.0" || document.compiler_version !== "0.6.0" || document.delivery_intent !== "case_document" || !Array.isArray(document.cases) || document.provenance?.output_role !== "downstream_only") throw new V5ProtocolError("CANONICAL_RENDER_MISMATCH", "Canonical V5 Case Document shape is invalid.");
+  if (!object7(document) || document.schema_version !== "5.0.0" || document.compiler_version !== "0.6.0" || document.delivery_intent !== "case_document" || !Array.isArray(document.cases) || document.provenance?.output_role !== "downstream_only") throw new V5ProtocolError("CANONICAL_RENDER_MISMATCH", "Canonical V5 Case Document shape is invalid.");
   const { bundle_digest: declared, ...payload } = document;
   if (canonicalObjectDigest(payload) !== declared) throw new V5ProtocolError("CANONICAL_RENDER_MISMATCH", "Canonical V5 Case Document digest is invalid.");
   return structuredClone(document);
 }
 function projectCompatibilityExecutionPlan(document, metadata) {
   validateV5CaseDocument(document);
-  if (!nonblank7(metadata.run_id) || !Number.isSafeInteger(metadata.revision) || metadata.revision < 0) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Execution Plan requires an immutable Case Document revision.");
+  if (!nonblank8(metadata.run_id) || !Number.isSafeInteger(metadata.revision) || metadata.revision < 0) throw new V5ProtocolError("CASE_DOCUMENT_REFERENCE_INVALID", "Execution Plan requires an immutable Case Document revision.");
   const operationKinds = ["confirm_execution_plan", "pause_execution", "provide_capability_proof", "set_execution_disposition"];
   const items = document.cases.map((current) => ({ case_id: current.case_id, title: current.title, semantic_status: current.semantic_status, execution_disposition: "pending", available_actions: current.semantic_status === "Grounded" ? ["provide_capability_proof", "set_execution_disposition"] : current.semantic_status === "NotApplicable" ? [] : ["set_execution_disposition"] }));
   const payload = {
@@ -4147,6 +4460,148 @@ async function persistRunRejection(current, request, code, message) {
   const reply = runRejection(current, code, message);
   const internalReceipt = { kind: "operational_commit", committed_action_digest: actionDigestV5("advance", request.action), semantic_revision_delta: 0, client_key_bindings: [], operational_effect: "idempotency_only" };
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: current.checkpoint, selectorSidecar: current.selectorSidecar, reply, commitReceipt: internalReceipt });
+}
+var BEHAVIOR_GAP_ERROR_KIND = Object.freeze({
+  FIELD_CORRESPONDENCE_REQUIRED: { contractKind: "field_correspondence", collection: "field_correspondences", missingSemantics: "null_policy" },
+  DOMAIN_CONTRACT_REQUIRED: { contractKind: "domain", collection: "domain_contracts", missingSemantics: "domain_boundary" },
+  POPULATION_CONTRACT_REQUIRED: { contractKind: "population", collection: "population_contracts", missingSemantics: "population_scope" }
+});
+function automaticBehaviorGapAnswerContract(missingSemantics, requirement, seed) {
+  const allowedControls2 = ["answer", "defer", "unknown", "close_for_delivery"];
+  if (missingSemantics === "null_policy") {
+    const catalog = contracts.answerConstraintRegistry.enum_catalogs.find((row) => row.catalog_id === "null_policy");
+    if (!catalog) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Null-policy answer catalog is missing.");
+    return { answer_mode: "typed_answer", allowed_controls: allowedControls2, value_schema: { kind: "enum", allowed_values: structuredClone(catalog.members) } };
+  }
+  if (missingSemantics === "domain_boundary") return { answer_mode: "typed_answer", allowed_controls: allowedControls2, value_schema: { kind: "text", min_scalars: 1, max_scalars: 1024, ambiguity_guard_ref: "answer.no-unresolved-vague-token.v1" } };
+  if (missingSemantics === "population_scope") return {
+    answer_mode: "typed_answer",
+    allowed_controls: allowedControls2,
+    value_schema: {
+      kind: "population_scope",
+      existing_candidates: structuredClone(requirement.population_gap_catalog?.scope_candidates ?? []),
+      allow_typed_creation: true,
+      creation_constraints: { allowed_scope_kinds: ["single_item", "visible_region", "current_page", "current_response", "all_pages", "full_dataset"], semantic_root_digest: seed.semantic_root_digest }
+    }
+  };
+  throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `No V1 answer derivation exists for ${missingSemantics}.`);
+}
+async function persistBehaviorContractGap(current, request, error) {
+  const profile = BEHAVIOR_GAP_ERROR_KIND[error.code];
+  if (!profile || current.checkpoint.fsm_cell_id !== "cd.active.case.behavior") return persistRunRejection(current, request, error.code, error.message);
+  const submitted = structuredClone(request.action.artifact);
+  const priorSeed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, "seed_digest");
+  const offending = submitted[profile.collection]?.[0] ?? {};
+  const fallbackBasis = priorSeed.required_contracts[0]?.basis ?? [{ kind: "claim", claim_id: "compiler-detected-behavior-gap" }];
+  const basis = Array.isArray(offending.basis) && offending.basis.length > 0 ? offending.basis : Array.isArray(offending.domain?.closed_world_basis) && offending.domain.closed_world_basis.length > 0 ? offending.domain.closed_world_basis : fallbackBasis;
+  let requirement = priorSeed.required_contracts.find((row2) => row2.contract_kind === profile.contractKind);
+  let seed = priorSeed;
+  if (!requirement) {
+    const subjectRef = offending.subject_ref ?? offending.left?.logical_surface_ref ?? offending.population_contract_client_key ?? priorSeed.required_contracts[0]?.subject_ref ?? "compiler-detected-subject";
+    const intentRef = offending.intent_ref ?? offending.mapping_client_key ?? offending.domain_client_key ?? offending.population_contract_client_key ?? `${profile.contractKind}-clarification`;
+    const synthetic = { contract_kind: profile.contractKind, subject_ref: subjectRef, intent_ref: intentRef, basis, ...profile.contractKind === "population" ? { population_gap_catalog: { scope_candidates: [], proof_candidates: [] } } : {} };
+    seed = deriveBehaviorContractSeed(current.checkpoint.semantic_root_digest, {
+      semanticRuleIndex: priorSeed.semantic_rule_index,
+      riskModuleIds: priorSeed.risk_review_module_ids,
+      requirements: [...priorSeed.required_contracts, synthetic]
+    });
+    requirement = seed.required_contracts.find((row2) => row2.contract_kind === profile.contractKind && row2.subject_ref === subjectRef && row2.intent_ref === intentRef);
+  }
+  if (!requirement) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Unable to preserve the ${profile.contractKind} gap requirement.`);
+  if (profile.contractKind === "field_correspondence") submitted.field_correspondences = [];
+  if (profile.contractKind === "domain") submitted.domain_contracts = [];
+  if (profile.contractKind === "population") {
+    submitted.population_contracts = [];
+    submitted.population_proofs = [];
+  }
+  const gapClientKey = `compiler-gap-${profile.contractKind}`;
+  const proposal = {
+    semantic_gap_client_key: gapClientKey,
+    target: { kind: "behavior_contract", required_contract_key: requirement.required_contract_key },
+    missing_semantics: profile.missingSemantics,
+    question: profile.contractKind === "field_correspondence" ? "Which null policy makes this field correspondence executable?" : profile.contractKind === "domain" ? "What exact universe or partition boundary closes this domain?" : "What exact population scope must this requirement quantify?",
+    answer_contract: automaticBehaviorGapAnswerContract(profile.missingSemantics, requirement, seed),
+    basis,
+    why_needed: error.message,
+    question_impact_summary: { affected_case_keys: [], impact_kinds: [profile.missingSemantics] }
+  };
+  submitted.behavior_contract_seed_digest = seed.seed_digest;
+  submitted.semantic_gap_proposals = [...submitted.semantic_gap_proposals, proposal];
+  submitted.behavior_contract_reviews = submitted.behavior_contract_reviews.filter((review) => review.required_contract_key !== requirement.required_contract_key).map((review) => ({ ...review, seed_digest: seed.seed_digest }));
+  submitted.behavior_contract_reviews.push({ seed_digest: seed.seed_digest, required_contract_key: requirement.required_contract_key, disposition: { kind: "semantic_gap", gap_ref: { kind: "same_behavior_batch", semantic_gap_client_key: gapClientKey } } });
+  submitted.behavior_contract_reviews.sort((left, right) => left.required_contract_key.localeCompare(right.required_contract_key));
+  validateBehaviorContractReviews(seed, submitted.behavior_contract_reviews, submitted);
+  const compiledGaps = compileBehaviorSemanticGaps(current.checkpoint.semantic_root_digest, seed, submitted.semantic_gap_proposals, submitted.behavior_contract_reviews);
+  const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, submitted.risk_reviews);
+  const envelope = acceptArtifactEnvelope({ artifactKind: "behavior_views", payload: submitted, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
+  const testObligations = sealV5Record({ kind: "test_obligations", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: [...new Set(submitted.formal_test_point_ids)].sort(), behavior_artifact_digest: envelope.envelope_digest }, "obligations_digest");
+  const gaps = clarificationGapsFromAcceptedBehavior(compiledGaps.accepted_gaps);
+  const inventory = sealV5Record({ kind: "clarification_gap_inventory", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, gaps }, "gaps_digest");
+  const stateSet = createQuestionPartStateSet(current.identity.case_document_lineage_id, current.checkpoint.semantic_root_digest, gaps);
+  const presentation = createClarificationPresentation(stateSet, current.checkpoint.current_revision + 1, gaps);
+  const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === error.code && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
+  if (!row || row.exact_commit.kind !== "artifact_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Behavior-gap reply contract is missing for ${error.code}.`);
+  const checkpointBase = {
+    ...current.checkpoint,
+    current_revision: current.checkpoint.current_revision + 1,
+    fsm_cell_id: "cd.active.case.resolve",
+    stage: row.exact_stage,
+    obligation: row.exact_obligation,
+    behavior_contract_seed_digest: seed.seed_digest,
+    accepted_artifact_digests: [.../* @__PURE__ */ new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
+    behavior_views_artifact_digest: envelope.envelope_digest,
+    test_obligations_digest: testObligations.obligations_digest,
+    risk_ledger_digest: canonicalObjectDigest(riskLedger),
+    clarification_gaps_digest: inventory.gaps_digest,
+    question_part_state_set_digest: stateSet.state_set_digest,
+    presentation_digest: presentation.presentation_digest
+  };
+  delete checkpointBase.checkpoint_digest;
+  const context = {
+    ...current.reply.work_packet.context,
+    behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
+    test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: testObligations }
+  };
+  const workPacket = { kind: "clarification_work", context, presentation };
+  const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(checkpointBase.fsm_cell_id, workPacket));
+  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigestV5("advance", request.action), semantic_revision_delta: 1, client_key_bindings: compiledGaps.client_key_bindings };
+  const reply = {
+    kind: "run_reply",
+    schema_version: V5_SCHEMA_VERSION,
+    projection_kind: row.exact_projection_kind,
+    reply_contract_id: row.reply_contract_id,
+    reply_status: row.exact_reply_status,
+    run_id: current.identity.run_id,
+    run_directory: current.layout.root,
+    case_document_lineage_id: current.identity.case_document_lineage_id,
+    delivery_intent: current.identity.delivery_intent,
+    run_lifecycle: "active",
+    stage: row.exact_stage,
+    obligation: row.exact_obligation,
+    current_revision: selectorState.checkpoint.current_revision,
+    checkpoint_digest: selectorState.checkpoint.checkpoint_digest,
+    selector_snapshot_digest: selectorState.sidecar.selector_sidecar_digest,
+    diagnostics: [{ code: error.code, affected_refs: [], message: error.message }],
+    available_actions: selectorState.selectors,
+    commit_receipt: commitReceipt,
+    work_packet: workPacket
+  };
+  return commitNormalRunTransaction(current.layout.root, request, {
+    checkpoint: selectorState.checkpoint,
+    selectorSidecar: selectorState.sidecar,
+    reply,
+    commitReceipt,
+    acceptedArtifacts: [{ record: envelope, digestField: "envelope_digest" }],
+    compilerStateRecords: [
+      ...seed.seed_digest === priorSeed.seed_digest ? [] : [{ record: seed, digestField: "seed_digest" }],
+      { record: testObligations, digestField: "obligations_digest" },
+      { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
+      { record: inventory, digestField: "gaps_digest" },
+      { record: stateSet, semanticDigest: stateSet.state_set_digest },
+      { record: presentation, semanticDigest: presentation.presentation_digest },
+      ...compiledGaps.accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
+    ]
+  });
 }
 async function persistOracleReroute(current, request, message) {
   const row = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "ORACLE_SEMANTICS_REQUIRED" && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
@@ -4623,6 +5078,7 @@ async function advanceV5Run(runDirectory, requestValue) {
     if (error.code === "ACTION_TOKEN_KEY_UNAVAILABLE") throw error;
     if (error.code === "IDEMPOTENCY_CONFLICT") return runRejection(current, error.code, error.message, current.checkpoint.run_lifecycle === "active" ? "persisted_run_state" : "read_only_terminal_rejection");
     if (error.code === "ORACLE_SEMANTICS_REQUIRED" && current.checkpoint.fsm_cell_id === "cd.active.case.drafts") return persistOracleReroute(current, request, error.message);
+    if (Object.hasOwn(BEHAVIOR_GAP_ERROR_KIND, error.code) && current.checkpoint.fsm_cell_id === "cd.active.case.behavior") return persistBehaviorContractGap(current, request, error);
     return persistRunRejection(current, request, error.code, error.message);
   }
 }
@@ -4882,19 +5338,41 @@ async function advanceBehaviorViews(current, request) {
   if (!hasExactKeys(action, ["kind", "action_token", "artifact_kind", "artifact"]) || action.artifact_kind !== "behavior_views" || !plainObject2(action.artifact)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior Views action is not a closed submit_artifact request.");
   validateAdvertisedAction(current, action, { kind: "submit_artifact", artifact_kind: "behavior_views" });
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, "seed_digest");
-  if (action.artifact.behavior_contract_seed_digest !== seed.seed_digest || !Array.isArray(action.artifact.contract_reviews) || !Array.isArray(action.artifact.risk_reviews)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior Views must bind the advertised seed and complete review arrays.");
-  validateBehaviorContractReviews(seed, action.artifact.contract_reviews, action.artifact);
+  const requiredArrays = ["field_correspondences", "value_states", "predicate_contracts", "domain_contracts", "behavior_equivalence_contracts", "population_contracts", "population_proofs", "permission_auxiliary_contracts", "oracle_semantic_contracts", "behavior_contract_reviews", "permission_matrix_reviews", "risk_reviews", "semantic_gap_proposals", "formal_test_point_ids"];
+  if (action.artifact.behavior_contract_seed_digest !== seed.seed_digest || requiredArrays.some((key) => !Array.isArray(action.artifact[key]))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Behavior Views must bind the advertised seed and every closed collection.");
+  const semanticRootDigest = current.checkpoint.semantic_root_digest;
+  action.artifact.value_states.forEach(validateValueState);
+  action.artifact.field_correspondences.forEach((mapping) => validateFieldCorrespondence(mapping, seed.semantic_rule_index));
+  const compiledDomains = action.artifact.domain_contracts.map((domain) => compileDomain(semanticRootDigest, domain, action.artifact.predicate_contracts));
+  action.artifact.population_contracts.forEach((contract) => validatePopulationContract(contract, semanticRootDigest));
+  const populationClientKeys = action.artifact.population_contracts.map((contract) => contract.population_contract_client_key);
+  action.artifact.population_proofs.forEach((proof) => validatePopulationProof(proof, semanticRootDigest, populationClientKeys));
+  action.artifact.oracle_semantic_contracts.forEach((contract) => validateOracleSemanticContract(contract, { semanticRootDigest, semanticRuleIndex: seed.semantic_rule_index, fieldCorrespondenceIds: action.artifact.field_correspondences.map((mapping) => mapping.mapping_client_key), permissionDecisionCells: [] }));
+  validateBehaviorContractReviews(seed, action.artifact.behavior_contract_reviews, action.artifact);
+  const matrices = current.reply.work_packet.permission_matrix_worklists ?? [];
+  if (action.artifact.permission_matrix_reviews.length !== matrices.length) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Every advertised permission matrix must be reviewed exactly once.");
+  for (const matrix of matrices) {
+    const review = action.artifact.permission_matrix_reviews.find((candidate) => candidate.matrix_id === matrix.matrix_id);
+    if (!review) throw new V5ProtocolError("PERMISSION_MATRIX_INCOMPLETE", "Permission matrix review is missing.");
+    validatePermissionMatrixReview(matrix, review, semanticRootDigest);
+  }
+  if (action.artifact.provenance_graph !== void 0) validateV5ProvenanceGraph(action.artifact.provenance_graph);
   const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, action.artifact.risk_reviews);
-  const envelope = acceptArtifactEnvelope({ artifactKind: "behavior_views", payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
-  const semanticGaps = Array.isArray(action.artifact.semantic_gaps) ? action.artifact.semantic_gaps : [];
-  const reviewHasGap = action.artifact.contract_reviews.some((review) => review.disposition?.kind === "semantic_gap");
+  const semanticGaps = action.artifact.semantic_gap_proposals;
+  const reviewHasGap = action.artifact.behavior_contract_reviews.some((review) => review.disposition?.kind === "semantic_gap");
   const hasGaps = reviewHasGap || semanticGaps.length > 0;
-  if (reviewHasGap && semanticGaps.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Behavior semantic-gap reviews require exact gap payloads.");
+  const compiledGaps = compileBehaviorSemanticGaps(semanticRootDigest, seed, semanticGaps, action.artifact.behavior_contract_reviews);
+  if (hasGaps !== compiledGaps.accepted_gaps.length > 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Behavior semantic-gap reviews require exact gap payloads.");
+  const envelope = acceptArtifactEnvelope({ artifactKind: "behavior_views", payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: "case_design", inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
   const resultKey = hasGaps ? "actionable_gaps" : "no_actionable_gap";
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: "artifact.submit_behavior_views", result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const testObligations = sealV5Record({ kind: "test_obligations", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: [...new Set(action.artifact.formal_test_point_ids ?? [])].sort(), behavior_artifact_digest: envelope.envelope_digest }, "obligations_digest");
-  const compilerStateRecords = [{ record: testObligations, digestField: "obligations_digest" }, { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) }];
+  const compilerStateRecords = [
+    { record: testObligations, digestField: "obligations_digest" },
+    { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
+    ...compiledGaps.accepted_gaps.map((gap) => ({ record: gap, semanticDigest: canonicalObjectDigest(gap) }))
+  ];
   let workPacket;
   const context = {
     ...current.reply.work_packet.context,
@@ -4913,7 +5391,7 @@ async function advanceBehaviorViews(current, request) {
     risk_ledger_digest: canonicalObjectDigest(riskLedger)
   };
   if (hasGaps) {
-    const gaps = compilerClarificationGaps(semanticGaps, "behavior_gap");
+    const gaps = clarificationGapsFromAcceptedBehavior(compiledGaps.accepted_gaps);
     const inventory = sealV5Record({ kind: "clarification_gap_inventory", schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, gaps }, "gaps_digest");
     const stateSet = createQuestionPartStateSet(current.identity.case_document_lineage_id, current.checkpoint.semantic_root_digest, gaps);
     const presentation = createClarificationPresentation(stateSet, checkpointBase.current_revision, gaps);
@@ -4924,7 +5402,7 @@ async function advanceBehaviorViews(current, request) {
   delete checkpointBase.checkpoint_digest;
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(outcome.target_cell_id, workPacket));
   const actionDigest = actionDigestV5("advance", action);
-  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: [] };
+  const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: compiledGaps.client_key_bindings };
   const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, acceptedArtifacts: [{ record: envelope, digestField: "envelope_digest" }], compilerStateRecords });
 }
