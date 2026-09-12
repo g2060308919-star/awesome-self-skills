@@ -1,66 +1,46 @@
-# E2E Test Report
+# B2B E2E 测试报告
 
-## Run Context
+- Run ID：{{run_id}}
+- 开始/更新时间：{{created_at}} / {{updated_at}}
+- 目标：{{target_urls}}
+- 角色：{{roles}}
+- 用例快照 SHA-256：{{test_cases_sha256}}
 
-| Field | Value |
-|---|---|
-| Run ID | {{run_id}} |
-| Target | {{target_url}} |
-| Environment | {{environment}} |
-| Started / ended | {{started_at}} / {{ended_at}} |
-| Input test plan | {{test_plan_reference}} |
-| Confirmed scope | {{scope}} |
-| Roles, accounts, tenants, or permissions | {{access_context}} |
-| Limitations | {{limitations}} |
+## 四态统计
 
-## Result Summary
+- 通过：{{passed}}
+- 未通过：{{failed}}
+- 无法确定：{{undetermined}}
+- 未执行：{{not_executed}}
 
-Totals below must be derived from required assertion facts in `execution-log.json`.
-
-| Passed | Failed | Inconclusive | Not Run |
-|---:|---:|---:|---:|
-| {{passed_count}} | {{failed_count}} | {{inconclusive_count}} | {{not_run_count}} |
-
-## Assistance and External Actions
-
-{{assistance_summary_with_case_step_time_action_observation_and_evidence}}
-
-## Blockers and Unverified Scope
-
-{{unresolved_blockers_unverified_assertions_not_run_cases_and_waiting_conditions}}
-
-## Case Results
-
-### {{case_id}} — {{case_title}}
-
-- Verdict and fact-based reason: {{case_verdict_and_reason}}
-- Preconditions and test data: {{preconditions_and_test_data}}
-- Role / permission / tenant context: {{case_access_context}}
-- Case issues: {{case_issues_or_none}}
-- Case evidence: {{relative_links_under_evidence}}
-
-| Step | Action | Expected | Actual | Assertion / required? | Outcome | Provenance | Evidence |
-|---|---|---|---|---|---|---|---|
-| {{step_id}} | {{action}} | {{expected}} | {{actual}} | {{assertion_id}} / {{required}} | {{verified-pass_or_verified-fail_or_unverified_or_not-run}} | {{ai_or_user-assisted-observed_or_external-person_or_user-reported-only}} | {{step_and_assertion_relative_links_under_evidence}} |
-
-Repeat the case section for every case, including Not Run cases. Link evidence at case, step, and assertion level.
-
-## Verified Failures and Suspected Abnormalities
-
-{{failures_and_abnormalities_with_expected_actual_and_redacted_relevant_page_console_network_evidence}}
-
-## Cleanup and Residual Data
-
-| Case | Declared or authorized cleanup | Result | Residual data | Evidence |
+| ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因 |
 |---|---|---|---|---|
-| {{case_id}} | {{cleanup_scope_or_not_declared}} | {{succeeded_failed_or_not_run}} | {{residual_data_or_none_known}} | {{relative_links_under_evidence}} |
+{{one_row_per_input_case_in_input_order}}
 
-## Data Handling
+## 未通过详情
 
-All persisted artifacts were reviewed to exclude passwords, cookies, authorization values, tokens, other secrets, and unrelated sensitive business data. {{additional_redaction_or_limitation_notes}}
+{{failed_details}}
 
-## Artifact Index
+## 无法确定详情
 
-- Machine-readable facts: [execution-log.json](execution-log.json)
-- Evidence root: [evidence/](evidence/)
-- {{evidence_inventory_with_case_step_assertion_mapping}}
+{{undetermined_details}}
+
+## 用户协助与阻塞
+
+{{assistance_and_blockers}}
+
+## 证据状态与数据处理
+
+{{evidence_states_and_secret_scan}}
+
+## 代理状态与真实验证
+
+{{proxy_state_and_real_verification}}
+
+## 清理结果
+
+{{cleanup_attempts_failures_and_residuals}}
+
+## 产物一致性校验
+
+{{hash_ids_counts_paths_contract_and_scan}}
