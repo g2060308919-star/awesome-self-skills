@@ -7,6 +7,8 @@ import { deriveCaseStatus } from '../../src/v5/case-status.mjs';
 import { renderV5Csv } from '../../src/v5/render-csv.mjs';
 import { renderV5Json } from '../../src/v5/render-json.mjs';
 import { renderV5Markdown } from '../../src/v5/render-markdown.mjs';
+import { stableV5Id } from '../../src/v5/identity.mjs';
+import { canonicalObjectDigest } from '../../src/v5/storage-records.mjs';
 import { caseOutputFixture } from './case-output-fixture.mjs';
 
 const compilerInput = caseOutputFixture;
@@ -61,6 +63,50 @@ test('Case V5 extensions are mandatory and compiler output contains only stable 
   assert.doesNotMatch(JSON.stringify(compiled.document), /(?:case|step|oracle|selection)_client_key/u);
 });
 
+test('Case anchor and identity use the frozen Phase 0 projection without V5 selection fields', () => {
+  const input = compilerInput();
+  input.case_drafts = [input.case_drafts[0]];
+  input.formal_test_point_ids = ['tp-grounded'];
+  input.formal_test_point_dispositions = [{ formal_test_point_id: 'tp-grounded', kind: 'formal' }];
+  const draft = input.case_drafts[0];
+  draft.domain_selections = [{
+    selection_client_key: 'selection-grounded-target', case_client_key: draft.case_client_key,
+    formal_test_point_id: draft.primary_test_point_id, oracle_semantic_contract_id: draft.oracles[0].oracle_semantic_contract_id,
+    domain_contract_id: 'domain-status', partition_id: 'partition-target',
+    selection: { kind: 'exhaustive_members', selected_values: [{ kind: 'string', value: 'draft' }], membership: { kind: 'closed_domain_membership' } }
+  }];
+  input.semantic_audit.domains = [{
+    domain_contract_id: 'domain-status',
+    domain: { kind: 'closed_enum', members: [{ kind: 'string', value: 'draft' }], closed_world_basis: [{ kind: 'claim', claim_id: 'claim-e2' }] },
+    partitions: [{ partition_id: 'partition-target', kind: 'exact_members', semantic_role: 'target', values: [{ kind: 'string', value: 'draft' }] }]
+  }];
+
+  const caseIdentityProjection = {
+    module_id: draft.module_id,
+    primary_test_point_id: draft.primary_test_point_id,
+    acceptance_role: draft.acceptance_role,
+    fact_ids: draft.fact_ids,
+    business_preconditions: draft.business_preconditions,
+    data_conditions: draft.data_conditions,
+    steps: draft.steps.map((step) => ({ action: step.action })),
+    semantic_effects: null,
+    baseline_spec: null,
+    test_values: null
+  };
+  const caseAnchorDigest = canonicalObjectDigest({ input_semantic_root_digest: input.semantic_root_digest, case_identity_projection: caseIdentityProjection });
+  const expectedSelectionId = stableV5Id('domain_selection', {
+    input_semantic_root_digest: input.semantic_root_digest, case_anchor_digest: caseAnchorDigest,
+    formal_test_point_id: draft.primary_test_point_id, oracle_semantic_contract_id: draft.oracles[0].oracle_semantic_contract_id,
+    domain_contract_id: 'domain-status', partition_id: 'partition-target', selection: draft.domain_selections[0].selection
+  });
+  const document = compileV5CaseDocument(input);
+  assert.equal(document.cases[0].domain_selections[0].domain_selection_id, expectedSelectionId);
+  assert.equal(document.cases[0].ordering.business_flow_ref, 'orders-flow');
+  assert.deepEqual(document.cases[0].fact_ids, ['fact-claim-e2']);
+  assert.equal('canonical_names' in document.cases[0], false);
+  assert.equal('semantic_gap_ids' in document.cases[0], false);
+});
+
 test('Domain selections do not participate in Case, Step, or Oracle identity preimages', () => {
   const input = compilerInput();
   const draft = input.case_drafts[0];
@@ -112,7 +158,7 @@ test('Domain selections are compiler-bound to one Case, Test Point, Oracle, Doma
   draft.case_step_semantic_bindings = [{
     case_client_key: draft.case_client_key,
     step_client_key: draft.steps[0].step_client_key,
-    action_ref: draft.steps[0].semantic_action_ref
+    action_ref: draft.case_step_semantic_bindings[0].action_ref
   }];
   draft.domain_selections = [{
     selection_client_key: 'selection-grounded-target',
@@ -162,7 +208,7 @@ test('Domain selections are compiler-bound to one Case, Test Point, Oracle, Doma
 test('representative Domain selections require the exact accepted equivalence contract', () => {
   const input = compilerInput();
   const draft = input.case_drafts[0];
-  draft.case_step_semantic_bindings = [{ case_client_key: draft.case_client_key, step_client_key: draft.steps[0].step_client_key, action_ref: draft.steps[0].semantic_action_ref }];
+  draft.case_step_semantic_bindings = [{ case_client_key: draft.case_client_key, step_client_key: draft.steps[0].step_client_key, action_ref: draft.case_step_semantic_bindings[0].action_ref }];
   draft.domain_selections = [{
     selection_client_key: 'selection-grounded-target', case_client_key: draft.case_client_key,
     formal_test_point_id: draft.primary_test_point_id, oracle_semantic_contract_id: draft.oracles[0].oracle_semantic_contract_id,
@@ -194,7 +240,7 @@ test('JSON, Markdown, and CSV are byte-stable mechanical projections with parity
   const parsed = JSON.parse(json);
   for (const current of parsed.cases) {
     assert.match(markdown, new RegExp(`${current.case_id}.*${current.semantic_status}`, 'u'));
-    assert.match(markdown, new RegExp(current.canonical_names[0], 'u'));
+    assert.match(markdown, new RegExp(current.module_id, 'u'));
     assert.match(csv, new RegExp(`${current.case_id},${current.semantic_status}`, 'u'));
     for (const step of current.steps) assert.equal(markdown.includes(step.action), true);
     for (const oracle of current.oracles) assert.equal(csv.includes(oracle.oracle_id), true);

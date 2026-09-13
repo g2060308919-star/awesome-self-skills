@@ -40,15 +40,14 @@ export function renderV5Markdown(document) {
   for (const current of document.cases) {
     lines.push(`### ${current.case_id} — ${current.title} [${current.semantic_status}]`, '');
     lines.push(`- Module: ${current.module_id}`);
+    lines.push(`- Acceptance role: ${current.acceptance_role}`);
     lines.push(`- Primary Test Point: ${current.primary_test_point_id}`);
-    lines.push(`- Canonical names: ${current.canonical_names.join('、')}`);
+    lines.push(`- Facts: ${current.fact_ids.join('、')}`);
     const oracleScopes = [...new Set(current.oracles.map((/** @type {Record<string,any>} */ oracle) => scopeText(oracle.evaluation_scope)))];
     lines.push(`- Scope: ${oracleScopes.join('、')}`);
-    if (current.semantic_gap_ids.length > 0) lines.push(`- Blocking gaps: ${current.semantic_gap_ids.join('、')}`);
-    if (current.observation_intent) lines.push(`- Observation intent: ${current.observation_intent}`);
     lines.push('', 'Steps:');
-    for (const step of current.steps) {
-      lines.push(`${step.sequence}. ${step.action}`);
+    for (const [index, step] of current.steps.entries()) {
+      lines.push(`${index + 1}. ${step.action}`);
       for (const oracle of current.oracles.filter((/** @type {Record<string,any>} */ oracle) => oracle.observe_after_step_id === step.step_id)) {
         lines.push(`   - Oracle ${oracle.oracle_id}: ${assertionText(oracle.assertion)}; scope=${oracle.evaluation_scope.kind}; window=${oracle.observation_window.kind}`);
       }

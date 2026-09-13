@@ -5,8 +5,8 @@
   "case_document_ref": {
     "run_id": "run-case",
     "revision": 9,
-    "manifest_digest": "sha256:79db63cbdbb89847fbca5b7ed327e4b19654327d6991d51ca80cdddaa2ea6e72",
-    "bundle_digest": "sha256:f95216d762f0b8ccecd06e6a5ec75b22b48e7c705134c2f64ff533615aedf0b2",
+    "manifest_digest": "sha256:6ce88fe380db537dd1594a315bbf3837c7089d942841353915d584ed7a255b4d",
+    "bundle_digest": "sha256:c965025cfc092bd77a8503cd4a1e409a3691140dbf38e77eccec47c43c4511b7",
     "case_document_lineage_id": "lineage-output",
     "schema_version": "5.0.0"
   },
@@ -18,25 +18,7 @@
   ],
   "items": [
     {
-      "case_id": "CASE-03ff3e1f1090910ecb78109cfb7981a96a80ff8b04545b26894aac597f5b8746",
-      "title": "Case conditional",
-      "semantic_status": "Conditional",
-      "execution_disposition": "pending",
-      "available_actions": [
-        "set_execution_disposition"
-      ]
-    },
-    {
-      "case_id": "CASE-17c815e07d471a1b923ee643b19cba004e110365930d4c6a48bcaa482ed4abdc",
-      "title": "Case exploratory",
-      "semantic_status": "Exploratory",
-      "execution_disposition": "pending",
-      "available_actions": [
-        "set_execution_disposition"
-      ]
-    },
-    {
-      "case_id": "CASE-3ca646af180f861dad77b8641d6599a58809a310d6ac16bcfb21991312fa547c",
+      "case_id": "CASE-0fbd6685591e95e960452b8503fa7f2f0ada9912c8e39901a36b4e7db4475d96",
       "title": "Case grounded",
       "semantic_status": "Grounded",
       "execution_disposition": "pending",
@@ -46,21 +28,39 @@
       ]
     },
     {
-      "case_id": "CASE-90c37e0a00f523faa1d1b5167cea77653abd72e0b2b3bd5da15642c0ed9f0062",
-      "title": "Case blocked",
-      "semantic_status": "Blocked",
+      "case_id": "CASE-2de7d9260a866ef648884087ad9f755b18f592799318a6162fd577446f20d516",
+      "title": "Case not-applicable",
+      "semantic_status": "NotApplicable",
+      "execution_disposition": "pending",
+      "available_actions": []
+    },
+    {
+      "case_id": "CASE-64b72901a49a9389b95f9f68f87f11e8d451c5fde9b2b4572808988c7d849590",
+      "title": "Case exploratory",
+      "semantic_status": "Exploratory",
       "execution_disposition": "pending",
       "available_actions": [
         "set_execution_disposition"
       ]
     },
     {
-      "case_id": "CASE-f853cd269e80f2e14d625b34534713eb3027ad7760747a66a056b570948cac52",
-      "title": "Case not-applicable",
-      "semantic_status": "NotApplicable",
+      "case_id": "CASE-a4e51014f4401737c741cc4f680a7fe72f36743acec57b551416905229c4e680",
+      "title": "Case conditional",
+      "semantic_status": "Conditional",
       "execution_disposition": "pending",
-      "available_actions": []
+      "available_actions": [
+        "set_execution_disposition"
+      ]
+    },
+    {
+      "case_id": "CASE-ede16b5c51170fe700fbb52ee098925b2d9d98f860c0cd806eedb1e7e22db813",
+      "title": "Case blocked",
+      "semantic_status": "Blocked",
+      "execution_disposition": "pending",
+      "available_actions": [
+        "set_execution_disposition"
+      ]
     }
   ],
-  "plan_digest": "sha256:916f3e12bc61b598701e8622bd041a852fd7f7e869347e30eb32560f78ece533"
+  "plan_digest": "sha256:da7a01354168a96dba7bf2b727cfa8e22d8b5e08eaf5eed4e567a7ac5bbbcaff"
 }

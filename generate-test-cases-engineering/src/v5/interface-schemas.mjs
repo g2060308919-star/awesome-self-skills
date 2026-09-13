@@ -506,16 +506,53 @@ function domainSelectionSchema() {
 }
 
 function caseDraftSchema() {
-  const step = closedObject({ step_client_key: clientKeyString(), action: nonblankString(), semantic_action_ref: actionRefSchema(), claim_ids: stringArray(1) });
+  const ordering = closedObject({
+    business_flow_ref: { oneOf: [nonblankString(), { type: 'null' }] },
+    page_action_ref: { oneOf: [nonblankString(), { type: 'null' }] }
+  });
+  const step = closedObject({ step_client_key: clientKeyString(), action: nonblankString() });
   const binding = closedObject({ case_client_key: clientKeyString(), step_client_key: clientKeyString(), action_ref: actionRefSchema() });
-  const dataCondition = { oneOf: [nonblankString(), closedObject({ field: nonblankString(), value: typedValueSchema() })] };
+  const precondition = closedObject({ precondition_id: nonblankString(), description: nonblankString() });
+  const dataCondition = closedObject({ condition_id: nonblankString(), description: nonblankString() });
+  const semanticEffect = closedObject({
+    effect_id: nonblankString(), kind: nonblankString(), subject: nonblankString(), before: nonblankString(),
+    after: nonblankString(), claim_ids: stringArray(1)
+  }, ['effect_id', 'kind', 'subject', 'after', 'claim_ids']);
+  const comparisonContract = { oneOf: [
+    closedObject({ kind: constant('all_observable_behavior_except'), exceptions: stringArray() }),
+    closedObject({ kind: constant('selected_dimensions'), dimensions: stringArray(1), allowed_differences: stringArray() })
+  ] };
+  const baselineSpec = closedObject({
+    baseline_id: nonblankString(), kind: constant('declared_reference'), acquisition: constant('capture_at_execution'),
+    reference: nonblankString(), comparison_contract: comparisonContract, claim_ids: stringArray(1)
+  });
+  const derivation = closedObject({ method_id: nonblankString(), method_version: nonblankString(), inputs_digest: digestString() });
+  const valueOrigin = { oneOf: [
+    closedObject({ kind: constant('requirement'), claim_ids: stringArray(1) }),
+    closedObject({ kind: constant('example'), claim_ids: stringArray(1), replaceable: constant(true) }),
+    closedObject({ kind: constant('derived'), input_claim_ids: stringArray(1), derivation, evidence_level: constant('derived') }),
+    closedObject({
+      kind: constant('temporary_assumption'), assumption_id: nonblankString(), semantic_gap_ids: stringArray(1),
+      reason: nonblankString(), requires_case_status: constant('Conditional')
+    })
+  ] };
+  const testValue = closedObject({
+    value_id: nonblankString(), subject_ref: nonblankString(),
+    field_path: { type: 'string', pattern: '^(?:/(?:[^~/]|~[01])*)+$' }, value: {},
+    used_by_refs: stringArray(1), value_origin: valueOrigin
+  });
   return closedObject({
     case_client_key: clientKeyString(), title: nonblankString(), module_id: nonblankString(), priority: { enum: ['P0', 'P1', 'P2', 'P3'] },
-    primary_test_point_id: nonblankString(), business_preconditions: stringArray(), data_conditions: arrayOf(dataCondition), steps: arrayOf(step, 1),
+    ordering, acceptance_role: { enum: ['primary_acceptance', 'dependency_contract', 'context_only'] }, fact_ids: stringArray(1),
+    primary_test_point_id: nonblankString(), supporting_observation_ids: stringArray(),
+    business_preconditions: arrayOf(precondition), data_conditions: arrayOf(dataCondition), steps: arrayOf(step, 1),
     case_step_semantic_bindings: arrayOf(binding, 1), domain_selections: arrayOf(domainSelectionSchema()), oracles: arrayOf(typedOracleSchema(), 1),
-    canonical_names: stringArray(), claim_ids: stringArray(1), semantic_gap_ids: stringArray(),
-    not_applicable_basis: arrayOf(evidenceRefSchema(), 1), exploratory_only: { type: 'boolean' }, observation_intent: nonblankString()
-  }, ['case_client_key', 'title', 'module_id', 'priority', 'primary_test_point_id', 'business_preconditions', 'data_conditions', 'steps', 'case_step_semantic_bindings', 'domain_selections', 'oracles', 'canonical_names', 'claim_ids', 'semantic_gap_ids']);
+    semantic_effects: arrayOf(semanticEffect, 1), baseline_spec: baselineSpec, test_values: arrayOf(testValue, 1)
+  }, [
+    'case_client_key', 'title', 'module_id', 'priority', 'ordering', 'acceptance_role', 'fact_ids',
+    'primary_test_point_id', 'supporting_observation_ids', 'business_preconditions', 'data_conditions', 'steps',
+    'case_step_semantic_bindings', 'domain_selections', 'oracles'
+  ]);
 }
 
 function evidenceArtifactSchema() {

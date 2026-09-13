@@ -2,7 +2,7 @@
 
 - Lineage: lineage-output
 - Semantic root: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-- Bundle digest: sha256:f95216d762f0b8ccecd06e6a5ec75b22b48e7c705134c2f64ff533615aedf0b2
+- Bundle digest: sha256:c965025cfc092bd77a8503cd4a1e409a3691140dbf38e77eccec47c43c4511b7
 
 ## Classification
 
@@ -25,62 +25,65 @@
 
 ## Cases
 
-### CASE-03ff3e1f1090910ecb78109cfb7981a96a80ff8b04545b26894aac597f5b8746 — Case conditional [Conditional]
+### CASE-0fbd6685591e95e960452b8503fa7f2f0ada9912c8e39901a36b4e7db4475d96 — Case grounded [Grounded]
 
 - Module: orders
-- Primary Test Point: tp-conditional
-- Canonical names: Order
-- Scope: 单项
-
-Steps:
-1. execute conditional
-   - Oracle ORACLE-5b57d385a1411939bea0cb4cd375b69b34888010fa56883151c9664fb2ce24e4: exact_text: done-conditional; scope=single; window=after_step
-
-### CASE-17c815e07d471a1b923ee643b19cba004e110365930d4c6a48bcaa482ed4abdc — Case exploratory [Exploratory]
-
-- Module: orders
-- Primary Test Point: tp-exploratory
-- Canonical names: Order
-- Scope: 单项
-- Observation intent: Observe retry latency without asserting a product requirement.
-
-Steps:
-1. execute exploratory
-   - Oracle ORACLE-d6ced708308620d6da4785fc74dfd15d898222f6e35b8aca02ed83e58f5416b2: exact_text: done-exploratory; scope=single; window=after_step
-
-### CASE-3ca646af180f861dad77b8641d6599a58809a310d6ac16bcfb21991312fa547c — Case grounded [Grounded]
-
-- Module: orders
+- Acceptance role: primary_acceptance
 - Primary Test Point: tp-grounded
-- Canonical names: Order
+- Facts: fact-claim-e2
 - Scope: 单项
 
 Steps:
 1. execute grounded
-   - Oracle ORACLE-d384879658f67586969d2013223a040d19f67a4741dfb8212c212b63e0d5443a: exact_text: done-grounded; scope=single; window=after_step
+   - Oracle ORACLE-4631bd997a412d377a23954ffd6a650a77bbf5b31b302d710a352117a9753f61: exact_text: done-grounded; scope=single; window=after_step
 
-### CASE-90c37e0a00f523faa1d1b5167cea77653abd72e0b2b3bd5da15642c0ed9f0062 — Case blocked [Blocked]
-
-- Module: orders
-- Primary Test Point: tp-blocked
-- Canonical names: Order
-- Scope: 单项
-- Blocking gaps: gap-delivery-closed
-
-Steps:
-1. execute blocked
-   - Oracle ORACLE-5c7d74351ab2708eed80fd40fa7863fd0bb303d3a7f09b52fe229513c8e47ca8: exact_text: done-blocked; scope=single; window=after_step
-
-### CASE-f853cd269e80f2e14d625b34534713eb3027ad7760747a66a056b570948cac52 — Case not-applicable [NotApplicable]
+### CASE-2de7d9260a866ef648884087ad9f755b18f592799318a6162fd577446f20d516 — Case not-applicable [NotApplicable]
 
 - Module: orders
+- Acceptance role: primary_acceptance
 - Primary Test Point: tp-not-applicable
-- Canonical names: Order
+- Facts: fact-claim-e2
 - Scope: 单项
 
 Steps:
 1. execute not-applicable
-   - Oracle ORACLE-527224f206e7299e2e8f854fcd48c5f35a10e4533cda4813f2c8ff8aaeefb2c6: exact_text: done-not-applicable; scope=single; window=after_step
+   - Oracle ORACLE-ffc96eef7bde5e3b1e678f5aee2c6f9476bb745a3c6cd870d1b59ac1cda8d130: exact_text: done-not-applicable; scope=single; window=after_step
+
+### CASE-64b72901a49a9389b95f9f68f87f11e8d451c5fde9b2b4572808988c7d849590 — Case exploratory [Exploratory]
+
+- Module: orders
+- Acceptance role: primary_acceptance
+- Primary Test Point: tp-exploratory
+- Facts: fact-claim-e2
+- Scope: 单项
+
+Steps:
+1. execute exploratory
+   - Oracle ORACLE-12051f041bdf7e13ac21ec4a34bf54de547c5208c19a9315ef86d488eb6cf753: exact_text: done-exploratory; scope=single; window=after_step
+
+### CASE-a4e51014f4401737c741cc4f680a7fe72f36743acec57b551416905229c4e680 — Case conditional [Conditional]
+
+- Module: orders
+- Acceptance role: primary_acceptance
+- Primary Test Point: tp-conditional
+- Facts: fact-claim-e1
+- Scope: 单项
+
+Steps:
+1. execute conditional
+   - Oracle ORACLE-f8798dcec51d3b306f2d589aa5ad25a79edacde184b019b0940a15c94d0e6aa4: exact_text: done-conditional; scope=single; window=after_step
+
+### CASE-ede16b5c51170fe700fbb52ee098925b2d9d98f860c0cd806eedb1e7e22db813 — Case blocked [Blocked]
+
+- Module: orders
+- Acceptance role: primary_acceptance
+- Primary Test Point: tp-blocked
+- Facts: fact-claim-e2
+- Scope: 单项
+
+Steps:
+1. execute blocked
+   - Oracle ORACLE-e8e25a34761e421fe54e1b8faad2e29ae08cd4d27454beba5f07601694879cef: exact_text: done-blocked; scope=single; window=after_step
 
 ## Material Risks
 

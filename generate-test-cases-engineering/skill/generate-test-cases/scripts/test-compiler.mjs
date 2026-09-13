@@ -1786,28 +1786,91 @@ function domainSelectionSchema() {
   });
 }
 function caseDraftSchema() {
-  const step = closedObject({ step_client_key: clientKeyString(), action: nonblankString(), semantic_action_ref: actionRefSchema(), claim_ids: stringArray(1) });
+  const ordering = closedObject({
+    business_flow_ref: { oneOf: [nonblankString(), { type: "null" }] },
+    page_action_ref: { oneOf: [nonblankString(), { type: "null" }] }
+  });
+  const step = closedObject({ step_client_key: clientKeyString(), action: nonblankString() });
   const binding = closedObject({ case_client_key: clientKeyString(), step_client_key: clientKeyString(), action_ref: actionRefSchema() });
-  const dataCondition = { oneOf: [nonblankString(), closedObject({ field: nonblankString(), value: typedValueSchema() })] };
+  const precondition = closedObject({ precondition_id: nonblankString(), description: nonblankString() });
+  const dataCondition = closedObject({ condition_id: nonblankString(), description: nonblankString() });
+  const semanticEffect = closedObject({
+    effect_id: nonblankString(),
+    kind: nonblankString(),
+    subject: nonblankString(),
+    before: nonblankString(),
+    after: nonblankString(),
+    claim_ids: stringArray(1)
+  }, ["effect_id", "kind", "subject", "after", "claim_ids"]);
+  const comparisonContract = { oneOf: [
+    closedObject({ kind: constant("all_observable_behavior_except"), exceptions: stringArray() }),
+    closedObject({ kind: constant("selected_dimensions"), dimensions: stringArray(1), allowed_differences: stringArray() })
+  ] };
+  const baselineSpec = closedObject({
+    baseline_id: nonblankString(),
+    kind: constant("declared_reference"),
+    acquisition: constant("capture_at_execution"),
+    reference: nonblankString(),
+    comparison_contract: comparisonContract,
+    claim_ids: stringArray(1)
+  });
+  const derivation = closedObject({ method_id: nonblankString(), method_version: nonblankString(), inputs_digest: digestString() });
+  const valueOrigin = { oneOf: [
+    closedObject({ kind: constant("requirement"), claim_ids: stringArray(1) }),
+    closedObject({ kind: constant("example"), claim_ids: stringArray(1), replaceable: constant(true) }),
+    closedObject({ kind: constant("derived"), input_claim_ids: stringArray(1), derivation, evidence_level: constant("derived") }),
+    closedObject({
+      kind: constant("temporary_assumption"),
+      assumption_id: nonblankString(),
+      semantic_gap_ids: stringArray(1),
+      reason: nonblankString(),
+      requires_case_status: constant("Conditional")
+    })
+  ] };
+  const testValue = closedObject({
+    value_id: nonblankString(),
+    subject_ref: nonblankString(),
+    field_path: { type: "string", pattern: "^(?:/(?:[^~/]|~[01])*)+$" },
+    value: {},
+    used_by_refs: stringArray(1),
+    value_origin: valueOrigin
+  });
   return closedObject({
     case_client_key: clientKeyString(),
     title: nonblankString(),
     module_id: nonblankString(),
     priority: { enum: ["P0", "P1", "P2", "P3"] },
+    ordering,
+    acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
+    fact_ids: stringArray(1),
     primary_test_point_id: nonblankString(),
-    business_preconditions: stringArray(),
+    supporting_observation_ids: stringArray(),
+    business_preconditions: arrayOf(precondition),
     data_conditions: arrayOf(dataCondition),
     steps: arrayOf(step, 1),
     case_step_semantic_bindings: arrayOf(binding, 1),
     domain_selections: arrayOf(domainSelectionSchema()),
     oracles: arrayOf(typedOracleSchema(), 1),
-    canonical_names: stringArray(),
-    claim_ids: stringArray(1),
-    semantic_gap_ids: stringArray(),
-    not_applicable_basis: arrayOf(evidenceRefSchema(), 1),
-    exploratory_only: { type: "boolean" },
-    observation_intent: nonblankString()
-  }, ["case_client_key", "title", "module_id", "priority", "primary_test_point_id", "business_preconditions", "data_conditions", "steps", "case_step_semantic_bindings", "domain_selections", "oracles", "canonical_names", "claim_ids", "semantic_gap_ids"]);
+    semantic_effects: arrayOf(semanticEffect, 1),
+    baseline_spec: baselineSpec,
+    test_values: arrayOf(testValue, 1)
+  }, [
+    "case_client_key",
+    "title",
+    "module_id",
+    "priority",
+    "ordering",
+    "acceptance_role",
+    "fact_ids",
+    "primary_test_point_id",
+    "supporting_observation_ids",
+    "business_preconditions",
+    "data_conditions",
+    "steps",
+    "case_step_semantic_bindings",
+    "domain_selections",
+    "oracles"
+  ]);
 }
 function evidenceArtifactSchema() {
   return closedObject({
@@ -6088,6 +6151,55 @@ function records(value) {
     value
   ) : [];
 }
+function canonicalizePhase0CaseFields(value) {
+  const candidate = structuredClone(value);
+  candidate.fact_ids = unique(candidate.fact_ids, "Case Fact IDs");
+  if (Array.isArray(candidate.supporting_observation_ids)) candidate.supporting_observation_ids = unique(candidate.supporting_observation_ids, "Case supporting observation IDs");
+  for (const oracle of records(candidate.oracles)) oracle.claim_ids = unique(oracle.claim_ids, "Oracle Claim IDs");
+  for (const effect of records(candidate.semantic_effects)) effect.claim_ids = unique(effect.claim_ids, "Semantic effect Claim IDs");
+  if (candidate.baseline_spec) {
+    candidate.baseline_spec.claim_ids = unique(candidate.baseline_spec.claim_ids, "Baseline Claim IDs");
+    const comparison = candidate.baseline_spec.comparison_contract;
+    if (comparison.kind === "all_observable_behavior_except") comparison.exceptions = unique(comparison.exceptions, "Baseline exceptions");
+    else {
+      comparison.dimensions = unique(comparison.dimensions, "Baseline dimensions");
+      comparison.allowed_differences = unique(comparison.allowed_differences, "Baseline allowed differences");
+    }
+  }
+  for (const testValue of records(candidate.test_values)) {
+    testValue.used_by_refs = unique(testValue.used_by_refs, "Test value usage refs");
+    const origin = testValue.value_origin;
+    if (Array.isArray(origin.claim_ids)) origin.claim_ids = unique(origin.claim_ids, "Test value Claim IDs");
+    if (Array.isArray(origin.input_claim_ids)) origin.input_claim_ids = unique(origin.input_claim_ids, "Derived test value Claim IDs");
+    if (Array.isArray(origin.semantic_gap_ids)) origin.semantic_gap_ids = unique(origin.semantic_gap_ids, "Temporary test value gap IDs");
+  }
+  return candidate;
+}
+function phase0CaseAnchorProjection(draft) {
+  return {
+    module_id: draft.module_id,
+    primary_test_point_id: draft.primary_test_point_id,
+    acceptance_role: draft.acceptance_role,
+    fact_ids: unique(draft.fact_ids, "Case Fact IDs"),
+    business_preconditions: structuredClone(draft.business_preconditions),
+    data_conditions: structuredClone(draft.data_conditions),
+    steps: draft.steps.map((step) => ({ action: step.action })),
+    semantic_effects: draft.semantic_effects ? structuredClone(draft.semantic_effects) : null,
+    baseline_spec: draft.baseline_spec ? structuredClone(draft.baseline_spec) : null,
+    test_values: draft.test_values ? structuredClone(draft.test_values) : null
+  };
+}
+function phase0RequiredClaimIds(draft) {
+  const claimIds = records(draft.oracles).flatMap((oracle) => oracle.claim_ids);
+  for (const effect of records(draft.semantic_effects)) claimIds.push(...effect.claim_ids);
+  if (draft.baseline_spec) claimIds.push(...draft.baseline_spec.claim_ids);
+  for (const testValue of records(draft.test_values)) {
+    const origin = testValue.value_origin;
+    if (Array.isArray(origin.claim_ids)) claimIds.push(...origin.claim_ids);
+    if (Array.isArray(origin.input_claim_ids)) claimIds.push(...origin.input_claim_ids);
+  }
+  return unique(claimIds, "Case evidence Claim IDs");
+}
 function finitePartitionMembers(domain, partition) {
   if (domain.domain?.kind !== "closed_enum") return null;
   if (partition.kind === "exact_members") return records(partition.values);
@@ -6268,7 +6380,19 @@ function compileV5CaseDocumentBundle(input) {
     if (!nonblank9(assessment.claim_id) || assessmentByClaim.has(assessment.claim_id) || !["E1", "E2", "E3"].includes(assessment.level) || !["supported", "uncertain", "unsupported"].includes(assessment.support_review)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Claim assessment inventory is invalid or ambiguous.");
     assessmentByClaim.set(assessment.claim_id, assessment);
   }
+  const factById = /* @__PURE__ */ new Map();
+  for (const fact of records(input.fact_assessments)) {
+    if (!nonblank9(fact.fact_id) || factById.has(fact.fact_id) || !Array.isArray(fact.claim_ids) || fact.claim_ids.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Fact assessment inventory is invalid or ambiguous.");
+    const claimIds = unique(fact.claim_ids, "Fact Claim IDs");
+    if (claimIds.some((claimId) => !assessmentByClaim.has(claimId))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Fact ancestry must resolve accepted Claims.");
+    factById.set(fact.fact_id, { ...structuredClone(fact), claim_ids: claimIds });
+  }
   const acceptedGapIds = new Set(unique(input.accepted_gap_ids ?? [], "Accepted gap IDs"));
+  const dispositionByPoint = /* @__PURE__ */ new Map();
+  for (const disposition of records(input.formal_test_point_dispositions)) {
+    if (!nonblank9(disposition.formal_test_point_id) || dispositionByPoint.has(disposition.formal_test_point_id) || !["formal", "semantic_gap", "not_applicable", "exploratory"].includes(disposition.kind)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Formal Test Point disposition inventory is invalid or ambiguous.");
+    dispositionByPoint.set(disposition.formal_test_point_id, disposition);
+  }
   const oracleContractById = new Map(records(input.oracle_semantic_contracts).map((contract) => [contract.oracle_semantic_contract_id, contract]));
   if (oracleContractById.size !== records(input.oracle_semantic_contracts).length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Accepted Oracle semantic-contract identities are duplicated.");
   const seenClientKeys = /* @__PURE__ */ new Set();
@@ -6280,19 +6404,37 @@ function compileV5CaseDocumentBundle(input) {
   };
   const seenCaseClientKeys = /* @__PURE__ */ new Set();
   const cases = input.case_drafts.map((draft) => {
-    if (!nonblank9(draft.case_client_key) || seenCaseClientKeys.has(draft.case_client_key) || !nonblank9(draft.title) || !nonblank9(draft.module_id) || !["P0", "P1", "P2", "P3"].includes(draft.priority) || !nonblank9(draft.primary_test_point_id) || !Array.isArray(draft.steps) || draft.steps.length === 0 || !Array.isArray(draft.case_step_semantic_bindings) || !Array.isArray(draft.domain_selections) || !Array.isArray(draft.oracles) || draft.oracles.length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Draft is incomplete, lacks its V5 extension, or duplicates a client key.");
+    const requiredKeys = ["case_client_key", "title", "module_id", "priority", "ordering", "acceptance_role", "fact_ids", "primary_test_point_id", "supporting_observation_ids", "business_preconditions", "data_conditions", "steps", "case_step_semantic_bindings", "domain_selections", "oracles"];
+    const optionalKeys = ["semantic_effects", "baseline_spec", "test_values"];
+    const actualKeys = Object.keys(draft);
+    if (!requiredKeys.every((key) => actualKeys.includes(key)) || actualKeys.some((key) => !requiredKeys.includes(key) && !optionalKeys.includes(key)) || !nonblank9(draft.case_client_key) || seenCaseClientKeys.has(draft.case_client_key) || !nonblank9(draft.title) || !nonblank9(draft.module_id) || !["P0", "P1", "P2", "P3"].includes(draft.priority) || !object8(draft.ordering) || !["primary_acceptance", "dependency_contract", "context_only"].includes(draft.acceptance_role) || !nonblank9(draft.primary_test_point_id) || !Array.isArray(draft.fact_ids) || draft.fact_ids.length === 0 || !Array.isArray(draft.supporting_observation_ids) || !Array.isArray(draft.business_preconditions) || !Array.isArray(draft.data_conditions) || !Array.isArray(draft.steps) || draft.steps.length === 0 || !Array.isArray(draft.case_step_semantic_bindings) || !Array.isArray(draft.domain_selections) || !Array.isArray(draft.oracles) || draft.oracles.length === 0) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case Draft must preserve the frozen Phase 0 fields and exact V5 extension.");
     seenCaseClientKeys.add(draft.case_client_key);
-    const claimIds = unique(draft.claim_ids ?? [], "Case Claim IDs");
+    const factIds = unique(draft.fact_ids, "Case Fact IDs");
+    const facts = factIds.map((factId) => factById.get(factId));
+    if (facts.some((fact) => !fact)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Case references an unknown Compiler-owned Fact.");
+    const claimIds = [.../* @__PURE__ */ new Set([...facts.flatMap((fact) => fact.claim_ids), ...phase0RequiredClaimIds(draft)])].sort();
     const assessments = claimIds.map((claimId) => assessmentByClaim.get(claimId));
     if (assessments.some((assessment) => !assessment || assessment.support_review !== "supported")) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "Case references unsupported or unknown business evidence.");
-    const gapIds = unique(draft.semantic_gap_ids ?? [], "Case semantic gap IDs");
-    if (gapIds.some((gapId) => !acceptedGapIds.has(gapId))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Case references an unaccepted semantic gap.");
-    const notApplicableLevels = draft.not_applicable_basis === void 0 ? void 0 : records(draft.not_applicable_basis).map((basis) => {
-      const assessment = assessmentByClaim.get(basis.claim_id);
-      if (basis.kind !== "claim" || !assessment || assessment.support_review !== "supported") throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "NotApplicable basis is not accepted evidence.");
-      return assessment.level;
-    });
-    const status = deriveCaseStatus({ evidence_levels: assessments.map((assessment) => assessment.level), unresolved_gap_ids: gapIds, not_applicable_basis_levels: notApplicableLevels, exploratory_only: draft.exploratory_only === true });
+    const disposition = dispositionByPoint.get(draft.primary_test_point_id) ?? { formal_test_point_id: draft.primary_test_point_id, kind: "formal" };
+    let gapIds = [];
+    let notApplicableLevels;
+    let exploratoryOnly = false;
+    if (disposition.kind === "semantic_gap") {
+      if (!exact7(disposition, ["formal_test_point_id", "kind", "semantic_gap_ids"])) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Semantic-gap Test Point disposition is not closed.");
+      gapIds = unique(disposition.semantic_gap_ids, "Test Point semantic gap IDs");
+      if (gapIds.length === 0 || gapIds.some((gapId) => !acceptedGapIds.has(gapId))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Test Point references an unaccepted semantic gap.");
+    } else if (disposition.kind === "not_applicable") {
+      if (!exact7(disposition, ["formal_test_point_id", "kind", "exclusion_basis"])) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "NotApplicable Test Point disposition is not closed.");
+      notApplicableLevels = records(disposition.exclusion_basis).map((basis) => {
+        const assessment = basis.kind === "claim" ? assessmentByClaim.get(basis.claim_id) : void 0;
+        if (!assessment || assessment.support_review !== "supported") throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_MISSING", "NotApplicable basis is not accepted evidence.");
+        return assessment.level;
+      });
+    } else if (disposition.kind === "exploratory") {
+      if (!exact7(disposition, ["formal_test_point_id", "kind", "observation_intent"]) || !nonblank9(disposition.observation_intent)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Exploratory Test Point disposition is not closed.");
+      exploratoryOnly = true;
+    } else if (!exact7(disposition, ["formal_test_point_id", "kind"])) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Formal Test Point disposition is not closed.");
+    const status = deriveCaseStatus({ evidence_levels: assessments.map((assessment) => assessment.level), unresolved_gap_ids: gapIds, not_applicable_basis_levels: notApplicableLevels, exploratory_only: exploratoryOnly });
     const stepKeys = unique(draft.steps.map((step) => step.step_client_key), "Case step client keys");
     const acceptedContractRefs = new Set(records(input.semantic_audit?.permission_auxiliary_contracts).map((contract) => typedContractRefKey({ contract_id: contract.permission_auxiliary_contract_id, contract_kind: contract.payload?.contract_kind, semantic_root_digest: input.semantic_root_digest })));
     const permissionCells = records(input.permission_cells).map((cell) => {
@@ -6303,28 +6445,20 @@ function compileV5CaseDocumentBundle(input) {
       return { ...structuredClone(cell), ...formalOutcome ? { formal_outcome: formalOutcome } : {} };
     });
     const oracleContext = { semanticRootDigest: input.semantic_root_digest, semanticRuleIndex: input.semantic_rule_index ?? { by_id: {} }, stepClientKeys: stepKeys, acceptedClaimIds: claimIds, oracleSemanticContractIds: [...oracleContractById.keys()], fieldCorrespondenceIds: records(input.semantic_audit?.field_correspondences).map((row) => row.field_correspondence_id), permissionCells, acceptedContractRefs };
-    const caseAnchorDigest = canonicalObjectDigest({
-      module_id: draft.module_id,
-      title: draft.title,
-      primary_test_point_id: draft.primary_test_point_id,
-      business_preconditions: draft.business_preconditions,
-      data_conditions: draft.data_conditions,
-      steps: draft.steps.map((step) => ({ action: step.action, semantic_action_ref: step.semantic_action_ref, claim_ids: [...step.claim_ids].sort() })),
-      canonical_names: [...draft.canonical_names].sort(),
-      claim_ids: claimIds,
-      semantic_gap_ids: gapIds,
-      semantic_status: status
-    });
+    const anchorProjection = canonicalizePhase0CaseFields(phase0CaseAnchorProjection(draft));
+    const caseAnchorDigest = canonicalObjectDigest({ input_semantic_root_digest: input.semantic_root_digest, case_identity_projection: anchorProjection });
     const bindings = records(draft.case_step_semantic_bindings);
     if (bindings.length !== draft.steps.length) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Case step semantic bindings must exactly cover all Case steps.");
     for (const step of draft.steps) {
-      const matches = bindings.filter((binding) => exact7(binding, ["case_client_key", "step_client_key", "action_ref"]) && binding.case_client_key === draft.case_client_key && binding.step_client_key === step.step_client_key && canonicalV5Stringify(binding.action_ref) === canonicalV5Stringify(step.semantic_action_ref));
+      if (!exact7(step, ["step_client_key", "action"]) || !nonblank9(step.action)) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case step must contain only a local key and action.");
+      const matches = bindings.filter((binding) => exact7(binding, ["case_client_key", "step_client_key", "action_ref"]) && binding.case_client_key === draft.case_client_key && binding.step_client_key === step.step_client_key && object8(binding.action_ref) && binding.action_ref.semantic_root_digest === input.semantic_root_digest);
       if (matches.length !== 1) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Each Case step needs one exact accepted semantic-action binding.");
     }
+    const bindingByStepKey = new Map(bindings.map((binding) => [binding.step_client_key, binding]));
     const domainSelections = compileDomainSelections(draft, caseAnchorDigest, input, status);
     const steps = draft.steps.map((step, index) => {
-      if (!nonblank9(step.action) || !Array.isArray(step.claim_ids) || step.claim_ids.some((claimId) => !claimIds.includes(claimId))) throw new V5ProtocolError("SCHEMA_VALIDATION_FAILED", "Case step action or Claim binding is invalid.");
-      return { step_id: legacyStableId("STEP", { case_anchor_digest: caseAnchorDigest, sequence: index + 1, action: step.action, semantic_action_ref: step.semantic_action_ref }), step_client_key: step.step_client_key, sequence: index + 1, action: step.action, semantic_action_ref: structuredClone(step.semantic_action_ref), claim_ids: [...step.claim_ids].sort() };
+      const actionRef = bindingByStepKey.get(step.step_client_key).action_ref;
+      return { step_id: legacyStableId("STEP", { case_anchor_digest: caseAnchorDigest, sequence: index + 1, action: step.action, action_ref: actionRef }), step_client_key: step.step_client_key, action: step.action, action_ref: structuredClone(actionRef) };
     });
     const stepIdByKey = new Map(steps.map((step) => [step.step_client_key, step.step_id]));
     const oracles = draft.oracles.map((oracle) => {
@@ -6345,21 +6479,23 @@ function compileV5CaseDocumentBundle(input) {
         claim_ids: [...oracle.claim_ids].sort()
       };
     }).sort((left, right) => left.oracle_id.localeCompare(right.oracle_id));
-    const publicSteps = steps.map(({ step_client_key: ignored, ...step }) => step);
+    const publicSteps = steps.map(({ step_client_key: ignoredKey, action_ref: ignoredRef, ...step }) => step);
     const publicOracles = oracles.map(({ oracle_client_key: ignored, ...oracle }) => oracle);
-    const identity = {
+    const identity = canonicalizePhase0CaseFields({
       module_id: draft.module_id,
       primary_test_point_id: draft.primary_test_point_id,
-      title: draft.title,
+      acceptance_role: draft.acceptance_role,
+      fact_ids: factIds,
       business_preconditions: draft.business_preconditions,
       data_conditions: draft.data_conditions,
       steps: publicSteps,
       oracles: publicOracles,
-      canonical_names: [...draft.canonical_names].sort(),
-      claim_ids: claimIds,
-      semantic_gap_ids: gapIds,
-      semantic_status: status
-    };
+      semantic_effects: draft.semantic_effects ?? null,
+      baseline_spec: draft.baseline_spec ?? null,
+      test_values: draft.test_values ?? null,
+      supporting_observation_ids: draft.supporting_observation_ids
+    });
+    delete identity.supporting_observation_ids;
     const caseId = legacyStableId("CASE", identity);
     bindClientKey(draft.case_client_key, caseId);
     for (const step of steps) bindClientKey(step.step_client_key, step.step_id);
@@ -6373,18 +6509,21 @@ function compileV5CaseDocumentBundle(input) {
       title: draft.title,
       module_id: draft.module_id,
       priority: draft.priority,
+      ordering: structuredClone(draft.ordering),
+      acceptance_role: draft.acceptance_role,
+      fact_ids: factIds,
       primary_test_point_id: draft.primary_test_point_id,
+      supporting_observation_ids: unique(draft.supporting_observation_ids, "Case supporting observation IDs"),
       semantic_status: status,
       business_preconditions: structuredClone(draft.business_preconditions),
       data_conditions: structuredClone(draft.data_conditions),
       steps: publicSteps,
       oracles: publicOracles,
-      canonical_names: unique(draft.canonical_names, "Canonical names"),
-      claim_ids: claimIds,
-      semantic_gap_ids: gapIds,
+      case_step_semantic_bindings: steps.map((step) => ({ case_id: caseId, step_id: step.step_id, action_ref: structuredClone(step.action_ref) })),
       domain_selections: publicDomainSelections,
-      ...status === "NotApplicable" ? { not_applicable_basis: structuredClone(draft.not_applicable_basis) } : {},
-      ...status === "Exploratory" ? { observation_intent: draft.observation_intent } : {}
+      ...draft.semantic_effects ? { semantic_effects: structuredClone(draft.semantic_effects) } : {},
+      ...draft.baseline_spec ? { baseline_spec: structuredClone(draft.baseline_spec) } : {},
+      ...draft.test_values ? { test_values: structuredClone(draft.test_values) } : {}
     };
   }).sort((left, right) => left.case_id.localeCompare(right.case_id));
   if (new Set(cases.map((current) => current.case_id)).size !== cases.length) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Derived Case identities collide.");
@@ -6495,15 +6634,14 @@ function renderV5Markdown(document) {
   for (const current of document.cases) {
     lines.push(`### ${current.case_id} \u2014 ${current.title} [${current.semantic_status}]`, "");
     lines.push(`- Module: ${current.module_id}`);
+    lines.push(`- Acceptance role: ${current.acceptance_role}`);
     lines.push(`- Primary Test Point: ${current.primary_test_point_id}`);
-    lines.push(`- Canonical names: ${current.canonical_names.join("\u3001")}`);
+    lines.push(`- Facts: ${current.fact_ids.join("\u3001")}`);
     const oracleScopes = [...new Set(current.oracles.map((oracle) => scopeText(oracle.evaluation_scope)))];
     lines.push(`- Scope: ${oracleScopes.join("\u3001")}`);
-    if (current.semantic_gap_ids.length > 0) lines.push(`- Blocking gaps: ${current.semantic_gap_ids.join("\u3001")}`);
-    if (current.observation_intent) lines.push(`- Observation intent: ${current.observation_intent}`);
     lines.push("", "Steps:");
-    for (const step of current.steps) {
-      lines.push(`${step.sequence}. ${step.action}`);
+    for (const [index, step] of current.steps.entries()) {
+      lines.push(`${index + 1}. ${step.action}`);
       for (const oracle of current.oracles.filter((oracle2) => oracle2.observe_after_step_id === step.step_id)) {
         lines.push(`   - Oracle ${oracle.oracle_id}: ${assertionText(oracle.assertion)}; scope=${oracle.evaluation_scope.kind}; window=${oracle.observation_window.kind}`);
       }
@@ -6526,9 +6664,9 @@ function csv(value) {
 }
 function renderV5Csv(document) {
   validateV5CaseDocument(document);
-  const rows = [["case_id", "semantic_status", "title", "module_id", "primary_test_point_id", "scope_kind", "canonical_names", "step_sequence", "step_id", "action", "oracle_id", "oracle_kind", "oracle_assertion"]];
+  const rows = [["case_id", "semantic_status", "title", "module_id", "acceptance_role", "primary_test_point_id", "fact_ids", "scope_kind", "step_sequence", "step_id", "action", "oracle_id", "oracle_kind", "oracle_assertion"]];
   for (const current of document.cases) {
-    for (const step of current.steps) {
+    for (const [index, step] of current.steps.entries()) {
       const oracles = current.oracles.filter((oracle) => oracle.observe_after_step_id === step.step_id);
       if (oracles.length === 0) oracles.push({});
       for (const oracle of oracles) rows.push([
@@ -6536,10 +6674,11 @@ function renderV5Csv(document) {
         current.semantic_status,
         current.title,
         current.module_id,
+        current.acceptance_role,
         current.primary_test_point_id,
+        current.fact_ids.join("|"),
         [...new Set(current.oracles.map((item) => item.evaluation_scope.kind))].join("|"),
-        current.canonical_names.join("|"),
-        step.sequence,
+        index + 1,
         step.step_id,
         step.action,
         oracle.oracle_id ?? "",
