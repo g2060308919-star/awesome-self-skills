@@ -1,0 +1,5 @@
+{
+  "idempotency_key": "fixture-resume-invalid-parent",
+  "creation_reason": "resume_cancelled",
+  "parent_run_id": "RUN-NOT-FOUND"
+}

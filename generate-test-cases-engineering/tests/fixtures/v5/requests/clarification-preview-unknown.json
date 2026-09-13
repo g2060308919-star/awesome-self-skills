@@ -1,0 +1,43 @@
+{
+  "idempotency_key": "fixture-clarification-preview-unknown",
+  "action": {
+    "kind": "preview_clarification_response",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "presentation_id": {
+      "$fixture_binding": "required"
+    },
+    "semantic_root_digest": {
+      "$fixture_binding": "required"
+    },
+    "preview_intent": "apply_units",
+    "raw_response": "Q001 目前未知",
+    "proposed_units": [
+      {
+        "unit_client_key": "unknown-one",
+        "origin": {
+          "message_digest": "sha256:43d0225144e21aa374aceaa740cc7d1426ecacf9e49e43f04af7d89aeb8dc7e3",
+          "range": {
+            "start_scalar": 0,
+            "end_scalar": 9
+          },
+          "excerpt": "Q001 目前未知",
+          "excerpt_digest": "sha256:63c7296927e3949372ae2bd7677c66cec64b69069463d90c017aa438c64baafc"
+        },
+        "target": {
+          "display_token": {
+            "$fixture_binding": "required"
+          },
+          "question_part_id": {
+            "$fixture_binding": "required"
+          },
+          "root_version_digest": {
+            "$fixture_binding": "required"
+          }
+        },
+        "action": "unknown"
+      }
+    ]
+  }
+}

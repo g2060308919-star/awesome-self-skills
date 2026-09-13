@@ -1,0 +1,18 @@
+{
+  "idempotency_key": "fixture-domain-gap-create",
+  "delivery_intent": "case_document",
+  "source_bootstrap": {
+    "source_request_seeds": [
+      {
+        "source_request_client_key": "c01-prd",
+        "source_role": "primary_prd",
+        "locator": {
+          "kind": "inline_text",
+          "media_type": "text/markdown",
+          "content": "状态域要求：提交后必须保存订单，并显示成功提示。"
+        },
+        "required": true
+      }
+    ]
+  }
+}

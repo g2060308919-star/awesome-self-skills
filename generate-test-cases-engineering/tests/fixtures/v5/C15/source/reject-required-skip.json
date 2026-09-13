@@ -1,0 +1,1 @@
+{"fixture_id":"C15.source.reject-required-skip","expected_error":"SCHEMA_VALIDATION_FAILED","reason":"required source requests cannot be skipped"}

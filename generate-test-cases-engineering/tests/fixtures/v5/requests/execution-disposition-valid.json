@@ -1,0 +1,16 @@
+{
+  "idempotency_key": "fixture-execution-disposition",
+  "action": {
+    "kind": "advance_execution_plan",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "operation": {
+      "kind": "set_execution_disposition",
+      "case_id": {
+        "$fixture_binding": "required"
+      },
+      "disposition": "execute"
+    }
+  }
+}

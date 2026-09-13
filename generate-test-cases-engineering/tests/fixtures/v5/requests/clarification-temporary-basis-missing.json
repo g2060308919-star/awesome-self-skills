@@ -1,0 +1,51 @@
+{
+  "idempotency_key": "fixture-clarification-temporary-basis-missing",
+  "action": {
+    "kind": "preview_clarification_response",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "presentation_id": {
+      "$fixture_binding": "required"
+    },
+    "semantic_root_digest": {
+      "$fixture_binding": "required"
+    },
+    "preview_intent": "apply_units",
+    "raw_response": "Q001 显示保存成功",
+    "proposed_units": [
+      {
+        "unit_client_key": "answer-normal",
+        "origin": {
+          "message_digest": "sha256:03aa299742ff8e70aac990ff103103d95c8e5a7b35864becdf416fe5f69667cd",
+          "range": {
+            "start_scalar": 0,
+            "end_scalar": 11
+          },
+          "excerpt": "Q001 显示保存成功",
+          "excerpt_digest": "sha256:2ae3cef73a3895f8fd76873202f3ed813dc878e6be8a389658dd9fe7680cce9a"
+        },
+        "target": {
+          "display_token": {
+            "$fixture_binding": "required"
+          },
+          "question_part_id": {
+            "$fixture_binding": "required"
+          },
+          "root_version_digest": {
+            "$fixture_binding": "required"
+          }
+        },
+        "action": "answer",
+        "answer": {
+          "value": {
+            "kind": "text",
+            "value": "显示保存成功"
+          },
+          "source_text": "显示保存成功",
+          "nature": "temporary"
+        }
+      }
+    ]
+  }
+}

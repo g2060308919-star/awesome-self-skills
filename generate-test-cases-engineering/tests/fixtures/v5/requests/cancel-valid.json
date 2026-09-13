@@ -1,0 +1,10 @@
+{
+  "idempotency_key": "fixture-cancel-valid",
+  "action": {
+    "kind": "cancel_run",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "reason": "fixture verifies accepted compiler state"
+  }
+}

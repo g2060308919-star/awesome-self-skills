@@ -1,0 +1,9 @@
+{
+  "idempotency_key": "fixture-action-not-advertised",
+  "action": {
+    "kind": "submit_artifact",
+    "action_token": "not-a-current-token",
+    "artifact_kind": "case_drafts",
+    "artifact": {}
+  }
+}

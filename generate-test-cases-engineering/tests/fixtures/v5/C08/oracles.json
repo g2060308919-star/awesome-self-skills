@@ -1,0 +1,1 @@
+{"fixture_id":"C08.typed-oracles","assertion_kinds":["absent","count_at_least","count_equals","cross_surface_equals","exact_text","exists","permission","semantic_text","set_contains","set_equals","transition","value_equals","value_state_equals"],"expected_verdicts_per_assertion":1}
