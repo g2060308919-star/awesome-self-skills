@@ -2,121 +2,34 @@
 
 Date: 2026-09-13
 
-Decision: **REJECT — do not merge or push as a completed V5 release.**
+Decision: **RESOLVED — the five recorded blockers and the final spec gate are closed.**
 
-The sole normative acceptance contract is `03-development-spec.md`. The
-automated suite demonstrates useful implementation progress, but it does not
-close the contract below.
+The sole normative acceptance contract is `03-development-spec.md`. Documents
+01 and 02 remain background and architecture context only.
 
-## Verified progress
+## Closure record
 
-- `npm run build` passed.
-- `node build/build.mjs --check` passed.
-- The executable fixture manifest passed 16 requirement groups and 105 leaves
-  with transcript digest
-  `sha256:1e5b55c34e1c110c4caed7c1a0e2205fb4069962b7d76ae286565f95528cee6e`.
-- The V5/runtime test invocation passed 109 of 110 tests before publication
-  synchronization; the only failure was the stale published Skill inventory.
-  After copying the engineering Skill build to the repository publication,
-  `repository-published-sync.test.mjs` passed.
-- `git diff --check` passed.
-- A repository scan found no private-key, GitHub token, or AWS access-key
-  pattern in the changed engineering/published Skill trees.
+| Blocker | Resolution | Evidence |
+| --- | --- | --- |
+| Phase 0 Case contract was replaced | Restored the frozen V4 Case projection and limited V5 to `case_step_semantic_bindings`, `domain_selections`, and typed `oracles`; identity goldens exclude the extension fields. | `903ede1`; `case-output.test.mjs`, `schema-contracts.test.mjs` |
+| Accepted work context retained Agent client keys | Behavior acceptance now persists a stable-ID-rewritten compiler projection sufficient for restart through `inspectV5Run`. | `e6033e0`; `fsm-runtime.test.mjs`, `schema-contracts.test.mjs` |
+| Provenance stopped at Behavior | Compiler now emits and validates Source → Claim → Fact → AtomicOutcome → FormalTestPoint → Case/CaseOracle with registered, acyclic edges. | `e6033e0`; `provenance.test.mjs`, `case-output.test.mjs` |
+| Named fixtures were aliases | Every normative leaf has a unique isolated trigger/assertion body and an individual golden. | `6c0df03`; `fixture-runner.test.mjs`; 105/105 leaves |
+| Static check reported 236 errors | All diagnostics were repaired without `@ts-nocheck`, `@ts-ignore`, or weakened compiler settings. | `4e1d81b`; `tsc --noEmit -p jsconfig.json` exits 0 |
+| Final gate 23 lacked the seven-state normal-fatal matrix | The manifest now creates and corrupts source state, Question Part state, pending clarification, Execution snapshot, Execution receipt, final Execution projection, and accepted Compiler projection. Set targets use checkpoint-member digests; missing, invalid, non-member, and diagnostic-mismatch negatives fail before fatal publication. | `1fb011d`; `F-C15-protocol.protocol.storage-tamper-matrix`; `fixture-runner.test.mjs` |
 
-## Release blockers
+## Final result
 
-### 1. Phase 0 V4 Case contract was redesigned instead of extended
+- `npm run check`: 118/118 passed.
+- C01–C16 manifest: 16/16 groups and 105/105 leaves passed.
+- Deterministic transcript:
+  `sha256:17781e2b5adf6fa98cc03a5b04d257c94ea40ac824d40d4a48843e9d443a6eb9`.
+- Candidate and repository-published Skill trees are byte-identical.
+- `git diff --check` passes and dependency audit reports zero vulnerabilities.
+- No declared deployment/catalog root exists, so the repository publication has
+  zero discoverable production V4 active runs and makes no runtime-deployment
+  claim. Historical benchmark and validation run directories are not a
+  configured live catalog and were not modified or migrated.
 
-The Phase 0 Case identity projection includes the frozen V4 fields such as
-`ordering`, `acceptance_role`, `fact_ids`, `supporting_observation_ids`, typed
-business preconditions/data conditions, semantic effects, baseline spec, and
-test values. The V5 contract permits the exact Case extension
-`case_step_semantic_bindings`, `domain_selections`, and typed `oracles`.
-
-The current public Case schema and compiler instead introduce a different
-shape with `canonical_names`, `claim_ids`, `semantic_gap_ids`, inline
-`semantic_action_ref`, and inline step Claim IDs. The Case anchor and final Case
-ID are calculated from that replacement shape. This violates the explicit
-in-place extension and frozen Case identity requirements.
-
-Relevant implementation:
-
-- `src/v5/interface-schemas.mjs:508`
-- `src/v5/case-compiler.mjs:220`
-- `src/v5/case-compiler.mjs:244`
-- `src/v5/case-compiler.mjs:279`
-
-### 2. Case work context is not a stable-ID-rewritten accepted projection
-
-The runtime accepts the raw Agent `behavior_views` payload into the envelope
-and places that payload in the next work packet. It therefore retains batch
-client keys and same-batch structure while the stable mappings exist only in
-the preceding mutation receipt. A restarted or replacement Agent cannot build
-the next artifact from `inspectV5Run` alone, contrary to the AgentWorkContext
-contract.
-
-Relevant implementation:
-
-- `src/v5/interface-schemas.mjs:771`
-- `src/v5/runtime.mjs:1022`
-- `src/v5/runtime.mjs:1066`
-
-### 3. Production provenance compilation stops at Behavior contracts
-
-The policy registry declares the complete Source → Claim → Fact →
-AtomicOutcome → FormalTestPoint → Case/CaseOracle chain, but
-`compileBehaviorProvenanceGraph` only creates source-unit, Claim, and Behavior
-contract nodes. The production path does not compile the required Fact,
-AtomicOutcome, FormalTestPoint, Case, or CaseOracle nodes/edges.
-
-Relevant implementation:
-
-- `src/v5/provenance.mjs:14`
-- `src/v5/runtime.mjs:994`
-
-### 4. Required named fixtures are aliases, not independent gate triggers
-
-Hashing each manifest fixture after removing only `fixture_id` and
-`requirement_ids` shows that many normatively required leaves have byte-identical
-action and expectation bodies. In particular, C13 has 13 named leaves but only
-2 unique bodies. Seven distinct negative requirements—including
-cross-coordinate denial, Oracle denial requiredness mismatch, orphan auxiliary
-contract, and permission-coordinate binding failures—execute the same two
-generic permission errors. Six positive requirements likewise share one body.
-
-Other affected groups include C08, C11, C12, C15, and C16. A passing leaf count
-therefore does not prove the named invariant set required by the specification.
-
-Relevant generator branch:
-
-- `build/generate-v5-fixture-manifest.mjs:498`
-- `build/generate-v5-fixture-manifest.mjs:504`
-
-### 5. The mandatory static check fails
-
-The repository-local command
-`./node_modules/.bin/tsc --noEmit -p jsconfig.json` reports **236 errors across
-18 files**. Failures include invalid object shapes, impossible `never` arrays,
-implicit `any`, missing properties, and runtime union errors. Consequently
-`npm run check` cannot pass.
-
-## Required remediation before release
-
-1. Restore the Phase 0 V4 semantic Case projection and apply only the exact V5
-   Case extension; freeze Case/Step/Oracle identity goldens against it.
-2. Compile and persist Facts, AtomicOutcomes, FormalTestPoints, Cases, and
-   CaseOracles with the registered provenance edges.
-3. Persist and expose stable-ID-rewritten accepted Behavior/Test Obligation
-   projections so a fresh Agent can continue using only `inspectV5Run`.
-4. Replace aliased manifest leaves with independent inputs and assertions that
-   trigger every named C01–C16 invariant.
-5. Fix all static-check diagnostics without disabling checking, then rerun the
-   exact release commands and regenerate release evidence.
-
-## Git publication status
-
-- Feature branch: `codex/generate-test-cases-v5`
-- Current committed HEAD: `b3c01f8`
-- The remediation above remains in the working tree.
-- No remote feature push was performed.
-- `main` was not merged or pushed.
+The complete command log, artifact digests, gate mapping, limitations, and
+security review are in `2026-09-13-v5-release-evidence.md`.
