@@ -15,10 +15,11 @@ import { readCasJson, readFixedSealedRecord, readSealedV5Record, readSemanticV5R
 import { applySourceBatch, currentSourceBatch, deriveSourceRequests, validateSourceBootstrap } from './source-acquisition.mjs';
 import { resolveCatalogLayout, resolveRunLayout, digestFilename } from './storage-paths.mjs';
 import { deriveBehaviorContractSeed, typedContractRefKey, validateBehaviorContractReviews, validateBehaviorEvidenceClosure, validateRiskReviews, validateValueState } from './behavior-contracts.mjs';
-import { compileBehaviorContracts } from './behavior-compiler.mjs';
+import { compileBehaviorContracts, projectAcceptedBehaviorViews } from './behavior-compiler.mjs';
+import { compileEvidenceSemantics } from './evidence-compiler.mjs';
 import { clarificationGapsFromAcceptedBehavior, compileBehaviorSemanticGaps } from './behavior-gaps.mjs';
 import { derivePermissionMatrices, validatePermissionMatrixReview } from './permission.mjs';
-import { compileBehaviorProvenanceGraph, validateV5ProvenanceGraph } from './provenance.mjs';
+import { compileBehaviorProvenanceGraph, extendCaseProvenanceGraph, validateV5ProvenanceGraph } from './provenance.mjs';
 import { deriveSemanticReviewSeed } from './semantic-seed.mjs';
 import { validateSemanticReviews } from './semantic-reviews.mjs';
 import { createSemanticRuleIndex } from './semantic-rules.mjs';
@@ -74,6 +75,25 @@ function validateAgentArtifactRoot(artifact, allowed) {
   const extra = Object.keys(artifact).filter((key) => !allowed.includes(key));
   if (extra.some((key) => COMPILER_OWNED_ARTIFACT_FIELDS.has(key))) throw new V5ProtocolError('COMPILER_OWNED_FIELD_SUBMITTED', 'Agent artifact contains a Compiler-owned envelope or state field.');
   if (extra.length > 0) throw new V5ProtocolError('SCHEMA_VALIDATION_FAILED', 'Agent artifact contains fields outside its closed branch.');
+}
+
+/**
+ * Rewrite every exact batch-local key value to the stable ID returned by the
+ * compiler. Property names remain part of the frozen accepted artifact shape;
+ * only their values cross the acceptance boundary.
+ * @param {unknown} value
+ * @param {Array<{client_key:string,stable_id:string}>} bindings
+ * @returns {any}
+ */
+function rewriteBatchLocalReferences(value, bindings) {
+  const stableByClientKey = new Map(bindings.map((binding) => [binding.client_key, binding.stable_id]));
+  const rewrite = (candidate) => {
+    if (typeof candidate === 'string') return stableByClientKey.get(candidate) ?? candidate;
+    if (Array.isArray(candidate)) return candidate.map(rewrite);
+    if (!candidate || typeof candidate !== 'object') return candidate;
+    return Object.fromEntries(Object.entries(candidate).map(([key, child]) => [key, rewrite(child)]));
+  };
+  return rewrite(structuredClone(value));
 }
 
 /** @param {unknown} value @param {Set<string>} acceptedClaimIds */
@@ -843,7 +863,14 @@ async function advanceEvidenceClaims(current, request) {
     client_key_bindings: claimClientKeyBindings,
     ...acceptedPayload
   } = /** @type {Record<string,any>} */ (validated);
-  const envelope = acceptArtifactEnvelope({ artifactKind: 'evidence_claims', payload: acceptedPayload, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'requirements_analysis', inputDigests: [seed.seed_digest, current.checkpoint.accepted_source_state_digest] });
+  const compiledEvidencePayload = rewriteBatchLocalReferences({
+    ...structuredClone(acceptedPayload),
+    claims: compiledClaims.map((/** @type {Record<string,any>} */ claim) => {
+      const { claim_client_key: ignored, ...compiled } = claim;
+      return compiled;
+    })
+  }, claimClientKeyBindings);
+  const envelope = acceptArtifactEnvelope({ artifactKind: 'evidence_claims', payload: compiledEvidencePayload, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'requirements_analysis', inputDigests: [seed.seed_digest, current.checkpoint.accepted_source_state_digest] });
   const semanticRootDigest = canonicalObjectDigest({
     namespace: 'generate-test-cases/v5/semantic-root', format_version: 1,
     accepted_source_state_digest: current.checkpoint.accepted_source_state_digest,
@@ -851,6 +878,8 @@ async function advanceEvidenceClaims(current, request) {
     decision_ids: []
   });
   const termRegistry = sealV5Record({ semantic_root_digest: semanticRootDigest, entries: provisionalTermRegistry.entries }, 'registry_digest');
+  const evidenceSemantics = compileEvidenceSemantics({ semanticRootDigest, sourceRevision: envelope.accepted_revision, claims: compiledEvidencePayload.claims });
+  const testObligations = sealV5Record(evidenceSemantics.test_obligations, 'obligations_digest');
   const ruleIndex = createSemanticRuleIndex(semanticRootDigest, { registry_digest: `sha256:${'0'.repeat(64)}`, registered_rules: [], accepted_rule_contract_refs: [] });
   const claimIdByClientKey = new Map(compiledClaims.map((/** @type {Record<string,any>} */ claim) => [claim.claim_client_key, claim.claim_id]));
   const rewriteEvidenceRefs = (/** @type {Array<Record<string,any>>} */ refs) => refs.map((ref) => ref.kind === 'claim' && claimIdByClientKey.has(ref.claim_id) ? { ...ref, claim_id: claimIdByClientKey.get(ref.claim_id) } : structuredClone(ref));
@@ -897,6 +926,7 @@ async function advanceEvidenceClaims(current, request) {
     evidence_claims_artifact_digest: envelope.envelope_digest,
     term_registry_digest: termRegistry.registry_digest,
     behavior_contract_seed_digest: behaviorSeed.seed_digest,
+    test_obligations_digest: testObligations.obligations_digest,
     ...(hasGaps ? { clarification_gaps_digest: /** @type {Record<string,any>} */ (gapInventory).gaps_digest, question_part_state_set_digest: /** @type {Record<string,any>} */ (questionPartStateSet).state_set_digest, presentation_digest: /** @type {Record<string,any>} */ (presentation).presentation_digest } : {})
   };
   delete checkpointBase.checkpoint_digest;
@@ -905,17 +935,11 @@ async function advanceEvidenceClaims(current, request) {
     : [{ kind: 'submit_artifact', artifact_kind: 'behavior_views' }, { kind: 'cancel_run' }];
   const selectorState = checkpointSelectors(checkpointBase, capabilities);
   const source = await acceptedSourceContext(current);
-  const compiledEvidencePayload = {
-    ...structuredClone(envelope.payload),
-    claims: compiledClaims.map((/** @type {Record<string,any>} */ claim) => {
-      const { claim_client_key: ignored, ...compiled } = claim;
-      return compiled;
-    })
-  };
   const context = {
     source,
     semantics: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: compiledEvidencePayload },
     term_registry: { artifact_digest: termRegistry.registry_digest, accepted_revision: envelope.accepted_revision, payload: termRegistry },
+    test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: evidenceSemantics.test_obligations },
     compiler_rules: { ...agentVisibleCompilerRules(), semantic_rule_index_projection: { kind: 'available', index: ruleIndex } }
   };
   const workPacket = hasGaps
@@ -940,7 +964,7 @@ async function advanceEvidenceClaims(current, request) {
     checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
     acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }],
     compilerStateRecords: [
-      { record: termRegistry, digestField: 'registry_digest' }, { record: behaviorSeed, digestField: 'seed_digest' },
+      { record: termRegistry, digestField: 'registry_digest' }, { record: behaviorSeed, digestField: 'seed_digest' }, { record: testObligations, digestField: 'obligations_digest' },
       ...(hasGaps ? [{ record: /** @type {Record<string,any>} */ (gapInventory), digestField: 'gaps_digest' }, { record: /** @type {Record<string,any>} */ (questionPartStateSet), semanticDigest: /** @type {Record<string,any>} */ (questionPartStateSet).state_set_digest }, { record: /** @type {Record<string,any>} */ (presentation), semanticDigest: /** @type {Record<string,any>} */ (presentation).presentation_digest }] : [])
     ]
   });
@@ -958,6 +982,14 @@ async function advanceBehaviorViews(current, request) {
   validateAgentArtifactRoot(action.artifact, ['behavior_contract_seed_digest', 'field_correspondences', 'value_states', 'predicate_contracts', 'domain_contracts', 'behavior_equivalence_contracts', 'population_contracts', 'population_proofs', 'permission_auxiliary_contracts', 'oracle_semantic_contracts', 'behavior_contract_reviews', 'permission_matrix_reviews', 'risk_reviews', 'semantic_gap_proposals']);
   const seed = await readSealedV5Record(current.layout.compilerState, current.checkpoint.behavior_contract_seed_digest, 'seed_digest');
   const semantics = current.reply.work_packet.context.semantics.payload;
+  const testObligationsRecord = await readSealedV5Record(current.layout.compilerState, current.checkpoint.test_obligations_digest, 'obligations_digest');
+  const { obligations_digest: ignoredObligationsDigest, ...testObligations } = testObligationsRecord;
+  const evidenceSemantics = compileEvidenceSemantics({ semanticRootDigest: current.checkpoint.semantic_root_digest, sourceRevision: testObligations.source_revision, claims: semantics.claims ?? [] });
+  if (canonicalV5Stringify(evidenceSemantics.test_obligations) !== canonicalV5Stringify(testObligations)) throw new V5ProtocolError('ACCEPTED_STATE_INTEGRITY_FAILURE', 'Accepted Test Obligations do not match the Compiler-owned Evidence projection.');
+  const acceptedFormalTestPointIds = new Set(testObligations.formal_test_points.map((/** @type {Record<string,any>} */ point) => point.formal_test_point_id));
+  for (const contract of [...action.artifact.oracle_semantic_contracts ?? [], ...action.artifact.behavior_equivalence_contracts ?? []]) {
+    if (!acceptedFormalTestPointIds.has(contract.formal_test_point_id)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Behavior contract must reference a Compiler-owned formal Test Point from the accepted work context.');
+  }
   const evidenceContext = await behaviorEvidenceContext(current, semantics);
   const acceptedClaimIds = new Set((semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => claim.claim_id));
   validateAcceptedClaimReferences(action.artifact, acceptedClaimIds);
@@ -991,6 +1023,16 @@ async function advanceBehaviorViews(current, request) {
   const compiledDomains = compiledBehavior.domain_contracts;
   const requirementByKey = new Map(seed.required_contracts.map((/** @type {Record<string,any>} */ requirement) => [requirement.required_contract_key, requirement]));
   const stableByClientKey = new Map(compiledBehavior.client_key_bindings.map((/** @type {{client_key:string,stable_id:string}} */ binding) => [binding.client_key, binding.stable_id]));
+  const compiledContractById = new Map([
+    ...compiledBehavior.field_correspondences.map((contract) => [contract.field_correspondence_id, contract]),
+    ...compiledBehavior.predicate_contracts.map((contract) => [contract.predicate_contract_id, contract]),
+    ...compiledBehavior.domain_contracts.map((contract) => [contract.domain_contract_id, contract]),
+    ...compiledBehavior.behavior_equivalence_contracts.map((contract) => [contract.behavior_equivalence_contract_id, contract]),
+    ...compiledBehavior.population_contracts.map((contract) => [contract.population_contract_id, contract]),
+    ...compiledBehavior.population_proofs.map((contract) => [contract.population_proof_id, contract]),
+    ...compiledBehavior.permission_auxiliary_contracts.map((contract) => [contract.permission_auxiliary_contract_id, contract]),
+    ...compiledBehavior.oracle_semantic_contracts.map((contract) => [contract.oracle_semantic_contract_id, contract])
+  ]);
   const provenanceContractById = new Map();
   for (const review of action.artifact.behavior_contract_reviews) {
     if (review.disposition?.kind !== 'formal') continue;
@@ -998,9 +1040,11 @@ async function advanceBehaviorViews(current, request) {
     for (const clientKey of review.disposition.contract_client_keys) {
       const contractId = stableByClientKey.get(clientKey);
       if (!contractId || !requirement) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Formal Behavior provenance cannot resolve its Compiler-owned stable contract identity.');
-      const aggregate = provenanceContractById.get(contractId) ?? { contract_id: contractId, basis: [] };
+      const aggregate = provenanceContractById.get(contractId) ?? { contract_id: contractId, basis: [], formal_test_point_ids: [] };
       aggregate.basis.push(...requirement.basis);
       aggregate.basis = [...new Map(aggregate.basis.map((basis) => [canonicalV5Stringify(basis), basis])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right)));
+      const formalTestPointId = compiledContractById.get(contractId)?.formal_test_point_id;
+      if (typeof formalTestPointId === 'string') aggregate.formal_test_point_ids = [...new Set([...aggregate.formal_test_point_ids, formalTestPointId])].sort();
       provenanceContractById.set(contractId, aggregate);
     }
   }
@@ -1008,6 +1052,9 @@ async function advanceBehaviorViews(current, request) {
     runId: current.identity.run_id, caseDocumentLineageId: current.identity.case_document_lineage_id,
     semanticRootDigest: current.checkpoint.semantic_root_digest,
     claims: (semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => ({ ...claim, evidence_level: 'E2' })),
+    facts: evidenceSemantics.facts,
+    atomicOutcomes: testObligations.outcomes,
+    formalTestPoints: testObligations.formal_test_points,
     behaviorContracts: [...provenanceContractById.values()]
   });
   const semanticGaps = action.artifact.semantic_gap_proposals;
@@ -1019,12 +1066,12 @@ async function advanceBehaviorViews(current, request) {
   if (hasGaps !== (compiledGaps.accepted_gaps.length > 0)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Behavior semantic-gap reviews require exact gap payloads.');
   const riskLedger = validateRiskReviews(current.checkpoint.semantic_root_digest, seed.risk_review_module_ids, action.artifact.risk_reviews, evidenceContext);
   validatePublicRequestSchema(request, 'advance');
-  const envelope = acceptArtifactEnvelope({ artifactKind: 'behavior_views', payload: action.artifact, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'case_design', inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest] });
+  const stableBehaviorPayload = projectAcceptedBehaviorViews(action.artifact, [...compiledGaps.client_key_bindings, ...compiledBehavior.client_key_bindings]);
+  const envelope = acceptArtifactEnvelope({ artifactKind: 'behavior_views', payload: stableBehaviorPayload, runIdentity: current.identity, revision: current.checkpoint.current_revision + 1, producerStage: 'case_design', inputDigests: [seed.seed_digest, current.checkpoint.semantic_root_digest, current.checkpoint.test_obligations_digest] });
   const resultKey = hasGaps ? 'actionable_gaps' : 'no_actionable_gap';
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'artifact.submit_behavior_views', result_key: resultKey });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
-  const formalTestPointIds = [...new Set(compiledBehavior.oracle_semantic_contracts.map((/** @type {Record<string,any>} */ contract) => contract.formal_test_point_id))].sort();
-  const testObligations = sealV5Record({ kind: 'test_obligations', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest, formal_test_point_ids: formalTestPointIds, behavior_artifact_digest: envelope.envelope_digest }, 'obligations_digest');
+  const formalTestPointIds = [...acceptedFormalTestPointIds].sort();
   const permissionCells = matrices.flatMap((/** @type {Record<string,any>} */ matrix) => {
     const review = compiledBehavior.permission_matrix_reviews.find((/** @type {Record<string,any>} */ candidate) => candidate.matrix_id === matrix.matrix_id);
     const dispositionByCell = new Map((review?.cell_dispositions ?? []).map((/** @type {Record<string,any>} */ row) => [row.required_cell_key, row.disposition]));
@@ -1036,7 +1083,9 @@ async function advanceBehaviorViews(current, request) {
   const caseCompilationContext = !hasGaps ? sealV5Record({
     kind: 'case_compilation_context', schema_version: V5_SCHEMA_VERSION, semantic_root_digest: current.checkpoint.semantic_root_digest,
     claim_assessments: (semantics.claims ?? []).map((/** @type {Record<string,any>} */ claim) => ({ claim_id: claim.claim_id ?? claim.claim_client_key, level: 'E2', support_review: 'supported' })).sort((left, right) => left.claim_id.localeCompare(right.claim_id)),
+    fact_assessments: evidenceSemantics.fact_assessments,
     accepted_gap_ids: [], formal_test_point_ids: formalTestPointIds,
+    formal_test_point_dispositions: evidenceSemantics.formal_test_point_dispositions,
     semantic_partitions: compiledDomains.flatMap((/** @type {Record<string,any>} */ domain) => domain.partitions.map((/** @type {Record<string,any>} */ partition) => ({ partition_id: partition.partition_id, disposition: 'covered' }))).sort((left, right) => left.partition_id.localeCompare(right.partition_id)),
     value_instances: action.artifact.value_states.map((/** @type {Record<string,any>} */ valueState) => ({ value_instance_id: canonicalObjectDigest(valueState), disposition: 'covered' })).sort((left, right) => left.value_instance_id.localeCompare(right.value_instance_id)),
     permission_cells: permissionCells.sort((left, right) => left.required_cell_key.localeCompare(right.required_cell_key)),
@@ -1057,7 +1106,6 @@ async function advanceBehaviorViews(current, request) {
   }, 'context_digest') : null;
   /** @type {Array<{record:Record<string,any>,digestField?:string,semanticDigest?:string}>} */
   const compilerStateRecords = [
-    { record: testObligations, digestField: 'obligations_digest' },
     { record: riskLedger, semanticDigest: canonicalObjectDigest(riskLedger) },
     { record: provenanceGraph, digestField: 'graph_digest' },
     ...(caseCompilationContext ? [{ record: caseCompilationContext, digestField: 'context_digest' }] : []),
@@ -1066,15 +1114,13 @@ async function advanceBehaviorViews(current, request) {
   let workPacket;
   const context = {
     ...current.reply.work_packet.context,
-    behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload },
-    provenance: { artifact_digest: provenanceGraph.graph_digest, accepted_revision: envelope.accepted_revision, payload: provenanceGraph },
-    test_obligations: { artifact_digest: testObligations.obligations_digest, accepted_revision: envelope.accepted_revision, payload: testObligations }
+    behavior: { artifact_digest: envelope.envelope_digest, accepted_revision: envelope.accepted_revision, payload: envelope.payload }
   };
   const checkpointBase = {
     ...current.checkpoint, current_revision: current.checkpoint.current_revision + 1,
     fsm_cell_id: outcome.target_cell_id, stage: targetCell.stage, obligation: targetCell.obligation,
     accepted_artifact_digests: [...new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
-    behavior_views_artifact_digest: envelope.envelope_digest, test_obligations_digest: testObligations.obligations_digest,
+    behavior_views_artifact_digest: envelope.envelope_digest,
     risk_ledger_digest: canonicalObjectDigest(riskLedger), provenance_graph_digest: provenanceGraph.graph_digest,
     ...(caseCompilationContext ? { case_compilation_context_digest: caseCompilationContext.context_digest } : {})
   };
@@ -1131,6 +1177,12 @@ async function advanceCaseDrafts(current, request) {
   const executionPlan = projectCompatibilityExecutionPlan(document, { run_id: current.identity.run_id, revision: current.checkpoint.current_revision + 1 });
   const caseDocumentRef = executionPlan.case_document_ref;
   const renderedOutputs = [renderedOutputRecord('application/json', renderV5Json(document)), renderedOutputRecord('text/markdown', renderV5Markdown(document)), renderedOutputRecord('text/csv', renderV5Csv(document))].map((record) => ({ record, digestField: 'rendered_output_digest' }));
+  const semanticProvenance = await readSealedV5Record(current.layout.compilerState, current.checkpoint.provenance_graph_digest, 'graph_digest');
+  const deliveredProvenance = extendCaseProvenanceGraph({
+    graph: semanticProvenance, runId: current.identity.run_id, caseDocumentLineageId: current.identity.case_document_lineage_id,
+    semanticRootDigest: current.checkpoint.semantic_root_digest, cases: document.cases, caseDocumentDigest: document.bundle_digest,
+    renderedOutputDigests: renderedOutputs.map((item) => item.record.rendered_output_digest)
+  });
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: 'advance', from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: 'artifact.submit_case_drafts', result_key: 'all_gates_passed' });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const checkpointBase = {
@@ -1139,7 +1191,8 @@ async function advanceCaseDrafts(current, request) {
     accepted_artifact_digests: [...new Set([...current.checkpoint.accepted_artifact_digests, envelope.envelope_digest])].sort(),
     case_drafts_artifact_digest: envelope.envelope_digest, case_document_ref: caseDocumentRef,
     case_document_digest: document.bundle_digest, execution_plan_digest: executionPlan.plan_digest,
-    rendered_output_digests: renderedOutputs.map((item) => item.record.rendered_output_digest).sort()
+    rendered_output_digests: renderedOutputs.map((item) => item.record.rendered_output_digest).sort(),
+    provenance_graph_digest: deliveredProvenance.graph_digest
   };
   delete checkpointBase.checkpoint_digest;
   const workPacket = { kind: 'terminal_work', terminal_kind: 'case_document_finished', case_document_ref: caseDocumentRef };
@@ -1150,7 +1203,7 @@ async function advanceCaseDrafts(current, request) {
   return commitNormalRunTransaction(current.layout.root, request, {
     checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt,
     acceptedArtifacts: [{ record: envelope, digestField: 'envelope_digest' }],
-    compilerStateRecords: [{ record: document, semanticDigest: document.bundle_digest }, { record: executionPlan, semanticDigest: executionPlan.plan_digest }], renderedOutputs
+    compilerStateRecords: [{ record: document, semanticDigest: document.bundle_digest }, { record: executionPlan, semanticDigest: executionPlan.plan_digest }, { record: deliveredProvenance, digestField: 'graph_digest' }], renderedOutputs
   });
 }
 

@@ -13,7 +13,7 @@ import {
   validatePopulationContract,
   validateValueState
 } from '../../src/v5/behavior-contracts.mjs';
-import { compileBehaviorContracts } from '../../src/v5/behavior-compiler.mjs';
+import { compileBehaviorContracts, projectAcceptedBehaviorViews } from '../../src/v5/behavior-compiler.mjs';
 import { createSemanticRuleIndex } from '../../src/v5/semantic-rules.mjs';
 
 const root = `sha256:${'a'.repeat(64)}`;
@@ -190,6 +190,10 @@ test('Behavior compilation rewrites every same-batch contract client key to its 
   assert.match(compiled.oracle_semantic_contracts[0].assertion.field_correspondence_id, /^fcr5_/u);
   assert.match(compiled.oracle_semantic_contracts[0].evaluation_scope.population_contract_id, /^pop5_/u);
   assert.match(compiled.oracle_semantic_contracts[0].evaluation_scope.population_proof_id, /^ppf5_/u);
+  const accepted = projectAcceptedBehaviorViews(artifact, compiled.client_key_bindings);
+  assert.equal(JSON.stringify(accepted).includes('oracle-status'), false);
+  assert.match(accepted.oracle_semantic_contracts[0].oracle_contract_client_key, /^osc5_/u);
+  assert.match(accepted.oracle_semantic_contracts[0].assertion.field_correspondence_id, /^fcr5_/u);
   assert.throws(() => compileBehaviorContracts({ semanticRootDigest: root, semanticRuleIndex, acceptedContractRefs, artifact: { ...artifact, oracle_semantic_contracts: [{ ...artifact.oracle_semantic_contracts[0], oracle_contract_client_key: 'field-status' }] } }), /CLIENT_KEY_INVALID/u);
   assert.throws(() => compileBehaviorContracts({ semanticRootDigest: root, semanticRuleIndex, acceptedContractRefs: new Set(), artifact }), /POPULATION_CONTRACT_REQUIRED/u);
 });

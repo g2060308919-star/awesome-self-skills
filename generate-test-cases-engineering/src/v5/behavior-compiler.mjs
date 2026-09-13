@@ -20,6 +20,24 @@ function nonblank(value) { return typeof value === 'string' && value.trim().leng
 function nonempty(value) { return Array.isArray(value) && value.length > 0; }
 
 /**
+ * Project a validated Behavior batch across the acceptance boundary. The
+ * frozen artifact field names are retained, while every exact batch-local key
+ * value is replaced by its Compiler-owned stable identity.
+ * @param {Record<string,any>} artifact
+ * @param {Array<{client_key:string,stable_id:string}>} bindings
+ */
+export function projectAcceptedBehaviorViews(artifact, bindings) {
+  const stableByClientKey = new Map(bindings.map((binding) => [binding.client_key, binding.stable_id]));
+  const rewrite = (value) => {
+    if (typeof value === 'string') return stableByClientKey.get(value) ?? value;
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, rewrite(child)]));
+  };
+  return rewrite(structuredClone(artifact));
+}
+
+/**
  * Compile Agent-local Behavior client keys into current-root stable contracts.
  * The returned projections are Compiler state; the accepted Agent envelope stays
  * byte-faithful to the submitted artifact.

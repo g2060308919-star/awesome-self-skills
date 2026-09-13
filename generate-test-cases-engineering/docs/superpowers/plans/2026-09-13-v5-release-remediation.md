@@ -53,10 +53,10 @@
 - Consumes: accepted Behavior transaction output and client-key bindings.
 - Produces: a closed `AcceptedBehaviorViews` projection whose local references are rewritten to stable IDs and which is sufficient for the next Case draft after restart.
 
-- [ ] Write a restart test that constructs the next Case artifact using only `inspectV5Run().work_packet.context` and rejects any accepted context containing a local client key.
-- [ ] Run the focused runtime test and verify it fails on the raw Agent payload.
-- [ ] Have the Behavior compiler return the normalized stable projection, persist that projection in the accepted envelope, and make every downstream work packet reference it.
-- [ ] Re-run the focused tests, build, and commit `fix(generate-test-cases): persist stable behavior context`.
+- [x] Write a restart test that constructs the next Case artifact using only `inspectV5Run().work_packet.context` and rejects any accepted context containing a local client key.
+- [x] Run the focused runtime test and verify it fails on the raw Agent payload.
+- [x] Have the Behavior compiler return the normalized stable projection, persist that projection in the accepted envelope, and make every downstream work packet reference it.
+- [x] Re-run the focused tests and build. Recorded with Task 3 because the stable TestPoint context and provenance compiler share one acceptance boundary.
 
 ### Task 3: Complete compiler-owned semantics and provenance
 
@@ -72,11 +72,11 @@
 - Consumes: accepted source, Claim/Decision evidence, Behavior outcomes, and accepted Cases/Oracles.
 - Produces: compiler-owned Facts, AtomicOutcomes, FormalTestPoints, and the complete same-run/current-root provenance graph.
 
-- [ ] Write graph tests for every registered edge, missing nodes, orphan downstream nodes, illegal reverse edges, wrong roots, and cycles.
-- [ ] Run the tests and verify production compilation omits the required nodes and edges.
-- [ ] Compile stable Facts from supported Claims, split Behavior and permission dimensions into AtomicOutcomes, derive FormalTestPoints, and use those stable test points as the Case coverage denominator.
-- [ ] Extend provenance after Behavior and Case acceptance, validate the full graph before transaction publication, and expose the verified projection in work/result state.
-- [ ] Re-run focused tests, build, and commit `fix(generate-test-cases): complete semantic provenance chain`.
+- [x] Write graph tests for every registered edge, missing nodes, orphan downstream nodes, illegal reverse edges, wrong roots, and cycles.
+- [x] Run the tests and verify production compilation omits the required nodes and edges.
+- [x] Compile stable Facts from supported Claims, split Behavior and permission dimensions into AtomicOutcomes, derive FormalTestPoints, and use those stable test points as the Case coverage denominator.
+- [x] Extend provenance after Behavior and Case acceptance, validate the full graph before transaction publication, and expose the verified projection in work/result state.
+- [x] Re-run focused tests and build. Commit recorded as the next atomic step.
 
 ### Task 4: Make every normative fixture independent
 

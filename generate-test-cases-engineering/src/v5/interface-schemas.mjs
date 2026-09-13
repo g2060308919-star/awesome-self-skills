@@ -790,18 +790,37 @@ function projectionRecordSchema(payload) {
 }
 
 function provenanceGraphSchema() {
-  const nodeBase = {
-    node_id: nonblankString(), kind: { enum: ['source_unit', 'claim', 'behavior_contract'] }, run_id: { type: 'string', pattern: RUN_ID },
-    case_document_lineage_id: nonblankString(), semantic_root_digest: digestString(), accepted: constant(true), evidence_level: { enum: ['E1', 'E2', 'E3'] }
-  };
-  const node = closedObject(nodeBase, ['node_id', 'kind', 'run_id', 'case_document_lineage_id', 'semantic_root_digest', 'accepted']);
-  return closedObject({ nodes: arrayOf(node), edges: arrayOf(closedObject({ from: nonblankString(), to: nonblankString() })), graph_digest: digestString() });
+  const common = { node_id: nonblankString(), run_id: { type: 'string', pattern: RUN_ID }, case_document_lineage_id: nonblankString(), semantic_root_digest: digestString(), accepted: constant(true) };
+  const plainKinds = ['source_unit', 'fact', 'behavior_contract', 'atomic_outcome', 'formal_test_point', 'case', 'case_oracle', 'execution_plan', 'rendered_output'];
+  const node = { oneOf: [
+    ...plainKinds.map((kind) => closedObject({ ...common, kind: constant(kind) })),
+    ...['claim', 'decision'].map((kind) => closedObject({ ...common, kind: constant(kind), evidence_level: { enum: ['E1', 'E2', 'E3'] } })),
+    closedObject({ ...common, kind: constant('case_document'), immutable_digest: digestString() }),
+    closedObject({ ...common, kind: constant('execution_result'), external_downstream: constant(true) })
+  ] };
+  const edge = { oneOf: [closedObject({ from: nonblankString(), to: nonblankString() }), closedObject({ from: nonblankString(), to: nonblankString(), immutable_digest_ref: digestString() })] };
+  return closedObject({ nodes: arrayOf(node), edges: arrayOf(edge), graph_digest: digestString() });
 }
 
 function testObligationsSchema() {
+  const acceptanceRole = { enum: ['primary_acceptance', 'dependency_contract', 'context_only'] };
+  const outcome = closedObject({
+    outcome_id: { type: 'string', pattern: '^OUT-[0-9a-f]{64}$' }, fact_id: nonblankString(),
+    condition: closedObject({ condition_slot_digest: digestString(), action_slot_digest: digestString(), branch_slot_digest: digestString() }),
+    expected: nonblankString(), acceptance_role: acceptanceRole, claim_ids: stringArray(1)
+  });
+  const formalTestPoint = closedObject({ formal_test_point_id: { type: 'string', pattern: '^TP-[0-9a-f]{64}$' }, outcome_id: nonblankString(), semantic_gap_refs: stringArray() });
+  const supportingObservation = closedObject({
+    supporting_observation_id: { type: 'string', pattern: '^OBS-[0-9a-f]{64}$' }, outcome_id: nonblankString(),
+    surface: { enum: ['ui', 'request', 'response', 'persistence', 'event', 'callback', 'compensation', 'side_effect', 'external_observation'] },
+    assertion: nonblankString(), claim_ids: stringArray(1)
+  });
   return closedObject({
-    kind: constant('test_obligations'), schema_version: constant(V5_SCHEMA_VERSION), semantic_root_digest: digestString(),
-    formal_test_point_ids: stringArray(), behavior_artifact_digest: digestString(), obligations_digest: digestString()
+    schema_version: constant('4.0.0'), source_revision: nonnegativeInteger(), outcomes: arrayOf(outcome),
+    formal_test_points: arrayOf(formalTestPoint), supporting_observations: arrayOf(supportingObservation),
+    risk_review_ledger: { type: 'array', maxItems: 0, items: false },
+    not_applicable_records: { type: 'array', maxItems: 0, items: false },
+    exploratory: { type: 'array', maxItems: 0, items: false }
   });
 }
 
@@ -811,12 +830,11 @@ function contextSchema(contracts) {
   const semantics = projectionRecordSchema(semanticPayloadSchema());
   const termRegistry = projectionRecordSchema(termRegistrySchema());
   const behavior = projectionRecordSchema(behaviorArtifactSchema());
-  const provenance = projectionRecordSchema(provenanceGraphSchema());
   const testObligations = projectionRecordSchema(testObligationsSchema());
   return { oneOf: [
     closedObject({ source, compiler_rules: compilerRules }),
-    closedObject({ source, semantics, term_registry: termRegistry, compiler_rules: compilerRules }),
-    closedObject({ source, semantics, term_registry: termRegistry, compiler_rules: compilerRules, behavior, provenance, test_obligations: testObligations })
+    closedObject({ source, semantics, term_registry: termRegistry, test_obligations: testObligations, compiler_rules: compilerRules }),
+    closedObject({ source, semantics, term_registry: termRegistry, behavior, test_obligations: testObligations, compiler_rules: compilerRules })
   ] };
 }
 

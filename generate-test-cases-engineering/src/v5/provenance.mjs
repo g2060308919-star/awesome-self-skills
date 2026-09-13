@@ -9,7 +9,7 @@ const downstreamKinds = new Set(['behavior_contract', 'atomic_outcome', 'formal_
 /**
  * Build the accepted Behavior provenance projection from Compiler-owned stable
  * Claim and contract identities. Agent artifacts never provide this graph.
- * @param {{runId:string,caseDocumentLineageId:string,semanticRootDigest:string,claims:Array<Record<string,any>>,behaviorContracts:Array<Record<string,any>>}} input
+ * @param {{runId:string,caseDocumentLineageId:string,semanticRootDigest:string,claims:Array<Record<string,any>>,facts:Array<Record<string,any>>,atomicOutcomes:Array<Record<string,any>>,formalTestPoints:Array<Record<string,any>>,behaviorContracts:Array<Record<string,any>>}} input
  */
 export function compileBehaviorProvenanceGraph(input) {
   const common = {
@@ -32,13 +32,95 @@ export function compileBehaviorProvenanceGraph(input) {
       edges.push({ from: sourceUnitId, to: claim.claim_id });
     }
   }
+  const facts = new Map();
+  for (const fact of input.facts) {
+    if (typeof fact.fact_id !== 'string' || !Array.isArray(fact.claim_ids) || fact.claim_ids.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Compiler provenance Fact projection is incomplete.');
+    addNode({ node_id: fact.fact_id, kind: 'fact', ...common });
+    facts.set(fact.fact_id, fact);
+    for (const claimId of [...new Set(fact.claim_ids)].sort()) {
+      if (!claims.has(claimId)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Fact provenance must resolve accepted Compiler-owned Claims.');
+      edges.push({ from: claimId, to: fact.fact_id });
+    }
+  }
+  const behaviorContracts = new Map();
   for (const contract of input.behaviorContracts) {
     if (typeof contract.contract_id !== 'string' || !Array.isArray(contract.basis) || contract.basis.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Compiler provenance Behavior contract projection is incomplete.');
     addNode({ node_id: contract.contract_id, kind: 'behavior_contract', ...common });
+    behaviorContracts.set(contract.contract_id, contract);
     for (const basis of contract.basis) {
       if (basis.kind !== 'claim' || !claims.has(basis.claim_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Behavior provenance must resolve accepted Compiler-owned Claim basis.');
       edges.push({ from: basis.claim_id, to: contract.contract_id });
     }
+  }
+  const outcomes = new Map();
+  for (const outcome of input.atomicOutcomes) {
+    if (typeof outcome.outcome_id !== 'string' || typeof outcome.fact_id !== 'string' || !facts.has(outcome.fact_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'AtomicOutcome provenance must resolve one Compiler-owned Fact.');
+    addNode({ node_id: outcome.outcome_id, kind: 'atomic_outcome', ...common });
+    outcomes.set(outcome.outcome_id, outcome);
+    edges.push({ from: outcome.fact_id, to: outcome.outcome_id });
+  }
+  const pointById = new Map();
+  const outcomeByPointId = new Map();
+  for (const point of input.formalTestPoints) {
+    if (typeof point.formal_test_point_id !== 'string' || typeof point.outcome_id !== 'string' || !outcomes.has(point.outcome_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'FormalTestPoint provenance must resolve one Compiler-owned AtomicOutcome.');
+    addNode({ node_id: point.formal_test_point_id, kind: 'formal_test_point', ...common });
+    pointById.set(point.formal_test_point_id, point);
+    outcomeByPointId.set(point.formal_test_point_id, point.outcome_id);
+    edges.push({ from: point.outcome_id, to: point.formal_test_point_id });
+  }
+  for (const contract of behaviorContracts.values()) {
+    for (const pointId of [...new Set(contract.formal_test_point_ids ?? [])].sort()) {
+      const outcomeId = outcomeByPointId.get(pointId);
+      if (!pointById.has(pointId) || !outcomeId) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Behavior provenance references an unknown formal Test Point.');
+      edges.push({ from: contract.contract_id, to: outcomeId });
+    }
+  }
+  const graphBase = {
+    nodes: [...nodes.values()].sort((left, right) => left.node_id.localeCompare(right.node_id)),
+    edges: [...new Map(edges.map((edge) => [`${edge.from}\0${edge.to}`, edge])).values()].sort((left, right) => `${left.from}\0${left.to}`.localeCompare(`${right.from}\0${right.to}`))
+  };
+  validateV5ProvenanceGraph(graphBase);
+  return { ...graphBase, graph_digest: canonicalObjectDigest(graphBase) };
+}
+
+/**
+ * Extend a verified semantic provenance graph with accepted Cases, Case
+ * Oracles, the immutable Case Document, and deterministic rendered outputs.
+ * @param {{graph:Record<string,any>,runId:string,caseDocumentLineageId:string,semanticRootDigest:string,cases:Array<Record<string,any>>,caseDocumentDigest:string,renderedOutputDigests:string[]}} input
+ */
+export function extendCaseProvenanceGraph(input) {
+  validateV5ProvenanceGraph(input.graph);
+  const nodes = new Map(input.graph.nodes.map((node) => [node.node_id, structuredClone(node)]));
+  const edges = input.graph.edges.map((edge) => structuredClone(edge));
+  const common = { run_id: input.runId, case_document_lineage_id: input.caseDocumentLineageId, semantic_root_digest: input.semanticRootDigest, accepted: true };
+  for (const node of nodes.values()) {
+    if (node.run_id !== input.runId || node.case_document_lineage_id !== input.caseDocumentLineageId || node.semantic_root_digest !== input.semanticRootDigest || node.accepted !== true) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance cannot extend a different run, lineage, or semantic root.');
+  }
+  const addNode = (node) => {
+    if (!node.node_id || nodes.has(node.node_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance identities must be nonblank and unique.');
+    nodes.set(node.node_id, node);
+  };
+  for (const current of input.cases) {
+    if (typeof current.case_id !== 'string' || !nodes.has(current.primary_test_point_id) || nodes.get(current.primary_test_point_id).kind !== 'formal_test_point' || !Array.isArray(current.oracles) || current.oracles.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance must resolve one formal Test Point and at least one Case Oracle.');
+    addNode({ node_id: current.case_id, kind: 'case', ...common });
+    edges.push({ from: current.primary_test_point_id, to: current.case_id });
+    for (const oracle of current.oracles) {
+      if (typeof oracle.oracle_id !== 'string' || !nodes.has(oracle.oracle_semantic_contract_id) || nodes.get(oracle.oracle_semantic_contract_id).kind !== 'behavior_contract' || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Oracle provenance must resolve its accepted semantic contract and Claims.');
+      addNode({ node_id: oracle.oracle_id, kind: 'case_oracle', ...common });
+      edges.push({ from: oracle.oracle_semantic_contract_id, to: current.case_id }, { from: current.case_id, to: oracle.oracle_id });
+      for (const claimId of [...new Set(oracle.claim_ids)].sort()) {
+        if (!nodes.has(claimId) || nodes.get(claimId).kind !== 'claim') throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Oracle evidence must resolve an accepted Claim.');
+        edges.push({ from: claimId, to: oracle.oracle_id });
+      }
+    }
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(input.caseDocumentDigest)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Document provenance digest is invalid.');
+  addNode({ node_id: input.caseDocumentDigest, kind: 'case_document', ...common, immutable_digest: input.caseDocumentDigest });
+  for (const current of input.cases) edges.push({ from: current.case_id, to: input.caseDocumentDigest });
+  for (const digest of [...new Set(input.renderedOutputDigests)].sort()) {
+    if (!/^sha256:[0-9a-f]{64}$/u.test(digest)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Rendered output provenance digest is invalid.');
+    addNode({ node_id: digest, kind: 'rendered_output', ...common });
+    edges.push({ from: input.caseDocumentDigest, to: digest, immutable_digest_ref: input.caseDocumentDigest });
   }
   const graphBase = {
     nodes: [...nodes.values()].sort((left, right) => left.node_id.localeCompare(right.node_id)),

@@ -129,17 +129,20 @@ export function validateSemanticReviews(seed, artifact, context) {
     }
     if (!sameSet(covered, group.mention_candidate_ids)) throw new V5ProtocolError('ENTITY_RESOLUTION_UNRESOLVED', 'Entity clusters must exactly partition the conflict group.');
   }
-  const termEntries = [...entityAggregates.values()].map((aggregate) => {
+  const termEntryRows = [...entityAggregates.entries()].map(([clientKey, aggregate]) => {
     const mentionIds = [...new Set(/** @type {Array<Record<string, any>>} */ (aggregate.mentions).map((entry) => entry.mention_candidate_id))].sort();
     const basis = [...new Map(/** @type {Array<Record<string, any>>} */ (aggregate.basis).map((item) => [canonicalV5Stringify(item), item])).values()].sort((left, right) => canonicalV5Stringify(left).localeCompare(canonicalV5Stringify(right)));
-    return {
+    return { clientKey, entry: {
       entity_id: stableV5Id('entity', { accepted_source_state_digest: seed.accepted_source_state_digest, canonical_name: aggregate.canonical_name, mention_candidate_ids: mentionIds, basis }),
       canonical_name: aggregate.canonical_name,
       alias_names: [...new Set(/** @type {Array<Record<string, any>>} */ (aggregate.mentions).filter((entry) => ['business_alias', 'business_alias_and_exact_ui_label'].includes(entry.name_role)).map((entry) => mentionsById.get(entry.mention_candidate_id)?.observed_name).filter(Boolean))].sort(),
       exact_ui_labels: [...new Set(/** @type {Array<Record<string, any>>} */ (aggregate.mentions).filter((entry) => entry.name_role.includes('exact_ui_label')).map((entry) => mentionsById.get(entry.mention_candidate_id)?.observed_name).filter(Boolean))].sort(),
       mention_candidate_ids: mentionIds, basis
-    };
-  }).sort((left, right) => left.entity_id.localeCompare(right.entity_id));
+    } };
+  }).sort((left, right) => left.entry.entity_id.localeCompare(right.entry.entity_id));
+  const termEntries = termEntryRows.map((row) => row.entry);
+  clientKeyBindings.push(...termEntryRows.map((row) => ({ client_key: row.clientKey, stable_id: row.entry.entity_id })));
+  clientKeyBindings.sort((left, right) => left.client_key.localeCompare(right.client_key));
   return {
     ...structuredClone(artifact), compiled_claims: compiledClaims, client_key_bindings: clientKeyBindings,
     term_registry: sealV5Record({ semantic_root_digest: seed.seed_digest, entries: termEntries }, 'registry_digest')

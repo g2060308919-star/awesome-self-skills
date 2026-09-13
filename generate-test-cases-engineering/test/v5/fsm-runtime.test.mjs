@@ -8,7 +8,7 @@ import test from 'node:test';
 import { advanceV5Run, createV5RunDirectory, inspectV5Run } from '../../src/entry.mjs';
 import { minimalOriginFromRaw } from '../../src/v5/clarification-parser.mjs';
 import { generateV5Contracts } from '../../src/v5/registry-generator.mjs';
-import { readVerifiedRun } from '../../src/v5/run-store.mjs';
+import { readSealedV5Record, readVerifiedRun } from '../../src/v5/run-store.mjs';
 import { digestFilename } from '../../src/v5/storage-paths.mjs';
 import {
   actionTemplateForV5Action,
@@ -114,9 +114,13 @@ test('public runtime completes source, evidence, behavior, Case, and canonical d
   assert.equal(behavior.obligation, 'provide_behavior_views');
   const evidenceBindings = new Map(behavior.commit_receipt.client_key_bindings.map((binding) => [binding.client_key, binding.stable_id]));
   const behaviorSeed = behavior.work_packet.behavior_contract_worklist;
+  const obligations = behavior.work_packet.context.test_obligations.payload;
+  assert.equal(obligations.outcomes.length, 2);
+  assert.equal(obligations.formal_test_points.length, 2);
+  const pointByClaimId = new Map(obligations.outcomes.map((outcome) => [outcome.claim_ids[0], obligations.formal_test_points.find((point) => point.outcome_id === outcome.outcome_id).formal_test_point_id]));
   const oracleContracts = behaviorSeed.required_contracts.map((row, index) => ({
     oracle_contract_client_key: `oracle-contract-${index}`,
-    formal_test_point_id: `tp-${index}`,
+    formal_test_point_id: pointByClaimId.get(row.basis[0].claim_id),
     observation_ref: { kind: 'response', logical_surface_ref: 'orders-api', subject_ref: row.subject_ref, field_path: '/status' },
     assertion: { kind: 'exact_text', expected_text: 'saved' },
     evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' },
@@ -150,11 +154,17 @@ test('public runtime completes source, evidence, behavior, Case, and canonical d
   assert.equal(rejectedBehavior.current_revision, behavior.current_revision);
   const caseWork = await advanceV5Run(created.run_directory, { idempotency_key: 'behavior-delivery', action: { kind: 'submit_artifact', action_token: behaviorSelector.action_token, artifact_kind: 'behavior_views', artifact: behaviorArtifact } });
   assert.equal(caseWork.obligation, 'provide_case_drafts');
+  const restartedCaseWork = await inspectV5Run(created.run_directory);
+  assert.deepEqual(restartedCaseWork.work_packet.context, caseWork.work_packet.context);
+  for (const localKey of [...claims.map((claim) => claim.claim_client_key), ...oracleContracts.map((contract) => contract.oracle_contract_client_key), ...riskReviews.map((review) => review.review_client_key)]) {
+    assert.equal(JSON.stringify(restartedCaseWork.work_packet.context).includes(`\"${localKey}\"`), false, `accepted context leaked batch-local key ${localKey}`);
+  }
   const behaviorBindings = new Map(caseWork.commit_receipt.client_key_bindings.map((binding) => [binding.client_key, binding.stable_id]));
   assert.deepEqual(oracleContracts.map((contract) => behaviorBindings.get(contract.oracle_contract_client_key)?.slice(0, 5)), ['osc5_', 'osc5_']);
   assert.equal([...behaviorBindings.keys()].filter((key) => key.startsWith('risk-')).length, riskReviews.length);
-  const root = behaviorSeed.semantic_root_digest;
-  const claimId = evidenceBindings.get(claims[0].claim_client_key);
+  const stableContext = restartedCaseWork.work_packet.context;
+  const root = stableContext.compiler_rules.semantic_rule_index_projection.index.semantic_root_digest;
+  const claimId = stableContext.semantics.payload.claims[0].claim_id;
   const stepKey = 'step-save';
   const caseSelector = caseWork.available_actions.find((selector) => selector.capability.kind === 'submit_artifact');
   const rejectedCompilerOwned = await advanceV5Run(created.run_directory, { idempotency_key: 'cases-compiler-owned', action: { kind: 'submit_artifact', action_token: caseSelector.action_token, artifact_kind: 'case_drafts', artifact: {
@@ -162,11 +172,13 @@ test('public runtime completes source, evidence, behavior, Case, and canonical d
   } } });
   assert.equal(rejectedCompilerOwned.diagnostics[0].code, 'COMPILER_OWNED_FIELD_SUBMITTED');
   assert.equal(rejectedCompilerOwned.current_revision, caseWork.current_revision);
-  const caseDrafts = oracleContracts.map((contract, index) => {
-    const boundClaimId = evidenceBindings.get(claims[index].claim_client_key);
+  const caseDrafts = stableContext.test_obligations.payload.outcomes.map((outcome, index) => {
+    const boundClaimId = outcome.claim_ids[0];
+    const point = stableContext.test_obligations.payload.formal_test_points.find((candidate) => candidate.outcome_id === outcome.outcome_id);
+    const acceptedOracle = stableContext.behavior.payload.oracle_semantic_contracts.find((candidate) => candidate.formal_test_point_id === point.formal_test_point_id);
     const boundStepKey = `${stepKey}-${index}`;
     const semanticActionRef = { action_id: 'save', semantic_root_digest: root };
-    return { case_client_key: `case-save-${index}`, title: `保存订单 ${index + 1}`, module_id: 'orders', priority: 'P1', primary_test_point_id: contract.formal_test_point_id, business_preconditions: ['已登录'], data_conditions: [], steps: [{ step_client_key: boundStepKey, action: '提交订单', semantic_action_ref: semanticActionRef, claim_ids: [boundClaimId] }], case_step_semantic_bindings: [{ case_client_key: `case-save-${index}`, step_client_key: boundStepKey, action_ref: semanticActionRef }], domain_selections: [], oracles: [{ oracle_client_key: `oracle-save-${index}`, oracle_semantic_contract_id: behaviorBindings.get(contract.oracle_contract_client_key), observe_after_step_client_key: boundStepKey, observation_ref: contract.observation_ref, assertion: contract.assertion, evaluation_scope: contract.evaluation_scope, observation_window: contract.observation_window, claim_ids: [boundClaimId] }], canonical_names: ['订单'], claim_ids: [boundClaimId], semantic_gap_ids: [] };
+    return { case_client_key: `case-save-${index}`, title: `保存订单 ${index + 1}`, module_id: 'orders', priority: 'P1', ordering: { business_flow_ref: 'orders-flow', page_action_ref: null }, acceptance_role: outcome.acceptance_role, fact_ids: [outcome.fact_id], primary_test_point_id: point.formal_test_point_id, supporting_observation_ids: stableContext.test_obligations.payload.supporting_observations.filter((observation) => observation.outcome_id === outcome.outcome_id).map((observation) => observation.supporting_observation_id), business_preconditions: [{ precondition_id: 'authenticated', description: '已登录' }], data_conditions: [], steps: [{ step_client_key: boundStepKey, action: '提交订单' }], case_step_semantic_bindings: [{ case_client_key: `case-save-${index}`, step_client_key: boundStepKey, action_ref: semanticActionRef }], domain_selections: [], oracles: [{ oracle_client_key: `oracle-save-${index}`, oracle_semantic_contract_id: acceptedOracle.oracle_contract_client_key, observe_after_step_client_key: boundStepKey, observation_ref: acceptedOracle.observation_ref, assertion: acceptedOracle.assertion, evaluation_scope: acceptedOracle.evaluation_scope, observation_window: acceptedOracle.observation_window, claim_ids: [boundClaimId] }] };
   });
   const finished = await advanceV5Run(created.run_directory, { idempotency_key: 'cases-delivery', action: { kind: 'submit_artifact', action_token: caseSelector.action_token, artifact_kind: 'case_drafts', artifact: {
     case_drafts: caseDrafts
@@ -182,6 +194,8 @@ test('public runtime completes source, evidence, behavior, Case, and canonical d
   assert.equal((await readdir(path.join(created.run_directory, 'objects', 'rendered-outputs'))).length, 3);
   const terminal = await readVerifiedRun(created.run_directory);
   assert.equal(terminal.checkpoint.rendered_output_digests.length, 3);
+  const completeProvenance = await readSealedV5Record(terminal.layout.compilerState, terminal.checkpoint.provenance_graph_digest, 'graph_digest');
+  assert.deepEqual([...new Set(completeProvenance.nodes.map((node) => node.kind))].sort(), ['atomic_outcome', 'behavior_contract', 'case', 'case_document', 'case_oracle', 'claim', 'fact', 'formal_test_point', 'rendered_output', 'source_unit']);
   const renderedDigest = terminal.checkpoint.rendered_output_digests[0];
   await writeFile(path.join(terminal.layout.renderedOutputs, digestFilename(renderedDigest)), '{"tampered":true}');
   const inspected = await inspectV5Run(created.run_directory);
