@@ -1,4 +1,3 @@
-// @ts-nocheck
 import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
@@ -18,7 +17,7 @@ import {
 } from '../../src/v5/execution-wrapper.mjs';
 import { createResumeInheritanceProjection } from '../../src/v5/resume.mjs';
 
-const digest = (letter) => `sha256:${letter.repeat(64)}`;
+const digest = (/** @type {string} */ letter) => `sha256:${letter.repeat(64)}`;
 const caseRef = { run_id: 'RUN-case', revision: 4, manifest_digest: digest('a'), bundle_digest: digest('b'), case_document_lineage_id: 'LINEAGE-case', schema_version: '5.0.0' };
 const planPayload = { schema_version: '5.0.0', compiler_version: '0.6.0', delivery_intent: 'execution_plan', case_document_ref: caseRef, operation_kinds: ['confirm_execution_plan', 'pause_execution', 'provide_capability_proof', 'set_execution_disposition'], items: [{ case_id: 'CASE-one', title: 'One', semantic_status: 'Grounded', execution_disposition: 'pending', available_actions: ['provide_capability_proof', 'set_execution_disposition'] }] };
 const plan = { ...planPayload, plan_digest: canonicalObjectDigest(planPayload) };
@@ -83,10 +82,10 @@ test('public execution run wraps a verified finished V5 Case and reaches confirm
 
   const created = await createV5RunDirectory(catalog, { idempotency_key: 'create-execution', delivery_intent: 'execution_plan', case_document_ref: storedRef });
   assert.equal(created.obligation, 'resolve_execution_closure');
-  const closure = created.available_actions.find((selector) => selector.capability.kind === 'advance_execution_plan');
+  const closure = created.available_actions.find((/** @type {Record<string,any>} */ selector) => selector.capability.kind === 'advance_execution_plan');
   const ready = await advanceV5Run(created.run_directory, { idempotency_key: 'set-disposition', action: { kind: 'advance_execution_plan', action_token: closure.action_token, operation: { kind: 'set_execution_disposition', case_id: 'CASE-one', disposition: 'execute' } } });
   assert.equal(ready.reply_status, 'ready');
-  const final = ready.available_actions.find((selector) => selector.capability.kind === 'advance_execution_plan');
+  const final = ready.available_actions.find((/** @type {Record<string,any>} */ selector) => selector.capability.kind === 'advance_execution_plan');
   const finished = await advanceV5Run(created.run_directory, { idempotency_key: 'confirm', action: { kind: 'advance_execution_plan', action_token: final.action_token, operation: { kind: 'confirm_execution_plan' } } });
   assert.equal(finished.reply_status, 'finished');
   assert.equal(finished.work_packet.terminal_kind, 'execution_plan_finished');

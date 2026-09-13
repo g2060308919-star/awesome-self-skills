@@ -12,7 +12,9 @@ const DIGEST = '^sha256:[0-9a-f]{64}$';
 const CLIENT_KEY = '^[A-Za-z][A-Za-z0-9._:-]{0,127}$';
 const RUN_ID = '^RUN-[A-Za-z0-9][A-Za-z0-9-]{0,127}$';
 
-/** @param {Record<string, unknown>} properties @param {string[]} [required] */
+/** @typedef {Record<string, any>} JsonSchema */
+
+/** @param {Record<string, any>} properties @param {string[]} [required] @returns {JsonSchema} */
 function closedObject(properties, required = Object.keys(properties)) {
   return { type: 'object', required, properties, additionalProperties: false };
 }
@@ -35,6 +37,7 @@ function stringArray(minimum = 0) { return arrayOf(nonblankString(), minimum); }
 function digestArray(minimum = 0) { return arrayOf(digestString(), minimum); }
 
 /** @param {unknown} value */
+/** @param {any} value @returns {JsonSchema} */
 function exactValueSchema(value) {
   if (Array.isArray(value)) return {
     type: 'array', minItems: value.length, maxItems: value.length,
@@ -77,6 +80,7 @@ function reviewBasisRefSchema() {
   ] };
 }
 
+/** @param {string} [contractKind] */
 function typedContractRefSchema(contractKind) {
   return closedObject({ contract_id: nonblankString(), contract_kind: contractKind ? constant(contractKind) : nonblankString(), semantic_root_digest: digestString() });
 }
@@ -181,13 +185,13 @@ function answerContractSchema() {
 }
 
 function questionImpactSchema(includePartId = false) {
-  const compact = { affected_case_keys: stringArray(), impact_kinds: stringArray() };
+  const compact = /** @type {Record<string,any>} */ ({ affected_case_keys: stringArray(), impact_kinds: stringArray() });
   if (includePartId) compact.question_part_id = nonblankString();
-  const detailed = {
+  const detailed = /** @type {Record<string,any>} */ ({
     affected_module_ids: stringArray(), affected_business_refs: stringArray(), affected_claim_ids: stringArray(),
     current_test_point_ids: stringArray(), blocked_count: nonnegativeInteger(), conditional_count: nonnegativeInteger(),
     unresolved_outcome: nonblankString()
-  };
+  });
   if (includePartId) detailed.question_part_id = nonblankString();
   return { oneOf: [closedObject(compact), closedObject(detailed)] };
 }
@@ -353,6 +357,7 @@ function observationRefSchema() {
 
 function actionRefSchema() { return closedObject({ action_id: nonblankString(), semantic_root_digest: digestString() }); }
 
+/** @param {string} contractKind */
 function acceptedOrBatchContractRefSchema(contractKind) {
   return { oneOf: [
     closedObject({ kind: constant('accepted'), ref: typedContractRefSchema(contractKind) }),
@@ -575,6 +580,7 @@ function behaviorArtifactSchema() {
   });
 }
 
+/** @param {string} artifactKind */
 function artifactRootSchema(artifactKind) {
   if (artifactKind === 'evidence_claims') return evidenceArtifactSchema();
   if (artifactKind === 'behavior_views') return behaviorArtifactSchema();
@@ -684,12 +690,14 @@ function runIdentitySchema() {
   };
 }
 
+/** @param {string} errorCode */
 function diagnosticSchema(errorCode) {
   return closedObject({
     code: constant(errorCode), json_pointer: nonblankString(), affected_refs: arrayOf(nonblankString()), message: nonblankString()
   }, ['code', 'affected_refs', 'message']);
 }
 
+/** @param {Record<string,any>} template */
 function capabilitySchema(template) {
   if (template.kind === 'cancel_run') return closedObject({ kind: constant('cancel_run') });
   if (template.kind === 'submit_artifact') return closedObject({ kind: constant('submit_artifact'), artifact_kind: constant(template.artifact_kind) });
@@ -700,6 +708,7 @@ function capabilitySchema(template) {
   throw new Error(`Unknown reply action template: ${template.kind}`);
 }
 
+/** @param {Array<Record<string,any>>} templates */
 function selectorsSchema(templates) {
   if (templates.length === 0) return { type: 'array', maxItems: 0, items: false };
   return {
@@ -729,6 +738,7 @@ function semanticRuleIndexSchema() {
   });
 }
 
+/** @param {Record<string,any>} contracts */
 function compilerRulesSchema(contracts) {
   return closedObject({
     rules_bundle_digest: constant(contracts.replyContracts.rules_bundle_digest),
@@ -785,6 +795,7 @@ function termRegistrySchema() {
   return closedObject({ semantic_root_digest: digestString(), entries: arrayOf(entry), registry_digest: digestString() });
 }
 
+/** @param {JsonSchema} payload */
 function projectionRecordSchema(payload) {
   return closedObject({ artifact_digest: digestString(), accepted_revision: nonnegativeInteger(), payload });
 }
@@ -824,6 +835,7 @@ function testObligationsSchema() {
   });
 }
 
+/** @param {Record<string,any>} contracts */
 function contextSchema(contracts) {
   const source = acceptedSourceContextSchema();
   const compilerRules = compilerRulesSchema(contracts);
@@ -839,7 +851,7 @@ function contextSchema(contracts) {
 }
 
 function behaviorSeedSchema() {
-  const gapCatalog = (left, right) => closedObject({ [left]: { type: 'array', maxItems: 0, items: false }, [right]: { type: 'array', maxItems: 0, items: false } });
+  const gapCatalog = (/** @type {string} */ left, /** @type {string} */ right) => closedObject({ [left]: { type: 'array', maxItems: 0, items: false }, [right]: { type: 'array', maxItems: 0, items: false } });
   const base = { required_contract_key: nonblankString(), contract_kind: nonblankString(), subject_ref: nonblankString(), intent_ref: nonblankString(), basis: arrayOf(evidenceRefSchema(), 1) };
   const requirement = { oneOf: [
     closedObject(base),
@@ -850,6 +862,7 @@ function behaviorSeedSchema() {
   return closedObject({ semantic_root_digest: digestString(), semantic_rule_index: semanticRuleIndexSchema(), risk_review_module_ids: stringArray(), required_contracts: arrayOf(requirement), seed_digest: digestString() });
 }
 
+/** @param {string} coordinate */
 function coordinateRefSchema(coordinate) {
   return closedObject({ coordinate: coordinate ? constant(coordinate) : nonblankString(), coordinate_evidence_digest: digestString() });
 }
@@ -919,9 +932,10 @@ function executionProjectionSchema() {
   });
 }
 
+/** @param {Record<string,any>} exactWorkPacket @param {Record<string,any>} contracts */
 function workPacketSchema(exactWorkPacket, contracts) {
   if (exactWorkPacket.kind === 'terminal') {
-    const properties = { kind: constant('terminal_work'), terminal_kind: constant(exactWorkPacket.terminal_kind) };
+    const properties = /** @type {Record<string,any>} */ ({ kind: constant('terminal_work'), terminal_kind: constant(exactWorkPacket.terminal_kind) });
     const terminalKind = exactWorkPacket.terminal_kind;
     if (terminalKind === 'case_document_finished') properties.case_document_ref = caseDocumentRefSchema();
     if (terminalKind === 'execution_plan_finished') { properties.case_document_ref = caseDocumentRefSchema(); properties.execution_projection = executionProjectionSchema(); }
@@ -948,6 +962,7 @@ function workPacketSchema(exactWorkPacket, contracts) {
 
 function bindingSchema() { return closedObject({ client_key: clientKeyString(), stable_id: nonblankString() }); }
 
+/** @param {Record<string,any>} exactCommit */
 function commitReceiptSchema(exactCommit) {
   if (exactCommit.kind === 'none') return { type: 'null' };
   const common = { committed_action_digest: digestString(), client_key_bindings: arrayOf(bindingSchema()) };
@@ -963,16 +978,19 @@ function commitReceiptSchema(exactCommit) {
   throw new Error(`Unknown reply commit kind: ${exactCommit.kind}`);
 }
 
+/** @param {Record<string,any>} exactState */
 function lastVerifiedStateSchema(exactState) {
   if (exactState.kind === 'none') return closedObject({ kind: constant('none') });
   return closedObject({ kind: constant('checkpoint'), fsm_cell_id: constant(exactState.fsm_cell_id), stage: nonblankString(), obligation: nonblankString(), current_revision: { type: 'integer', minimum: 0 }, checkpoint_digest: digestString() });
 }
 
+/** @param {Record<string,any>} exactWorkPacket */
 function workPacketDefinitionKey(exactWorkPacket) {
   const suffix = exactWorkPacket.kind === 'terminal' ? exactWorkPacket.terminal_kind : exactWorkPacket.packet_kind;
   return `work_packet_${suffix.replaceAll(/[^A-Za-z0-9_]/gu, '_')}`;
 }
 
+/** @param {Record<string,any>} row */
 function replySchemaBranch(row) {
   const diagnostics = row.exact_diagnostic.kind === 'none'
     ? { type: 'array', maxItems: 0, items: false }
@@ -1001,6 +1019,7 @@ function replySchemaBranch(row) {
 
 /** @param {Record<string, any>} contracts */
 function replySchema(contracts) {
+  /** @type {Record<string,any>} */
   const workPacketDefinitions = {};
   for (const row of contracts.replyContracts.rows) {
     if (row.exact_work_packet.kind === 'absent') continue;
@@ -1025,10 +1044,10 @@ export function generateV5InterfaceSchemas(contracts) {
 /** @param {Record<string, any>} replyContracts @param {Record<string, any>} schema */
 export function validateV5ReplySchemaRegistryAlignment(replyContracts, schema) {
   if (!Array.isArray(schema.oneOf)) return ['reply schema oneOf is missing'];
-  const schemaIds = schema.oneOf.map((branch) => branch?.properties?.reply_contract_id?.const);
+  const schemaIds = schema.oneOf.map((/** @type {Record<string,any>} */ branch) => branch?.properties?.reply_contract_id?.const);
   if (schemaIds.some((value) => typeof value !== 'string')) return ['reply schema contains a branch without a contract ID'];
   if (new Set(schemaIds).size !== schemaIds.length) return ['reply schema contract IDs are not unique'];
-  const registryIds = replyContracts.rows.map((row) => row.reply_contract_id);
+  const registryIds = replyContracts.rows.map((/** @type {Record<string,any>} */ row) => row.reply_contract_id);
   if (canonicalStringify([...schemaIds].sort()) !== canonicalStringify([...registryIds].sort())) return ['reply schema and registry contract IDs differ'];
   return [];
 }

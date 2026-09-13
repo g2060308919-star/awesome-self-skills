@@ -140,8 +140,8 @@ export function validatePermissionMatrixReview(matrix, review, semanticRootDiges
     const disposition = row.disposition;
     if (disposition.kind === 'semantic_gap') { if (!disposition.gap_ref) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission gap reference is missing.'); continue; }
     if (disposition.kind === 'not_applicable') {
-      const levels = (disposition.basis ?? []).map((ref) => evidenceContext?.evidenceLevels.get(ref.claim_id ?? ref.decision_id));
-      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0 || (evidenceContext && levels.some((level) => !['E2', 'E3'].includes(level)))) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission N/A needs accepted E2/E3 basis.');
+      const levels = (disposition.basis ?? []).map((/** @type {Record<string,any>} */ ref) => evidenceContext?.evidenceLevels.get(ref.claim_id ?? ref.decision_id));
+      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0 || (evidenceContext && levels.some((/** @type {string|undefined} */ level) => !level || !['E2', 'E3'].includes(level)))) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission N/A needs accepted E2/E3 basis.');
       continue;
     }
     if (disposition.kind !== 'formal' || !Array.isArray(disposition.basis) || disposition.basis.length === 0 || disposition.outcome.permission_dimension !== cell.permission_dimension) throw new V5ProtocolError('PERMISSION_OUTCOME_UNRESOLVED', 'Permission formal outcome does not match its cell.');

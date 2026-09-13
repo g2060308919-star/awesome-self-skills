@@ -5,7 +5,7 @@ import { compileEvidenceSemantics } from '../../src/v5/evidence-compiler.mjs';
 import { canonicalObjectDigest } from '../../src/v5/storage-records.mjs';
 
 const root = `sha256:${'a'.repeat(64)}`;
-const signature = (suffix) => ({
+const signature = (/** @type {string} */ suffix) => ({
   subject_slot_digest: `sha256:${suffix.repeat(64)}`,
   condition_slot_digest: `sha256:${'2'.repeat(64)}`,
   action_slot_digest: `sha256:${'3'.repeat(64)}`,
@@ -26,10 +26,10 @@ test('Compiler derives the frozen Fact, AtomicOutcome, and FormalTestPoint chain
   for (const fact of compiled.facts) {
     assert.match(fact.fact_id, /^FACT-[0-9a-f]{64}$/u);
     assert.equal(claims.some((claim) => claim.claim_id === fact.claim_ids[0]), true);
-    const outcome = compiled.test_obligations.outcomes.find((candidate) => candidate.fact_id === fact.fact_id);
+    const outcome = /** @type {Record<string,any>} */ (compiled.test_obligations.outcomes.find((candidate) => candidate.fact_id === fact.fact_id));
     assert.match(outcome.outcome_id, /^OUT-[0-9a-f]{64}$/u);
     assert.equal(outcome.outcome_id, `OUT-${canonicalObjectDigest({ fact_id: outcome.fact_id, condition: outcome.condition, expected: outcome.expected, acceptance_role: outcome.acceptance_role }).slice(7)}`);
-    const point = compiled.test_obligations.formal_test_points.find((candidate) => candidate.outcome_id === outcome.outcome_id);
+    const point = /** @type {Record<string,any>} */ (compiled.test_obligations.formal_test_points.find((candidate) => candidate.outcome_id === outcome.outcome_id));
     assert.equal(point.formal_test_point_id, `TP-${canonicalObjectDigest({ outcome_id: outcome.outcome_id }).slice(7)}`);
   }
   assert.deepEqual(compiled.formal_test_point_dispositions.map((row) => row.kind), ['formal', 'formal']);

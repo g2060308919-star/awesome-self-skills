@@ -94,7 +94,7 @@ test('Compiler derives the complete accepted semantic and Case provenance chain 
     claims: [{ claim_id: 'claim_0123456789abcdef', outcome_candidate_ids: ['out5_source'], evidence_level: 'E2' }],
     facts: [], atomicOutcomes: [], formalTestPoints: [],
     behaviorContracts: [{ contract_id: 'osc5_contract', basis: [{ kind: 'claim', claim_id: 'claim-client-key' }], formal_test_point_ids: [] }]
-  }), (error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
+  }), (/** @type {any} */ error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
 });
 
 test('Compiler rejects orphan and cross-root Case provenance instead of publishing a partial graph', () => {
@@ -104,6 +104,6 @@ test('Compiler rejects orphan and cross-root Case provenance instead of publishi
     facts: [{ fact_id: 'fact', claim_ids: ['claim'] }], atomicOutcomes: [{ outcome_id: 'outcome', fact_id: 'fact' }],
     formalTestPoints: [{ formal_test_point_id: 'point', outcome_id: 'outcome' }], behaviorContracts: []
   });
-  assert.throws(() => extendCaseProvenanceGraph({ graph: base, runId: 'RUN-1', caseDocumentLineageId: 'LINEAGE-1', semanticRootDigest: ROOT, cases: [{ case_id: 'case', primary_test_point_id: 'missing', oracles: [] }], caseDocumentDigest: `sha256:${'b'.repeat(64)}`, renderedOutputDigests: [] }), (error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
-  assert.throws(() => extendCaseProvenanceGraph({ graph: base, runId: 'RUN-1', caseDocumentLineageId: 'LINEAGE-1', semanticRootDigest: `sha256:${'d'.repeat(64)}`, cases: [], caseDocumentDigest: `sha256:${'b'.repeat(64)}`, renderedOutputDigests: [] }), (error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
+  assert.throws(() => extendCaseProvenanceGraph({ graph: base, runId: 'RUN-1', caseDocumentLineageId: 'LINEAGE-1', semanticRootDigest: ROOT, cases: [{ case_id: 'case', primary_test_point_id: 'missing', oracles: [] }], caseDocumentDigest: `sha256:${'b'.repeat(64)}`, renderedOutputDigests: [] }), (/** @type {any} */ error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
+  assert.throws(() => extendCaseProvenanceGraph({ graph: base, runId: 'RUN-1', caseDocumentLineageId: 'LINEAGE-1', semanticRootDigest: `sha256:${'d'.repeat(64)}`, cases: [], caseDocumentDigest: `sha256:${'b'.repeat(64)}`, renderedOutputDigests: [] }), (/** @type {any} */ error) => error.code === 'PROVENANCE_EDGE_NOT_ALLOWED');
 });

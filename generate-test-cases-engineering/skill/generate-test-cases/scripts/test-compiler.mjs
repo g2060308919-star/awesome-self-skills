@@ -1434,17 +1434,23 @@ function answerContractSchema() {
   });
 }
 function questionImpactSchema(includePartId = false) {
-  const compact = { affected_case_keys: stringArray(), impact_kinds: stringArray() };
+  const compact = (
+    /** @type {Record<string,any>} */
+    { affected_case_keys: stringArray(), impact_kinds: stringArray() }
+  );
   if (includePartId) compact.question_part_id = nonblankString();
-  const detailed = {
-    affected_module_ids: stringArray(),
-    affected_business_refs: stringArray(),
-    affected_claim_ids: stringArray(),
-    current_test_point_ids: stringArray(),
-    blocked_count: nonnegativeInteger(),
-    conditional_count: nonnegativeInteger(),
-    unresolved_outcome: nonblankString()
-  };
+  const detailed = (
+    /** @type {Record<string,any>} */
+    {
+      affected_module_ids: stringArray(),
+      affected_business_refs: stringArray(),
+      affected_claim_ids: stringArray(),
+      current_test_point_ids: stringArray(),
+      blocked_count: nonnegativeInteger(),
+      conditional_count: nonnegativeInteger(),
+      unresolved_outcome: nonblankString()
+    }
+  );
   if (includePartId) detailed.question_part_id = nonblankString();
   return { oneOf: [closedObject(compact), closedObject(detailed)] };
 }
@@ -2284,7 +2290,10 @@ function executionProjectionSchema() {
 }
 function workPacketSchema(exactWorkPacket, contracts2) {
   if (exactWorkPacket.kind === "terminal") {
-    const properties = { kind: constant("terminal_work"), terminal_kind: constant(exactWorkPacket.terminal_kind) };
+    const properties = (
+      /** @type {Record<string,any>} */
+      { kind: constant("terminal_work"), terminal_kind: constant(exactWorkPacket.terminal_kind) }
+    );
     const terminalKind = exactWorkPacket.terminal_kind;
     if (terminalKind === "case_document_finished") properties.case_document_ref = caseDocumentRefSchema();
     if (terminalKind === "execution_plan_finished") {
@@ -2892,7 +2901,10 @@ function createPolicyRegistry(fsm) {
       enforcement: ["schema", "invariant", "fsm", "transaction"],
       applicability: [...new Set(responses.map((response) => response.context))].map((context) => context === "pre_run" ? { kind: "pre_run" } : { kind: context, stages: ["source_acquisition", "requirements_analysis", "case_design", "execution_closure", "final_confirmation", "delivery"] }),
       normative_refs: [`SPEC.ERROR.${errorCode}`],
-      test_ids: [executableErrorFixture[errorCode] ?? `F-${errorRequirement(errorCode)}.negative.rejection`],
+      test_ids: [
+        /** @type {Record<string,string>} */
+        executableErrorFixture[errorCode] ?? `F-${errorRequirement(errorCode)}.negative.rejection`
+      ],
       kind: "runtime_error",
       trigger_ref: `trigger.${errorCode.toLowerCase()}`,
       error_code: errorCode,
@@ -3675,7 +3687,9 @@ function validateEvidenceReference(ref, context, options = {}) {
   if (!idField || !exact(ref, ["kind", idField]) || !nonblank2(ref[idField])) return fail("Evidence reference must be an exact Claim or Decision reference.");
   const level = context.evidenceLevels.get(ref[idField]);
   const minimum = options.minimumLevel ?? "E1";
-  if (!level || EVIDENCE_LEVEL_RANK[level] < EVIDENCE_LEVEL_RANK[minimum]) return fail(`Evidence ${ref[idField]} is not accepted at ${minimum} or above.`);
+  if (!level || /** @type {Record<string,number>} */
+  EVIDENCE_LEVEL_RANK[level] < /** @type {Record<string,number>} */
+  EVIDENCE_LEVEL_RANK[minimum]) return fail(`Evidence ${ref[idField]} is not accepted at ${minimum} or above.`);
   return ref;
 }
 function validateBehaviorEvidenceClosure(value, context) {
@@ -4252,12 +4266,22 @@ function compileBehaviorContracts(input) {
     bind(contract.predicate_contract_client_key, predicateContractId);
     return { ...structuredClone(contract), predicate_contract_id: predicateContractId };
   });
-  const domains = artifact.domain_contracts.map((contract) => {
-    const compiled = compileDomain(semanticRootDigest, contract, artifact.predicate_contracts, acceptedContractRefs);
-    bind(compiled.domain_client_key, compiled.domain_contract_id);
-    for (const partition of compiled.partitions) bind(partition.partition_client_key, partition.partition_id);
-    return compiled;
-  });
+  const domains = (
+    /** @type {Array<Record<string,any>>} */
+    artifact.domain_contracts.map((contract) => {
+      const compiled = (
+        /** @type {Record<string,any>} */
+        compileDomain(semanticRootDigest, contract, artifact.predicate_contracts, acceptedContractRefs)
+      );
+      bind(compiled.domain_client_key, compiled.domain_contract_id);
+      for (
+        const partition of
+        /** @type {Array<Record<string,any>>} */
+        compiled.partitions
+      ) bind(partition.partition_client_key, partition.partition_id);
+      return compiled;
+    })
+  );
   const populations = artifact.population_contracts.map((contract) => {
     const validated = validatePopulationContract(contract, semanticRootDigest, acceptedContractRefs);
     const populationContractId = stableV5Id("population_contract", { input_semantic_root_digest: semanticRootDigest, scope: validated.scope });
@@ -4623,7 +4647,8 @@ function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals, review
     if (!object5(proposal) || !nonblank7(proposal.semantic_gap_client_key) || proposalByClientKey.has(proposal.semantic_gap_client_key) || !object5(proposal.target) || !nonblank7(proposal.missing_semantics) || !nonblank7(proposal.question) || !Array.isArray(proposal.basis) || proposal.basis.length === 0) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap proposal identity, target, question, or basis is invalid.");
     if (proposal.target.kind === "behavior_contract") {
       const requirement = requirements.get(proposal.target.required_contract_key);
-      if (!requirement || !COMPATIBLE_MISSING_SEMANTICS[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap target or missing semantics does not match the advertised requirement.");
+      if (!requirement || !/** @type {Record<string,Set<string>>} */
+      COMPATIBLE_MISSING_SEMANTICS[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Behavior gap target or missing semantics does not match the advertised requirement.");
     } else if (proposal.target.kind === "permission_cell") {
       const cell = permissionCells.get(`${proposal.target.matrix_id}\0${proposal.target.required_cell_key}`);
       const requiredMissing = cell?.permission_dimension === "decision" ? "permission_outcome" : cell?.permission_dimension;
@@ -4812,7 +4837,7 @@ function validatePermissionMatrixReview(matrix, review, semanticRootDigest, evid
     }
     if (disposition.kind === "not_applicable") {
       const levels = (disposition.basis ?? []).map((ref) => evidenceContext?.evidenceLevels.get(ref.claim_id ?? ref.decision_id));
-      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0 || evidenceContext && levels.some((level) => !["E2", "E3"].includes(level))) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission N/A needs accepted E2/E3 basis.");
+      if (!Array.isArray(disposition.basis) || disposition.basis.length === 0 || evidenceContext && levels.some((level) => !level || !["E2", "E3"].includes(level))) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission N/A needs accepted E2/E3 basis.");
       continue;
     }
     if (disposition.kind !== "formal" || !Array.isArray(disposition.basis) || disposition.basis.length === 0 || disposition.outcome.permission_dimension !== cell.permission_dimension) throw new V5ProtocolError("PERMISSION_OUTCOME_UNRESOLVED", "Permission formal outcome does not match its cell.");
@@ -4928,15 +4953,15 @@ function extendCaseProvenanceGraph(input) {
     nodes.set(node.node_id, node);
   };
   for (const current of input.cases) {
-    if (typeof current.case_id !== "string" || !nodes.has(current.primary_test_point_id) || nodes.get(current.primary_test_point_id).kind !== "formal_test_point" || !Array.isArray(current.oracles) || current.oracles.length === 0) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Case provenance must resolve one formal Test Point and at least one Case Oracle.");
+    if (typeof current.case_id !== "string" || nodes.get(current.primary_test_point_id)?.kind !== "formal_test_point" || !Array.isArray(current.oracles) || current.oracles.length === 0) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Case provenance must resolve one formal Test Point and at least one Case Oracle.");
     addNode({ node_id: current.case_id, kind: "case", ...common });
     edges.push({ from: current.primary_test_point_id, to: current.case_id });
     for (const oracle of current.oracles) {
-      if (typeof oracle.oracle_id !== "string" || !nodes.has(oracle.oracle_semantic_contract_id) || nodes.get(oracle.oracle_semantic_contract_id).kind !== "behavior_contract" || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Case Oracle provenance must resolve its accepted semantic contract and Claims.");
+      if (typeof oracle.oracle_id !== "string" || nodes.get(oracle.oracle_semantic_contract_id)?.kind !== "behavior_contract" || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0) throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Case Oracle provenance must resolve its accepted semantic contract and Claims.");
       addNode({ node_id: oracle.oracle_id, kind: "case_oracle", ...common });
       edges.push({ from: oracle.oracle_semantic_contract_id, to: current.case_id }, { from: current.case_id, to: oracle.oracle_id });
       for (const claimId of [...new Set(oracle.claim_ids)].sort()) {
-        if (!nodes.has(claimId) || nodes.get(claimId).kind !== "claim") throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Case Oracle evidence must resolve an accepted Claim.");
+        if (nodes.get(claimId)?.kind !== "claim") throw new V5ProtocolError("PROVENANCE_EDGE_NOT_ALLOWED", "Case Oracle evidence must resolve an accepted Claim.");
         edges.push({ from: claimId, to: oracle.oracle_id });
       }
     }
@@ -5216,17 +5241,20 @@ function validateSemanticReviews(seed, artifact, context) {
     } else throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Outcome disposition kind is unknown.");
   }
   if ([...claimByKey.keys()].some((claimKey) => !candidateIdsByClaimKey.has(claimKey))) throw new V5ProtocolError("SEMANTIC_REVIEW_CANDIDATE_UNKNOWN", "Every submitted Claim must close at least one advertised outcome candidate.");
-  const compiledClaims = [...claimByKey.entries()].map(([claimClientKey, claim]) => {
-    const semanticClaim = {
-      accepted_source_state_digest: seed.accepted_source_state_digest,
-      outcome_candidate_ids: candidateIdsByClaimKey.get(claimClientKey),
-      primary_outcome_signature: claim.primary_outcome_signature,
-      observation_slot_digests: [...claim.observation_slot_digests].sort(),
-      ...claim.subject_ref === void 0 ? {} : { subject_ref: claim.subject_ref },
-      ...claim.intent_ref === void 0 ? {} : { intent_ref: claim.intent_ref }
-    };
-    return { ...structuredClone(claim), claim_id: stableId("claim", semanticClaim), outcome_candidate_ids: semanticClaim.outcome_candidate_ids };
-  }).sort((left, right) => left.claim_id.localeCompare(right.claim_id));
+  const compiledClaims = (
+    /** @type {Array<Record<string,any>>} */
+    [...claimByKey.entries()].map(([claimClientKey, claim]) => {
+      const semanticClaim = {
+        accepted_source_state_digest: seed.accepted_source_state_digest,
+        outcome_candidate_ids: candidateIdsByClaimKey.get(claimClientKey),
+        primary_outcome_signature: claim.primary_outcome_signature,
+        observation_slot_digests: [...claim.observation_slot_digests].sort(),
+        ...claim.subject_ref === void 0 ? {} : { subject_ref: claim.subject_ref },
+        ...claim.intent_ref === void 0 ? {} : { intent_ref: claim.intent_ref }
+      };
+      return { ...structuredClone(claim), claim_id: stableId("claim", semanticClaim), outcome_candidate_ids: semanticClaim.outcome_candidate_ids };
+    }).sort((left, right) => left.claim_id.localeCompare(right.claim_id))
+  );
   const claimIdByClientKey = new Map(compiledClaims.map((claim) => [claim.claim_client_key, claim.claim_id]));
   for (const claim of compiledClaims) {
     if (Array.isArray(claim.basis)) claim.basis = claim.basis.map((basis) => basis.kind === "claim" && claimIdByClientKey.has(basis.claim_id) ? { ...basis, claim_id: claimIdByClientKey.get(basis.claim_id) } : basis);
@@ -6382,7 +6410,10 @@ function compileDomainSelections(draft, caseAnchorDigest, input, status) {
     seenCoordinates.add(coordinate);
     const domain = domainById.get(selection.domain_contract_id);
     const partition = records(domain?.partitions).find((candidate) => candidate.partition_id === selection.partition_id);
-    const choice = selection.selection;
+    const choice = (
+      /** @type {Record<string,any>} */
+      selection.selection
+    );
     if (!domain || !partition || !object8(choice) || !nonempty3(choice.selected_values) || choice.selected_values.some((value) => !validateTypedValue(value))) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection must resolve one current-root Domain partition and typed values.");
     const selectedDigests = choice.selected_values.map((value) => canonicalObjectDigest(value));
     if (new Set(selectedDigests).size !== selectedDigests.length) throw new V5ProtocolError("DOMAIN_CONTRACT_REQUIRED", "Domain selection values must be unique.");
@@ -6614,7 +6645,9 @@ function compileV5CaseDocumentBundle(input) {
     const bindingByStepKey = new Map(bindings.map((binding) => [binding.step_client_key, binding]));
     const domainSelections = compileDomainSelections(draft, caseAnchorDigest, input, status);
     const steps = draft.steps.map((step, index) => {
-      const actionRef = bindingByStepKey.get(step.step_client_key).action_ref;
+      const binding = bindingByStepKey.get(step.step_client_key);
+      if (!binding) throw new V5ProtocolError("ORACLE_SEMANTICS_REQUIRED", "Each Case step needs one exact accepted semantic-action binding.");
+      const actionRef = binding.action_ref;
       return { step_id: legacyStableId("STEP", { case_anchor_digest: caseAnchorDigest, sequence: index + 1, action: step.action, action_ref: actionRef }), step_client_key: step.step_client_key, action: step.action, action_ref: structuredClone(actionRef) };
     });
     const stepIdByKey = new Map(steps.map((step) => [step.step_client_key, step.step_id]));
@@ -7512,7 +7545,8 @@ async function advanceV5Run(runDirectory, requestValue) {
     if (error.code === "ACTION_TOKEN_KEY_UNAVAILABLE") throw error;
     if (error.code === "IDEMPOTENCY_CONFLICT") return runRejection(current, error.code, error.message, current.checkpoint.run_lifecycle === "active" ? "persisted_run_state" : "read_only_terminal_rejection");
     if (error.code === "ORACLE_SEMANTICS_REQUIRED" && current.checkpoint.fsm_cell_id === "cd.active.case.drafts") return persistOracleReroute(current, request, error.message);
-    if (current.checkpoint.fsm_cell_id === "cd.active.case.behavior" && BEHAVIOR_GAP_COMMIT_ERRORS.has(error.code)) return persistRunRejection(current, request, "SCHEMA_VALIDATION_FAILED", error.message);
+    if (current.checkpoint.fsm_cell_id === "cd.active.case.behavior" && /** @type {Set<string>} */
+    BEHAVIOR_GAP_COMMIT_ERRORS.has(error.code)) return persistRunRejection(current, request, "SCHEMA_VALIDATION_FAILED", error.message);
     return persistRunRejection(current, request, error.code, error.message);
   }
 }
@@ -7540,7 +7574,10 @@ async function advanceExecution(current, request, templateId) {
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(outcome.target_cell_id, workPacket));
   const actionDigest = actionDigestV5("advance", action);
   const commitReceipt = { kind: "operational_commit", committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: outcome.commit_projection.effect };
-  const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  const reply = (
+    /** @type {Record<string,any>} */
+    persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest)
+  );
   const compilerStateRecords = [{ record: advanced.projection, semanticDigest: advanced.projection.execution_snapshot_digest }];
   if (advanced.receipt) compilerStateRecords.push({ record: advanced.receipt, semanticDigest: advanced.receipt.receipt_digest });
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, compilerStateRecords });
@@ -7593,7 +7630,10 @@ async function advanceClarificationPreview(current, request) {
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(outcome.target_cell_id, workPacket));
   const actionDigest = actionDigestV5("advance", action);
   const commitReceipt = { kind: "operational_commit", committed_action_digest: actionDigest, semantic_revision_delta: 0, client_key_bindings: [], operational_effect: outcome.commit_projection.effect };
-  const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  const reply = (
+    /** @type {Record<string,any>} */
+    persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest)
+  );
   if (resultKey === "semantic_change") {
     const confirmationRow = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === "CLARIFICATION_CONFIRMATION_REQUIRED" && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id && candidate.exact_projection_kind === "persisted_run_state");
     if (!confirmationRow) throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", "Clarification confirmation reply contract is unavailable.");
@@ -7660,7 +7700,10 @@ async function advanceClarificationCommit(current, request) {
     { record: { ...committed.impact, impact_digest: clarificationImpactDigest }, semanticDigest: clarificationImpactDigest },
     ...committed.decisions.map((decision) => ({ record: decision, semanticDigest: decision.decision_digest }))
   ];
-  const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  const reply = (
+    /** @type {Record<string,any>} */
+    persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest)
+  );
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, compilerStateRecords });
 }
 async function acceptedSourceContext(current) {
@@ -7852,7 +7895,10 @@ async function advanceEvidenceClaims(current, request) {
   const workPacket = hasGaps ? { kind: "clarification_work", context, presentation } : { kind: "behavior_work", context, permission_matrix_worklists: permissionMatrices, behavior_contract_worklist: behaviorSeed };
   const actionDigest = actionDigestV5("advance", action);
   const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: claimClientKeyBindings };
-  const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
+  const reply = (
+    /** @type {Record<string,any>} */
+    persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest)
+  );
   if (hasGaps) {
     const origins = acceptedPayload.semantic_gaps.map((gap) => gap.target?.origin?.kind);
     const diagnosticCode = origins.includes("ambiguity") ? "AMBIGUITY_UNRESOLVED" : origins.includes("entity_resolution") ? "ENTITY_RESOLUTION_UNRESOLVED" : null;
@@ -8076,14 +8122,23 @@ async function advanceBehaviorViews(current, request) {
     ...compiledBehavior.client_key_bindings
   ].sort((left, right) => left.client_key.localeCompare(right.client_key));
   const commitReceipt = { kind: "artifact_commit", committed_action_digest: actionDigest, semantic_revision_delta: 1, client_key_bindings: clientKeyBindings };
-  const reply = persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest);
-  const primaryGapDiagnostic = compiledGaps.accepted_gaps.map((gap) => BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics]).filter(Boolean)[0];
+  const reply = (
+    /** @type {Record<string,any>} */
+    persistedReply(selectorState.checkpoint, workPacket, selectorState.selectors, commitReceipt, current.layout.root, outcome.outcome_id, selectorState.sidecar.selector_sidecar_digest)
+  );
+  const primaryGapDiagnostic = compiledGaps.accepted_gaps.map((gap) => (
+    /** @type {Record<string,string>} */
+    BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics]
+  )).filter(Boolean)[0];
   if (primaryGapDiagnostic) {
     const errorRow = replyRows.find((candidate) => candidate.source.kind === "runtime_error" && candidate.source.error_code === primaryGapDiagnostic && candidate.source.response_context === "run_mutation" && candidate.source.trigger_state?.fsm_cell_id === current.checkpoint.fsm_cell_id);
     if (!errorRow || errorRow.exact_commit.kind !== "artifact_commit") throw new V5ProtocolError("POLICY_REGISTRY_INCONSISTENT", `Explicit Behavior-gap reply contract is missing for ${primaryGapDiagnostic}.`);
     reply.reply_contract_id = errorRow.reply_contract_id;
     reply.reply_status = errorRow.exact_reply_status;
-    reply.diagnostics = [{ code: primaryGapDiagnostic, affected_refs: compiledGaps.accepted_gaps.filter((gap) => BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics] === primaryGapDiagnostic).map((gap) => gap.semantic_gap_id).sort(), message: "The accepted Behavior artifact contains an explicit unresolved semantic gap." }];
+    reply.diagnostics = [{ code: primaryGapDiagnostic, affected_refs: compiledGaps.accepted_gaps.filter((gap) => (
+      /** @type {Record<string,string>} */
+      BEHAVIOR_GAP_DIAGNOSTIC[gap.missing_semantics] === primaryGapDiagnostic
+    )).map((gap) => gap.semantic_gap_id).sort(), message: "The accepted Behavior artifact contains an explicit unresolved semantic gap." }];
   }
   return commitNormalRunTransaction(current.layout.root, request, { checkpoint: selectorState.checkpoint, selectorSidecar: selectorState.sidecar, reply, commitReceipt, acceptedArtifacts: [{ record: envelope, digestField: "envelope_digest" }], compilerStateRecords });
 }

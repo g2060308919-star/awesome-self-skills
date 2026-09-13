@@ -1,4 +1,3 @@
-// @ts-nocheck
 import assert from 'node:assert/strict';
 import { mkdtemp, readdir } from 'node:fs/promises';
 import os from 'node:os';
@@ -15,7 +14,7 @@ import {
   validateResumeParent
 } from '../../src/v5/resume.mjs';
 
-const digest = (letter) => `sha256:${letter.repeat(64)}`;
+const digest = (/** @type {string} */ letter) => `sha256:${letter.repeat(64)}`;
 const identity = { schema_version: '5.0.0', run_id: 'RUN-parent', delivery_intent: 'case_document', case_document_lineage_id: 'LINEAGE-parent' };
 const prior = { ...identity, kind: 'v5_run_checkpoint', compiler_version: '0.6.0', run_lifecycle: 'active', fsm_cell_id: 'cd.active.case.behavior', stage: 'case_design', obligation: 'provide_behavior_views', current_revision: 3, checkpoint_digest: digest('a'), semantic_root_digest: digest('b'), accepted_artifact_digests: [digest('c')] };
 const transaction = { transaction_digest: digest('d') };
@@ -63,7 +62,7 @@ test('resume parent requires a verified V5 cancelled closure and matching cancel
 test('public cancellation persists one event and resume creates an active child without staging inheritance', async () => {
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-resume-'));
   const created = await createV5RunDirectory(catalog, { idempotency_key: 'create-parent', delivery_intent: 'case_document', source_bootstrap: { source_request_seeds: [{ source_request_client_key: 'prd', source_role: 'primary_prd', locator: { kind: 'inline_text', media_type: 'text/markdown', content: 'Create an order.' }, required: true }] } });
-  const cancelSelector = created.available_actions.find((selector) => selector.capability.kind === 'cancel_run');
+  const cancelSelector = created.available_actions.find((/** @type {Record<string,any>} */ selector) => selector.capability.kind === 'cancel_run');
   const cancelled = await advanceV5Run(created.run_directory, { idempotency_key: 'cancel-parent', action: { kind: 'cancel_run', action_token: cancelSelector.action_token, reason: 'operator requested stop' } });
   assert.equal(cancelled.reply_status, 'cancelled');
   const eventFiles = await readdir(path.join(created.run_directory, 'objects', 'events'));

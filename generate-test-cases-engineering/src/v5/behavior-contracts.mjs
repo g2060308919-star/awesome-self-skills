@@ -32,7 +32,7 @@ function validateEvidenceReference(ref, context, options = {}) {
   if (!idField || !exact(ref, ['kind', idField]) || !nonblank(ref[idField])) return fail('Evidence reference must be an exact Claim or Decision reference.');
   const level = context.evidenceLevels.get(ref[idField]);
   const minimum = options.minimumLevel ?? 'E1';
-  if (!level || EVIDENCE_LEVEL_RANK[level] < EVIDENCE_LEVEL_RANK[minimum]) return fail(`Evidence ${ref[idField]} is not accepted at ${minimum} or above.`);
+  if (!level || /** @type {Record<string,number>} */ (EVIDENCE_LEVEL_RANK)[level] < /** @type {Record<string,number>} */ (EVIDENCE_LEVEL_RANK)[minimum]) return fail(`Evidence ${ref[idField]} is not accepted at ${minimum} or above.`);
   return ref;
 }
 
@@ -243,14 +243,14 @@ export function validateRiskReviews(semanticRootDigest, moduleIds, reviews, cont
   const items = [];
   for (const review of reviews) {
     if (!nonblank(review.review_client_key) || !nonempty(review.review_basis) || !RISK_KINDS.includes(review.risk_kind)) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'Risk review identity or basis is missing.');
-    review.review_basis.forEach((ref) => validateEvidenceReference(ref, context, { allowSourceUnit: true, errorCode: 'RISK_LEDGER_INVALID' }));
+    review.review_basis.forEach((/** @type {Record<string,any>} */ ref) => validateEvidenceReference(ref, context, { allowSourceUnit: true, errorCode: 'RISK_LEDGER_INVALID' }));
     if (review.risk_signal_status === 'no_signal') {
       if (Object.hasOwn(review, 'risk_item')) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'no_signal review cannot carry a risk item.');
       continue;
     }
     const item = review.risk_item;
     if (review.risk_signal_status !== 'signal_found' || !object(item) || !nonblank(item.candidate_client_key) || !nonempty(item.trigger_basis) || !nonempty(item.affected_refs) || !nonblank(item.why_material) || !nonblank(item.recommended_action) || !['low', 'medium', 'high', 'critical'].includes(item.severity) || !['low', 'medium', 'high'].includes(item.likelihood) || !['low', 'medium', 'high'].includes(item.evidence_confidence) || !['low', 'medium', 'high'].includes(item.testability)) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'Signal-found risk item is incomplete.');
-    item.trigger_basis.forEach((ref) => validateEvidenceReference(ref, context, { allowSourceUnit: true, errorCode: 'RISK_LEDGER_INVALID' }));
+    item.trigger_basis.forEach((/** @type {Record<string,any>} */ ref) => validateEvidenceReference(ref, context, { allowSourceUnit: true, errorCode: 'RISK_LEDGER_INVALID' }));
     if (item.risk_disposition === 'formal_requirement') {
       if (!nonblank(item.formal_claim_id)) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'Formal risk needs a Claim.');
       validateEvidenceReference({ kind: 'claim', claim_id: item.formal_claim_id }, context, { minimumLevel: 'E2', errorCode: 'RISK_LEDGER_INVALID' });
@@ -259,7 +259,7 @@ export function validateRiskReviews(semanticRootDigest, moduleIds, reviews, cont
     if (item.risk_disposition === 'exploratory' && !nonblank(item.observation_intent)) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'Exploratory risk needs a nonblank observation intent.');
     if (item.risk_disposition === 'not_applicable') {
       if (!nonempty(item.exclusion_basis)) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'N/A risk needs E2/E3 exclusion basis.');
-      item.exclusion_basis.forEach((ref) => validateEvidenceReference(ref, context, { minimumLevel: 'E2', errorCode: 'RISK_LEDGER_INVALID' }));
+      item.exclusion_basis.forEach((/** @type {Record<string,any>} */ ref) => validateEvidenceReference(ref, context, { minimumLevel: 'E2', errorCode: 'RISK_LEDGER_INVALID' }));
     }
     if (!['formal_requirement', 'semantic_gap', 'exploratory', 'not_applicable'].includes(item.risk_disposition)) throw new V5ProtocolError('RISK_LEDGER_INVALID', 'Risk disposition is unknown.');
     const sourceReviewId = stableV5Id('risk_review', { input_semantic_root_digest: semanticRootDigest, module_ref: review.module_ref, risk_kind: review.risk_kind });
@@ -330,7 +330,7 @@ export function validateBehaviorContractReviews(seed, reviews, artifact, evidenc
       if (!object(disposition.gap_ref)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Behavior gap disposition needs an exact gap reference.');
     } else if (disposition.kind === 'not_applicable') {
       if (!nonempty(disposition.basis)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'N/A behavior disposition needs E2/E3 basis.');
-      if (evidenceContext) disposition.basis.forEach((ref) => validateEvidenceReference(ref, evidenceContext, { minimumLevel: 'E2', errorCode: 'SEMANTIC_REVIEW_CANDIDATE_MISSING' }));
+      if (evidenceContext) disposition.basis.forEach((/** @type {Record<string,any>} */ ref) => validateEvidenceReference(ref, evidenceContext, { minimumLevel: 'E2', errorCode: 'SEMANTIC_REVIEW_CANDIDATE_MISSING' }));
     } else throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Behavior disposition kind is unknown.');
   }
   return structuredClone(reviews);

@@ -86,7 +86,7 @@ export function compileBehaviorProvenanceGraph(input) {
 /**
  * Extend a verified semantic provenance graph with accepted Cases, Case
  * Oracles, the immutable Case Document, and deterministic rendered outputs.
- * @param {{graph:Record<string,any>,runId:string,caseDocumentLineageId:string,semanticRootDigest:string,cases:Array<Record<string,any>>,caseDocumentDigest:string,renderedOutputDigests:string[]}} input
+ * @param {{graph:{nodes:Array<Record<string,any>>,edges:Array<Record<string,any>>},runId:string,caseDocumentLineageId:string,semanticRootDigest:string,cases:Array<Record<string,any>>,caseDocumentDigest:string,renderedOutputDigests:string[]}} input
  */
 export function extendCaseProvenanceGraph(input) {
   validateV5ProvenanceGraph(input.graph);
@@ -96,20 +96,20 @@ export function extendCaseProvenanceGraph(input) {
   for (const node of nodes.values()) {
     if (node.run_id !== input.runId || node.case_document_lineage_id !== input.caseDocumentLineageId || node.semantic_root_digest !== input.semanticRootDigest || node.accepted !== true) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance cannot extend a different run, lineage, or semantic root.');
   }
-  const addNode = (node) => {
+  const addNode = (/** @type {Record<string,any>} */ node) => {
     if (!node.node_id || nodes.has(node.node_id)) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance identities must be nonblank and unique.');
     nodes.set(node.node_id, node);
   };
   for (const current of input.cases) {
-    if (typeof current.case_id !== 'string' || !nodes.has(current.primary_test_point_id) || nodes.get(current.primary_test_point_id).kind !== 'formal_test_point' || !Array.isArray(current.oracles) || current.oracles.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance must resolve one formal Test Point and at least one Case Oracle.');
+    if (typeof current.case_id !== 'string' || nodes.get(current.primary_test_point_id)?.kind !== 'formal_test_point' || !Array.isArray(current.oracles) || current.oracles.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case provenance must resolve one formal Test Point and at least one Case Oracle.');
     addNode({ node_id: current.case_id, kind: 'case', ...common });
     edges.push({ from: current.primary_test_point_id, to: current.case_id });
     for (const oracle of current.oracles) {
-      if (typeof oracle.oracle_id !== 'string' || !nodes.has(oracle.oracle_semantic_contract_id) || nodes.get(oracle.oracle_semantic_contract_id).kind !== 'behavior_contract' || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Oracle provenance must resolve its accepted semantic contract and Claims.');
+      if (typeof oracle.oracle_id !== 'string' || nodes.get(oracle.oracle_semantic_contract_id)?.kind !== 'behavior_contract' || !Array.isArray(oracle.claim_ids) || oracle.claim_ids.length === 0) throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Oracle provenance must resolve its accepted semantic contract and Claims.');
       addNode({ node_id: oracle.oracle_id, kind: 'case_oracle', ...common });
       edges.push({ from: oracle.oracle_semantic_contract_id, to: current.case_id }, { from: current.case_id, to: oracle.oracle_id });
       for (const claimId of [...new Set(oracle.claim_ids)].sort()) {
-        if (!nodes.has(claimId) || nodes.get(claimId).kind !== 'claim') throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Oracle evidence must resolve an accepted Claim.');
+        if (nodes.get(claimId)?.kind !== 'claim') throw new V5ProtocolError('PROVENANCE_EDGE_NOT_ALLOWED', 'Case Oracle evidence must resolve an accepted Claim.');
         edges.push({ from: claimId, to: oracle.oracle_id });
       }
     }

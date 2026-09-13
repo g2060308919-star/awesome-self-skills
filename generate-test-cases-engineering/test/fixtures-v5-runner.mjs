@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createHash } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -19,49 +18,59 @@ const REQUIREMENTS = new Set(Array.from({ length: 16 }, (_, index) => `C${String
 const FIXTURE_ID = /^F-C(0[1-9]|1[0-6])-[a-z0-9-]+\.(positive|negative|blocked|protocol)\.[a-z0-9-]+$/u;
 const SANDBOX_ROOT = '/tmp/generate-test-cases-v5-fixtures-v1';
 
+/** @param {string} message @returns {never} */
 function fail(message) { throw new Error(`V5_FIXTURE_CONTRACT: ${message}`); }
+/** @param {unknown} value @returns {value is Record<string,any>} */
 function object(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
+/** @param {Record<string,any>} value @param {string[]} keys */
 function exactKeys(value, keys) { const actual = Object.keys(value).sort(); const expected = [...keys].sort(); return actual.length === expected.length && actual.every((key, index) => key === expected[index]); }
+/** @param {any} value */
 function sha256(value) { return createHash('sha256').update(value).digest('hex'); }
 
+/** @param {string} value */
 export function validateManifestRelativePath(value) {
   if (typeof value !== 'string' || value.length === 0 || value.startsWith('/') || value.includes('\\') || value.includes('\0') || value.split('/').some((segment) => segment.length === 0 || segment === '.' || segment === '..')) fail(`unsafe manifest-relative path: ${String(value)}`);
   return value;
 }
 
+/** @param {string} pointer */
 function pointerTokens(pointer) {
   if (pointer === '') return [];
   if (typeof pointer !== 'string' || !pointer.startsWith('/')) fail(`invalid JSON pointer: ${String(pointer)}`);
   return pointer.slice(1).split('/').map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'));
 }
 
+/** @param {any} value @param {string} pointer @returns {any} */
 export function resolveFixturePointer(value, pointer) {
   let current = value;
   for (const token of pointerTokens(pointer)) {
     if ((Array.isArray(current) && !/^(0|[1-9][0-9]*)$/u.test(token)) || !object(current) && !Array.isArray(current) || !Object.hasOwn(current, token)) fail(`JSON pointer does not resolve exactly once: ${pointer}`);
-    current = current[token];
+    current = /** @type {any} */ (current)[token];
   }
   return current;
 }
 
+/** @param {any} value @param {string} pointer @param {any} replacement @param {string} sentinelKey */
 function replaceFixturePointer(value, pointer, replacement, sentinelKey) {
   const tokens = pointerTokens(pointer);
   if (tokens.length === 0) fail('binding cannot replace the request root');
   let current = value;
   for (const token of tokens.slice(0, -1)) {
     if ((!object(current) && !Array.isArray(current)) || !Object.hasOwn(current, token)) fail(`binding target is missing: ${pointer}`);
-    current = current[token];
+    current = /** @type {any} */ (current)[token];
   }
   const leaf = tokens.at(-1);
-  if ((!object(current) && !Array.isArray(current)) || !Object.hasOwn(current, leaf) || canonicalV5Stringify(current[leaf]) !== canonicalV5Stringify({ [sentinelKey]: 'required' })) fail(`binding target is not the exact sentinel: ${pointer}`);
-  current[leaf] = structuredClone(replacement);
+  if (leaf === undefined || (!object(current) && !Array.isArray(current)) || !Object.hasOwn(current, leaf) || canonicalV5Stringify(/** @type {any} */ (current)[leaf]) !== canonicalV5Stringify({ [sentinelKey]: 'required' })) fail(`binding target is not the exact sentinel: ${pointer}`);
+  /** @type {any} */ (current)[leaf] = structuredClone(replacement);
 }
 
+/** @param {any} value */
 function assertNoSentinels(value) {
   const encoded = canonicalV5Stringify(value);
   if (encoded.includes('$fixture_binding') || encoded.includes('$fixture_absolute_path') || encoded.includes('$fixture_client_key')) fail('request contains an unconsumed fixture placeholder');
 }
 
+/** @param {Record<string,any>} action @param {Record<string,any>} expected */
 function validateExpectedPair(action, expected) {
   const publicApis = new Set(['createV5RunDirectory', 'advanceV5Run', 'inspectV5Run']);
   if (publicApis.has(action.api)) {
@@ -73,12 +82,14 @@ function validateExpectedPair(action, expected) {
   if (action.api === 'tamper_run_storage' && canonicalV5Stringify(expected.target) !== canonicalV5Stringify(action.target)) fail('tamper targets differ');
 }
 
+/** @param {Record<string,any>} value @param {boolean} [runDirectory] */
 function validateReplyRef(value, runDirectory = false) {
   if (!object(value) || !exactKeys(value, ['source_step_id', 'source_json_pointer']) || typeof value.source_step_id !== 'string' || typeof value.source_json_pointer !== 'string') fail('reply reference is not closed');
   pointerTokens(value.source_json_pointer);
   if (runDirectory && value.source_json_pointer !== '/run_directory') fail('run_directory_from must bind /run_directory');
 }
 
+/** @param {Record<string,any>} step @param {boolean} allowAbsolutePaths */
 function validateRequestBindings(step, allowAbsolutePaths) {
   if (!Array.isArray(step.request_bindings) || !Array.isArray(step.fixture_absolute_path_bindings ?? [])) fail('request binding lists are required');
   for (const binding of step.request_bindings) {
@@ -97,6 +108,7 @@ function validateRequestBindings(step, allowAbsolutePaths) {
   }
 }
 
+/** @param {Record<string,any>} target */
 function validateTamperTarget(target) {
   if (!object(target) || typeof target.kind !== 'string') fail('tamper target is invalid');
   const operational = new Set(['current_run_pointer', 'current_transaction_object', 'current_receipt_object', 'current_idempotency_index', 'current_reply_object', 'current_checkpoint', 'current_selector_sidecar']);
@@ -113,6 +125,7 @@ function validateTamperTarget(target) {
   fail(`unsupported logical tamper target: ${target.kind}`);
 }
 
+/** @param {Record<string,any>} step @param {boolean} [nested] */
 function validateInvocation(step, nested = false) {
   const prefix = nested ? [] : ['step_id'];
   if (step.api === 'createV5RunDirectory') {
@@ -137,6 +150,7 @@ function validateInvocation(step, nested = false) {
   } else fail(`unknown fixture API: ${step.api}`);
 }
 
+/** @param {Record<string,any>} expected */
 function validateExpected(expected) {
   if (!object(expected) || typeof expected.kind !== 'string') fail('expected step is invalid');
   if (expected.kind === 'process_control') {
@@ -161,10 +175,12 @@ function validateExpected(expected) {
   } else fail('unknown expected reply branch');
 }
 
+/** @param {any} manifest @returns {any} */
 export function validateV5FixtureManifest(manifest) {
   if (!object(manifest) || !exactKeys(manifest, ['schema_version', 'fixtures']) || manifest.schema_version !== '5.0.0' || !Array.isArray(manifest.fixtures) || manifest.fixtures.length === 0) fail('manifest root is not closed V5');
+  const fixtures = /** @type {any[]} */ (manifest.fixtures);
   const fixtureIds = new Set();
-  for (const fixture of manifest.fixtures) {
+  for (const fixture of fixtures) {
     if (!object(fixture) || !exactKeys(fixture, ['fixture_id', 'requirement_ids', 'runtime_profile', 'catalog_keys', 'input_files', 'action_sequence', 'expected_steps']) || !FIXTURE_ID.test(fixture.fixture_id) || fixtureIds.has(fixture.fixture_id) || fixture.runtime_profile !== 'deterministic-v1') fail(`invalid or duplicate fixture: ${fixture.fixture_id}`);
     fixtureIds.add(fixture.fixture_id);
     if (!Array.isArray(fixture.requirement_ids) || fixture.requirement_ids.length === 0 || fixture.requirement_ids.some((id) => !REQUIREMENTS.has(id))) fail(`invalid requirement set: ${fixture.fixture_id}`);
@@ -173,7 +189,7 @@ export function validateV5FixtureManifest(manifest) {
     fixture.input_files.forEach(validateManifestRelativePath);
     if (!Array.isArray(fixture.action_sequence) || fixture.action_sequence.length === 0 || fixture.action_sequence.length !== fixture.expected_steps?.length) fail(`action/expected cardinality differs: ${fixture.fixture_id}`);
     const stepIndexes = new Map();
-    fixture.action_sequence.forEach((step, index) => {
+    /** @type {any[]} */ (fixture.action_sequence).forEach((step, index) => {
       if (!object(step) || typeof step.step_id !== 'string' || stepIndexes.has(step.step_id)) fail(`duplicate step ID: ${step.step_id}`);
       stepIndexes.set(step.step_id, index);
       validateInvocation(step);
@@ -186,26 +202,27 @@ export function validateV5FixtureManifest(manifest) {
       }
       if (step.catalog_key && !fixture.catalog_keys.includes(step.catalog_key)) fail(`undeclared catalog key: ${step.catalog_key}`);
     });
-    fixture.action_sequence.forEach((step, index) => {
-      if (['restart_process', 'tamper_run_storage', 'inject_crash'].includes(step.api) && !fixture.action_sequence.slice(index + 1).some((candidate) => ['advanceV5Run', 'inspectV5Run'].includes(candidate.api))) fail(`process-control step lacks later API evidence: ${step.step_id}`);
+    /** @type {any[]} */ (fixture.action_sequence).forEach((step, index) => {
+      if (['restart_process', 'tamper_run_storage', 'inject_crash'].includes(step.api) && !fixture.action_sequence.slice(index + 1).some((/** @type {Record<string,any>} */ candidate) => ['advanceV5Run', 'inspectV5Run'].includes(candidate.api))) fail(`process-control step lacks later API evidence: ${step.step_id}`);
     });
   }
   for (const requirement of REQUIREMENTS) {
-    const leaves = manifest.fixtures.filter((fixture) => fixture.requirement_ids.includes(requirement));
+    const leaves = fixtures.filter((fixture) => fixture.requirement_ids.includes(requirement));
     if (!leaves.some((fixture) => fixture.fixture_id.includes('.positive.')) || !leaves.some((fixture) => /\.(negative|blocked|protocol)\./u.test(fixture.fixture_id))) fail(`${requirement} lacks positive and negative/blocked/protocol leaves`);
   }
   const actualFixtureIds = [...fixtureIds].sort();
   if (canonicalV5Stringify(actualFixtureIds) !== canonicalV5Stringify(V5_REQUIRED_FIXTURE_LEAF_IDS)) fail('manifest does not contain the exact normative fixture leaf inventory');
   const contracts = generateV5Contracts();
   const referencedTestIds = [
-    ...contracts.policyRegistry.rules.flatMap((rule) => rule.test_ids),
-    ...contracts.policyRegistry.provenance_policy.allowed_edges.flatMap((edge) => edge.test_ids),
-    ...contracts.stableIdPreimageRegistry.rows.map((row) => row.golden_test_id)
+    ...contracts.policyRegistry.rules.flatMap((/** @type {Record<string,any>} */ rule) => rule.test_ids),
+    ...contracts.policyRegistry.provenance_policy.allowed_edges.flatMap((/** @type {Record<string,any>} */ edge) => edge.test_ids),
+    ...contracts.stableIdPreimageRegistry.rows.map((/** @type {Record<string,any>} */ row) => row.golden_test_id)
   ];
-  for (const testId of referencedTestIds) if (manifest.fixtures.filter((fixture) => fixture.fixture_id === testId).length !== 1) fail(`registry test ID does not resolve to exactly one manifest leaf: ${testId}`);
+  for (const testId of referencedTestIds) if (fixtures.filter((fixture) => fixture.fixture_id === testId).length !== 1) fail(`registry test ID does not resolve to exactly one manifest leaf: ${testId}`);
   return manifest;
 }
 
+/** @param {string} root @param {string} relativePath @returns {Promise<any>} */
 async function readJsonFile(root, relativePath) {
   validateManifestRelativePath(relativePath);
   const candidate = path.join(root, relativePath);
@@ -216,6 +233,7 @@ async function readJsonFile(root, relativePath) {
   return JSON.parse(await readFile(candidateReal, 'utf8'));
 }
 
+/** @param {string} fixtureId @param {string} relativePath @param {any} bytes */
 export function v5FixtureSandboxPaths(fixtureId, relativePath, bytes) {
   const fixtureHash = sha256(Buffer.from(fixtureId));
   const fileHash = sha256(Buffer.concat([Buffer.from(validateManifestRelativePath(relativePath)), Buffer.from([0]), bytes]));
@@ -227,6 +245,7 @@ export function v5FixtureSandboxPaths(fixtureId, relativePath, bytes) {
   };
 }
 
+/** @param {string} fixtureId */
 export async function acquireV5FixtureSandbox(fixtureId) {
   if (process.platform === 'win32' || path.sep !== '/') fail('fixed POSIX fixture sandbox is unsupported on this platform');
   const { fixtureHash, directory, lock } = v5FixtureSandboxPaths(fixtureId, 'placeholder.input', Buffer.alloc(0));
@@ -239,6 +258,7 @@ export async function acquireV5FixtureSandbox(fixtureId) {
   return { fixtureHash, directory, release: async () => { await rm(directory, { recursive: true, force: true }); await rm(lock, { recursive: true, force: true }); } };
 }
 
+/** @param {any} template @param {any} step @param {Map<string,any>} replies @param {string} fixtureRoot @param {any} fixture @param {any} sandbox */
 async function applyRequestBindings(template, step, replies, fixtureRoot, fixture, sandbox) {
   const request = structuredClone(template);
   const targets = new Set();
@@ -271,8 +291,9 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
     const source = replies.get(step.client_key_bindings_from.source_step_id);
     if (!source) fail(`client-key binding source has no API reply: ${step.client_key_bindings_from.source_step_id}`);
     const bindings = resolveFixturePointer(source, step.client_key_bindings_from.source_json_pointer);
-    if (!Array.isArray(bindings) || bindings.some((binding) => !object(binding) || typeof binding.client_key !== 'string' || typeof binding.stable_id !== 'string')) fail('committed client-key binding list is invalid');
-    const stableByClientKey = new Map(bindings.map((binding) => [binding.client_key, binding.stable_id]));
+    if (!Array.isArray(bindings) || bindings.some((/** @type {any} */ binding) => !object(binding) || typeof binding.client_key !== 'string' || typeof binding.stable_id !== 'string')) fail('committed client-key binding list is invalid');
+    const stableByClientKey = new Map(bindings.map((/** @type {any} */ binding) => [binding.client_key, binding.stable_id]));
+    /** @param {any} value @returns {any} */
     const rewrite = (value) => {
       if (Array.isArray(value)) {
         value.forEach((child, index) => {
@@ -296,19 +317,19 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
   }
   if (request.action?.artifact_kind === 'behavior_views' && object(request.action.artifact)) {
     const seedSourceId = step.client_key_bindings_from?.source_step_id
-      ?? step.request_bindings.find((binding) => binding.target_json_pointer === '/action/artifact/behavior_contract_seed_digest')?.value_from.source_step_id;
+      ?? step.request_bindings.find((/** @type {any} */ binding) => binding.target_json_pointer === '/action/artifact/behavior_contract_seed_digest')?.value_from.source_step_id;
     const seedReply = seedSourceId ? replies.get(seedSourceId) : undefined;
     const seed = seedReply?.work_packet?.behavior_contract_worklist;
     const obligations = seedReply?.work_packet?.context?.test_obligations?.payload;
     const artifact = request.action.artifact;
     if (obligations && Array.isArray(obligations.outcomes) && Array.isArray(obligations.formal_test_points)) {
-      const pointByOutcomeId = new Map(obligations.formal_test_points.map((point) => [point.outcome_id, point.formal_test_point_id]));
-      const pointByClaimId = new Map(obligations.outcomes.flatMap((outcome) => outcome.claim_ids.map((claimId) => [claimId, pointByOutcomeId.get(outcome.outcome_id)])));
+      const pointByOutcomeId = new Map(obligations.formal_test_points.map((/** @type {any} */ point) => [point.outcome_id, point.formal_test_point_id]));
+      const pointByClaimId = new Map(obligations.outcomes.flatMap((/** @type {any} */ outcome) => outcome.claim_ids.map((/** @type {string} */ claimId) => [claimId, pointByOutcomeId.get(outcome.outcome_id)])));
       for (const [index, contract] of (artifact.oracle_semantic_contracts ?? []).entries()) {
-        const claimId = contract.basis?.find((basis) => basis.kind === 'claim')?.claim_id;
+        const claimId = contract.basis?.find((/** @type {any} */ basis) => basis.kind === 'claim')?.claim_id;
         contract.formal_test_point_id = pointByClaimId.get(claimId) ?? obligations.formal_test_points[index]?.formal_test_point_id;
       }
-      const oracleByClientKey = new Map((artifact.oracle_semantic_contracts ?? []).map((contract) => [contract.oracle_contract_client_key, contract]));
+      const oracleByClientKey = new Map((artifact.oracle_semantic_contracts ?? []).map((/** @type {any} */ contract) => [contract.oracle_contract_client_key, contract]));
       for (const contract of artifact.behavior_equivalence_contracts ?? []) contract.formal_test_point_id = oracleByClientKey.get(contract.oracle_semantic_contract_client_key)?.formal_test_point_id;
     }
     if (seed && Array.isArray(seed.required_contracts) && Array.isArray(artifact.behavior_contract_reviews)) {
@@ -321,11 +342,12 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
       ];
       const contractInfo = new Map();
       for (const [kind, collection, clientKeyField] of collectionKinds) for (const contract of artifact[collection] ?? []) contractInfo.set(contract[clientKeyField], { kind, contract });
-      const gapKind = new Map((artifact.semantic_gap_proposals ?? []).map((gap) => [gap.semantic_gap_client_key, ['authority', 'join', 'transform', 'null_policy', 'freshness'].includes(gap.missing_semantics) ? 'field_correspondence' : gap.missing_semantics === 'domain_boundary' ? 'domain' : ['population_scope', 'population_proof'].includes(gap.missing_semantics) ? 'population' : gap.missing_semantics?.startsWith('oracle_') ? 'oracle_semantics' : gap.target?.kind === 'permission_cell' ? 'permission_auxiliary' : undefined]));
+      const gapKind = new Map((artifact.semantic_gap_proposals ?? []).map((/** @type {any} */ gap) => [gap.semantic_gap_client_key, ['authority', 'join', 'transform', 'null_policy', 'freshness'].includes(gap.missing_semantics) ? 'field_correspondence' : gap.missing_semantics === 'domain_boundary' ? 'domain' : ['population_scope', 'population_proof'].includes(gap.missing_semantics) ? 'population' : gap.missing_semantics?.startsWith('oracle_') ? 'oracle_semantics' : gap.target?.kind === 'permission_cell' ? 'permission_auxiliary' : undefined]));
       const claimed = new Set();
       const keyByGap = new Map();
       for (const review of artifact.behavior_contract_reviews) {
-        let kind; let subjectRef;
+        /** @type {any} */ let kind;
+        /** @type {any} */ let subjectRef;
         if (review.disposition?.kind === 'formal') {
           const info = contractInfo.get(review.disposition.contract_client_keys?.[0]);
           kind = info?.kind;
@@ -334,8 +356,8 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
           const gapClientKey = review.disposition.gap_ref?.semantic_gap_client_key;
           kind = gapKind.get(gapClientKey);
         }
-        const candidates = seed.required_contracts.filter((candidate) => candidate.contract_kind === kind && !claimed.has(candidate.required_contract_key));
-        const selected = candidates.find((candidate) => subjectRef !== undefined && candidate.subject_ref === subjectRef) ?? candidates[0];
+        const candidates = seed.required_contracts.filter((/** @type {any} */ candidate) => candidate.contract_kind === kind && !claimed.has(candidate.required_contract_key));
+        const selected = candidates.find((/** @type {any} */ candidate) => subjectRef !== undefined && candidate.subject_ref === subjectRef) ?? candidates[0];
         if (!selected) continue;
         review.seed_digest = seed.seed_digest;
         review.required_contract_key = selected.required_contract_key;
@@ -346,23 +368,23 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
     }
   }
   if (request.action?.artifact_kind === 'case_drafts' && object(request.action.artifact)) {
-    const tokenBinding = step.request_bindings.find((binding) => binding.target_json_pointer === '/action/action_token');
+    const tokenBinding = step.request_bindings.find((/** @type {any} */ binding) => binding.target_json_pointer === '/action/action_token');
     const caseWorkReply = tokenBinding ? replies.get(tokenBinding.value_from.source_step_id) : undefined;
     const context = caseWorkReply?.work_packet?.context;
     const obligations = context?.test_obligations?.payload;
     const acceptedOracles = context?.behavior?.payload?.oracle_semantic_contracts;
     if (obligations && Array.isArray(acceptedOracles)) {
-      const pointByOutcomeId = new Map(obligations.formal_test_points.map((point) => [point.outcome_id, point]));
+      const pointByOutcomeId = new Map(obligations.formal_test_points.map((/** @type {any} */ point) => [point.outcome_id, point]));
       for (const [index, draft] of (request.action.artifact.case_drafts ?? []).entries()) {
         const claimId = draft.oracles?.[0]?.claim_ids?.[0];
-        const outcome = obligations.outcomes.find((candidate) => candidate.claim_ids.includes(claimId)) ?? obligations.outcomes[index];
+        const outcome = obligations.outcomes.find((/** @type {any} */ candidate) => candidate.claim_ids.includes(claimId)) ?? obligations.outcomes[index];
         const point = outcome ? pointByOutcomeId.get(outcome.outcome_id) : undefined;
-        const acceptedOracle = acceptedOracles.find((candidate) => candidate.formal_test_point_id === point?.formal_test_point_id) ?? acceptedOracles[index];
+        const acceptedOracle = acceptedOracles.find((/** @type {any} */ candidate) => candidate.formal_test_point_id === point?.formal_test_point_id) ?? acceptedOracles[index];
         if (!outcome || !point || !acceptedOracle) fail('Case fixture cannot resolve accepted Fact, TestPoint, and Oracle projections');
         draft.acceptance_role = outcome.acceptance_role;
         draft.fact_ids = [outcome.fact_id];
         draft.primary_test_point_id = point.formal_test_point_id;
-        draft.supporting_observation_ids = obligations.supporting_observations.filter((observation) => observation.outcome_id === outcome.outcome_id).map((observation) => observation.supporting_observation_id);
+        draft.supporting_observation_ids = obligations.supporting_observations.filter((/** @type {any} */ observation) => observation.outcome_id === outcome.outcome_id).map((/** @type {any} */ observation) => observation.supporting_observation_id);
         draft.oracles[0].oracle_semantic_contract_id = acceptedOracle.oracle_contract_client_key;
       }
     }
@@ -371,6 +393,7 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
   return request;
 }
 
+/** @param {any} reply @param {Map<string,string>} catalogs */
 function normalizeReply(reply, catalogs) {
   const result = structuredClone(reply);
   if (typeof result.run_directory === 'string') {
@@ -379,6 +402,7 @@ function normalizeReply(reply, catalogs) {
   return result;
 }
 
+/** @param {any} actual @param {any} expected @param {number} priorRevision */
 function assertExpectedReply(actual, expected, priorRevision) {
   if (actual.kind !== expected.reply_kind || actual.reply_contract_id !== expected.reply_contract_id || actual.reply_status !== expected.reply_status) fail(`reply contract mismatch: ${canonicalV5Stringify({ actual, expected })}`);
   if (expected.projection_kind !== undefined && actual.projection_kind !== expected.projection_kind) fail('reply projection kind differs');
@@ -391,10 +415,11 @@ function assertExpectedReply(actual, expected, priorRevision) {
   if (delta !== expected.semantic_revision_delta) fail(`semantic revision delta differs: ${delta}`);
   for (const pointer of expected.required_json_pointers) resolveFixturePointer(actual, pointer);
   for (const pointer of expected.forbidden_json_pointers) {
-    try { resolveFixturePointer(actual, pointer); fail(`forbidden pointer exists: ${pointer}`); } catch (error) { if (!String(error.message).includes('does not resolve')) throw error; }
+    try { resolveFixturePointer(actual, pointer); fail(`forbidden pointer exists: ${pointer}`); } catch (error) { if (!String(error).includes('does not resolve')) throw error; }
   }
 }
 
+/** @param {any} step @param {Map<string,any>} replies @param {Map<string,string>} catalogRoots */
 async function runTamper(step, replies, catalogRoots) {
   const runDirectory = resolveFixturePointer(replies.get(step.run_directory_from.source_step_id), '/run_directory');
   if (![...catalogRoots.values()].some((root) => runDirectory.startsWith(`${root}${path.sep}`))) fail('tamper target is outside this fixture catalogs');
@@ -402,19 +427,19 @@ async function runTamper(step, replies, catalogRoots) {
   if (step.target.kind === 'current_run_pointer') targetPath = path.join(runDirectory, 'current-transaction.json');
   else {
     const current = await readVerifiedRun(runDirectory);
-    const digestByKind = {
+    const digestByKind = /** @type {Record<string,string>} */ ({
       current_transaction_object: current.transaction.transaction_digest,
       current_receipt_object: current.transaction.receipt_digest,
       current_idempotency_index: current.transaction.idempotency_index_digest,
       current_reply_object: current.transaction.reply_object_digest,
       current_checkpoint: current.transaction.checkpoint_digest,
       current_selector_sidecar: current.transaction.selector_sidecar_digest
-    };
-    const directoryByKind = {
+    });
+    const directoryByKind = /** @type {Record<string,string>} */ ({
       current_transaction_object: current.layout.transactions, current_receipt_object: current.layout.receipts,
       current_idempotency_index: current.layout.idempotencyIndexes, current_reply_object: current.layout.replies,
       current_checkpoint: current.layout.checkpoints, current_selector_sidecar: current.layout.selectorSidecars
-    };
+    });
     if (digestByKind[step.target.kind]) targetPath = path.join(directoryByKind[step.target.kind], digestFilename(digestByKind[step.target.kind]));
     else if (step.target.kind === 'accepted_artifact') {
       const matches = [];
@@ -425,7 +450,7 @@ async function runTamper(step, replies, catalogRoots) {
       if (matches.length !== 1) fail('accepted artifact tamper target is not unique');
       targetPath = matches[0];
     } else if (step.target.kind === 'renderer_output') {
-      const index = { json: 0, markdown: 1, csv: 2 }[step.target.output_kind];
+      const index = /** @type {Record<string,number>} */ ({ json: 0, markdown: 1, csv: 2 })[step.target.output_kind];
       const digest = current.checkpoint.rendered_output_digests?.[index];
       if (!digest) fail('renderer output target is unavailable');
       targetPath = path.join(current.layout.renderedOutputs, digestFilename(digest));
@@ -434,13 +459,13 @@ async function runTamper(step, replies, catalogRoots) {
       if (step.target.projection_kind !== 'applied_clarification_impact' || typeof digest !== 'string') fail('compiler projection target is unavailable');
       targetPath = path.join(current.layout.compilerState, digestFilename(digest));
     } else if (step.target.kind === 'compiler_state') {
-      const checkpointFieldByKind = {
+      const checkpointFieldByKind = /** @type {Record<string,string>} */ ({
         source_acquisition_state: 'source_acquisition_state_digest',
         question_part_state_set: 'question_part_state_set_digest',
         clarification_pending: 'pending_clarification_digest',
         execution_snapshot: 'execution_snapshot_digest',
         final_execution_projection: 'final_execution_projection_digest'
-      };
+      });
       let digest;
       if (step.target.state_kind === 'execution_receipt') {
         digest = step.target.target_digest;
@@ -463,14 +488,20 @@ async function runTamper(step, replies, catalogRoots) {
   else fail(`unknown tamper mutation: ${step.mutation}`);
 }
 
+/**
+ * @param {string} manifestPath
+ * @param {{fixtureIds?:string[],onReply?:(reply:any,context:{fixture_id:string,step_id:string})=>any,includeTranscript?:boolean}} [options]
+ */
 export async function runV5FixtureManifest(manifestPath, options = {}) {
   const absoluteManifest = path.resolve(manifestPath);
   const fixtureRoot = path.dirname(absoluteManifest);
   const manifest = validateV5FixtureManifest(JSON.parse(await readFile(absoluteManifest, 'utf8')));
   const contracts = generateV5Contracts();
   const replySchema = generateV5InterfaceSchemas(contracts).reply;
+  /** @type {any[]} */
   const transcript = [];
   const requirementResults = new Map([...REQUIREMENTS].map((id) => [id, 0]));
+  /** @type {Map<string,Set<string>>} */
   const observedDiagnosticsByFixture = new Map();
   let executedFixtureCount = 0;
   for (const fixture of manifest.fixtures) {
@@ -496,6 +527,7 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
         let crashRestore = null;
         if (step.api === 'inject_crash') { restore(); crashRestore = installV5DeterministicTestProfile(fixture.fixture_id, { crashPoint: step.crash_point }); restore = crashRestore; invocation = step.during; }
         try {
+          /** @type {any} */
           let actual;
           if (invocation.api === 'createV5RunDirectory') {
             const template = await readJsonFile(fixtureRoot, invocation.request_file);
@@ -514,13 +546,13 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
           if (typeof options.onReply === 'function') await options.onReply(structuredClone(actual), { fixture_id: fixture.fixture_id, step_id: step.step_id });
           const replySchemaIssues = validateAgainstSchema(actual, replySchema);
           if (replySchemaIssues.length > 0) {
-            const branch = replySchema.oneOf.find((candidate) => candidate.properties?.reply_contract_id?.const === actual.reply_contract_id);
+            const branch = replySchema.oneOf.find((/** @type {any} */ candidate) => candidate.properties?.reply_contract_id?.const === actual.reply_contract_id);
             const branchIssues = branch ? validateAgainstSchema(actual, { ...branch, $defs: replySchema.$defs }) : [];
             fail(`public reply violates generated Reply oneOf: ${canonicalV5Stringify({ replySchemaIssues, branchIssues, reply_contract_id: actual.reply_contract_id })}`);
           }
           assertExpectedReply(actual, expected.reply, priorRevision);
           for (const diagnostic of actual.diagnostics ?? []) {
-            if (typeof diagnostic?.code === 'string') observedDiagnosticsByFixture.get(fixture.fixture_id).add(diagnostic.code);
+            if (typeof diagnostic?.code === 'string') observedDiagnosticsByFixture.get(fixture.fixture_id)?.add(diagnostic.code);
           }
           if (typeof actual.current_revision === 'number') priorRevision = actual.current_revision;
           replies.set(step.step_id, actual);
@@ -531,12 +563,12 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
           }
           transcript.push({ fixture_id: fixture.fixture_id, step_id: step.step_id, reply_digest: canonicalObjectDigest(normalized) });
         } catch (error) {
-          if (step.api !== 'inject_crash' || !String(error.message).includes('INJECTED_CRASH')) throw new Error(`${fixture.fixture_id}/${step.step_id}: ${error.message}`, { cause: error });
+          if (step.api !== 'inject_crash' || !String(error).includes('INJECTED_CRASH')) throw new Error(`${fixture.fixture_id}/${step.step_id}: ${String(error)}`, { cause: error });
         } finally {
           if (step.api === 'inject_crash') { restore(); restore = installV5DeterministicTestProfile(fixture.fixture_id); }
         }
       }
-      for (const requirement of fixture.requirement_ids) requirementResults.set(requirement, requirementResults.get(requirement) + 1);
+      for (const requirement of fixture.requirement_ids) requirementResults.set(requirement, (requirementResults.get(requirement) ?? 0) + 1);
     } finally {
       restore();
       await sandbox.release();
@@ -544,9 +576,9 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
     }
   }
   const uncoveredRuntimeErrors = contracts.policyRegistry.rules
-    .filter((rule) => rule.kind === 'runtime_error')
-    .filter((rule) => !rule.test_ids.some((fixtureId) => observedDiagnosticsByFixture.get(fixtureId)?.has(rule.error_code)))
-    .map((rule) => `${rule.error_code} -> ${rule.test_ids.join(',')}`)
+    .filter((/** @type {Record<string,any>} */ rule) => rule.kind === 'runtime_error')
+    .filter((/** @type {Record<string,any>} */ rule) => !rule.test_ids.some((/** @type {string} */ fixtureId) => observedDiagnosticsByFixture.get(fixtureId)?.has(rule.error_code)))
+    .map((/** @type {Record<string,any>} */ rule) => `${rule.error_code} -> ${rule.test_ids.join(',')}`)
     .sort();
   const partialRun = Array.isArray(options.fixtureIds);
   if (!partialRun && uncoveredRuntimeErrors.length > 0) fail(`Registry runtime errors lack executable leaf triggers: ${uncoveredRuntimeErrors.join('; ')}`);

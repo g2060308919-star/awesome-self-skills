@@ -13,6 +13,7 @@ import { V5_POLICY_FILE_MAP, generateV5Contracts } from '../../src/v5/registry-g
 const policyDirectory = new URL('../../skill/generate-test-cases/scripts/policies/', import.meta.url);
 const schemaDirectory = new URL('../../skill/generate-test-cases/scripts/schemas/', import.meta.url);
 
+/** @param {any} schema @param {string} [pointer] */
 function assertDeeplyClosedSchema(schema, pointer = '') {
   if (!schema || typeof schema !== 'object') return;
   if (Array.isArray(schema)) {
@@ -125,11 +126,11 @@ test('case drafts preserve the Phase 0 Case shape and add only the exact V5 exte
   assert.deepEqual(validateAgainstSchema(request, advanceSchema), []);
 
   for (const replacementField of ['canonical_names', 'claim_ids', 'semantic_gap_ids', 'not_applicable_basis', 'exploratory_only', 'observation_intent']) {
-    const invalid = structuredClone(request);
+    const invalid = /** @type {any} */ (structuredClone(request));
     invalid.action.artifact.case_drafts[0][replacementField] = replacementField === 'exploratory_only' ? true : [];
     assert.ok(validateAgainstSchema(invalid, advanceSchema).some((issue) => issue.code === 'ADDITIONAL_PROPERTY'));
   }
-  const inlineSemanticRef = structuredClone(request);
+  const inlineSemanticRef = /** @type {any} */ (structuredClone(request));
   inlineSemanticRef.action.artifact.case_drafts[0].steps[0].semantic_action_ref = caseDraft.case_step_semantic_bindings[0].action_ref;
   assert.ok(validateAgainstSchema(inlineSemanticRef, advanceSchema).some((issue) => issue.code === 'ADDITIONAL_PROPERTY'));
 });

@@ -526,7 +526,7 @@ function createPolicyRegistry(fsm) {
       enforcement: ['schema', 'invariant', 'fsm', 'transaction'],
       applicability: [...new Set(responses.map((response) => response.context))].map((context) => context === 'pre_run' ? { kind: 'pre_run' } : { kind: context, stages: ['source_acquisition', 'requirements_analysis', 'case_design', 'execution_closure', 'final_confirmation', 'delivery'] }),
       normative_refs: [`SPEC.ERROR.${errorCode}`],
-      test_ids: [executableErrorFixture[errorCode] ?? `F-${errorRequirement(errorCode)}.negative.rejection`],
+      test_ids: [/** @type {Record<string,string>} */ (executableErrorFixture)[errorCode] ?? `F-${errorRequirement(errorCode)}.negative.rejection`],
       kind: 'runtime_error',
       trigger_ref: `trigger.${errorCode.toLowerCase()}`,
       error_code: errorCode,
@@ -775,7 +775,7 @@ export async function writeV5Contracts(schemaDirectory, policyDirectory) {
   }
   const interfaceSchemas = generateV5InterfaceSchemas(contracts);
   for (const [schemaKey, fileBase] of Object.entries(V5_INTERFACE_SCHEMA_FILE_MAP)) {
-    const schema = interfaceSchemas[schemaKey];
+    const schema = /** @type {Record<string,any>} */ (interfaceSchemas)[schemaKey];
     if (schemaKey === 'reply' && validateV5ReplySchemaRegistryAlignment(contracts.replyContracts, schema).length > 0) {
       throw new Error('generated Reply oneOf is inconsistent with the Reply Registry');
     }
@@ -804,7 +804,7 @@ export async function checkV5Contracts(schemaDirectory, policyDirectory) {
   const interfaceSchemas = generateV5InterfaceSchemas(contracts);
   for (const [schemaKey, fileBase] of Object.entries(V5_INTERFACE_SCHEMA_FILE_MAP)) {
     expectedSchemaFiles.push(`${fileBase}.schema.json`);
-    const expectedSchema = `${canonicalStringify(interfaceSchemas[schemaKey])}\n`;
+    const expectedSchema = `${canonicalStringify(/** @type {Record<string,any>} */ (interfaceSchemas)[schemaKey])}\n`;
     const actualSchema = await readFile(path.join(schemaPath, `${fileBase}.schema.json`), 'utf8');
     if (actualSchema !== expectedSchema) throw new Error(`generated artifact is stale: ${fileBase}`);
   }

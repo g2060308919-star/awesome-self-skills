@@ -63,7 +63,10 @@ test('permission matrix review covers exact cells and keeps decision, denial, an
     : cell.permission_dimension === 'denial_behavior'
       ? { kind: 'formal', outcome: { permission_dimension: 'denial_behavior', decision_cell_key: /** @type {Record<string,any>} */ (decision).required_cell_key, denial_contract_ref: { kind: 'accepted', ref: { contract_id: 'deny-ui', contract_kind: 'denial_behavior', semantic_root_digest: root } } }, basis: [{ kind: 'claim', claim_id: 'claim-permission' }] }
       : { kind: 'semantic_gap', gap_ref: { kind: 'accepted_gap', semantic_gap_id: 'gap-data-scope' } } }));
-  const denialRef = reviews.find((row) => row.disposition.outcome?.permission_dimension === 'denial_behavior').disposition.outcome.denial_contract_ref.ref;
+  const denialReview = reviews.find((row) => row.disposition.outcome?.permission_dimension === 'denial_behavior');
+  if (!denialReview || denialReview.disposition.kind !== 'formal' || denialReview.disposition.outcome?.permission_dimension !== 'denial_behavior') throw new Error('missing denial review fixture');
+  const denialOutcome = /** @type {Record<string,any>} */ (denialReview.disposition.outcome);
+  const denialRef = denialOutcome.denial_contract_ref.ref;
   const evidenceContext = { evidenceLevels: new Map([['claim-permission', 'E2']]), acceptedContractRefs: new Set([typedContractRefKey(denialRef)]) };
   assert.equal(validatePermissionMatrixReview(matrix, { matrix_id: matrix.matrix_id, seed_digest: matrix.seed_digest, cell_dispositions: reviews }, root, evidenceContext).length, 3);
   assert.throws(() => validatePermissionMatrixReview(matrix, { matrix_id: matrix.matrix_id, seed_digest: matrix.seed_digest, cell_dispositions: reviews.slice(1) }, root), /PERMISSION_MATRIX_INCOMPLETE/u);

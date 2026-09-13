@@ -62,7 +62,7 @@ export function validateSemanticReviews(seed, artifact, context) {
     } else throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Outcome disposition kind is unknown.');
   }
   if ([...claimByKey.keys()].some((claimKey) => !candidateIdsByClaimKey.has(claimKey))) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Every submitted Claim must close at least one advertised outcome candidate.');
-  const compiledClaims = [...claimByKey.entries()].map(([claimClientKey, claim]) => {
+  const compiledClaims = /** @type {Array<Record<string,any>>} */ ([...claimByKey.entries()].map(([claimClientKey, claim]) => {
     const semanticClaim = {
       accepted_source_state_digest: seed.accepted_source_state_digest,
       outcome_candidate_ids: candidateIdsByClaimKey.get(claimClientKey),
@@ -72,7 +72,7 @@ export function validateSemanticReviews(seed, artifact, context) {
       ...(claim.intent_ref === undefined ? {} : { intent_ref: claim.intent_ref })
     };
     return { ...structuredClone(claim), claim_id: stableId('claim', semanticClaim), outcome_candidate_ids: semanticClaim.outcome_candidate_ids };
-  }).sort((left, right) => left.claim_id.localeCompare(right.claim_id));
+  }).sort((left, right) => left.claim_id.localeCompare(right.claim_id)));
   const claimIdByClientKey = new Map(compiledClaims.map((claim) => [claim.claim_client_key, claim.claim_id]));
   for (const claim of compiledClaims) {
     if (Array.isArray(claim.basis)) claim.basis = claim.basis.map((basis) => basis.kind === 'claim' && claimIdByClientKey.has(basis.claim_id) ? { ...basis, claim_id: claimIdByClientKey.get(basis.claim_id) } : basis);

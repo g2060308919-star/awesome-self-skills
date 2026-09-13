@@ -2,12 +2,13 @@ import { mkdir, writeFile } from 'node:fs/promises';
 
 const outputDirectory = new URL('../tests/fixtures/v5/requests/', import.meta.url);
 const binding = () => ({ $fixture_binding: 'required' });
-const evidence = (claimId = 'claim-save') => [{ kind: 'claim', claim_id: claimId }];
+const evidence = (/** @type {string} */ claimId = 'claim-save') => [{ kind: 'claim', claim_id: claimId }];
 const riskKinds = [
   'null_or_missing', 'unknown_enum', 'api_failure', 'loading_failure', 'sync_delay',
   'long_content', 'pagination', 'refresh', 'business_permission_boundary'
 ];
 
+/** @param {number} index @returns {any} */
 function oracle(index) {
   const claimId = index === 0 ? 'claim-save' : 'claim-message';
   return {
@@ -19,6 +20,7 @@ function oracle(index) {
   };
 }
 
+/** @returns {any} */
 function artifact() {
   return {
     behavior_contract_seed_digest: binding(),
@@ -32,6 +34,7 @@ function artifact() {
   };
 }
 
+/** @param {string} kind */
 function request(kind) {
   const current = artifact();
   if (kind === 'oracle') current.oracle_semantic_contracts[0].assertion = { expected: '结果正常' };

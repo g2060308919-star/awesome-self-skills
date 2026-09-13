@@ -1,6 +1,6 @@
 const root = `sha256:${'a'.repeat(64)}`;
 
-/** @param {string} key @param {string} claimId @param {Record<string,any>} classification */
+/** @param {string} key @param {string} claimId @param {Record<string,any>} classification @returns {Record<string,any>} */
 function draft(key, claimId, classification = {}) {
   const stepKey = `step-${key}`;
   return {
@@ -17,6 +17,7 @@ function draft(key, claimId, classification = {}) {
   };
 }
 
+/** @returns {Record<string,any>} */
 export function caseOutputFixture() {
   const caseDrafts = [
     draft('grounded', 'claim-e2'),
@@ -42,7 +43,7 @@ export function caseOutputFixture() {
       { formal_test_point_id: 'tp-exploratory', kind: 'exploratory', observation_intent: 'Observe retry latency without asserting a product requirement.' }
     ],
     formal_test_point_ids: ['tp-grounded', 'tp-conditional', 'tp-blocked', 'tp-not-applicable'],
-    oracle_semantic_contracts: caseDrafts.flatMap((current) => current.oracles.map((oracle) => ({
+    oracle_semantic_contracts: caseDrafts.flatMap((current) => current.oracles.map((/** @type {Record<string,any>} */ oracle) => ({
       oracle_semantic_contract_id: oracle.oracle_semantic_contract_id,
       observation_ref: oracle.observation_ref, assertion: oracle.assertion,
       evaluation_scope: oracle.evaluation_scope, observation_window: oracle.observation_window

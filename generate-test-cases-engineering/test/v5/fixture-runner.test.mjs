@@ -1,4 +1,3 @@
-// @ts-nocheck
 import assert from 'node:assert/strict';
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -23,12 +22,12 @@ function cloneManifest() { return structuredClone(manifest); }
 test('manifest is the closed and complete discovery source for C01-C16', () => {
   const validated = validateV5FixtureManifest(cloneManifest());
   assert.equal(validated.fixtures.length, V5_REQUIRED_FIXTURE_LEAF_IDS.length);
-  assert.deepEqual(validated.fixtures.map((fixture) => fixture.fixture_id).sort(), V5_REQUIRED_FIXTURE_LEAF_IDS);
+  assert.deepEqual(validated.fixtures.map((/** @type {Record<string,any>} */ fixture) => fixture.fixture_id).sort(), V5_REQUIRED_FIXTURE_LEAF_IDS);
   for (let index = 1; index <= 16; index += 1) {
     const requirement = `C${String(index).padStart(2, '0')}`;
-    const leaves = validated.fixtures.filter((fixture) => fixture.requirement_ids.includes(requirement));
-    assert.ok(leaves.some((fixture) => fixture.fixture_id.includes('.positive.')), requirement);
-    assert.ok(leaves.some((fixture) => /\.(negative|blocked|protocol)\./u.test(fixture.fixture_id)), requirement);
+    const leaves = validated.fixtures.filter((/** @type {Record<string,any>} */ fixture) => fixture.requirement_ids.includes(requirement));
+    assert.ok(leaves.some((/** @type {Record<string,any>} */ fixture) => fixture.fixture_id.includes('.positive.')), requirement);
+    assert.ok(leaves.some((/** @type {Record<string,any>} */ fixture) => /\.(negative|blocked|protocol)\./u.test(fixture.fixture_id)), requirement);
   }
 });
 

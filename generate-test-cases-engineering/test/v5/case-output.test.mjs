@@ -41,10 +41,10 @@ test('compiler emits all five statuses, typed semantics, separate coverage, and 
 test('Agent client-key renames do not change compiler-owned Case, Step, or Oracle IDs', () => {
   const original = compileV5CaseDocument(compilerInput());
   const renamedInput = compilerInput();
-  renamedInput.case_drafts = renamedInput.case_drafts.map((draft, index) => ({
+  renamedInput.case_drafts = renamedInput.case_drafts.map((/** @type {Record<string,any>} */ draft, /** @type {number} */ index) => ({
     ...draft,
     case_client_key: `renamed-${index}`,
-    case_step_semantic_bindings: draft.case_step_semantic_bindings.map((binding) => ({ ...binding, case_client_key: `renamed-${index}` }))
+    case_step_semantic_bindings: draft.case_step_semantic_bindings.map((/** @type {Record<string,any>} */ binding) => ({ ...binding, case_client_key: `renamed-${index}` }))
   }));
   const renamed = compileV5CaseDocument(renamedInput);
   assert.deepEqual(renamed.cases.map((item) => ({ case_id: item.case_id, step_ids: item.steps.map((step) => step.step_id), oracle_ids: item.oracles.map((oracle) => oracle.oracle_id) })), original.cases.map((item) => ({ case_id: item.case_id, step_ids: item.steps.map((step) => step.step_id), oracle_ids: item.oracles.map((oracle) => oracle.oracle_id) })));
@@ -54,7 +54,7 @@ test('Case V5 extensions are mandatory and compiler output contains only stable 
   for (const field of ['case_step_semantic_bindings', 'domain_selections']) {
     const invalid = compilerInput();
     delete invalid.case_drafts[0][field];
-    assert.throws(() => compileV5CaseDocument(invalid), (error) => error.code === 'SCHEMA_VALIDATION_FAILED');
+    assert.throws(() => compileV5CaseDocument(invalid), (/** @type {any} */ error) => error.code === 'SCHEMA_VALIDATION_FAILED');
   }
 
   const compiled = compileV5CaseDocumentTransaction(compilerInput());
@@ -88,7 +88,7 @@ test('Case anchor and identity use the frozen Phase 0 projection without V5 sele
     fact_ids: draft.fact_ids,
     business_preconditions: draft.business_preconditions,
     data_conditions: draft.data_conditions,
-    steps: draft.steps.map((step) => ({ action: step.action })),
+    steps: draft.steps.map((/** @type {Record<string,any>} */ step) => ({ action: step.action })),
     semantic_effects: null,
     baseline_spec: null,
     test_values: null
@@ -100,7 +100,7 @@ test('Case anchor and identity use the frozen Phase 0 projection without V5 sele
     domain_contract_id: 'domain-status', partition_id: 'partition-target', selection: draft.domain_selections[0].selection
   });
   const document = compileV5CaseDocument(input);
-  assert.equal(document.cases[0].domain_selections[0].domain_selection_id, expectedSelectionId);
+  assert.equal(/** @type {Record<string,any>} */ (document.cases[0].domain_selections[0]).domain_selection_id, expectedSelectionId);
   assert.equal(document.cases[0].ordering.business_flow_ref, 'orders-flow');
   assert.deepEqual(document.cases[0].fact_ids, ['fact-claim-e2']);
   assert.equal('canonical_names' in document.cases[0], false);
@@ -130,12 +130,14 @@ test('Domain selections do not participate in Case, Step, or Oracle identity pre
     kind: 'sampled', selected_values: [{ kind: 'string', value: 'draft' }], residual_risk: 'One valid member sampled.', membership: { kind: 'closed_domain_membership' }
   };
   const sampled = compileV5CaseDocument(sampledInput);
-  const projectIds = (document) => {
-    const current = document.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id);
-    return { case_id: current.case_id, step_ids: current.steps.map((step) => step.step_id), oracle_ids: current.oracles.map((oracle) => oracle.oracle_id) };
+  const projectIds = (/** @type {Record<string,any>} */ document) => {
+    const current = /** @type {Record<string,any>} */ (document.cases.find((/** @type {Record<string,any>} */ item) => item.primary_test_point_id === draft.primary_test_point_id));
+    return { case_id: current.case_id, step_ids: current.steps.map((/** @type {Record<string,any>} */ step) => step.step_id), oracle_ids: current.oracles.map((/** @type {Record<string,any>} */ oracle) => oracle.oracle_id) };
   };
   assert.deepEqual(projectIds(sampled), projectIds(exhaustive));
-  assert.notEqual(sampled.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id).domain_selections[0].domain_selection_id, exhaustive.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id).domain_selections[0].domain_selection_id);
+  const sampledCase = /** @type {Record<string,any>} */ (sampled.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id));
+  const exhaustiveCase = /** @type {Record<string,any>} */ (exhaustive.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id));
+  assert.notEqual(sampledCase.domain_selections[0].domain_selection_id, exhaustiveCase.domain_selections[0].domain_selection_id);
 });
 
 test('Oracle-only changes leave Step identity unchanged', () => {
@@ -143,11 +145,11 @@ test('Oracle-only changes leave Step identity unchanged', () => {
   const changedInput = compilerInput();
   const draft = changedInput.case_drafts[0];
   draft.oracles[0].assertion.expected_text = 'changed';
-  const accepted = changedInput.oracle_semantic_contracts.find((contract) => contract.oracle_semantic_contract_id === draft.oracles[0].oracle_semantic_contract_id);
+  const accepted = /** @type {Record<string,any>} */ (changedInput.oracle_semantic_contracts.find((/** @type {Record<string,any>} */ contract) => contract.oracle_semantic_contract_id === draft.oracles[0].oracle_semantic_contract_id));
   accepted.assertion.expected_text = 'changed';
   const changed = compileV5CaseDocument(changedInput);
-  const originalCase = original.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id);
-  const changedCase = changed.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id);
+  const originalCase = /** @type {Record<string,any>} */ (original.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id));
+  const changedCase = /** @type {Record<string,any>} */ (changed.cases.find((item) => item.primary_test_point_id === draft.primary_test_point_id));
   assert.equal(changedCase.steps[0].step_id, originalCase.steps[0].step_id);
   assert.notEqual(changedCase.oracles[0].oracle_id, originalCase.oracles[0].oracle_id);
 });
@@ -190,9 +192,10 @@ test('Domain selections are compiler-bound to one Case, Test Point, Oracle, Doma
 
   const transaction = compileV5CaseDocumentTransaction(input);
   const document = transaction.document;
-  const compiled = document.cases.find((current) => current.primary_test_point_id === draft.primary_test_point_id);
+  const compiled = /** @type {Record<string,any>} */ (document.cases.find((current) => current.primary_test_point_id === draft.primary_test_point_id));
   assert.match(compiled.domain_selections[0].domain_selection_id, /^dsl5_[0-9a-f]{64}$/u);
-  assert.equal(transaction.client_key_bindings.find((binding) => binding.client_key === 'selection-grounded-target').stable_id, compiled.domain_selections[0].domain_selection_id);
+  const selectionBinding = transaction.client_key_bindings.find((binding) => binding.client_key === 'selection-grounded-target');
+  assert.equal(selectionBinding?.stable_id, compiled.domain_selections[0].domain_selection_id);
   assert.deepEqual(document.coverage.semantic_partition, {
     total: 2, covered: 1, gap: 1, not_applicable: 0
   });
@@ -202,7 +205,7 @@ test('Domain selections are compiler-bound to one Case, Test Point, Oracle, Doma
 
   const invalid = structuredClone(input);
   invalid.case_drafts[0].domain_selections[0].partition_id = 'partition-other';
-  assert.throws(() => compileV5CaseDocument(invalid), (error) => error.code === 'DOMAIN_CONTRACT_REQUIRED');
+  assert.throws(() => compileV5CaseDocument(invalid), (/** @type {any} */ error) => error.code === 'DOMAIN_CONTRACT_REQUIRED');
 });
 
 test('representative Domain selections require the exact accepted equivalence contract', () => {
@@ -227,7 +230,7 @@ test('representative Domain selections require the exact accepted equivalence co
     behavior_equivalence_contract_id: 'beq5-accepted', domain_contract_id: 'domain-open', partition_id: 'partition-open',
     formal_test_point_id: draft.primary_test_point_id, oracle_semantic_contract_id: draft.oracles[0].oracle_semantic_contract_id
   }];
-  assert.throws(() => compileV5CaseDocument(input), (error) => error.code === 'DOMAIN_CONTRACT_REQUIRED');
+  assert.throws(() => compileV5CaseDocument(input), (/** @type {any} */ error) => error.code === 'DOMAIN_CONTRACT_REQUIRED');
 });
 
 test('JSON, Markdown, and CSV are byte-stable mechanical projections with parity', async () => {

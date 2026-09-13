@@ -57,14 +57,14 @@ test('semantic review requires exact candidate coverage and atomic observation-s
   const accepted = /** @type {Record<string, any>} */ (validateSemanticReviews(seed, review, { acceptedDecisionIds: [] }));
   assert.equal(accepted.claims.length, 2);
   assert.equal(accepted.compiled_claims.length, 2);
-  assert.ok(accepted.compiled_claims.every((claim) => /^claim_[0-9a-f]{16}$/u.test(claim.claim_id)));
-  assert.deepEqual(accepted.client_key_bindings.map((binding) => binding.client_key), ['claim-0', 'claim-1']);
+  assert.ok(accepted.compiled_claims.every((/** @type {Record<string,any>} */ claim) => /^claim_[0-9a-f]{16}$/u.test(claim.claim_id)));
+  assert.deepEqual(accepted.client_key_bindings.map((/** @type {Record<string,any>} */ binding) => binding.client_key), ['claim-0', 'claim-1']);
   const renamed = structuredClone(review);
-  renamed.claims.forEach((claim, index) => { claim.claim_client_key = `renamed-${index}`; });
-  renamed.decomposition_reviews[0].disposition.claim_client_keys = renamed.claims.map((claim) => claim.claim_client_key);
+  renamed.claims.forEach((/** @type {Record<string,any>} */ claim, /** @type {number} */ index) => { claim.claim_client_key = `renamed-${index}`; });
+  renamed.decomposition_reviews[0].disposition.claim_client_keys = renamed.claims.map((/** @type {Record<string,any>} */ claim) => claim.claim_client_key);
   assert.deepEqual(
-    /** @type {Record<string, any>} */ (validateSemanticReviews(seed, renamed, { acceptedDecisionIds: [] })).compiled_claims.map((claim) => claim.claim_id),
-    accepted.compiled_claims.map((claim) => claim.claim_id)
+    /** @type {Record<string, any>} */ (validateSemanticReviews(seed, renamed, { acceptedDecisionIds: [] })).compiled_claims.map((/** @type {Record<string,any>} */ claim) => claim.claim_id),
+    accepted.compiled_claims.map((/** @type {Record<string,any>} */ claim) => claim.claim_id)
   );
   assert.throws(() => validateSemanticReviews(seed, { ...review, decomposition_reviews: [] }, { acceptedDecisionIds: [] }), /SEMANTIC_REVIEW_CANDIDATE_MISSING/u);
   const bad = structuredClone(review);

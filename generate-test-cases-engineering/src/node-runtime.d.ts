@@ -17,6 +17,7 @@ declare module 'node:child_process' {
 }
 
 declare module 'node:fs/promises' {
+  export const chmod: any;
   export const mkdtemp: any;
   export const cp: any;
   export const mkdir: any;
@@ -42,6 +43,7 @@ declare module 'node:crypto' {
   export const createHash: any;
   export const createHmac: any;
   export const hkdfSync: any;
+  export const randomBytes: any;
   export const randomUUID: any;
   export const timingSafeEqual: any;
 }

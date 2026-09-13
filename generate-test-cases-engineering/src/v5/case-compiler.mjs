@@ -91,6 +91,7 @@ function finitePartitionMembers(domain, partition) {
  * @param {string} caseAnchorDigest
  * @param {Record<string,any>} input
  * @param {string} status
+ * @returns {Array<Record<string,any>>}
  */
 function compileDomainSelections(draft, caseAnchorDigest, input, status) {
   const domainById = new Map(records(input.semantic_audit?.domains).map((domain) => [domain.domain_contract_id, domain]));
@@ -107,16 +108,16 @@ function compileDomainSelections(draft, caseAnchorDigest, input, status) {
     seenCoordinates.add(coordinate);
     const domain = domainById.get(selection.domain_contract_id);
     const partition = records(domain?.partitions).find((candidate) => candidate.partition_id === selection.partition_id);
-    const choice = selection.selection;
-    if (!domain || !partition || !object(choice) || !nonempty(choice.selected_values) || choice.selected_values.some((value) => !validateTypedValue(value))) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Domain selection must resolve one current-root Domain partition and typed values.');
-    const selectedDigests = choice.selected_values.map((value) => canonicalObjectDigest(value));
+    const choice = /** @type {Record<string,any>} */ (selection.selection);
+    if (!domain || !partition || !object(choice) || !nonempty(choice.selected_values) || choice.selected_values.some((/** @type {unknown} */ value) => !validateTypedValue(value))) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Domain selection must resolve one current-root Domain partition and typed values.');
+    const selectedDigests = choice.selected_values.map((/** @type {unknown} */ value) => canonicalObjectDigest(value));
     if (new Set(selectedDigests).size !== selectedDigests.length) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Domain selection values must be unique.');
     const finiteMembers = finitePartitionMembers(domain, partition);
     const finiteDigests = finiteMembers === null ? null : finiteMembers.map((value) => canonicalObjectDigest(value)).sort();
     const membership = choice.membership;
     if (!object(membership)) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Domain selection membership evidence is required.');
     if (membership.kind === 'closed_domain_membership') {
-      if (!exact(membership, ['kind']) || finiteDigests === null || selectedDigests.some((digest) => !finiteDigests.includes(digest))) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Closed-domain membership must select only members of the bound partition.');
+      if (!exact(membership, ['kind']) || finiteDigests === null || selectedDigests.some((/** @type {string} */ digest) => !finiteDigests.includes(digest))) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Closed-domain membership must select only members of the bound partition.');
     } else if (membership.kind === 'decidable_predicate') {
       if (!exact(membership, ['kind', 'predicate_contract_id']) || partition.kind !== 'predicate' || !nonblank(membership.predicate_contract_id) || membership.predicate_contract_id !== partition.predicate_contract_id) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Predicate membership must bind the partition predicate contract exactly.');
     } else if (membership.kind === 'membership_witnesses') {
@@ -161,7 +162,7 @@ function deriveDomainCoverage(input, cases) {
   for (const group of groups.values()) {
     const domain = domainById.get(group.domain_contract_id);
     const requiredIds = records(domain?.partitions).map((partition) => partition.partition_id).sort();
-    const byPartition = new Map(group.selections.map((selection) => [selection.partition_id, selection]));
+    const byPartition = new Map(group.selections.map((/** @type {Record<string,any>} */ selection) => [selection.partition_id, selection]));
     const grounded = []; const conditional = []; const blocked = [];
     for (const partitionId of requiredIds) {
       const selection = byPartition.get(partitionId);
@@ -198,7 +199,7 @@ function deriveDomainCoverage(input, cases) {
 /** @param {string} prefix @param {unknown} payload */
 function legacyStableId(prefix, payload) { return `${prefix}-${canonicalObjectDigest(payload).slice(7)}`; }
 
-/** @param {Record<string,any>} input @param {Array<Record<string,any>>} cases */
+/** @param {Record<string,any>} input @param {Array<Record<string,any>>} cases @param {Record<string,any>} domainCoverage */
 function deriveCoverage(input, cases, domainCoverage) {
   const caseByPoint = new Map(cases.filter((current) => current.semantic_status !== 'Exploratory').map((current) => [current.primary_test_point_id, current]));
   const formalIds = unique(input.formal_test_point_ids ?? [], 'Formal Test Point IDs');
@@ -277,6 +278,7 @@ function compileV5CaseDocumentBundle(input) {
   const oracleContractById = new Map(records(input.oracle_semantic_contracts).map((contract) => [contract.oracle_semantic_contract_id, contract]));
   if (oracleContractById.size !== records(input.oracle_semantic_contracts).length) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Accepted Oracle semantic-contract identities are duplicated.');
   const seenClientKeys = new Set();
+  /** @type {Array<{client_key:string,stable_id:string}>} */
   const clientKeyBindings = [];
   const bindClientKey = (/** @type {string} */ clientKey, /** @type {string} */ stableId) => {
     if (!nonblank(clientKey) || seenClientKeys.has(clientKey)) throw new V5ProtocolError('CLIENT_KEY_INVALID', 'Case, Step, Oracle, and DomainSelection client keys must be globally unique within the Case batch.');
@@ -297,6 +299,7 @@ function compileV5CaseDocumentBundle(input) {
     const assessments = claimIds.map((claimId) => assessmentByClaim.get(claimId));
     if (assessments.some((assessment) => !assessment || assessment.support_review !== 'supported')) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_MISSING', 'Case references unsupported or unknown business evidence.');
     const disposition = dispositionByPoint.get(draft.primary_test_point_id) ?? { formal_test_point_id: draft.primary_test_point_id, kind: 'formal' };
+    /** @type {string[]} */
     let gapIds = [];
     let notApplicableLevels;
     let exploratoryOnly = false;
@@ -338,7 +341,9 @@ function compileV5CaseDocumentBundle(input) {
     const bindingByStepKey = new Map(bindings.map((binding) => [binding.step_client_key, binding]));
     const domainSelections = compileDomainSelections(draft, caseAnchorDigest, input, status);
     const steps = draft.steps.map((/** @type {Record<string,any>} */ step, /** @type {number} */ index) => {
-      const actionRef = bindingByStepKey.get(step.step_client_key).action_ref;
+      const binding = bindingByStepKey.get(step.step_client_key);
+      if (!binding) throw new V5ProtocolError('ORACLE_SEMANTICS_REQUIRED', 'Each Case step needs one exact accepted semantic-action binding.');
+      const actionRef = binding.action_ref;
       return { step_id: legacyStableId('STEP', { case_anchor_digest: caseAnchorDigest, sequence: index + 1, action: step.action, action_ref: actionRef }), step_client_key: step.step_client_key, action: step.action, action_ref: structuredClone(actionRef) };
     });
     const stepIdByKey = new Map(steps.map((step) => [step.step_client_key, step.step_id]));

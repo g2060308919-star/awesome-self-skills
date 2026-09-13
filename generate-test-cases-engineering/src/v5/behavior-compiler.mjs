@@ -28,6 +28,7 @@ function nonempty(value) { return Array.isArray(value) && value.length > 0; }
  */
 export function projectAcceptedBehaviorViews(artifact, bindings) {
   const stableByClientKey = new Map(bindings.map((binding) => [binding.client_key, binding.stable_id]));
+  /** @param {any} value @returns {any} */
   const rewrite = (value) => {
     if (typeof value === 'string') return stableByClientKey.get(value) ?? value;
     if (Array.isArray(value)) return value.map(rewrite);
@@ -46,6 +47,7 @@ export function projectAcceptedBehaviorViews(artifact, bindings) {
 export function compileBehaviorContracts(input) {
   const { semanticRootDigest, semanticRuleIndex, artifact } = input;
   const acceptedContractRefs = new Set(input.acceptedContractRefs ?? []);
+  /** @type {Array<{client_key:string,stable_id:string}>} */
   const bindings = [];
   const stableByClientKey = new Map();
   const bind = (/** @type {string} */ clientKey, /** @type {string} */ stableId) => {
@@ -65,7 +67,7 @@ export function compileBehaviorContracts(input) {
     bind(validated.mapping_client_key, fieldCorrespondenceId);
     return { ...validated, field_correspondence_id: fieldCorrespondenceId };
   });
-  const fieldIdByClientKey = new Map(fieldCorrespondences.map((row) => [row.mapping_client_key, row.field_correspondence_id]));
+  const fieldIdByClientKey = new Map(fieldCorrespondences.map((/** @type {Record<string,any>} */ row) => [row.mapping_client_key, row.field_correspondence_id]));
 
   const permissionCellByTarget = new Map((input.permissionCells ?? []).map((cell) => [
     canonicalV5Stringify({ matrix_id: cell.matrix_id, required_cell_key: cell.required_cell_key }), cell
@@ -88,7 +90,7 @@ export function compileBehaviorContracts(input) {
         basis: contract.basis
       }, {
         semanticRootDigest, semanticRuleIndex,
-        fieldCorrespondenceIds: artifact.field_correspondences.map((mapping) => mapping.mapping_client_key),
+        fieldCorrespondenceIds: artifact.field_correspondences.map((/** @type {Record<string,any>} */ mapping) => mapping.mapping_client_key),
         permissionDecisionCells: []
       });
       const assertion = structuredClone(validated.assertion);
@@ -111,7 +113,7 @@ export function compileBehaviorContracts(input) {
     bind(contract.contract_client_key, permissionAuxiliaryContractId);
     return { ...structuredClone(contract), payload, permission_auxiliary_contract_id: permissionAuxiliaryContractId };
   });
-  const auxiliaryByClientKey = new Map(permissionAuxiliaryContracts.map((contract) => [contract.contract_client_key, contract]));
+  const auxiliaryByClientKey = new Map(permissionAuxiliaryContracts.map((/** @type {Record<string,any>} */ contract) => [contract.contract_client_key, contract]));
 
   const auxiliaryBehaviorRefs = new Map();
   for (const review of artifact.behavior_contract_reviews ?? []) {
@@ -158,12 +160,12 @@ export function compileBehaviorContracts(input) {
     return { ...structuredClone(contract), predicate_contract_id: predicateContractId };
   });
 
-  const domains = artifact.domain_contracts.map((/** @type {Record<string,any>} */ contract) => {
-    const compiled = compileDomain(semanticRootDigest, contract, artifact.predicate_contracts, acceptedContractRefs);
+  const domains = /** @type {Array<Record<string,any>>} */ (artifact.domain_contracts.map((/** @type {Record<string,any>} */ contract) => {
+    const compiled = /** @type {Record<string,any>} */ (compileDomain(semanticRootDigest, contract, artifact.predicate_contracts, acceptedContractRefs));
     bind(compiled.domain_client_key, compiled.domain_contract_id);
-    for (const partition of compiled.partitions) bind(partition.partition_client_key, partition.partition_id);
+    for (const partition of /** @type {Array<Record<string,any>>} */ (compiled.partitions)) bind(partition.partition_client_key, partition.partition_id);
     return compiled;
-  });
+  }));
 
   const populations = artifact.population_contracts.map((/** @type {Record<string,any>} */ contract) => {
     const validated = validatePopulationContract(contract, semanticRootDigest, acceptedContractRefs);
@@ -171,7 +173,7 @@ export function compileBehaviorContracts(input) {
     bind(validated.population_contract_client_key, populationContractId);
     return { ...validated, population_contract_id: populationContractId };
   });
-  const populationIdByClientKey = new Map(populations.map((row) => [row.population_contract_client_key, row.population_contract_id]));
+  const populationIdByClientKey = new Map(populations.map((/** @type {Record<string,any>} */ row) => [row.population_contract_client_key, row.population_contract_id]));
   const populationProofs = artifact.population_proofs.map((/** @type {Record<string,any>} */ proof) => {
     const validated = validatePopulationProof(proof, semanticRootDigest, artifact.population_contracts.map((/** @type {Record<string,any>} */ row) => row.population_contract_client_key), acceptedContractRefs);
     const populationContractId = populationIdByClientKey.get(validated.population_contract_client_key);
@@ -181,7 +183,7 @@ export function compileBehaviorContracts(input) {
     bind(validated.proof_client_key, populationProofId);
     return { ...validated, population_contract_id: populationContractId, population_proof_id: populationProofId };
   });
-  const populationProofIdByClientKey = new Map(populationProofs.map((row) => [row.proof_client_key, row.population_proof_id]));
+  const populationProofIdByClientKey = new Map(populationProofs.map((/** @type {Record<string,any>} */ row) => [row.proof_client_key, row.population_proof_id]));
 
   const oracleSemanticContracts = artifact.oracle_semantic_contracts.map((/** @type {Record<string,any>} */ contract) => {
     const candidate = structuredClone(contract);
@@ -219,12 +221,12 @@ export function compileBehaviorContracts(input) {
     bind(validated.oracle_contract_client_key, oracleSemanticContractId);
     return { ...validated, assertion, evaluation_scope: evaluationScope, oracle_semantic_contract_id: oracleSemanticContractId };
   });
-  const oracleIdByClientKey = new Map(oracleSemanticContracts.map((row) => [row.oracle_contract_client_key, row.oracle_semantic_contract_id]));
+  const oracleIdByClientKey = new Map(oracleSemanticContracts.map((/** @type {Record<string,any>} */ row) => [row.oracle_contract_client_key, row.oracle_semantic_contract_id]));
 
   const behaviorEquivalenceContracts = artifact.behavior_equivalence_contracts.map((/** @type {Record<string,any>} */ contract) => {
     if (!exact(contract, ['equivalence_contract_client_key', 'domain_contract_client_key', 'partition_client_key', 'formal_test_point_id', 'oracle_semantic_contract_client_key', 'equivalence_scope', 'basis']) || !nonblank(contract.equivalence_contract_client_key) || !nonblank(contract.formal_test_point_id) || contract.equivalence_scope !== 'all_members_same_observable_behavior' || !nonempty(contract.basis)) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Behavior equivalence contract is incomplete.');
-    const domain = domains.find((row) => row.domain_client_key === contract.domain_contract_client_key);
-    const partition = domain?.partitions.find((row) => row.partition_client_key === contract.partition_client_key);
+    const domain = domains.find((/** @type {Record<string,any>} */ row) => row.domain_client_key === contract.domain_contract_client_key);
+    const partition = domain?.partitions.find((/** @type {Record<string,any>} */ row) => row.partition_client_key === contract.partition_client_key);
     const oracleSemanticContractId = oracleIdByClientKey.get(contract.oracle_semantic_contract_client_key);
     if (!domain || !partition || !oracleSemanticContractId) throw new V5ProtocolError('DOMAIN_CONTRACT_REQUIRED', 'Behavior equivalence references are not closed within the same Behavior batch.');
     const behaviorEquivalenceContractId = stableV5Id('behavior_equivalence_contract', {

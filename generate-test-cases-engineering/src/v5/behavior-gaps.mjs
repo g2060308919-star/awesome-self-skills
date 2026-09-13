@@ -36,8 +36,8 @@ function validateAnswerContract(contract) {
  */
 export function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals, reviews, context = {}) {
   const requirements = new Map(/** @type {Array<Record<string,any>>} */ (seed.required_contracts ?? []).map((requirement) => [requirement.required_contract_key, requirement]));
-  const permissionCells = new Map((context.permissionMatrices ?? []).flatMap((matrix) => matrix.required_cells.map((cell) => [`${matrix.matrix_id}\0${cell.required_cell_key}`, { ...cell, matrix_id: matrix.matrix_id }])));
-  const riskKeys = new Set((seed.risk_review_module_ids ?? []).flatMap((moduleRef) => ['null_or_missing', 'unknown_enum', 'api_failure', 'loading_failure', 'sync_delay', 'long_content', 'pagination', 'refresh', 'business_permission_boundary'].map((riskKind) => `${moduleRef}\0${riskKind}`)));
+  const permissionCells = new Map((context.permissionMatrices ?? []).flatMap((matrix) => matrix.required_cells.map((/** @type {Record<string,any>} */ cell) => [`${matrix.matrix_id}\0${cell.required_cell_key}`, { ...cell, matrix_id: matrix.matrix_id }])));
+  const riskKeys = new Set((seed.risk_review_module_ids ?? []).flatMap((/** @type {string} */ moduleRef) => ['null_or_missing', 'unknown_enum', 'api_failure', 'loading_failure', 'sync_delay', 'long_content', 'pagination', 'refresh', 'business_permission_boundary'].map((riskKind) => `${moduleRef}\0${riskKind}`)));
   const proposalByClientKey = new Map();
   const acceptedById = new Map();
   const accepted = [];
@@ -60,7 +60,7 @@ export function compileBehaviorSemanticGaps(semanticRootDigest, seed, proposals,
     if (!object(proposal) || !nonblank(proposal.semantic_gap_client_key) || proposalByClientKey.has(proposal.semantic_gap_client_key) || !object(proposal.target) || !nonblank(proposal.missing_semantics) || !nonblank(proposal.question) || !Array.isArray(proposal.basis) || proposal.basis.length === 0) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Behavior gap proposal identity, target, question, or basis is invalid.');
     if (proposal.target.kind === 'behavior_contract') {
       const requirement = requirements.get(proposal.target.required_contract_key);
-      if (!requirement || !COMPATIBLE_MISSING_SEMANTICS[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Behavior gap target or missing semantics does not match the advertised requirement.');
+      if (!requirement || !/** @type {Record<string,Set<string>>} */ (COMPATIBLE_MISSING_SEMANTICS)[requirement.contract_kind]?.has(proposal.missing_semantics)) throw new V5ProtocolError('SEMANTIC_REVIEW_CANDIDATE_UNKNOWN', 'Behavior gap target or missing semantics does not match the advertised requirement.');
     } else if (proposal.target.kind === 'permission_cell') {
       const cell = permissionCells.get(`${proposal.target.matrix_id}\0${proposal.target.required_cell_key}`);
       const requiredMissing = cell?.permission_dimension === 'decision' ? 'permission_outcome' : cell?.permission_dimension;

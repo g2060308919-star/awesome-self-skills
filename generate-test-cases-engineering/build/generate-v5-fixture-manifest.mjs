@@ -6,10 +6,11 @@ import { V5_REQUIRED_FIXTURE_LEAF_IDS } from '../test/v5/fixture-inventory.mjs';
 import { generateV5Contracts } from '../src/v5/registry-generator.mjs';
 
 const manifestPath = new URL('../tests/fixtures/v5/manifest.json', import.meta.url);
-const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-const base = manifest.fixtures.filter((fixture) => /\.(positive\.baseline|negative\.rejection)$/u.test(fixture.fixture_id));
+const manifest = /** @type {any} */ (JSON.parse(await readFile(manifestPath, 'utf8')));
+const base = /** @type {any[]} */ (manifest.fixtures).filter((fixture) => /\.(positive\.baseline|negative\.rejection)$/u.test(fixture.fixture_id));
 const baseById = new Map(base.map((fixture) => [fixture.fixture_id, fixture]));
 
+/** @param {string} fixtureId */
 function sourceLeafId(fixtureId) {
   const match = /^(F-C(?:0[1-9]|1[0-6])-[a-z0-9-]+)\.(positive|negative|blocked|protocol)\./u.exec(fixtureId);
   if (!match) throw new Error(`invalid required fixture ID: ${fixtureId}`);
@@ -27,7 +28,9 @@ const behaviorFailureKinds = new Map([
   ['C14', ['risk', 'RISK_LEDGER_INVALID']]
 ]);
 const contracts = generateV5Contracts();
+const replyRows = /** @type {any[]} */ (contracts.replyContracts.rows);
 const requestRoot = new URL('../tests/fixtures/v5/requests/', import.meta.url);
+/** @param {string} name @returns {Promise<any>} */
 const readRequest = async (name) => JSON.parse(await readFile(new URL(name, requestRoot), 'utf8'));
 const previewTemplate = await readRequest('clarification-preview-final.json');
 const commitTemplate = await readRequest('clarification-commit-valid.json');
@@ -37,9 +40,11 @@ const evidenceC01Template = await readRequest('evidence-c01-valid.json');
 const behaviorValidTemplate = await readRequest('behavior-invalid-permission.json');
 behaviorValidTemplate.action.artifact.permission_matrix_reviews = [];
 delete behaviorValidTemplate.action.artifact.formal_test_point_ids;
-const claimRef = (clientKey) => ({ '$fixture_client_key': clientKey });
+const claimRef = (/** @type {string} */ clientKey) => ({ '$fixture_client_key': clientKey });
 
+/** @type {Map<string,any>} */
 const generatedRequests = new Map();
+/** @param {string} name @param {any} request */
 function registerRequest(name, request) {
   if (request.action?.artifact_kind === 'behavior_views') {
     for (const contract of request.action.artifact?.oracle_semantic_contracts ?? []) contract.formal_test_point_id = { '$fixture_binding': 'required' };
@@ -67,6 +72,7 @@ entityGapEvidence.action.artifact.semantic_gaps = [{
 entityGapEvidence.action.artifact.entity_resolutions[0].resolution = { kind: 'unresolved', semantic_gap_client_key: 'gap-entity' };
 registerRequest('evidence-c03-gap.json', entityGapEvidence);
 
+/** @param {string} name @param {string} raw @param {((unit:any,action:any,request:any)=>void)} [mutate] */
 function clarificationPreview(name, raw, mutate) {
   const request = structuredClone(previewTemplate);
   request.idempotency_key = `fixture-${name.replace(/\.json$/u, '')}`;
@@ -76,7 +82,7 @@ function clarificationPreview(name, raw, mutate) {
   return registerRequest(name, request);
 }
 
-const REQUESTS = {
+const REQUESTS = /** @type {Record<string,string>} */ ({
   bindingAmbiguous: clarificationPreview('clarification-binding-ambiguous.json', 'Q001 Q001 显示保存成功'),
   bindingInvalid: clarificationPreview('clarification-binding-invalid.json', 'Q001 显示保存成功', (unit) => { unit.target.display_token = 'Q999'; }),
   controlOrigin: clarificationPreview('clarification-control-origin-invalid.json', 'Q001 我想稍后回答', (unit) => { unit.action = 'defer'; delete unit.answer; }),
@@ -89,7 +95,7 @@ const REQUESTS = {
   stale: clarificationPreview('clarification-preview-stale.json', 'Q001 显示保存成功', (unit, action) => { action.presentation_id = 'stale-presentation'; }),
   valid: 'requests/clarification-preview-final.json',
   commitValid: 'requests/clarification-commit-valid.json'
-};
+});
 const invalidCommit = structuredClone(commitTemplate);
 invalidCommit.idempotency_key = 'fixture-clarification-commit-invalid';
 invalidCommit.action.raw_confirmation = '拒绝';
@@ -185,7 +191,7 @@ const caseValid = {
   } }
 };
 registerRequest('case-valid.json', caseValid);
-const caseOracleRequired = structuredClone(caseValid);
+const caseOracleRequired = /** @type {any} */ (structuredClone(caseValid));
 caseOracleRequired.idempotency_key = 'fixture-case-oracle-required';
 caseOracleRequired.action.artifact.case_drafts[0].oracles[0].observation_ref.subject_ref = '';
 registerRequest('case-oracle-required.json', caseOracleRequired);
@@ -209,7 +215,7 @@ for (const [kind, content] of Object.entries({
   behaviorFailureSources.set(kind, { create: `requests/${createName}`, source: `requests/${sourceName}` });
 }
 
-const behaviorGapBlueprints = Object.freeze({
+const behaviorGapBlueprints = /** @type {Record<string,any>} */ (Object.freeze({
   field: {
     gapIndex: 2, missingSemantics: 'null_policy', question: '空值在字段对应中应视为缺失、业务值、非法值还是不适用？',
     oracleByIndex: { 0: 'oracle-contract-0', 1: 'oracle-contract-1' },
@@ -228,7 +234,7 @@ const behaviorGapBlueprints = Object.freeze({
       creation_constraints: { allowed_scope_kinds: ['single_item', 'visible_region', 'current_page', 'current_response', 'all_pages', 'full_dataset'], semantic_root_digest: { '$fixture_binding': 'required' } }
     }
   }
-});
+}));
 
 for (const [kind, blueprint] of Object.entries(behaviorGapBlueprints)) {
   const request = structuredClone(behaviorValidTemplate);
@@ -251,6 +257,7 @@ for (const [kind, blueprint] of Object.entries(behaviorGapBlueprints)) {
 
 await Promise.all([...generatedRequests].map(([name, request]) => writeFile(new URL(name, requestRoot), `${JSON.stringify(request, null, 2)}\n`)));
 
+/** @param {any} clone @param {string} fixtureId @param {string} requirement */
 function specializeBehaviorFailure(clone, fixtureId, requirement) {
   if (!/\.(negative|blocked)\./u.test(fixtureId)) return clone;
   const failure = behaviorFailureKinds.get(requirement);
@@ -262,7 +269,7 @@ function specializeBehaviorFailure(clone, fixtureId, requirement) {
     source.action_sequence[0].request_file = signalSource.create;
     source.action_sequence[1].request_file = signalSource.source;
     if (kind === 'field' || kind === 'population') {
-      const evidenceBindings = source.action_sequence[2].request_bindings;
+      const evidenceBindings = /** @type {any[]} */ (source.action_sequence[2].request_bindings);
       evidenceBindings.find((binding) => binding.target_json_pointer === '/action/artifact/claims/0/observation_slot_digests/0').value_from.source_json_pointer = '/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/primary_observation_slot_digest';
       evidenceBindings.find((binding) => binding.target_json_pointer === '/action/artifact/claims/1/primary_outcome_signature/primary_observation_slot_digest').value_from.source_json_pointer = '/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0';
       evidenceBindings.find((binding) => binding.target_json_pointer === '/action/artifact/claims/1/observation_slot_digests/0').value_from.source_json_pointer = '/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0';
@@ -292,7 +299,7 @@ function specializeBehaviorFailure(clone, fixtureId, requirement) {
       ] : [])
     ]
   });
-  const row = contracts.replyContracts.rows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === 'cd.active.case.behavior' && candidate.exact_projection_kind === 'persisted_run_state');
+  const row = replyRows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === 'run_mutation' && candidate.source.trigger_state?.fsm_cell_id === 'cd.active.case.behavior' && candidate.exact_projection_kind === 'persisted_run_state');
   if (!row) throw new Error(`missing behavior failure reply row for ${errorCode}`);
   source.expected_steps.push({ kind: 'api_reply', reply: {
     reply_kind: 'run_reply', projection_kind: 'persisted_run_state', reply_contract_id: row.reply_contract_id,
@@ -302,15 +309,18 @@ function specializeBehaviorFailure(clone, fixtureId, requirement) {
   return synchronizeInputFiles(source);
 }
 
+/** @param {string} api @param {Record<string,any>} [extra] */
 const processExpectation = (api, extra = {}) => ({ kind: 'process_control', api, ...extra });
 
+/** @param {Record<string,any>} step */
 function withoutStepId(step) {
   const { step_id: ignored, ...nested } = structuredClone(step);
   return nested;
 }
 
+/** @param {string} errorCode @param {string} context @param {Record<string,any>} triggerState @param {Record<string,any>} [overrides] */
 function registryErrorReply(errorCode, context, triggerState, overrides = {}) {
-  const row = contracts.replyContracts.rows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === context && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(triggerState) && candidate.exact_projection_kind === (overrides.projection_kind ?? candidate.exact_projection_kind));
+  const row = replyRows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === context && canonicalV5Stringify(candidate.source.trigger_state) === canonicalV5Stringify(triggerState) && candidate.exact_projection_kind === (overrides.projection_kind ?? candidate.exact_projection_kind));
   if (!row) throw new Error(`missing fixture reply contract for ${errorCode}/${context}/${canonicalV5Stringify(triggerState)}`);
   if (row.exact_projection_kind === 'read_only_integrity_fatal') return { kind: 'api_reply', reply: {
     reply_kind: 'run_reply', projection_kind: row.exact_projection_kind, reply_contract_id: row.reply_contract_id,
@@ -345,44 +355,48 @@ function clarificationPrefix() {
 
 function permissionPrefix() {
   const prefix = c01Prefix();
-  const actions = [prefix.create, prefix.source, prefix.evidence].map((step) => structuredClone(step));
+  const actions = [prefix.create, prefix.source, prefix.evidence].map((/** @type {any} */ step) => structuredClone(step));
   actions[0].request_file = 'requests/create-permission.json';
   actions[1].request_file = 'requests/source-permission.json';
   actions[2].request_file = 'requests/evidence-permission.json';
-  const parentIndex = actions[2].request_bindings.findIndex((binding) => binding.target_json_pointer === '/action/artifact/claims/0/primary_outcome_signature');
+  const parentIndex = /** @type {any[]} */ (actions[2].request_bindings).findIndex((binding) => binding.target_json_pointer === '/action/artifact/claims/0/primary_outcome_signature');
   actions[2].request_bindings.splice(parentIndex, 1, ...['subject_slot_digest', 'condition_slot_digest', 'action_slot_digest', 'branch_slot_digest'].map((field) => ({ target_json_pointer: `/action/artifact/claims/0/primary_outcome_signature/${field}`, value_from: { source_step_id: 'source', source_json_pointer: `/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/${field}` } })), { target_json_pointer: '/action/artifact/claims/0/primary_outcome_signature/primary_observation_slot_digest', value_from: { source_step_id: 'source', source_json_pointer: '/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0' } });
   return { actions, expected: [prefix.createExpected, prefix.sourceExpected, structuredClone(baseById.get('F-C01-atomicity.positive.baseline').expected_steps[2])] };
 }
 
+/** @param {any} fixture */
 function synchronizeInputFiles(fixture) {
-  fixture.input_files = [...new Set(fixture.action_sequence.flatMap((step) => step.api === 'inject_crash' ? [step.during.request_file].filter(Boolean) : [step.request_file].filter(Boolean)))];
+  fixture.input_files = [...new Set(fixture.action_sequence.flatMap((/** @type {any} */ step) => step.api === 'inject_crash' ? [step.during.request_file].filter(Boolean) : [step.request_file].filter(Boolean)))];
   return fixture;
 }
 
+/** @param {string} requestFile @param {string} stepId @param {string} [sourceStepId] @param {Record<string,any>} [options] */
 function previewStep(requestFile, stepId, sourceStepId = 'evidence', options = {}) {
   const source = structuredClone(baseById.get('F-C02-ambiguity.positive.baseline').action_sequence[3]);
   source.step_id = stepId;
   source.request_file = requestFile;
-  source.request_bindings.forEach((binding) => { binding.value_from.source_step_id = sourceStepId; });
-  if (options.actionIndex !== undefined) source.request_bindings.find((binding) => binding.target_json_pointer === '/action/action_token').value_from.source_json_pointer = `/available_actions/${options.actionIndex}/action_token`;
-  if (options.fixedPresentation) source.request_bindings = source.request_bindings.filter((binding) => binding.target_json_pointer !== '/action/presentation_id');
-  if (options.fixedDisplayToken) source.request_bindings = source.request_bindings.filter((binding) => binding.target_json_pointer !== '/action/proposed_units/0/target/display_token');
+  /** @type {any[]} */ (source.request_bindings).forEach((binding) => { binding.value_from.source_step_id = sourceStepId; });
+  if (options.actionIndex !== undefined) /** @type {any[]} */ (source.request_bindings).find((binding) => binding.target_json_pointer === '/action/action_token').value_from.source_json_pointer = `/available_actions/${options.actionIndex}/action_token`;
+  if (options.fixedPresentation) source.request_bindings = /** @type {any[]} */ (source.request_bindings).filter((binding) => binding.target_json_pointer !== '/action/presentation_id');
+  if (options.fixedDisplayToken) source.request_bindings = /** @type {any[]} */ (source.request_bindings).filter((binding) => binding.target_json_pointer !== '/action/proposed_units/0/target/display_token');
   if (options.secondUnit) {
-    for (const binding of source.request_bindings.filter((candidate) => candidate.target_json_pointer.startsWith('/action/proposed_units/0/target/'))) {
+    for (const binding of /** @type {any[]} */ (source.request_bindings).filter((candidate) => candidate.target_json_pointer.startsWith('/action/proposed_units/0/target/'))) {
       source.request_bindings.push({ ...structuredClone(binding), target_json_pointer: binding.target_json_pointer.replace('/0/', '/1/') });
     }
   }
   return source;
 }
 
+/** @param {string} requestFile @param {string} stepId @param {string} sourceStepId */
 function commitStep(requestFile, stepId, sourceStepId) {
   const source = structuredClone(baseById.get('F-C02-ambiguity.positive.baseline').action_sequence[4]);
   source.step_id = stepId;
   source.request_file = requestFile;
-  source.request_bindings.forEach((binding) => { binding.value_from.source_step_id = sourceStepId; });
+  /** @type {any[]} */ (source.request_bindings).forEach((binding) => { binding.value_from.source_step_id = sourceStepId; });
   return source;
 }
 
+/** @param {string} requestFile @param {string} stepId @param {string} [evidenceStepId] @param {any[]} [extraBindings] */
 function behaviorStep(requestFile, stepId, evidenceStepId = 'evidence', extraBindings = []) {
   return {
     step_id: stepId, api: 'advanceV5Run',
@@ -401,6 +415,7 @@ function behaviorStep(requestFile, stepId, evidenceStepId = 'evidence', extraBin
   };
 }
 
+/** @param {string} [behaviorStepId] */
 function caseOracleContractBindings(behaviorStepId = 'behavior-valid') {
   return [0, 1].map((index) => ({
     target_json_pointer: `/action/artifact/case_drafts/${index}/oracles/0/oracle_semantic_contract_id`,
@@ -408,6 +423,7 @@ function caseOracleContractBindings(behaviorStepId = 'behavior-valid') {
   }));
 }
 
+/** @param {string} [evidenceStepId] */
 function caseSemanticRootBindings(evidenceStepId = 'evidence') {
   return [0, 1].map((index) => ({
     target_json_pointer: `/action/artifact/case_drafts/${index}/case_step_semantic_bindings/0/action_ref/semantic_root_digest`,
@@ -415,8 +431,9 @@ function caseSemanticRootBindings(evidenceStepId = 'evidence') {
   }));
 }
 
+/** @param {string} outcomeId @param {number} semanticRevisionDelta @param {string[]} [requiredJsonPointers] */
 function fsmReply(outcomeId, semanticRevisionDelta, requiredJsonPointers = []) {
-  const row = contracts.replyContracts.rows.find((candidate) => candidate.source.kind === 'fsm_outcome' && candidate.source.outcome_id === outcomeId);
+  const row = replyRows.find((candidate) => candidate.source.kind === 'fsm_outcome' && candidate.source.outcome_id === outcomeId);
   if (!row) throw new Error(`missing FSM fixture reply row ${outcomeId}`);
   return { kind: 'api_reply', reply: {
     reply_kind: 'run_reply', projection_kind: row.exact_projection_kind, reply_contract_id: row.reply_contract_id,
@@ -425,12 +442,14 @@ function fsmReply(outcomeId, semanticRevisionDelta, requiredJsonPointers = []) {
   } };
 }
 
+/** @param {string} errorCode */
 function preRunErrorReply(errorCode) {
-  const row = contracts.replyContracts.rows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === 'pre_run');
+  const row = replyRows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === 'pre_run');
   if (!row) throw new Error(`missing pre-run fixture reply row ${errorCode}`);
   return { kind: 'api_reply', reply: { reply_kind: 'pre_run_error', reply_contract_id: row.reply_contract_id, reply_status: row.exact_reply_status, error_code: errorCode, semantic_revision_delta: 0, required_json_pointers: ['/diagnostics/0/code'], forbidden_json_pointers: ['/compiler_version'] } };
 }
 
+/** @param {any} clone @param {string} fixtureId @param {string} requirement */
 function specializeClarificationFixture(clone, fixtureId, requirement) {
   if (!['C04', 'C05', 'C06', 'C07'].includes(requirement)) return clone;
   if (!/\.(negative|blocked)\./u.test(fixtureId)) {
@@ -440,14 +459,14 @@ function specializeClarificationFixture(clone, fixtureId, requirement) {
   }
   const prefix = clarificationPrefix();
   clone.action_sequence = [...prefix.actions]; clone.expected_steps = [...prefix.expected];
-  const error = (code) => registryErrorReply(code, 'run_mutation', { kind: 'verified_fsm_cell', fsm_cell_id: 'cd.active.requirements.resolve' });
+  const error = (/** @type {string} */ code) => registryErrorReply(code, 'run_mutation', { kind: 'verified_fsm_cell', fsm_cell_id: 'cd.active.requirements.resolve' });
   if (requirement === 'C04') {
-    const rows = [
+    const rows = /** @type {Array<[string,string,string,Record<string,any>]>} */ ([
       ['binding-ambiguous', REQUESTS.bindingAmbiguous, 'ANSWER_BINDING_AMBIGUOUS', {}],
       ['binding-invalid', REQUESTS.bindingInvalid, 'ANSWER_BINDING_INVALID', { fixedDisplayToken: true }],
       ['control-origin', REQUESTS.controlOrigin, 'CONTROL_ORIGIN_REQUIRED', {}],
       ['client-key', REQUESTS.clientKey, 'CLIENT_KEY_INVALID', {}]
-    ];
+    ]);
     for (const [id, file, code, options] of rows) { clone.action_sequence.push(previewStep(file, id, 'evidence', options)); clone.expected_steps.push(error(code)); }
   } else if (requirement === 'C05') {
     for (const [id, file, code] of [['answer-nature', REQUESTS.answerNature, 'ANSWER_NATURE_INVALID'], ['temporary-basis', REQUESTS.temporaryBasis, 'TEMPORARY_BASIS_REQUIRED']]) {
@@ -479,6 +498,7 @@ function specializeClarificationFixture(clone, fixtureId, requirement) {
   return synchronizeInputFiles(clone);
 }
 
+/** @param {any} clone @param {string} fixtureId @param {string} requirement */
 function specializeBehaviorFixtures(clone, fixtureId, requirement) {
   if (requirement === 'C08' && /\.(negative|blocked)\./u.test(fixtureId)) {
     const prefix = c01Prefix();
@@ -540,6 +560,7 @@ function specializeBehaviorFixtures(clone, fixtureId, requirement) {
   return clone;
 }
 
+/** @param {any} clone @param {string} fixtureId @param {string} requirement */
 function specializeRequirementsGapFixture(clone, fixtureId, requirement) {
   if (!['C02', 'C03'].includes(requirement) || !/\.(negative|blocked)\./u.test(fixtureId)) return clone;
   const positive = structuredClone(baseById.get(requirement === 'C02' ? 'F-C02-ambiguity.positive.baseline' : 'F-C03-entity.positive.baseline'));
@@ -550,7 +571,7 @@ function specializeRequirementsGapFixture(clone, fixtureId, requirement) {
   if (requirement === 'C03') {
     const evidence = positive.action_sequence[2];
     evidence.request_file = 'requests/evidence-c03-gap.json';
-    evidence.request_bindings = evidence.request_bindings.filter((binding) => !binding.target_json_pointer.includes('/resolution/clusters/'));
+    evidence.request_bindings = /** @type {any[]} */ (evidence.request_bindings).filter((binding) => !binding.target_json_pointer.includes('/resolution/clusters/'));
     evidence.request_bindings.push(
       { target_json_pointer: '/action/artifact/semantic_gaps/0/target/origin/conflict_group_id', value_from: { source_step_id: 'source', source_json_pointer: '/work_packet/semantic_review_seed/entity_conflict_groups/0/conflict_group_id' } },
       { target_json_pointer: '/action/artifact/semantic_gaps/0/target/origin/mention_candidate_ids/0', value_from: { source_step_id: 'source', source_json_pointer: '/work_packet/semantic_review_seed/entity_mention_candidates/0/candidate_id' } },
@@ -562,12 +583,13 @@ function specializeRequirementsGapFixture(clone, fixtureId, requirement) {
   return synchronizeInputFiles(positive);
 }
 
+/** @param {any} clone @param {string} fixtureId @param {string} requirement */
 function specializeProtocolFixture(clone, fixtureId, requirement) {
   if (requirement !== 'C15') return clone;
   const local = structuredClone(baseById.get('F-C15-protocol.positive.baseline'));
   const c01 = c01Prefix();
   if (fixtureId === 'F-C15-protocol.negative.rejection') {
-    const createInvocation = (stepId, requestFile) => ({ step_id: stepId, api: 'createV5RunDirectory', catalog_key: 'primary', request_file: requestFile, request_bindings: [], fixture_absolute_path_bindings: [] });
+    const createInvocation = (/** @type {string} */ stepId, /** @type {string} */ requestFile) => ({ step_id: stepId, api: 'createV5RunDirectory', catalog_key: 'primary', request_file: requestFile, request_bindings: [], fixture_absolute_path_bindings: [] });
     clone.catalog_keys = ['primary'];
     clone.action_sequence = [
       createInvocation('unsupported', 'requests/create-unsupported.json'),
@@ -693,6 +715,7 @@ function specializeProtocolFixture(clone, fixtureId, requirement) {
   return clone;
 }
 
+/** @param {any} clone @param {string} fixtureId @param {string} requirement */
 function specializeProvenanceFixture(clone, fixtureId, requirement) {
   if (requirement !== 'C16') return clone;
   const prefix = c01Prefix();
@@ -720,6 +743,7 @@ const fixtures = V5_REQUIRED_FIXTURE_LEAF_IDS.map((fixtureId) => {
   let clone = structuredClone(source);
   clone.fixture_id = fixtureId;
   const requirement = /^F-(C(?:0[1-9]|1[0-6]))-/u.exec(fixtureId)?.[1];
+  if (!requirement) throw new Error(`fixture requirement is missing: ${fixtureId}`);
   clone.requirement_ids = [requirement];
   clone = specializeBehaviorFailure(clone, fixtureId, requirement);
   clone = specializeRequirementsGapFixture(clone, fixtureId, requirement);
@@ -733,21 +757,22 @@ const fixtures = V5_REQUIRED_FIXTURE_LEAF_IDS.map((fixtureId) => {
     clone.expected_steps[index].reply.required_json_pointers.push('/work_packet/presentation/parts/0/question_part_id');
   }
   for (const expected of clone.expected_steps) {
+    if (expected.kind === 'api_reply') delete expected.reply.golden_digest_file;
     if (expected.kind !== 'api_reply' || expected.reply.reply_status !== 'clarification_confirmation_required' || expected.reply.error_code) continue;
-    const row = contracts.replyContracts.rows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'CLARIFICATION_CONFIRMATION_REQUIRED' && candidate.source.trigger_state?.fsm_cell_id === 'cd.active.requirements.resolve');
+    const row = replyRows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === 'CLARIFICATION_CONFIRMATION_REQUIRED' && candidate.source.trigger_state?.fsm_cell_id === 'cd.active.requirements.resolve');
     if (!row) throw new Error('missing requirements clarification confirmation reply row');
     expected.reply.reply_contract_id = row.reply_contract_id;
     expected.reply.error_code = 'CLARIFICATION_CONFIRMATION_REQUIRED';
   }
   const fixtureCatalogSuffix = fixtureId.toLowerCase().replace(/[^a-z0-9-]+/gu, '-');
-  const catalogKeyByOriginal = new Map(clone.catalog_keys.map((key) => [key, `${key}-${fixtureCatalogSuffix}`]));
-  clone.catalog_keys = clone.catalog_keys.map((key) => catalogKeyByOriginal.get(key));
-  const rewriteCatalogKey = (invocation) => {
-    if (invocation.api === 'createV5RunDirectory') invocation.catalog_key = catalogKeyByOriginal.get(invocation.catalog_key);
+  const fixtureCatalogKey = `primary-${fixtureCatalogSuffix}`;
+  clone.catalog_keys = [fixtureCatalogKey];
+  const rewriteCatalogKey = (/** @type {any} */ invocation) => {
+    if (invocation.api === 'createV5RunDirectory') invocation.catalog_key = fixtureCatalogKey;
     if (invocation.api === 'inject_crash') rewriteCatalogKey(invocation.during);
   };
   clone.action_sequence.forEach(rewriteCatalogKey);
-  const lastApiReplyIndex = clone.expected_steps.findLastIndex((expected) => expected.kind === 'api_reply');
+  const lastApiReplyIndex = /** @type {any[]} */ (clone.expected_steps).map((expected) => expected.kind === 'api_reply').lastIndexOf(true);
   if (lastApiReplyIndex < 0) throw new Error(`fixture has no API reply assertion: ${fixtureId}`);
   clone.expected_steps[lastApiReplyIndex].reply.golden_digest_file = `goldens/${fixtureId}.digest`;
   return clone;
