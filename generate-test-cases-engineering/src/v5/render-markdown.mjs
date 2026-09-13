@@ -58,6 +58,5 @@ export function renderV5Markdown(document) {
   lines.push('## Material Risks', '');
   if (visibleRisks.length === 0) lines.push('- None');
   else for (const risk of visibleRisks) lines.push(`- ${risk.risk_key}: ${risk.risk_kind} (${risk.display_tier})`);
-  lines.push('');
   return `${lines.join('\n')}\n`;
 }
