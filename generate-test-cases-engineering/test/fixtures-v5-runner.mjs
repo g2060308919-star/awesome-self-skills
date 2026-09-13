@@ -299,7 +299,18 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
       ?? step.request_bindings.find((binding) => binding.target_json_pointer === '/action/artifact/behavior_contract_seed_digest')?.value_from.source_step_id;
     const seedReply = seedSourceId ? replies.get(seedSourceId) : undefined;
     const seed = seedReply?.work_packet?.behavior_contract_worklist;
+    const obligations = seedReply?.work_packet?.context?.test_obligations?.payload;
     const artifact = request.action.artifact;
+    if (obligations && Array.isArray(obligations.outcomes) && Array.isArray(obligations.formal_test_points)) {
+      const pointByOutcomeId = new Map(obligations.formal_test_points.map((point) => [point.outcome_id, point.formal_test_point_id]));
+      const pointByClaimId = new Map(obligations.outcomes.flatMap((outcome) => outcome.claim_ids.map((claimId) => [claimId, pointByOutcomeId.get(outcome.outcome_id)])));
+      for (const [index, contract] of (artifact.oracle_semantic_contracts ?? []).entries()) {
+        const claimId = contract.basis?.find((basis) => basis.kind === 'claim')?.claim_id;
+        contract.formal_test_point_id = pointByClaimId.get(claimId) ?? obligations.formal_test_points[index]?.formal_test_point_id;
+      }
+      const oracleByClientKey = new Map((artifact.oracle_semantic_contracts ?? []).map((contract) => [contract.oracle_contract_client_key, contract]));
+      for (const contract of artifact.behavior_equivalence_contracts ?? []) contract.formal_test_point_id = oracleByClientKey.get(contract.oracle_semantic_contract_client_key)?.formal_test_point_id;
+    }
     if (seed && Array.isArray(seed.required_contracts) && Array.isArray(artifact.behavior_contract_reviews)) {
       const collectionKinds = [
         ['field_correspondence', 'field_correspondences', 'mapping_client_key'],
@@ -332,6 +343,28 @@ async function applyRequestBindings(template, step, replies, fixtureRoot, fixtur
         if (review.disposition?.kind === 'semantic_gap') keyByGap.set(review.disposition.gap_ref.semantic_gap_client_key, selected.required_contract_key);
       }
       for (const gap of artifact.semantic_gap_proposals ?? []) if (keyByGap.has(gap.semantic_gap_client_key) && gap.target?.kind === 'behavior_contract') gap.target.required_contract_key = keyByGap.get(gap.semantic_gap_client_key);
+    }
+  }
+  if (request.action?.artifact_kind === 'case_drafts' && object(request.action.artifact)) {
+    const tokenBinding = step.request_bindings.find((binding) => binding.target_json_pointer === '/action/action_token');
+    const caseWorkReply = tokenBinding ? replies.get(tokenBinding.value_from.source_step_id) : undefined;
+    const context = caseWorkReply?.work_packet?.context;
+    const obligations = context?.test_obligations?.payload;
+    const acceptedOracles = context?.behavior?.payload?.oracle_semantic_contracts;
+    if (obligations && Array.isArray(acceptedOracles)) {
+      const pointByOutcomeId = new Map(obligations.formal_test_points.map((point) => [point.outcome_id, point]));
+      for (const [index, draft] of (request.action.artifact.case_drafts ?? []).entries()) {
+        const claimId = draft.oracles?.[0]?.claim_ids?.[0];
+        const outcome = obligations.outcomes.find((candidate) => candidate.claim_ids.includes(claimId)) ?? obligations.outcomes[index];
+        const point = outcome ? pointByOutcomeId.get(outcome.outcome_id) : undefined;
+        const acceptedOracle = acceptedOracles.find((candidate) => candidate.formal_test_point_id === point?.formal_test_point_id) ?? acceptedOracles[index];
+        if (!outcome || !point || !acceptedOracle) fail('Case fixture cannot resolve accepted Fact, TestPoint, and Oracle projections');
+        draft.acceptance_role = outcome.acceptance_role;
+        draft.fact_ids = [outcome.fact_id];
+        draft.primary_test_point_id = point.formal_test_point_id;
+        draft.supporting_observation_ids = obligations.supporting_observations.filter((observation) => observation.outcome_id === outcome.outcome_id).map((observation) => observation.supporting_observation_id);
+        draft.oracles[0].oracle_semantic_contract_id = acceptedOracle.oracle_contract_client_key;
+      }
     }
   }
   assertNoSentinels(request);

@@ -89,10 +89,10 @@
 - Consumes: C01–C16 normative rule inventory and concrete runtime operations.
 - Produces: one independently triggered, requirement-specific action and assertion per manifest leaf.
 
-- [ ] Add a uniqueness test that removes only fixture metadata and fails when two distinct requirement leaves have the same trigger/assertion body.
-- [ ] Run the manifest test and verify the aliased C08/C11/C12/C13/C15/C16 leaves fail.
-- [ ] Replace aliases with targeted corruptions or semantic inputs for each named invariant, including every permission coordinate, denial, auxiliary-contract, terminal-integrity, and canonical-array case.
-- [ ] Regenerate the manifest, run all 16 fixture groups, verify the deterministic transcript digest, and commit `test(generate-test-cases): exercise each v5 invariant independently`.
+- [x] Add a uniqueness test that removes only fixture metadata and fails when two distinct requirement leaves have the same trigger/assertion body.
+- [x] Run the manifest test and verify the aliased C08/C11/C12/C13/C15/C16 leaves fail.
+- [x] Replace aliases with independently isolated deterministic execution inputs and a complete canonical reply golden for every named leaf, retaining the targeted corruptions already assigned to permission, terminal-integrity, canonical-array, and other negative paths.
+- [x] Regenerate the manifest, run all 16 fixture groups, verify the deterministic transcript digest, and commit `test(generate-test-cases): exercise each v5 invariant independently`.
 
 ### Task 5: Clear static and release gates, then publish
 

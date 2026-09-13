@@ -21,7 +21,9 @@
       "oracle_semantic_contracts": [
         {
           "oracle_contract_client_key": "oracle-contract-0",
-          "formal_test_point_id": "tp-0",
+          "formal_test_point_id": {
+            "$fixture_binding": "required"
+          },
           "observation_ref": {
             "kind": "response",
             "logical_surface_ref": "orders-api",
@@ -50,7 +52,9 @@
         },
         {
           "oracle_contract_client_key": "oracle-contract-1",
-          "formal_test_point_id": "tp-1",
+          "formal_test_point_id": {
+            "$fixture_binding": "required"
+          },
           "observation_ref": {
             "kind": "response",
             "logical_surface_ref": "orders-api",

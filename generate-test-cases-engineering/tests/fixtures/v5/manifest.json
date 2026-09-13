@@ -8,7 +8,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c01-atomicity-negative-cross-origin-gap"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -21,7 +21,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c01-atomicity-negative-cross-origin-gap",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -272,7 +272,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C01-atomicity.negative.cross-origin-gap.digest"
           }
         }
       ]
@@ -284,7 +285,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c01-atomicity-negative-rejection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -297,7 +298,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c01-atomicity-negative-rejection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -548,7 +549,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C01-atomicity.negative.rejection.digest"
           }
         }
       ]
@@ -560,7 +562,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c01-atomicity-positive-baseline"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -571,7 +573,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c01-atomicity-positive-baseline",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -760,7 +762,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C01-atomicity.positive.baseline.digest"
           }
         }
       ]
@@ -772,7 +775,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c01-atomicity-positive-outcome-origin-gap"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -783,7 +786,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c01-atomicity-positive-outcome-origin-gap",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -972,7 +975,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C01-atomicity.positive.outcome-origin-gap.digest"
           }
         }
       ]
@@ -984,7 +988,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c02-ambiguity-negative-answer-guard-digest-tamper"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -995,7 +999,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c02-ambiguity-negative-answer-guard-digest-tamper",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -1164,7 +1168,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C02-ambiguity.negative.answer-guard-digest-tamper.digest"
           }
         }
       ]
@@ -1176,7 +1181,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c02-ambiguity-negative-rejection"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -1187,7 +1192,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c02-ambiguity-negative-rejection",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -1356,7 +1361,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C02-ambiguity.negative.rejection.digest"
           }
         }
       ]
@@ -1368,7 +1374,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c02-ambiguity-positive-baseline"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -1381,7 +1387,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c02-ambiguity-positive-baseline",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -1681,7 +1687,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C02-ambiguity.positive.baseline.digest"
           }
         }
       ]
@@ -1693,7 +1700,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-negative-decision-projection-mismatch"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -1704,7 +1711,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-negative-decision-projection-mismatch",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -1901,7 +1908,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.negative.decision-projection-mismatch.digest"
           }
         }
       ]
@@ -1913,7 +1921,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-negative-rejection"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -1924,7 +1932,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-negative-rejection",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -2121,7 +2129,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.negative.rejection.digest"
           }
         }
       ]
@@ -2133,7 +2142,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-negative-wrong-conflict-group-gap"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -2144,7 +2153,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-negative-wrong-conflict-group-gap",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -2341,7 +2350,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.negative.wrong-conflict-group-gap.digest"
           }
         }
       ]
@@ -2353,7 +2363,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-positive-baseline"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -2364,7 +2374,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-positive-baseline",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -2552,7 +2562,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.positive.baseline.digest"
           }
         }
       ]
@@ -2564,7 +2575,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-positive-mixed-clusters"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -2575,7 +2586,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-positive-mixed-clusters",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -2763,7 +2774,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.positive.mixed-clusters.digest"
           }
         }
       ]
@@ -2775,7 +2787,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-positive-term-registry-stable-id"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -2786,7 +2798,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-positive-term-registry-stable-id",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -2974,7 +2986,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.positive.term-registry-stable-id.digest"
           }
         }
       ]
@@ -2986,7 +2999,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c03-entity-positive-typed-resolution-decision"
       ],
       "input_files": [
         "requests/create-c03.json",
@@ -2997,7 +3010,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c03-entity-positive-typed-resolution-decision",
           "request_file": "requests/create-c03.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -3185,7 +3198,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C03-entity.positive.typed-resolution-decision.digest"
           }
         }
       ]
@@ -3197,7 +3211,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c04-binding-negative-control-origin"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -3212,7 +3226,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c04-binding-negative-control-origin",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -3666,7 +3680,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C04-binding.negative.control-origin.digest"
           }
         }
       ]
@@ -3678,7 +3693,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c04-binding-negative-rejection"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -3693,7 +3708,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c04-binding-negative-rejection",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -4147,7 +4162,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C04-binding.negative.rejection.digest"
           }
         }
       ]
@@ -4159,7 +4175,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c04-binding-positive-baseline"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -4172,7 +4188,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c04-binding-positive-baseline",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -4472,7 +4488,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C04-binding.positive.baseline.digest"
           }
         }
       ]
@@ -4484,7 +4501,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c04-binding-positive-clone-exact-token-set"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -4497,7 +4514,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c04-binding-positive-clone-exact-token-set",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -4797,7 +4814,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C04-binding.positive.clone-exact-token-set.digest"
           }
         }
       ]
@@ -4809,7 +4827,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c05-nature-negative-rejection"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -4822,7 +4840,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c05-nature-negative-rejection",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -5137,7 +5155,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C05-nature.negative.rejection.digest"
           }
         }
       ]
@@ -5149,7 +5168,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c05-nature-positive-baseline"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -5162,7 +5181,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c05-nature-positive-baseline",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -5462,7 +5481,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C05-nature.positive.baseline.digest"
           }
         }
       ]
@@ -5474,7 +5494,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c05-nature-protocol-decision-record-binding"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -5487,7 +5507,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c05-nature-protocol-decision-record-binding",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -5787,7 +5807,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C05-nature.protocol.decision-record-binding.digest"
           }
         }
       ]
@@ -5799,7 +5820,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c06-question-fsm-negative-action-not-currently-allowed"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -5814,7 +5835,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c06-question-fsm-negative-action-not-currently-allowed",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -6281,7 +6302,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C06-question-fsm.negative.action-not-currently-allowed.digest"
           }
         }
       ]
@@ -6293,7 +6315,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c06-question-fsm-negative-part-gap-bijection"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -6308,7 +6330,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c06-question-fsm-negative-part-gap-bijection",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -6775,7 +6797,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C06-question-fsm.negative.part-gap-bijection.digest"
           }
         }
       ]
@@ -6787,7 +6810,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c06-question-fsm-negative-rejection"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -6802,7 +6825,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c06-question-fsm-negative-rejection",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -7269,7 +7292,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C06-question-fsm.negative.rejection.digest"
           }
         }
       ]
@@ -7281,7 +7305,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c06-question-fsm-positive-baseline"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -7294,7 +7318,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c06-question-fsm-positive-baseline",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -7594,7 +7618,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C06-question-fsm.positive.baseline.digest"
           }
         }
       ]
@@ -7606,7 +7631,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c06-question-fsm-positive-recovery-current-controls"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -7619,7 +7644,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c06-question-fsm-positive-recovery-current-controls",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -7919,7 +7944,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C06-question-fsm.positive.recovery-current-controls.digest"
           }
         }
       ]
@@ -7931,7 +7957,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c06-question-fsm-protocol-presentation-order-and-digest"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -7944,7 +7970,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c06-question-fsm-protocol-presentation-order-and-digest",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -8244,7 +8270,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C06-question-fsm.protocol.presentation-order-and-digest.digest"
           }
         }
       ]
@@ -8256,7 +8283,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c07-impact-negative-confirmation-invalid"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -8271,7 +8298,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c07-impact-negative-confirmation-invalid",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -8745,7 +8772,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C07-impact.negative.confirmation-invalid.digest"
           }
         }
       ]
@@ -8757,7 +8785,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c07-impact-negative-rejection"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -8772,7 +8800,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c07-impact-negative-rejection",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -9246,7 +9274,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C07-impact.negative.rejection.digest"
           }
         }
       ]
@@ -9258,7 +9287,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c07-impact-positive-baseline"
       ],
       "input_files": [
         "requests/create-c02.json",
@@ -9271,7 +9300,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c07-impact-positive-baseline",
           "request_file": "requests/create-c02.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -9571,7 +9600,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C07-impact.positive.baseline.digest"
           }
         }
       ]
@@ -9583,7 +9613,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c08-oracle-negative-not-decidable"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -9597,7 +9627,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c08-oracle-negative-not-decidable",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -9821,21 +9851,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -10023,7 +10039,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C08-oracle.negative.not-decidable.digest"
           }
         }
       ]
@@ -10035,7 +10052,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c08-oracle-negative-rejection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -10049,7 +10066,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c08-oracle-negative-rejection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -10273,21 +10290,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -10475,7 +10478,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C08-oracle.negative.rejection.digest"
           }
         }
       ]
@@ -10487,7 +10491,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c08-oracle-positive-baseline"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -10496,7 +10500,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c08-oracle-positive-baseline",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -10519,7 +10523,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C08-oracle.positive.baseline.digest"
           }
         }
       ]
@@ -10531,7 +10536,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c08-oracle-positive-transition-step-binding"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -10540,7 +10545,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c08-oracle-positive-transition-step-binding",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -10563,7 +10568,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C08-oracle.positive.transition-step-binding.digest"
           }
         }
       ]
@@ -10575,7 +10581,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c08-oracle-positive-typed-create-empty-catalog"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -10584,7 +10590,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c08-oracle-positive-typed-create-empty-catalog",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -10607,7 +10613,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C08-oracle.positive.typed-create-empty-catalog.digest"
           }
         }
       ]
@@ -10619,7 +10626,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c09-correspondence-blocked-transform-text-not-executable"
       ],
       "input_files": [
         "requests/create-field-gap.json",
@@ -10631,7 +10638,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c09-correspondence-blocked-transform-text-not-executable",
           "request_file": "requests/create-field-gap.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -10918,7 +10925,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C09-correspondence.blocked.transform-text-not-executable.digest"
           }
         }
       ]
@@ -10930,7 +10938,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c09-correspondence-negative-rejection"
       ],
       "input_files": [
         "requests/create-field-gap.json",
@@ -10942,7 +10950,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c09-correspondence-negative-rejection",
           "request_file": "requests/create-field-gap.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -11229,7 +11237,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C09-correspondence.negative.rejection.digest"
           }
         }
       ]
@@ -11241,7 +11250,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c09-correspondence-negative-unregistered-semantic-rule-ref"
       ],
       "input_files": [
         "requests/create-field-gap.json",
@@ -11253,7 +11262,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c09-correspondence-negative-unregistered-semantic-rule-ref",
           "request_file": "requests/create-field-gap.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -11540,7 +11549,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C09-correspondence.negative.unregistered-semantic-rule-ref.digest"
           }
         }
       ]
@@ -11552,7 +11562,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c09-correspondence-positive-baseline"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -11561,7 +11571,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c09-correspondence-positive-baseline",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -11584,7 +11594,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C09-correspondence.positive.baseline.digest"
           }
         }
       ]
@@ -11596,7 +11607,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c10-value-state-negative-rejection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -11608,7 +11619,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c10-value-state-negative-rejection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -11874,7 +11885,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C10-value-state.negative.rejection.digest"
           }
         }
       ]
@@ -11886,7 +11898,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c10-value-state-positive-baseline"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -11895,7 +11907,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c10-value-state-positive-baseline",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -11918,7 +11930,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C10-value-state.positive.baseline.digest"
           }
         }
       ]
@@ -11930,7 +11943,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c11-complement-negative-cross-testpoint-coverage"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -11942,7 +11955,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c11-complement-negative-cross-testpoint-coverage",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -12208,7 +12221,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C11-complement.negative.cross-testpoint-coverage.digest"
           }
         }
       ]
@@ -12220,7 +12234,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c11-complement-negative-empty-finite-partition"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -12232,7 +12246,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c11-complement-negative-empty-finite-partition",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -12498,7 +12512,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C11-complement.negative.empty-finite-partition.digest"
           }
         }
       ]
@@ -12510,7 +12525,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c11-complement-negative-empty-selection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -12522,7 +12537,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c11-complement-negative-empty-selection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -12788,7 +12803,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C11-complement.negative.empty-selection.digest"
           }
         }
       ]
@@ -12800,7 +12816,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c11-complement-negative-rejection"
       ],
       "input_files": [
         "requests/create-domain-gap.json",
@@ -12812,7 +12828,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c11-complement-negative-rejection",
           "request_file": "requests/create-domain-gap.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -13099,7 +13115,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C11-complement.negative.rejection.digest"
           }
         }
       ]
@@ -13111,7 +13128,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c11-complement-negative-selection-outside-partition"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -13123,7 +13140,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c11-complement-negative-selection-outside-partition",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -13389,7 +13406,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C11-complement.negative.selection-outside-partition.digest"
           }
         }
       ]
@@ -13401,7 +13419,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c11-complement-positive-baseline"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -13410,7 +13428,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c11-complement-positive-baseline",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -13433,7 +13451,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C11-complement.positive.baseline.digest"
           }
         }
       ]
@@ -13445,7 +13464,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c12-population-negative-contract-ref-kind"
       ],
       "input_files": [
         "requests/create-population-gap.json",
@@ -13457,7 +13476,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c12-population-negative-contract-ref-kind",
           "request_file": "requests/create-population-gap.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -13751,7 +13770,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C12-population.negative.contract-ref-kind.digest"
           }
         }
       ]
@@ -13763,7 +13783,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c12-population-negative-rejection"
       ],
       "input_files": [
         "requests/create-population-gap.json",
@@ -13775,7 +13795,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c12-population-negative-rejection",
           "request_file": "requests/create-population-gap.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -14069,7 +14089,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C12-population.negative.rejection.digest"
           }
         }
       ]
@@ -14081,7 +14102,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c12-population-positive-baseline"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -14090,7 +14111,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c12-population-positive-baseline",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -14113,7 +14134,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C12-population.positive.baseline.digest"
           }
         }
       ]
@@ -14125,7 +14147,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c12-population-positive-typed-create-empty-catalog"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -14134,7 +14156,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c12-population-positive-typed-create-empty-catalog",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -14157,7 +14179,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C12-population.positive.typed-create-empty-catalog.digest"
           }
         }
       ]
@@ -14169,7 +14192,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-ambiguous-coordinate-gap-binding"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -14182,7 +14205,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-ambiguous-coordinate-gap-binding",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -14588,7 +14611,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.ambiguous-coordinate-gap-binding.digest"
           }
         }
       ]
@@ -14600,7 +14624,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-cross-coordinate-denial"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -14613,7 +14637,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-cross-coordinate-denial",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -15019,7 +15043,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.cross-coordinate-denial.digest"
           }
         }
       ]
@@ -15031,7 +15056,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-oracle-denial-requiredness-mismatch"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -15044,7 +15069,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-oracle-denial-requiredness-mismatch",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -15450,7 +15475,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.oracle-denial-requiredness-mismatch.digest"
           }
         }
       ]
@@ -15462,7 +15488,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-orphan-auxiliary-contract"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -15475,7 +15501,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-orphan-auxiliary-contract",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -15881,7 +15907,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.orphan-auxiliary-contract.digest"
           }
         }
       ]
@@ -15893,7 +15920,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-permission-coordinate-missing-resolution"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -15906,7 +15933,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-permission-coordinate-missing-resolution",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -16312,7 +16339,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.permission-coordinate-missing-resolution.digest"
           }
         }
       ]
@@ -16324,7 +16352,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-permission-coordinate-wrong-binding"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -16337,7 +16365,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-permission-coordinate-wrong-binding",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -16743,7 +16771,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.permission-coordinate-wrong-binding.digest"
           }
         }
       ]
@@ -16755,7 +16784,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-negative-rejection"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -16768,7 +16797,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-negative-rejection",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -17174,7 +17203,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.negative.rejection.digest"
           }
         }
       ]
@@ -17186,7 +17216,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-positive-auxiliary-typed-create"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -17199,7 +17229,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-positive-auxiliary-typed-create",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -17472,21 +17502,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -17598,7 +17614,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.positive.auxiliary-typed-create.digest"
           }
         }
       ]
@@ -17610,7 +17627,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-positive-baseline"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -17623,7 +17640,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-positive-baseline",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -17896,21 +17913,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -18022,7 +18025,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.positive.baseline.digest"
           }
         }
       ]
@@ -18034,7 +18038,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-positive-coordinate-registry-derivation"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -18047,7 +18051,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-positive-coordinate-registry-derivation",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -18320,21 +18324,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -18446,7 +18436,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.positive.coordinate-registry-derivation.digest"
           }
         }
       ]
@@ -18458,7 +18449,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-positive-oracle-denial-required"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -18471,7 +18462,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-positive-oracle-denial-required",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -18744,21 +18735,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -18870,7 +18847,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.positive.oracle-denial-required.digest"
           }
         }
       ]
@@ -18882,7 +18860,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-positive-role-action-answer-next-seed"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -18895,7 +18873,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-positive-role-action-answer-next-seed",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -19168,21 +19146,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -19294,7 +19258,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.positive.role-action-answer-next-seed.digest"
           }
         }
       ]
@@ -19306,7 +19271,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c13-permission-positive-same-batch-typed-ref"
       ],
       "input_files": [
         "requests/create-permission.json",
@@ -19319,7 +19284,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c13-permission-positive-same-batch-typed-ref",
           "request_file": "requests/create-permission.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -19592,21 +19557,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -19718,7 +19669,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C13-permission.positive.same-batch-typed-ref.digest"
           }
         }
       ]
@@ -19730,7 +19682,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c14-risk-negative-empty-action-text"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -19742,7 +19694,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c14-risk-negative-empty-action-text",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20008,7 +19960,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C14-risk.negative.empty-action-text.digest"
           }
         }
       ]
@@ -20020,7 +19973,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c14-risk-negative-missing-module-row"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -20032,7 +19985,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c14-risk-negative-missing-module-row",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20298,7 +20251,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C14-risk.negative.missing-module-row.digest"
           }
         }
       ]
@@ -20310,7 +20264,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c14-risk-negative-rejection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -20322,7 +20276,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c14-risk-negative-rejection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20588,7 +20542,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C14-risk.negative.rejection.digest"
           }
         }
       ]
@@ -20600,7 +20555,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c14-risk-positive-baseline"
       ],
       "input_files": [
         "requests/create-valid.json"
@@ -20609,7 +20564,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c14-risk-positive-baseline",
           "request_file": "requests/create-valid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20632,7 +20587,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C14-risk.positive.baseline.digest"
           }
         }
       ]
@@ -20644,7 +20600,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-negative-rejection"
       ],
       "input_files": [
         "requests/create-unsupported.json",
@@ -20665,7 +20621,7 @@
         {
           "step_id": "unsupported",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-negative-rejection",
           "request_file": "requests/create-unsupported.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20673,7 +20629,7 @@
         {
           "step_id": "execution-invalid-ref",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-negative-rejection",
           "request_file": "requests/create-execution-invalid-ref.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20681,7 +20637,7 @@
         {
           "step_id": "resume-invalid-parent",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-negative-rejection",
           "request_file": "requests/create-resume-invalid-parent.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20689,7 +20645,7 @@
         {
           "step_id": "run-argument-invalid",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-negative-rejection",
           "request_file": "requests/create-invalid.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -20697,7 +20653,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-negative-rejection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -21016,21 +20972,7 @@
               }
             },
             {
-              "target_json_pointer": "/action/artifact/case_drafts/0/steps/0/semantic_action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
               "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
-              "value_from": {
-                "source_step_id": "evidence",
-                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
-              }
-            },
-            {
-              "target_json_pointer": "/action/artifact/case_drafts/1/steps/0/semantic_action_ref/semantic_root_digest",
               "value_from": {
                 "source_step_id": "evidence",
                 "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
@@ -21333,7 +21275,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.negative.rejection.digest"
           }
         }
       ]
@@ -21345,7 +21288,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-positive-baseline"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -21355,7 +21298,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-positive-baseline",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -21413,7 +21356,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.positive.baseline.digest"
           }
         }
       ]
@@ -21425,7 +21369,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-accepted-source-state-anchor"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -21436,7 +21380,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-accepted-source-state-anchor",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -21560,7 +21504,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.accepted-source-state-anchor.digest"
           }
         }
       ]
@@ -21572,7 +21517,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-canonical-set"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -21582,7 +21527,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-canonical-set",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -21640,7 +21585,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.canonical-set.digest"
           }
         }
       ]
@@ -21652,7 +21598,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-create-genesis-publication-order"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -21665,7 +21611,7 @@
           "crash_point": "after_catalog_genesis_record",
           "during": {
             "api": "createV5RunDirectory",
-            "catalog_key": "primary",
+            "catalog_key": "primary-f-c15-protocol-protocol-create-genesis-publication-order",
             "request_file": "requests/create-local-file.json",
             "request_bindings": [],
             "fixture_absolute_path_bindings": [
@@ -21683,7 +21629,7 @@
         {
           "step_id": "create-recover",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-create-genesis-publication-order",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -21752,7 +21698,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.create-genesis-publication-order.digest"
           }
         }
       ]
@@ -21764,7 +21711,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-current-pointer-schema-and-cas"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -21775,7 +21722,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-current-pointer-schema-and-cas",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -21846,7 +21793,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.current-pointer-schema-and-cas.digest"
           }
         }
       ]
@@ -21858,7 +21806,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-fixture-reply-binding-chain"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -21868,7 +21816,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-fixture-reply-binding-chain",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -21926,7 +21874,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.fixture-reply-binding-chain.digest"
           }
         }
       ]
@@ -21938,7 +21887,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-fsm-registry-matrix"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -21948,7 +21897,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-fsm-registry-matrix",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -22006,7 +21955,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.fsm-registry-matrix.digest"
           }
         }
       ]
@@ -22018,7 +21968,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-fsm-registry-orphan"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -22028,7 +21978,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-fsm-registry-orphan",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -22086,7 +22036,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.fsm-registry-orphan.digest"
           }
         }
       ]
@@ -22098,7 +22049,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-idempotent-noop-restart"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -22109,7 +22060,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-idempotent-noop-restart",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -22244,7 +22195,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.idempotent-noop-restart.digest"
           }
         }
       ]
@@ -22256,7 +22208,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-integrity-quarantine-recovery"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -22267,7 +22219,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-integrity-quarantine-recovery",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -22363,7 +22315,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.integrity-quarantine-recovery.digest"
           }
         }
       ]
@@ -22375,7 +22328,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-normal-chain-fatal-crash-replay"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -22386,7 +22339,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-normal-chain-fatal-crash-replay",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -22712,7 +22665,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.normal-chain-fatal-crash-replay.digest"
           }
         }
       ]
@@ -22724,7 +22678,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-normal-chain-fatal-incident"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -22735,7 +22689,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-normal-chain-fatal-incident",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -22947,7 +22901,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.normal-chain-fatal-incident.digest"
           }
         }
       ]
@@ -22959,7 +22914,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-quarantine-idempotency-namespace"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -22970,7 +22925,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-quarantine-idempotency-namespace",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -23118,7 +23073,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.quarantine-idempotency-namespace.digest"
           }
         }
       ]
@@ -23130,7 +23086,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-read-only-integrity-fatal"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -23141,7 +23097,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-read-only-integrity-fatal",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -23212,7 +23168,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.read-only-integrity-fatal.digest"
           }
         }
       ]
@@ -23224,7 +23181,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-receipt-index-quarantine"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -23235,7 +23192,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-receipt-index-quarantine",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -23445,7 +23402,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.receipt-index-quarantine.digest"
           }
         }
       ]
@@ -23457,7 +23415,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-reply-contract-invalid-combination"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -23467,7 +23425,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-reply-contract-invalid-combination",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -23525,7 +23483,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.reply-contract-invalid-combination.digest"
           }
         }
       ]
@@ -23537,7 +23496,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-reply-contract-state-profile-matrix"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -23547,7 +23506,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-reply-contract-state-profile-matrix",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -23605,7 +23564,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.reply-contract-state-profile-matrix.digest"
           }
         }
       ]
@@ -23617,7 +23577,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-resume-parent-invalid"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -23627,7 +23587,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-resume-parent-invalid",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -23685,7 +23645,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.resume-parent-invalid.digest"
           }
         }
       ]
@@ -23697,7 +23658,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-run-identity-cross-binding-rejected"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -23707,7 +23668,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-run-identity-cross-binding-rejected",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -23765,7 +23726,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.run-identity-cross-binding-rejected.digest"
           }
         }
       ]
@@ -23777,7 +23739,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-run-identity-preimage"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -23787,7 +23749,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-run-identity-preimage",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -23845,7 +23807,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.run-identity-preimage.digest"
           }
         }
       ]
@@ -23857,7 +23820,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-selector-sidecar-crash-restart"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -23868,7 +23831,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-selector-sidecar-crash-restart",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -24021,7 +23984,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.selector-sidecar-crash-restart.digest"
           }
         }
       ]
@@ -24033,7 +23997,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-semantic-digest-family-tamper"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -24044,7 +24008,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-semantic-digest-family-tamper",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -24168,7 +24132,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.semantic-digest-family-tamper.digest"
           }
         }
       ]
@@ -24180,7 +24145,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-source-batch-order"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24190,7 +24155,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-source-batch-order",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24248,7 +24213,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.source-batch-order.digest"
           }
         }
       ]
@@ -24260,7 +24226,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-source-batch-resume"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24270,7 +24236,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-source-batch-resume",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24328,7 +24294,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.source-batch-resume.digest"
           }
         }
       ]
@@ -24340,7 +24307,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-source-bootstrap-deterministic"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24350,7 +24317,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-source-bootstrap-deterministic",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24408,7 +24375,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.source-bootstrap-deterministic.digest"
           }
         }
       ]
@@ -24420,7 +24388,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-source-bootstrap-required"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24430,7 +24398,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-source-bootstrap-required",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24488,7 +24456,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.source-bootstrap-required.digest"
           }
         }
       ]
@@ -24500,7 +24469,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-source-optional-skip"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24510,7 +24479,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-source-optional-skip",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24568,7 +24537,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.source-optional-skip.digest"
           }
         }
       ]
@@ -24580,7 +24550,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-source-required-skip-rejected"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24590,7 +24560,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-source-required-skip-rejected",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24648,7 +24618,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.source-required-skip-rejected.digest"
           }
         }
       ]
@@ -24660,7 +24631,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-storage-tamper-matrix"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -24671,7 +24642,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-storage-tamper-matrix",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -24881,7 +24852,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.storage-tamper-matrix.digest"
           }
         }
       ]
@@ -24893,7 +24865,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-terminal-new-key-read-only-rejection"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -24903,7 +24875,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-terminal-new-key-read-only-rejection",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -24961,7 +24933,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.terminal-new-key-read-only-rejection.digest"
           }
         }
       ]
@@ -24973,7 +24946,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-transaction-receipt-reply-cross-binding"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -24984,7 +24957,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-transaction-receipt-reply-cross-binding",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -25194,7 +25167,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.transaction-receipt-reply-cross-binding.digest"
           }
         }
       ]
@@ -25206,7 +25180,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c15-protocol-protocol-validator-priority"
       ],
       "input_files": [
         "requests/create-local-file.json",
@@ -25216,7 +25190,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c15-protocol-protocol-validator-priority",
           "request_file": "requests/create-local-file.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": [
@@ -25274,7 +25248,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C15-protocol.protocol.validator-priority.digest"
           }
         }
       ]
@@ -25286,7 +25261,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c16-provenance-negative-direct-parent-run-reference"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -25300,7 +25275,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c16-provenance-negative-direct-parent-run-reference",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -25720,7 +25695,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C16-provenance.negative.direct-parent-run-reference.digest"
           }
         }
       ]
@@ -25732,7 +25708,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c16-provenance-negative-rejection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -25746,7 +25722,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c16-provenance-negative-rejection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -26166,7 +26142,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C16-provenance.negative.rejection.digest"
           }
         }
       ]
@@ -26178,7 +26155,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c16-provenance-positive-baseline"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -26190,7 +26167,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c16-provenance-positive-baseline",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -26455,7 +26432,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C16-provenance.positive.baseline.digest"
           }
         }
       ]
@@ -26467,7 +26445,7 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary"
+        "primary-f-c16-provenance-positive-resume-inheritance-projection"
       ],
       "input_files": [
         "requests/create-c01.json",
@@ -26479,7 +26457,7 @@
         {
           "step_id": "create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary",
+          "catalog_key": "primary-f-c16-provenance-positive-resume-inheritance-projection",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
@@ -26744,7 +26722,8 @@
             ],
             "forbidden_json_pointers": [
               "/compiler_version"
-            ]
+            ],
+            "golden_digest_file": "goldens/F-C16-provenance.positive.resume-inheritance-projection.digest"
           }
         }
       ]

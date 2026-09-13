@@ -41,6 +41,10 @@ const claimRef = (clientKey) => ({ '$fixture_client_key': clientKey });
 
 const generatedRequests = new Map();
 function registerRequest(name, request) {
+  if (request.action?.artifact_kind === 'behavior_views') {
+    for (const contract of request.action.artifact?.oracle_semantic_contracts ?? []) contract.formal_test_point_id = { '$fixture_binding': 'required' };
+    for (const contract of request.action.artifact?.behavior_equivalence_contracts ?? []) contract.formal_test_point_id = { '$fixture_binding': 'required' };
+  }
   generatedRequests.set(name, request);
   return `requests/${name}`;
 }
@@ -175,8 +179,8 @@ const caseValid = {
   idempotency_key: 'fixture-case-valid',
   action: { kind: 'submit_artifact', action_token: { '$fixture_binding': 'required' }, artifact_kind: 'case_drafts', artifact: {
     case_drafts: [
-      { case_client_key: 'case-save', title: '保存订单', module_id: 'orders', priority: 'P1', primary_test_point_id: 'tp-0', business_preconditions: ['已登录'], data_conditions: [], steps: [{ step_client_key: 'step-save', action: '提交订单', semantic_action_ref: { action_id: 'save', semantic_root_digest: { '$fixture_binding': 'required' } }, claim_ids: [claimRef('claim-save')] }], case_step_semantic_bindings: [{ case_client_key: 'case-save', step_client_key: 'step-save', action_ref: { action_id: 'save', semantic_root_digest: { '$fixture_binding': 'required' } } }], domain_selections: [], oracles: [{ oracle_client_key: 'oracle-save', oracle_semantic_contract_id: { '$fixture_binding': 'required' }, observe_after_step_client_key: 'step-save', observation_ref: { kind: 'response', logical_surface_ref: 'orders-api', subject_ref: claimRef('claim-save'), field_path: '/status' }, assertion: { kind: 'exact_text', expected_text: 'saved' }, evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, claim_ids: [claimRef('claim-save')] }], canonical_names: ['订单'], claim_ids: [claimRef('claim-save')], semantic_gap_ids: [] },
-      { case_client_key: 'case-message', title: '显示成功提示', module_id: 'orders', priority: 'P1', primary_test_point_id: 'tp-1', business_preconditions: ['已登录'], data_conditions: [], steps: [{ step_client_key: 'step-message', action: '提交订单', semantic_action_ref: { action_id: 'save', semantic_root_digest: { '$fixture_binding': 'required' } }, claim_ids: [claimRef('claim-message')] }], case_step_semantic_bindings: [{ case_client_key: 'case-message', step_client_key: 'step-message', action_ref: { action_id: 'save', semantic_root_digest: { '$fixture_binding': 'required' } } }], domain_selections: [], oracles: [{ oracle_client_key: 'oracle-message', oracle_semantic_contract_id: { '$fixture_binding': 'required' }, observe_after_step_client_key: 'step-message', observation_ref: { kind: 'response', logical_surface_ref: 'orders-api', subject_ref: claimRef('claim-message'), field_path: '/status' }, assertion: { kind: 'exact_text', expected_text: 'success' }, evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, claim_ids: [claimRef('claim-message')] }], canonical_names: ['提示'], claim_ids: [claimRef('claim-message')], semantic_gap_ids: [] }
+      { case_client_key: 'case-save', title: '保存订单', module_id: 'orders', priority: 'P1', ordering: { business_flow_ref: 'orders-flow', page_action_ref: null }, acceptance_role: 'primary_acceptance', fact_ids: [{ '$fixture_binding': 'required' }], primary_test_point_id: { '$fixture_binding': 'required' }, supporting_observation_ids: [], business_preconditions: [{ precondition_id: 'authenticated', description: '已登录' }], data_conditions: [], steps: [{ step_client_key: 'step-save', action: '提交订单' }], case_step_semantic_bindings: [{ case_client_key: 'case-save', step_client_key: 'step-save', action_ref: { action_id: 'save', semantic_root_digest: { '$fixture_binding': 'required' } } }], domain_selections: [], oracles: [{ oracle_client_key: 'oracle-save', oracle_semantic_contract_id: { '$fixture_binding': 'required' }, observe_after_step_client_key: 'step-save', observation_ref: { kind: 'response', logical_surface_ref: 'orders-api', subject_ref: claimRef('claim-save'), field_path: '/status' }, assertion: { kind: 'exact_text', expected_text: 'saved' }, evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, claim_ids: [claimRef('claim-save')] }] },
+      { case_client_key: 'case-message', title: '显示成功提示', module_id: 'orders', priority: 'P1', ordering: { business_flow_ref: 'orders-flow', page_action_ref: null }, acceptance_role: 'primary_acceptance', fact_ids: [{ '$fixture_binding': 'required' }], primary_test_point_id: { '$fixture_binding': 'required' }, supporting_observation_ids: [], business_preconditions: [{ precondition_id: 'authenticated', description: '已登录' }], data_conditions: [], steps: [{ step_client_key: 'step-message', action: '提交订单' }], case_step_semantic_bindings: [{ case_client_key: 'case-message', step_client_key: 'step-message', action_ref: { action_id: 'save', semantic_root_digest: { '$fixture_binding': 'required' } } }], domain_selections: [], oracles: [{ oracle_client_key: 'oracle-message', oracle_semantic_contract_id: { '$fixture_binding': 'required' }, observe_after_step_client_key: 'step-message', observation_ref: { kind: 'response', logical_surface_ref: 'orders-api', subject_ref: claimRef('claim-message'), field_path: '/status' }, assertion: { kind: 'exact_text', expected_text: 'success' }, evaluation_scope: { kind: 'single' }, observation_window: { kind: 'after_step' }, claim_ids: [claimRef('claim-message')] }] }
     ]
   } }
 };
@@ -405,13 +409,10 @@ function caseOracleContractBindings(behaviorStepId = 'behavior-valid') {
 }
 
 function caseSemanticRootBindings(evidenceStepId = 'evidence') {
-  return [0, 1].flatMap((index) => [
-    `/action/artifact/case_drafts/${index}/steps/0/semantic_action_ref/semantic_root_digest`,
-    `/action/artifact/case_drafts/${index}/case_step_semantic_bindings/0/action_ref/semantic_root_digest`
-  ].map((targetJsonPointer) => ({
-    target_json_pointer: targetJsonPointer,
+  return [0, 1].map((index) => ({
+    target_json_pointer: `/action/artifact/case_drafts/${index}/case_step_semantic_bindings/0/action_ref/semantic_root_digest`,
     value_from: { source_step_id: evidenceStepId, source_json_pointer: '/work_packet/behavior_contract_worklist/semantic_root_digest' }
-  })));
+  }));
 }
 
 function fsmReply(outcomeId, semanticRevisionDelta, requiredJsonPointers = []) {
@@ -738,6 +739,17 @@ const fixtures = V5_REQUIRED_FIXTURE_LEAF_IDS.map((fixtureId) => {
     expected.reply.reply_contract_id = row.reply_contract_id;
     expected.reply.error_code = 'CLARIFICATION_CONFIRMATION_REQUIRED';
   }
+  const fixtureCatalogSuffix = fixtureId.toLowerCase().replace(/[^a-z0-9-]+/gu, '-');
+  const catalogKeyByOriginal = new Map(clone.catalog_keys.map((key) => [key, `${key}-${fixtureCatalogSuffix}`]));
+  clone.catalog_keys = clone.catalog_keys.map((key) => catalogKeyByOriginal.get(key));
+  const rewriteCatalogKey = (invocation) => {
+    if (invocation.api === 'createV5RunDirectory') invocation.catalog_key = catalogKeyByOriginal.get(invocation.catalog_key);
+    if (invocation.api === 'inject_crash') rewriteCatalogKey(invocation.during);
+  };
+  clone.action_sequence.forEach(rewriteCatalogKey);
+  const lastApiReplyIndex = clone.expected_steps.findLastIndex((expected) => expected.kind === 'api_reply');
+  if (lastApiReplyIndex < 0) throw new Error(`fixture has no API reply assertion: ${fixtureId}`);
+  clone.expected_steps[lastApiReplyIndex].reply.golden_digest_file = `goldens/${fixtureId}.digest`;
   return clone;
 });
 

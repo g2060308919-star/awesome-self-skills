@@ -13,6 +13,7 @@ import {
   validateV5FixtureManifest
 } from '../fixtures-v5-runner.mjs';
 import { V5_REQUIRED_FIXTURE_LEAF_IDS } from './fixture-inventory.mjs';
+import { canonicalV5Stringify } from '../../src/v5/canonical-v5.mjs';
 
 const manifestPath = path.resolve('tests/fixtures/v5/manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -28,6 +29,18 @@ test('manifest is the closed and complete discovery source for C01-C16', () => {
     const leaves = validated.fixtures.filter((fixture) => fixture.requirement_ids.includes(requirement));
     assert.ok(leaves.some((fixture) => fixture.fixture_id.includes('.positive.')), requirement);
     assert.ok(leaves.some((fixture) => /\.(negative|blocked|protocol)\./u.test(fixture.fixture_id)), requirement);
+  }
+});
+
+test('every normative leaf has an independent trigger and assertion body', () => {
+  const bodies = new Map();
+  for (const fixture of validateV5FixtureManifest(cloneManifest()).fixtures) {
+    const body = structuredClone(fixture);
+    delete body.fixture_id;
+    delete body.requirement_ids;
+    const encoded = canonicalV5Stringify(body);
+    assert.equal(bodies.has(encoded), false, `${fixture.fixture_id} aliases ${bodies.get(encoded)}`);
+    bodies.set(encoded, fixture.fixture_id);
   }
 });
 
@@ -90,6 +103,6 @@ test('all leaves execute twice with byte-identical normalized transcript digests
     schema_version: '5.0.0',
     requirement_groups_passed: 16,
     fixture_leaves_passed: 105,
-    transcript_digest: 'sha256:1e5b55c34e1c110c4caed7c1a0e2205fb4069962b7d76ae286565f95528cee6e'
+    transcript_digest: 'sha256:e8191abfb2652882b2e74e7ccf4a8c098adced035dcab063cc6b686242971caf'
   });
 });

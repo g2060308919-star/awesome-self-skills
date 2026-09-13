@@ -13,26 +13,31 @@
           "title": "保存订单",
           "module_id": "orders",
           "priority": "P1",
-          "primary_test_point_id": "tp-0",
+          "ordering": {
+            "business_flow_ref": "orders-flow",
+            "page_action_ref": null
+          },
+          "acceptance_role": "primary_acceptance",
+          "fact_ids": [
+            {
+              "$fixture_binding": "required"
+            }
+          ],
+          "primary_test_point_id": {
+            "$fixture_binding": "required"
+          },
+          "supporting_observation_ids": [],
           "business_preconditions": [
-            "已登录"
+            {
+              "precondition_id": "authenticated",
+              "description": "已登录"
+            }
           ],
           "data_conditions": [],
           "steps": [
             {
               "step_client_key": "step-save",
-              "action": "提交订单",
-              "semantic_action_ref": {
-                "action_id": "save",
-                "semantic_root_digest": {
-                  "$fixture_binding": "required"
-                }
-              },
-              "claim_ids": [
-                {
-                  "$fixture_client_key": "claim-save"
-                }
-              ]
+              "action": "提交订单"
             }
           ],
           "case_step_semantic_bindings": [
@@ -79,42 +84,38 @@
                 }
               ]
             }
-          ],
-          "canonical_names": [
-            "订单"
-          ],
-          "claim_ids": [
-            {
-              "$fixture_client_key": "claim-save"
-            }
-          ],
-          "semantic_gap_ids": []
+          ]
         },
         {
           "case_client_key": "case-message",
           "title": "显示成功提示",
           "module_id": "orders",
           "priority": "P1",
-          "primary_test_point_id": "tp-1",
+          "ordering": {
+            "business_flow_ref": "orders-flow",
+            "page_action_ref": null
+          },
+          "acceptance_role": "primary_acceptance",
+          "fact_ids": [
+            {
+              "$fixture_binding": "required"
+            }
+          ],
+          "primary_test_point_id": {
+            "$fixture_binding": "required"
+          },
+          "supporting_observation_ids": [],
           "business_preconditions": [
-            "已登录"
+            {
+              "precondition_id": "authenticated",
+              "description": "已登录"
+            }
           ],
           "data_conditions": [],
           "steps": [
             {
               "step_client_key": "step-message",
-              "action": "提交订单",
-              "semantic_action_ref": {
-                "action_id": "save",
-                "semantic_root_digest": {
-                  "$fixture_binding": "required"
-                }
-              },
-              "claim_ids": [
-                {
-                  "$fixture_client_key": "claim-message"
-                }
-              ]
+              "action": "提交订单"
             }
           ],
           "case_step_semantic_bindings": [
@@ -161,16 +162,7 @@
                 }
               ]
             }
-          ],
-          "canonical_names": [
-            "提示"
-          ],
-          "claim_ids": [
-            {
-              "$fixture_client_key": "claim-message"
-            }
-          ],
-          "semantic_gap_ids": []
+          ]
         }
       ]
     }
