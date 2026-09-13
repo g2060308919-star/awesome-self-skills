@@ -16,6 +16,8 @@ import {
   validateImmutableV5CaseDocumentRef
 } from '../../src/v5/execution-wrapper.mjs';
 import { createResumeInheritanceProjection } from '../../src/v5/resume.mjs';
+import { currentV5ExecutionServices, installV5DeterministicTestProfile } from '../../src/v5/runtime-services.mjs';
+import { readVerifiedRun } from '../../src/v5/run-store.mjs';
 
 const digest = (/** @type {string} */ letter) => `sha256:${letter.repeat(64)}`;
 const caseRef = { run_id: 'RUN-case', revision: 4, manifest_digest: digest('a'), bundle_digest: digest('b'), case_document_lineage_id: 'LINEAGE-case', schema_version: '5.0.0' };
@@ -64,6 +66,30 @@ test('capability proof is verified externally and never trusted from the submitt
   assert.equal(result.receipt.kind, 'capability_proof');
 });
 
+test('deterministic fixture profile supplies a closed capability-proof verifier without changing production services', async () => {
+  assert.deepEqual(currentV5ExecutionServices(), {});
+  const restore = installV5DeterministicTestProfile('execution-services');
+  try {
+    const services = currentV5ExecutionServices();
+    assert.equal(typeof services.verifyCapabilityProof, 'function');
+    const verifier = services.verifyCapabilityProof;
+    if (!verifier) throw new Error('fixture verifier is unavailable');
+    const verified = await verifier({
+      case_document_ref: caseRef,
+      case_id: 'CASE-one',
+      proof: { type: 'account', value: 'fixture-proof' }
+    });
+    assert.equal(verified.verified, true);
+    assert.equal(verified.ready, true);
+    const receipt = /** @type {Record<string,any>} */ (verified.receipt);
+    assert.deepEqual(Object.keys(receipt).sort(), ['case_id', 'kind', 'ready', 'receipt_digest']);
+    assert.equal(canonicalObjectDigest({ kind: 'capability_proof', ready: true, case_id: 'CASE-one' }), receipt.receipt_digest);
+  } finally {
+    restore();
+  }
+  assert.deepEqual(currentV5ExecutionServices(), {});
+});
+
 test('public execution run wraps a verified finished V5 Case and reaches confirmation without executing cases', async () => {
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v5-execution-'));
   const storedPlanPayload = { ...plan, plan_digest: undefined };
@@ -89,4 +115,6 @@ test('public execution run wraps a verified finished V5 Case and reaches confirm
   const finished = await advanceV5Run(created.run_directory, { idempotency_key: 'confirm', action: { kind: 'advance_execution_plan', action_token: final.action_token, operation: { kind: 'confirm_execution_plan' } } });
   assert.equal(finished.reply_status, 'finished');
   assert.equal(finished.work_packet.terminal_kind, 'execution_plan_finished');
+  const verified = await readVerifiedRun(created.run_directory);
+  assert.equal(verified.checkpoint.final_execution_projection_digest, finished.work_packet.execution_projection.execution_snapshot_digest);
 });

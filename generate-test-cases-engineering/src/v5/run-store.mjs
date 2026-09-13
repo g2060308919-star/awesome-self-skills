@@ -276,7 +276,7 @@ export async function verifyV5AcceptedClosure(current) {
   for (const field of arrayFields) for (const digest of current.checkpoint[field] ?? []) if (typeof digest === 'string') compilerRefs.push({ field, digest });
   for (const { field, digest } of compilerRefs.sort((left, right) => `${left.field}:${left.digest}`.localeCompare(`${right.field}:${right.digest}`))) {
     try {
-      const digestField = COMPILER_SEALED_DIGEST_FIELDS.get(field);
+      const digestField = field === 'compiler_projection_digests' ? 'projection_record_digest' : COMPILER_SEALED_DIGEST_FIELDS.get(field);
       if (digestField) await readSealedV5Record(current.layout.compilerState, digest, digestField);
       else await readSemanticV5Record(current.layout.compilerState, digest);
     } catch (error) {

@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
+import { canonicalObjectDigest } from './storage-records.mjs';
+
 /** @type {{seed:string,sequence:number,clockSequence:number,crashPoint?:string}|null} */
 let testProfile = null;
 
@@ -44,4 +46,17 @@ export function runtimeV5Entropy(byteLength) {
 
 export function currentV5TransactionServices() {
   return testProfile?.crashPoint ? { failAt: testProfile.crashPoint } : {};
+}
+
+/** @returns {{verifyCapabilityProof?:(input:Record<string,any>)=>Promise<Record<string,any>>}} */
+export function currentV5ExecutionServices() {
+  if (!testProfile) return {};
+  return {
+    /** @param {Record<string,any>} input */
+    async verifyCapabilityProof(input) {
+      if (input.proof?.type !== 'account' || input.proof?.value !== 'fixture-proof') return { verified: false, ready: false, receipt: {} };
+      const receiptPayload = { kind: 'capability_proof', ready: true, case_id: input.case_id };
+      return { verified: true, ready: true, receipt: { ...receiptPayload, receipt_digest: canonicalObjectDigest(receiptPayload) } };
+    }
+  };
 }

@@ -115,6 +115,19 @@ registerRequest('advance-idempotency-conflict.json', idempotencyConflict);
 registerRequest('create-unsupported.json', { idempotency_key: 'fixture-create-unsupported', schema_version: '4.0.0', run_directory: '/legacy' });
 registerRequest('create-execution-invalid-ref.json', { idempotency_key: 'fixture-execution-invalid-ref', delivery_intent: 'execution_plan', case_document_ref: { run_id: 'RUN-NOT-FOUND', revision: 1, manifest_digest: `sha256:${'1'.repeat(64)}`, bundle_digest: `sha256:${'2'.repeat(64)}`, case_document_lineage_id: 'LINEAGE-NOT-FOUND', schema_version: '5.0.0' } });
 registerRequest('create-resume-invalid-parent.json', { idempotency_key: 'fixture-resume-invalid-parent', creation_reason: 'resume_cancelled', parent_run_id: 'RUN-NOT-FOUND' });
+registerRequest('cancel-valid.json', { idempotency_key: 'fixture-cancel-valid', action: { kind: 'cancel_run', action_token: { '$fixture_binding': 'required' }, reason: 'fixture verifies accepted compiler state' } });
+registerRequest('create-resume-valid.json', { idempotency_key: 'fixture-resume-valid', creation_reason: 'resume_cancelled', parent_run_id: { '$fixture_binding': 'required' } });
+registerRequest('create-execution-valid.json', {
+  idempotency_key: 'fixture-execution-valid', delivery_intent: 'execution_plan', case_document_ref: {
+    run_id: { '$fixture_binding': 'required' }, revision: { '$fixture_binding': 'required' }, manifest_digest: { '$fixture_binding': 'required' },
+    bundle_digest: { '$fixture_binding': 'required' }, case_document_lineage_id: { '$fixture_binding': 'required' }, schema_version: { '$fixture_binding': 'required' }
+  }
+});
+registerRequest('execution-proof-valid.json', { idempotency_key: 'fixture-execution-proof', action: { kind: 'advance_execution_plan', action_token: { '$fixture_binding': 'required' }, operation: { kind: 'provide_capability_proof', case_id: { '$fixture_binding': 'required' }, proof: { type: 'account', value: 'fixture-proof' } } } });
+registerRequest('execution-disposition-valid.json', { idempotency_key: 'fixture-execution-disposition', action: { kind: 'advance_execution_plan', action_token: { '$fixture_binding': 'required' }, operation: { kind: 'set_execution_disposition', case_id: { '$fixture_binding': 'required' }, disposition: 'execute' } } });
+registerRequest('execution-disposition-second-valid.json', { idempotency_key: 'fixture-execution-disposition-second', action: { kind: 'advance_execution_plan', action_token: { '$fixture_binding': 'required' }, operation: { kind: 'set_execution_disposition', case_id: { '$fixture_binding': 'required' }, disposition: 'execute' } } });
+registerRequest('execution-confirm-valid.json', { idempotency_key: 'fixture-execution-confirm', action: { kind: 'advance_execution_plan', action_token: { '$fixture_binding': 'required' }, operation: { kind: 'confirm_execution_plan' } } });
+registerRequest('execution-confirm-after-tamper.json', { idempotency_key: 'fixture-execution-confirm-after-tamper', action: { kind: 'advance_execution_plan', action_token: { '$fixture_binding': 'required' }, operation: { kind: 'confirm_execution_plan' } } });
 
 const complementBehavior = structuredClone(behaviorValidTemplate);
 complementBehavior.idempotency_key = 'fixture-behavior-complement-overclaimed';
@@ -442,6 +455,71 @@ function fsmReply(outcomeId, semanticRevisionDelta, requiredJsonPointers = []) {
   } };
 }
 
+/** @param {any[]} actions @param {any[]} expected @param {string} prefix @param {string} catalogKey */
+function namespaceFixtureFlow(actions, expected, prefix, catalogKey) {
+  const namespacedActions = structuredClone(actions);
+  const stepIds = new Map(namespacedActions.map((step) => [step.step_id, `${prefix}-${step.step_id}`]));
+  /** @param {any} value */
+  const rewriteReferences = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (typeof value.source_step_id === 'string' && stepIds.has(value.source_step_id)) value.source_step_id = stepIds.get(value.source_step_id);
+    for (const child of Object.values(value)) rewriteReferences(child);
+  };
+  for (const step of namespacedActions) {
+    step.step_id = stepIds.get(step.step_id);
+    rewriteReferences(step);
+    const invocation = step.api === 'inject_crash' ? step.during : step;
+    if (invocation.api === 'createV5RunDirectory') invocation.catalog_key = catalogKey;
+  }
+  return { actions: namespacedActions, expected: structuredClone(expected) };
+}
+
+function finishedCaseFlow() {
+  const prefix = c01Prefix();
+  const behavior = behaviorStep('requests/behavior-valid.json', 'behavior-valid');
+  const caseStep = {
+    step_id: 'case-valid', api: 'advanceV5Run', run_directory_from: { source_step_id: 'create', source_json_pointer: '/run_directory' },
+    request_file: 'requests/case-valid.json', client_key_bindings_from: { source_step_id: 'evidence', source_json_pointer: '/commit_receipt/client_key_bindings' },
+    request_bindings: [
+      { target_json_pointer: '/action/action_token', value_from: { source_step_id: 'behavior-valid', source_json_pointer: '/available_actions/0/action_token' } },
+      ...caseOracleContractBindings(), ...caseSemanticRootBindings()
+    ]
+  };
+  return {
+    actions: [prefix.create, prefix.source, prefix.evidence, behavior, caseStep],
+    expected: [prefix.createExpected, prefix.sourceExpected, structuredClone(baseById.get('F-C01-atomicity.positive.baseline').expected_steps[2]), fsmReply('OUT5.cd.case.behavior.ready', 1), fsmReply('OUT5.cd.case.drafts.finished', 1)]
+  };
+}
+
+/** @param {string} caseStepId @param {string} stepId */
+function createExecutionStep(caseStepId, stepId = 'execution-create') {
+  return {
+    step_id: stepId, api: 'createV5RunDirectory', catalog_key: 'primary', request_file: 'requests/create-execution-valid.json', fixture_absolute_path_bindings: [],
+    request_bindings: ['run_id', 'revision', 'manifest_digest', 'bundle_digest', 'case_document_lineage_id', 'schema_version'].map((field) => ({
+      target_json_pointer: `/case_document_ref/${field}`, value_from: { source_step_id: caseStepId, source_json_pointer: `/work_packet/case_document_ref/${field}` }
+    }))
+  };
+}
+
+/** @param {string} executionStepId @param {string} stepId @param {'provide_capability_proof'|'set_execution_disposition'} kind @param {number} [itemIndex] @param {string} [requestFile] */
+function advanceExecutionClosureStep(executionStepId, stepId, kind, itemIndex = 0, requestFile = kind === 'provide_capability_proof' ? 'requests/execution-proof-valid.json' : 'requests/execution-disposition-valid.json') {
+  return {
+    step_id: stepId, api: 'advanceV5Run', run_directory_from: { source_step_id: executionStepId, source_json_pointer: '/run_directory' }, request_file: requestFile,
+    request_bindings: [
+      { target_json_pointer: '/action/action_token', value_from: { source_step_id: executionStepId, source_json_pointer: '/available_actions/0/action_token' } },
+      { target_json_pointer: '/action/operation/case_id', value_from: { source_step_id: executionStepId, source_json_pointer: `/work_packet/execution_projection/items/${itemIndex}/case_id` } }
+    ]
+  };
+}
+
+/** @param {string} executionStepId @param {string} tokenStepId @param {string} stepId @param {string} [requestFile] */
+function confirmExecutionStep(executionStepId, tokenStepId, stepId, requestFile = 'requests/execution-confirm-valid.json') {
+  return {
+    step_id: stepId, api: 'advanceV5Run', run_directory_from: { source_step_id: executionStepId, source_json_pointer: '/run_directory' }, request_file: requestFile,
+    request_bindings: [{ target_json_pointer: '/action/action_token', value_from: { source_step_id: tokenStepId, source_json_pointer: '/available_actions/0/action_token' } }]
+  };
+}
+
 /** @param {string} errorCode */
 function preRunErrorReply(errorCode) {
   const row = replyRows.find((candidate) => candidate.source.kind === 'runtime_error' && candidate.source.error_code === errorCode && candidate.source.response_context === 'pre_run');
@@ -588,6 +666,54 @@ function specializeProtocolFixture(clone, fixtureId, requirement) {
   if (requirement !== 'C15') return clone;
   const local = structuredClone(baseById.get('F-C15-protocol.positive.baseline'));
   const c01 = c01Prefix();
+  if (fixtureId.endsWith('.storage-tamper-matrix')) {
+    clone.catalog_keys = [];
+    clone.action_sequence = [];
+    clone.expected_steps = [];
+    const appendFlow = (/** @type {string} */ prefix, /** @type {string} */ catalogKey, /** @type {any[]} */ actions, /** @type {any[]} */ expected, /** @type {string} */ currentStepId, /** @type {Record<string,any>} */ target, /** @type {string} */ cellId, /** @type {Record<string,any>} */ fatalAction) => {
+      fatalAction.run_directory_from = { source_step_id: currentStepId, source_json_pointer: '/run_directory' };
+      const tamper = { step_id: 'tamper', api: 'tamper_run_storage', run_directory_from: { source_step_id: currentStepId, source_json_pointer: '/run_directory' }, target, mutation: 'flip_first_byte' };
+      const inspect = { step_id: 'inspect', api: 'inspectV5Run', run_directory_from: { source_step_id: currentStepId, source_json_pointer: '/run_directory' } };
+      const flow = namespaceFixtureFlow([...actions, tamper, inspect, fatalAction], [...expected,
+        processExpectation('tamper_run_storage', { target, result: 'tampered' }),
+        registryErrorReply('ACCEPTED_STATE_INTEGRITY_FAILURE', 'run_inspect', { kind: 'verified_fsm_cell', fsm_cell_id: cellId }, { projection_kind: 'read_only_integrity_fatal' }),
+        registryErrorReply('ACCEPTED_STATE_INTEGRITY_FAILURE', 'run_mutation', { kind: 'verified_fsm_cell', fsm_cell_id: cellId }, { projection_kind: 'persisted_run_state' })
+      ], prefix, catalogKey);
+      clone.catalog_keys.push(catalogKey);
+      clone.action_sequence.push(...flow.actions);
+      clone.expected_steps.push(...flow.expected);
+    };
+
+    appendFlow('source-state', 'source-state', [c01.create], [c01.createExpected], 'create', { kind: 'compiler_state', state_kind: 'source_acquisition_state' }, 'cd.active.source.provide', { ...structuredClone(c01.source), step_id: 'fatal' });
+
+    const clarification = clarificationPrefix();
+    appendFlow('question-state', 'question-state', clarification.actions, clarification.expected, 'evidence', { kind: 'compiler_state', state_kind: 'question_part_state_set' }, 'cd.active.requirements.resolve', { ...previewStep(REQUESTS.valid, 'fatal'), step_id: 'fatal' });
+
+    const pendingPreview = previewStep(REQUESTS.valid, 'preview');
+    appendFlow('pending-state', 'pending-state', [...clarification.actions, pendingPreview], [...clarification.expected, registryErrorReply('CLARIFICATION_CONFIRMATION_REQUIRED', 'run_mutation', { kind: 'verified_fsm_cell', fsm_cell_id: 'cd.active.requirements.resolve' })], 'preview', { kind: 'compiler_state', state_kind: 'clarification_pending' }, 'cd.active.requirements.confirm', commitStep(REQUESTS.commitValid, 'fatal', 'preview'));
+
+    const snapshotCase = finishedCaseFlow();
+    const snapshotCreate = createExecutionStep('case-valid');
+    appendFlow('execution-snapshot', 'execution-snapshot', [...snapshotCase.actions, snapshotCreate], [...snapshotCase.expected, fsmReply('OUT5.create.execution.initial', 0)], 'execution-create', { kind: 'compiler_state', state_kind: 'execution_snapshot' }, 'ep.active.closure.resolve', advanceExecutionClosureStep('execution-create', 'fatal', 'set_execution_disposition'));
+
+    const receiptCase = finishedCaseFlow();
+    const receiptCreate = createExecutionStep('case-valid');
+    const receiptProof = advanceExecutionClosureStep('execution-create', 'execution-proof', 'provide_capability_proof');
+    appendFlow('execution-receipt', 'execution-receipt', [...receiptCase.actions, receiptCreate, receiptProof], [...receiptCase.expected, fsmReply('OUT5.create.execution.initial', 0), fsmReply('OUT5.ep.closure.provide_capability_proof.stay', 0)], 'execution-proof', { kind: 'compiler_state', state_kind: 'execution_receipt', target_digest: 'sha256:c4441716ff56edfdf704a0bb57657d5ab68a959d42904e9f1a049737658b8564' }, 'ep.active.closure.resolve', advanceExecutionClosureStep('execution-proof', 'fatal', 'set_execution_disposition'));
+
+    const finalCase = finishedCaseFlow();
+    const finalCreate = createExecutionStep('case-valid');
+    const finalDispositionFirst = advanceExecutionClosureStep('execution-create', 'execution-disposition-first', 'set_execution_disposition');
+    const finalDispositionSecond = advanceExecutionClosureStep('execution-disposition-first', 'execution-disposition-second', 'set_execution_disposition', 1, 'requests/execution-disposition-second-valid.json');
+    const finalConfirm = confirmExecutionStep('execution-create', 'execution-disposition-second', 'execution-confirm');
+    appendFlow('execution-final', 'execution-final', [...finalCase.actions, finalCreate, finalDispositionFirst, finalDispositionSecond, finalConfirm], [...finalCase.expected, fsmReply('OUT5.create.execution.initial', 0), fsmReply('OUT5.ep.closure.set_execution_disposition.stay', 0), fsmReply('OUT5.ep.closure.set_execution_disposition.ready', 0), fsmReply('OUT5.ep.final.confirm', 0)], 'execution-confirm', { kind: 'compiler_state', state_kind: 'final_execution_projection' }, 'ep.terminal.finished', confirmExecutionStep('execution-create', 'execution-disposition-second', 'fatal', 'requests/execution-confirm-after-tamper.json'));
+
+    const cancelAction = { step_id: 'cancel', api: 'advanceV5Run', run_directory_from: { source_step_id: 'create', source_json_pointer: '/run_directory' }, request_file: 'requests/cancel-valid.json', request_bindings: [{ target_json_pointer: '/action/action_token', value_from: { source_step_id: 'source', source_json_pointer: '/available_actions/1/action_token' } }] };
+    const resumeAction = { step_id: 'resume', api: 'createV5RunDirectory', catalog_key: 'accepted-projection', request_file: 'requests/create-resume-valid.json', request_bindings: [{ target_json_pointer: '/parent_run_id', value_from: { source_step_id: 'cancel', source_json_pointer: '/run_id' } }], fixture_absolute_path_bindings: [] };
+    const resumeFatal = { step_id: 'fatal', api: 'advanceV5Run', run_directory_from: { source_step_id: 'resume', source_json_pointer: '/run_directory' }, request_file: 'requests/cancel-valid.json', request_bindings: [{ target_json_pointer: '/action/action_token', value_from: { source_step_id: 'resume', source_json_pointer: '/available_actions/1/action_token' } }] };
+    appendFlow('accepted-projection', 'accepted-projection', [c01.create, c01.source, cancelAction, resumeAction], [c01.createExpected, c01.sourceExpected, fsmReply('OUT5.cancel.cd.active.requirements.review', 0), fsmReply('OUT5.create.resume.cd.active.requirements.review', 0)], 'resume', { kind: 'compiler_state', state_kind: 'accepted_compiler_projection', target_digest: 'sha256:8f8024e762ff9b05eda367fc8d698df6a02f5b172373f4615e2b91008df60396' }, 'cd.active.requirements.review', resumeFatal);
+    return synchronizeInputFiles(clone);
+  }
   if (fixtureId === 'F-C15-protocol.negative.rejection') {
     const createInvocation = (/** @type {string} */ stepId, /** @type {string} */ requestFile) => ({ step_id: stepId, api: 'createV5RunDirectory', catalog_key: 'primary', request_file: requestFile, request_bindings: [], fixture_absolute_path_bindings: [] });
     clone.catalog_keys = ['primary'];
@@ -705,7 +831,7 @@ function specializeProtocolFixture(clone, fixtureId, requirement) {
     }
     return clone;
   }
-  const operationalTamper = fixtureId.endsWith('.receipt-index-quarantine') || fixtureId.endsWith('.transaction-receipt-reply-cross-binding') || fixtureId.endsWith('.storage-tamper-matrix');
+  const operationalTamper = fixtureId.endsWith('.receipt-index-quarantine') || fixtureId.endsWith('.transaction-receipt-reply-cross-binding');
   if (operationalTamper) {
     const target = fixtureId.endsWith('.transaction-receipt-reply-cross-binding') ? { kind: 'current_receipt_object' } : fixtureId.endsWith('.storage-tamper-matrix') ? { kind: 'current_reply_object' } : { kind: 'current_idempotency_index' };
     clone.input_files = c01.input_files; clone.action_sequence = [c01.create, c01.source, { step_id: 'tamper', api: 'tamper_run_storage', run_directory_from: { source_step_id: 'source', source_json_pointer: '/run_directory' }, target, mutation: 'flip_first_byte' }, { ...structuredClone(c01.evidence), step_id: 'quarantine' }];
@@ -765,10 +891,15 @@ const fixtures = V5_REQUIRED_FIXTURE_LEAF_IDS.map((fixtureId) => {
     expected.reply.error_code = 'CLARIFICATION_CONFIRMATION_REQUIRED';
   }
   const fixtureCatalogSuffix = fixtureId.toLowerCase().replace(/[^a-z0-9-]+/gu, '-');
-  const fixtureCatalogKey = `primary-${fixtureCatalogSuffix}`;
-  clone.catalog_keys = [fixtureCatalogKey];
+  const logicalCatalogKey = (/** @type {string} */ key) => key.includes('-f-c') ? key.slice(0, key.indexOf('-f-c')) : key;
+  const catalogKeyMap = new Map(clone.catalog_keys.map((/** @type {string} */ key) => logicalCatalogKey(key)).map((/** @type {string} */ key) => [key, `${key}-${fixtureCatalogSuffix}`]));
+  clone.catalog_keys = [...new Set(catalogKeyMap.values())];
   const rewriteCatalogKey = (/** @type {any} */ invocation) => {
-    if (invocation.api === 'createV5RunDirectory') invocation.catalog_key = fixtureCatalogKey;
+    if (invocation.api === 'createV5RunDirectory') {
+      const rewritten = catalogKeyMap.get(logicalCatalogKey(invocation.catalog_key));
+      if (!rewritten) throw new Error(`fixture create uses undeclared catalog key: ${fixtureId}/${invocation.catalog_key}`);
+      invocation.catalog_key = rewritten;
+    }
     if (invocation.api === 'inject_crash') rewriteCatalogKey(invocation.during);
   };
   clone.action_sequence.forEach(rewriteCatalogKey);

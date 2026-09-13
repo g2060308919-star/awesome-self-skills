@@ -1,0 +1,19 @@
+{
+  "idempotency_key": "fixture-execution-proof",
+  "action": {
+    "kind": "advance_execution_plan",
+    "action_token": {
+      "$fixture_binding": "required"
+    },
+    "operation": {
+      "kind": "provide_capability_proof",
+      "case_id": {
+        "$fixture_binding": "required"
+      },
+      "proof": {
+        "type": "account",
+        "value": "fixture-proof"
+      }
+    }
+  }
+}

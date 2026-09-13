@@ -16,6 +16,7 @@ import { V5_REQUIRED_FIXTURE_LEAF_IDS } from './v5/fixture-inventory.mjs';
 
 const REQUIREMENTS = new Set(Array.from({ length: 16 }, (_, index) => `C${String(index + 1).padStart(2, '0')}`));
 const FIXTURE_ID = /^F-C(0[1-9]|1[0-6])-[a-z0-9-]+\.(positive|negative|blocked|protocol)\.[a-z0-9-]+$/u;
+const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const SANDBOX_ROOT = '/tmp/generate-test-cases-v5-fixtures-v1';
 
 /** @param {string} message @returns {never} */
@@ -117,7 +118,7 @@ function validateTamperTarget(target) {
   if (target.kind === 'compiler_state') {
     const setTargetKinds = new Set(['execution_receipt', 'accepted_compiler_projection']);
     const scalarKinds = new Set(['source_acquisition_state', 'question_part_state_set', 'clarification_pending', 'execution_snapshot', 'final_execution_projection']);
-    if (setTargetKinds.has(target.state_kind) ? !exactKeys(target, ['kind', 'state_kind', 'target_digest']) || typeof target.target_digest !== 'string' : !scalarKinds.has(target.state_kind) || !exactKeys(target, ['kind', 'state_kind'])) fail('compiler-state tamper target is invalid');
+    if (setTargetKinds.has(target.state_kind) ? !exactKeys(target, ['kind', 'state_kind', 'target_digest']) || !DIGEST.test(target.target_digest) : !scalarKinds.has(target.state_kind) || !exactKeys(target, ['kind', 'state_kind'])) fail('compiler-state tamper target is invalid');
     return;
   }
   if (target.kind === 'compiler_projection') { if (!exactKeys(target, ['kind', 'projection_kind']) || target.projection_kind !== 'applied_clarification_impact') fail('compiler projection target is invalid'); return; }
@@ -204,6 +205,13 @@ export function validateV5FixtureManifest(manifest) {
     });
     /** @type {any[]} */ (fixture.action_sequence).forEach((step, index) => {
       if (['restart_process', 'tamper_run_storage', 'inject_crash'].includes(step.api) && !fixture.action_sequence.slice(index + 1).some((/** @type {Record<string,any>} */ candidate) => ['advanceV5Run', 'inspectV5Run'].includes(candidate.api))) fail(`process-control step lacks later API evidence: ${step.step_id}`);
+      if (step.api === 'tamper_run_storage' && step.target.kind === 'compiler_state') {
+        const inspect = fixture.action_sequence[index + 1];
+        const advance = fixture.action_sequence[index + 2];
+        const inspectExpected = fixture.expected_steps[index + 1]?.reply;
+        const advanceExpected = fixture.expected_steps[index + 2]?.reply;
+        if (inspect?.api !== 'inspectV5Run' || advance?.api !== 'advanceV5Run' || canonicalV5Stringify(inspect.run_directory_from) !== canonicalV5Stringify(step.run_directory_from) || canonicalV5Stringify(advance.run_directory_from) !== canonicalV5Stringify(step.run_directory_from) || inspectExpected?.projection_kind !== 'read_only_integrity_fatal' || inspectExpected?.error_code !== 'ACCEPTED_STATE_INTEGRITY_FAILURE' || advanceExpected?.projection_kind !== 'persisted_run_state' || advanceExpected?.error_code !== 'ACCEPTED_STATE_INTEGRITY_FAILURE' || advanceExpected?.lifecycle !== 'fatal') fail(`tamper diagnostic differs from target: ${step.step_id}`);
+      }
     });
   }
   for (const requirement of REQUIREMENTS) {
@@ -220,6 +228,29 @@ export function validateV5FixtureManifest(manifest) {
   ];
   for (const testId of referencedTestIds) if (fixtures.filter((fixture) => fixture.fixture_id === testId).length !== 1) fail(`registry test ID does not resolve to exactly one manifest leaf: ${testId}`);
   return manifest;
+}
+
+/** @param {Record<string,any>} checkpoint @param {Record<string,any>} target */
+export function resolveCompilerStateTamperDigest(checkpoint, target) {
+  const checkpointFieldByKind = /** @type {Record<string,string>} */ ({
+    source_acquisition_state: 'source_acquisition_state_digest',
+    question_part_state_set: 'question_part_state_set_digest',
+    clarification_pending: 'pending_clarification_digest',
+    execution_snapshot: 'execution_snapshot_digest',
+    final_execution_projection: 'final_execution_projection_digest'
+  });
+  if (target.state_kind === 'execution_receipt') {
+    if (!checkpoint.accepted_execution_receipt_digests?.includes(target.target_digest)) fail('execution receipt target is not in the verified checkpoint set');
+    return target.target_digest;
+  }
+  if (target.state_kind === 'accepted_compiler_projection') {
+    if (!checkpoint.compiler_projection_digests?.includes(target.target_digest)) fail('compiler projection target is not in the verified checkpoint set');
+    return target.target_digest;
+  }
+  const field = checkpointFieldByKind[target.state_kind];
+  const digest = field ? checkpoint[field] : undefined;
+  if (typeof digest !== 'string') fail('compiler-state target is unavailable');
+  return digest;
 }
 
 /** @param {string} root @param {string} relativePath @returns {Promise<any>} */
@@ -459,25 +490,7 @@ async function runTamper(step, replies, catalogRoots) {
       if (step.target.projection_kind !== 'applied_clarification_impact' || typeof digest !== 'string') fail('compiler projection target is unavailable');
       targetPath = path.join(current.layout.compilerState, digestFilename(digest));
     } else if (step.target.kind === 'compiler_state') {
-      const checkpointFieldByKind = /** @type {Record<string,string>} */ ({
-        source_acquisition_state: 'source_acquisition_state_digest',
-        question_part_state_set: 'question_part_state_set_digest',
-        clarification_pending: 'pending_clarification_digest',
-        execution_snapshot: 'execution_snapshot_digest',
-        final_execution_projection: 'final_execution_projection_digest'
-      });
-      let digest;
-      if (step.target.state_kind === 'execution_receipt') {
-        digest = step.target.target_digest;
-        if (!current.checkpoint.accepted_execution_receipt_digests?.includes(digest)) fail('execution receipt target is not in the verified checkpoint set');
-      } else if (step.target.state_kind === 'accepted_compiler_projection') {
-        digest = step.target.target_digest;
-        if (!current.checkpoint.compiler_projection_digests?.includes(digest)) fail('compiler projection target is not in the verified checkpoint set');
-      } else {
-        const field = checkpointFieldByKind[step.target.state_kind];
-        digest = field ? current.checkpoint[field] : undefined;
-      }
-      if (typeof digest !== 'string') fail('compiler-state target is unavailable');
+      const digest = resolveCompilerStateTamperDigest(current.checkpoint, step.target);
       targetPath = path.join(current.layout.compilerState, digestFilename(digest));
     } else fail(`unsupported logical tamper target: ${step.target.kind}`);
   }
@@ -516,7 +529,7 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
     const sandbox = await acquireV5FixtureSandbox(fixture.fixture_id);
     const replies = new Map();
     let restore = installV5DeterministicTestProfile(fixture.fixture_id);
-    let priorRevision = 0;
+    const priorRevisionByRun = new Map();
     try {
       for (let index = 0; index < fixture.action_sequence.length; index += 1) {
         const step = fixture.action_sequence[index];
@@ -550,11 +563,13 @@ export async function runV5FixtureManifest(manifestPath, options = {}) {
             const branchIssues = branch ? validateAgainstSchema(actual, { ...branch, $defs: replySchema.$defs }) : [];
             fail(`public reply violates generated Reply oneOf: ${canonicalV5Stringify({ replySchemaIssues, branchIssues, reply_contract_id: actual.reply_contract_id })}`);
           }
+          const revisionKey = typeof actual.run_id === 'string' ? actual.run_id : null;
+          const priorRevision = revisionKey === null ? 0 : priorRevisionByRun.get(revisionKey) ?? 0;
           assertExpectedReply(actual, expected.reply, priorRevision);
           for (const diagnostic of actual.diagnostics ?? []) {
             if (typeof diagnostic?.code === 'string') observedDiagnosticsByFixture.get(fixture.fixture_id)?.add(diagnostic.code);
           }
-          if (typeof actual.current_revision === 'number') priorRevision = actual.current_revision;
+          if (revisionKey !== null && typeof actual.current_revision === 'number') priorRevisionByRun.set(revisionKey, actual.current_revision);
           replies.set(step.step_id, actual);
           const normalized = normalizeReply(actual, catalogs);
           if (expected.reply.golden_digest_file) {

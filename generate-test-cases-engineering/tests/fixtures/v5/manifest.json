@@ -24631,27 +24631,69 @@
       ],
       "runtime_profile": "deterministic-v1",
       "catalog_keys": [
-        "primary-f-c15-protocol-protocol-storage-tamper-matrix"
+        "source-state-f-c15-protocol-protocol-storage-tamper-matrix",
+        "question-state-f-c15-protocol-protocol-storage-tamper-matrix",
+        "pending-state-f-c15-protocol-protocol-storage-tamper-matrix",
+        "execution-snapshot-f-c15-protocol-protocol-storage-tamper-matrix",
+        "execution-receipt-f-c15-protocol-protocol-storage-tamper-matrix",
+        "execution-final-f-c15-protocol-protocol-storage-tamper-matrix",
+        "accepted-projection-f-c15-protocol-protocol-storage-tamper-matrix"
       ],
       "input_files": [
         "requests/create-c01.json",
         "requests/source-c01.json",
-        "requests/evidence-c01-valid.json"
+        "requests/create-c02.json",
+        "requests/source-c02.json",
+        "requests/evidence-c02-gap.json",
+        "requests/clarification-preview-final.json",
+        "requests/clarification-commit-valid.json",
+        "requests/evidence-c01-valid.json",
+        "requests/behavior-valid.json",
+        "requests/case-valid.json",
+        "requests/create-execution-valid.json",
+        "requests/execution-disposition-valid.json",
+        "requests/execution-proof-valid.json",
+        "requests/execution-disposition-second-valid.json",
+        "requests/execution-confirm-valid.json",
+        "requests/execution-confirm-after-tamper.json",
+        "requests/cancel-valid.json",
+        "requests/create-resume-valid.json"
       ],
       "action_sequence": [
         {
-          "step_id": "create",
+          "step_id": "source-state-create",
           "api": "createV5RunDirectory",
-          "catalog_key": "primary-f-c15-protocol-protocol-storage-tamper-matrix",
+          "catalog_key": "source-state-f-c15-protocol-protocol-storage-tamper-matrix",
           "request_file": "requests/create-c01.json",
           "request_bindings": [],
           "fixture_absolute_path_bindings": []
         },
         {
-          "step_id": "source",
+          "step_id": "source-state-tamper",
+          "api": "tamper_run_storage",
+          "run_directory_from": {
+            "source_step_id": "source-state-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "source_acquisition_state"
+          },
+          "mutation": "flip_first_byte"
+        },
+        {
+          "step_id": "source-state-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "source-state-create",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "source-state-fatal",
           "api": "advanceV5Run",
           "run_directory_from": {
-            "source_step_id": "create",
+            "source_step_id": "source-state-create",
             "source_json_pointer": "/run_directory"
           },
           "request_file": "requests/source-c01.json",
@@ -24659,43 +24701,486 @@
             {
               "target_json_pointer": "/action/action_token",
               "value_from": {
-                "source_step_id": "create",
+                "source_step_id": "source-state-create",
                 "source_json_pointer": "/available_actions/0/action_token"
               }
             },
             {
               "target_json_pointer": "/action/request_ids/0",
               "value_from": {
-                "source_step_id": "create",
+                "source_step_id": "source-state-create",
                 "source_json_pointer": "/work_packet/source_requests/0/request_id"
               }
             },
             {
               "target_json_pointer": "/action/request_dispositions/0/request_id",
               "value_from": {
-                "source_step_id": "create",
+                "source_step_id": "source-state-create",
                 "source_json_pointer": "/work_packet/source_requests/0/request_id"
               }
             }
           ]
         },
         {
-          "step_id": "tamper",
+          "step_id": "question-state-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "question-state-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-c02.json",
+          "request_bindings": [],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "question-state-source",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "question-state-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/source-c02.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "question-state-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_ids/0",
+              "value_from": {
+                "source_step_id": "question-state-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_dispositions/0/request_id",
+              "value_from": {
+                "source_step_id": "question-state-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "question-state-evidence",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "question-state-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/evidence-c02-gap.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/semantic_review_seed_digest",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/primary_outcome_signature",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/observation_slot_digests/0",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/semantic_gaps/0/target/origin/ambiguity_candidate_id",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/candidate_id",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/ambiguity_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/ambiguity_reviews/0/candidate_id",
+              "value_from": {
+                "source_step_id": "question-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "question-state-tamper",
           "api": "tamper_run_storage",
           "run_directory_from": {
-            "source_step_id": "source",
+            "source_step_id": "question-state-evidence",
             "source_json_pointer": "/run_directory"
           },
           "target": {
-            "kind": "current_reply_object"
+            "kind": "compiler_state",
+            "state_kind": "question_part_state_set"
           },
           "mutation": "flip_first_byte"
         },
         {
-          "step_id": "quarantine",
+          "step_id": "question-state-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "question-state-evidence",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "question-state-fatal",
           "api": "advanceV5Run",
           "run_directory_from": {
-            "source_step_id": "create",
+            "source_step_id": "question-state-evidence",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/clarification-preview-final.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "question-state-evidence",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/presentation_id",
+              "value_from": {
+                "source_step_id": "question-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/presentation_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "question-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/semantic_root_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/proposed_units/0/target/display_token",
+              "value_from": {
+                "source_step_id": "question-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/parts/0/display_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/proposed_units/0/target/question_part_id",
+              "value_from": {
+                "source_step_id": "question-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/parts/0/question_part_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/proposed_units/0/target/root_version_digest",
+              "value_from": {
+                "source_step_id": "question-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/semantic_root_digest"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "pending-state-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "pending-state-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-c02.json",
+          "request_bindings": [],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "pending-state-source",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "pending-state-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/source-c02.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "pending-state-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_ids/0",
+              "value_from": {
+                "source_step_id": "pending-state-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_dispositions/0/request_id",
+              "value_from": {
+                "source_step_id": "pending-state-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "pending-state-evidence",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "pending-state-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/evidence-c02-gap.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/semantic_review_seed_digest",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/primary_outcome_signature",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/observation_slot_digests/0",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/semantic_gaps/0/target/origin/ambiguity_candidate_id",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/candidate_id",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/ambiguity_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/ambiguity_reviews/0/candidate_id",
+              "value_from": {
+                "source_step_id": "pending-state-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "pending-state-preview",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "pending-state-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/clarification-preview-final.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "pending-state-evidence",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/presentation_id",
+              "value_from": {
+                "source_step_id": "pending-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/presentation_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "pending-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/semantic_root_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/proposed_units/0/target/display_token",
+              "value_from": {
+                "source_step_id": "pending-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/parts/0/display_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/proposed_units/0/target/question_part_id",
+              "value_from": {
+                "source_step_id": "pending-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/parts/0/question_part_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/proposed_units/0/target/root_version_digest",
+              "value_from": {
+                "source_step_id": "pending-state-evidence",
+                "source_json_pointer": "/work_packet/presentation/semantic_root_digest"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "pending-state-tamper",
+          "api": "tamper_run_storage",
+          "run_directory_from": {
+            "source_step_id": "pending-state-preview",
+            "source_json_pointer": "/run_directory"
+          },
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "clarification_pending"
+          },
+          "mutation": "flip_first_byte"
+        },
+        {
+          "step_id": "pending-state-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "pending-state-preview",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "pending-state-fatal",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "pending-state-preview",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/clarification-commit-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "pending-state-preview",
+                "source_json_pointer": "/available_actions/1/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/presentation_id",
+              "value_from": {
+                "source_step_id": "pending-state-preview",
+                "source_json_pointer": "/work_packet/presentation/presentation_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "pending-state-preview",
+                "source_json_pointer": "/work_packet/presentation/semantic_root_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/preview_digest",
+              "value_from": {
+                "source_step_id": "pending-state-preview",
+                "source_json_pointer": "/work_packet/clarification_preview/preview_digest"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-snapshot-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "execution-snapshot-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-c01.json",
+          "request_bindings": [],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "execution-snapshot-source",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/source-c01.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-snapshot-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_ids/0",
+              "value_from": {
+                "source_step_id": "execution-snapshot-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_dispositions/0/request_id",
+              "value_from": {
+                "source_step_id": "execution-snapshot-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-snapshot-evidence",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-create",
             "source_json_pointer": "/run_directory"
           },
           "request_file": "requests/evidence-c01-valid.json",
@@ -24703,91 +25188,1476 @@
             {
               "target_json_pointer": "/action/action_token",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/available_actions/0/action_token"
               }
             },
             {
               "target_json_pointer": "/action/artifact/semantic_review_seed_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/0/primary_outcome_signature",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/0/observation_slot_digests/0",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/subject_slot_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/subject_slot_digest"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/condition_slot_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/condition_slot_digest"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/action_slot_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/action_slot_digest"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/primary_observation_slot_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/branch_slot_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/branch_slot_digest"
               }
             },
             {
               "target_json_pointer": "/action/artifact/claims/1/observation_slot_digests/0",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"
               }
             },
             {
               "target_json_pointer": "/action/artifact/decomposition_reviews/0/seed_digest",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
               }
             },
             {
               "target_json_pointer": "/action/artifact/decomposition_reviews/0/candidate_id",
               "value_from": {
-                "source_step_id": "source",
+                "source_step_id": "execution-snapshot-source",
                 "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-snapshot-behavior-valid",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/behavior-valid.json",
+          "client_key_bindings_from": {
+            "source_step_id": "execution-snapshot-evidence",
+            "source_json_pointer": "/commit_receipt/client_key_bindings"
+          },
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_seed_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/0/required_contract_key",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/required_contracts/0/required_contract_key"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/1/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/1/required_contract_key",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/required_contracts/1/required_contract_key"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-snapshot-case-valid",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/case-valid.json",
+          "client_key_bindings_from": {
+            "source_step_id": "execution-snapshot-evidence",
+            "source_json_pointer": "/commit_receipt/client_key_bindings"
+          },
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-snapshot-behavior-valid",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/0/oracles/0/oracle_semantic_contract_id",
+              "value_from": {
+                "source_step_id": "execution-snapshot-behavior-valid",
+                "source_json_pointer": "/commit_receipt/client_key_bindings/0/stable_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/1/oracles/0/oracle_semantic_contract_id",
+              "value_from": {
+                "source_step_id": "execution-snapshot-behavior-valid",
+                "source_json_pointer": "/commit_receipt/client_key_bindings/1/stable_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/1/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-snapshot-execution-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "execution-snapshot-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-execution-valid.json",
+          "fixture_absolute_path_bindings": [],
+          "request_bindings": [
+            {
+              "target_json_pointer": "/case_document_ref/run_id",
+              "value_from": {
+                "source_step_id": "execution-snapshot-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/run_id"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/revision",
+              "value_from": {
+                "source_step_id": "execution-snapshot-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/revision"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/manifest_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/manifest_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/bundle_digest",
+              "value_from": {
+                "source_step_id": "execution-snapshot-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/bundle_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/case_document_lineage_id",
+              "value_from": {
+                "source_step_id": "execution-snapshot-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/case_document_lineage_id"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/schema_version",
+              "value_from": {
+                "source_step_id": "execution-snapshot-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/schema_version"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-snapshot-tamper",
+          "api": "tamper_run_storage",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-execution-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "execution_snapshot"
+          },
+          "mutation": "flip_first_byte"
+        },
+        {
+          "step_id": "execution-snapshot-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-execution-create",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "execution-snapshot-fatal",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-snapshot-execution-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-disposition-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-snapshot-execution-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/operation/case_id",
+              "value_from": {
+                "source_step_id": "execution-snapshot-execution-create",
+                "source_json_pointer": "/work_packet/execution_projection/items/0/case_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "execution-receipt-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-c01.json",
+          "request_bindings": [],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "execution-receipt-source",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/source-c01.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-receipt-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_ids/0",
+              "value_from": {
+                "source_step_id": "execution-receipt-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_dispositions/0/request_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-evidence",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/evidence-c01-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/semantic_review_seed_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/primary_outcome_signature",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/observation_slot_digests/0",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/subject_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/subject_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/condition_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/condition_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/action_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/action_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/primary_observation_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/branch_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/branch_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/observation_slot_digests/0",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/candidate_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-behavior-valid",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/behavior-valid.json",
+          "client_key_bindings_from": {
+            "source_step_id": "execution-receipt-evidence",
+            "source_json_pointer": "/commit_receipt/client_key_bindings"
+          },
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_seed_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/0/required_contract_key",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/required_contracts/0/required_contract_key"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/1/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/1/required_contract_key",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/required_contracts/1/required_contract_key"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-case-valid",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/case-valid.json",
+          "client_key_bindings_from": {
+            "source_step_id": "execution-receipt-evidence",
+            "source_json_pointer": "/commit_receipt/client_key_bindings"
+          },
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-receipt-behavior-valid",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/0/oracles/0/oracle_semantic_contract_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-behavior-valid",
+                "source_json_pointer": "/commit_receipt/client_key_bindings/0/stable_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/1/oracles/0/oracle_semantic_contract_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-behavior-valid",
+                "source_json_pointer": "/commit_receipt/client_key_bindings/1/stable_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/1/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-execution-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "execution-receipt-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-execution-valid.json",
+          "fixture_absolute_path_bindings": [],
+          "request_bindings": [
+            {
+              "target_json_pointer": "/case_document_ref/run_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/run_id"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/revision",
+              "value_from": {
+                "source_step_id": "execution-receipt-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/revision"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/manifest_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/manifest_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/bundle_digest",
+              "value_from": {
+                "source_step_id": "execution-receipt-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/bundle_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/case_document_lineage_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/case_document_lineage_id"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/schema_version",
+              "value_from": {
+                "source_step_id": "execution-receipt-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/schema_version"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-execution-proof",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-execution-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-proof-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-receipt-execution-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/operation/case_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-execution-create",
+                "source_json_pointer": "/work_packet/execution_projection/items/0/case_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-receipt-tamper",
+          "api": "tamper_run_storage",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-execution-proof",
+            "source_json_pointer": "/run_directory"
+          },
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "execution_receipt",
+            "target_digest": "sha256:c4441716ff56edfdf704a0bb57657d5ab68a959d42904e9f1a049737658b8564"
+          },
+          "mutation": "flip_first_byte"
+        },
+        {
+          "step_id": "execution-receipt-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-execution-proof",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "execution-receipt-fatal",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-receipt-execution-proof",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-disposition-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-receipt-execution-proof",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/operation/case_id",
+              "value_from": {
+                "source_step_id": "execution-receipt-execution-proof",
+                "source_json_pointer": "/work_packet/execution_projection/items/0/case_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "execution-final-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-c01.json",
+          "request_bindings": [],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "execution-final-source",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/source-c01.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_ids/0",
+              "value_from": {
+                "source_step_id": "execution-final-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_dispositions/0/request_id",
+              "value_from": {
+                "source_step_id": "execution-final-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-evidence",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/evidence-c01-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/semantic_review_seed_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/primary_outcome_signature",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/0/observation_slot_digests/0",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/0"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/subject_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/subject_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/condition_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/condition_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/action_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/action_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/primary_observation_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/primary_outcome_signature/branch_slot_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/atom_signature/branch_slot_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/claims/1/observation_slot_digests/0",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/required_observation_slot_digests/1"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/decomposition_reviews/0/candidate_id",
+              "value_from": {
+                "source_step_id": "execution-final-source",
+                "source_json_pointer": "/work_packet/semantic_review_seed/normative_units/0/outcome_candidates/0/candidate_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-behavior-valid",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/behavior-valid.json",
+          "client_key_bindings_from": {
+            "source_step_id": "execution-final-evidence",
+            "source_json_pointer": "/commit_receipt/client_key_bindings"
+          },
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_seed_digest",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/0/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/0/required_contract_key",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/required_contracts/0/required_contract_key"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/1/seed_digest",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/seed_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/behavior_contract_reviews/1/required_contract_key",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/required_contracts/1/required_contract_key"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-case-valid",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/case-valid.json",
+          "client_key_bindings_from": {
+            "source_step_id": "execution-final-evidence",
+            "source_json_pointer": "/commit_receipt/client_key_bindings"
+          },
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-behavior-valid",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/0/oracles/0/oracle_semantic_contract_id",
+              "value_from": {
+                "source_step_id": "execution-final-behavior-valid",
+                "source_json_pointer": "/commit_receipt/client_key_bindings/0/stable_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/1/oracles/0/oracle_semantic_contract_id",
+              "value_from": {
+                "source_step_id": "execution-final-behavior-valid",
+                "source_json_pointer": "/commit_receipt/client_key_bindings/1/stable_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/0/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/action/artifact/case_drafts/1/case_step_semantic_bindings/0/action_ref/semantic_root_digest",
+              "value_from": {
+                "source_step_id": "execution-final-evidence",
+                "source_json_pointer": "/work_packet/behavior_contract_worklist/semantic_root_digest"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-execution-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "execution-final-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-execution-valid.json",
+          "fixture_absolute_path_bindings": [],
+          "request_bindings": [
+            {
+              "target_json_pointer": "/case_document_ref/run_id",
+              "value_from": {
+                "source_step_id": "execution-final-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/run_id"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/revision",
+              "value_from": {
+                "source_step_id": "execution-final-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/revision"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/manifest_digest",
+              "value_from": {
+                "source_step_id": "execution-final-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/manifest_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/bundle_digest",
+              "value_from": {
+                "source_step_id": "execution-final-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/bundle_digest"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/case_document_lineage_id",
+              "value_from": {
+                "source_step_id": "execution-final-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/case_document_lineage_id"
+              }
+            },
+            {
+              "target_json_pointer": "/case_document_ref/schema_version",
+              "value_from": {
+                "source_step_id": "execution-final-case-valid",
+                "source_json_pointer": "/work_packet/case_document_ref/schema_version"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-execution-disposition-first",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-execution-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-disposition-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-execution-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/operation/case_id",
+              "value_from": {
+                "source_step_id": "execution-final-execution-create",
+                "source_json_pointer": "/work_packet/execution_projection/items/0/case_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-execution-disposition-second",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-execution-disposition-first",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-disposition-second-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-execution-disposition-first",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/operation/case_id",
+              "value_from": {
+                "source_step_id": "execution-final-execution-disposition-first",
+                "source_json_pointer": "/work_packet/execution_projection/items/1/case_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-execution-confirm",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-execution-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-confirm-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-execution-disposition-second",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "execution-final-tamper",
+          "api": "tamper_run_storage",
+          "run_directory_from": {
+            "source_step_id": "execution-final-execution-confirm",
+            "source_json_pointer": "/run_directory"
+          },
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "final_execution_projection"
+          },
+          "mutation": "flip_first_byte"
+        },
+        {
+          "step_id": "execution-final-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-execution-confirm",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "execution-final-fatal",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "execution-final-execution-confirm",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/execution-confirm-after-tamper.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "execution-final-execution-disposition-second",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "accepted-projection-create",
+          "api": "createV5RunDirectory",
+          "catalog_key": "accepted-projection-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-c01.json",
+          "request_bindings": [],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "accepted-projection-source",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "accepted-projection-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/source-c01.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "accepted-projection-create",
+                "source_json_pointer": "/available_actions/0/action_token"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_ids/0",
+              "value_from": {
+                "source_step_id": "accepted-projection-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            },
+            {
+              "target_json_pointer": "/action/request_dispositions/0/request_id",
+              "value_from": {
+                "source_step_id": "accepted-projection-create",
+                "source_json_pointer": "/work_packet/source_requests/0/request_id"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "accepted-projection-cancel",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "accepted-projection-create",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/cancel-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "accepted-projection-source",
+                "source_json_pointer": "/available_actions/1/action_token"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "accepted-projection-resume",
+          "api": "createV5RunDirectory",
+          "catalog_key": "accepted-projection-f-c15-protocol-protocol-storage-tamper-matrix",
+          "request_file": "requests/create-resume-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/parent_run_id",
+              "value_from": {
+                "source_step_id": "accepted-projection-cancel",
+                "source_json_pointer": "/run_id"
+              }
+            }
+          ],
+          "fixture_absolute_path_bindings": []
+        },
+        {
+          "step_id": "accepted-projection-tamper",
+          "api": "tamper_run_storage",
+          "run_directory_from": {
+            "source_step_id": "accepted-projection-resume",
+            "source_json_pointer": "/run_directory"
+          },
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "accepted_compiler_projection",
+            "target_digest": "sha256:8f8024e762ff9b05eda367fc8d698df6a02f5b172373f4615e2b91008df60396"
+          },
+          "mutation": "flip_first_byte"
+        },
+        {
+          "step_id": "accepted-projection-inspect",
+          "api": "inspectV5Run",
+          "run_directory_from": {
+            "source_step_id": "accepted-projection-resume",
+            "source_json_pointer": "/run_directory"
+          }
+        },
+        {
+          "step_id": "accepted-projection-fatal",
+          "api": "advanceV5Run",
+          "run_directory_from": {
+            "source_step_id": "accepted-projection-resume",
+            "source_json_pointer": "/run_directory"
+          },
+          "request_file": "requests/cancel-valid.json",
+          "request_bindings": [
+            {
+              "target_json_pointer": "/action/action_token",
+              "value_from": {
+                "source_step_id": "accepted-projection-resume",
+                "source_json_pointer": "/available_actions/1/action_token"
               }
             }
           ]
         }
       ],
       "expected_steps": [
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.CASE.INITIAL",
+            "reply_status": "need_artifact",
+            "stage": "source_acquisition",
+            "obligation": "provide_source_pack",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/run_directory",
+              "/work_packet/source_requests/0/request_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "process_control",
+          "api": "tamper_run_storage",
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "source_acquisition_state"
+          },
+          "result": "tampered"
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.CD.ACTIVE.SOURCE.PROVIDE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.CD.ACTIVE.SOURCE.PROVIDE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "fatal",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.CASE.INITIAL",
+            "reply_status": "need_artifact",
+            "stage": "source_acquisition",
+            "obligation": "provide_source_pack",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/run_directory"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE",
+            "reply_status": "need_revision",
+            "stage": "requirements_analysis",
+            "obligation": "review_semantic_seed",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.AMBIGUITY_UNRESOLVED.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW",
+            "reply_status": "need_user_answers",
+            "error_code": "AMBIGUITY_UNRESOLVED",
+            "stage": "requirements_analysis",
+            "obligation": "resolve_requirements_questions",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/diagnostics/0/code",
+              "/work_packet/presentation/parts/0/question_part_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "process_control",
+          "api": "tamper_run_storage",
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "question_part_state_set"
+          },
+          "result": "tampered"
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.CD.ACTIVE.REQUIREMENTS.RESOLVE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.CD.ACTIVE.REQUIREMENTS.RESOLVE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "fatal",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.CASE.INITIAL",
+            "reply_status": "need_artifact",
+            "stage": "source_acquisition",
+            "obligation": "provide_source_pack",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/run_directory"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE",
+            "reply_status": "need_revision",
+            "stage": "requirements_analysis",
+            "obligation": "review_semantic_seed",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/semantic_review_seed/ambiguity_candidates/0/candidate_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.AMBIGUITY_UNRESOLVED.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW",
+            "reply_status": "need_user_answers",
+            "error_code": "AMBIGUITY_UNRESOLVED",
+            "stage": "requirements_analysis",
+            "obligation": "resolve_requirements_questions",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/diagnostics/0/code",
+              "/work_packet/presentation/parts/0/question_part_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.CLARIFICATION_CONFIRMATION_REQUIRED.RUN_MUTATION.RUN_MUTATION.STATE.CD.ACTIVE.REQUIREMENTS.RESOLVE",
+            "reply_status": "clarification_confirmation_required",
+            "error_code": "CLARIFICATION_CONFIRMATION_REQUIRED",
+            "stage": "requirements_analysis",
+            "obligation": "confirm_clarification",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "process_control",
+          "api": "tamper_run_storage",
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "clarification_pending"
+          },
+          "result": "tampered"
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.CD.ACTIVE.REQUIREMENTS.CONFIRM",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.CD.ACTIVE.REQUIREMENTS.CONFIRM",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "fatal",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
         {
           "kind": "api_reply",
           "reply": {
@@ -24828,10 +26698,81 @@
           }
         },
         {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.READY",
+            "reply_status": "need_revision",
+            "stage": "case_design",
+            "obligation": "provide_behavior_views",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/behavior_contract_worklist/seed_digest"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.CASE.BEHAVIOR.READY",
+            "reply_status": "need_revision",
+            "stage": "case_design",
+            "obligation": "provide_case_drafts",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.CASE.DRAFTS.FINISHED",
+            "reply_status": "finished",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "finished",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.EXECUTION.INITIAL",
+            "reply_status": "need_revision",
+            "stage": "execution_closure",
+            "obligation": "resolve_execution_closure",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
           "kind": "process_control",
           "api": "tamper_run_storage",
           "target": {
-            "kind": "current_reply_object"
+            "kind": "compiler_state",
+            "state_kind": "execution_snapshot"
           },
           "result": "tampered"
         },
@@ -24839,8 +26780,532 @@
           "kind": "api_reply",
           "reply": {
             "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.EP.ACTIVE.CLOSURE.RESOLVE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
             "projection_kind": "persisted_run_state",
-            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_QUARANTINE.QUARANTINE.NONE.CASE",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.EP.ACTIVE.CLOSURE.RESOLVE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "fatal",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.CASE.INITIAL",
+            "reply_status": "need_artifact",
+            "stage": "source_acquisition",
+            "obligation": "provide_source_pack",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/run_directory",
+              "/work_packet/source_requests/0/request_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE",
+            "reply_status": "need_revision",
+            "stage": "requirements_analysis",
+            "obligation": "review_semantic_seed",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/semantic_review_seed/seed_digest"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.READY",
+            "reply_status": "need_revision",
+            "stage": "case_design",
+            "obligation": "provide_behavior_views",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/behavior_contract_worklist/seed_digest"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.CASE.BEHAVIOR.READY",
+            "reply_status": "need_revision",
+            "stage": "case_design",
+            "obligation": "provide_case_drafts",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.CASE.DRAFTS.FINISHED",
+            "reply_status": "finished",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "finished",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.EXECUTION.INITIAL",
+            "reply_status": "need_revision",
+            "stage": "execution_closure",
+            "obligation": "resolve_execution_closure",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.EP.CLOSURE.PROVIDE_CAPABILITY_PROOF.STAY",
+            "reply_status": "need_revision",
+            "stage": "execution_closure",
+            "obligation": "resolve_execution_closure",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "process_control",
+          "api": "tamper_run_storage",
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "execution_receipt",
+            "target_digest": "sha256:c4441716ff56edfdf704a0bb57657d5ab68a959d42904e9f1a049737658b8564"
+          },
+          "result": "tampered"
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.EP.ACTIVE.CLOSURE.RESOLVE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.EP.ACTIVE.CLOSURE.RESOLVE",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "fatal",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.CASE.INITIAL",
+            "reply_status": "need_artifact",
+            "stage": "source_acquisition",
+            "obligation": "provide_source_pack",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/run_directory",
+              "/work_packet/source_requests/0/request_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE",
+            "reply_status": "need_revision",
+            "stage": "requirements_analysis",
+            "obligation": "review_semantic_seed",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/semantic_review_seed/seed_digest"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.REQUIREMENTS.REVIEW.READY",
+            "reply_status": "need_revision",
+            "stage": "case_design",
+            "obligation": "provide_behavior_views",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/behavior_contract_worklist/seed_digest"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.CASE.BEHAVIOR.READY",
+            "reply_status": "need_revision",
+            "stage": "case_design",
+            "obligation": "provide_case_drafts",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.CASE.DRAFTS.FINISHED",
+            "reply_status": "finished",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "finished",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.EXECUTION.INITIAL",
+            "reply_status": "need_revision",
+            "stage": "execution_closure",
+            "obligation": "resolve_execution_closure",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.EP.CLOSURE.SET_EXECUTION_DISPOSITION.STAY",
+            "reply_status": "need_revision",
+            "stage": "execution_closure",
+            "obligation": "resolve_execution_closure",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.EP.CLOSURE.SET_EXECUTION_DISPOSITION.READY",
+            "reply_status": "ready",
+            "stage": "final_confirmation",
+            "obligation": "confirm_execution_plan",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.EP.FINAL.CONFIRM",
+            "reply_status": "finished",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "finished",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "process_control",
+          "api": "tamper_run_storage",
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "final_execution_projection"
+          },
+          "result": "tampered"
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.EP.TERMINAL.FINISHED",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.EP.TERMINAL.FINISHED",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "fatal",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.CASE.INITIAL",
+            "reply_status": "need_artifact",
+            "stage": "source_acquisition",
+            "obligation": "provide_source_pack",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/run_directory",
+              "/work_packet/source_requests/0/request_id"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CD.SOURCE.BATCH.PAYLOAD.COMPLETE",
+            "reply_status": "need_revision",
+            "stage": "requirements_analysis",
+            "obligation": "review_semantic_seed",
+            "lifecycle": "active",
+            "semantic_revision_delta": 1,
+            "required_json_pointers": [
+              "/work_packet/semantic_review_seed/seed_digest"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CANCEL.CD.ACTIVE.REQUIREMENTS.REVIEW",
+            "reply_status": "cancelled",
+            "stage": "delivery",
+            "obligation": "complete",
+            "lifecycle": "cancelled",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.FSM.OUT5.CREATE.RESUME.CD.ACTIVE.REQUIREMENTS.REVIEW",
+            "reply_status": "need_revision",
+            "stage": "requirements_analysis",
+            "obligation": "review_semantic_seed",
+            "lifecycle": "active",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "process_control",
+          "api": "tamper_run_storage",
+          "target": {
+            "kind": "compiler_state",
+            "state_kind": "accepted_compiler_projection",
+            "target_digest": "sha256:8f8024e762ff9b05eda367fc8d698df6a02f5b172373f4615e2b91008df60396"
+          },
+          "result": "tampered"
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "read_only_integrity_fatal",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_INSPECT.INSPECT_VERIFIED.INSPECT.CD.ACTIVE.REQUIREMENTS.REVIEW",
+            "reply_status": "fatal",
+            "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
+            "lifecycle": "fatal",
+            "last_verified_state_kind": "checkpoint",
+            "semantic_revision_delta": 0,
+            "required_json_pointers": [
+              "/diagnostics/0/code"
+            ],
+            "forbidden_json_pointers": [
+              "/compiler_version"
+            ]
+          }
+        },
+        {
+          "kind": "api_reply",
+          "reply": {
+            "reply_kind": "run_reply",
+            "projection_kind": "persisted_run_state",
+            "reply_contract_id": "RPL.ERROR.ACCEPTED_STATE_INTEGRITY_FAILURE.RUN_MUTATION.MUTATION_TERMINALIZE.STATE.CD.ACTIVE.REQUIREMENTS.REVIEW",
             "reply_status": "fatal",
             "error_code": "ACCEPTED_STATE_INTEGRITY_FAILURE",
             "stage": "delivery",

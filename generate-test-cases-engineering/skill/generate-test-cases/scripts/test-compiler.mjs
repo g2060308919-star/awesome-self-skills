@@ -3432,7 +3432,7 @@ async function verifyV5AcceptedClosure(current) {
   for (const field of arrayFields) for (const digest4 of current.checkpoint[field] ?? []) if (typeof digest4 === "string") compilerRefs.push({ field, digest: digest4 });
   for (const { field, digest: digest4 } of compilerRefs.sort((left, right) => `${left.field}:${left.digest}`.localeCompare(`${right.field}:${right.digest}`))) {
     try {
-      const digestField = COMPILER_SEALED_DIGEST_FIELDS.get(field);
+      const digestField = field === "compiler_projection_digests" ? "projection_record_digest" : COMPILER_SEALED_DIGEST_FIELDS.get(field);
       if (digestField) await readSealedV5Record(current.layout.compilerState, digest4, digestField);
       else await readSemanticV5Record(current.layout.compilerState, digest4);
     } catch (error) {
@@ -5392,6 +5392,17 @@ function runtimeV5ActionKeyring() {
 }
 function currentV5TransactionServices() {
   return testProfile?.crashPoint ? { failAt: testProfile.crashPoint } : {};
+}
+function currentV5ExecutionServices() {
+  if (!testProfile) return {};
+  return {
+    /** @param {Record<string,any>} input */
+    async verifyCapabilityProof(input) {
+      if (input.proof?.type !== "account" || input.proof?.value !== "fixture-proof") return { verified: false, ready: false, receipt: {} };
+      const receiptPayload = { kind: "capability_proof", ready: true, case_id: input.case_id };
+      return { verified: true, ready: true, receipt: { ...receiptPayload, receipt_digest: canonicalObjectDigest(receiptPayload) } };
+    }
+  };
 }
 
 // src/v5/transactions.mjs
@@ -7394,6 +7405,7 @@ async function createResumedRun(catalog, request, parentRunId) {
   const childIdentityProjection = { run_id: runId, delivery_intent: parent.identity.delivery_intent, case_document_lineage_id: parent.identity.case_document_lineage_id };
   const digestReplacements = /* @__PURE__ */ new Map();
   const acceptedArtifacts = [];
+  const compilerProjectionDigests = [];
   const priorReply = await readCasJson(path5.join(parent.layout.replies, digestFilename(priorTransaction.reply_object_digest)), priorTransaction.reply_object_digest);
   let workPacket = structuredClone(priorReply.work_packet);
   if (targetCellId.endsWith(".resolve") && workPacket.kind === "clarification_confirmation_work") {
@@ -7414,6 +7426,7 @@ async function createResumedRun(catalog, request, parentRunId) {
     digestReplacements.set(parentEnvelope.envelope_digest, childEnvelope.envelope_digest);
     acceptedArtifacts.push({ record: childEnvelope, digestField: "envelope_digest" });
     compilerStateRecords.push({ record: projection, digestField: "projection_record_digest" });
+    compilerProjectionDigests.push(projection.projection_record_digest);
   }
   const projectedExecutionReceiptDigests = [];
   for (const parentReceiptDigest of priorCheckpoint.accepted_execution_receipt_digests ?? []) {
@@ -7425,6 +7438,7 @@ async function createResumedRun(catalog, request, parentRunId) {
     digestReplacements.set(parentReceiptDigest, childReceiptDigest);
     projectedExecutionReceiptDigests.push(childReceiptDigest);
     compilerStateRecords.push({ record: projection, digestField: "projection_record_digest" }, { record: childReceipt, semanticDigest: childReceiptDigest });
+    compilerProjectionDigests.push(projection.projection_record_digest);
   }
   workPacket = /** @type {Record<string,any>} */
   rewriteDigestRefs(workPacket, digestReplacements);
@@ -7441,6 +7455,7 @@ async function createResumedRun(catalog, request, parentRunId) {
     stage: targetCell.stage,
     obligation: targetCell.obligation,
     accepted_artifact_digests: acceptedArtifacts.map((item) => item.record.envelope_digest).sort(),
+    compiler_projection_digests: [...new Set(compilerProjectionDigests)].sort(),
     ...priorCheckpoint.delivery_intent === "execution_plan" ? { accepted_execution_receipt_digests: projectedExecutionReceiptDigests.sort() } : {},
     resume_lineage: { creation_reason: "resume_cancelled", parent_run_id: parentRunId, parent_cancel_event_digest: parent.operationalEvent.cancel_event_digest, resume_base: resumeBase }
   };
@@ -7555,7 +7570,7 @@ async function advanceExecution(current, request, templateId) {
   const capability = { kind: "advance_execution_plan", allowed_operation_kinds: templateId === "execution.advance_closure" ? ["provide_capability_proof", "set_execution_disposition"] : ["pause_execution", "confirm_execution_plan"] };
   validateAdvertisedAction(current, action, capability);
   validatePublicRequestSchema(request, "advance");
-  const advanced = await advanceV5ExecutionProjection(current.reply.work_packet.execution_projection, action.operation);
+  const advanced = await advanceV5ExecutionProjection(current.reply.work_packet.execution_projection, action.operation, currentV5ExecutionServices());
   const outcome = selectV5Outcome(contracts.fsmRegistry, { kind: "advance", from_cell_id: current.checkpoint.fsm_cell_id, action_template_id: templateId, result_key: advanced.result_key });
   const targetCell = fsmByCell.get(outcome.target_cell_id);
   const checkpointBase = {
@@ -7568,7 +7583,10 @@ async function advanceExecution(current, request, templateId) {
     accepted_execution_receipt_digests: advanced.receipt ? [.../* @__PURE__ */ new Set([...current.checkpoint.accepted_execution_receipt_digests ?? [], advanced.receipt.receipt_digest])].sort() : current.checkpoint.accepted_execution_receipt_digests
   };
   delete checkpointBase.checkpoint_digest;
-  if (targetCell.lifecycle !== "active") checkpointBase.run_lifecycle = targetCell.lifecycle;
+  if (targetCell.lifecycle !== "active") {
+    checkpointBase.run_lifecycle = targetCell.lifecycle;
+    if (targetCell.lifecycle === "finished") checkpointBase.final_execution_projection_digest = advanced.projection.execution_snapshot_digest;
+  }
   const workPacket = targetCell.lifecycle === "finished" ? { kind: "terminal_work", terminal_kind: "execution_plan_finished", case_document_ref: current.checkpoint.case_document_ref, execution_projection: advanced.projection } : { kind: "execution_work", case_document_ref: current.checkpoint.case_document_ref, execution_projection: advanced.projection };
   const selectorState = checkpointSelectors(checkpointBase, capabilitiesForCell(outcome.target_cell_id, workPacket));
   const actionDigest = actionDigestV5("advance", action);

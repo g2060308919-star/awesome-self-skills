@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import {
   acquireV5FixtureSandbox,
+  resolveCompilerStateTamperDigest,
   resolveFixturePointer,
   runV5FixtureManifest,
   v5FixtureSandboxPaths,
@@ -65,6 +66,41 @@ test('runner rejects open manifests, cardinality drift, forward bindings, and un
   assert.throws(() => validateV5FixtureManifest(processControl), /lacks later API evidence/u);
 });
 
+test('compiler-state tamper matrix covers every frozen state and rejects ambiguous or mismatched targets', () => {
+  const matrix = cloneManifest().fixtures.find((/** @type {Record<string,any>} */ fixture) => fixture.fixture_id === 'F-C15-protocol.protocol.storage-tamper-matrix');
+  assert.ok(matrix);
+  const compilerStateSteps = matrix.action_sequence.filter((/** @type {Record<string,any>} */ step) => step.api === 'tamper_run_storage' && step.target.kind === 'compiler_state');
+  assert.deepEqual(compilerStateSteps.map((/** @type {Record<string,any>} */ step) => step.target.state_kind).sort(), [
+    'accepted_compiler_projection', 'clarification_pending', 'execution_receipt', 'execution_snapshot',
+    'final_execution_projection', 'question_part_state_set', 'source_acquisition_state'
+  ]);
+  for (const step of compilerStateSteps.filter((/** @type {Record<string,any>} */ candidate) => ['execution_receipt', 'accepted_compiler_projection'].includes(candidate.target.state_kind))) {
+    assert.match(step.target.target_digest, /^sha256:[0-9a-f]{64}$/u);
+  }
+
+  const missingDigest = cloneManifest();
+  const missingMatrix = missingDigest.fixtures.find((/** @type {Record<string,any>} */ fixture) => fixture.fixture_id === matrix.fixture_id);
+  const missingTarget = missingMatrix.action_sequence.find((/** @type {Record<string,any>} */ step) => step.target?.state_kind === 'execution_receipt');
+  delete missingTarget.target.target_digest;
+  delete missingMatrix.expected_steps[missingMatrix.action_sequence.indexOf(missingTarget)].target.target_digest;
+  assert.throws(() => validateV5FixtureManifest(missingDigest), /compiler-state tamper target is invalid/u);
+
+  const invalidDigest = cloneManifest();
+  const invalidMatrix = invalidDigest.fixtures.find((/** @type {Record<string,any>} */ fixture) => fixture.fixture_id === matrix.fixture_id);
+  const setTarget = invalidMatrix.action_sequence.find((/** @type {Record<string,any>} */ step) => step.target?.state_kind === 'execution_receipt');
+  setTarget.target.target_digest = 'not-a-digest';
+  invalidMatrix.expected_steps[invalidMatrix.action_sequence.indexOf(setTarget)].target.target_digest = 'not-a-digest';
+  assert.throws(() => validateV5FixtureManifest(invalidDigest), /compiler-state tamper target is invalid/u);
+
+  assert.throws(() => resolveCompilerStateTamperDigest({ accepted_execution_receipt_digests: [`sha256:${'a'.repeat(64)}`] }, { state_kind: 'execution_receipt', target_digest: `sha256:${'b'.repeat(64)}` }), /target is not in the verified checkpoint set/u);
+
+  const mismatchedDiagnostic = cloneManifest();
+  const mismatchMatrix = mismatchedDiagnostic.fixtures.find((/** @type {Record<string,any>} */ fixture) => fixture.fixture_id === matrix.fixture_id);
+  const tamperIndex = mismatchMatrix.action_sequence.findIndex((/** @type {Record<string,any>} */ step) => step.target?.state_kind === 'source_acquisition_state');
+  mismatchMatrix.expected_steps[tamperIndex + 1].reply.error_code = 'CANONICAL_RENDER_MISMATCH';
+  assert.throws(() => validateV5FixtureManifest(mismatchedDiagnostic), /tamper diagnostic differs from target/u);
+});
+
 test('manifest paths and JSON pointers are exact and traversal-safe', () => {
   for (const rejected of ['/absolute.json', '../escape.json', 'a/../b.json', 'a//b.json', 'a\\b.json', 'a\0b.json']) {
     assert.throws(() => validateManifestRelativePath(rejected), /unsafe manifest-relative path/u);
@@ -102,6 +138,6 @@ test('all leaves execute twice with byte-identical normalized transcript digests
     schema_version: '5.0.0',
     requirement_groups_passed: 16,
     fixture_leaves_passed: 105,
-    transcript_digest: 'sha256:bcead0bdce92510cd8b3b4d0e16eadd4ad429c82b7dfc768e53a548650020729'
+    transcript_digest: 'sha256:17781e2b5adf6fa98cc03a5b04d257c94ea40ac824d40d4a48843e9d443a6eb9'
   });
 });
