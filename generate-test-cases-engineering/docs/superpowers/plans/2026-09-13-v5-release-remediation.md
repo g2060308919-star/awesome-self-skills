@@ -109,4 +109,4 @@
 - [x] Run the local TypeScript binary, group diagnostics by root cause, and fix the smallest truthful JSDoc/schema/type boundary without `@ts-nocheck` or weakened compiler settings.
 - [x] Repeat until `./node_modules/.bin/tsc --noEmit -p jsconfig.json` passes, then run the complete test/build/check/fixture/secret/diff gates exactly once on the final bytes.
 - [x] Update release evidence with exact commands, counts, digests, commit IDs, and C01–C16 traceability; change the blocker decision only when every MUST is evidenced.
-- [ ] Commit `fix(generate-test-cases): clear v5 release gates`, push `codex/generate-test-cases-v5`, merge it into `main`, rerun merge-head smoke gates, and push `main`.
+- [x] Commit `fix(generate-test-cases): clear v5 release gates`, push `codex/generate-test-cases-v5`, merge it into `main`, rerun merge-head smoke gates, and push `main`.
