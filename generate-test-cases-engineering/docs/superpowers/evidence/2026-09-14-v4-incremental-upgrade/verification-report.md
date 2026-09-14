@@ -1,6 +1,6 @@
 # V4 incremental upgrade verification report
 
-Status: implementation candidate under final verification. This report distinguishes deterministic implementation completion from release acceptance.
+Status: implementation candidate complete; release acceptance not passed. This report distinguishes deterministic implementation completion from release acceptance.
 
 ## Bound identities
 
@@ -30,7 +30,7 @@ Status: implementation candidate under final verification. This report distingui
 | final `npm run check` | exit 0; tsc/build freshness passed; 1486/1486 core/golden/interface/recovery tests and 2/2 repeatability tests passed; includes 100 fresh installed-shape runs and three durable-directory repeats |
 | `npm run test:benchmark` | exit 0; 145/145 benchmark contract/tool tests passed |
 | `npm run public-pilot` | exit 0; `pilot_ready`, 30/30 admitted, `release_eligible=false`, `release_status=insufficient_evidence` |
-| `npm run benchmark` | `PENDING_FINAL_CAPTURE` |
+| `npm run benchmark` | exit 1 as designed for blocking evidence; `status=fail`, `release_eligible=false`, 30 cases, 0/90 completed candidate captures; issues `CAPTURE_EVIDENCE_FORGED` and `CAPTURE_SET_INCOMPLETE` because retained captures bind older source revisions |
 | engineering/repository Skill byte comparison | exit 0 from `diff -qr`; full-suite repository sync test also passed |
 | `git diff --check` | exit 0 before final capture |
 
@@ -47,7 +47,7 @@ The initial candidate failure is retained as development evidence. Its legacy te
 | T04 | complete for deterministic implementation candidate: existing Oracle/mapping carriers protected and semantic mutants rejected |
 | T05 | complete for deterministic implementation candidate: six values, logical population and permission outcomes projected from actual delivery |
 | T06 | complete: evidence projection, official output, version, recovery and consumers checked |
-| T07 | candidate build, deterministic suite, benchmark-tool suite and public-pilot validation complete; actual clean-tree single-system gate and content digest capture pending; cold-context paired evaluation unavailable |
+| T07 | candidate build, deterministic suite, benchmark-tool suite, public-pilot validation, clean-tree single-system gate and content digest capture complete; cold-context paired evaluation unavailable and release gate failed on absent candidate-bound captures |
 
 Detailed R/P/C/AT evidence is in `acceptance-map.md`, `capability-map.md`, and `change-register.md`.
 
@@ -62,8 +62,8 @@ Detailed R/P/C/AT evidence is in `acceptance-map.md`, `capability-map.md`, and `
 | G4 | insufficient evidence | one visible synthetic domain is deterministically checked, but independent per-domain facts/obligations/question-quality/false-status paired scoring was not supplied or run |
 | G5 | pass | full-suite answer → preview → confirmation → Decision → evidence → Test Point/Case/output chain and stale/recovery checks passed |
 | G6 | pass | canonical JSON/Markdown/CSV, terminal states, cancellation, reopen and crash recovery all passed |
-| G7 | pending source identity | build freshness, installed entry, manifest/version and byte-identical publication copy passed; local source commit/digest capture pending |
-| G8 | insufficient evidence | missing qualified 12-requirement corpus, hidden holdouts, independent truth/reviewer, frozen answer scripts/model/tool profile, and budget for 72 paired cold-context tasks |
+| G7 | pass | implementation commit `f6cbac78b1866b22a2cd155213368e11bc725d33`; clean-tree gate captured compiler/schema/manifest/Skill/bundle digests; engineering and repository copies byte-identical |
+| G8 | fail / insufficient evidence | actual gate rejects the retained old-revision captures and has 0/90 candidate captures; additionally missing the qualified 12-requirement corpus, hidden holdouts, independent truth/reviewer, frozen answer scripts/model/tool profile, and budget for 72 paired cold-context tasks |
 
 ## Semantic evaluation and cost boundary
 
@@ -72,7 +72,11 @@ Detailed R/P/C/AT evidence is in `acceptance-map.md`, `capability-map.md`, and `
 - No cold-context generation tasks were executed for this upgrade, so paired question counts, elapsed time and token deltas are unavailable rather than zero. The implemented interaction contract adds at most one apply confirmation per prepared answer batch; this is an interface invariant, not a measured end-user cost result.
 - The required external inputs and 72-task design are frozen in `evaluation-protocol.json`. Until supplied and run, G4/G8 cannot pass and the candidate cannot be described as release-accepted.
 
+## Final conclusion
+
+The V4 incremental implementation candidate is complete and deterministically verified. Release acceptance did not pass: G4 is evidence-insufficient, and G8 both lacks the Spec's independent paired study and fails the existing single-system gate because no retained capture is bound to the candidate source. Producing new candidate-bound captures and independent review is future evaluation work; rewriting the historical captures would violate the authorized scope.
+
 ## Scope and safety
 
 - No E2E Runner, CDP proxy, browser automation, installed user Skill, historical run, dependency lock, unrelated product code, remote branch or Git history is modified.
-- This worktree is a local candidate only. It has not been installed, pushed, published or merged.
+- This worktree is a local candidate only. The implementation was committed locally; it has not been installed, pushed, published or merged.

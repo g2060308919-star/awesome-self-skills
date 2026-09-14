@@ -122,8 +122,8 @@
 - Mirror: `skill/generate-test-cases/**` to `../generate-test-cases/**`
 
 - [x] Run focused red/green tests for each slice, then `npm run check`.
-- [ ] Run `npm run test:benchmark`, `npm run public-pilot`, and the actual single-system gate.
+- [x] Run `npm run test:benchmark`, `npm run public-pilot`, and the actual single-system gate; preserve its actual failed release result.
 - [x] Verify engineering Skill and repository publication candidate are byte-identical.
 - [x] Review the branch diff against the supplied Spec and V4 baseline.
-- [ ] Record actual G0-G8 outcomes. Mark G8 insufficient unless the frozen external cold-context corpus is fully run.
-- [ ] Commit locally only; do not push, publish, merge, or modify historical runs.
+- [x] Record actual G0-G8 outcomes. Mark G8 failed/insufficient because neither candidate-bound captures nor the frozen external cold-context corpus were completed.
+- [x] Commit locally only; do not push, publish, merge, or modify historical runs.
