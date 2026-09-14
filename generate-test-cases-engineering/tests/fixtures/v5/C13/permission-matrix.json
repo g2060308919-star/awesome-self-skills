@@ -1,1 +1,0 @@
-{"fixture_id":"C13.permission-matrix","action":"view","dimensions":["data_scope","decision","denial_behavior"],"expected_required_cells":3,"unresolved_coordinate_example":["role"]}

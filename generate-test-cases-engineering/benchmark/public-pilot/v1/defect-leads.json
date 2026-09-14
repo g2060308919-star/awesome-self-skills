@@ -1,0 +1,920 @@
+{
+  "schema_version": "1.0.0",
+  "ledger_id": "public-defect-leads-v1",
+  "evidence_class": "public-source-machine-pilot",
+  "external_expert_evidence": false,
+  "release_eligible": false,
+  "release_status": "insufficient_evidence",
+  "source_reports": [
+    {
+      "path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3"
+    },
+    {
+      "path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e"
+    }
+  ],
+  "controlling_sources": [
+    {
+      "path": "docs/research/2026-08-31-public-prd-adjudication.md",
+      "sha256": "7c93373fbc855349d245fe8fd3b412b527bed4cb1c858427c5a6117a065b5ee9"
+    },
+    {
+      "path": "docs/research/2026-08-31-public-prd-adjudication-rubric.md",
+      "sha256": "632c8295ca7ec062cc772702cb1393087f66127b814aaa6db5cd38234ebddbab"
+    }
+  ],
+  "normalization": {
+    "raw_entry_count": 33,
+    "unique_lead_count": 32,
+    "deduplication_count": 1,
+    "deduplicated_issue": {
+      "canonical_url": "https://github.com/temporalio/temporal/issues/10321",
+      "canonical_defect_id": "DEFECT-TEMPORAL-10321",
+      "merged_source_local_ids": [
+        "A-workflow-06",
+        "ASYNC-TEMP-10321"
+      ]
+    }
+  },
+  "boundary": {
+    "machine_generated": true,
+    "formal_admit_count": 0,
+    "immutable_snapshots_retained": 0,
+    "current_case_bindings": 0,
+    "note": "These mutable GitHub issue URLs are research leads only. No issue was frozen, retained, or bound to a benchmark case; machine normalization is not external human expert evidence."
+  },
+  "leads": [
+    {
+      "defect_id": "DEFECT-SOLIDUS-6326",
+      "canonical_url": "https://github.com/solidusio/solidus/issues/6326",
+      "repository": "solidusio/solidus",
+      "issue_number": 6326,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "transaction/order/payment"
+      ],
+      "relevance": "Checkout can hit a stack overflow after a payment card is added.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-transaction-01"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-SOLIDUS-STRIPE-313",
+      "canonical_url": "https://github.com/solidusio/solidus_stripe/issues/313",
+      "repository": "solidusio/solidus_stripe",
+      "issue_number": 313,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "transaction/order/payment"
+      ],
+      "relevance": "A failed 3DS payment can be presented as paid when confirmation is removed.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-transaction-02"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-SOLIDUS-STRIPE-311",
+      "canonical_url": "https://github.com/solidusio/solidus_stripe/issues/311",
+      "repository": "solidusio/solidus_stripe",
+      "issue_number": 311,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "transaction/order/payment"
+      ],
+      "relevance": "Store-credit handling can leave insufficient Stripe balance during payment.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-transaction-03"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-SOLIDUS-AFFIRM-42",
+      "canonical_url": "https://github.com/solidusio/solidus_affirm/issues/42",
+      "repository": "solidusio/solidus_affirm",
+      "issue_number": 42,
+      "frozen_risk": "medium",
+      "suggested_strata": [
+        "transaction/order/payment"
+      ],
+      "relevance": "An apostrophe in a customer name can break checkout.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-transaction-04"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-MEDUSA-8640",
+      "canonical_url": "https://github.com/medusajs/medusa/issues/8640",
+      "repository": "medusajs/medusa",
+      "issue_number": 8640,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "transaction/order/payment"
+      ],
+      "relevance": "Stripe checkout payment-session initiation can fail.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-transaction-05"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-MEDUSA-11816",
+      "canonical_url": "https://github.com/medusajs/medusa/issues/11816",
+      "repository": "medusajs/medusa",
+      "issue_number": 11816,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "transaction/order/payment"
+      ],
+      "relevance": "Payment can succeed without an order being created after a shipping mismatch.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-transaction-06"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KEYCLOAK-41707",
+      "canonical_url": "https://github.com/keycloak/keycloak/issues/41707",
+      "repository": "keycloak/keycloak",
+      "issue_number": 41707,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "identity/role/permission"
+      ],
+      "relevance": "Wildcard or same-URI permission matching can produce access_denied.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-identity-01"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KEYCLOAK-23585",
+      "canonical_url": "https://github.com/keycloak/keycloak/issues/23585",
+      "repository": "keycloak/keycloak",
+      "issue_number": 23585,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "identity/role/permission"
+      ],
+      "relevance": "User-role handling can make the account console fail.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-identity-02"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KEYCLOAK-51249",
+      "canonical_url": "https://github.com/keycloak/keycloak/issues/51249",
+      "repository": "keycloak/keycloak",
+      "issue_number": 51249,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "identity/role/permission"
+      ],
+      "relevance": "Deleting a required authorization role can weaken policies.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-identity-03"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KEYCLOAK-51247",
+      "canonical_url": "https://github.com/keycloak/keycloak/issues/51247",
+      "repository": "keycloak/keycloak",
+      "issue_number": 51247,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "identity/role/permission"
+      ],
+      "relevance": "A scope permission can list only the first of multiple resources.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-identity-04"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-GRAFANA-54974",
+      "canonical_url": "https://github.com/grafana/grafana/issues/54974",
+      "repository": "grafana/grafana",
+      "issue_number": 54974,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "identity/role/permission"
+      ],
+      "relevance": "Anonymous RBAC migration can omit dashboards:read.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-identity-05"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-GRAFANA-ONCALL-5096",
+      "canonical_url": "https://github.com/grafana-cold-storage/oncall/issues/5096",
+      "repository": "grafana-cold-storage/oncall",
+      "issue_number": 5096,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "identity/role/permission"
+      ],
+      "relevance": "Permissions can fail when org_id is not 1.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-identity-06"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-ARGO-WORKFLOWS-13299",
+      "canonical_url": "https://github.com/argoproj/argo-workflows/issues/13299",
+      "repository": "argoproj/argo-workflows",
+      "issue_number": 13299,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "workflow/approval/state"
+      ],
+      "relevance": "A workflow can remain Running after a resource-template failure.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-workflow-01"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-ARGO-WORKFLOWS-12103",
+      "canonical_url": "https://github.com/argoproj/argo-workflows/issues/12103",
+      "repository": "argoproj/argo-workflows",
+      "issue_number": 12103,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "workflow/approval/state"
+      ],
+      "relevance": "A workflow can remain Running after its only pod completes.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-workflow-02"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-ARGO-WORKFLOWS-16567",
+      "canonical_url": "https://github.com/argoproj/argo-workflows/issues/16567",
+      "repository": "argoproj/argo-workflows",
+      "issue_number": 16567,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "workflow/approval/state"
+      ],
+      "relevance": "Semaphore handling can remove the wrong pending-queue entry and miss notifications.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-workflow-03"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-TEKTON-10136",
+      "canonical_url": "https://github.com/tektoncd/pipeline/issues/10136",
+      "repository": "tektoncd/pipeline",
+      "issue_number": 10136,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "workflow/approval/state"
+      ],
+      "relevance": "PipelineRun status can be wrong after a task timeout.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-workflow-04"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-AIRFLOW-67287",
+      "canonical_url": "https://github.com/apache/airflow/issues/67287",
+      "repository": "apache/airflow",
+      "issue_number": 67287,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "workflow/approval/state"
+      ],
+      "relevance": "A scheduler/trigger race can produce an incorrect queued state.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "machine-normalized-from-report-summary",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-workflow-05"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-TEMPORAL-10321",
+      "canonical_url": "https://github.com/temporalio/temporal/issues/10321",
+      "repository": "temporalio/temporal",
+      "issue_number": 10321,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "workflow/approval/state",
+        "asynchronous integration/event"
+      ],
+      "relevance": "A SQL transaction race can permanently stall a workflow.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+      "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+      "risk_source": "source-report-explicit-and-machine-normalized-summary-agree",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-a.md",
+          "source_report_sha256": "3dcbf5f9764d8a93e4664d310ac68bfe2be0c9b89f7fc3aae2dff502e8717cb3",
+          "source_local_id": "A-workflow-06"
+        },
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "ASYNC-TEMP-10321"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-65470",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/65470",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 65470,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "form/configuration/input validation"
+      ],
+      "relevance": "An invalid validation expression can crash the API server.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "FORM-K8S-65470"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-68787",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/68787",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 68787,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "form/configuration/input validation"
+      ],
+      "relevance": "Validation rejection can lose actionable error detail.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "FORM-K8S-68787"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-68466",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/68466",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 68466,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "form/configuration/input validation"
+      ],
+      "relevance": "A legal items field can be rejected.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "FORM-K8S-68466"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-120821",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/120821",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 120821,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "form/configuration/input validation"
+      ],
+      "relevance": "CEL changes can break validation compatibility.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "FORM-K8S-120821"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-90128",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/90128",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 90128,
+      "frozen_risk": "medium",
+      "suggested_strata": [
+        "form/configuration/input validation"
+      ],
+      "relevance": "An error can report the wrong invalid value.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "FORM-K8S-90128"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-TEMPORAL-1267",
+      "canonical_url": "https://github.com/temporalio/temporal/issues/1267",
+      "repository": "temporalio/temporal",
+      "issue_number": 1267,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "asynchronous integration/event"
+      ],
+      "relevance": "Partial persistence can leave unrecoverable asynchronous state.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "ASYNC-TEMP-1267"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-TEMPORAL-9118",
+      "canonical_url": "https://github.com/temporalio/temporal/issues/9118",
+      "repository": "temporalio/temporal",
+      "issue_number": 9118,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "asynchronous integration/event"
+      ],
+      "relevance": "An event can be recorded while the downstream task is absent.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "ASYNC-TEMP-9118"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-ARGO-EVENTS-3049",
+      "canonical_url": "https://github.com/argoproj/argo-events/issues/3049",
+      "repository": "argoproj/argo-events",
+      "issue_number": 3049,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "asynchronous integration/event"
+      ],
+      "relevance": "The wrong dependency can trigger while the intended dependency is omitted.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "ASYNC-ARGO-3049"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-ARGO-EVENTS-4109",
+      "canonical_url": "https://github.com/argoproj/argo-events/issues/4109",
+      "repository": "argoproj/argo-events",
+      "issue_number": 4109,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "asynchronous integration/event"
+      ],
+      "relevance": "Retry or failure handling can leak integration resources.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "ASYNC-ARGO-4109"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-107205",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/107205",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 107205,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "time-window/quota/entitlement"
+      ],
+      "relevance": "A valid entitlement can be rejected as absent.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "TIME-K8S-107205"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-97090",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/97090",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 97090,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "time-window/quota/entitlement"
+      ],
+      "relevance": "Consumed quota can remain reported as zero.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "TIME-K8S-97090"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-52093",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/52093",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 52093,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "time-window/quota/entitlement"
+      ],
+      "relevance": "Concurrent quota processing can crash the controller.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "TIME-K8S-52093"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-120981",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/120981",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 120981,
+      "frozen_risk": "critical",
+      "suggested_strata": [
+        "time-window/quota/entitlement"
+      ],
+      "relevance": "A declared quota gap can exist without a per-pod limit.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "TIME-K8S-120981"
+        }
+      ]
+    },
+    {
+      "defect_id": "DEFECT-KUBERNETES-140890",
+      "canonical_url": "https://github.com/kubernetes/kubernetes/issues/140890",
+      "repository": "kubernetes/kubernetes",
+      "issue_number": 140890,
+      "frozen_risk": "high",
+      "suggested_strata": [
+        "time-window/quota/entitlement"
+      ],
+      "relevance": "Stale quota synchronization can reject work indefinitely.",
+      "status": "lead",
+      "bound_case_id": null,
+      "countable": false,
+      "source_version": null,
+      "snapshot_sha256": null,
+      "snapshot_status": "not-retained",
+      "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+      "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+      "risk_source": "source-report-explicit",
+      "source_occurrences": [
+        {
+          "source_report_path": "docs/research/2026-08-31-public-prd-expert-b.md",
+          "source_report_sha256": "882c35126a46b80ef181d3e031adc44e590040ec49667f2b27d5e1e2d9d1541e",
+          "source_local_id": "TIME-K8S-140890"
+        }
+      ]
+    }
+  ]
+}

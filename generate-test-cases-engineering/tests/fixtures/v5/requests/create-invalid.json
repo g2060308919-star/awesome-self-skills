@@ -1,7 +1,0 @@
-{
-  "idempotency_key": "fixture-invalid",
-  "delivery_intent": "case_document",
-  "source_bootstrap": {
-    "source_request_seeds": []
-  }
-}

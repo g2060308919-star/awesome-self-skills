@@ -1,0 +1,12 @@
+{
+  "repository": "arthursantos67/cineprime-api",
+  "commit": "e66b7ec1485ecbb2970043b459db32c1bd85f436",
+  "source_url": "https://raw.githubusercontent.com/arthursantos67/cineprime-api/e66b7ec1485ecbb2970043b459db32c1bd85f436/product-requirements-document.md",
+  "source_sha256": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+  "content_digest": "38a32678c6d84644790c781003c780b2c8d8f19e3f69a564c34909c85f3577a2",
+  "license_url": "https://raw.githubusercontent.com/arthursantos67/cineprime-api/e66b7ec1485ecbb2970043b459db32c1bd85f436/LICENSE",
+  "license_sha256": "6a7276de4d2e7a6cf5a239444c122be86ce7bcc699f94f8910eeb58ae645c1ba",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

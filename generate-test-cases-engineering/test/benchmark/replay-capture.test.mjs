@@ -1,0 +1,204 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import { verifyCaptureTranscript } from '../../benchmark/replay-capture.mjs';
+import { buildJourney, runInstalledRevision } from '../helpers/run-journey.mjs';
+
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const runnerPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/test-compiler.mjs');
+const replySchemaPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/reply.schema.json');
+const bundleSchemaPath = path.join(repositoryRoot, 'skill/generate-test-cases/scripts/schemas/test-bundle.schema.json');
+const artifactDigests = {
+  compiler: 'a'.repeat(64), schema: 'b'.repeat(64), schema_manifest: 'c'.repeat(64),
+  skill: 'd'.repeat(64), bundle: 'e'.repeat(64)
+};
+
+/** @param {any} value */
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+/** @param {any} reply @param {string} runDirectory */
+function normalizeReply(reply, runDirectory) {
+  const normalized = structuredClone(reply);
+  for (const key of ['artifact_path', 'bundle_path', 'markdown_path']) {
+    if (typeof normalized[key] === 'string') {
+      normalized[key] = path.relative(runDirectory, normalized[key]).split(path.sep).join('/');
+    }
+  }
+  return normalized;
+}
+
+/** @param {any} value @param {string} before @param {string} after @returns {any} */
+function replaceStringDeep(value, before, after) {
+  if (value === before) return after;
+  if (Array.isArray(value)) return value.map((item) => replaceStringDeep(item, before, after));
+  if (value !== null && typeof value === 'object') return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, replaceStringDeep(item, before, after)])
+  );
+  return value;
+}
+
+async function genuineTranscript() {
+  const revision = buildJourney('all-e3');
+  const sourceBytes = revision.source_pack.sources[0].content;
+  const sourceDigest = sha256(sourceBytes);
+  revision.source_pack.sources[0].content_digest = sourceDigest;
+  revision.source_pack.sources[0].version = '1'.repeat(40);
+  revision.source_pack.sources[0].authority = 'public-repository:example/project';
+  revision.source_pack.source_policy.rules[0].authority = 'public-repository:example/project';
+  for (const locator of revision.source_pack.locators) locator.content_digest = sourceDigest;
+  const capture = {
+    capture_id: 'PF-TR-01-r1', case_id: 'PF-TR-01', system: 'generate-test-cases',
+    repeat: 1, session_id: 'session-genuine-1', source_sha256: sourceDigest,
+    task_sha256: 'f'.repeat(64), runtime_revision: '1'.repeat(40), artifact_digests: artifactDigests,
+    operator_witness: {
+      method: 'operator-observed-codex-subagent-v1', operator_task_id: '/root',
+      agent_task_id: '/root/v4_pressure_transactions_identity', observation_id: 'observation-genuine-1'
+    }
+  };
+  const run = await runInstalledRevision(revision);
+  const transcript = {
+    schema_version: '1.0.0', ...capture,
+    events: run.submittedEvents.map((/** @type {any} */ event) => ({
+      stage: event.stage,
+      artifact: event.artifact,
+      reply: normalizeReply(event.reply, run.runDirectory)
+    }))
+  };
+  await rm(run.runDirectory, { recursive: true, force: true });
+  return {
+    capture,
+    transcript,
+    sourceContract: {
+      source_id: revision.source_pack.sources[0].source_id,
+      repository: 'example/project',
+      commit: '1'.repeat(40),
+      source_sha256: sourceDigest
+    }
+  };
+}
+
+test('capture verifier reproduces retained submissions, replies, final bundle, and recovery', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const transcriptBytes = new TextEncoder().encode(`${JSON.stringify(transcript)}\n`);
+
+  const result = await verifyCaptureTranscript({
+    transcriptBytes, expected: capture, candidateRoot: repositoryRoot, runnerPath,
+    replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+  });
+
+  assert.equal(result.transcript_sha256, sha256(transcriptBytes));
+  assert.equal(result.final_bundle_sha256, result.replay_bundle_sha256);
+  assert.match(result.reply_sequence_sha256, /^[a-f0-9]{64}$/u);
+});
+
+test('capture verifier rejects a recorded reply that the runner cannot reproduce', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  /** @type {any} */ (transcript.events.at(-1)).reply.bundle_digest = '0'.repeat(64);
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /Recorded runner reply mismatch/u
+  );
+});
+
+test('capture verifier rejects a forged presentation digest instead of alpha-rebinding it', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const presentationEvent = transcript.events.find((/** @type {any} */ event) => (
+    event.reply?.status === 'need_user_answers' && typeof event.reply?.presentation_digest === 'string'
+  ));
+  assert.ok(presentationEvent);
+  presentationEvent.reply.presentation_digest = '0'.repeat(64);
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /Recorded presentation digest mismatch/u
+  );
+});
+
+test('capture verifier schema-validates recorded replies before learning replay identities', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const presentationEvent = transcript.events.find((/** @type {any} */ event) => (
+    event.reply?.status === 'need_user_answers' && typeof event.reply?.presentation_id === 'string'
+  ));
+  assert.ok(presentationEvent);
+  const originalPresentationId = presentationEvent.reply.presentation_id;
+  transcript.events = replaceStringDeep(
+    transcript.events, originalPresentationId, ''
+  );
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /Recorded runner reply schema invalid/u
+  );
+});
+
+test('capture verifier rejects a matching PRD used only as a decoy source', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  const primary = transcript.events[0].artifact.sources[0];
+  primary.content = 'Synthetic requirements unrelated to the retained PRD.';
+  primary.content_digest = sha256(primary.content);
+  transcript.events[0].artifact.sources.push({
+    source_id: sourceContract.source_id,
+    kind: 'prd', version: sourceContract.commit,
+    status: 'effective', authority: `public-repository:${sourceContract.repository}`,
+    content: 'Frozen journey requirements.', content_digest: sourceContract.source_sha256,
+    scope: '*'
+  });
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /not exactly bound/u
+  );
+});
+
+test('capture verifier rejects a transcript that names an unassigned Agent task', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  capture.operator_witness.agent_task_id = '/root/unobserved-agent';
+  transcript.operator_witness.agent_task_id = '/root/unobserved-agent';
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /contract or binding/u
+  );
+});
+
+test('capture verifier rejects an allowed Agent assigned to another PRD stratum', async () => {
+  const { capture, transcript, sourceContract } = await genuineTranscript();
+  capture.operator_witness.agent_task_id = '/root/v4_pressure_workflow_forms';
+  transcript.operator_witness.agent_task_id = '/root/v4_pressure_workflow_forms';
+
+  await assert.rejects(
+    verifyCaptureTranscript({
+      transcriptBytes: new TextEncoder().encode(`${JSON.stringify(transcript)}\n`),
+      expected: capture, candidateRoot: repositoryRoot, runnerPath,
+      replySchemaPath, bundleSchemaPath, taskContract: { scope: '*' }, sourceContract
+    }),
+    /contract or binding/u
+  );
+});

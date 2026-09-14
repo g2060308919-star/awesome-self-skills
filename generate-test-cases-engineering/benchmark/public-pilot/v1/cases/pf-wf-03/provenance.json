@@ -1,0 +1,12 @@
+{
+  "repository": "beettlle/pi-spine",
+  "commit": "528f2fd128ac1878c700d9248f22f36500e27aa9",
+  "source_url": "https://raw.githubusercontent.com/beettlle/pi-spine/528f2fd128ac1878c700d9248f22f36500e27aa9/pi-spine-PRD.md",
+  "source_sha256": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+  "content_digest": "c12662f0e0692f4ca06b95c39c2768d3b3a8b6b9255c76521a2c129b1184ded6",
+  "license_url": "https://raw.githubusercontent.com/beettlle/pi-spine/528f2fd128ac1878c700d9248f22f36500e27aa9/LICENSE",
+  "license_sha256": "41bc36dc57bcc0d6154887b7993dc22bd4a0be15d8e74dc8fbb946d0a4ce7d92",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

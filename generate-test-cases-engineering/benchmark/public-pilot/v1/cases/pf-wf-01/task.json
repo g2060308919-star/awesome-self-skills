@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-WF-01",
+  "scope": "Kherad contribution submission, review, approval, and merge workflow",
+  "stratum": "workflow/approval/state",
+  "source_paths": [
+    "cases/pf-wf-01/source/PRD.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

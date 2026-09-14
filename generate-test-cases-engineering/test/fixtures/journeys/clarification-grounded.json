@@ -1,0 +1,5 @@
+{
+  "scenario": "clarification-grounded",
+  "interaction_policy": "pause_for_clarification",
+  "expected": { "status": "finished", "grounded": 1, "conditional": 0, "blocked": 0, "exploratory": 0, "not_applicable": 0, "delivery_status": "executable_subset_ready" }
+}

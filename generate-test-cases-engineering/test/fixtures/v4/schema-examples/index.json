@@ -1,0 +1,272 @@
+{
+  "suites": [
+    {
+      "name": "complete Behavior Views roots",
+      "schema": "behavior-views.schema.json",
+      "fixture": "behavior-views-root.json"
+    },
+    {
+      "name": "four closed test-value-origin branches",
+      "schema": "case-drafts.schema.json",
+      "definition": "testValueOrigin",
+      "fixture": "test-value-origins.json"
+    },
+    {
+      "name": "v4 Case Draft step-oracle relational mapping",
+      "schema": "case-drafts.schema.json",
+      "fixture": "case-step-oracle.json",
+      "semantic_validator": "case_semantics_v4"
+    },
+    {
+      "name": "complete v3 and v4 checkpoint roots",
+      "schema": "checkpoint.schema.json",
+      "fixture": "checkpoint-roots.json"
+    },
+    {
+      "name": "complete legacy and v4 current-pointer roots",
+      "schema": "current-pointer.schema.json",
+      "fixture": "current-pointer-roots.json"
+    },
+    {
+      "name": "complete v3 and v4 Evidence roots",
+      "schema": "evidence-claims.schema.json",
+      "fixture": "evidence-roots.json"
+    },
+    {
+      "name": "complete v4 Execution Plan artifact roots",
+      "schema": "execution-plan.schema.json",
+      "definition": "v4ExecutionPlan",
+      "fixture": "execution-plan-root.json"
+    },
+    {
+      "name": "Evidence canonical source record helper",
+      "schema": "evidence-claims.schema.json",
+      "definition": "v4SourceCanonicalRecord",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_canonical_record"
+    },
+    {
+      "name": "Evidence source review helper",
+      "schema": "evidence-claims.schema.json",
+      "definition": "v4SourceReview",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_review"
+    },
+    {
+      "name": "Evidence source locator helper",
+      "schema": "evidence-claims.schema.json",
+      "definition": "v4SourceLocator",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_locator"
+    },
+    {
+      "name": "Evidence source conflict-review helper",
+      "schema": "evidence-claims.schema.json",
+      "definition": "v4SourceConflictReview",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_conflict_review"
+    },
+    {
+      "name": "complete migration index root",
+      "schema": "migration-index.schema.json",
+      "fixture": "migration-index-root.json"
+    },
+    {
+      "name": "migration seed helper",
+      "schema": "migration-index.schema.json",
+      "definition": "seed",
+      "fixture": "migration-direct-definitions.json",
+      "fixture_key": "seed"
+    },
+    {
+      "name": "migration report helper",
+      "schema": "migration-index.schema.json",
+      "definition": "report",
+      "fixture": "migration-direct-definitions.json",
+      "fixture_key": "report"
+    },
+    {
+      "name": "complete ordering registry root",
+      "schema": "ordering-registry.schema.json",
+      "fixture": "ordering-registry-root.json"
+    },
+    {
+      "name": "complete v3 and v4 presentation roots",
+      "schema": "presentation.schema.json",
+      "fixture": "presentation-roots.json"
+    },
+    {
+      "name": "complete semantic and execution reply roots",
+      "schema": "reply.schema.json",
+      "fixture": "reply-roots.json"
+    },
+    {
+      "name": "complete v3 and v4 Source Pack roots",
+      "schema": "source-pack.schema.json",
+      "fixture": "source-pack-roots.json"
+    },
+    {
+      "name": "Source Pack semantic clarification-event helper",
+      "schema": "source-pack.schema.json",
+      "definition": "v4SemanticClarificationEvent",
+      "fixture": "source-pack-direct-definitions.json",
+      "fixture_key": "semantic_clarification_event"
+    },
+    {
+      "name": "Source Pack execution action-context helper",
+      "schema": "source-pack.schema.json",
+      "definition": "v4ExecutionContext",
+      "fixture": "source-pack-direct-definitions.json",
+      "fixture_key": "execution_context"
+    },
+    {
+      "name": "Source Pack artifact-request helper",
+      "schema": "source-pack.schema.json",
+      "definition": "artifactRequest",
+      "fixture": "source-pack-direct-definitions.json",
+      "fixture_key": "artifact_request"
+    },
+    {
+      "name": "Source Pack canonical source-record helper",
+      "schema": "source-pack.schema.json",
+      "definition": "v4SourceCanonicalRecord",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_canonical_record"
+    },
+    {
+      "name": "Source Pack source-subject helper",
+      "schema": "source-pack.schema.json",
+      "definition": "v4SourceSubjectDescriptor",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_subject_descriptor"
+    },
+    {
+      "name": "Source Pack locator-role helper",
+      "schema": "source-pack.schema.json",
+      "definition": "v4SourceLocatorRole",
+      "fixture": "evidence-direct-definitions.json",
+      "fixture_key": "source_locator_role"
+    },
+    {
+      "name": "complete Case Document bundle root",
+      "schema": "test-bundle.schema.json",
+      "fixture": "test-bundle-root.json"
+    },
+    {
+      "name": "four closed risk-review-item branches",
+      "schema": "test-obligations.schema.json",
+      "definition": "riskReviewItem",
+      "fixture": "risk-review-items.json"
+    },
+    {
+      "name": "complete v3 and v4 Test Obligation roots",
+      "schema": "test-obligations.schema.json",
+      "fixture": "test-obligations-roots.json"
+    },
+    {
+      "name": "Case Document manifest discriminator",
+      "schema": "current-pointer.schema.json",
+      "definition": "caseDocumentManifest",
+      "fixture": "case-document-manifest.json"
+    },
+    {
+      "name": "Execution manifest discriminator and readiness linkage",
+      "schema": "current-pointer.schema.json",
+      "definition": "executionManifest",
+      "fixture": "execution-manifest.json"
+    }
+  ],
+  "new_definitions": {
+    "behavior-views.schema.json": [
+      "v3Artifact", "text", "idArray", "jsonValue", "condition", "evidenceBinding", "surface", "semanticEffect",
+      "partition", "v4ElementBase", "v4InputDomain", "v4Integration", "v4DeclaredOutcome", "v4Element", "v4View", "v4Artifact"
+    ],
+    "case-drafts.schema.json": [
+      "nonBlank", "idArray", "stringSet", "caseCondition", "casePrecondition", "caseOracle", "semanticEffect",
+      "testValueOrigin", "testValue", "comparisonContract", "baselineSpec"
+    ],
+    "checkpoint.schema.json": [
+      "v4_sha256", "v4_string_set", "v4_question_part", "v4_semantic_presentation", "v4_semantic_gap", "v4_root_state",
+      "v4_decision_id_set", "v4_decision_suspension", "v4_reopened_target", "v4_decision_suspension_entry",
+      "v3_checkpoint", "v4_checkpoint"
+    ],
+    "current-pointer.schema.json": [
+      "text", "count", "sha256", "artifact", "legacyV3", "caseDocumentManifest", "executionManifest"
+    ],
+    "evidence-claims.schema.json": [
+      "v4Text", "v4IdSet", "v4OptionalIdSet", "v3Fact", "v4Fact", "topologyCandidate", "topologyDiscovery", "topologyReview",
+      "topologyDisposition", "scopeModule", "scopeBoundary", "scopeManifest", "interactionCellBase", "interactionReviewItem",
+      "acceptanceRoleAssignmentBase", "acceptanceRoleAssignment", "v4SemanticGapInput", "v4SourceSha256", "v4SourceJsonValue",
+      "v4SourceSubjectDescriptor", "v4SourceLocatorRole", "v4SourceReview", "v4SourceLocator", "v4SourceUnit",
+      "v4SourceCanonicalProjection", "v4SourceCanonicalRecord", "v4SourceConflictReview", "v3EvidenceClaim", "v4EvidenceClaim"
+    ],
+    "execution-plan.schema.json": [
+      "v4Sha256", "v4CaseDocumentRef", "v4WorkingExecutionItem", "v4FinalExecutionItem",
+      "v4EmptyRunnerProjection", "v4ReadyRunnerProjection", "v4PendingExecutionPlan",
+      "v4ExecutionReadyPlan", "v4NoExecutionSelectedPlan", "v4ExecutionPlan"
+    ],
+    "migration-index.schema.json": ["transaction", "seed", "report"],
+    "ordering-registry.schema.json": ["text", "idArray", "locatorOrderKey", "basis", "businessFlow", "pageAction", "dependencyRule"],
+    "presentation.schema.json": ["v3Presentation", "v4Sha256", "v4ActionContext", "v4QuestionPart", "v4Recovery", "v4SemanticPresentation"],
+    "reply.schema.json": [
+      "v4SemanticActionContext", "v4SemanticQuestionPart", "v4SemanticRecovery", "v4SemanticPresentation",
+      "v4ExecutionClosurePresentation", "v4CancelContext", "v4FinalConfirmationPresentation", "v4ExecutionPresentation",
+      "sourceAcquisitionNeedArtifactReply", "v4StageArtifactReply", "v4InvalidArtifactRevisionReply"
+    ],
+    "source-pack.schema.json": [
+      "v4DecisionTarget", "v4DecisionAnswerOrigin", "v4DecisionObligationAudit", "v4SemanticDecision",
+      "v4SemanticClarificationEvent", "v4ExecutionContext", "v4ExecutionEvent", "v4SourceSha256", "v4SourceJsonValue",
+      "v4SourceSubjectDescriptor", "v4SourceLocatorRole", "v4SourceReview", "v4SourceLocator", "v4SourceUnit",
+      "v4SourceCanonicalProjection", "v4SourceCanonicalRecord", "v4SourceConflictReview", "sha256", "resumeRef", "artifactRequest",
+      "stableResourceInput", "safeUploadInput", "provideArtifactEvent", "v4SourceCaptureAudit", "v3Sources", "v3Locators",
+      "v3SourceReviews", "v3SourcePolicy", "v3SourceAssets", "v4Source", "v4SourceCompositionRule", "v4SourceAsset"
+    ],
+    "test-bundle.schema.json": [
+      "v4Text", "v4IdSet", "v4StringSet", "v4CasePrecondition", "v4CaseCondition", "v4CaseStep", "v4CaseOracle",
+      "v4SemanticEffect", "v4TestValueOrigin", "v4TestValue", "v4ComparisonContract", "v4BaselineSpec", "v4CanonicalCase",
+      "v4ScopeModule", "v4ScopeBoundary", "v4ScopeManifest", "v4CoverageLane", "v4CoverageSummary", "v4AffectedBusinessItem",
+      "v4SemanticRootGroup", "v4ExploratoryPresentation", "v4NotApplicablePresentation", "v4EvidenceBasis", "v4SemanticGapBasis",
+      "v4RiskCatalogBasis", "v4ScopeDecisionBasis", "v4RiskReviewItem"
+    ],
+    "test-obligations.schema.json": [
+      "v3Artifact", "text", "idArray", "refs", "acceptanceRole", "jsonValue", "condition", "evidenceBasis", "scopeDecisionBasis",
+      "exclusionBasis", "semanticGapBasis", "riskCatalogBasis", "riskReviewBase", "riskFormal", "riskSemanticGap",
+      "riskExploratory", "riskNotApplicable", "riskReviewItem", "notApplicableSubject", "notApplicableRecord", "outcome",
+      "formalTestPoint", "supportingObservation", "exploratory", "v4Artifact"
+    ]
+  },
+  "preexisting_definitions": {
+    "behavior-views.schema.json": [],
+    "case-drafts.schema.json": [],
+    "checkpoint.schema.json": [
+      "sha256", "digest_map", "clarification_stop", "working_confirmation", "string_set", "working_basis", "working_item",
+      "promotion", "tp_coverage", "summary", "plan_snapshot", "presentation_item", "presentation_option", "proposed_change",
+      "presentation_group", "presentation", "last_preview_request"
+    ],
+    "current-pointer.schema.json": [],
+    "evidence-claims.schema.json": [],
+    "execution-plan.schema.json": [
+      "sha256", "string_set", "default_basis", "not_applicable_basis", "execution_event_basis",
+      "ready_not_applicable_basis", "ready_execution_event_basis", "working_item", "ready_item",
+      "promotion", "ready_promotion", "tp_coverage", "summary", "working_confirmation",
+      "ready_confirmation", "working_plan", "ready_plan"
+    ],
+    "migration-index.schema.json": [],
+    "ordering-registry.schema.json": [],
+    "presentation.schema.json": ["sha256", "item_ref", "option", "proposed_change", "group"],
+    "reply.schema.json": [
+      "sha256", "nonBlockingDiagnostic", "resumeRef", "artifactRequest", "producedArtifact", "incompleteReason", "userNextStep",
+      "recoverySummary", "v4StopInformation", "needUserAnswersReply", "needArtifactReply", "needRevisionReply", "finishedReply",
+      "fatalReply", "cancelledReply", "v4Reply", "legacySha256", "diagnostic", "diagnostics", "string_set", "risk_counts",
+      "counts_by_kind", "option", "affected_item", "readable_group", "basis", "plan_item", "promotion", "tp_coverage",
+      "summary", "confirmation", "execution_plan", "source_pack_revision", "evidence_claims_revision", "behavior_views_revision",
+      "case_drafts_revision", "blocker", "ready_binding", "preview_control", "proposed_change"
+    ],
+    "source-pack.schema.json": [],
+    "test-bundle.schema.json": [
+      "sha256", "string_set", "ready_basis", "ready_item", "tp_execution_coverage", "execution_summary",
+      "ready_execution_plan", "document_item", "document_execution_plan", "legacyBundle", "caseDocumentBundle"
+    ],
+    "test-obligations.schema.json": []
+  }
+}

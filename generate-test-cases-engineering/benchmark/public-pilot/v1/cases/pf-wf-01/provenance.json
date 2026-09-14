@@ -1,0 +1,12 @@
+{
+  "repository": "mohammadmaso/kherad",
+  "commit": "2a8d6992b87a33760688e1f956653c21a6292294",
+  "source_url": "https://raw.githubusercontent.com/mohammadmaso/kherad/2a8d6992b87a33760688e1f956653c21a6292294/PRD.md",
+  "source_sha256": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+  "content_digest": "69eeba1770678f2147ee2ea8c0576b8928ffce101b97686ff2e834e11d46d7cc",
+  "license_url": "https://raw.githubusercontent.com/mohammadmaso/kherad/2a8d6992b87a33760688e1f956653c21a6292294/LICENSE",
+  "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

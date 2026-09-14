@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "generate-test-cases-public-pilot-catalog.schema.json",
+  "title": "Public-source machine pilot catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_id",
+    "evidence_class",
+    "release_eligible",
+    "release_status",
+    "corpus_snapshot_sha256",
+    "intake_report",
+    "review_reports",
+    "adjudication_report",
+    "defect_ledger",
+    "comparators",
+    "items"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "catalog_id": { "$ref": "#/$defs/nonEmptyString" },
+    "evidence_class": { "const": "public-source-machine-pilot" },
+    "release_eligible": { "const": false },
+    "release_status": { "const": "insufficient_evidence" },
+    "corpus_snapshot_sha256": { "$ref": "#/$defs/sha256" },
+    "intake_report": { "$ref": "#/$defs/retainedArtifact" },
+    "review_reports": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/reviewReportDescriptor" }
+    },
+    "adjudication_report": { "$ref": "#/$defs/adjudicationReportDescriptor" },
+    "defect_ledger": { "$ref": "#/$defs/defectLedgerDescriptor" },
+    "comparators": { "$ref": "#/$defs/comparatorRegistryDescriptor" },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "rfc3339DateTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "stratum": {
+      "enum": [
+        "transaction/order/payment",
+        "identity/role/permission",
+        "workflow/approval/state",
+        "form/configuration/input validation",
+        "asynchronous integration/event",
+        "time-window/quota/entitlement"
+      ]
+    },
+    "taskScope": {
+      "allOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        {
+          "not": {
+            "enum": [
+              "public-source-machine-pilot",
+              "transaction/order/payment",
+              "identity/role/permission",
+              "workflow/approval/state",
+              "form/configuration/input validation",
+              "asynchronous integration/event",
+              "time-window/quota/entitlement"
+            ]
+          }
+        }
+      ]
+    },
+    "retainedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "path", "sha256", "content_digest", "upstream_url"],
+      "properties": {
+        "source_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "content_digest": { "$ref": "#/$defs/sha256" },
+        "upstream_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "upstream_url", "reported_license", "scope_decision"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "upstream_url": { "type": "string", "format": "uri" },
+        "reported_license": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_decision": { "enum": ["applicable", "hold", "inapplicable"] }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "path", "sha256", "source_id", "scope"],
+      "properties": {
+        "task_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "source_id": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "$ref": "#/$defs/taskScope" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "reviewReportDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "path",
+        "sha256",
+        "reviewer_id",
+        "reviewer_class",
+        "review_scope"
+      ],
+      "properties": {
+        "report_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "reviewer_id": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewer_class": { "const": "machine-agent" },
+        "review_scope": { "const": "intake-only" }
+      }
+    },
+    "adjudicationReportDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "path",
+        "sha256",
+        "reviewer_id",
+        "reviewer_class",
+        "review_scope"
+      ],
+      "properties": {
+        "report_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "reviewer_id": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewer_class": { "const": "machine-agent" },
+        "review_scope": { "const": "intake-only" }
+      }
+    },
+    "defectLedgerDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ledger_id", "path", "sha256"],
+      "properties": {
+        "ledger_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "comparatorRegistryDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "path", "sha256"],
+      "properties": {
+        "registry_id": { "$ref": "#/$defs/nonEmptyString" },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "reviewLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_id",
+        "report_id",
+        "reviewer_class",
+        "review_scope",
+        "source_id",
+        "task_id",
+        "decision"
+      ],
+      "properties": {
+        "review_id": { "$ref": "#/$defs/nonEmptyString" },
+        "report_id": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewer_class": { "const": "machine-agent" },
+        "review_scope": { "const": "intake-only" },
+        "source_id": { "$ref": "#/$defs/nonEmptyString" },
+        "task_id": { "$ref": "#/$defs/nonEmptyString" },
+        "decision": { "enum": ["admit", "hold", "reject"] }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pilot_id",
+        "status",
+        "repository",
+        "commit",
+        "stratum",
+        "acquired_at",
+        "source",
+        "license",
+        "provenance",
+        "task",
+        "reviews",
+        "defects"
+      ],
+      "properties": {
+        "pilot_id": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "enum": ["pilot-admitted", "hold", "rejected"] },
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
+        },
+        "commit": { "$ref": "#/$defs/commit" },
+        "stratum": { "$ref": "#/$defs/stratum" },
+        "acquired_at": { "$ref": "#/$defs/rfc3339DateTime" },
+        "source": { "$ref": "#/$defs/source" },
+        "license": { "$ref": "#/$defs/license" },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "task": { "$ref": "#/$defs/task" },
+        "reviews": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/reviewLink" }
+        },
+        "defects": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
+    }
+  }
+}

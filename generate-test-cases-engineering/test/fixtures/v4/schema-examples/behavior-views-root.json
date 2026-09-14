@@ -1,0 +1,115 @@
+{
+  "valid": [
+    {
+      "name": "complete_sparse_behavior_root_reaches_all_v4_element_kinds",
+      "reason": "A complete v4 root models only evidenced input, integration and declared-outcome elements while retaining the closed legacy interaction containers.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "views": [
+          {
+            "view_id": "VIEW-input",
+            "module_id": "admin",
+            "type": "input-domain",
+            "scope": "评价星级",
+            "source_claim_ids": ["CLM-star"],
+            "elements": [
+              {
+                "element_id": "EL-star",
+                "kind": "input_domain",
+                "fact_id": "FACT-star",
+                "business_outcome": "星级值展示对应文案",
+                "evidence_bindings": [
+                  { "field_path": "/business_outcome", "claim_ids": ["CLM-star"] },
+                  { "field_path": "/partitions/0/value", "claim_ids": ["CLM-star"] },
+                  { "field_path": "/partitions/0/expected", "claim_ids": ["CLM-star"] }
+                ],
+                "semantic_effects": [
+                  { "effect_id": "EFF-label", "kind": "visible_output", "subject": "星级文案", "after": "推荐", "claim_ids": ["CLM-star"] }
+                ],
+                "partitions": [
+                  { "kind": "enum", "value": 500, "expected": "推荐" },
+                  { "kind": "range", "bounds": { "lower": 1, "upper": 499, "inclusive": true }, "expected": "常规" }
+                ]
+              }
+            ],
+            "relations": []
+          },
+          {
+            "view_id": "VIEW-integration",
+            "module_id": "admin",
+            "type": "integration",
+            "scope": "来源展示",
+            "source_claim_ids": ["CLM-source"],
+            "elements": [
+              {
+                "element_id": "EL-source",
+                "kind": "integration",
+                "fact_id": "FACT-source",
+                "business_outcome": "来源 22 显示打车去过",
+                "condition": { "source": 22 },
+                "surfaces": [
+                  { "kind": "response", "assertion": "source 原值为 22" },
+                  { "kind": "ui", "assertion": "来源列显示打车去过" }
+                ],
+                "evidence_bindings": [
+                  { "field_path": "/business_outcome", "claim_ids": ["CLM-source"] },
+                  { "field_path": "/condition", "claim_ids": ["CLM-source"] },
+                  { "field_path": "/surfaces/0/assertion", "claim_ids": ["CLM-source"] }
+                ]
+              }
+            ],
+            "relations": []
+          },
+          {
+            "view_id": "VIEW-flow",
+            "module_id": "admin",
+            "type": "flow",
+            "scope": "评价列表",
+            "source_claim_ids": ["CLM-flow"],
+            "elements": [
+              {
+                "element_id": "EL-flow",
+                "kind": "flow",
+                "fact_id": "FACT-flow",
+                "business_outcome": "保存后列表显示已保存",
+                "condition": { "saved": true },
+                "expected": "显示已保存",
+                "surfaces": [{ "kind": "ui", "assertion": "状态列显示已保存" }],
+                "evidence_bindings": [
+                  { "field_path": "/business_outcome", "claim_ids": ["CLM-flow"] },
+                  { "field_path": "/condition", "claim_ids": ["CLM-flow"] },
+                  { "field_path": "/expected", "claim_ids": ["CLM-flow"] }
+                ]
+              }
+            ],
+            "relations": []
+          }
+        ],
+        "interaction_matrix": [],
+        "interaction_candidates": [],
+        "obligation_inputs": {
+          "view_contexts": [],
+          "terminal_fact_routes": [],
+          "custom_responsibilities": [],
+          "combination_requests": []
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "sparse_behavior_root_rejects_fictional_execution_state",
+      "reason": "The closed v4 Behavior Views artifact cannot carry a downstream execution disposition.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "views": [],
+        "interaction_matrix": [],
+        "interaction_candidates": [],
+        "obligation_inputs": { "view_contexts": [], "terminal_fact_routes": [], "custom_responsibilities": [], "combination_requests": [] },
+        "execution_disposition": "execute"
+      }
+    }
+  ]
+}

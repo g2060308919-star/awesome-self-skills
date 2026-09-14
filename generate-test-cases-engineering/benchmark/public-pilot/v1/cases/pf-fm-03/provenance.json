@@ -1,0 +1,12 @@
+{
+  "repository": "System-Error-Worldwide/the-loop",
+  "commit": "e53bda761fc0f2467e5f686b0e1d9e2b773ab870",
+  "source_url": "https://raw.githubusercontent.com/System-Error-Worldwide/the-loop/e53bda761fc0f2467e5f686b0e1d9e2b773ab870/docs/specs/prd.md",
+  "source_sha256": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+  "content_digest": "962d66fb0df76f1e452b8c5f96794c3b1b279f5bfad5d4ec12d6b40b9c5cf09c",
+  "license_url": "https://raw.githubusercontent.com/System-Error-Worldwide/the-loop/e53bda761fc0f2467e5f686b0e1d9e2b773ab870/LICENSE",
+  "license_sha256": "f008c1469cc26b68c21d912a0083a2fc1161e11ccbc0ec9c35a39de8e3c16787",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

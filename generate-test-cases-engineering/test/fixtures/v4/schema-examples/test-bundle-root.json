@@ -1,0 +1,174 @@
+{
+  "valid": [
+    {
+      "name": "complete_case_document_bundle_carries_cases_gaps_scope_and_risk_accounting",
+      "reason": "The canonical v4 bundle contains every business-facing Case Document lane and all four closed risk-review dispositions.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "case_document",
+        "source_revision": 4,
+        "result_kind": "delivered_with_gaps",
+        "ordered_case_ids": ["CASE-source-22"],
+        "scope_manifest": {
+          "primary_surface": "admin",
+          "modules": [
+            { "module_id": "admin", "name": "评价中台", "role": "primary", "claim_ids": ["CLM-admin"] },
+            { "module_id": "gateway", "name": "评价网关", "role": "upstream", "claim_ids": ["CLM-gateway"] }
+          ],
+          "boundaries": [
+            { "from": "gateway", "to": "admin", "channel": "HTTP 响应", "acceptance_scope": "contract_only", "claim_ids": ["CLM-boundary"] }
+          ]
+        },
+        "cases": [
+          {
+            "case_id": "CASE-source-22",
+            "title": "来源为打车去过时展示对应文案",
+            "module_id": "admin",
+            "priority": "P0",
+            "ordering": {
+              "business_flow_ref": "FLOW-review-list",
+              "page_action_ref": "ACTION-view-review-row",
+              "depends_on_case_ids": []
+            },
+            "acceptance_role": "primary_acceptance",
+            "fact_ids": ["FACT-source-22"],
+            "semantic_status": "Grounded",
+            "primary_test_point_id": "TP-source-label-22",
+            "supporting_observation_ids": ["OBS-response-source-22"],
+            "business_preconditions": [
+              { "precondition_id": "PRE-view", "description": "操作者拥有评价列表查看权限" }
+            ],
+            "data_conditions": [
+              { "condition_id": "COND-source-22", "description": "存在 source=22 的评价记录" }
+            ],
+            "steps": [
+              { "step_id": "STEP-open", "action": "进入评价中台列表" },
+              { "step_id": "STEP-find", "action": "定位该评价记录" }
+            ],
+            "oracles": [
+              {
+                "oracle_id": "ORACLE-label",
+                "observe_after_step_id": "STEP-find",
+                "surface": "ui",
+                "expected": "来源列展示“打车去过”",
+                "claim_ids": ["CLM-source-enum"]
+              }
+            ],
+            "semantic_effects": [
+              { "effect_id": "EFF-label", "kind": "visible_output", "subject": "来源列", "after": "打车去过", "claim_ids": ["CLM-source-enum"] }
+            ],
+            "baseline_spec": {
+              "baseline_id": "BASE-source",
+              "kind": "declared_reference",
+              "acquisition": "capture_at_execution",
+              "reference": "同一列表中其他来源的评价行",
+              "comparison_contract": { "kind": "selected_dimensions", "dimensions": ["布局", "操作"], "allowed_differences": ["来源文案"] },
+              "claim_ids": ["CLM-source-enum"]
+            },
+            "test_values": [
+              {
+                "value_id": "VAL-source-22",
+                "subject_ref": "admin.review",
+                "field_path": "/response/source",
+                "value": 22,
+                "used_by_refs": ["COND-source-22", "ORACLE-label"],
+                "value_origin": { "kind": "requirement", "claim_ids": ["CLM-source-enum"] }
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "primary": { "reviewed_formal_test_point_count": 2, "covered_formal_test_point_count": 1, "not_applicable_formal_test_point_count": 1 },
+          "boundary": { "reviewed_formal_test_point_count": 1, "covered_formal_test_point_count": 1, "not_applicable_formal_test_point_count": 0 },
+          "semantic_gap_count": 1,
+          "exploratory_count": 1,
+          "not_applicable_count": 1
+        },
+        "semantic_root_groups": [
+          {
+            "root_issue_id": "ROOT-refresh",
+            "status": "closed_for_delivery",
+            "title": "刷新完成时机未定义",
+            "business_object": "评价列表",
+            "question": "刷新后何时展示最新评价？",
+            "why_needed": "需要确定观察时点。",
+            "decision_impact": "决定刷新场景步骤和预期。",
+            "unresolved_outcome": "刷新场景保留为交付缺口。",
+            "affected_business_items": [
+              { "item_kind": "formal_test_point", "item_id": "TP-refresh", "display_name": "刷新后展示最新评价" }
+            ]
+          }
+        ],
+        "exploratory": [
+          { "exploratory_id": "EXP-loading", "module_id": "admin", "title": "加载失败提示", "reason": "风险目录提示检查降级反馈" }
+        ],
+        "not_applicable": [
+          { "not_applicable_record_id": "NA-pagination", "module_id": "admin", "subject": "分页", "reason": "本次范围明确排除分页" }
+        ],
+        "risk_review_ledger": [
+          {
+            "module_id": "admin",
+            "risk_kind": "null_or_missing",
+            "acceptance_role": "primary_acceptance",
+            "status": "formal",
+            "review_basis": { "kind": "evidence", "claim_ids": ["CLM-null"] },
+            "formal_test_point_ids": ["TP-null"]
+          },
+          {
+            "module_id": "admin",
+            "risk_kind": "unknown_enum",
+            "acceptance_role": "primary_acceptance",
+            "status": "semantic_gap",
+            "review_basis": { "kind": "semantic_gap_analysis", "subject_fact_ids": ["FACT-source"], "missing_aspect": "未知枚举值结果" },
+            "semantic_gap_ids": ["SG-unknown"]
+          },
+          {
+            "module_id": "admin",
+            "risk_kind": "loading_failure",
+            "acceptance_role": "primary_acceptance",
+            "status": "exploratory",
+            "review_basis": { "kind": "risk_catalog", "policy_id": "risk.loading_failure", "policy_version": "1.0.0" },
+            "exploratory_ids": ["EXP-loading"]
+          },
+          {
+            "module_id": "admin",
+            "risk_kind": "pagination",
+            "acceptance_role": "primary_acceptance",
+            "status": "not_applicable",
+            "review_basis": { "kind": "scope_decision", "decision_ids": ["DEC-scope"] },
+            "not_applicable_record_ids": ["NA-pagination"]
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "case_document_bundle_rejects_embedded_execution_projection",
+      "reason": "The closed Case Document result cannot contain runner Case IDs from the distinct execution-plan product.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "case_document",
+        "source_revision": 4,
+        "result_kind": "no_applicable_cases",
+        "ordered_case_ids": [],
+        "scope_manifest": { "primary_surface": "admin", "modules": [{ "module_id": "admin", "name": "评价中台", "role": "primary", "claim_ids": ["CLM-admin"] }], "boundaries": [] },
+        "cases": [],
+        "coverage": {
+          "primary": { "reviewed_formal_test_point_count": 0, "covered_formal_test_point_count": 0, "not_applicable_formal_test_point_count": 0 },
+          "boundary": { "reviewed_formal_test_point_count": 0, "covered_formal_test_point_count": 0, "not_applicable_formal_test_point_count": 0 },
+          "semantic_gap_count": 0,
+          "exploratory_count": 0,
+          "not_applicable_count": 0
+        },
+        "semantic_root_groups": [],
+        "exploratory": [],
+        "not_applicable": [],
+        "risk_review_ledger": [],
+        "runner_case_ids": []
+      }
+    }
+  ]
+}

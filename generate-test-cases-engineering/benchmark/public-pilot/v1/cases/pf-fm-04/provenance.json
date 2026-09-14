@@ -1,0 +1,12 @@
+{
+  "repository": "deghosal-2026/agent-tooltrust",
+  "commit": "e4a8522df2613b1ad94373a4e5b40e930654e452",
+  "source_url": "https://raw.githubusercontent.com/deghosal-2026/agent-tooltrust/e4a8522df2613b1ad94373a4e5b40e930654e452/docs/design/PRD.md",
+  "source_sha256": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+  "content_digest": "3b478712a62db882e15dab6ba97f9dc43b6e10d90c901b7a5e5b3c3b2023d956",
+  "license_url": "https://raw.githubusercontent.com/deghosal-2026/agent-tooltrust/e4a8522df2613b1ad94373a4e5b40e930654e452/LICENSE",
+  "license_sha256": "f6feb22ed5d9fadd7db789aafddd3b32b3c849791fa45983270482f6204bdf25",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

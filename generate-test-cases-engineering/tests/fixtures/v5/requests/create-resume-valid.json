@@ -1,7 +1,0 @@
-{
-  "idempotency_key": "fixture-resume-valid",
-  "creation_reason": "resume_cancelled",
-  "parent_run_id": {
-    "$fixture_binding": "required"
-  }
-}

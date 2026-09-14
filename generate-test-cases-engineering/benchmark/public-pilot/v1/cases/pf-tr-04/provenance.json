@@ -1,0 +1,12 @@
+{
+  "repository": "chuhemiao/agentic-transaction-firewall",
+  "commit": "b652229d87d4e5b8f732184c779fb54ed83dd2bf",
+  "source_url": "https://raw.githubusercontent.com/chuhemiao/agentic-transaction-firewall/b652229d87d4e5b8f732184c779fb54ed83dd2bf/docs/PRD.md",
+  "source_sha256": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+  "content_digest": "e9ca0dcdee3a78788d420e54b51cd8b81963aae8aa476886c3a73277318cd5b8",
+  "license_url": "https://raw.githubusercontent.com/chuhemiao/agentic-transaction-firewall/b652229d87d4e5b8f732184c779fb54ed83dd2bf/LICENSE",
+  "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

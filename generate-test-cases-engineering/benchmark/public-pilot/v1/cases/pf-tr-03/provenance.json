@@ -1,0 +1,12 @@
+{
+  "repository": "unbrowse-ai/unbrowse",
+  "commit": "e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca",
+  "source_url": "https://raw.githubusercontent.com/unbrowse-ai/unbrowse/e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca/docs/architecture/ACCEPTANCE-CRITERIA.md",
+  "source_sha256": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+  "content_digest": "5d098a0efd0a24570c245894532d46a273c4716b5f429fe026b4bbbfd96cd755",
+  "license_url": "https://raw.githubusercontent.com/unbrowse-ai/unbrowse/e844f8f6af03b2ca9f0c466ac2262efceb2cf8ca/LICENSE",
+  "license_sha256": "53ba032af8ce6e762d8a0f97b1c946bc49d1f9edf9fee41a3555c2eb1ed907c2",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T20:10:30Z"
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "registry_id": "public-pilot-comparators-v1",
+  "evidence_class": "public-source-machine-pilot",
+  "captures_allowed": false,
+  "systems": [
+    {
+      "system_id": "generate-test-cases",
+      "status": "frozen",
+      "version": "0.1.0",
+      "repository_revision": "2c39d7cf887be5673cc5d3b0be1de4516ce8aea9",
+      "artifacts": [
+        {
+          "artifact_id": "generate-test-cases-skill",
+          "kind": "skill",
+          "repository_path": "skill/generate-test-cases/SKILL.md",
+          "sha256": "06f974e581b710490cdb45a1cfc79e3014ff4326579b56618d2edcad87999a94"
+        },
+        {
+          "artifact_id": "generate-test-cases-compiler",
+          "kind": "compiler",
+          "repository_path": "skill/generate-test-cases/scripts/test-compiler.mjs",
+          "sha256": "24914e4890abb13f74fffe5a4edb294469a477441e33264d5a7a2a250dada6b5"
+        },
+        {
+          "artifact_id": "generate-test-cases-schema-manifest",
+          "kind": "schema",
+          "repository_path": "skill/generate-test-cases/scripts/schema-manifest.json",
+          "sha256": "f706ff91b97ea1ee336f5abda96d3ff348804c71a5961db217bdddd971bb047a"
+        }
+      ],
+      "model_identity": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "run_recipe": {
+        "recipe_id": "public-pilot-generate-test-cases-v1",
+        "invocation": "Start a fresh isolated task with the frozen model and invoke the frozen generate-test-cases Skill exactly once.",
+        "input_contract": "Provide only the retained source bytes and bound task scope; do not expose machine reviews, defect leads, prior outputs, diagnostics, or benchmark labels.",
+        "output_contract": "Retain the unmodified raw response and bind it to the source, task, model, Skill, compiler, schema, recipe, and repeat identity before extraction.",
+        "independent_runs": 3
+      }
+    },
+    {
+      "system_id": "long-prompt",
+      "status": "unresolved",
+      "missing_fields": [
+        "version",
+        "artifacts",
+        "model_identity",
+        "run_recipe"
+      ],
+      "resolution_note": "No authoritative, licensed long-prompt implementation was supplied or established by public research; similarly named artifacts are not substituted."
+    },
+    {
+      "system_id": "test-case-designer",
+      "status": "unresolved",
+      "missing_fields": [
+        "version",
+        "artifacts",
+        "model_identity",
+        "run_recipe"
+      ],
+      "resolution_note": "The public similarly named repository did not establish the licensed authoritative comparator required by the frozen design, so no implementation is substituted."
+    },
+    {
+      "system_id": "technique-router",
+      "status": "unresolved",
+      "missing_fields": [
+        "version",
+        "artifacts",
+        "model_identity",
+        "run_recipe"
+      ],
+      "resolution_note": "No uniquely intended, authoritative, licensed technique-router implementation was supplied or established by public research."
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-instance.schema.json",
+  "oneOf": [
+    { "$ref": "#/$defs/v3RunInstance" },
+    { "$ref": "#/$defs/v4RunInstance" }
+  ],
+  "$defs": {
+    "runId": {
+      "type": "string",
+      "pattern": "^RUN-[0-9a-fA-F-]{36}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "decisionIdSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^DEC-[0-9a-f]{64}$"
+      }
+    },
+    "v3RunInstance": {
+      "type": "object",
+      "required": ["schema_version", "run_instance_id", "created_at"],
+      "properties": {
+        "schema_version": { "const": "3.0.0" },
+        "run_instance_id": { "$ref": "#/$defs/runId" },
+        "created_at": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "caseDocumentRef": {
+      "type": "object",
+      "required": ["run_id", "revision", "manifest_digest", "bundle_digest"],
+      "properties": {
+        "run_id": { "$ref": "#/$defs/runId" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "manifest_digest": { "$ref": "#/$defs/sha256" },
+        "bundle_digest": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "decisionSuspension": {
+      "type": "object",
+      "required": [
+        "newly_suspended_decision_ids",
+        "cumulative_suspended_decision_ids",
+        "reopen_event_id"
+      ],
+      "properties": {
+        "newly_suspended_decision_ids": { "$ref": "#/$defs/decisionIdSet" },
+        "cumulative_suspended_decision_ids": { "$ref": "#/$defs/decisionIdSet" },
+        "reopen_event_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "reopenedTarget": {
+      "type": "object",
+      "required": [
+        "root_issue_id",
+        "prior_root_version_digest",
+        "reopened_root_version_digest",
+        "decision_suspension"
+      ],
+      "properties": {
+        "root_issue_id": { "type": "string", "pattern": "^ROOT-[0-9a-f]{64}$" },
+        "prior_root_version_digest": { "$ref": "#/$defs/sha256" },
+        "reopened_root_version_digest": { "$ref": "#/$defs/sha256" },
+        "decision_suspension": { "$ref": "#/$defs/decisionSuspension" }
+      },
+      "additionalProperties": false
+    },
+    "inheritedArtifacts": {
+      "type": "object",
+      "required": [
+        "source_pack_digest",
+        "decision_journal_digest",
+        "evidence_digest",
+        "scope_manifest_digest"
+      ],
+      "properties": {
+        "source_pack_digest": { "$ref": "#/$defs/sha256" },
+        "decision_journal_digest": { "$ref": "#/$defs/sha256" },
+        "evidence_digest": { "$ref": "#/$defs/sha256" },
+        "scope_manifest_digest": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "semanticReopenLineage": {
+      "type": "object",
+      "required": [
+        "creation_reason",
+        "parent_case_document_ref",
+        "parent_execution_run_id",
+        "reopen_event_id",
+        "reopened_targets",
+        "decision_reopen_overlay_digest",
+        "inherited_artifacts"
+      ],
+      "properties": {
+        "creation_reason": { "const": "reopen_semantic_question" },
+        "parent_case_document_ref": { "$ref": "#/$defs/caseDocumentRef" },
+        "parent_execution_run_id": { "$ref": "#/$defs/runId" },
+        "reopen_event_id": { "type": "string", "minLength": 1 },
+        "reopened_targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/reopenedTarget" }
+        },
+        "decision_reopen_overlay_digest": { "$ref": "#/$defs/sha256" },
+        "inherited_artifacts": { "$ref": "#/$defs/inheritedArtifacts" }
+      },
+      "additionalProperties": false
+    },
+    "migrationLineage": {
+      "type": "object",
+      "required": ["creation_reason", "parent_run_id"],
+      "properties": {
+        "creation_reason": { "enum": ["migration_v3", "resume_cancelled"] },
+        "parent_run_id": { "$ref": "#/$defs/runId" }
+      },
+      "additionalProperties": false
+    },
+    "v4Lineage": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/semanticReopenLineage" },
+        { "$ref": "#/$defs/migrationLineage" }
+      ]
+    },
+    "v4RunInstance": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "compiler_version",
+        "run_id",
+        "delivery_intent",
+        "created_at",
+        "lineage"
+      ],
+      "properties": {
+        "schema_version": { "const": "4.0.0" },
+        "compiler_version": { "const": "0.5.0" },
+        "run_id": { "$ref": "#/$defs/runId" },
+        "delivery_intent": { "enum": ["case_document", "execution_plan"] },
+        "created_at": { "type": "string", "minLength": 1 },
+        "lineage": { "$ref": "#/$defs/v4Lineage" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

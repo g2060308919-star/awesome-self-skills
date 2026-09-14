@@ -17,16 +17,12 @@ declare module 'node:child_process' {
 }
 
 declare module 'node:fs/promises' {
-  export const chmod: any;
   export const mkdtemp: any;
   export const cp: any;
   export const mkdir: any;
-  export const lstat: any;
   export const open: any;
   export const readFile: any;
   export const readdir: any;
-  export const realpath: any;
-  export const rename: any;
   export const rm: any;
   export const stat: any;
   export const symlink: any;
@@ -41,11 +37,7 @@ declare module 'node:fs' {
 
 declare module 'node:crypto' {
   export const createHash: any;
-  export const createHmac: any;
-  export const hkdfSync: any;
-  export const randomBytes: any;
   export const randomUUID: any;
-  export const timingSafeEqual: any;
 }
 
 declare module 'node:events' {

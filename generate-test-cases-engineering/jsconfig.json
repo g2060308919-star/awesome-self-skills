@@ -6,5 +6,6 @@
     "module": "NodeNext",
     "target": "ES2022"
   },
-  "include": ["src", "build", "test/v5", "test/fixtures-v5-runner.mjs", "test/interface/repository-published-sync.test.mjs"]
+  "include": ["src", "test", "build", "benchmark"],
+  "exclude": ["benchmark/release/v1/operator-work"]
 }

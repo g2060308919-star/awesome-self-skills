@@ -1,0 +1,13 @@
+{
+  "scenario": "all-not-applicable",
+  "interaction_policy": "pause_for_clarification",
+  "expected": {
+    "status": "finished",
+    "grounded": 0,
+    "conditional": 0,
+    "blocked": 0,
+    "exploratory": 0,
+    "not_applicable": 1,
+    "delivery_status": "no_applicable_formal_test_points"
+  }
+}

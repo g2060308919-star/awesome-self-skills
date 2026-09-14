@@ -1,0 +1,1 @@
+{"artifact_kind":"synthetic-pilot-original-output","capture_id":"synthetic-checkout-001-technique-router-2","system":"technique-router","repeat":2,"response":"Synthetic technique-router run 2: identified submit-valid-cart as grounded and failed-payment-outcome as blocked pending an explicit failure oracle."}

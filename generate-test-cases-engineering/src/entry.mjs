@@ -1,36 +1,60 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { advanceV5Run, createV5RunDirectory, inspectV5Run } from './v5/runtime.mjs';
+import { advanceStrict } from './advance-strict.mjs';
+import { constructV4Action } from './agent-action-adapter-v4.mjs';
+import {
+  sourceAcquisitionMaterialPathV4, stageV4SourceAcquisitionAction
+} from './source-acquisition-v4.mjs';
+import { createV4RunDirectory } from './run-bootstrap-v4.mjs';
 
-export { advanceV5Run, createV5RunDirectory, inspectV5Run };
+export {
+  advanceStrict, constructV4Action, createV4RunDirectory, sourceAcquisitionMaterialPathV4,
+  stageV4SourceAcquisitionAction
+};
 
 /** @param {string} code @param {string} message */
 function fatalReply(code, message) {
   return {
-    reply_kind: 'pre_run_error', schema_version: '5.0.0', compiler_version: '0.6.0',
-    status: code === 'RUN_ARGUMENT_INVALID' ? 'protocol_error' : 'fatal',
-    diagnostics: [{ code, affected_refs: [], message }], available_actions: []
+    status: 'fatal',
+    diagnostics: [{ category: 'reference', code, message }]
   };
 }
 
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
+    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.5.0';
     const userArguments = process.argv.slice(2);
-    const reply = userArguments.length !== 1 || !path.isAbsolute(userArguments[0])
+    const reply = userArguments.length !== 1
       ? fatalReply(
-          'RUN_ARGUMENT_INVALID',
-          'The V5 runner accepts exactly one absolute run directory argument.'
+          'RUNNER_ARGUMENTS_INVALID',
+          'The private runner accepts exactly one absolute run directory argument.'
         )
       : nodeMajor >= 20
-      ? await inspectV5Run(userArguments[0])
-      : fatalReply('RUN_ARGUMENT_INVALID', 'Node.js 20 or newer is required.');
+      ? compilerVersion.length > 0
+        ? await advanceStrict(userArguments[0])
+        : {
+            status: 'fatal',
+            diagnostics: [{
+              category: 'reference',
+              code: 'compiler_version_missing',
+              message: 'The bundled compiler version is missing.'
+            }]
+          }
+      : {
+          status: 'fatal',
+          diagnostics: [{
+            category: 'reference',
+            code: 'runtime_node20_required',
+            message: 'Node.js 20 or newer is required.'
+          }]
+        };
     process.stdout.write(`${JSON.stringify(reply)}\n`);
   } catch (error) {
     process.exitCode = 1;
     const message = error instanceof Error ? error.message : 'private runner failed to form a JSON reply';
-    process.stderr.write(`generate-test-cases v5 process failure: ${message}\n`);
+    process.stderr.write(`test-compiler process failure: ${message}\n`);
   }
 }
 

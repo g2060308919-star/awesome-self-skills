@@ -1,0 +1,16 @@
+[
+  { "gate": "E1-as-Grounded", "expected": "conditional" },
+  { "gate": "E0-as-Conditional", "expected": "blocked" },
+  { "gate": "unsupported-support-review", "expected": "blocked" },
+  { "gate": "approved-assumption-as-Grounded", "expected": "conditional" },
+  { "gate": "Exploratory-in-denominator", "expected": "formal-coverage-unchanged" },
+  { "gate": "NotApplicable-in-numerator", "expected": "not-covered" },
+  { "gate": "missing-Blocked-Test-Point", "expected": "blocked-retained" },
+  { "gate": "skipped-interaction-cell", "expected": "INTERACTION_CELL_MISSING" },
+  { "gate": "invalid-E2-target", "expected": "E2_TARGET_NOT_ALLOWED" },
+  { "gate": "E2-cycle", "expected": "E2_CYCLE" },
+  { "gate": "revision-in-stable-ID", "expected": "same-id" },
+  { "gate": "old-checkpoint-winning", "expected": "highest-valid-accepted-revision" },
+  { "gate": "record_only-lowering-gates", "expected": "blocked" },
+  { "gate": "record_only-public-selector", "expected": "RUNNER_ARGUMENTS_INVALID" }
+]

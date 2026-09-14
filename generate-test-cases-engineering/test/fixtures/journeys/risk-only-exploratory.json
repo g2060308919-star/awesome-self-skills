@@ -1,0 +1,5 @@
+{
+  "scenario": "risk-only-exploratory",
+  "interaction_policy": "pause_for_clarification",
+  "expected": { "status": "finished", "grounded": 0, "conditional": 0, "blocked": 0, "exploratory": 1, "not_applicable": 0, "delivery_status": "no_applicable_formal_test_points" }
+}

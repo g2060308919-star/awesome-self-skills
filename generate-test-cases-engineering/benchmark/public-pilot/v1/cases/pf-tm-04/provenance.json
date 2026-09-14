@@ -1,0 +1,12 @@
+{
+  "repository": "marketcalls/openrag",
+  "commit": "76303a9a88cbb779093a682b2be6c645eef7ed8b",
+  "source_url": "https://raw.githubusercontent.com/marketcalls/openrag/76303a9a88cbb779093a682b2be6c645eef7ed8b/docs/prd.md",
+  "source_sha256": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+  "content_digest": "a289d8b127242d802a0cd4cb991da69bb85729ceec46967179cd36a32ac8b47c",
+  "license_url": "https://raw.githubusercontent.com/marketcalls/openrag/76303a9a88cbb779093a682b2be6c645eef7ed8b/LICENSE",
+  "license_sha256": "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b",
+  "reported_license": "AGPL-3.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

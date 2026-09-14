@@ -1,0 +1,12 @@
+{
+  "scenario": "all-blocked",
+  "interaction_policy": "record_only",
+  "expected": {
+    "status": "finished",
+    "grounded": 0,
+    "conditional": 0,
+    "blocked": 1,
+    "exploratory": 0,
+    "delivery_status": "no_deterministic_cases"
+  }
+}

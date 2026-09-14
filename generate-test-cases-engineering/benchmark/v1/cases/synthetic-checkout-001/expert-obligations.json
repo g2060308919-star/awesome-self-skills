@@ -1,0 +1,24 @@
+{
+  "label_version":"1.0.0","correction_of":null,
+  "final_labels":[
+    {"label_key":"submit-valid-cart","value":{"expected":true,"groundable":true,"risk":"critical"}},
+    {"label_key":"failed-payment-outcome","value":{"expected":true,"groundable":false,"risk":"high"}}
+  ],
+  "expert_annotations":[
+    {"expert_id":"synthetic-expert-a","reviewer_class":"synthetic-fixture","complete":true,"labels":[
+      {"label_key":"submit-valid-cart","value":{"expected":true,"groundable":true,"risk":"critical"}},
+      {"label_key":"failed-payment-outcome","value":{"expected":true,"groundable":false,"risk":"high"}}
+    ]},
+    {"expert_id":"synthetic-expert-b","reviewer_class":"synthetic-fixture","complete":true,"labels":[
+      {"label_key":"submit-valid-cart","value":{"expected":true,"groundable":true,"risk":"critical"}},
+      {"label_key":"failed-payment-outcome","value":{"expected":true,"groundable":true,"risk":"high"}}
+    ]}
+  ],
+  "adjudications":[{
+    "label_key":"failed-payment-outcome","completed":true,
+    "expert_values":[{"expected":true,"groundable":false,"risk":"high"},{"expected":true,"groundable":true,"risk":"high"}],
+    "resolved_value":{"expected":true,"groundable":false,"risk":"high"},
+    "adjudicator":"synthetic-adjudicator","adjudicator_class":"synthetic-fixture","completed_at":"2026-08-29T00:00:00Z",
+    "rationale":"The failure outcome is a formal risk but the synthetic PRD supplies no Oracle."
+  }]
+}

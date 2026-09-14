@@ -6,13 +6,11 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "build": "node build/build.mjs",
-    "build:v5-contracts": "node build/generate-v5-policy-artifacts.mjs",
-    "check:v5-contracts": "node build/generate-v5-policy-artifacts.mjs --check",
-    "test": "node --test --test-concurrency=1 test/v5/*.test.mjs test/interface/repository-published-sync.test.mjs",
-    "test:benchmark": "node --test test/v5/case-output.test.mjs test/v5/fixture-runner.test.mjs",
+    "test": "node --test --test-concurrency=1 test/core/*.test.mjs test/golden/*.test.mjs test/interface/*.test.mjs test/recovery/*.test.mjs && node --test test/repeatability/*.repeat.mjs",
+    "test:benchmark": "node --test --test-concurrency=1 test/benchmark/*.test.mjs",
     "check": "tsc --noEmit -p jsconfig.json && node build/build.mjs --check && npm test",
-    "benchmark": "node test/fixtures-v5-runner.mjs tests/fixtures/v5/manifest.json",
-    "public-pilot": "node test/fixtures-v5-runner.mjs tests/fixtures/v5/manifest.json"
+    "benchmark": "node benchmark/single-system-gate.mjs benchmark/release/v1/manifest.json",
+    "public-pilot": "node benchmark/public-pilot/validate.mjs benchmark/public-pilot/v1/catalog.json"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

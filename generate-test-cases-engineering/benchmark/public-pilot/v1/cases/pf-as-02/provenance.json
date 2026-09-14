@@ -1,0 +1,12 @@
+{
+  "repository": "sandraschi/ocr-mcp",
+  "commit": "f5c662299fc13925daa5760a3ee17cb9cc34eff5",
+  "source_url": "https://raw.githubusercontent.com/sandraschi/ocr-mcp/f5c662299fc13925daa5760a3ee17cb9cc34eff5/PRD.md",
+  "source_sha256": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+  "content_digest": "e2154d225db6e639b4530e96998f1433564a96a671efcc8f578cc80e5a1772ff",
+  "license_url": "https://raw.githubusercontent.com/sandraschi/ocr-mcp/f5c662299fc13925daa5760a3ee17cb9cc34eff5/LICENSE",
+  "license_sha256": "57bd85d017f3eaea7a2de0b78323f1bfa92b05ae53c73d07ba8dc622c50009ca",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

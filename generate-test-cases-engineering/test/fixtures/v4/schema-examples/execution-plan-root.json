@@ -1,0 +1,175 @@
+{
+  "valid": [
+    {
+      "name": "pending_execution_plan_is_versioned_and_closed",
+      "reason": "An unsettled execution decision remains a versioned, closed downstream plan with no runner projection.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "execution_plan",
+        "status": "need_user_answers",
+        "result_kind": null,
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [
+          {
+            "case_id": "CASE-source-22",
+            "semantic_status": "Grounded",
+            "disposition": "pending",
+            "ready": false
+          }
+        ],
+        "runner_ready": false,
+        "runner_projection": {
+          "case_ids": [],
+          "case_ids_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      }
+    },
+    {
+      "name": "execution_ready_plan_has_nonempty_runner_projection",
+      "reason": "A finished ready plan identifies its contract version and exposes at least one selected Grounded Case.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "execution_plan",
+        "status": "finished",
+        "result_kind": "execution_ready",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [
+          {
+            "case_id": "CASE-source-22",
+            "semantic_status": "Grounded",
+            "disposition": "execute",
+            "ready": true
+          }
+        ],
+        "runner_ready": true,
+        "runner_projection": {
+          "case_ids": ["CASE-source-22"],
+          "case_ids_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    },
+    {
+      "name": "no_execution_selected_plan_has_empty_projection",
+      "reason": "An all-DoNotExecute plan remains a finished versioned artifact while explicitly withholding runner readiness.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "execution_plan",
+        "status": "finished",
+        "result_kind": "no_execution_selected",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [
+          {
+            "case_id": "CASE-source-22",
+            "semantic_status": "Grounded",
+            "disposition": "do_not_execute",
+            "ready": false
+          }
+        ],
+        "runner_ready": false,
+        "runner_projection": {
+          "case_ids": [],
+          "case_ids_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "execution_plan_rejects_missing_compiler_version",
+      "reason": "A v4 execution artifact cannot omit the compiler version that owns its canonical contract.",
+      "value": {
+        "schema_version": "4.0.0",
+        "delivery_intent": "execution_plan",
+        "status": "finished",
+        "result_kind": "execution_ready",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [{ "case_id": "CASE-source-22", "semantic_status": "Grounded", "disposition": "execute", "ready": true }],
+        "runner_ready": true,
+        "runner_projection": { "case_ids": ["CASE-source-22"], "case_ids_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }
+      }
+    },
+    {
+      "name": "execution_plan_rejects_wrong_schema_version",
+      "reason": "A legacy schema version cannot masquerade as the closed v4 execution-plan artifact.",
+      "value": {
+        "schema_version": "3.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "execution_plan",
+        "status": "finished",
+        "result_kind": "execution_ready",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [{ "case_id": "CASE-source-22", "semantic_status": "Grounded", "disposition": "execute", "ready": true }],
+        "runner_ready": true,
+        "runner_projection": { "case_ids": ["CASE-source-22"], "case_ids_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }
+      }
+    },
+    {
+      "name": "execution_plan_rejects_unknown_item_field",
+      "reason": "An Adapter cannot smuggle an undeclared execution property into a canonical Case decision.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "execution_plan",
+        "status": "finished",
+        "result_kind": "execution_ready",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [{ "case_id": "CASE-source-22", "semantic_status": "Grounded", "disposition": "execute", "ready": true, "command": "run now" }],
+        "runner_ready": true,
+        "runner_projection": { "case_ids": ["CASE-source-22"], "case_ids_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }
+      }
+    },
+    {
+      "name": "execution_ready_rejects_empty_runner_projection",
+      "reason": "A finished execution-ready artifact cannot claim readiness without a selected Case ID.",
+      "value": {
+        "schema_version": "4.0.0",
+        "compiler_version": "0.5.0",
+        "delivery_intent": "execution_plan",
+        "status": "finished",
+        "result_kind": "execution_ready",
+        "case_document_ref": {
+          "run_id": "RUN-case-document",
+          "revision": 4,
+          "manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "items": [{ "case_id": "CASE-source-22", "semantic_status": "Grounded", "disposition": "execute", "ready": true }],
+        "runner_ready": true,
+        "runner_projection": { "case_ids": [], "case_ids_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945" }
+      }
+    }
+  ]
+}

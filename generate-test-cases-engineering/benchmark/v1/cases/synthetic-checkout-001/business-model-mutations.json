@@ -1,0 +1,1 @@
+{"mutations":[{"mutation_id":"synthetic-drop-pending-payment-state","risk":"high","description":"Remove the specified pending-payment post-state.","provenance_kind":"synthetic-pilot"}]}

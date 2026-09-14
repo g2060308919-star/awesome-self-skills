@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ordering-registry.schema.json",
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "idArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/text"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "locatorOrderKey": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ],
+      "minItems": 4,
+      "items": false
+    },
+    "basis": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "claim_ids"
+          ],
+          "properties": {
+            "kind": {
+              "const": "evidence"
+            },
+            "claim_ids": {
+              "$ref": "#/$defs/idArray"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "decision_ids"
+          ],
+          "properties": {
+            "kind": {
+              "const": "decision"
+            },
+            "decision_ids": {
+              "$ref": "#/$defs/idArray"
+            }
+          }
+        }
+      ]
+    },
+    "businessFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flow_id",
+        "module_id",
+        "locator_order_key",
+        "claim_ids"
+      ],
+      "properties": {
+        "flow_id": {
+          "type": "string",
+          "pattern": "^FLOW-[0-9a-f]{64}$"
+        },
+        "module_id": {
+          "$ref": "#/$defs/text"
+        },
+        "locator_order_key": {
+          "$ref": "#/$defs/locatorOrderKey"
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/idArray"
+        }
+      }
+    },
+    "pageAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "flow_id",
+        "locator_order_key",
+        "claim_ids"
+      ],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "pattern": "^ACTION-[0-9a-f]{64}$"
+        },
+        "flow_id": {
+          "$ref": "#/$defs/text"
+        },
+        "locator_order_key": {
+          "$ref": "#/$defs/locatorOrderKey"
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/idArray"
+        }
+      }
+    },
+    "dependencyRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dependency_rule_id",
+        "predecessor_outcome_id",
+        "successor_outcome_id",
+        "basis"
+      ],
+      "properties": {
+        "dependency_rule_id": {
+          "type": "string",
+          "pattern": "^DEP-[0-9a-f]{64}$"
+        },
+        "predecessor_outcome_id": {
+          "$ref": "#/$defs/text"
+        },
+        "successor_outcome_id": {
+          "$ref": "#/$defs/text"
+        },
+        "basis": {
+          "$ref": "#/$defs/basis"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "business_flows",
+    "page_actions",
+    "dependency_rules"
+  ],
+  "properties": {
+    "business_flows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/businessFlow"
+      },
+      "minItems": 0
+    },
+    "page_actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pageAction"
+      },
+      "minItems": 0
+    },
+    "dependency_rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dependencyRule"
+      },
+      "minItems": 0
+    }
+  }
+}

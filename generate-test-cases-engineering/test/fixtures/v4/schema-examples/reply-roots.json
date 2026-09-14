@@ -1,0 +1,264 @@
+{
+  "valid": [
+    {
+      "name": "requirements_reply_carries_matching_semantic_presentation",
+      "reason": "A requirements-analysis stop binds the full business question and replay-safe recovery presentation to the reply.",
+      "value": {
+        "run_id": "RUN-v4",
+        "status": "need_user_answers",
+        "phase": "requirements_analysis",
+        "produced_artifacts": [],
+        "incomplete_reason": { "code": "SEMANTIC_GAP", "summary": "IP 列含义尚未明确。" },
+        "user_next_steps": [{ "action": "answer_question_part", "description": "确认 IP 列含义。" }],
+        "recovery": { "mode": "append_clarification_event", "description": "在当前运行追加回答。" },
+        "non_blocking_diagnostics": [],
+        "semantic_presentation": {
+          "schema_version": "4.0.0",
+          "presentation_id": "PRES-1111111111111111111111111111111111111111111111111111111111111111",
+          "phase": "requirements_analysis",
+          "supersedes_presentation_id": null,
+          "answered_part_ids": [],
+          "remaining_part_ids": ["QP-2222222222222222222222222222222222222222222222222222222222222222"],
+          "cycle_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "run_actions": ["cancel_run"],
+          "recovery": {
+            "mode": "append_clarification_event",
+            "run_id": "RUN-v4",
+            "committed_revision": 2,
+            "committed_checkpoint_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+            "after_partial_answer": "issue_successor_for_remaining_parts"
+          },
+          "question_parts": [
+            {
+              "question_part_id": "QP-2222222222222222222222222222222222222222222222222222222222222222",
+              "root_issue_id": "ROOT-5555555555555555555555555555555555555555555555555555555555555555",
+              "root_version_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+              "question": "IP 列代表什么？",
+              "why_needed": "需要明确业务含义。",
+              "decision_impact": "决定用例数据与预期。",
+              "unresolved_outcome": "该场景保持待确认。",
+              "affected_facts": ["IP 列"],
+              "answer_options": ["网络 IP", "定位城市"],
+              "risk_level": "high",
+              "available_actions": ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"],
+              "action_context": {
+                "presentation_id": "PRES-1111111111111111111111111111111111111111111111111111111111111111",
+                "question_part_id": "QP-2222222222222222222222222222222222222222222222222222222222222222",
+                "root_issue_id": "ROOT-5555555555555555555555555555555555555555555555555555555555555555",
+                "root_version_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "source_acquisition_reply_binds_safe_resume_request",
+      "reason": "A source-acquisition stop contains a complete redacted material request, exact resume reference, and executable cancellation context.",
+      "value": {
+        "run_id": "RUN-v4",
+        "status": "need_artifact",
+        "phase": "source_acquisition",
+        "produced_artifacts": [],
+        "incomplete_reason": { "code": "SOURCE_ASSET_UNAVAILABLE", "summary": "规范性图片当前不可获取。" },
+        "user_next_steps": [{ "action": "provide_artifact", "description": "提供稳定资源 ID 或安全上传引用。" }],
+        "recovery": { "mode": "resume_from_committed_checkpoint", "description": "材料验真后从已提交检查点继续。" },
+        "artifact_requests": [{
+          "artifact_request_id": "ARQ-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "request_version_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "reason_code": "SOURCE_ASSET_UNAVAILABLE",
+          "provider": "prd-platform",
+          "redacted_resource_ref": "prd-platform/document-1/image-2",
+          "source_reference_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "ordinary_query_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "why_needed": "该图片定义字段展示规则。",
+          "allowed_input_kinds": ["stable_resource_id", "safe_upload_ref"]
+        }],
+        "resume_ref": {
+          "run_id": "RUN-v4",
+          "committed_revision": 0,
+          "committed_checkpoint_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "request_set_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        "available_actions": ["provide_artifact", "cancel_run"],
+        "cancel_context": { "run_id": "RUN-v4", "phase": "source_acquisition", "phase_version": 0 },
+        "non_blocking_diagnostics": []
+      }
+    },
+    {
+      "name": "execution_stage_reply_requests_source_pack",
+      "reason": "An execution sibling without its Source Pack returns the full closed stop contract while retaining its durable run identity.",
+      "value": {
+        "run_id": "RUN-execution",
+        "status": "need_revision",
+        "phase": "execution_closure",
+        "stage": "source_pack",
+        "schema_ref": "source-pack.schema.json",
+        "scope": { "source_revision": 0, "run_instance_id": "RUN-execution" },
+        "diagnostics": [],
+        "produced_artifacts": [],
+        "incomplete_reason": { "code": "STAGE_ARTIFACT_REQUIRED", "summary": "仍需 execution Source Pack。" },
+        "user_next_steps": [{ "action": "write_stage_artifact", "description": "写入请求的 Source Pack。" }],
+        "recovery": { "mode": "write_staging_artifact", "description": "在同一运行目录补齐工件。" },
+        "non_blocking_diagnostics": []
+      }
+    },
+    {
+      "name": "invalid_stage_reply_requests_revision",
+      "reason": "An invalid submitted stage retains its exact artifact identity and returns a closed corrective revision contract.",
+      "value": {
+        "run_id": "RUN-v4",
+        "status": "need_revision",
+        "phase": "case_design",
+        "stage": "case_drafts",
+        "schema_ref": "case-drafts.schema.json",
+        "source_revision": 2,
+        "artifact_path": "/tmp/run/staging/case-drafts.json",
+        "artifact_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+        "diagnostics": [{
+          "category": "schema",
+          "code": "CASE_DRAFT_INVALID",
+          "path": "/cases/0",
+          "message": "A Case expectation must close one compiler-owned obligation."
+        }],
+        "produced_artifacts": [],
+        "incomplete_reason": {
+          "code": "CASE_DRAFT_INVALID",
+          "summary": "A Case expectation must close one compiler-owned obligation."
+        },
+        "user_next_steps": [{
+          "action": "revise_artifact",
+          "description": "Revise the rejected Case Draft and retry this run."
+        }],
+        "recovery": {
+          "mode": "retry_current_run",
+          "description": "Keep accepted revisions and replace only the staging candidate."
+        },
+        "non_blocking_diagnostics": []
+      }
+    },
+    {
+      "name": "execution_reply_carries_real_action_context",
+      "reason": "An execution-closure stop presents real downstream actions bound to the exact immutable Case Document selection.",
+      "value": {
+        "run_id": "RUN-execution",
+        "status": "need_user_answers",
+        "phase": "execution_closure",
+        "produced_artifacts": [],
+        "incomplete_reason": { "code": "EXECUTION_DECISION_REQUIRED", "summary": "尚未选择是否执行。" },
+        "user_next_steps": [{ "action": "set_execution_disposition", "description": "选择执行或不执行。" }],
+        "recovery": { "mode": "append_execution_event", "description": "提交绑定当前展示的执行决定。" },
+        "non_blocking_diagnostics": [],
+        "execution_presentation": {
+          "phase": "execution_closure",
+          "run_id": "RUN-execution",
+          "presentation_id": "PRES-execution",
+          "run_actions": ["cancel_run"],
+          "cancel_context": {
+            "run_id": "RUN-execution",
+            "phase": "execution_closure",
+            "phase_version": 0
+          },
+          "items": [
+            {
+              "case_ids": ["CASE-source-22"],
+              "root_refs": [{ "root_issue_id": "EXECROOT-source", "root_version_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777" }],
+              "case_document_ref": {
+                "run_id": "RUN-case-document",
+                "revision": 4,
+                "manifest_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+                "bundle_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+              },
+              "available_actions": ["provide_capability_proof"],
+              "proof_contract": {
+                "type": "testability_availability",
+                "allowed_values": ["verified_available", "verified_unavailable"]
+              },
+              "action_context": {
+                "run_id": "RUN-execution",
+                "presentation_id": "PRES-execution",
+                "case_document_ref": {
+                  "run_id": "RUN-case-document",
+                  "revision": 4,
+                  "manifest_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+                  "bundle_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+                },
+                "case_ids": ["CASE-source-22"],
+                "root_refs": [{ "root_issue_id": "EXECROOT-source", "root_version_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777" }]
+              },
+              "why": "需要明确下游执行去向。",
+              "decision_impact": "只有 Grounded 且 Execute 的用例进入 runner 投影。",
+              "unresolved_outcome": "该用例保持 Pending。"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "final_confirmation_reply_binds_displayed_plan_and_cancel_context",
+      "reason": "A final-confirmation stop binds confirmation and cancellation to the exact displayed execution plan revision.",
+      "value": {
+        "run_id": "RUN-execution",
+        "status": "need_user_answers",
+        "phase": "final_confirmation",
+        "produced_artifacts": [],
+        "incomplete_reason": { "code": "FINAL_CONFIRMATION_REQUIRED", "summary": "执行清单等待最终确认。" },
+        "user_next_steps": [{ "action": "confirm_execution_plan", "description": "确认实际展示的同一版执行清单。" }],
+        "recovery": { "mode": "append_execution_event", "description": "提交绑定当前展示版本的最终确认。" },
+        "non_blocking_diagnostics": [],
+        "execution_presentation": {
+          "phase": "final_confirmation",
+          "run_id": "RUN-execution",
+          "presentation_id": "PRES-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_revision": 1,
+          "case_document_ref": {
+            "run_id": "RUN-case-document",
+            "revision": 4,
+            "manifest_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+            "bundle_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+          },
+          "presented_plan_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "runner_projection": {
+            "case_ids": [],
+            "case_ids_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "result_kind": "no_execution_selected",
+          "available_actions": ["confirm_execution_plan"],
+          "action_context": {
+            "run_id": "RUN-execution",
+            "phase": "final_confirmation",
+            "phase_version": 1,
+            "presented_presentation_id": "PRES-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "presented_plan_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "presented_source_revision": 1
+          },
+          "run_actions": ["cancel_run"],
+          "cancel_context": {
+            "run_id": "RUN-execution",
+            "phase": "final_confirmation",
+            "phase_version": 1
+          },
+          "why": "最终确认前不能发布执行清单。",
+          "decision_impact": "确认只对实际展示的同一版计划生效。",
+          "unresolved_outcome": "未确认时保持未完成且不写 current。"
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "requirements_reply_rejects_missing_semantic_presentation",
+      "reason": "A semantic stop cannot ask an unbound free-form question without the matching persisted presentation.",
+      "value": {
+        "run_id": "RUN-v4",
+        "status": "need_user_answers",
+        "phase": "requirements_analysis",
+        "produced_artifacts": [],
+        "incomplete_reason": { "code": "SEMANTIC_GAP", "summary": "IP 列含义尚未明确。" },
+        "user_next_steps": [{ "action": "answer_question_part", "description": "确认 IP 列含义。" }],
+        "recovery": { "mode": "append_clarification_event", "description": "在当前运行追加回答。" },
+        "non_blocking_diagnostics": []
+      }
+    }
+  ]
+}

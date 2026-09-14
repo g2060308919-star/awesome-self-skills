@@ -1,0 +1,76 @@
+{
+  "valid": [
+    {
+      "name": "requirement_requires_nonempty_claim_ids",
+      "reason": "A requirement value is directly required by accepted Claims.",
+      "value": { "kind": "requirement", "claim_ids": ["CLM-required-value"] }
+    },
+    {
+      "name": "example_is_explicitly_replaceable",
+      "reason": "An illustrative value stays replaceable and cannot masquerade as a fixed requirement.",
+      "value": { "kind": "example", "claim_ids": ["CLM-example-value"], "replaceable": true }
+    },
+    {
+      "name": "derived_binds_versioned_deterministic_method",
+      "reason": "A derived value binds all inputs and a versioned derivation digest.",
+      "value": {
+        "kind": "derived",
+        "input_claim_ids": ["CLM-derived-input"],
+        "derivation": {
+          "method_id": "boundary-representative",
+          "method_version": "1.0.0",
+          "inputs_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "evidence_level": "derived"
+      }
+    },
+    {
+      "name": "temporary_assumption_forces_conditional",
+      "reason": "A temporary assumption names its gap and can support only a Conditional Case.",
+      "value": {
+        "kind": "temporary_assumption",
+        "assumption_id": "ASSUME-empty-display",
+        "semantic_gap_ids": ["SG-empty-display"],
+        "reason": "Use a dash until the product owner confirms the empty-state rule.",
+        "requires_case_status": "Conditional"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "requirement_rejects_example_branch_field",
+      "reason": "Cross-branch replaceable must not leak into requirement origin.",
+      "value": { "kind": "requirement", "claim_ids": ["CLM-required-value"], "replaceable": true }
+    },
+    {
+      "name": "example_rejects_missing_replaceable",
+      "reason": "An example without replaceable=true loses its semantic boundary.",
+      "value": { "kind": "example", "claim_ids": ["CLM-example-value"] }
+    },
+    {
+      "name": "derived_rejects_requirement_claim_field",
+      "reason": "Derived input_claim_ids cannot be replaced by another branch's claim_ids.",
+      "value": {
+        "kind": "derived",
+        "claim_ids": ["CLM-derived-input"],
+        "derivation": {
+          "method_id": "boundary-representative",
+          "method_version": "1.0.0",
+          "inputs_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "evidence_level": "derived"
+      }
+    },
+    {
+      "name": "temporary_assumption_rejects_grounded_status",
+      "reason": "A temporary assumption cannot authorize Grounded status.",
+      "value": {
+        "kind": "temporary_assumption",
+        "assumption_id": "ASSUME-empty-display",
+        "semantic_gap_ids": ["SG-empty-display"],
+        "reason": "Temporary choice.",
+        "requires_case_status": "Grounded"
+      }
+    }
+  ]
+}

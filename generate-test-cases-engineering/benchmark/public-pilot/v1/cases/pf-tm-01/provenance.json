@@ -1,0 +1,12 @@
+{
+  "repository": "mangopudding/mcp-server-iru-api",
+  "commit": "6743958ad8fa3329035a663d60b931cf0419058e",
+  "source_url": "https://raw.githubusercontent.com/mangopudding/mcp-server-iru-api/6743958ad8fa3329035a663d60b931cf0419058e/docs/PRD.md",
+  "source_sha256": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+  "content_digest": "0fa8477db88aa8dee614456d132a9c811d8771da876f586ea2a5074bb665eebc",
+  "license_url": "https://raw.githubusercontent.com/mangopudding/mcp-server-iru-api/6743958ad8fa3329035a663d60b931cf0419058e/LICENSE",
+  "license_sha256": "4847b39a59a0b59db4f878b7236c77502e79120dccfd34c859b31a40295cc224",
+  "reported_license": "MIT",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

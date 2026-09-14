@@ -1,0 +1,85 @@
+{
+  "valid": [
+    {
+      "name": "formal_uses_evidence_basis_and_formal_refs",
+      "reason": "A formal risk is evidence-backed and links formal Test Points.",
+      "value": {
+        "module_id": "admin", "risk_kind": "null_or_missing", "acceptance_role": "primary_acceptance",
+        "status": "formal", "review_basis": { "kind": "evidence", "claim_ids": ["CLM-null-rule"] },
+        "formal_test_point_ids": ["TP-null-rule"]
+      }
+    },
+    {
+      "name": "semantic_gap_uses_gap_analysis_and_gap_refs",
+      "reason": "An unresolved risk names the analyzed Fact/aspect and semantic gap.",
+      "value": {
+        "module_id": "admin", "risk_kind": "unknown_enum", "acceptance_role": "primary_acceptance",
+        "status": "semantic_gap",
+        "review_basis": { "kind": "semantic_gap_analysis", "subject_fact_ids": ["FACT-source"], "missing_aspect": "unknown-enum outcome" },
+        "semantic_gap_ids": ["SG-source-unknown"]
+      }
+    },
+    {
+      "name": "exploratory_uses_versioned_risk_catalog_and_exploratory_refs",
+      "reason": "An unsourced heuristic remains visibly tied to the versioned risk catalog.",
+      "value": {
+        "module_id": "admin", "risk_kind": "loading_failure", "acceptance_role": "primary_acceptance",
+        "status": "exploratory",
+        "review_basis": { "kind": "risk_catalog", "policy_id": "risk.loading_failure", "policy_version": "1.0.0" },
+        "exploratory_ids": ["EXP-loading-failure"]
+      }
+    },
+    {
+      "name": "not_applicable_uses_independent_exclusion_evidence",
+      "reason": "NotApplicable requires independent exclusion proof and a formal exclusion record.",
+      "value": {
+        "module_id": "admin", "risk_kind": "pagination", "acceptance_role": "primary_acceptance",
+        "status": "not_applicable",
+        "review_basis": { "kind": "evidence", "claim_ids": ["CLM-single-page-scope"] },
+        "not_applicable_record_ids": ["NA-pagination"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "formal_rejects_risk_catalog_basis",
+      "reason": "A risk-catalog heuristic cannot prove a formal Test Point.",
+      "value": {
+        "module_id": "admin", "risk_kind": "null_or_missing", "acceptance_role": "primary_acceptance",
+        "status": "formal", "review_basis": { "kind": "risk_catalog", "policy_id": "risk.null", "policy_version": "1" },
+        "formal_test_point_ids": ["TP-null-rule"]
+      }
+    },
+    {
+      "name": "semantic_gap_rejects_formal_refs",
+      "reason": "A semantic-gap branch must link semantic_gap_ids, not formal Test Points.",
+      "value": {
+        "module_id": "admin", "risk_kind": "unknown_enum", "acceptance_role": "primary_acceptance",
+        "status": "semantic_gap",
+        "review_basis": { "kind": "semantic_gap_analysis", "subject_fact_ids": ["FACT-source"], "missing_aspect": "unknown outcome" },
+        "formal_test_point_ids": ["TP-source"]
+      }
+    },
+    {
+      "name": "exploratory_rejects_wrong_ref_collection",
+      "reason": "An exploratory review must link exploratory_ids only.",
+      "value": {
+        "module_id": "admin", "risk_kind": "loading_failure", "acceptance_role": "primary_acceptance",
+        "status": "exploratory",
+        "review_basis": { "kind": "risk_catalog", "policy_id": "risk.loading", "policy_version": "1" },
+        "semantic_gap_ids": ["SG-loading"]
+      }
+    },
+    {
+      "name": "not_applicable_rejects_extra_field",
+      "reason": "The closed NotApplicable branch rejects unrelated exploratory data.",
+      "value": {
+        "module_id": "admin", "risk_kind": "pagination", "acceptance_role": "primary_acceptance",
+        "status": "not_applicable",
+        "review_basis": { "kind": "evidence", "claim_ids": ["CLM-single-page-scope"] },
+        "not_applicable_record_ids": ["NA-pagination"],
+        "exploratory_ids": ["EXP-pagination"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "valid": [
+    {
+      "name": "every_oracle_observes_one_existing_case_step",
+      "reason": "The complete v4 Case Draft root binds the expected result to STEP-find.",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "cases": [
+          {
+            "case_id": "CASE-source-22",
+            "title": "来源为 22 时展示打车去过",
+            "module_id": "admin",
+            "priority": "P0",
+            "ordering": { "business_flow_ref": "FLOW-review-list", "page_action_ref": "ACTION-view-row" },
+            "acceptance_role": "primary_acceptance",
+            "fact_ids": ["FACT-source-22"],
+            "primary_test_point_id": "TP-source-22",
+            "supporting_observation_ids": ["OBS-source-response"],
+            "business_preconditions": [
+              { "precondition_id": "PRE-view", "description": "操作者具有评价列表查看权限" }
+            ],
+            "data_conditions": [
+              { "condition_id": "COND-source-22", "description": "存在 source=22 的评价" }
+            ],
+            "steps": [
+              { "step_id": "STEP-open", "action": "进入评价列表" },
+              { "step_id": "STEP-find", "action": "定位目标评价" }
+            ],
+            "oracles": [
+              {
+                "oracle_id": "ORACLE-label",
+                "observe_after_step_id": "STEP-find",
+                "surface": "ui",
+                "expected": "来源列展示“打车去过”",
+                "claim_ids": ["CLM-source-enum"]
+              }
+            ],
+            "semantic_effects": [
+              {
+                "effect_id": "EFF-source-label",
+                "kind": "visible_output",
+                "subject": "来源列",
+                "before": "未展示",
+                "after": "打车去过",
+                "claim_ids": ["CLM-source-enum"]
+              }
+            ],
+            "baseline_spec": {
+              "baseline_id": "BASE-source-column",
+              "kind": "declared_reference",
+              "acquisition": "capture_at_execution",
+              "reference": "同一列表中不受来源字段影响的评价行",
+              "comparison_contract": {
+                "kind": "all_observable_behavior_except",
+                "exceptions": ["来源文案"]
+              },
+              "claim_ids": ["CLM-source-enum"]
+            },
+            "test_values": [
+              {
+                "value_id": "VAL-source-22",
+                "subject_ref": "admin.review",
+                "field_path": "/response/source",
+                "value": 22,
+                "used_by_refs": ["COND-source-22", "ORACLE-label"],
+                "value_origin": { "kind": "requirement", "claim_ids": ["CLM-source-enum"] }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "dangling_oracle_step_is_rejected_after_schema_validation",
+      "reason": "The closed root shape is valid, but relational validation must reject STEP-missing.",
+      "failure_stage": "semantic",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "cases": [
+          {
+            "case_id": "CASE-source-22",
+            "title": "来源为 22 时展示打车去过",
+            "module_id": "admin",
+            "priority": "P0",
+            "ordering": { "business_flow_ref": null, "page_action_ref": null },
+            "acceptance_role": "primary_acceptance",
+            "fact_ids": ["FACT-source-22"],
+            "primary_test_point_id": "TP-source-22",
+            "supporting_observation_ids": [],
+            "business_preconditions": [],
+            "data_conditions": [],
+            "steps": [{ "step_id": "STEP-open", "action": "进入评价列表" }],
+            "oracles": [
+              {
+                "oracle_id": "ORACLE-label",
+                "observe_after_step_id": "STEP-missing",
+                "surface": "ui",
+                "expected": "来源列展示“打车去过”",
+                "claim_ids": ["CLM-source-enum"]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "oracle_rejects_unrecognized_manual_expected_field",
+      "reason": "The closed Case Oracle does not accept a fictional fallback field.",
+      "failure_stage": "schema",
+      "value": {
+        "schema_version": "4.0.0",
+        "source_revision": 4,
+        "cases": [
+          {
+            "case_id": "CASE-source-22",
+            "title": "来源为 22 时展示打车去过",
+            "module_id": "admin",
+            "priority": "P0",
+            "ordering": { "business_flow_ref": null, "page_action_ref": null },
+            "acceptance_role": "primary_acceptance",
+            "fact_ids": ["FACT-source-22"],
+            "primary_test_point_id": "TP-source-22",
+            "supporting_observation_ids": [],
+            "business_preconditions": [],
+            "data_conditions": [],
+            "steps": [{ "step_id": "STEP-open", "action": "进入评价列表" }],
+            "oracles": [
+              {
+                "oracle_id": "ORACLE-label",
+                "observe_after_step_id": "STEP-open",
+                "surface": "ui",
+                "expected": "来源列展示“打车去过”",
+                "claim_ids": ["CLM-source-enum"],
+                "manual_expected_result": "看起来正确"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

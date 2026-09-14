@@ -1,0 +1,12 @@
+{
+  "repository": "stone16/context-engine",
+  "commit": "f180a976796a50e98ba43845409ddbc1bf3299a9",
+  "source_url": "https://raw.githubusercontent.com/stone16/context-engine/f180a976796a50e98ba43845409ddbc1bf3299a9/docs/agents/prd-contextengine-implementation.md",
+  "source_sha256": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+  "content_digest": "c95801ca6f75f712afaee66f268abbf388aaa3a54c21c3a6e64d19c2a85af3d0",
+  "license_url": "https://raw.githubusercontent.com/stone16/context-engine/f180a976796a50e98ba43845409ddbc1bf3299a9/LICENSE",
+  "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "reported_license": "Apache-2.0",
+  "scope_decision": "applicable",
+  "acquired_at": "2026-08-31T18:23:03.336Z"
+}

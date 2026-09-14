@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-FM-05",
+  "scope": "Cineprime request and form constraints with standardized field-level validation errors",
+  "stratum": "form/configuration/input validation",
+  "source_paths": [
+    "cases/pf-fm-05/source/product-requirements-document.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-WF-04",
+  "scope": "AgentAction exact-action challenge, approval/grant binding, replay, and fail-closed context drift",
+  "stratum": "workflow/approval/state",
+  "source_paths": [
+    "cases/pf-wf-04/source/prd.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

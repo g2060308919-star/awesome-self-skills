@@ -1,0 +1,13 @@
+{
+  "case_id": "PF-TM-01",
+  "scope": "Kandji MCP cache TTL behavior and rate-limit retry/backoff",
+  "stratum": "time-window/quota/entitlement",
+  "source_paths": [
+    "cases/pf-tm-01/source/PRD.md"
+  ],
+  "clarification_candidate": {
+    "status": "unassessed",
+    "evidence_class": "machine-pilot-candidate",
+    "reason": "Clarification necessity was not assessed during Task 3 acquisition."
+  }
+}

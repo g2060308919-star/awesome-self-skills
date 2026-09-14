@@ -1,5 +1,0 @@
-{
-  "idempotency_key": "fixture-create-unsupported",
-  "schema_version": "4.0.0",
-  "run_directory": "/legacy"
-}
