@@ -13,7 +13,6 @@ import sourcePackSchema from '../../skill/generate-test-cases/scripts/schemas/so
 import { advanceStrict } from '../../src/advance-strict.mjs';
 import { canonicalStringify, digest } from '../../src/canonical.mjs';
 import { constructSemanticClarificationEventV4 } from '../../src/clarification.mjs';
-import { ensureV4RunInstance } from '../../src/revision-transaction-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import {
@@ -21,6 +20,7 @@ import {
 } from '../../src/source-capture-audit.mjs';
 import { createSourceProviderRegistry } from '../../src/source-canonicalization.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
+import { seedLegacyV4RunInstance } from '../helpers/v4-run-contract-fixture.mjs';
 
 const transactionModuleUrl = new URL('../../src/revision-transaction-v4.mjs', import.meta.url).href;
 const installedRunnerModuleUrl = new URL(
@@ -109,7 +109,7 @@ function answerEvent(presentation, pattern, answer, options = {}) {
 /** @param {string} directory @param {string} runId
  * @param {(directory:string)=>Promise<unknown>} [advance] */
 async function startQuestionJourney(directory, runId, advance = advanceStrict) {
-  await ensureV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
+  await seedLegacyV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
   const fixture = await bendReviewJourneyFixture(runId);
   await stage(directory, 'source_pack', fixture.artifacts.source_pack);
   const evidenceRequest = /** @type {any} */ (await advance(directory));

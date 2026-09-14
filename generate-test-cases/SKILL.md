@@ -16,6 +16,7 @@ The compiler owns validation, stable identity, Facts, scope topology, formal Tes
 - Read `references/behavior-views.md` before writing `behavior_views`.
 - Read `references/case-writing-policy.md` before writing `case_drafts` or presenting the business Case document.
 - Read `references/clarification-policy.md` before presenting questions or submitting `answer_question_part`, `defer_question_part`, `mark_question_unknown`, or `request_delivery`.
+- Read `references/semantic-answer-preview.md` before preparing, presenting, committing, revising, or cancelling a semantic answer preview.
 - Read `references/execution-closure-policy.md` before submitting `provide_capability_proof`, `set_execution_disposition`, `pause_execution`, or `reopen_semantic_question`, and before presenting or confirming an execution plan.
 
 Read the runner-requested `scripts/schemas/<schema_ref>` before writing that artifact or event. Do not invent a field absent from the closed Schema, rename a result kind, or expose a private working shape.
@@ -33,6 +34,8 @@ This Skill creates and, when explicitly requested, confirms an execution plan. I
 Try every supplied path, attachment, and inline source. If no requirement content is readable, ask once for accessible source material. If it remains unavailable, end with `INPUT_UNAVAILABLE`; never create a generic or empty Case document.
 
 Freeze product, module, role, client, version, region, environment, original source set, and material scope. An unspecified dimension remains unspecified. Do not broaden or narrow scope because later analysis discovers more material. New authoritative source bytes or a material scope change requires `NEW_RUN_REQUIRED`; preserve the old run.
+
+Read complete source structures before modeling. Split independently decidable results across sentences, punctuation, lists, and tables, including both sides of an explicit branch. Formatting-only changes must not alter the business obligations. Keep object identity, scoped aliases, and exact displayed text distinct; never turn a locally allowed wording set into global fuzzy matching.
 
 Set `output_language` to the user's requested `zh-CN` or `en`, otherwise use the request language. Preserve source quotations and technical names verbatim. Never fill product truth from generic domain knowledge.
 
@@ -52,7 +55,7 @@ node <skill-dir>/scripts/test-compiler.mjs <absolute-run-directory>
 
 The runner receives one absolute run-directory argument and stdout contains one JSON reply. Validate it against `scripts/schemas/reply.schema.json` before inspecting status or writing anything. Unknown status/stage, a stage/schema mismatch, malformed JSON, extra reply fields, or unverifiable recovery bindings is `PIPELINE_PROTOCOL_ERROR`; write no artifact. stderr is diagnostics only.
 
-Import the private installed Adapter helpers `createV4RunDirectory`, `constructV4Action`, and `stageV4SourceAcquisitionAction` from `<skill-dir>/scripts/test-compiler.mjs`. Create each Case Document or Execution Plan sibling with `createV4RunDirectory(<catalog-root>, delivery_intent)` so the compiler issues the run ID and canonical `runs/<run-id>` directory together; never mint a run ID or move an established run directory. Before submitting a displayed action, pass the validated reply plus only the user's semantic answer or choice to `constructV4Action`, then append exactly the returned event to the next Source Pack revision. Never mint or compute an event ID, digest, presentation binding, request binding, or other protocol ID. A stale or unadvertised action is a protocol error; do not hand-build a substitute event.
+Import the private installed Adapter helpers `createV4RunDirectory`, `constructV4Action`, `prepareSemanticAnswerBatchV4`, `commitSemanticAnswerBatchV4`, and `stageV4SourceAcquisitionAction` from `<skill-dir>/scripts/test-compiler.mjs`. Create each Case Document or Execution Plan sibling with `createV4RunDirectory(<catalog-root>, delivery_intent)` so the compiler issues the run ID and canonical `runs/<run-id>` directory together; never mint a run ID or move an established run directory. Route semantic answer/control batches in enrolled Case Document runs through prepare, a business-readable preview, explicit user confirmation, and commit; do not directly append a constructed answer event. Continue to use `constructV4Action` for advertised `cancel_run`, execution choices, and legacy-compatible lower-level paths, and use `stageV4SourceAcquisitionAction` for source acquisition. Never mint or compute an event ID, digest, presentation binding, request binding, or other protocol ID. A stale or unadvertised action is a protocol error; do not hand-build a substitute event.
 
 Follow this order:
 
@@ -68,7 +71,11 @@ source acquisition and canonical capture
 
 The pre-case clarification occurs after source review, atomic fact extraction, and scope manifest closure, but before Behavior Views and Cases. The post-case clarification occurs only after Case design reveals a genuinely new semantic gap. In both phases, present one business-readable batch.
 
+For each reliably bound semantic answer/control batch in a newly enrolled Case Document run, call `prepareSemanticAnswerBatchV4`, show its business-readable preview, obtain the user's explicit decision for that exact preview, then call `commitSemanticAnswerBatchV4`. Apply is the only preview decision that may append the prepared batch. Revise and cancel-preview leave accepted business state unchanged. This protection does not replace either clarification phase, and ordinary confirmation never upgrades a temporary E1 answer to final E3.
+
 For a partial answer, submit only reliably bound answered parts. Unanswered parts remain `presented` and pending; blank, unparseable, or not reliably bound text writes no answer and cannot suppress an item or advance its revision. Only an explicit `defer_question_part` or `mark_question_unknown` changes that part to deferred or unknown. `request_delivery` closes only the explicitly referenced parts for delivery.
+
+When writing Cases, keep plain manual Oracles valid without environment resources. Preserve every source-declared finite value mapping, logical all-record condition, and permission result as independently auditable semantics; do not replace them with representative samples, live-data assumptions, or an equal-count but different business outcome.
 
 ## Handle runner replies
 
@@ -83,6 +90,8 @@ Report current state, produced artifacts, why source acquisition is incomplete, 
 Report current state, produced artifacts, why the run needs decisions, available actions, and recovery from the committed checkpoint. Present compiler questions in business language: concrete question, `why_needed`, `decision_impact`, `unresolved_outcome`, affected business items, and named risk counts. Keep root, Fact, Claim, obligation, digest, and other protocol IDs hidden in the submission context.
 
 For semantic clarification, allow only `answer_question_part`, `defer_question_part`, `mark_question_unknown`, `request_delivery`, and `cancel_run` when advertised. For an explicitly requested execution plan, execution closure uses only `provide_capability_proof`, `set_execution_disposition`, `pause_execution`, `reopen_semantic_question`, and `cancel_run` when advertised. Copy all presentation, version, item, run, and checkpoint bindings exactly; do not compute IDs.
+
+For the four semantic part actions, use the preview reference and the installed `prepareSemanticAnswerBatchV4`/`commitSemanticAnswerBatchV4` pair. A prepared preview is not an accepted answer. Show the adopted business rule/control, scope, authority/evidence nature, determinate changes, reanalysis scope, and retained items before asking for apply, revise, or cancel-preview. Keep `cancel_run` on its original independent Adapter action.
 
 ### Handle `need_revision`
 

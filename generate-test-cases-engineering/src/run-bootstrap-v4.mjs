@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { ensureV4RunInstance } from './revision-transaction-v4.mjs';
 import { createResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
+import { initializeSemanticAnswerPreviewPolicyV4 } from './semantic-answer-preview-v4.mjs';
 
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const { lstat, mkdir, realpath } = fsPromises;
@@ -56,6 +57,9 @@ export async function createV4RunDirectory(submittedCatalogRoot, request, unexpe
       parent_run_id: resumeLineage.parent_run_id,
       run_id: runId
     });
+    if (run.delivery_intent === 'case_document') {
+      await initializeSemanticAnswerPreviewPolicyV4(runDirectory, run.run_id);
+    }
     return {
       run_id: run.run_id,
       run_directory: runDirectory,
@@ -65,6 +69,9 @@ export async function createV4RunDirectory(submittedCatalogRoot, request, unexpe
   }
   const deliveryIntent = /** @type {'case_document'|'execution_plan'} */ (request);
   await mkdir(runDirectory);
+  if (deliveryIntent === 'case_document') {
+    await initializeSemanticAnswerPreviewPolicyV4(runDirectory, runId);
+  }
   const run = await ensureV4RunInstance(runDirectory, {
     run_id: runId, delivery_intent: deliveryIntent
   });

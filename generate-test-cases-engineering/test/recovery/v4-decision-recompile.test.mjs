@@ -98,7 +98,14 @@ test('Decision Claim completes the ambiguous Fact through an auditable supersede
       value: 'IP 列业务含义不明确', source_locator_ids: ['LOC-prd'], source_id: 'SRC-prd', domain: 'business',
       field_path: '/ip', document_level_claim: false,
       subject_descriptor: { scope_ref: 'review.ip', module_id: 'review', entity_type: 'row', entity_key: 'ip', field_path: '/ip', condition: {} },
-      semantic_value: 'ambiguous' }],
+      semantic_value: {
+        source_value: 'ambiguous',
+        decision_answer_projection: [
+          { fact_id: 'FACT-ip', field_path: '/business_outcome', value_kind: 'literal', value: 'IP 列业务含义' },
+          { fact_id: 'FACT-ip', field_path: '/condition', value_kind: 'literal', value: {} },
+          { fact_id: 'FACT-ip', field_path: '/expected', value_kind: 'answer' }
+        ]
+      } }],
     fact_ledger: [{ fact_id: 'FACT-ip', statement: 'IP 业务含义待确认', status: 'ambiguous',
       acceptance_role: 'primary_acceptance', claim_ids: ['CLM-ip'], module_refs: ['review'], field_path: '/ip' }],
     semantic_gaps: []
@@ -110,10 +117,47 @@ test('Decision Claim completes the ambiguous Fact through an auditable supersede
   const decisionClaim = overlay.evidence.claims.find((/** @type {any} */ claim) => claim.claim_form === 'decision-record');
   assert.equal(decisionClaim.value, '定位城市');
   assert.equal(decisionClaim.level, 'E1');
+  assert.deepEqual(decisionClaim.semantic_value, {
+    source_value: '定位城市',
+    behavior_assertions: [
+      { fact_id: 'FACT-ip', field_path: '/business_outcome', value: 'IP 列业务含义' },
+      { fact_id: 'FACT-ip', field_path: '/condition', value: {} },
+      { fact_id: 'FACT-ip', field_path: '/expected', value: '定位城市' }
+    ]
+  });
   assert.equal(overlay.evidence.claims.find((/** @type {any} */ claim) => claim.claim_id === 'CLM-ip').superseded_by, decisionClaim.claim_id);
   assert.deepEqual(overlay.evidence.fact_ledger[0], {
     ...evidence.fact_ledger[0], claim_ids: [decisionClaim.claim_id], status: 'active'
   });
+});
+
+test('T03/T06 Decision evidence requires an exact source-authored answer projection', () => {
+  const base = checkpoint(); const root = base.checkpoint.semantic_gap_ledger[0];
+  const message = '用户回答：定位城市';
+  const accepted = apply(base, event(base, message, '定位城市'), [], [base.presentation], [message]);
+  const evidence = {
+    schema_version: '4.0.0', source_revision: 0,
+    claims: [{
+      claim_id: 'CLM-ip', claim_form: 'direct', level: 'E3', kind: 'requirement',
+      scope: 'review.ip', value: 'IP 列业务含义不明确', source_locator_ids: ['LOC-prd'],
+      source_id: 'SRC-prd', domain: 'business', field_path: '/ip', document_level_claim: false,
+      subject_descriptor: {
+        scope_ref: 'review.ip', module_id: 'review', entity_type: 'row', entity_key: 'ip',
+        field_path: '/ip', condition: {}
+      },
+      semantic_value: { source_value: 'ambiguous', behavior_assertions: [] }
+    }],
+    fact_ledger: [{
+      fact_id: 'FACT-ip', statement: 'IP 业务含义待确认', status: 'ambiguous',
+      acceptance_role: 'primary_acceptance', claim_ids: ['CLM-ip'], module_refs: ['review'],
+      field_path: '/ip'
+    }],
+    semantic_gaps: []
+  };
+  assert.throws(() => compileV4DecisionEvidenceOverlay(evidence, accepted.decisions, [{
+    root_issue_id: root.root_issue_id, root_version_digest: root.root_version_digest,
+    source_locator_id: 'LOC-answer', field_path: '/ip'
+  }]), /DECISION_EVIDENCE_PROJECTION_REQUIRED/u);
 });
 
 test('the accepted answer event, Decision and Decision Claim pass the real v4 Source/Evidence boundary', () => {
@@ -129,6 +173,11 @@ test('the accepted answer event, Decision and Decision Claim pass the real v4 So
     const originalClaim = fixture.evidence.claims[0]; const originalFact = fixture.evidence.fact_ledger[0];
     originalClaim.claim_id = 'CLM-ip';
     originalFact.fact_id = 'FACT-ip'; originalFact.claim_ids = ['CLM-ip']; originalFact.status = 'ambiguous';
+    originalClaim.semantic_value.decision_answer_projection = [
+      { fact_id: 'FACT-ip', field_path: '/business_outcome', value_kind: 'literal', value: 'IP 列业务含义' },
+      { fact_id: 'FACT-ip', field_path: '/condition', value_kind: 'literal', value: {} },
+      { fact_id: 'FACT-ip', field_path: '/expected', value_kind: 'answer' }
+    ];
     const source = fixture.pack.sources[0];
     const answerUnit = {
       unit_id: `UNIT-answer-${authority.level}`, text: message.normalize('NFC'), type: 'user_statement',

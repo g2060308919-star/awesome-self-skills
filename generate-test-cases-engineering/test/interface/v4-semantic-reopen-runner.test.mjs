@@ -8,10 +8,13 @@ import test from 'node:test';
 import replySchema from '../../skill/generate-test-cases/scripts/schemas/reply.schema.json' with { type: 'json' };
 import sourcePackSchema from '../../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
 import { advanceStrict } from '../../src/advance-strict.mjs';
-import { canonicalStringify, digest } from '../../src/canonical.mjs';
+import { canonicalStringify } from '../../src/canonical.mjs';
 import { constructSemanticClarificationEventV4 } from '../../src/clarification-v4.mjs';
 import { ensureV4RunInstance } from '../../src/revision-transaction-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
+import {
+  commitSemanticAnswerBatchV4, prepareSemanticAnswerBatchV4
+} from '../../src/semantic-answer-preview-v4.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
 
@@ -42,62 +45,6 @@ function executionSourcePack(runId, caseDocumentRef) {
   };
 }
 
-/** @param {any} source @param {any} presentation @param {string} answer */
-function appendSemanticAnswer(source, presentation, answer) {
-  const part = presentation.question_parts[0];
-  const prefix = '答复：';
-  const message = `${prefix}${answer}`;
-  const start = Array.from(prefix).length;
-  const event = /** @type {any} */ (constructSemanticClarificationEventV4(
-    presentation, part, 'answer_question_part', {
-      answer, resolution: 'temporary', authority: 'task_scoped',
-      answer_origin: {
-        type: 'user_statement', presentation_id: presentation.presentation_id,
-        message_digest: byteDigest(message),
-        answer_span: {
-          start_scalar: start, end_scalar: start + Array.from(answer).length,
-          excerpt_digest: byteDigest(answer)
-        }
-      }
-    }
-  ));
-  const next = /** @type {any} */ (structuredClone(source));
-  next.source_revision += 1;
-  next.clarification_events.push(event);
-  const unit = {
-    unit_id: `UNIT-answer-${event.event_id.slice('EVENT-'.length, 'EVENT-'.length + 12)}`,
-    text: message, type: 'user_statement', presentation_id: event.presentation_id,
-    message_digest: event.answer_origin.message_digest,
-    answer_span: {
-      start: event.answer_origin.answer_span.start_scalar,
-      end: event.answer_origin.answer_span.end_scalar
-    }
-  };
-  next.sources[0].semantic_projection.structure.push(unit);
-  const semanticDigest = `sha256:${digest(next.sources[0].semantic_projection)}`;
-  next.sources[0].semantic_digest = semanticDigest;
-  for (const locator of next.locators) locator.semantic_digest = semanticDigest;
-  next.locators.push({
-    locator_id: `LOC-answer-${event.event_id.slice('EVENT-'.length, 'EVENT-'.length + 12)}`,
-    source_id: next.sources[0].source_id, semantic_digest: semanticDigest,
-    type: 'user_statement', unit_id: unit.unit_id, excerpt: answer,
-    excerpt_digest: event.answer_origin.answer_span.excerpt_digest,
-    domain: 'business', field_path: '/clarification_answers/0',
-    presentation_id: event.presentation_id,
-    message_digest: event.answer_origin.message_digest,
-    answer_span: { start: unit.answer_span.start, end: unit.answer_span.end }
-  });
-  const review = next.source_reviews.find(
-    (/** @type {any} */ item) => item.source_id === next.sources[0].source_id
-  );
-  review.semantic_digest = semanticDigest;
-  review.units.push({
-    unit_id: unit.unit_id, content_digest: byteDigest(message),
-    classification: 'non_normative'
-  });
-  return { source: next, event };
-}
-
 /** @param {string} catalog @param {string} runId */
 async function deliverCaseDocumentWithClosedSemanticRoot(catalog, runId) {
   const directory = path.join(catalog, 'runs', runId);
@@ -108,6 +55,14 @@ async function deliverCaseDocumentWithClosedSemanticRoot(catalog, runId) {
   fixture.artifacts.source_pack.run_instance_id = runId;
   const fact = fixture.artifacts.evidence_claims.fact_ledger[0];
   const claim = fixture.artifacts.evidence_claims.claims[0];
+  claim.semantic_value.decision_answer_projection = [
+    {
+      fact_id: fact.fact_id, field_path: '/business_outcome', value_kind: 'literal',
+      value: '刷新后订单状态可见时机'
+    },
+    { fact_id: fact.fact_id, field_path: '/condition', value_kind: 'literal', value: {} },
+    { fact_id: fact.fact_id, field_path: '/expected', value_kind: 'answer' }
+  ];
   fixture.artifacts.evidence_claims.semantic_gaps = [{
     category: 'semantic_gap', code: 'REFRESH_TIMING_UNRESOLVED',
     subject_fact_ids: [fact.fact_id], missing_aspect: 'refresh_timing',
@@ -244,6 +199,9 @@ test('BR17 real runner advertises and commits a version-bound semantic reopen in
     assert.equal(JSON.parse(await readFile(lifecyclePath, 'utf8')).version, 2);
 
     const siblingDirectory = path.join(catalog, 'runs', reopened.run_id);
+    assert.equal(JSON.parse(await readFile(path.join(
+      siblingDirectory, 'derived/semantic-answer-policy.json'
+    ), 'utf8')).run_id, reopened.run_id);
     const siblingReplay = /** @type {any} */ (await advanceStrict(siblingDirectory));
     assert.deepEqual(
       siblingReplay,
@@ -268,15 +226,27 @@ test('BR17 real runner advertises and commits a version-bound semantic reopen in
         && 'code' in error && error.code === 'ENOENT'
     );
 
-    const siblingSource = JSON.parse(await readFile(
-      path.join(siblingDirectory, 'accepted/r000/source-pack.json'), 'utf8'
+    const answer = '刷新完成后立即';
+    const userMessage = `答复：${answer}`;
+    const prepared = /** @type {any} */ (await prepareSemanticAnswerBatchV4(siblingDirectory, {
+      presentation_id: reopened.semantic_presentation.presentation_id,
+      user_message: userMessage,
+      requests: [{
+        action: 'answer_question_part',
+        question_part_id: reopened.semantic_presentation.question_parts[0].question_part_id,
+        answer, user_message: userMessage, resolution: 'temporary',
+        origin_type: 'user_statement'
+      }]
+    }));
+    assert.equal(prepared.kind, 'prepared', JSON.stringify(prepared));
+    const afterAnswer = /** @type {any} */ (await commitSemanticAnswerBatchV4(
+      siblingDirectory,
+      {
+        preview_id: prepared.value.preview_id,
+        confirmation_message: '确认按预览应用刷新时机口径',
+        decision: 'apply'
+      }
     ));
-    const answered = appendSemanticAnswer(
-      siblingSource, reopened.semantic_presentation, '刷新完成后立即'
-    );
-    assert.deepEqual(validateAgainstSchema(answered.source, sourcePackSchema), []);
-    await stage(siblingDirectory, 'source_pack', answered.source);
-    const afterAnswer = /** @type {any} */ (await advanceStrict(siblingDirectory));
     assert.equal(afterAnswer.status, 'need_revision', JSON.stringify(afterAnswer));
     assert.equal(afterAnswer.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
     assert.equal(afterAnswer.stage, 'behavior_views');

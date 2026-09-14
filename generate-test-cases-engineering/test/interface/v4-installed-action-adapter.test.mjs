@@ -106,6 +106,9 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
     ));
     assert.equal(instance.run_id, sibling.run_id);
     assert.deepEqual(instance.lineage, sibling.lineage);
+    assert.equal(JSON.parse(await readFile(path.join(
+      sibling.run_directory, 'derived/semantic-answer-policy.json'
+    ), 'utf8')).run_id, sibling.run_id);
     const resumed = await installed.advanceStrict(sibling.run_directory);
     assert.equal(resumed.scope.run_instance_id, sibling.run_id, JSON.stringify(resumed));
     assert.equal(resumed.status, 'need_revision', JSON.stringify(resumed));
@@ -177,12 +180,17 @@ async function deliverInstalledCaseDocument(installed, catalog) {
   };
 }
 
-test('installed private action seam constructs a semantic answer and the installed runner accepts it', async () => {
+test('installed legacy V4 run keeps its original naked-answer contract without silent enrolment', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-action-'));
   try {
     const initial = await installed.advanceStrict(directory);
     const runId = initial.scope.run_instance_id;
+    const bootstrap = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
+    await writeFile(path.join(directory, 'run-instance.json'), `${canonicalStringify({
+      schema_version: '4.0.0', compiler_version: '0.5.0', run_id: runId,
+      delivery_intent: 'case_document', created_at: bootstrap.created_at, lineage: null
+    })}\n`, 'utf8');
     const fixture = await bendReviewJourneyFixture(runId);
     await stage(directory, 'source_pack', fixture.artifacts.source_pack);
     assert.equal((await installed.advanceStrict(directory)).stage, 'evidence_claims');
@@ -211,6 +219,80 @@ test('installed private action seam constructs a semantic answer and the install
     assert.equal(accepted.semantic_presentation.question_parts.length, 2);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('installed new-bundle adoption enrols a direct directory and rejects a naked answer append', async () => {
+  const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-direct-preview-'));
+  try {
+    const { runId, reply } = await pendingSemanticReply(installed, directory);
+    const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
+    assert.equal(identity.schema_version, '4.1.0');
+    assert.equal(identity.compiler_version, '0.6.0');
+    const policy = JSON.parse(await readFile(path.join(
+      directory, 'derived/semantic-answer-policy.json'
+    ), 'utf8'));
+    assert.equal(policy.run_id, runId);
+    const part = reply.semantic_presentation.question_parts.find(
+      (/** @type {any} */ item) => /IP/u.test(item.question)
+    );
+    assert.ok(part);
+    const answer = '发布者提交评价时的 IP 归属地';
+    const event = installed.constructV4Action(reply, {
+      action: 'answer_question_part', question_part_id: part.question_part_id,
+      answer, user_message: `答复：${answer}`,
+      resolution: 'temporary', origin_type: 'user_statement'
+    });
+    const revision1 = await bendReviewJourneyFixture(runId, 1, [event]);
+    await stage(directory, 'source_pack', revision1.artifacts.source_pack);
+    const rejected = await installed.advanceStrict(directory);
+    assert.equal(rejected.status, 'need_revision', JSON.stringify(rejected));
+    assert.ok(rejected.diagnostics.some(
+      (/** @type {any} */ item) => item.code === 'PREVIEW_CONFIRMATION_REQUIRED'
+    ));
+    await assert.rejects(
+      readFile(path.join(directory, 'accepted/r001/source-pack.json'), 'utf8'),
+      (/** @type {any} */ error) => error && error.code === 'ENOENT'
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('installed bundle exposes and enforces the compiler-owned semantic preview transaction', async () => {
+  const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
+  assert.equal(typeof installed.prepareSemanticAnswerBatchV4, 'function');
+  assert.equal(typeof installed.commitSemanticAnswerBatchV4, 'function');
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-preview-'));
+  try {
+    const created = await installed.createV4RunDirectory(catalog, 'case_document');
+    const { reply } = await pendingSemanticReply(installed, created.run_directory);
+    const part = reply.semantic_presentation.question_parts.find(
+      (/** @type {any} */ item) => /IP/u.test(item.question)
+    );
+    assert.ok(part);
+    const answer = '发布者提交评价时的 IP 归属地';
+    const userMessage = `答复：${answer}`;
+    const prepared = await installed.prepareSemanticAnswerBatchV4(created.run_directory, {
+      presentation_id: reply.semantic_presentation.presentation_id,
+      user_message: userMessage,
+      requests: [{
+        action: 'answer_question_part', question_part_id: part.question_part_id,
+        answer, user_message: userMessage, resolution: 'temporary',
+        origin_type: 'user_statement'
+      }]
+    });
+    assert.equal(prepared.kind, 'prepared', JSON.stringify(prepared));
+    const accepted = await installed.commitSemanticAnswerBatchV4(created.run_directory, {
+      preview_id: prepared.value.preview_id,
+      confirmation_message: '确认按该预览应用',
+      decision: 'apply'
+    });
+    assert.equal(accepted.status, 'need_user_answers', JSON.stringify(accepted));
+    await readFile(path.join(created.run_directory, 'accepted/r001/source-pack.json'), 'utf8');
+  } finally {
+    await rm(catalog, { recursive: true, force: true });
   }
 });
 

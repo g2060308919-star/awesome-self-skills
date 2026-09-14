@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "semantic-answer-preview.schema.json",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "previewId": { "type": "string", "pattern": "^SAP-[0-9a-f]{64}$" },
+    "runId": { "type": "string", "pattern": "^RUN-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "questionPartId": { "type": "string", "pattern": "^QP-[0-9a-f]{64}$" },
+    "rootId": { "type": "string", "pattern": "^ROOT-[0-9a-f]{64}$" },
+    "presentationId": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
+    "policyMarker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version", "schema_version", "compiler_version", "run_schema_version",
+        "compatible_artifact_schema_versions", "run_id", "mode"
+      ],
+      "properties": {
+        "contract_version": { "const": "semantic-answer-preview/v1" },
+        "schema_version": { "const": "1.0.0" },
+        "compiler_version": { "const": "0.6.0" },
+        "run_schema_version": { "const": "4.1.0" },
+        "compatible_artifact_schema_versions": {
+          "type": "array", "const": ["4.0.0"]
+        },
+        "run_id": { "$ref": "#/$defs/runId" },
+        "mode": { "const": "preview_required" }
+      }
+    },
+    "answerRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "question_part_id", "answer", "user_message", "resolution", "origin_type"],
+      "properties": {
+        "action": { "const": "answer_question_part" },
+        "question_part_id": { "$ref": "#/$defs/questionPartId" },
+        "answer": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "user_message": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "resolution": { "enum": ["temporary", "final"] },
+        "origin_type": { "enum": ["user_statement", "authorized_confirmation"] },
+        "answer_start_scalar": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "partControlRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "question_part_id"],
+      "properties": {
+        "action": { "enum": ["defer_question_part", "mark_question_unknown", "request_delivery"] },
+        "question_part_id": { "$ref": "#/$defs/questionPartId" }
+      }
+    },
+    "prepareRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presentation_id", "user_message", "requests"],
+      "properties": {
+        "presentation_id": { "$ref": "#/$defs/presentationId" },
+        "user_message": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "requests": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "oneOf": [{ "$ref": "#/$defs/answerRequest" }, { "$ref": "#/$defs/partControlRequest" }] }
+        }
+      }
+    },
+    "commitRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preview_id", "confirmation_message", "decision"],
+      "properties": {
+        "preview_id": { "$ref": "#/$defs/previewId" },
+        "confirmation_message": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "decision": { "enum": ["apply", "revise", "cancel_preview"] }
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "accepted_revision", "checkpoint_digest"],
+      "properties": {
+        "run_id": { "$ref": "#/$defs/runId" },
+        "accepted_revision": { "type": "integer", "minimum": 0 },
+        "checkpoint_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "presentationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presentation_id", "cycle_digest", "phase"],
+      "properties": {
+        "presentation_id": { "$ref": "#/$defs/presentationId" },
+        "cycle_digest": { "$ref": "#/$defs/digest" },
+        "phase": { "enum": ["requirements_analysis", "case_design"] }
+      }
+    },
+    "answerSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_scalar", "end_scalar", "excerpt_digest"],
+      "properties": {
+        "start_scalar": { "type": "integer", "minimum": 0 },
+        "end_scalar": { "type": "integer", "minimum": 1 },
+        "excerpt_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action", "question_part_id", "root_issue_id", "root_version_digest", "question",
+        "business_scope", "original_answer", "resolution", "authority", "evidence_level",
+        "message_digest", "answer_span"
+      ],
+      "properties": {
+        "action": { "enum": ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] },
+        "question_part_id": { "$ref": "#/$defs/questionPartId" },
+        "root_issue_id": { "$ref": "#/$defs/rootId" },
+        "root_version_digest": { "$ref": "#/$defs/digest" },
+        "question": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "business_scope": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "original_answer": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S" },
+        "resolution": { "type": ["string", "null"], "enum": ["temporary", "final", null] },
+        "authority": { "type": ["string", "null"], "enum": ["task_scoped", "product_final", null] },
+        "evidence_level": { "type": ["string", "null"], "enum": ["E1", "E3", null] },
+        "message_digest": { "$ref": "#/$defs/digest" },
+        "answer_span": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/answerSpan" }] }
+      }
+    },
+    "determinateChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "question_part_id", "business_scope", "adopted_value", "adopted_nature"],
+      "properties": {
+        "kind": { "enum": ["business_rule", "question_control"] },
+        "question_part_id": { "$ref": "#/$defs/questionPartId" },
+        "business_scope": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "adopted_value": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "adopted_nature": { "enum": ["temporary_E1", "scope_final_E3", "deferred", "unknown", "closed_for_delivery"] }
+      }
+    },
+    "reanalyzeItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["business_scope", "reason", "known_fact_ids", "known_test_point_ids", "known_case_ids"],
+      "properties": {
+        "business_scope": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "reason": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "known_fact_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "known_test_point_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "known_case_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "retainedItems": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pending_part_ids", "deferred_part_ids", "unknown_part_ids", "closed_for_delivery_part_ids"],
+      "properties": {
+        "pending_part_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/questionPartId" } },
+        "deferred_part_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/questionPartId" } },
+        "unknown_part_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/questionPartId" } },
+        "closed_for_delivery_part_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/questionPartId" } }
+      }
+    },
+    "previewRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "description"],
+      "properties": {
+        "mode": { "const": "commit_semantic_answer_preview" },
+        "description": { "type": "string", "minLength": 1, "pattern": "\\S" }
+      }
+    },
+    "semanticAnswerPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version", "preview_id", "preview_digest", "status", "run_binding",
+        "presentation_binding", "input_summary", "targets", "determinate_changes",
+        "reanalyze_after_apply", "retained_items", "available_actions", "recovery"
+      ],
+      "properties": {
+        "contract_version": { "const": "semantic-answer-preview/v1" },
+        "preview_id": { "$ref": "#/$defs/previewId" },
+        "preview_digest": { "$ref": "#/$defs/digest" },
+        "status": { "const": "prepared" },
+        "run_binding": { "$ref": "#/$defs/runBinding" },
+        "presentation_binding": { "$ref": "#/$defs/presentationBinding" },
+        "input_summary": {
+          "type": "object", "additionalProperties": false,
+          "required": ["message_digest", "request_count", "actions", "authority_policy"],
+          "properties": {
+            "message_digest": { "$ref": "#/$defs/digest" },
+            "request_count": { "type": "integer", "minimum": 1 },
+            "actions": { "type": "array", "minItems": 1, "items": { "enum": ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] } },
+            "authority_policy": { "const": "apply confirmation preserves the answer's adopted authority and resolution" }
+          }
+        },
+        "targets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/target" } },
+        "determinate_changes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/determinateChange" } },
+        "reanalyze_after_apply": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reanalyzeItem" } },
+        "retained_items": { "$ref": "#/$defs/retainedItems" },
+        "available_actions": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "prefixItems": [{ "const": "apply" }, { "const": "revise" }, { "const": "cancel_preview" }],
+          "items": false
+        },
+        "recovery": { "$ref": "#/$defs/previewRecovery" }
+      }
+    },
+    "previewReply": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": { "kind": { "const": "prepared" }, "value": { "$ref": "#/$defs/semanticAnswerPreview" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "runner_reply"],
+          "properties": { "kind": { "const": "not_prepared" }, "runner_reply": { "type": "object" } }
+        }
+      ]
+    },
+    "previewPointer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contract_version", "preview_id", "preview_digest", "state"],
+      "properties": {
+        "contract_version": { "const": "semantic-answer-preview/v1" },
+        "preview_id": { "$ref": "#/$defs/previewId" },
+        "preview_digest": { "$ref": "#/$defs/digest" },
+        "state": { "enum": ["active", "revised", "cancelled", "applied", "superseded"] }
+      }
+    },
+    "storedPreview": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contract_version", "preview", "prepared_request", "request_digest", "candidate_source_pack_digest", "event_ids", "content_digest"],
+      "properties": {
+        "contract_version": { "const": "semantic-answer-preview/v1" },
+        "preview": { "$ref": "#/$defs/semanticAnswerPreview" },
+        "prepared_request": { "$ref": "#/$defs/prepareRequest" },
+        "request_digest": { "$ref": "#/$defs/digest" },
+        "candidate_source_pack_digest": { "$ref": "#/$defs/digest" },
+        "event_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^EVENT-[0-9a-f]{64}$" } },
+        "content_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "applyReceipt": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "contract_version", "preview_id", "preview_digest", "decision", "confirmation_message",
+        "confirmation_message_digest", "base_revision", "target_revision", "event_ids", "state",
+        "runner_reply_digest"
+      ],
+      "properties": {
+        "contract_version": { "const": "semantic-answer-preview/v1" },
+        "preview_id": { "$ref": "#/$defs/previewId" },
+        "preview_digest": { "$ref": "#/$defs/digest" },
+        "decision": { "const": "apply" },
+        "confirmation_message": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "confirmation_message_digest": { "$ref": "#/$defs/digest" },
+        "base_revision": { "type": "integer", "minimum": 0 },
+        "target_revision": { "type": "integer", "minimum": 1 },
+        "event_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^EVENT-[0-9a-f]{64}$" } },
+        "state": { "enum": ["confirmed", "applied"] },
+        "runner_reply_digest": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }] }
+      }
+    },
+    "auditEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contract_version", "event", "preview_id", "preview_digest", "base_revision", "related_preview_id", "confirmation_message", "confirmation_message_digest", "runner_reply_digest"],
+      "properties": {
+        "contract_version": { "const": "semantic-answer-preview/v1" },
+        "event": { "enum": ["prepared", "superseded", "confirmed", "revised", "cancelled", "applied"] },
+        "preview_id": { "$ref": "#/$defs/previewId" },
+        "preview_digest": { "$ref": "#/$defs/digest" },
+        "base_revision": { "type": "integer", "minimum": 0 },
+        "related_preview_id": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/previewId" }] },
+        "confirmation_message": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S" },
+        "confirmation_message_digest": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }] },
+        "runner_reply_digest": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }] }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/policyMarker" },
+    { "$ref": "#/$defs/prepareRequest" },
+    { "$ref": "#/$defs/commitRequest" },
+    { "$ref": "#/$defs/previewReply" },
+    { "$ref": "#/$defs/previewPointer" },
+    { "$ref": "#/$defs/storedPreview" },
+    { "$ref": "#/$defs/applyReceipt" },
+    { "$ref": "#/$defs/auditEntry" }
+  ]
+}

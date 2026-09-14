@@ -26,6 +26,7 @@ import { appendedRepair, repairDiagnostics, reusableStages, unconfirmedWorkflow 
 import { groupRiskCounts } from './presentation-summary.mjs';
 import { advanceStrictV4Locked, detectV4Run } from './advance-v4.mjs';
 import { verifyResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
+import { isSupportedV4RunIdentity } from './v4-run-contract.mjs';
 
 const moduleDirectory = path.dirname(realpathSync(fileURLToPath(import.meta.url)));
 const schemaDirectory = path.resolve(
@@ -997,9 +998,11 @@ async function advanceStrictExclusive(runDirectory) {
       const migrationSeedPresent = await guardedAwait(() => readTextIfPresent(
         runDirectory, path.join(runDirectory, 'derived', 'migration-replay-seed.json')
       )) !== null;
-      const declaredV4 = runInstanceValue?.schema_version === '4.0.0';
-      if ((migrationSeedPresent || declaredV4)
-        && (runInstanceValue?.schema_version !== '4.0.0'
+      const declaredV4 = isSupportedV4RunIdentity(runInstanceValue);
+      const declaredV4Family = typeof runInstanceValue?.schema_version === 'string'
+        && runInstanceValue.schema_version.startsWith('4.');
+      if ((migrationSeedPresent || declaredV4Family)
+        && (!declaredV4
           || artifactDiagnostics(
             runInstanceValue, registry.schemas.get('run-instance.schema.json')
           ).length > 0)) {
@@ -1025,7 +1028,7 @@ async function advanceStrictExclusive(runDirectory) {
         || await guardedAwait(() => detectV4Run(runDirectory));
       let runInstance;
       if (isV4Run) {
-        runInstance = runInstanceValue?.schema_version === '4.0.0'
+        runInstance = declaredV4
           ? { ...runInstanceValue, run_instance_id: runInstanceValue.run_id }
           : await guardedAwait(() => ensureRunInstance(runDirectory));
       } else runInstance = await guardedAwait(() => ensureRunInstance(runDirectory));

@@ -34,6 +34,8 @@ Multiple unrelated atomic Claims must never reuse a whole-document locator. `doc
 
 For every normative Claim create canonical `subject_descriptor` with `scope_ref`, `module_id`, `entity_type`, NFC `entity_key`, normalized JSON-Pointer `field_path`, and recursively canonical JSON `condition`. Derive `subject_key` only from that descriptor. Never use a natural-language title as subject identity.
 
+Keep object identity, an explicitly authorized alias, and displayed wording separate. Two labels may identify the same object only when an accepted source or Decision says so and defines the applicable scope. Preserve each original locator and quotation; do not rewrite one source into the other label or generalize a local allowed-label set into global fuzzy matching.
+
 ## Use the closed semantic assertion seam
 
 Only an accepted `domain="business"` Claim may carry compiler inputs under `semantic_value`. These are evidence assertions, not Case/View self-proof. Use only the following field names and exact item shapes; omit a family when the source does not support it:
@@ -73,6 +75,10 @@ Source policy defaults to `single_source`. Use `merge_non_overlapping`, `consens
 ## Build atomic Facts and explicit gaps
 
 Split independently true-or-false propositions into separate Claims. Distinguish requirements, descriptions, examples, and diagnostics. A sentence saying a capability is unsupported and out of scope normally creates two Claims: the behavior fact and independent exclusion proof. NotApplicable requires the latter; “PRD did not mention it” is not exclusion evidence.
+
+Atomicity follows business results across prose, lists, and tables. For example, four named columns with selected/show and otherwise/hide behavior contain eight independently checkable branches even when written in one sentence. Conversely, layout-only rewriting must not duplicate them. A quantified “all matching records” remains a logical set condition without inventing a current count, page count, or guarantee that the set is nonempty.
+
+When accepted semantics specify cross-surface field correspondence, data-state rendering, finite required values, or permission behavior, retain the subject, condition, value, result, and scope in the existing Fact/Claim and view carriers. Do not collapse `0`, `null`, missing, and empty text; model only distinctions the source actually defines. A representative example is not a declared complete domain, while each value in an explicit finite mapping is independently required. Allow and deny permissions are separate outcomes even if their Cases share setup.
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
 

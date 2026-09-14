@@ -58,7 +58,7 @@ test('schema registry loads every versioned schema from its manifest', async () 
   const registry = await loadSchemaRegistry(schemaDirectory, manifest.digest);
 
   assert.equal(registry.schemaVersion, '4.0.0');
-  assert.equal(registry.compilerVersion, '0.5.0');
+  assert.equal(registry.compilerVersion, '0.6.0');
   assert.ok(registry.schemas.size >= 14);
   assert.ok(registry.schemas.has('run-catalog.schema.json'));
 });
@@ -120,7 +120,13 @@ test('packaged runner binds the frozen compiler version into schema integrity', 
     await mkdir(temporaryScripts, { recursive: true });
     await cp(schemaDirectory, path.join(temporaryScripts, 'schemas'), { recursive: true });
     await cp(manifestPath, path.join(temporaryScripts, 'schema-manifest.json'));
-    await writeFile(temporaryRunner, (await readFile(runnerPath, 'utf8')).replace(/var embeddedCompilerVersion = [^;]+;/, 'var embeddedCompilerVersion = "0.1.1";'));
+    await writeFile(
+      temporaryRunner,
+      (await readFile(runnerPath, 'utf8')).replace(
+        /embeddedCompilerVersion = true \? "0\.6\.0" : void 0;/,
+        'embeddedCompilerVersion = true ? "0.1.1" : void 0;'
+      )
+    );
     const result = await runCompiler(runDirectory, temporaryRunner);
 
     assert.equal(JSON.parse(result.stdout).status, 'fatal');

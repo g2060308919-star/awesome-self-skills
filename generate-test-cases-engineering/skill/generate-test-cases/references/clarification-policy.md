@@ -10,6 +10,10 @@ The post-case (`case_design`) clarification happens after Case design. Merge onl
 
 At either phase, merge all current fresh answerable roots into one risk-ordered presentation. Do not ask per Case and do not impose a fixed total round count. Non-answerable source, evidence, or process gaps retain their compiler status and recovery guidance; they never become business questions.
 
+Before deriving gaps, decompose the reviewed source by independently decidable business result, not by punctuation or layout. A comma, semicolon, table row, or line break may join several atomic outcomes; changing only that formatting must not add or remove an outcome. Preserve both sides of an explicit branch such as “selected shows these columns; otherwise hides them”. If a source already supplies the result, do not ask it again.
+
+Distinguish literal product wording from vague approval language. “保存后状态显示‘正常’” supplies a concrete observable string; “查询后结果正常” does not supply a result criterion by itself. Ask only for the missing business criterion, never for an API field, status code, selector, URL, account, current row count, or other execution resource as a prerequisite to a manual Case.
+
 ## Present business decisions, not protocol
 
 For each question part show, in the frozen output language:
@@ -22,9 +26,13 @@ For each question part show, in the frozen output language:
 - answer options and available action names;
 - named risk counts whose denominator is distinct affected formal Test Points.
 
+State the business object, the unresolved meaning, the accepted basis already known, why the decision affects acceptance, and what remains unresolved if unanswered. Preserve a source-backed distinction between object identity, an allowed alias, and exact display text. An explicit two-label allowance is local to that field and context; it is never a global fuzzy-matching rule.
+
 Never show root, Fact, Claim, obligation, question-part, digest, or other internal ID in normal business content. Keep `root_issue_id`, `root_version_digest`, `question_part_id`, `presentation_id`, and `action_context` hidden for event construction. An explicit audit may display them separately.
 
 Spell risk labels out (`严重/高/中/低` or localized equivalents) and state what was counted. Never show a bare tuple. Separate semantic-rule gaps, source/evidence acquisition gaps, scope exclusions, and execution preparation in the presentation without changing their true categories.
+
+Sort by actual business impact and affected formal outcomes. Generic unsourced risk suggestions may be folded in presentation, but folding cannot delete ledger entries, change status or denominator, or hide a source-backed critical question behind generic risk volume.
 
 ## Apply partial answers exactly
 
@@ -37,6 +45,8 @@ One user response is one atomic append group and creates one Source Pack revisio
 - Every unanswered item remains presented and pending; it is not deferred or suppressed by omission. It reappears in the successor presentation.
 - Blank or unparseable text, or text that cannot be reliably bound, writes no Decision or control and changes neither root state nor revision.
 - `no_information_gain` returns the same pending set without suppressing any root and without committing a revision.
+
+Freeze the visible batch numbering to its presentation. Bind reordered answers by explicit number, quoted question, or a unique business object—not by the order in which fragments appear. When a fragment has several possible targets, do not guess or submit it; reliably bound fragments in the same message may still form a preview. Repeated text and non-BMP characters use the existing Unicode-scalar half-open span, including the submitted start when uniqueness requires it.
 
 Only explicit controls change an unanswered part:
 

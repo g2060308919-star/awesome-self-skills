@@ -19,6 +19,57 @@ function sortedUniqueStringsV4(values) {
 }
 
 /**
+ * Project a Decision answer only through the exact field mapping declared by
+ * the superseded source Claim. The compiler never guesses that an answer is a
+ * condition, outcome, or Oracle.
+ * @param {any[]} priorClaims @param {any[]} groupedFacts @param {string} answer
+ */
+function decisionAnswerAssertions(priorClaims, groupedFacts, answer) {
+  const factIds = new Set(groupedFacts.map((fact) => fact.fact_id));
+  const submitted = priorClaims.flatMap((claim) => {
+    const projection = claim?.semantic_value?.decision_answer_projection;
+    if (!Array.isArray(projection) || projection.length === 0) {
+      throw new TypeError('DECISION_EVIDENCE_PROJECTION_REQUIRED');
+    }
+    return projection;
+  });
+  const assertions = new Map();
+  for (const item of submitted) {
+    if (!isObject(item) || typeof item.fact_id !== 'string' || !factIds.has(item.fact_id)
+      || typeof item.field_path !== 'string' || !item.field_path.startsWith('/')
+      || typeof item.value_kind !== 'string'
+      || !['answer', 'literal'].includes(item.value_kind)) {
+      throw new TypeError('DECISION_EVIDENCE_PROJECTION_INVALID');
+    }
+    const keys = Object.keys(item).sort();
+    const expectedKeys = item.value_kind === 'answer'
+      ? ['fact_id', 'field_path', 'value_kind']
+      : ['fact_id', 'field_path', 'value', 'value_kind'];
+    if (canonicalStringify(keys) !== canonicalStringify(expectedKeys)
+      || (item.value_kind === 'literal' && !Object.hasOwn(item, 'value'))) {
+      throw new TypeError('DECISION_EVIDENCE_PROJECTION_INVALID');
+    }
+    const assertion = {
+      fact_id: item.fact_id, field_path: item.field_path,
+      value: item.value_kind === 'answer' ? answer : structuredClone(item.value)
+    };
+    const key = `${item.fact_id}\u0000${item.field_path}`;
+    const existing = assertions.get(key);
+    if (existing && canonicalStringify(existing) !== canonicalStringify(assertion)) {
+      throw new TypeError('DECISION_EVIDENCE_PROJECTION_CONFLICT');
+    }
+    assertions.set(key, assertion);
+  }
+  if (groupedFacts.some((fact) => ![...assertions.values()].some(
+    (assertion) => assertion.fact_id === fact.fact_id
+  ))) throw new TypeError('DECISION_EVIDENCE_PROJECTION_REQUIRED');
+  return [...assertions.values()].sort((left, right) => {
+    const fact = left.fact_id.localeCompare(right.fact_id);
+    return fact || left.field_path.localeCompare(right.field_path);
+  });
+}
+
+/**
  * Materialize accepted v4 Decisions into the Evidence/Fact candidate rather
  * than merely toggling clarification state. The original claim remains as an
  * auditable superseded record; every subject Fact points at the Decision Claim.
@@ -98,7 +149,10 @@ export function compileV4DecisionEvidenceOverlay(submittedEvidence, submittedDec
         field_path: priorClaim.field_path,
         document_level_claim: false,
         subject_descriptor: structuredClone(priorClaim.subject_descriptor),
-        semantic_value: decision.answer
+        semantic_value: {
+          source_value: decision.answer,
+          behavior_assertions: decisionAnswerAssertions(priorClaims, groupedFacts, decision.answer)
+        }
       };
       if (!isObject(decisionClaim.subject_descriptor) || typeof decisionClaim.scope !== 'string'
         || typeof decisionClaim.field_path !== 'string') throw new TypeError('DECISION_EVIDENCE_SUBJECT_INVALID');

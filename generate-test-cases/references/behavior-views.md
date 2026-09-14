@@ -32,6 +32,12 @@ Do not unconditionally expand flow edges, before/equal/after, lower/upper, or ev
 
 Every Fact, outcome, Test Point, and later Case retains `acceptance_role`: `primary_acceptance`, `dependency_contract`, or `context_only`. Primary coverage counts only primary acceptance. Boundary-contract coverage is reported separately. Context-only material is traceability, not a formal denominator.
 
+For an explicitly finite mapping, retain each required input/result pair as an independently auditable outcome or parameter instance. One representative Case cannot discharge the other named values. A source-backed exclusion keeps outside values out of formal expectations; it does not authorize invented error, blank, or fallback behavior. If the source supplies only an example and no closed-world statement, report sample coverage rather than a complete domain.
+
+For logical sets such as “all records matching the current filter”, retain the quantified object, predicate, assertion scope, and supported exceptions. Generation does not need a live row count, total pages, or proof that data currently exists. Keep “filter is correct” separate from “at least one matching record exists”.
+
+For role/permission views, compile every declared role-resource-action-context result separately. “Administrator may view” and “ordinary user may not access” are different outcomes; visibility, navigation denial, API status, and data scope are not interchangeable unless the source says so. “All authorized users” may remain a logical role set without inventing a complete role enumeration.
+
 ## Respect compiler-owned scope and ordering
 
 Modules and boundaries come only from the closed `scope_manifest` after topology review. Interaction expectations must use those module IDs; the matrix cannot create, rename, or delete a module. Do not infer ordering or dependencies in Behavior Views. Business flow, page action, and outcome dependency registries are compiler-owned from exact source locators and accepted Claims/Decisions.
