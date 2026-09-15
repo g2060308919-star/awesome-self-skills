@@ -25,6 +25,7 @@ import {
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { compileSourceEvidence } from './source-compiler-v4.mjs';
+import { v4ContractForSchema } from './v4-contract.mjs';
 
 const ALLOWED_SYSTEM_KEYS = new Set([
   'source', 'topology', 'interaction', 'behavior_evidence', 'ordering',
@@ -389,16 +390,18 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   const artifacts = /** @type {any} */ (structuredClone(submittedArtifacts));
   const system = /** @type {any} */ (submittedSystem);
   const sourcePack = artifacts.source_pack;
-  if (!record(sourcePack) || sourcePack.schema_version !== '4.0.0') {
-    return needRevision('source_pack', [{ code: 'V4_SOURCE_PACK_REQUIRED', path: '/schema_version', message: 'The v4 pipeline requires schema 4.0.0.' }]);
+  const contract = record(sourcePack) ? v4ContractForSchema(sourcePack.schema_version) : null;
+  if (!contract) {
+    return needRevision('source_pack', [{ code: 'V4_SOURCE_PACK_REQUIRED', path: '/schema_version', message: 'The v4 pipeline requires a supported explicit v4 contract.' }]);
   }
   const revision = sourcePack.source_revision;
-  for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) {
+  for (const stage of ['evidence_claims']) {
     const artifact = artifacts[stage];
-    if (record(artifact) && artifact.source_revision !== undefined && artifact.source_revision !== revision) {
+    if (record(artifact) && (artifact.schema_version !== contract.schema_version
+      || (artifact.source_revision !== undefined && artifact.source_revision !== revision))) {
       return needRevision(stage, [{
         category: 'traceability', code: 'SOURCE_REVISION_MISMATCH', path: '/source_revision',
-        message: 'Every Agent artifact must bind the active source revision.'
+        message: 'Every Agent artifact must bind the active source revision and explicit v4 contract.'
       }]);
     }
   }
@@ -447,6 +450,17 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     non_blocking_diagnostics: []
   };
 
+  for (const stage of ['behavior_views', 'case_drafts']) {
+    const artifact = artifacts[stage];
+    if (record(artifact) && (artifact.schema_version !== contract.schema_version
+      || (artifact.source_revision !== undefined && artifact.source_revision !== revision))) {
+      return needRevision(stage, [{
+        category: 'traceability', code: 'SOURCE_REVISION_MISMATCH', path: '/source_revision',
+        message: 'Every Agent artifact must bind the active source revision and explicit v4 contract.'
+      }]);
+    }
+  }
+
   const behaviorSchemaFailure = validateArtifact(artifacts.behavior_views, behaviorSchema, 'behavior_views');
   if (behaviorSchemaFailure) return behaviorSchemaFailure;
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
@@ -469,7 +483,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
       source_revision: revision, case_drafts: materializedDrafts.cases,
       formal_test_points: formalPoints,
       claim_assessments: system.claim_assessments
-    });
+    }, contract);
   } catch (error) {
     return needRevision('case_drafts', [{
       category: 'adapter_revision', code: error instanceof Error ? error.message : 'CASE_COMPILATION_FAILED',
@@ -563,6 +577,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   }
   const obligations = assembleObligationsArtifactV4(behavior, risk.ledger, risk.context);
   if (obligations.kind !== 'assembled') return qualityFailure('RISK_REVIEW_FAILED', obligations.diagnostics);
+  obligations.artifact.schema_version = contract.schema_version;
   if (pendingPostCase.length) return {
     status: 'need_user_answers', phase: 'case_design', semantic_roots: pendingPostCase,
     obligations: obligations.artifact, non_blocking_diagnostics: []
@@ -583,7 +598,8 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   if (outcome.status !== 'finished') return outcome.status === 'fatal'
     ? qualityFailure(outcome.reason_code) : { ...outcome, semantic_roots: openRoots(activeGaps) };
   const bundle = {
-    schema_version: '4.0.0', compiler_version: '0.5.0', delivery_intent: 'case_document',
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
+    delivery_intent: 'case_document',
     source_revision: revision, result_kind: outcome.result_kind,
     ordered_case_ids: ordered.cases.map((/** @type {any} */ candidate) => candidate.case_id),
     scope_manifest: structuredClone(scope.scope_manifest), cases: ordered.cases,

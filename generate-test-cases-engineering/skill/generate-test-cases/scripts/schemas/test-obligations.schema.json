@@ -644,7 +644,7 @@
     ],
     "properties": {
       "schema_version": {
-        "const": "4.0.0"
+        "enum": ["4.0.0", "4.2.0"]
       },
       "source_revision": {
         "type": "integer",

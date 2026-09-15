@@ -191,7 +191,7 @@
       "v3_checkpoint", "v4_checkpoint"
     ],
     "current-pointer.schema.json": [
-      "text", "count", "sha256", "artifact", "legacyV3", "caseDocumentManifest", "executionManifest"
+      "text", "count", "sha256", "artifact", "legacyV3", "v4ContractVersion", "caseDocumentManifest", "executionManifest"
     ],
     "evidence-claims.schema.json": [
       "v4Text", "v4IdSet", "v4OptionalIdSet", "v3Fact", "v4Fact", "topologyCandidate", "topologyDiscovery", "topologyReview",
@@ -201,7 +201,7 @@
       "v4SourceCanonicalProjection", "v4SourceCanonicalRecord", "v4SourceConflictReview", "v3EvidenceClaim", "v4EvidenceClaim"
     ],
     "execution-plan.schema.json": [
-      "v4Sha256", "v4CaseDocumentRef", "v4WorkingExecutionItem", "v4FinalExecutionItem",
+      "v4Sha256", "v4CaseDocumentRef", "v4ContractVersion", "v4WorkingExecutionItem", "v4FinalExecutionItem",
       "v4EmptyRunnerProjection", "v4ReadyRunnerProjection", "v4PendingExecutionPlan",
       "v4ExecutionReadyPlan", "v4NoExecutionSelectedPlan", "v4ExecutionPlan"
     ],

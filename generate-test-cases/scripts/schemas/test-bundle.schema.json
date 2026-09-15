@@ -5897,10 +5897,10 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "4.0.0"
+          "enum": ["4.0.0", "4.2.0"]
         },
         "compiler_version": {
-          "const": "0.5.0"
+          "enum": ["0.5.0", "0.7.0"]
         },
         "delivery_intent": {
           "const": "case_document"
@@ -5926,7 +5926,25 @@
         "not_applicable": {"type": "array", "items": {"$ref": "#/$defs/v4NotApplicablePresentation"}},
         "risk_review_ledger": {"type": "array", "items": {"$ref": "#/$defs/v4RiskReviewItem"}}
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "schema_version": { "const": "4.0.0" },
+                "compiler_version": { "const": "0.5.0" }
+              }
+            },
+            {
+              "properties": {
+                "schema_version": { "const": "4.2.0" },
+                "compiler_version": { "const": "0.7.0" }
+              }
+            }
+          ]
+        }
+      ]
     }
   },
   "oneOf": [

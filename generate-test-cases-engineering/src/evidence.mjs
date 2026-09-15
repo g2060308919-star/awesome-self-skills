@@ -5,6 +5,7 @@ import { validateAssetClaims, validateV4SourceReviews, validateV4ClaimLocators }
 import { canonicalSourceSubject } from './source-subjects-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import evidenceSchema from '../skill/generate-test-cases/scripts/schemas/evidence-claims.schema.json' with { type: 'json' };
+import { isV4SchemaVersion } from './v4-contract.mjs';
 
 /** @param {string[]} values */
 function sortedUniqueStringsV4(values) {
@@ -29,7 +30,7 @@ function sortedUniqueStringsV4(values) {
  * @param {unknown} submittedBindings
  */
 export function compileV4DecisionEvidenceOverlay(submittedEvidence, submittedDecisions, submittedBindings) {
-  if (!isObject(submittedEvidence) || submittedEvidence.schema_version !== '4.0.0'
+  if (!isObject(submittedEvidence) || !isV4SchemaVersion(submittedEvidence.schema_version)
     || !Array.isArray(submittedEvidence.claims) || !Array.isArray(submittedEvidence.fact_ledger)
     || !Array.isArray(submittedDecisions) || !Array.isArray(submittedBindings)) {
     throw new TypeError('DECISION_EVIDENCE_INPUT_INVALID');
@@ -134,7 +135,7 @@ export function compileV4DecisionEvidenceOverlay(submittedEvidence, submittedDec
  */
 export function validateV4EvidenceSourceBoundary(pack, artifact, subjectRegistry) {
   /** @type {any[]} */ const diagnostics = validateAgainstSchema(artifact, evidenceSchema);
-  if (artifact?.schema_version !== '4.0.0') diagnostics.push(diagnostic('schema', 'V4_EVIDENCE_REQUIRED', '/schema_version', 'The v4 source boundary requires v4 evidence.'));
+  if (!isV4SchemaVersion(artifact?.schema_version) || artifact.schema_version !== pack?.schema_version) diagnostics.push(diagnostic('schema', 'V4_EVIDENCE_REQUIRED', '/schema_version', 'The v4 source boundary requires evidence bound to the Source Pack contract.'));
   if (diagnostics.length) return { claimsById: new Map(), diagnostics, source_conflicts: [], composition_audit: [] };
   const direct = artifact.claims.filter((/** @type {any} */ claim) => claim.claim_form === 'direct');
   diagnostics.push(...validateV4SourceReviews(pack), ...validateV4ClaimLocators(pack, direct));

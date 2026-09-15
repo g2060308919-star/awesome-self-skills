@@ -176,14 +176,22 @@ test('artifact schemas retain the v3 branch and discriminate new v4 envelopes', 
       for (const child of [...(node.oneOf ?? []), ...(node.allOf ?? [])]) {
         const found = variant(child, version); if (found) return found;
       }
+      if (node.properties?.schema_version?.enum?.includes(version)) return node;
       return undefined;
     }
     const legacy = variant(contract, '3.0.0');
     assert.equal(legacy?.properties?.schema_version?.const, '3.0.0', name);
     const v4Branch = variant(contract, '4.0.0');
     if (['source-pack.schema.json', 'evidence-claims.schema.json', 'test-bundle.schema.json', 'case-drafts.schema.json'].includes(name) || v4Branch) {
-      assert.equal(v4Branch.properties.schema_version.const, '4.0.0');
+      assert.ok(v4Branch, `${name} accepts the legacy V4 identity`);
+      assert.ok(
+        v4Branch.properties.schema_version.const === '4.0.0'
+          || v4Branch.properties.schema_version.enum?.includes('4.0.0'),
+        `${name} accepts 4.0.0`
+      );
       assert.notDeepEqual(validateAgainstSchema({schema_version:'3.0.0'},{$defs:contract.$defs,...v4Branch}),[]);
+      const candidateBranch = variant(contract, '4.2.0');
+      assert.ok(candidateBranch, `${name} accepts the candidate V4 identity`);
     }
   }
 });

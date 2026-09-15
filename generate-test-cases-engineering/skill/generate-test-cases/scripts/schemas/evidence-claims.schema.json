@@ -12,7 +12,8 @@
     "schema_version": {
       "enum": [
         "3.0.0",
-        "4.0.0"
+        "4.0.0",
+        "4.2.0"
       ]
     },
     "source_revision": {
@@ -90,7 +91,7 @@
           ],
           "properties": {
             "schema_version": {
-              "const": "4.0.0"
+              "enum": ["4.0.0", "4.2.0"]
             },
             "claims": {
               "items": {

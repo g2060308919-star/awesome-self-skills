@@ -8,7 +8,11 @@ For a v4 Case Document, run pre-case semantic-gap discovery only after complete 
 
 The post-case (`case_design`) clarification happens after Case design. Merge only genuinely new roots with old roots that are still pending; never repeat resolved roots or execution-preparation gaps. Do not move known pre-case gaps into this later phase. Both `requirements_analysis` and `case_design` contain only `semantic_gap` questions. Environment URLs, accounts, data availability, query tools, observers, controls, and cleanup access are execution resources, not Case Document questions.
 
+前置澄清发生在用例设计前，后置澄清发生在用例设计后；两者都是业务语义边界，不能被 preview、commit 或执行准备替代。
+
 At either phase, merge all current fresh answerable roots into one risk-ordered presentation. Do not ask per Case and do not impose a fixed total round count. Non-answerable source, evidence, or process gaps retain their compiler status and recovery guidance; they never become business questions.
+
+Clarify when an unresolved choice can change the business对象、条件、角色、状态、顺序、输入范围、文案或结果 and accepted evidence or a permitted derivation cannot decide it. Cite the original source location, name the concrete ambiguity and affected items, state what decision is needed, and state the consequence of no answer. Do not ask again when the source already says it, do not turn a generic risk into a question, and never convert acquisition or schema failure into a business Decision.
 
 ## Present business decisions, not protocol
 

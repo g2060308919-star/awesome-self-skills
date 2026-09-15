@@ -1,6 +1,7 @@
 import { canonicalStringify, digest } from './canonical.mjs';
 import { scopeContains } from './decision-record.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
+import { LEGACY_V4_CONTRACT, requireV4Contract } from './v4-contract.mjs';
 
 const text = { type: 'string', minLength: 1, pattern: '\\S' };
 const refs = { type: 'array', items: text, uniqueItems: true };
@@ -284,7 +285,11 @@ function requiredSemanticClaimIds(candidate) {
  * resources are absent from both the input contract and identity projection.
  * @param {unknown} input
  */
-export function compileSemanticCaseDocumentV4(input) {
+export function compileSemanticCaseDocumentV4(
+  input,
+  /** @type {unknown} */ submittedContract = LEGACY_V4_CONTRACT
+) {
+  const contract = requireV4Contract(submittedContract);
   if (validateAgainstSchema(input, semanticCompilationInputSchema).length) {
     throw new TypeError('SEMANTIC_CASE_COMPILATION_INPUT_INVALID');
   }
@@ -328,7 +333,8 @@ export function compileSemanticCaseDocumentV4(input) {
     };
   });
   return {
-    schema_version: '4.0.0', compiler_version: '0.5.0', delivery_intent: 'case_document',
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
+    delivery_intent: 'case_document',
     source_revision: source.source_revision, cases
   };
 }

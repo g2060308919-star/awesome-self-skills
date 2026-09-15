@@ -29,6 +29,7 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
+import { v4ContractForIdentity } from './v4-contract.mjs';
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function record(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
@@ -127,7 +128,7 @@ function executionPlanDigest(result) {
 }
 
 /** @param {string} runDirectory @param {string} runId @param {number} revision @param {any} source @param {any} result */
-async function commitFinalConfirmationPresentation(runDirectory, runId, revision, source, result) {
+async function commitFinalConfirmationPresentation(runDirectory, runId, revision, source, result, /** @type {any} */ contract) {
   const presentation = createV4FinalConfirmationPresentation({
     run_id: runId, source_revision: revision,
     case_document_ref: source.case_document_ref,
@@ -135,7 +136,7 @@ async function commitFinalConfirmationPresentation(runDirectory, runId, revision
     plan_digest: executionPlanDigest(result)
   });
   const record = {
-    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: runId,
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version, run_id: runId,
     status: 'pending', source_revision: revision,
     source_pack_digest: `sha256:${digest(source)}`,
     presentation, presentation_digest: `sha256:${digest(presentation)}`
@@ -152,10 +153,11 @@ async function commitFinalConfirmationPresentation(runDirectory, runId, revision
 }
 
 /** @param {string} runDirectory @param {string} runId @param {any} source @param {any} result @param {any} event */
-async function verifyDisplayedFinalConfirmation(runDirectory, runId, source, result, event) {
+async function verifyDisplayedFinalConfirmation(runDirectory, runId, source, result, event, /** @type {any} */ contract) {
   const snapshot = await readJsonIfPresent(runDirectory, finalConfirmationPath(runDirectory));
   const record = snapshot?.value;
-  if (!record || record.schema_version !== '4.0.0' || record.compiler_version !== '0.5.0'
+  if (!record || record.schema_version !== contract.schema_version
+    || record.compiler_version !== contract.compiler_version
     || record.run_id !== runId || record.status !== 'pending'
     || !Number.isSafeInteger(record.source_revision)
     || record.source_revision + 1 !== source.source_revision
@@ -219,9 +221,9 @@ function capabilityReceiptLedgerPath(runDirectory) {
 }
 
 /** @param {string} runId @param {any} caseDocumentRef @param {any[]} receipts */
-function capabilityReceiptLedger(runId, caseDocumentRef, receipts) {
+function capabilityReceiptLedger(runId, caseDocumentRef, receipts, /** @type {any} */ contract) {
   const body = {
-    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: runId,
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version, run_id: runId,
     case_document_ref: structuredClone(caseDocumentRef),
     receipts: receipts.map((receipt) => validateV4CapabilityReceipt(receipt, {
       case_document_ref: caseDocumentRef
@@ -237,12 +239,13 @@ function capabilityReceiptLedger(runId, caseDocumentRef, receipts) {
  * @param {string} runDirectory @param {string} runId @param {any} caseDocumentRef
  * @param {any[]} receipts
  */
-async function persistCapabilityReceiptLedger(runDirectory, runId, caseDocumentRef, receipts) {
-  const desired = capabilityReceiptLedger(runId, caseDocumentRef, receipts);
+async function persistCapabilityReceiptLedger(runDirectory, runId, caseDocumentRef, receipts, /** @type {any} */ contract) {
+  const desired = capabilityReceiptLedger(runId, caseDocumentRef, receipts, contract);
   const existing = await readJsonIfPresent(runDirectory, capabilityReceiptLedgerPath(runDirectory));
   if (existing) {
     const value = existing.value;
-    if (!record(value) || value.schema_version !== '4.0.0' || value.compiler_version !== '0.5.0'
+    if (!record(value) || value.schema_version !== contract.schema_version
+      || value.compiler_version !== contract.compiler_version
       || value.run_id !== runId
       || canonicalStringify(value.case_document_ref) !== canonicalStringify(caseDocumentRef)
       || !Array.isArray(value.receipts)
@@ -361,7 +364,7 @@ function appendDiagnostics(prior, candidate) {
  * latest parsed object. Every revision must be canonical, bind its directory,
  * and append to the exact preceding event prefix.
  * @param {string} runDirectory @param {any} registry @param {string} runId */
-async function acceptedExecutionHistory(runDirectory, registry, runId) {
+async function acceptedExecutionHistory(runDirectory, registry, runId, /** @type {any} */ contract) {
   const revisions = await acceptedSourceRevisions(runDirectory);
   if (revisions.some((revision, index) => revision !== index)) {
     throw new TypeError('EXECUTION_HISTORY_NOT_CONTIGUOUS');
@@ -378,6 +381,7 @@ async function acceptedExecutionHistory(runDirectory, registry, runId) {
     ];
     if (stored.text !== `${canonicalStringify(source)}\n`
       || diagnostics.length || source.run_instance_id !== runId
+      || source.schema_version !== contract.schema_version
       || source.delivery_intent !== 'execution_plan'
       || source.source_revision !== revision) {
       throw new TypeError('EXECUTION_HISTORY_REVISION_INVALID');
@@ -478,11 +482,11 @@ function mergedBindings(items, state) {
 /** @param {string} runDirectory @param {number} revision @param {any} source
  * @param {any} candidate @param {string} runId @param {any} state */
 async function commitExecutionCapabilityState(
-  runDirectory, revision, source, candidate, runId, state
+  runDirectory, revision, source, candidate, runId, state, /** @type {any} */ contract
 ) {
   if (candidate) await promoteArtifact(runDirectory, revision, 'source_pack', source, candidate);
   await persistCapabilityReceiptLedger(
-    runDirectory, runId, source.case_document_ref, state.capability_receipts
+    runDirectory, runId, source.case_document_ref, state.capability_receipts, contract
   );
 }
 
@@ -498,13 +502,15 @@ export async function advanceExecutionRunV4Locked(
 ) {
   const runId = runInstance.run_id ?? runInstance.run_instance_id;
   if (typeof runId !== 'string') throw new TypeError('V4_RUN_ID_INVALID');
+  const contract = v4ContractForIdentity(runInstance);
+  if (!contract) throw new TypeError('V4_RUN_VERSION_INVALID');
   try {
     const lifecycle = await readJsonIfPresent(
       runDirectory, path.join(runDirectory, 'state', 'lifecycle.json')
     );
     if (!lifecycle) {
       await ensureActiveRunLifecycleV4WithHeldLock(runDirectory, lockOwnership);
-    } else if (lifecycle.value?.schema_version !== '4.0.0'
+    } else if (lifecycle.value?.schema_version !== contract.schema_version
       || lifecycle.value.run_id !== runId
       || lifecycle.value.delivery_intent !== 'execution_plan'
       || !['active', 'superseded_by_semantic_reopen'].includes(lifecycle.value.status)) {
@@ -530,7 +536,7 @@ export async function advanceExecutionRunV4Locked(
 
   let history;
   try {
-    history = await acceptedExecutionHistory(runDirectory, registry, runId);
+    history = await acceptedExecutionHistory(runDirectory, registry, runId, contract);
   } catch (error) {
     return qualityFailure(
       runId, error instanceof Error ? error.message : 'RUN_INTEGRITY_ERROR',
@@ -558,7 +564,7 @@ export async function advanceExecutionRunV4Locked(
     if (candidateDiagnostics.length) return revisionReply(
       runDirectory, expectedRevision, candidate.value, candidateDiagnostics, runId
     );
-    if (!record(candidate.value) || candidate.value.schema_version !== '4.0.0'
+    if (!record(candidate.value) || candidate.value.schema_version !== contract.schema_version
       || candidate.value.delivery_intent !== 'execution_plan'
       || candidate.value.run_instance_id !== runId) return revisionReply(
       runDirectory, expectedRevision, candidate.value, [{
@@ -605,7 +611,8 @@ export async function advanceExecutionRunV4Locked(
       const finalConfirmation = await readJsonIfPresent(
         runDirectory, finalConfirmationPath(runDirectory)
       );
-      finalConfirmationDisplayed = finalConfirmation?.value?.schema_version === '4.0.0'
+      finalConfirmationDisplayed = finalConfirmation?.value?.schema_version === contract.schema_version
+        && finalConfirmation.value.compiler_version === contract.compiler_version
         && finalConfirmation.value.run_id === runId
         && finalConfirmation.value.status === 'pending'
         && finalConfirmation.value.source_revision === revision;
@@ -718,7 +725,7 @@ export async function advanceExecutionRunV4Locked(
       );
       if (applied?.status === 'semantic_reopen_committed') {
         await commitExecutionCapabilityState(
-          runDirectory, revision, source, candidate, runId, state
+          runDirectory, revision, source, candidate, runId, state, contract
         );
         const siblingDirectory = path.join(
           catalogRoot(runDirectory), 'runs', applied.sibling_run_id
@@ -781,7 +788,7 @@ export async function advanceExecutionRunV4Locked(
           return createV4ExecutionPendingReply(runId, priorPresentation);
         }
         const priorFinalPresentation = await commitFinalConfirmationPresentation(
-          runDirectory, runId, appendBaseRevision, appendBaseSource, priorResult
+          runDirectory, runId, appendBaseRevision, appendBaseSource, priorResult, contract
         );
         return finalConfirmationReply(runId, priorFinalPresentation);
       }
@@ -834,10 +841,10 @@ export async function advanceExecutionRunV4Locked(
     }
     try {
       await verifyDisplayedFinalConfirmation(
-        runDirectory, runId, source, result, confirmations[0]
+        runDirectory, runId, source, result, confirmations[0], contract
       );
       await persistCapabilityReceiptLedger(
-        runDirectory, runId, source.case_document_ref, state.capability_receipts
+        runDirectory, runId, source.case_document_ref, state.capability_receipts, contract
       );
     } catch (error) {
       return qualityFailure(
@@ -855,7 +862,7 @@ export async function advanceExecutionRunV4Locked(
     }], runId, 'final_confirmation');
     try {
       await commitExecutionCapabilityState(
-        runDirectory, revision, source, candidate, runId, state
+        runDirectory, revision, source, candidate, runId, state, contract
       );
     } catch (error) {
       return qualityFailure(runId,
@@ -868,7 +875,7 @@ export async function advanceExecutionRunV4Locked(
   if (!confirmations.length) {
     try {
       await commitExecutionCapabilityState(
-        runDirectory, revision, source, candidate, runId, state
+        runDirectory, revision, source, candidate, runId, state, contract
       );
     } catch (error) {
       return qualityFailure(runId,
@@ -878,7 +885,7 @@ export async function advanceExecutionRunV4Locked(
     let finalPresentation;
     try {
       finalPresentation = await commitFinalConfirmationPresentation(
-        runDirectory, runId, revision, source, result
+        runDirectory, runId, revision, source, result, contract
       );
     } catch (error) {
       return qualityFailure(runId,
@@ -902,7 +909,7 @@ export async function advanceExecutionRunV4Locked(
   }
   try {
     await verifyDisplayedFinalConfirmation(
-      runDirectory, runId, source, result, confirmations[0]
+      runDirectory, runId, source, result, confirmations[0], contract
     );
   } catch (error) {
     return revisionReply(runDirectory, revision, source, [{
@@ -914,7 +921,7 @@ export async function advanceExecutionRunV4Locked(
   }
   try {
     await commitExecutionCapabilityState(
-      runDirectory, revision, source, candidate, runId, state
+      runDirectory, revision, source, candidate, runId, state, contract
     );
   } catch (error) {
     return qualityFailure(runId,

@@ -12,6 +12,7 @@ import {
 } from '../../src/clarification-v4.mjs';
 import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
 import { v4PipelineFixture } from './v4-pipeline-fixture.mjs';
+import { LEGACY_V4_CONTRACT } from '../../src/v4-contract.mjs';
 
 /** @param {unknown} value */
 export const sha = (value) => `sha256:${createHash('sha256').update(String(value)).digest('hex')}`;
@@ -64,12 +65,13 @@ function semanticGap(index, evidence) {
 }
 
 /** @param {any} sourcePack @param {any} evidence @param {string} runId @param {number} revision @param {Uint8Array} baseBytes */
-function initialCheckpoint(sourcePack, evidence, runId, revision, baseBytes) {
+function initialCheckpoint(sourcePack, evidence, runId, revision, baseBytes, /** @type {any} */ contract) {
   const expected = sourcePack.sources.flatMap((/** @type {any} */ source) =>
     source.semantic_projection.structure.map((/** @type {any} */ unit) => unit.unit_id));
   const reviewed = sourcePack.source_reviews.flatMap((/** @type {any} */ review) =>
     review.units.map((/** @type {any} */ unit) => unit.unit_id));
   return compileSemanticClarificationCheckpointV4({
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, committed_revision: revision, committed_checkpoint_bytes: baseBytes,
     discovery_phase: 'pre_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
@@ -124,12 +126,14 @@ function resolveCheckpointRoots(checkpoint, count) {
  */
 export function revisionArtifacts(profile, revision, options = {}) {
   const runId = options.run_id ?? 'RUN-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const contract = options.contract ?? LEGACY_V4_CONTRACT;
   const fixture = v4PipelineFixture();
   const sourcePack = clone(fixture.artifacts.source_pack);
   const evidence = clone(fixture.artifacts.evidence_claims);
   const behaviorViews = clone(fixture.artifacts.behavior_views);
   const caseDrafts = clone(fixture.artifacts.case_drafts);
   for (const artifact of [sourcePack, evidence, behaviorViews, caseDrafts]) {
+    artifact.schema_version = contract.schema_version;
     artifact.source_revision = revision;
   }
   sourcePack.run_instance_id = runId;
@@ -146,10 +150,11 @@ export function revisionArtifacts(profile, revision, options = {}) {
   const gapCount = options.semantic_gap_count ?? (options.semantic_root ? 1 : 0);
   evidence.semantic_gaps = Array.from({ length: gapCount }, (_, index) => semanticGap(index, evidence));
   const genesis = `${canonicalStringify({
-    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: runId, genesis: true
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
+    run_id: runId, genesis: true
   })}\n`;
   const baseBytes = new TextEncoder().encode(options.base_checkpoint_text ?? genesis);
-  let checkpoint = initialCheckpoint(sourcePack, evidence, runId, revision, baseBytes);
+  let checkpoint = initialCheckpoint(sourcePack, evidence, runId, revision, baseBytes, contract);
   const resolveCount = options.resolved_gap_count
     ?? (profile === 'pre_case_pending' ? 0 : gapCount);
   const resolved = resolveCheckpointRoots(checkpoint, resolveCount);
@@ -158,6 +163,7 @@ export function revisionArtifacts(profile, revision, options = {}) {
   sourcePack.clarification_events = resolved.events;
   if (profile !== 'pre_case_pending') {
     checkpoint = compileSemanticClarificationCheckpointV4({
+      schema_version: contract.schema_version, compiler_version: contract.compiler_version,
       run_id: runId, committed_revision: revision, committed_checkpoint_bytes: baseBytes,
       discovery_phase: 'post_case', source_review_witness: checkpoint.source_review_witness,
       fact_ledger_digest: `sha256:${digest(evidence.fact_ledger)}`,
@@ -173,20 +179,20 @@ export function revisionArtifacts(profile, revision, options = {}) {
   const base = {
     source_pack: json(sourcePack),
     decision_journal: json({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: contract.schema_version, source_revision: revision,
       decisions: clone(sourcePack.decision_records)
     }),
     evidence_claims: json(evidence),
     fact_ledger: json({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: contract.schema_version, source_revision: revision,
       facts: clone(evidence.fact_ledger)
     }),
     scope_manifest: json({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: contract.schema_version, source_revision: revision,
       ...clone(evidence.scope_manifest)
     }),
     clarification_state: json({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: contract.schema_version, source_revision: revision,
       ...clone(checkpoint.clarification_state)
     }),
     checkpoint: json(checkpoint)
@@ -197,15 +203,36 @@ export function revisionArtifacts(profile, revision, options = {}) {
     case_drafts: json(caseDrafts)
   });
   if (profile === 'final') {
-    const delivery = materializeCaseDocumentDeliveryV4({
+    const sourceReading = {
+      version: '1.0.0', source_binding_digest: sha(`source-binding-${revision}`),
+      scope: {
+        mode: 'provided_materials', root_ref: 'provided:revision-fixture',
+        collection_window: { started_at: '2026-09-09T00:00:00.000Z', ended_at: '2026-09-09T00:00:01.000Z' },
+        source_version: sourcePack.sources[0]?.version ?? null
+      },
+      status: 'complete_within_scope',
+      items: [{
+        item_id: 'provided-body', parent_item_id: null, channel: 'body',
+        acquisition_status: 'acquired', review_status: 'reviewed',
+        source_id: sourcePack.sources[0]?.source_id ?? null, asset_id: null
+      }],
+      limitations: []
+    };
+    const delivery = /** @type {any} */ (materializeCaseDocumentDeliveryV4({
       run_id: runId, completed_at: '2026-09-09T00:00:00.000Z',
-      bundle: compiled.bundle, render_options: { include_audit_appendix: false },
+      bundle: compiled.bundle,
+      ...(contract.candidate ? { source_reading: sourceReading } : {}),
+      render_options: { include_audit_appendix: false },
       non_blocking_diagnostics: []
-    });
+    }));
     Object.assign(base, {
       bundle: json(JSON.parse(delivery.bundle_bytes)),
       markdown: text(delivery.markdown_bytes),
       worksheet: text(delivery.worksheet_bytes),
+      ...(contract.candidate ? {
+        html: text(delivery.html_bytes), table: text(delivery.table_bytes),
+        source_reading: json(JSON.parse(delivery.source_reading_bytes))
+      } : {}),
       manifest: json(delivery.manifest)
     });
   }

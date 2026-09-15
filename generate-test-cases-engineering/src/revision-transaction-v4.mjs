@@ -15,6 +15,9 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { validateRevisionArtifactsV4 } from './revision-artifact-validation-v4.mjs';
+import {
+  LEGACY_V4_CONTRACT, isV4SchemaVersion, requireV4Contract, v4ContractForIdentity
+} from './v4-contract.mjs';
 
 const VERSION = '4.0.0';
 const COMPILER_VERSION = '0.5.0';
@@ -31,11 +34,24 @@ const POST_CASE_ARTIFACTS = Object.freeze([
 const FINAL_ARTIFACTS = Object.freeze([
   ...POST_CASE_ARTIFACTS, 'bundle', 'markdown', 'worksheet', 'manifest'
 ]);
-const PROFILE_ARTIFACTS = Object.freeze({
+const CANDIDATE_FINAL_ARTIFACTS = Object.freeze([
+  ...POST_CASE_ARTIFACTS, 'bundle', 'markdown', 'worksheet',
+  'html', 'table', 'source_reading', 'manifest'
+]);
+const LEGACY_PROFILE_ARTIFACTS = Object.freeze({
   pre_case_pending: BASE_ARTIFACTS,
   post_case_pending: POST_CASE_ARTIFACTS,
   final: FINAL_ARTIFACTS
 });
+
+/** @param {string} schemaVersion */
+function profileArtifacts(schemaVersion) {
+  return schemaVersion === '4.2.0' ? {
+    pre_case_pending: BASE_ARTIFACTS,
+    post_case_pending: POST_CASE_ARTIFACTS,
+    final: CANDIDATE_FINAL_ARTIFACTS
+  } : LEGACY_PROFILE_ARTIFACTS;
+}
 const PROFILE_RANK = Object.freeze({
   pre_case_pending: 0,
   post_case_pending: 1,
@@ -125,6 +141,9 @@ function artifactPath(runDirectory, revision, key) {
     bundle: path.join(runDirectory, 'output', name, 'test-bundle.json'),
     markdown: path.join(runDirectory, 'output', name, 'test-cases.md'),
     worksheet: path.join(runDirectory, 'output', name, 'execution-worksheet.csv'),
+    html: path.join(runDirectory, 'output', name, 'test-cases.html'),
+    table: path.join(runDirectory, 'output', name, 'case-table.txt'),
+    source_reading: path.join(runDirectory, 'output', name, 'source-reading.json'),
     manifest: path.join(runDirectory, 'output', name, 'manifest.json')
   };
   const target = /** @type {Record<string,string>} */ (paths)[key];
@@ -154,7 +173,7 @@ const promotionBackupDirectory = (runDirectory, transactionId) =>
 async function readV4RunInstance(runDirectory) {
   const snapshot = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'run-instance.json'));
   const value = snapshot?.value;
-  if (!value || value.schema_version !== VERSION) {
+  if (!value || !isV4SchemaVersion(value.schema_version)) {
     throw new RunStoreIntegrityError('V4_RUN_INSTANCE_REQUIRED');
   }
   return requireRunInstanceSchema(value, 'V4_RUN_INSTANCE_REQUIRED');
@@ -178,13 +197,15 @@ async function hasDurableEntries(runDirectory, directory) {
  * the lock-owning wrapper from there would deadlock on the non-reentrant lock.
  * The legacy bootstrap may be adopted only before any durable v3 revision.
  * @param {string} runDirectory
- * @param {{delivery_intent:'case_document'|'execution_plan',run_id?:string,lineage?:unknown}} input
+ * @param {{delivery_intent:'case_document'|'execution_plan',run_id?:string,lineage?:unknown,contract?:unknown}} input
  * @param {unknown} ownership token returned by acquireRunLock(runDirectory)
  */
 export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, ownership) {
   const heldLock = requireHeldLock(ownership);
   try {
     const requested = requireRecord(input, 'V4_RUN_INSTANCE_INPUT_INVALID');
+    const requestedContract = requested.contract === undefined
+      ? LEGACY_V4_CONTRACT : requireV4Contract(requested.contract);
     if (!['case_document', 'execution_plan'].includes(requested.delivery_intent)) {
       throw new TypeError('V4_DELIVERY_INTENT_INVALID');
     }
@@ -217,6 +238,9 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
       requireRunInstanceSchema(value, 'IMMUTABLE_V4_RUN_INSTANCE_INVALID');
       if (value.delivery_intent !== requested.delivery_intent
         || (requested.run_id !== undefined && value.run_id !== requested.run_id)
+        || (requested.contract !== undefined
+          && (value.schema_version !== requestedContract.schema_version
+            || value.compiler_version !== requestedContract.compiler_version))
         || (Object.hasOwn(requested, 'lineage')
           && canonicalStringify(value.lineage) !== canonicalStringify(requested.lineage))) {
         throw new RunStoreIntegrityError('RUN_INSTANCE_BINDING_CONFLICT');
@@ -224,8 +248,8 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
       return value;
     }
     const value = {
-      schema_version: VERSION,
-      compiler_version: COMPILER_VERSION,
+      schema_version: requestedContract.schema_version,
+      compiler_version: requestedContract.compiler_version,
       run_id: requested.run_id ?? `RUN-${randomUUID()}`,
       delivery_intent: requested.delivery_intent,
       created_at: new Date().toISOString(),
@@ -242,7 +266,7 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
 /**
  * Lock-owning convenience wrapper for callers outside advanceStrict.
  * @param {string} runDirectory
- * @param {{delivery_intent:'case_document'|'execution_plan',run_id?:string,lineage?:unknown}} input
+ * @param {{delivery_intent:'case_document'|'execution_plan',run_id?:string,lineage?:unknown,contract?:unknown}} input
  */
 export async function ensureV4RunInstance(runDirectory, input) {
   const release = await acquireRunLock(runDirectory);
@@ -253,15 +277,17 @@ export async function ensureV4RunInstance(runDirectory, input) {
   }
 }
 
-/** @param {unknown} submitted @param {string} runId */
-function normalizeRequest(submitted, runId) {
+/** @param {unknown} submitted @param {Record<string,any>} run */
+function normalizeRequest(submitted, run) {
+  const runId = run.run_id;
+  const contract = requireV4Contract(run);
   const request = requireRecord(submitted, 'REVISION_REQUEST_INVALID');
   const appendId = requireNonEmptyString(request.append_id, 'APPEND_ID_INVALID');
   const appendDigest = requireDigest(request.append_digest, 'APPEND_DIGEST_INVALID');
   const semanticDigest = requireDigest(request.semantic_digest, 'SEMANTIC_DIGEST_INVALID');
   const profile = requireNonEmptyString(request.commit_profile, 'REVISION_PROFILE_INVALID');
   const required = /** @type {readonly string[]|undefined} */ (
-    /** @type {Record<string,readonly string[]>} */ (PROFILE_ARTIFACTS)[profile]
+    /** @type {Record<string,readonly string[]>} */ (profileArtifacts(contract.schema_version))[profile]
   );
   if (!required) throw new TypeError('REVISION_PROFILE_INVALID');
   const baseRevision = request.base_revision;
@@ -287,25 +313,26 @@ function normalizeRequest(submitted, runId) {
   const artifactDigests = {};
   for (const key of required) {
     const entry = requireRecord(artifacts[key], 'REVISION_ARTIFACT_SCHEMA_INVALID');
-    const expectedFormat = key === 'markdown' || key === 'worksheet' ? 'text' : 'json';
+    const expectedFormat = ['markdown', 'worksheet', 'html', 'table'].includes(key) ? 'text' : 'json';
     if (entry.format !== expectedFormat) throw new TypeError('REVISION_ARTIFACT_SCHEMA_INVALID');
     texts[key] = artifactText(artifacts[key]);
     artifactDigests[key] = exactDigest(texts[key]);
   }
   let checkpoint;
   try { checkpoint = JSON.parse(texts.checkpoint); } catch { throw new TypeError('CHECKPOINT_INVALID'); }
-  if (!checkpoint || checkpoint.schema_version !== VERSION || checkpoint.compiler_version !== COMPILER_VERSION
+  if (!checkpoint || checkpoint.schema_version !== contract.schema_version
+    || checkpoint.compiler_version !== contract.compiler_version
     || checkpoint.run_id !== runId || checkpoint.revision !== candidateRevision
     || checkpoint.commit_profile !== profile) throw new TypeError('CHECKPOINT_BINDING_INVALID');
   let sourcePack;
   try { sourcePack = JSON.parse(texts.source_pack); } catch { throw new TypeError('SOURCE_PACK_INVALID'); }
-  if (!sourcePack || sourcePack.schema_version !== VERSION || sourcePack.run_instance_id !== runId
+  if (!sourcePack || sourcePack.schema_version !== contract.schema_version || sourcePack.run_instance_id !== runId
     || sourcePack.source_revision !== candidateRevision) throw new TypeError('SOURCE_PACK_BINDING_INVALID');
   const values = validateRevisionArtifactsV4({
     profile: /** @type {'pre_case_pending'|'post_case_pending'|'final'} */ (profile),
     revision: candidateRevision, run_id: runId, texts
   });
-  if (profile === 'final') validateManifest(texts, candidateRevision, runId);
+  if (profile === 'final') validateManifest(texts, candidateRevision, run);
   const appendKey = createHash('sha256').update(appendId).digest('hex');
   const transactionId = `TXN-${createHash('sha256').update(
     `${appendId}\0${appendDigest}\0${baseRevision === null ? 'null' : baseRevision}\0${candidateRevision}`
@@ -315,6 +342,8 @@ function normalizeRequest(submitted, runId) {
     commit_profile: profile, semantic_digest: semanticDigest, artifact_digests: artifactDigests
   });
   return {
+    schema_version: contract.schema_version,
+    compiler_version: contract.compiler_version,
     append_id: appendId, append_digest: appendDigest, append_key: appendKey,
     base_revision: baseRevision, candidate_revision: candidateRevision,
     commit_mode: promotesProfile ? 'profile_promotion' : 'new_revision',
@@ -326,12 +355,14 @@ function normalizeRequest(submitted, runId) {
   };
 }
 
-/** @param {Record<string,string>} texts @param {number} revision @param {string} runId */
-function validateManifest(texts, revision, runId) {
+/** @param {Record<string,string>} texts @param {number} revision @param {Record<string,any>} run */
+function validateManifest(texts, revision, run) {
+  const contract = requireV4Contract(run);
   let manifest;
   try { manifest = JSON.parse(texts.manifest); } catch { throw new TypeError('CANONICAL_MANIFEST_INVALID'); }
-  if (!manifest || manifest.schema_version !== VERSION || manifest.compiler_version !== COMPILER_VERSION
-    || manifest.run_id !== runId || manifest.revision !== revision || manifest.authority !== 'canonical') {
+  if (!manifest || manifest.schema_version !== contract.schema_version
+    || manifest.compiler_version !== contract.compiler_version
+    || manifest.run_id !== run.run_id || manifest.revision !== revision || manifest.authority !== 'canonical') {
     throw new TypeError('CANONICAL_MANIFEST_INVALID');
   }
   const expected = {
@@ -340,7 +371,12 @@ function validateManifest(texts, revision, runId) {
     execution_worksheet: {
       path: `output/${revisionName(revision)}/execution-worksheet.csv`, digest: exactDigest(texts.worksheet),
       format: 'csv'
-    }
+    },
+    ...(contract.candidate ? {
+      html: { path: `output/${revisionName(revision)}/test-cases.html`, digest: exactDigest(texts.html), format: 'html' },
+      chat_table: { path: `output/${revisionName(revision)}/case-table.txt`, digest: exactDigest(texts.table), format: 'commonmark-table' },
+      source_reading: { path: `output/${revisionName(revision)}/source-reading.json`, digest: exactDigest(texts.source_reading), format: 'json' }
+    } : {})
   };
   for (const [key, value] of Object.entries(expected)) {
     if (canonicalStringify(manifest[key]) !== canonicalStringify(value)) {
@@ -354,18 +390,19 @@ async function committedCheckpoint(runDirectory) {
   const snapshot = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'checkpoint.json'));
   if (!snapshot) return null;
   const value = snapshot.value;
-  if (!value || value.schema_version !== VERSION || value.compiler_version !== COMPILER_VERSION
+  if (!value || !v4ContractForIdentity(value)
     || !Number.isSafeInteger(value.revision) || value.revision < 0) {
     throw new RunStoreIntegrityError('COMMITTED_CHECKPOINT_INVALID');
   }
   return { ...snapshot, revision: value.revision };
 }
 
-/** @param {string} runId */
-function genesisCheckpointText(runId) {
+/** @param {Record<string,any>} run */
+function genesisCheckpointText(run) {
+  const contract = requireV4Contract(run);
   return `${canonicalStringify({
-    schema_version: VERSION, compiler_version: COMPILER_VERSION,
-    run_id: runId, genesis: true
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
+    run_id: run.run_id, genesis: true
   })}\n`;
 }
 
@@ -382,7 +419,7 @@ async function readCommittedRecord(runDirectory, revision) {
     runDirectory, committedRecordPath(runDirectory, revision)
   );
   const value = snapshot?.value;
-  if (!value || value.schema_version !== VERSION || value.revision !== revision
+  if (!value || !isV4SchemaVersion(value.schema_version) || value.revision !== revision
     || typeof value.txn_id !== 'string' || typeof value.semantic_digest !== 'string'
     || typeof value.checkpoint_digest !== 'string' || !value.artifact_digests
     || typeof value.artifact_digests !== 'object' || Array.isArray(value.artifact_digests)) {
@@ -395,7 +432,7 @@ async function readCommittedRecord(runDirectory, revision) {
 /** @param {string} runDirectory @param {any} record */
 async function verifyCommittedArtifacts(runDirectory, record) {
   const required = /** @type {Record<string,readonly string[]>} */ (
-    PROFILE_ARTIFACTS
+    profileArtifacts(record.schema_version)
   )[record.commit_profile];
   for (const key of required) {
     const text = await readTextIfPresent(
@@ -414,7 +451,7 @@ async function validateFreshBase(runDirectory, run, request) {
   const actualBase = checkpoint?.revision ?? null;
   if (actualBase !== request.base_revision) throw new RunStoreIntegrityError('BASE_REVISION_STALE');
   const expectedBaseText = request.base_revision === null
-    ? genesisCheckpointText(run.run_id) : checkpoint?.text;
+    ? genesisCheckpointText(run) : checkpoint?.text;
   if (typeof expectedBaseText !== 'string'
     || request.artifact_values.checkpoint.base_checkpoint_digest !== exactDigest(expectedBaseText)) {
     throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
@@ -441,7 +478,7 @@ async function validatePendingBase(runDirectory, run, request, pending) {
     throw new RunStoreIntegrityError('COMMITTED_REVISION_CHANGED');
   }
   const expectedBaseText = request.base_revision === null
-    ? genesisCheckpointText(run.run_id) : checkpoint?.text;
+    ? genesisCheckpointText(run) : checkpoint?.text;
   if (request.base_revision !== null && checkpoint?.revision !== request.base_revision) {
     throw new RunStoreIntegrityError('BASE_REVISION_STALE');
   }
@@ -463,7 +500,7 @@ function validateProfilePromotion(request, prior) {
   }
   const mutable = new Set(PROMOTION_MUTABLE_ARTIFACTS);
   const inherited = /** @type {Record<string,readonly string[]>} */ (
-    PROFILE_ARTIFACTS
+    profileArtifacts(prior.schema_version)
   )[prior.commit_profile];
   for (const key of inherited) {
     if (!mutable.has(key) && request.artifact_digests[key] !== prior.artifact_digests[key]) {
@@ -561,11 +598,11 @@ async function cleanupPromotionBackup(runDirectory, pending) {
  * @param {string} runDirectory @param {any} pending */
 async function rollbackPendingArtifacts(runDirectory, pending) {
   const candidateKeys = /** @type {Record<string,readonly string[]>} */ (
-    PROFILE_ARTIFACTS
+    profileArtifacts(pending.schema_version)
   )[pending.commit_profile];
   if (pending.commit_mode === 'profile_promotion') {
     const inherited = new Set(
-      /** @type {Record<string,readonly string[]>} */ (PROFILE_ARTIFACTS)[pending.previous_profile]
+      /** @type {Record<string,readonly string[]>} */ (profileArtifacts(pending.schema_version))[pending.previous_profile]
     );
     for (const key of candidateKeys) {
       if (!inherited.has(key)) {
@@ -625,10 +662,10 @@ async function rollbackPendingArtifacts(runDirectory, pending) {
 async function materializeArtifacts(runDirectory, pending, artifacts) {
   await ensurePromotionBackups(runDirectory, pending);
   const inherited = new Set(pending.commit_mode === 'profile_promotion'
-    ? /** @type {Record<string,readonly string[]>} */ (PROFILE_ARTIFACTS)[pending.previous_profile]
+    ? /** @type {Record<string,readonly string[]>} */ (profileArtifacts(pending.schema_version))[pending.previous_profile]
     : []);
   const mutable = new Set(PROMOTION_MUTABLE_ARTIFACTS);
-  for (const key of /** @type {Record<string,readonly string[]>} */ (PROFILE_ARTIFACTS)[pending.commit_profile]) {
+  for (const key of /** @type {Record<string,readonly string[]>} */ (profileArtifacts(pending.schema_version))[pending.commit_profile]) {
     const target = artifactPath(runDirectory, pending.candidate_revision, key);
     if (inherited.has(key) && !mutable.has(key)) {
       const existing = await readTextIfPresent(runDirectory, target);
@@ -664,7 +701,7 @@ async function commitCheckpoint(runDirectory, pending, artifacts) {
 /** @param {string} runDirectory @param {any} pending */
 async function storeCommittedRecord(runDirectory, pending) {
   const record = {
-    schema_version: VERSION, txn_id: pending.txn_id,
+    schema_version: pending.schema_version, txn_id: pending.txn_id,
     revision: pending.candidate_revision, commit_profile: pending.commit_profile,
     semantic_digest: pending.semantic_digest,
     checkpoint_digest: pending.artifact_digests.checkpoint,
@@ -708,7 +745,7 @@ export async function commitRevisionTransactionV4WithHeldLock(
   const heldLock = requireHeldLock(ownership);
   try {
     const run = await readV4RunInstance(runDirectory);
-    const request = normalizeRequest(submitted, run.run_id);
+    const request = normalizeRequest(submitted, run);
     const receipt = await priorReceipt(runDirectory, request);
     if (receipt) {
       const stalePending = await readJsonIfPresent(runDirectory, pendingPath(runDirectory));
@@ -769,7 +806,7 @@ export async function commitRevisionTransactionV4WithHeldLock(
           };
           const stableResult = canonicalClone(result);
           const completed = {
-            schema_version: VERSION, transaction_kind: 'revision_append',
+            schema_version: request.schema_version, transaction_kind: 'revision_append',
             txn_id: request.txn_id, append_id: request.append_id,
             append_digest: request.append_digest, append_key: request.append_key,
             base_revision: request.base_revision, candidate_revision: request.candidate_revision,
@@ -781,13 +818,14 @@ export async function commitRevisionTransactionV4WithHeldLock(
           };
           await atomicWriteJson(runDirectory, transactionPath(runDirectory, request.txn_id), completed);
           await atomicWriteJson(runDirectory, appendReceiptPath(runDirectory, request.append_key), {
-            schema_version: VERSION, append_id: request.append_id,
+            schema_version: request.schema_version, append_id: request.append_id,
             append_digest: request.append_digest, txn_id: request.txn_id, result: stableResult
           });
           return stableResult;
       }
       pending = {
-        schema_version: VERSION, transaction_kind: 'revision_append',
+        schema_version: request.schema_version, compiler_version: request.compiler_version,
+        transaction_kind: 'revision_append',
         txn_id: request.txn_id, append_id: request.append_id,
         append_digest: request.append_digest, append_key: request.append_key,
         base_revision: request.base_revision, candidate_revision: request.candidate_revision,
@@ -836,7 +874,7 @@ export async function commitRevisionTransactionV4WithHeldLock(
     const complete = { ...movePhase(pending, 'complete'), result };
     await atomicWriteJson(runDirectory, transactionPath(runDirectory, pending.txn_id), complete);
     await atomicWriteJson(runDirectory, appendReceiptPath(runDirectory, pending.append_key), {
-      schema_version: VERSION, append_id: pending.append_id,
+      schema_version: pending.schema_version, append_id: pending.append_id,
       append_digest: pending.append_digest, txn_id: pending.txn_id, result
     });
     await cleanupPromotionBackup(runDirectory, pending);
@@ -920,7 +958,7 @@ export async function abortPendingRevisionV4WithHeldLock(runDirectory, identity,
     };
     await atomicWriteJson(runDirectory, transactionPath(runDirectory, pending.txn_id), aborted);
     await atomicWriteJson(runDirectory, appendReceiptPath(runDirectory, pending.append_key), {
-      schema_version: VERSION, append_id: pending.append_id,
+      schema_version: pending.schema_version, append_id: pending.append_id,
       append_digest: pending.append_digest, txn_id: pending.txn_id, result
     });
     await rm(pendingPath(runDirectory), { force: true });

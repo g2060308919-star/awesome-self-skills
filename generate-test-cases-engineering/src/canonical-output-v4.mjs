@@ -51,7 +51,7 @@ function validateCanonicalCase(candidate) {
  * @param {unknown} input @param {unknown} orderedCaseIds
  */
 export function renderExecutionWorksheetCsvV4(input, orderedCaseIds) {
-  if (!record(input) || input.schema_version !== '4.0.0' || input.delivery_intent !== 'case_document'
+  if (!record(input) || !['4.0.0', '4.2.0'].includes(input.schema_version) || input.delivery_intent !== 'case_document'
     || !Array.isArray(input.cases) || !record(input.scope_manifest)
     || !Array.isArray(input.scope_manifest.modules) || !Array.isArray(orderedCaseIds)) {
     throw new TypeError('CASE_DOCUMENT_INVALID');

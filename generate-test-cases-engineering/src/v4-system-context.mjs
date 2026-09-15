@@ -1,5 +1,6 @@
 import { canonicalStringify } from './canonical.mjs';
 import { compileCanonicalSourceStructure } from './source-locators-v4.mjs';
+import { isV4SchemaVersion } from './v4-contract.mjs';
 import { createSourceSubjectRegistry } from './source-subjects-v4.mjs';
 import { createCompilerSourceRuntimeV4 } from './source-runtime-registry-v4.mjs';
 import { discoverTopologyV4 } from './topology-discovery.mjs';
@@ -553,7 +554,7 @@ export function deriveV4SystemContext(submittedArtifacts, sourceAcquisition = nu
   const artifacts = /** @type {any} */ (submittedArtifacts);
   const pack = artifacts.source_pack;
   const evidence = artifacts.evidence_claims;
-  if (pack?.schema_version !== '4.0.0' || evidence?.schema_version !== '4.0.0') {
+  if (!isV4SchemaVersion(pack?.schema_version) || evidence?.schema_version !== pack.schema_version) {
     throw new TypeError('V4_ARTIFACT_VERSION_INVALID');
   }
   const preCase = deriveV4PreCaseSystemContext(pack, evidence, sourceAcquisition);
@@ -571,7 +572,8 @@ export function deriveV4SystemContext(submittedArtifacts, sourceAcquisition = nu
  * @param {any|null} [sourceAcquisition] */
 export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, sourceAcquisition = null) {
   if (!record(submittedPack) || !record(submittedEvidence)
-    || submittedPack.schema_version !== '4.0.0' || submittedEvidence.schema_version !== '4.0.0') {
+    || !isV4SchemaVersion(submittedPack.schema_version)
+    || submittedEvidence.schema_version !== submittedPack.schema_version) {
     throw new TypeError('V4_PRE_CASE_ARTIFACT_INVALID');
   }
   const pack = /** @type {any} */ (submittedPack);
@@ -581,7 +583,7 @@ export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, s
     || !Array.isArray(sourceAcquisition.verified_source_receipts)
     || !Array.isArray(sourceAcquisition.verified_acquisition_records)
     || Object.keys(sourceAcquisition).some(key => ![
-      'verified_source_receipts', 'verified_acquisition_records'
+      'verified_source_receipts', 'verified_acquisition_records', 'source_reading_summary'
     ].includes(key)))) throw new TypeError('V4_SOURCE_ACQUISITION_CONTEXT_INVALID');
   const receipts = sourceAcquisition?.verified_source_receipts ?? [];
   const canonical_source_structure = canonicalTopologyStructure(pack);
@@ -591,7 +593,10 @@ export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, s
     expiry_registry: registries.expiry_registry,
     subject_registry: subjectRegistry(pack, evidence),
     acquisitions: reconstructibleAcquisitions(pack, registries, receipts),
-    ...(sourceAcquisition ?? {})
+    ...(sourceAcquisition ? {
+      verified_source_receipts: structuredClone(sourceAcquisition.verified_source_receipts),
+      verified_acquisition_records: structuredClone(sourceAcquisition.verified_acquisition_records)
+    } : {})
   };
   const claim_assessments = evidence.claims.filter((/** @type {any} */ claim) => claim.domain === 'business')
     .map((/** @type {any} */ claim) => ({

@@ -26,6 +26,22 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
+    "v4ContractVersion": {
+      "oneOf": [
+        {
+          "properties": {
+            "schema_version": { "const": "4.0.0" },
+            "compiler_version": { "const": "0.5.0" }
+          }
+        },
+        {
+          "properties": {
+            "schema_version": { "const": "4.2.0" },
+            "compiler_version": { "const": "0.7.0" }
+          }
+        }
+      ]
+    },
     "artifact": {
       "type": "object",
       "required": [
@@ -183,10 +199,10 @@
           "$ref": "#/$defs/count"
         },
         "schema_version": {
-          "const": "4.0.0"
+          "enum": ["4.0.0", "4.2.0"]
         },
         "compiler_version": {
-          "const": "0.5.0"
+          "enum": ["0.5.0", "0.7.0"]
         },
         "delivery_intent": {
           "const": "case_document"
@@ -231,6 +247,37 @@
           },
           "additionalProperties": false
         },
+        "html": {
+          "type": "object",
+          "required": ["path", "digest", "format"],
+          "properties": {
+            "path": { "$ref": "#/$defs/text" },
+            "digest": { "$ref": "#/$defs/sha256" },
+            "format": { "const": "html" }
+          },
+          "additionalProperties": false
+        },
+        "chat_table": {
+          "type": "object",
+          "required": ["path", "digest", "format"],
+          "properties": {
+            "path": { "$ref": "#/$defs/text" },
+            "digest": { "$ref": "#/$defs/sha256" },
+            "format": { "const": "commonmark-table" }
+          },
+          "additionalProperties": false
+        },
+        "source_reading": {
+          "type": "object",
+          "required": ["path", "digest", "format"],
+          "properties": {
+            "path": { "$ref": "#/$defs/text" },
+            "digest": { "$ref": "#/$defs/sha256" },
+            "format": { "const": "json" }
+          },
+          "additionalProperties": false
+        },
+        "primary_readable": { "const": "html" },
         "render_options": {
           "type": "object",
           "required": [
@@ -260,6 +307,25 @@
         }
       },
       "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "schema_version": { "const": "4.0.0" },
+                "compiler_version": { "const": "0.5.0" }
+              }
+            },
+            {
+              "required": ["html", "chat_table", "source_reading", "primary_readable"],
+              "properties": {
+                "schema_version": { "const": "4.2.0" },
+                "compiler_version": { "const": "0.7.0" }
+              }
+            }
+          ]
+        }
+      ],
       "oneOf": [
         {
           "properties": {
@@ -332,6 +398,7 @@
     },
     "executionManifest": {
       "type": "object",
+      "allOf": [{ "$ref": "#/$defs/v4ContractVersion" }],
       "required": [
         "run_id",
         "revision",
@@ -354,10 +421,10 @@
           "$ref": "#/$defs/count"
         },
         "schema_version": {
-          "const": "4.0.0"
+          "enum": ["4.0.0", "4.2.0"]
         },
         "compiler_version": {
-          "const": "0.5.0"
+          "enum": ["0.5.0", "0.7.0"]
         },
         "delivery_intent": {
           "const": "execution_plan"

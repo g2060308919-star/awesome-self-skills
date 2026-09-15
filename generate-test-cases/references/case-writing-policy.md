@@ -10,6 +10,18 @@ A logical Case may and should describe source-backed business role/permission, b
 
 Keep exactly one independently diagnosable primary business outcome per Case. One Case has one `primary_test_point_id`; API, storage, event, and UI observations of that same outcome may be supporting oracles/observations. Split two independently failing business results even if they share setup or actions. Case remains the atomic execution unit; a later plan cannot select only some steps.
 
+Different enumerations, permission branches, or condition/result branches that can fail independently must be split into their own Cases with their own exact input and expected result. Do not change only the title while retaining one vague expectation across all inputs. Several steps are allowed when they establish or observe the same primary result; do not split merely by step count.
+
+不同枚举、权限或条件分支必须按独立结果拆分，各自保留准确输入与预期；共享操作不构成合并理由。
+
+## Preserve single points and add a same-object complete path
+
+When accepted flow evidence defines a main closed path, keep every required 单点 Case and add one complete-path Case. 完整流程必须围绕同一业务对象，从证据明确的起点经过所需动作到达证据明确的终点。Refer to continuity in executable terms such as “本用例创建的记录”; do not invent an identifier field the product never provides. A critical stage stays in the steps instead of being moved into a precondition, and the Case must not silently switch objects midway.
+
+完整流程仍是一条普通多步 Case, with one `primary_test_point_id` and one primary business result. Process observations may prove continuity, but unrelated copy, permissions, failures, retries, or fields remain their own single-point outcomes. A flow Case may share the terminal Test Point with a different single-point scenario; preserve both scenarios without increasing the formal denominator. 单点必须保留，不能被完整流程取代。不新增 Case 类型、流程引擎或状态机。
+
+不得新增 Case 类型、流程引擎或状态机。Use only the existing CaseSpec, existing compiler-owned ordering refs, and source-backed views. If the source signals a path but its object linkage, ordering, start, or terminal result is ambiguous, route that business ambiguity through the existing pre-case or post-case clarification phase.
+
 ## Use only the closed v4 CaseSpec
 
 Every Case supplies:
@@ -30,7 +42,7 @@ Every Oracle has `oracle_id`, `observe_after_step_id`, `surface`, concrete `expe
 
 Write a concrete business expectation, not “works”, “normal”, “correct”, or “successful”. Name the exact value/state/event/side effect, where it is observed, and any sourced comparison or time bound. An observation surface alone is not an Oracle. A generic boundary technique, common practice, model consensus, or coverage selection cannot supply expected product truth.
 
-Markdown places each expected result immediately after its owning step. CSV serializes `steps` as `N. action` and `expected_results` as `步骤N：预期`, using the same step order. JSON, Markdown, and CSV derive from one canonical Case document; never edit them independently.
+HTML and Markdown place each expected result with its owning step. CSV serializes `steps` as `N. action` and `expected_results` as `步骤N：预期`, using the same step order. The conversation Table preserves every Oracle in deterministic step/observation order. JSON, HTML, Table, Markdown, and CSV derive from one canonical Case document; never edit them independently.
 
 ## Record semantic effects only when real
 
@@ -61,7 +73,7 @@ An unsourced generic risk may become a clearly labelled Exploratory record, neve
 
 ## Render a business-first Case Document
 
-The document begins with one scenario per line, in the compiler's canonical order, showing module, priority, title, and semantic status. Primary Cases and boundary-contract Cases have separate sections. Show preconditions and data before actions, then place each expected result immediately after its step.
+The primary `test-cases.html` document begins with a complete overview in the compiler's canonical order and provides full Case details. Primary Cases and boundary-contract Cases remain distinguishable. Show preconditions and data before actions, then place each expected result immediately after its step. The complete conversation Table uses the same projection and never samples or rewrites expectations.
 
 Display a shared semantic root once with all affected business items. Default business content must not expose root, Fact, Claim, obligation, Test Point, Case, Oracle, or other internal IDs. IDs are permitted only in canonical JSON or when `render_options.include_audit_appendix=true`.
 
