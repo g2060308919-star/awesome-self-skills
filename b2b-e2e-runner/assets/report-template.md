@@ -2,6 +2,7 @@
 
 - Run ID：{{run_id}}
 - 开始/更新时间：{{created_at}} / {{updated_at}}
+- 当前阶段：{{run_status}}
 - 目标：{{target_urls}}
 - 角色：{{roles}}
 - 用例快照 SHA-256：{{test_cases_sha256}}
@@ -29,6 +30,10 @@
 
 {{assistance_and_blockers}}
 
+## 权限准备与执行批次
+
+{{permission_groups_batches_waits_and_verifications}}
+
 ## 证据状态与数据处理
 
 {{evidence_states_and_secret_scan}}
@@ -44,3 +49,5 @@
 ## 产物一致性校验
 
 {{hash_ids_counts_paths_contract_and_scan}}
+
+> `report.html` 与本兼容报告必须来自同一快照、事件读取边界和结果行；对话全表从本文件复制。

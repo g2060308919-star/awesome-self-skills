@@ -15,6 +15,9 @@ const required = [
   "references/proxy-protocol.md",
   "references/security-and-evidence.md",
   "scripts/run-artifacts.mjs",
+  "scripts/lib/permission-batches.mjs",
+  "scripts/lib/report-model.mjs",
+  "scripts/lib/report-html.mjs",
   "scripts/cdp-fetch-proxy.mjs"
 ];
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "B2B E2E Runner"
-  short_description: "Run confirmed B2B E2E cases with Chrome DevTools MCP and auditable artifacts"
-  default_prompt: "Use $b2b-e2e-runner to execute these confirmed semantic test cases against the non-production B2B site through Chrome DevTools MCP, then produce a traceable run ledger, evidence, and report."
+  short_description: "Run confirmed B2B E2E cases with staged permissions and auditable reports"
+  default_prompt: "Use $b2b-e2e-runner to execute these confirmed semantic cases in permission-ready batches through Chrome DevTools MCP, then produce one auditable ledger plus HTML and Markdown reports."

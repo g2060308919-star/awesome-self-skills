@@ -69,3 +69,28 @@ test("TASK-02: init/record/report CLI works with spaces and secret input exits 4
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("PBH AC-25: CLI accepts the additive workflow profile and returns both compatible report paths", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner profile cli "));
+  try {
+    const initialized = await invoke(["init", "--workspace", root, "--cases", fixture, "--workflow-profile", "permission-batches-html-v1"]);
+    assert.equal(initialized.code, 0);
+    const initJson = JSON.parse(initialized.stdout);
+    const log = JSON.parse(await readFile(path.join(initJson.runRoot, "execution-log.json")));
+    assert.deepEqual(log.events.map(event => [event.type, event.profile]), [["workflow_profile", "permission-batches-html-v1"]]);
+
+    const eventPath = path.join(root, "plan.json");
+    await writeFile(eventPath, JSON.stringify({
+      type: "permission_plan",
+      version: "1.0",
+      groups: [],
+      role_independent_case_ids: ["CASE-原始-01"]
+    }));
+    assert.equal((await invoke(["record", "--run", initJson.runRoot, "--event", eventPath])).code, 0);
+    const report = await invoke(["report", "--run", initJson.runRoot]);
+    assert.equal(report.code, 0);
+    const result = JSON.parse(report.stdout);
+    assert.equal(result.reportPath, path.join(initJson.runRoot, "report.md"));
+    assert.equal(result.htmlReportPath, path.join(initJson.runRoot, "report.html"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

@@ -14,7 +14,9 @@ async function sources() {
     readFile(path.join(skillRoot, "SKILL.md"), "utf8"),
     readFile(path.join(skillRoot, "references/workflow.md"), "utf8"),
     readFile(path.join(skillRoot, "references/result-model.md"), "utf8"),
-    readFile(path.join(skillRoot, "references/proxy-protocol.md"), "utf8")
+    readFile(path.join(skillRoot, "references/proxy-protocol.md"), "utf8"),
+    readFile(path.join(skillRoot, "references/artifact-contract.md"), "utf8"),
+    readFile(path.join(skillRoot, "references/security-and-evidence.md"), "utf8")
   ]);
 }
 
@@ -62,17 +64,21 @@ test("AC-03/04: Chrome and the test page are prepared automatically", async () =
   assert.equal(workflow.includes("不得要求用户提供调试端口或 `targetId`"), true);
 });
 
-test("AC-05/06/07/08: role coverage gates Run initialization and follow-ups ask only for gaps", async () => {
+test("PBH AC-01/03/04/05/30/32: role requirements are classified without fixed names, counts, or account mapping", async () => {
   const [, workflow, resultModel] = await sources();
-  assert.equal(workflow.includes("本次需要的角色/权限 | 受影响用例 | 账号 | 密码状态 | 当前权限 | 权限如何申请或切换 | 状态"), true);
+  assert.equal(workflow.includes("所需角色 | 对应权限 | 受影响用例 | 对应账号 | 密码状态 | 当前准备情况"), true);
   for (const phrase of [
-    "一个账号都未提供时不得初始化正式 Run",
-    "只追问仍缺失的字段",
-    "用户明确某个角色无法提供",
-    "至少一个所需角色可执行",
-    "验证码、MFA、扫码、SSO、账号锁定或未知登录流程实际出现后"
+    "已就绪 / 待用户准备 / 无法提供 / 待说明",
+    "没有任何已就绪权限组时不得初始化正式 Run",
+    "只追问仍未明确的分类或当前批次实际缺失的登录字段",
+    "全部权限均明确无法提供",
+    "角色、权限组和账号不要求一一对应",
+    "不预设角色名称、组数或账号数量上限"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
-  assert.equal(resultModel.includes("缺失角色相关检查点为 `undetermined`"), true);
+  assert.equal(workflow.includes("其余角色明确无法提供"), false);
+  assert.equal(workflow.includes("权限如何申请或切换 | 状态"), false);
+  assert.equal(resultModel.includes("待用户准备"), true);
+  assert.equal(resultModel.includes("明确无法提供"), true);
 });
 
 test("AC-09/10: proxy decision is the only preflight proxy input and incomplete rules stay gated", async () => {
@@ -87,7 +93,26 @@ test("AC-09/10: proxy decision is the only preflight proxy input and incomplete 
   assert.equal(skill.includes("Execution preflight asks the user only for account/permission coverage and the proxy decision/rules."), true);
 });
 
-test("AC-14/15/16/17: delivery contains the canonical full table and proxy-only automatic cleanup", async () => {
+test("PBH AC-08/09/10/12/14/15/16/31: waiting and resume loop is contextual, repeatable, and never automates permission work", async () => {
+  const [skill, workflow, , proxy, artifact] = await sources();
+  for (const phrase of [
+    "先完成所有当前已就绪且可执行的工作",
+    "每批结束或准备状态更新后重新计算剩余工作",
+    "不限定等待次数或批次数",
+    "自然语言",
+    "一次说明多个权限组",
+    "实际核验",
+    "原 Run",
+    "不得创建轮询、定时任务"
+  ]) assert.equal(`${skill}\n${workflow}`.includes(phrase), true, phrase);
+  assert.equal(proxy.includes("进入 `awaiting_user` 前"), true);
+  assert.equal(artifact.includes("permission_plan"), true);
+  assert.equal(artifact.includes("permission_availability"), true);
+  assert.equal(artifact.includes("permission_wait"), true);
+  assert.equal(artifact.includes("resume_check"), true);
+});
+
+test("PBH AC-19/20/21/25: HTML is primary, Markdown remains compatible, and dialogue keeps the canonical full table", async () => {
   const [skill, workflow, resultModel, proxy] = await sources();
   for (const phrase of [
     "默认环境清理只包括本 Run 的代理",
@@ -96,11 +121,25 @@ test("AC-14/15/16/17: delivery contains the canonical full table and proxy-only 
     "用例明确声明的业务副作用清理"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
   assert.equal(proxy.includes("不得释放其他 Run 的锁"), true);
-  assert.equal(skill.includes("copy the complete five-column table from the validated report into the final reply"), true);
+  assert.equal(skill.includes("copy the complete five-column table from the validated Markdown report into the final reply"), true);
   assert.equal(resultModel.includes("报告链接不能替代对话内全量表格"), true);
   assert.equal(resultModel.includes("ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因"), true);
+  assert.equal(resultModel.includes("report.html"), true);
+  assert.equal(resultModel.includes("reportPath"), true);
+  assert.equal(resultModel.includes("htmlReportPath"), true);
+  assert.equal(workflow.includes("优先提供 `report.html`"), true);
   assert.equal(workflow.includes("密码状态只能显示“已提供”或“待提供”"), true);
   assert.equal(workflow.includes("最终回复不得回显密码"), true);
+});
+
+test("PBH AC-22/23/24: report instructions require escaping, local evidence boundaries, secret blocking, and pair rebuild", async () => {
+  const [, , , , artifact, security] = await sources();
+  for (const phrase of ["动态文本统一转义", "禁止外部脚本", "普通图片", "符号链接", "HTML 编码不能替代秘密扫描"]) {
+    assert.equal(security.includes(phrase), true, phrase);
+  }
+  for (const phrase of ["reportPath", "htmlReportPath", "两次 rename", "重新生成两份报告", "无标记历史 Run"]) {
+    assert.equal(artifact.includes(phrase), true, phrase);
+  }
 });
 
 test("UAT-02: strict expected text remains failed when page shows a broader label", async () => {

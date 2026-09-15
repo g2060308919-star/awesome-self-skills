@@ -13,6 +13,13 @@ import {
 } from "./lib/contracts.mjs";
 import { assertNoSecrets } from "./lib/redaction.mjs";
 import { aggregateCase, buildReport } from "./lib/report.mjs";
+import { buildReportModel } from "./lib/report-model.mjs";
+import { buildHtmlReport } from "./lib/report-html.mjs";
+import {
+  permissionWorkflowProfile,
+  validatePermissionEvent,
+  validatePermissionLog
+} from "./lib/permission-batches.mjs";
 
 function ensureRuntime() {
   const major = Number(process.versions.node.split(".")[0]);
@@ -52,7 +59,7 @@ async function loadRun(runRoot) {
   }
   const testCases = JSON.parse(snapshotBytes);
   validateTestCases(testCases);
-  return { snapshotPath, logPath, snapshotHash, testCases, log };
+  return { snapshotPath, logPath, snapshotHash, logHash: digest(logBytes), testCases, log };
 }
 
 function consistencyError(message, details = {}) {
@@ -119,9 +126,12 @@ async function scanEvidenceDirectory(runRoot) {
   }
 }
 
-export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId() }) {
+export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId(), workflowProfile }) {
   ensureRuntime();
   if (!workspaceRoot || !casesPath) throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 必填");
+  if (workflowProfile !== undefined && workflowProfile !== permissionWorkflowProfile) {
+    throw runnerError("INPUT_CONTRACT", "未知 workflow profile");
+  }
   if (!/^[A-Za-z0-9._-]+$/.test(runId)) throw runnerError("INPUT_CONTRACT", "Run ID 只能包含字母、数字、点、下划线和连字符");
   let input;
   try { input = JSON.parse(await readFile(casesPath, "utf8")); }
@@ -202,7 +212,7 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
       cleanup: { attempted: false, succeeded: null, reason: null }
     },
     cases: caseStates,
-    events: [],
+    events: workflowProfile ? [{ type: "workflow_profile", profile: workflowProfile, sequence: 1, at: now }] : [],
     cleanup: { attempted: false, completed: false, items: [] }
   };
   await writeJsonAtomic(path.join(runRoot, "execution-log.json"), executionLog);
@@ -255,6 +265,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
       evidenceIds.add(evidence.evidence_id);
     }
   }
+  validatePermissionLog(run.testCases, run.log);
   const checkpointStatuses = new Set(["pending", "running", "completed", "skipped"]);
   const resultStates = new Set(["passed", "failed", "undetermined", "not_executed"]);
   const evidenceStates = new Set(["complete", "partial", "missing", "not_required"]);
@@ -288,13 +299,33 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
   }
   await scanEvidenceDirectory(path.resolve(runRoot));
   const reportPath = path.join(path.resolve(runRoot), "report.md");
-  const reportStats = await lstat(reportPath).catch(error => error.code === "ENOENT" ? null : Promise.reject(error));
-  if (reportStats) {
-    if (!reportStats.isFile() || reportStats.isSymbolicLink()) throw consistencyError("report.md 必须是普通文件");
-    const report = await readFile(reportPath, "utf8");
-    assertNoSecrets(report);
-    if (checkReport && report !== buildReport(run.testCases, run.log).markdown) {
-      throw consistencyError("report.md 与用例快照和执行日志的确定性派生结果不一致");
+  const htmlReportPath = path.join(path.resolve(runRoot), "report.html");
+  if (checkReport) {
+    const [reportStats, htmlStats] = await Promise.all([
+      lstat(reportPath).catch(error => error.code === "ENOENT" ? null : Promise.reject(error)),
+      lstat(htmlReportPath).catch(error => error.code === "ENOENT" ? null : Promise.reject(error))
+    ]);
+    const profile = workflowProfile(run.log);
+    const deliveryState = ["awaiting_user", "completed"].includes(run.log.run.status);
+    if (profile === permissionWorkflowProfile && (deliveryState || reportStats || htmlStats) && (!reportStats || !htmlStats)) {
+      throw consistencyError("新工作流阶段或最终交付必须同时存在 report.md 与 report.html 两份报告");
+    }
+    const model = buildReportModel(run.testCases, run.log);
+    if (reportStats) {
+      if (!reportStats.isFile() || reportStats.isSymbolicLink()) throw consistencyError("report.md 必须是普通文件");
+      const report = await readFile(reportPath, "utf8");
+      assertNoSecrets(report);
+      if (report !== buildReport(run.testCases, run.log).markdown) {
+        throw consistencyError("report.md 与用例快照和执行日志的确定性派生结果不一致");
+      }
+    }
+    if (htmlStats) {
+      if (!htmlStats.isFile() || htmlStats.isSymbolicLink()) throw consistencyError("report.html 必须是普通文件");
+      const html = await readFile(htmlReportPath, "utf8");
+      assertNoSecrets(html);
+      if (html !== buildHtmlReport(model)) {
+        throw consistencyError("report.html 与用例快照和执行日志的确定性派生结果不一致");
+      }
     }
   }
   return {
@@ -312,12 +343,16 @@ export async function recordEvent(runRoot, event) {
   if (!event || typeof event !== "object" || typeof event.type !== "string") {
     throw runnerError("INPUT_CONTRACT", "事件必须包含 type");
   }
+  if (["workflow_profile", "resume_check"].includes(event.type)) {
+    throw runnerError("INPUT_CONTRACT", `${event.type} 只能由其所属命令写入`);
+  }
   if (event.type === "checkpoint_result") {
     validateCheckpointEvent(event);
     if (!expectedCheckpointIds(run.testCases).has(event.checkpoint_id)) {
       throw runnerError("RUN_CONSISTENCY", `未知检查点：${event.checkpoint_id}`);
     }
   }
+  validatePermissionEvent(run.testCases, run.log, event);
   const ids = expectedCheckpointIds(run.testCases);
   for (const evidence of event.evidence ?? []) await validateEvidenceEntry(path.resolve(runRoot), evidence, ids);
   const logged = {
@@ -370,10 +405,22 @@ export async function recordEvent(runRoot, event) {
     checkpoint.blocker = event.blocker ?? null;
     checkpoint.started_at ??= logged.at;
     checkpoint.completed_at = logged.at;
+    if (event.permission_group_ids !== undefined) checkpoint.permission_group_ids = [...event.permission_group_ids];
     state.result = aggregateCase({ excluded: sourceCase.excluded === true, checkpoints: state.checkpoints });
     const decisive = state.checkpoints.find(item => item.result === "failed") ??
       state.checkpoints.find(item => item.result === "undetermined") ?? state.checkpoints.at(-1);
     state.reason = decisive?.reason ?? (state.result === "passed" ? "所有必需检查点均通过" : "检查点尚未全部执行");
+  }
+  if (event.type === "permission_wait") {
+    for (const checkpointId of event.checkpoint_ids) {
+      const found = findCheckpoint(run.testCases, run.log, checkpointId);
+      found.checkpoint.reason = event.reason;
+      found.checkpoint.blocker = event.reason;
+      found.checkpoint.permission_group_ids = [event.group_id];
+      if (!found.state.checkpoints.some(item => item.result === "failed" || item.result === "undetermined")) {
+        found.state.reason = event.reason;
+      }
+    }
   }
   await writeJsonAtomic(run.logPath, run.log);
   return { recorded: true, sequence: logged.sequence, runId: run.log.run.run_id };
@@ -396,12 +443,21 @@ export async function resumeCheck(runRoot) {
       if (checkpoint.status === "running" && checkpoint.result === null) checkpoint.status = "pending";
     }
   }
+  const previousLastEvent = log.events.at(-1) ?? null;
   log.run.resume_count += 1;
+  if (workflowProfile(log) === permissionWorkflowProfile) {
+    log.events.push({
+      type: "resume_check",
+      resume_count: log.run.resume_count,
+      sequence: log.events.length + 1,
+      at: new Date().toISOString()
+    });
+  }
   await writeJsonAtomic(logPath, log);
   return {
     run_id: log.run.run_id,
     state: log.run.status,
-    last_event: log.events.at(-1) ?? null,
+    last_event: previousLastEvent,
     last_completed_checkpoint: completed
       ? `${completed.testCase.case_id}/${completed.checkpoint.step_id}/${completed.checkpoint.oracle_id}`
       : null,
@@ -428,16 +484,35 @@ function findCheckpoint(testCases, log, id) {
   return null;
 }
 
+function workflowProfile(log) {
+  return log.events?.find(event => event.type === "workflow_profile")?.profile ?? null;
+}
+
 export async function generateReport(runRoot) {
   await validateRun(runRoot, { checkReport: false });
-  const { testCases, log } = await loadRun(path.resolve(runRoot));
+  const loaded = await loadRun(path.resolve(runRoot));
+  const { testCases, log } = loaded;
+  const model = buildReportModel(testCases, log);
+  assertNoSecrets(model);
   const generated = buildReport(testCases, log);
+  const html = buildHtmlReport(model);
   assertNoSecrets(generated.markdown);
+  assertNoSecrets(html);
   const reportPath = path.join(path.resolve(runRoot), "report.md");
+  const htmlReportPath = path.join(path.resolve(runRoot), "report.html");
   await writeTextAtomic(reportPath, generated.markdown);
-  assertNoSecrets(await readFile(reportPath, "utf8"));
+  await writeTextAtomic(htmlReportPath, html);
+  const [writtenMarkdown, writtenHtml, latestLog] = await Promise.all([
+    readFile(reportPath, "utf8"),
+    readFile(htmlReportPath, "utf8"),
+    readFile(loaded.logPath)
+  ]);
+  assertNoSecrets(writtenMarkdown);
+  assertNoSecrets(writtenHtml);
+  if (writtenMarkdown !== generated.markdown || writtenHtml !== html) throw consistencyError("报告写入后内容校验失败");
+  if (digest(latestLog) !== loaded.logHash) throw consistencyError("报告生成期间执行日志发生变化，拒绝交付过期报告");
   await validateRun(runRoot);
-  return { reportPath, counts: generated.counts, runId: log.run.run_id };
+  return { reportPath, htmlReportPath, counts: generated.counts, runId: log.run.run_id };
 }
 
 function parseArguments(argv) {
@@ -464,7 +539,7 @@ async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
   let result;
   if (command === "init") {
-    result = await initializeRun({ workspaceRoot: options.workspace, casesPath: options.cases });
+    result = await initializeRun({ workspaceRoot: options.workspace, casesPath: options.cases, workflowProfile: options["workflow-profile"] });
   } else if (command === "record") {
     const event = JSON.parse(await readFile(options.event, "utf8"));
     result = await recordEvent(options.run, event);
