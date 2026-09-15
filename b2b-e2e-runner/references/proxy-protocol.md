@@ -4,7 +4,7 @@
 
 仅在测试用例确认的非生产目标、Chrome DevTools MCP 正在操作的同一 Chrome CDP endpoint 上使用。endpoint 不可访问即报告阻塞；禁止用页面内 fetch/XHR monkeypatch、浏览器全局代理或其他浏览器工具降级。
 
-代理精确绑定 `targetId`，通过浏览器 WebSocket 建立扁平 Session，只处理该 Session 的 `Fetch.requestPaused`。先用 CDP pattern 缩小范围，再按 protocol、完整 hostname、URL pathname prefix 和标准化 method 精确匹配；重定向重新匹配。不匹配流量立即原样继续，其他 Target 不受影响。
+一个代理实例只精确绑定一个 `targetId`，通过浏览器 WebSocket 建立该 Target 的扁平 Session，只处理该 Session 的 `Fetch.requestPaused`。Fetch 不得在 BrowserContext 或整个 Chrome 上启用。先用 CDP pattern 缩小范围，再按 protocol、完整 hostname、URL pathname prefix 和标准化 method 精确匹配；重定向重新匹配。不匹配流量立即原样继续。即使其他页面请求完全相同的接口，也不得受影响。
 
 ## 配置
 
@@ -46,10 +46,12 @@ node <SKILL_ROOT>/scripts/cdp-fetch-proxy.mjs status --state <PRIVATE_STATE_JSON
 node <SKILL_ROOT>/scripts/cdp-fetch-proxy.mjs stop --state <PRIVATE_STATE_JSON>
 ```
 
-start 校验 endpoint→target 映射、排他获取 `hash(endpoint identity + targetId)` 锁、attach、Network.enable、Fetch.enable，并前台保持连接。state 包含 PID、Target、Session 是否已附着、owner token、计数和最近错误，但不保存 Session ID。stop 对照锁验证 PID、Run ID、owner token 后只向该 owner 发停止信号。锁带时间与心跳；仅心跳过期且 PID 不存在时回收。不同 Target 可并发。
+start 校验 endpoint→target 映射与 Runner 当前登记的测试页面一致、排他获取 `hash(endpoint identity + targetId)` 锁、attach、Network.enable、Fetch.enable，并前台保持连接。state 包含 PID、Target、Session 是否已附着、owner token、计数和最近错误，但不保存 Session ID。stop 对照锁验证 PID、Run ID、owner token 后只向该 owner 发停止信号。锁带时间与心跳；仅心跳过期且 PID 不存在时回收。不同 Target 可用独立实例和独立锁并发；一个实例不能覆盖多个页面。
 
-正常结束、SIGINT/SIGTERM、Target 关闭或 CDP 断连都尽力 Fetch.disable、detach、释放本 Run 锁。登录、刷新、导航、Target 变化或重连后重新做真实验证。
+同一 Target 内刷新或导航时保持绑定并重新做真实验证。测试转移到新标签页产生新 `targetId` 时，旧代理不得影响新页面；先停止旧绑定，再为新 Target 创建独立实例、锁和验证。
+
+正常结束、失败、中断、SIGINT/SIGTERM、Target 关闭或 CDP 断连都自动尽力 Fetch.disable、detach、停止本 Run 代理进程并释放本 Run 锁，无需用户确认；随后用真实请求验证原行为恢复。只操作与 state 中 Run ID、owner token、endpoint 和 targetId 全部匹配的资源，不得停止其他 Target 的代理，也不得释放其他 Run 的锁。
 
 ## 真实验证与恢复
 
-内部计数不是证据。启用后必须从服务器回显/Network 原始事件证明请求头实际发出，从页面观察证明状态、响应头/body 生效，并证明同 Target 不匹配请求、另一 Target、刷新/导航和停止后原响应。代理中断时暂停受影响检查点，重新附着并复核；恢复成功后重跑该检查点。不能恢复则判 `undetermined` 并写代理事实，不能直接判产品 `failed`。
+内部计数不是证据。Runner 在执行依赖代理的检查点前，自动从服务器回显/Network 原始事件证明请求头实际发出，从页面观察证明状态、响应头/body 生效，并证明同 Target 不匹配请求、至少一个其他页面、刷新/导航和停止后原响应。无法安全触发另一页面真实请求时，只能记录 Target 级隔离事实和可执行模拟证据，不得虚构结果。验证结果写入报告并在最终对话展示，不列入执行前用户确认。代理中断时暂停受影响检查点，重新附着并复核；恢复成功后重跑该检查点。不能恢复则判 `undetermined` 并写代理事实，不能直接判产品 `failed`。

@@ -30,6 +30,13 @@ class FakeCdp {
     return () => this.handlers.delete(key);
   }
 
+  async emit(sessionId, method, event) {
+    const handler = this.handlers.get(`${sessionId}:${method}`);
+    if (!handler) return false;
+    await handler(event);
+    return true;
+  }
+
   close() {
     this.closed = true;
   }
@@ -89,6 +96,74 @@ test("AC-024: two target listeners are independent; stopping A leaves B running"
     assert.equal(a.status().state, "stopped");
     assert.equal(b.status().state, "active");
     assert.equal(clientB.calls.some(call => call.method === "Fetch.disable"), false);
+  } finally {
+    await Promise.all([a.stop(), b.stop()]);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC-11: a proxy bound to page A cannot handle the same request from page B", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "proxy-isolation-"));
+  const clientA = new FakeCdp("A");
+  const listener = new ProxyListener(config(root, "A", clientA));
+  try {
+    await listener.start();
+    const paused = {
+      requestId: "request-A",
+      request: { url: "https://fixture.test/api/value", method: "GET", headers: {} },
+      responseStatusCode: 200,
+      responseHeaders: [{ name: "content-type", value: "text/plain" }]
+    };
+    assert.equal(await clientA.emit("session-A", "Fetch.requestPaused", paused), true);
+    assert.equal(clientA.calls.some(call => call.method === "Fetch.fulfillRequest" && call.sessionId === "session-A"), true);
+    const callsBeforePageB = clientA.calls.length;
+    assert.equal(await clientA.emit("session-B", "Fetch.requestPaused", { ...paused, requestId: "request-B" }), false);
+    assert.equal(clientA.calls.length, callsBeforePageB);
+  } finally {
+    await listener.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC-12: stopping page A leaves page B proxy active and able to fulfill requests", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "proxy-independent-"));
+  const clientA = new FakeCdp("A");
+  const clientB = new FakeCdp("B");
+  const a = new ProxyListener(config(root, "A", clientA));
+  const b = new ProxyListener(config(root, "B", clientB));
+  try {
+    await Promise.all([a.start(), b.start()]);
+    await a.stop();
+    const handled = await clientB.emit("session-B", "Fetch.requestPaused", {
+      requestId: "request-B",
+      request: { url: "https://fixture.test/api/value", method: "GET", headers: {} }
+    });
+    assert.equal(handled, true);
+    assert.equal(clientB.calls.some(call => call.method === "Fetch.continueRequest" && call.sessionId === "session-B"), true);
+    assert.equal(clientB.calls.some(call => call.method === "Fetch.disable"), false);
+  } finally {
+    await Promise.all([a.stop(), b.stop()]);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC-13: a new target is untouched until a new proxy is explicitly bound", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "proxy-migrate-"));
+  const clientA = new FakeCdp("A");
+  const clientB = new FakeCdp("B");
+  const a = new ProxyListener(config(root, "A", clientA));
+  const b = new ProxyListener(config(root, "B", clientB));
+  try {
+    await a.start();
+    const paused = {
+      requestId: "request-B",
+      request: { url: "https://fixture.test/api/value", method: "GET", headers: {} }
+    };
+    assert.equal(await clientA.emit("session-B", "Fetch.requestPaused", paused), false);
+    await a.stop();
+    await b.start();
+    assert.equal(await clientB.emit("session-B", "Fetch.requestPaused", paused), true);
+    assert.equal(clientB.calls.some(call => call.method === "Fetch.continueRequest" && call.sessionId === "session-B"), true);
   } finally {
     await Promise.all([a.stop(), b.stop()]);
     await rm(root, { recursive: true, force: true });

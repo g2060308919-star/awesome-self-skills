@@ -51,7 +51,7 @@ async function fixtureCases(root) {
   return file;
 }
 
-test("AC-007/008/009: report has one ordered five-column row per case and non-empty reasons", async () => {
+test("AC-007/008/009/15: report exposes the complete ordered five-column table for final delivery", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "report-test-"));
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await fixtureCases(root) });
@@ -82,6 +82,15 @@ test("AC-007/008/009: report has one ordered five-column row per case and non-em
       undetermined: 1,
       not_executed: 1
     });
+    const canonicalTable = report.split("\n").filter(line => line.startsWith("|")).slice(0, 6);
+    assert.deepEqual(canonicalTable, [
+      "| ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因 |",
+      "|---|---|---|---|---|",
+      "| R-01 | 订单 | 通过场景 | 通过 | 页面显示严格文案 |",
+      "| R-02 | 权限 | 失败场景 | 未通过 | 权限页面实际返回 200 并展示数据 |",
+      "| R-03 | 数据 | 无法确定场景 | 无法确定 | 10 个不同结果页均无动态样本 |",
+      "| R-04 | 范围 | 未执行场景 | 未执行 | 整条用例在正式执行前已明确排除 |"
+    ]);
     for (const heading of [
       "## 未通过详情",
       "## 无法确定详情",
