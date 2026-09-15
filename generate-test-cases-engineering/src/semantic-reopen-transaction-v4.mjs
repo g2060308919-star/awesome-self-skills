@@ -17,11 +17,6 @@ import { validateAgainstSchema } from './schema-validator.mjs';
 import {
   commitRevisionTransactionV4, revisionArtifactPathV4
 } from './revision-transaction-v4.mjs';
-import { initializeSemanticAnswerPreviewPolicyV4 } from './semantic-answer-preview-v4.mjs';
-import {
-  isSupportedV4RunIdentity, PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
-  PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION
-} from './v4-run-contract.mjs';
 
 const VERSION = '4.0.0';
 const COMPILER_VERSION = '0.5.0';
@@ -268,7 +263,7 @@ export async function ensureActiveRunLifecycleV4WithHeldLock(runDirectory, owner
   const heldLock = requireHeldLock(ownership);
   try {
     const instance = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'run-instance.json'));
-    if (!instance || !isSupportedV4RunIdentity(instance.value)
+    if (!instance || instance.value.schema_version !== VERSION
       || instance.value.delivery_intent !== 'execution_plan') throw new RunStoreIntegrityError('V4_EXECUTION_RUN_REQUIRED');
     const expected = {
       schema_version: VERSION, run_id: instance.value.run_id, delivery_intent: 'execution_plan',
@@ -678,7 +673,7 @@ async function compileProductionSiblingRevision(catalogRoot, seed) {
 async function requireRunInstance(catalogRoot, runDirectory, runId, intent) {
   const snapshot = await readJsonIfPresent(catalogRoot, path.join(runDirectory, 'run-instance.json'));
   if (!snapshot || validateAgainstSchema(snapshot.value, runInstanceSchema).length
-    || !isSupportedV4RunIdentity(snapshot.value)
+    || snapshot.value.schema_version !== VERSION || snapshot.value.compiler_version !== COMPILER_VERSION
     || snapshot.value.run_id !== runId || snapshot.value.delivery_intent !== intent) {
     throw new RunStoreIntegrityError(`REOPEN_${intent === 'execution_plan' ? 'EXECUTION' : 'CASE_DOCUMENT'}_RUN_INVALID`);
   }
@@ -1017,8 +1012,7 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
     );
     if (transaction.phase === 'reserved') {
       const instance = {
-        schema_version: PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION,
-        compiler_version: PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
+        schema_version: VERSION, compiler_version: COMPILER_VERSION,
         run_id: transaction.sibling_run_id, delivery_intent: 'case_document',
         created_at: transaction.created_at, lineage: transaction.lineage
       };
@@ -1031,7 +1025,6 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
         throw new RunStoreIntegrityError('REOPEN_SIBLING_IDENTITY_CONFLICT');
       }
       if (!existingInstance) await atomicWriteJson(catalogRoot, instancePath, instance);
-      await initializeSemanticAnswerPreviewPolicyV4(siblingDirectory, instance.run_id);
       const seedPath = path.join(siblingDirectory, 'staging', 'semantic-reopen-seed.json');
       const existingSeed = await readJsonIfPresent(catalogRoot, seedPath);
       if (existingSeed && canonicalStringify(existingSeed.value) !== canonicalStringify(transaction.seed)) {

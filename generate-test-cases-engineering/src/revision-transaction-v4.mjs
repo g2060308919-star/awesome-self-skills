@@ -15,10 +15,6 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { validateRevisionArtifactsV4 } from './revision-artifact-validation-v4.mjs';
-import {
-  isSupportedV4RunIdentity, PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
-  PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION
-} from './v4-run-contract.mjs';
 
 const VERSION = '4.0.0';
 const COMPILER_VERSION = '0.5.0';
@@ -158,7 +154,7 @@ const promotionBackupDirectory = (runDirectory, transactionId) =>
 async function readV4RunInstance(runDirectory) {
   const snapshot = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'run-instance.json'));
   const value = snapshot?.value;
-  if (!value || !isSupportedV4RunIdentity(value)) {
+  if (!value || value.schema_version !== VERSION) {
     throw new RunStoreIntegrityError('V4_RUN_INSTANCE_REQUIRED');
   }
   return requireRunInstanceSchema(value, 'V4_RUN_INSTANCE_REQUIRED');
@@ -209,8 +205,7 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
           throw new RunStoreIntegrityError('V3_BOOTSTRAP_NOT_ADOPTABLE');
         }
         const adopted = {
-          schema_version: PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION,
-          compiler_version: PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
+          schema_version: VERSION, compiler_version: COMPILER_VERSION,
           run_id: value.run_instance_id, delivery_intent: requested.delivery_intent,
           created_at: value.created_at,
           lineage: Object.hasOwn(requested, 'lineage') ? structuredClone(requested.lineage) : null
@@ -229,8 +224,8 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
       return value;
     }
     const value = {
-      schema_version: PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION,
-      compiler_version: PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
+      schema_version: VERSION,
+      compiler_version: COMPILER_VERSION,
       run_id: requested.run_id ?? `RUN-${randomUUID()}`,
       delivery_intent: requested.delivery_intent,
       created_at: new Date().toISOString(),

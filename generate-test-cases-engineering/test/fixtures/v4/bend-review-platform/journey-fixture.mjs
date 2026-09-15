@@ -374,19 +374,6 @@ export async function bendReviewJourneyFixture(
       behavior_assertions: behaviorAssertions
     };
   }
-  for (const [key, businessOutcome] of [
-    ['ip', 'IP 列业务含义'],
-    ['empty', '空值展示方式'],
-    ['sort', '默认排序方向']
-  ]) {
-    const claim = claims.find((item) => item.claim_id === `CLM-${key}`);
-    if (!claim) throw new TypeError(`BEND_FIXTURE_DECISION_PROJECTION_MISSING:${key}`);
-    claim.semantic_value.decision_answer_projection = [
-      { fact_id: `FACT-${key}`, field_path: '/business_outcome', value_kind: 'literal', value: businessOutcome },
-      { fact_id: `FACT-${key}`, field_path: '/condition', value_kind: 'literal', value: {} },
-      { fact_id: `FACT-${key}`, field_path: '/expected', value_kind: 'answer' }
-    ];
-  }
   const scopeClaim = claims.find(claim => claim.claim_id === 'CLM-scope');
   if (!scopeClaim) throw new TypeError('BEND_FIXTURE_SCOPE_CLAIM_MISSING');
   scopeClaim.semantic_value.topology_authorization = {

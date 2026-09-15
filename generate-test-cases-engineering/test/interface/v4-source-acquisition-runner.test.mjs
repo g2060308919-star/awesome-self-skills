@@ -23,7 +23,6 @@ import { ensureV4RunInstance } from '../../src/revision-transaction-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
 import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
-import { seedLegacyV4RunInstance } from '../helpers/v4-run-contract-fixture.mjs';
 
 const providerRegistry = createSourceProviderRegistry([]);
 const cooperProviderRegistry = createSourceProviderRegistry([{
@@ -100,7 +99,7 @@ async function stage(directory, stageName, value) {
 
 /** @param {string} directory @param {string} runId */
 async function startSemanticQuestion(directory, runId) {
-  await seedLegacyV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
+  await ensureV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
   const fixture = await bendReviewJourneyFixture(runId);
   await stage(directory, 'source_pack', fixture.artifacts.source_pack);
   assert.equal((/** @type {any} */ (await advanceStrict(directory))).stage, 'evidence_claims');
@@ -291,7 +290,7 @@ test('BR-13 post-case clarification quarantines a signed answer and resumes the 
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-source-post-case-answer-'));
   const runId = 'RUN-32323232-3232-4323-8323-323232323232';
   try {
-    await seedLegacyV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
+    await ensureV4RunInstance(directory, { run_id: runId, delivery_intent: 'case_document' });
     const fixture = await bendReviewJourneyFixture(runId);
     fixture.artifacts.evidence_claims.semantic_gaps = [{
       ...structuredClone(fixture.artifacts.evidence_claims.semantic_gaps[0]),
@@ -351,7 +350,6 @@ test('BR-13 post-case clarification quarantines a signed answer and resumes the 
 test('BR-13 acquired capture receipts allow only verified user-statement append and reject base capture mutation', { timeout: 60_000 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-source-acquired-append-'));
   try {
-    await seedLegacyV4RunInstance(directory);
     const initial = /** @type {any} */ (await advanceStrict(directory));
     const runId = initial.scope.run_instance_id;
     const fixture = await bendReviewJourneyFixture(runId);

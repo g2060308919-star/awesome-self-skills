@@ -39,41 +39,22 @@ function semanticReopenLineage() {
   };
 }
 
-test('T00/T10 run-instance schema distinguishes legacy V4 from preview-required V4.1 identities', async () => {
+test('T10 run-instance schema is a closed v3/v4 discriminator for fresh, replay and reopen identities', async () => {
   const v3 = {
     schema_version: '3.0.0', run_instance_id: RUN_ID,
     created_at: '2026-09-09T00:00:00.000Z'
   };
-  const legacy = {
-    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: RUN_ID,
-    delivery_intent: 'case_document', created_at: '2026-09-09T00:00:00.000Z', lineage: null
-  };
   const fresh = {
-    schema_version: '4.1.0', compiler_version: '0.6.0', run_id: RUN_ID,
+    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: RUN_ID,
     delivery_intent: 'case_document', created_at: '2026-09-09T00:00:00.000Z', lineage: null
   };
   const reopened = { ...fresh, lineage: semanticReopenLineage() };
   assert.deepEqual(validateAgainstSchema(v3, runInstanceSchema), []);
-  assert.deepEqual(validateAgainstSchema(legacy, runInstanceSchema), []);
   assert.deepEqual(validateAgainstSchema(fresh, runInstanceSchema), []);
   assert.deepEqual(validateAgainstSchema(reopened, runInstanceSchema), []);
-  const legacyReader = {
-    type: 'object', additionalProperties: false,
-    required: ['schema_version', 'compiler_version', 'run_id', 'delivery_intent', 'created_at', 'lineage'],
-    properties: {
-      schema_version: { const: '4.0.0' }, compiler_version: { const: '0.5.0' },
-      run_id: { type: 'string' }, delivery_intent: { enum: ['case_document', 'execution_plan'] },
-      created_at: { type: 'string' }, lineage: {}
-    }
-  };
-  assert.notDeepEqual(
-    validateAgainstSchema(fresh, legacyReader), [],
-    'a legacy 0.5.0 bundle must reject rather than mutate a preview-required run'
-  );
   for (const invalid of [
     { ...fresh, extra: true },
-    { ...fresh, compiler_version: '0.5.0' },
-    { ...legacy, compiler_version: '0.6.0' },
+    { ...fresh, compiler_version: '0.4.0' },
     { ...fresh, delivery_intent: 'combined' },
     { ...fresh, lineage: { ...semanticReopenLineage(), parent_run_id: PARENT_ID } }
   ]) assert.notDeepEqual(validateAgainstSchema(invalid, runInstanceSchema), []);
@@ -86,8 +67,6 @@ test('T00/T10 run-instance schema distinguishes legacy V4 from preview-required 
       run_id: RUN_ID, delivery_intent: 'case_document'
     });
     assert.deepEqual(validateAgainstSchema(first, runInstanceSchema), []);
-    assert.equal(first.schema_version, '4.1.0');
-    assert.equal(first.compiler_version, '0.6.0');
     assert.deepEqual(replay, first);
     await assert.rejects(ensureV4RunInstance(directory, {
       run_id: RUN_ID, delivery_intent: 'execution_plan'
@@ -98,8 +77,7 @@ test('T00/T10 run-instance schema distinguishes legacy V4 from preview-required 
 test('T10 migration and cancelled-resume siblings use the canonical v4 identity with typed lineage', () => {
   for (const creationReason of ['migration_v3', 'resume_cancelled']) {
     const sibling = {
-      schema_version: creationReason === 'migration_v3' ? '4.0.0' : '4.1.0',
-      compiler_version: creationReason === 'migration_v3' ? '0.5.0' : '0.6.0', run_id: RUN_ID,
+      schema_version: '4.0.0', compiler_version: '0.5.0', run_id: RUN_ID,
       delivery_intent: 'case_document', created_at: '2026-09-09T00:00:00.000Z',
       lineage: { creation_reason: creationReason, parent_run_id: PARENT_ID }
     };

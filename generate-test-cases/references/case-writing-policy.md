@@ -30,10 +30,6 @@ Every Oracle has `oracle_id`, `observe_after_step_id`, `surface`, concrete `expe
 
 Write a concrete business expectation, not “works”, “normal”, “correct”, or “successful”. Name the exact value/state/event/side effect, where it is observed, and any sourced comparison or time bound. An observation surface alone is not an Oracle. A generic boundary technique, common practice, model consensus, or coverage selection cannot supply expected product truth.
 
-A literal requirement such as “after save, the page displays ‘saved successfully’” is already a valid manual Oracle when its business object, condition, step, observation timing, surface, and Claim are bound. Do not require a selector, API field, status code, or executable assertion DSL. In contrast, “the result displays normally” needs clarification when the source provides no observable criterion; do not silently rewrite it as nonempty data or a success toast.
-
-Use structured business values only when the source actually defines a mapping, correspondence, data/render state, finite required set, logical population, or permission outcome. The natural-language `expected` is the validated display projection of that same accepted semantic rule, not an independently editable second truth. For cross-surface collections, retain a source-backed object correspondence so exchanging two row values cannot pass merely because both surfaces contain the same value set. A uniquely identified single object or a UI-only wording check does not require a join key or API field.
-
 Markdown places each expected result immediately after its owning step. CSV serializes `steps` as `N. action` and `expected_results` as `步骤N：预期`, using the same step order. JSON, Markdown, and CSV derive from one canonical Case document; never edit them independently.
 
 ## Record semantic effects only when real
@@ -56,10 +52,6 @@ Each `test_values` item identifies `value_id`, semantic `subject_ref`, business 
 - `temporary_assumption`: `assumption_id`, nonempty `semantic_gap_ids`, `reason`, and `requires_case_status=Conditional`.
 
 Never mix fields from different branches, relabel an example as a requirement, or treat a derived result as an authorized rule. `used_by_refs` may name only an existing precondition, condition, step, oracle, or semantic effect in this Case. An E1 or temporary-assumption input caps the Case at Conditional even if its Oracle is stronger.
-
-Each value in an explicit finite mapping must remain independently inspectable through separate Cases or separate parameter instances with its own expected result. Removing one named instance must reduce required-value coverage and fail the completeness gate. Values explicitly outside scope receive no invented formal result. A representative example without a closed-world declaration remains a sample, not complete-domain evidence.
-
-Permission Cases preserve each declared role/resource/action/context result. An allow outcome cannot stand in for a denial outcome, even when the total Case count is unchanged. Do not invent HTTP 403, hidden navigation, or additional roles when the source states only business access behavior.
 
 ## Preserve evidence and risk boundaries
 

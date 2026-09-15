@@ -7,13 +7,10 @@ import {
   sourceAcquisitionMaterialPathV4, stageV4SourceAcquisitionAction
 } from './source-acquisition-v4.mjs';
 import { createV4RunDirectory } from './run-bootstrap-v4.mjs';
-import {
-  commitSemanticAnswerBatchV4, prepareSemanticAnswerBatchV4
-} from './semantic-answer-preview-v4.mjs';
 
 export {
-  advanceStrict, commitSemanticAnswerBatchV4, constructV4Action, createV4RunDirectory,
-  prepareSemanticAnswerBatchV4, sourceAcquisitionMaterialPathV4, stageV4SourceAcquisitionAction
+  advanceStrict, constructV4Action, createV4RunDirectory, sourceAcquisitionMaterialPathV4,
+  stageV4SourceAcquisitionAction
 };
 
 /** @param {string} code @param {string} message */
@@ -27,7 +24,7 @@ function fatalReply(code, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
-    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.6.0';
+    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.5.0';
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1
       ? fatalReply(

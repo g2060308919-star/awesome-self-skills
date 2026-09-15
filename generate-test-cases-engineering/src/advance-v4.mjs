@@ -29,10 +29,6 @@ import {
 } from './revision-transaction-v4.mjs';
 import { sourceByteDigest } from './source-canonicalization.mjs';
 import {
-  initializeSemanticAnswerPreviewPolicyV4, semanticAnswerPreviewAppendDiagnosticsV4
-} from './semantic-answer-preview-v4.mjs';
-import { isPreviewRequiredV4RunIdentity } from './v4-run-contract.mjs';
-import {
   acceptedPath, acceptedSourceRevisions, discardStagingSnapshot, promoteArtifact,
   readJson, readJsonIfPresent, readTextIfPresent, revisionName, stagingPath, STAGE_FILES
 } from './run-store.mjs';
@@ -523,17 +519,6 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
   return output;
 }
 
-/** @param {string} runDirectory @param {any} prior @param {any} candidate
- * @param {boolean} [acquisitionVerified] */
-async function protectedSemanticAppendDiagnostics(
-  runDirectory, prior, candidate, acquisitionVerified = false
-) {
-  return [
-    ...await semanticAnswerPreviewAppendDiagnosticsV4(runDirectory, prior, candidate),
-    ...semanticAppendDiagnostics(prior, candidate, acquisitionVerified)
-  ];
-}
-
 /** @param {any} sourcePack @param {any[]} events */
 function normalizedAnswerMessages(sourcePack, events) {
   const units = sourcePack.sources.flatMap((/** @type {any} */ source) => source.semantic_projection.structure)
@@ -821,8 +806,8 @@ async function consumeSemanticAppend(
     runDirectory, candidate, revision + 1, runId, 'requirements_analysis'
   );
   if (acquisition.kind === 'reply') return acquisition;
-  const appendDiagnostics = await protectedSemanticAppendDiagnostics(
-    runDirectory, artifacts.source_pack, candidate.value, acquisition.verified
+  const appendDiagnostics = semanticAppendDiagnostics(
+    artifacts.source_pack, candidate.value, acquisition.verified
   );
   if (appendDiagnostics.length) return {
     kind: 'reply', reply: revisionReply(
@@ -1052,8 +1037,8 @@ async function consumePostCaseAppend(
     runDirectory, candidate, revision + 1, runId, 'case_design'
   );
   if (acquisition.kind === 'reply') return acquisition;
-  const immutableDiagnostics = await protectedSemanticAppendDiagnostics(
-    runDirectory, artifacts.source_pack, candidate.value, acquisition.verified
+  const immutableDiagnostics = semanticAppendDiagnostics(
+    artifacts.source_pack, candidate.value, acquisition.verified
   );
   if (immutableDiagnostics.length) return {
     kind: 'reply', reply: revisionReply(
@@ -1588,10 +1573,6 @@ export async function advanceStrictV4Locked(
       establishedRunInstance = await ensureV4RunInstanceWithHeldLock(runDirectory, {
         run_id: runId, delivery_intent: candidate.value.delivery_intent
       }, lockOwnership);
-      if (establishedRunInstance.delivery_intent === 'case_document'
-        && isPreviewRequiredV4RunIdentity(establishedRunInstance)) {
-        await initializeSemanticAnswerPreviewPolicyV4(runDirectory, establishedRunInstance.run_id);
-      }
     } catch (error) {
       return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
         error instanceof Error ? error.message : 'The v4 durable run identity could not be established.');

@@ -19,12 +19,12 @@ import {
 /** @param {string} file */
 const missing = async (file) => assert.rejects(readFile(file), { code: 'ENOENT' });
 
-test('T10 creates an immutable preview-required v4 run identity without changing legacy v3 creation', async () => {
+test('T10 creates an immutable v4 run identity without changing legacy v3 creation', async () => {
   await withRun(async (/** @type {string} */ directory) => {
     const first = await ensureV4RunInstance(directory, { delivery_intent: 'case_document' });
     const second = await ensureV4RunInstance(directory, { delivery_intent: 'case_document' });
-    assert.equal(first.schema_version, '4.1.0');
-    assert.equal(first.compiler_version, '0.6.0');
+    assert.equal(first.schema_version, '4.0.0');
+    assert.equal(first.compiler_version, '0.5.0');
     assert.equal(first.delivery_intent, 'case_document');
     assert.match(first.run_id, /^RUN-[0-9a-f-]{36}$/u);
     assert.deepEqual(second, first);
@@ -40,14 +40,14 @@ test('T10 creates an immutable preview-required v4 run identity without changing
   });
 });
 
-test('T10 adopts a pristine v3 bootstrap as preview-required v4 without changing its run id', async () => {
+test('T10 adopts a pristine v3 bootstrap as v4 without changing its durable identity', async () => {
   await withRun(async (/** @type {string} */ directory) => {
     const bootstrap = await ensureRunInstance(directory);
     const adopted = await ensureV4RunInstance(directory, {
       run_id: bootstrap.run_instance_id, delivery_intent: 'case_document'
     });
     assert.deepEqual(adopted, {
-      schema_version: '4.1.0', compiler_version: '0.6.0',
+      schema_version: '4.0.0', compiler_version: '0.5.0',
       run_id: bootstrap.run_instance_id, delivery_intent: 'case_document',
       created_at: bootstrap.created_at, lineage: null
     });

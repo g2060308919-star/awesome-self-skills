@@ -20,7 +20,6 @@ import { ensureV4RunInstance } from '../../src/revision-transaction-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
-import { seedLegacyV4RunInstance } from '../helpers/v4-run-contract-fixture.mjs';
 
 /** @param {string} directory @param {keyof typeof STAGE_FILES} stage @param {any} value */
 async function stage(directory, stage, value) {
@@ -146,7 +145,7 @@ async function deliverBendCaseDocument(catalog, documentRunId) {
 async function deliverBendCaseDocumentWithClosedRoot(catalog, documentRunId) {
   const directory = path.join(catalog, 'runs', documentRunId);
   await mkdir(directory, { recursive: true });
-  await seedLegacyV4RunInstance(directory, {
+  await ensureV4RunInstance(directory, {
     run_id: documentRunId, delivery_intent: 'case_document'
   });
   await advanceStrict(directory);
@@ -372,7 +371,6 @@ test('T12 semantic-clarification cancellation rejects later appends and resumes 
 test('T15 real runner conserves pending questions across a recovered partial-answer transaction and delivers only after explicitly closing the sorting gap', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-bend-partial-'));
   try {
-    await seedLegacyV4RunInstance(directory);
     const initial = /** @type {any} */ (await advanceStrict(directory));
     const revision0 = await bendReviewJourneyFixture(initial.scope.run_instance_id);
     await stage(directory, 'source_pack', revision0.artifacts.source_pack);

@@ -8,11 +8,6 @@ import {
   discardStagingSnapshot, readJsonIfPresent, readTextIfPresent, stagingPath
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
-import {
-  isPreviewRequiredV4RunIdentity, isSupportedV4RunIdentity,
-  PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
-  PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION
-} from './v4-run-contract.mjs';
 
 const SCHEMA_VERSION = '4.0.0';
 const COMPILER_VERSION = '0.5.0';
@@ -149,7 +144,7 @@ export async function cancelRunV4WithHeldLock(runDirectory, submittedEvent, owne
     const event = validateCancelEvent(submittedEvent);
     const run = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'run-instance.json'));
     if (!run || validateAgainstSchema(run.value, runInstanceSchema).length
-      || !isSupportedV4RunIdentity(run.value) || run.value.run_id !== event.run_id) {
+      || run.value.schema_version !== SCHEMA_VERSION || run.value.run_id !== event.run_id) {
       throw new RunStoreIntegrityError('CANCEL_RUN_INSTANCE_INVALID');
     }
     const existing = await readCancelledRunV4(runDirectory);
@@ -250,7 +245,7 @@ export async function createResumeCancelledSiblingV4(catalogRoot, input) {
     const target = path.join(siblingDirectory, 'run-instance.json');
     const existing = await readJsonIfPresent(catalogRoot, target);
     if (existing) {
-      if (!isPreviewRequiredV4RunIdentity(existing.value)
+      if (existing.value.schema_version !== SCHEMA_VERSION
         || existing.value.run_id !== input.run_id
         || existing.value.delivery_intent !== deliveryIntent
         || canonicalStringify(existing.value.lineage) !== canonicalStringify({
@@ -259,8 +254,7 @@ export async function createResumeCancelledSiblingV4(catalogRoot, input) {
       return structuredClone(existing.value);
     }
     const instance = {
-      schema_version: PREVIEW_REQUIRED_V4_RUN_SCHEMA_VERSION,
-      compiler_version: PREVIEW_REQUIRED_V4_RUN_COMPILER_VERSION,
+      schema_version: SCHEMA_VERSION, compiler_version: COMPILER_VERSION,
       run_id: input.run_id, delivery_intent: deliveryIntent,
       created_at: new Date().toISOString(),
       lineage: { parent_run_id: input.parent_run_id, creation_reason: 'resume_cancelled' }
