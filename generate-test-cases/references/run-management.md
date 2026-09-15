@@ -29,6 +29,14 @@ Before any revision that invalidates ready output, commit a current tombstone/st
 
 `output/current.json` is the only authoritative delivery manifest. Finished recovery re-reads it and all referenced artifact digests. Stray Markdown/CSV/JSON files, older current files, or partially written output are never official delivery.
 
+## Keep semantic preview state compiler-owned
+
+New Case Document runs use the immutable `derived/semantic-answer-policy.json` marker and the closed `semantic-answer-preview/v1` sidecar contract. Legacy V4 runs without that marker remain compatible and unchanged; do not add the marker during recovery or repair. Execution-plan runs are not enrolled and do not use semantic-answer preview.
+
+Preparing a batch writes only compiler-owned preview/candidate/audit records; the accepted revision and business state remain unchanged by prepare. A new prepare may supersede the active preview but never deletes preview history. Apply requires the exact active preview, a distinct nonblank user confirmation, a confirmed apply receipt, and the same accepted revision/checkpoint/presentation/content bindings. Revise and cancel-preview change only the active pointer plus append-only audit history.
+
+If apply is interrupted, invoke the runner first and replay the exact commit request. Recovery validates the immutable stored request, candidate digest, receipt, accepted Source Pack and runner reply, then completes the same append at most once. Never rebuild the candidate from chat history or create a replacement receipt. Cancellation remains the original independent `cancel_run` path; a terminal cancelled run rejects every prepared preview, and continuation uses a fresh `resume_cancelled` sibling.
+
 ## Repair without rewriting history
 
 Fix an unaccepted artifact in staging at the same candidate revision. For an accepted Agent artifact, append a digest-bound `artifact_repairs` record naming `base_source_revision`, semantic `stage`, exact accepted canonical artifact digest, and reason. Increment revision once, let the compiler carry forward safe predecessors, then regenerate the returned downstream stage. Never edit accepted/derived/output files.

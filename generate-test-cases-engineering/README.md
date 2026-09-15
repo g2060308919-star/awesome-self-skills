@@ -32,14 +32,16 @@ below. The separately retained single-system release benchmark is not a v4
 development prerequisite and makes no comparator-superiority, external-expert,
 or platform-signed Agent identity claim.
 
-## v4 architecture (compiler 0.5.0 / schema 4.0.0)
+## v4 architecture (bundle compiler 0.6.0; V4 artifacts 0.5.0 / schema 4.0.0)
 
-The v4 development track keeps one private module entry point, `advanceStrict(absoluteRunDirectory)`, and exactly four Agent-writable artifacts:
+The v4 development track keeps one private runner entry point, `advanceStrict(absoluteRunDirectory)`, two compiler-owned semantic-answer preview transaction helpers, and exactly four Agent-writable artifacts:
 
 1. `source_pack`
 2. `evidence_claims`
 3. `behavior_views`
 4. `case_drafts`
+
+Existing active run identities remain 4.0/0.5. Newly created Case Document runs use the explicit 4.1/0.6 run identity so the runner can require preview without silently migrating historical runs; their accepted artifacts and official outputs stay in the compatible 4.0/0.5 V4 artifact family.
 
 The compiler owns semantic-gap/root identities, decisions, scope verification, business outcomes, formal test points, ordering, coverage, canonical Case IDs, and delivery manifests. The Case Document path is:
 
@@ -60,13 +62,18 @@ npm run build
 node skill/generate-test-cases/scripts/test-compiler.mjs /absolute/path/to/run
 ```
 
-The installed module also exposes shallow Adapter helpers. Use
+The installed module also exposes Adapter helpers. Use
 `createV4RunDirectory(<catalog-root>, delivery_intent)` to obtain a
 compiler-issued ID already coupled to its canonical `runs/<run-id>` directory,
 `constructV4Action(reply, choice)` for displayed semantic/execution actions,
 and `stageV4SourceAcquisitionAction(...)` for a complete verified acquisition
-batch. These helpers do not add a second compiler entry point: every state
-transition still runs through `advanceStrict`.
+batch. Newly enrolled Case Document runs additionally use
+`prepareSemanticAnswerBatchV4(...)` and `commitSemanticAnswerBatchV4(...)`:
+prepare writes only compiler-owned digest-bound preview state, while commit
+records the exact confirmation and stages the prepared Source Pack. All
+accepted semantic revisions and lifecycle transitions still run through
+`advanceStrict`; the preview helpers do not introduce another artifact compiler
+or a fifth Agent-writable artifact.
 
 To continue a cancelled run, call the same ordinary create helper with
 `{ parent_run_id, creation_reason: 'resume_cancelled' }` as its second argument.

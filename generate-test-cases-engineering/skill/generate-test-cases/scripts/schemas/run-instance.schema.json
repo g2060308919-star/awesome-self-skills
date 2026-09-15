@@ -3,7 +3,8 @@
   "$id": "run-instance.schema.json",
   "oneOf": [
     { "$ref": "#/$defs/v3RunInstance" },
-    { "$ref": "#/$defs/v4RunInstance" }
+    { "$ref": "#/$defs/v4RunInstance" },
+    { "$ref": "#/$defs/v4PreviewRequiredRunInstance" }
   ],
   "$defs": {
     "runId": {
@@ -144,6 +145,26 @@
       "properties": {
         "schema_version": { "const": "4.0.0" },
         "compiler_version": { "const": "0.5.0" },
+        "run_id": { "$ref": "#/$defs/runId" },
+        "delivery_intent": { "enum": ["case_document", "execution_plan"] },
+        "created_at": { "type": "string", "minLength": 1 },
+        "lineage": { "$ref": "#/$defs/v4Lineage" }
+      },
+      "additionalProperties": false
+    },
+    "v4PreviewRequiredRunInstance": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "compiler_version",
+        "run_id",
+        "delivery_intent",
+        "created_at",
+        "lineage"
+      ],
+      "properties": {
+        "schema_version": { "const": "4.1.0" },
+        "compiler_version": { "const": "0.6.0" },
         "run_id": { "$ref": "#/$defs/runId" },
         "delivery_intent": { "enum": ["case_document", "execution_plan"] },
         "created_at": { "type": "string", "minLength": 1 },

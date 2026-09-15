@@ -1,0 +1,91 @@
+{
+  "protocol_version": "1.1.0",
+  "frozen_before_candidate_output": {
+    "deterministic_acceptance": true,
+    "cold_context_paired_evaluation": false,
+    "reason": "The supplied F-CITY truth and deterministic mutants were frozen before candidate output; the required independent corpus, hidden holdouts, answer scripts, model/tool profile, and external reviewer were not supplied and cannot be frozen retroactively."
+  },
+  "deterministic_acceptance": {
+    "source_fixture": "test/fixtures/v4-upgrade/f-city/prd.md",
+    "truth_fixture": "test/fixtures/v4-upgrade/f-city/business-truth.json",
+    "layers": [
+      "core",
+      "public_adapter",
+      "installed_bundle",
+      "recovery",
+      "canonical_output_projection"
+    ],
+    "projection_fields": [
+      "module",
+      "subject",
+      "condition",
+      "action",
+      "result",
+      "value",
+      "scope",
+      "authority",
+      "evidence_level"
+    ],
+    "normalization_exclusions": [
+      "absolute_machine_paths",
+      "timestamps",
+      "transaction_ids_without_business_meaning"
+    ],
+    "normalization_must_preserve": [
+      "conditions",
+      "negation",
+      "exact_business_wording",
+      "state",
+      "scope",
+      "authority"
+    ],
+    "required_legal_format_mutants": [
+      "AT27_missing_score_value_6",
+      "AT31_missing_ordinary_user_denial_with_same_case_count",
+      "AT36_wrong_subject_oracle",
+      "AT37_case_or_report_as_claim_source_or_E1_promoted_to_E3",
+      "AT38_markdown_or_csv_drops_condition_data_or_instance"
+    ],
+    "f_city_role": "visible deterministic regression fixture; not a hidden holdout"
+  },
+  "cold_context": {
+    "required_domains": [
+      "simple_ui_or_filtering",
+      "enumeration_and_data_display",
+      "permissions",
+      "flow_state_or_timing",
+      "multi_source_or_policy_conflict",
+      "cross_surface_integration_or_relative_baseline"
+    ],
+    "requirements_per_domain": 2,
+    "hidden_holdouts_per_domain": 1,
+    "versions": ["qualified_v4_baseline", "candidate"],
+    "repeats_per_requirement_per_version": 3,
+    "minimum_generation_tasks": 72,
+    "exact_sample_assignment": [],
+    "qualified_independent_truth_sets": [],
+    "frozen_answer_scripts": [],
+    "frozen_model_and_tool_profile": null,
+    "independent_external_reviewer": null,
+    "public_pilot_intake_records_eligible_as_truth": false,
+    "status": "blocked_by_missing_independent_truth_and_execution_resources",
+    "missing_inputs": [
+      "12 independently qualified complete requirements across the six required domains",
+      "at least six development-hidden holdout assignments",
+      "independent obligation and expected-result truth for every requirement",
+      "frozen user-answer scripts and termination conditions",
+      "one identical baseline/candidate model, sampling, and tool profile",
+      "an independent reviewer and sufficient budget to run and score 72 cold-context generation tasks"
+    ]
+  },
+  "existing_metric_thresholds": {
+    "grounded_factual_support_precision": 0.98,
+    "critical_test_point_recall": 1.0,
+    "expert_overall_test_point_recall": 0.9,
+    "grounded_no_material_rewrite_acceptance": 0.85,
+    "test_point_signature_jaccard": 0.9,
+    "grounded_coverage_signature_jaccard": 0.85,
+    "historical_defect_recall_per_domain": 0.8
+  },
+  "release_rule": "G8 remains insufficient_evidence unless the complete 72-task frozen paired protocol and independent review are actually completed."
+}
