@@ -17,9 +17,8 @@ import { validateAgainstSchema } from './schema-validator.mjs';
 import {
   commitRevisionTransactionV4, revisionArtifactPathV4
 } from './revision-transaction-v4.mjs';
+import { isV4SchemaVersion, v4ContractForIdentity } from './v4-contract.mjs';
 
-const VERSION = '4.0.0';
-const COMPILER_VERSION = '0.5.0';
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const PHASES = Object.freeze(['reserved', 'sibling_committed', 'execution_superseded', 'complete']);
 
@@ -43,10 +42,10 @@ function jsonArtifact(value) {
   return { format: 'json', value: canonicalClone(value) };
 }
 
-/** @param {string} runId */
-function siblingGenesisDigest(runId) {
+/** @param {string} runId @param {any} contract */
+function siblingGenesisDigest(runId, contract) {
   return byteDigest(`${canonicalStringify({
-    schema_version: VERSION, compiler_version: COMPILER_VERSION,
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, genesis: true
   })}\n`);
 }
@@ -263,10 +262,11 @@ export async function ensureActiveRunLifecycleV4WithHeldLock(runDirectory, owner
   const heldLock = requireHeldLock(ownership);
   try {
     const instance = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'run-instance.json'));
-    if (!instance || instance.value.schema_version !== VERSION
+    const contract = v4ContractForIdentity(instance?.value);
+    if (!instance || !contract
       || instance.value.delivery_intent !== 'execution_plan') throw new RunStoreIntegrityError('V4_EXECUTION_RUN_REQUIRED');
     const expected = {
-      schema_version: VERSION, run_id: instance.value.run_id, delivery_intent: 'execution_plan',
+      schema_version: contract.schema_version, run_id: instance.value.run_id, delivery_intent: 'execution_plan',
       status: 'active', version: 1, superseded_by: null, semantic_reopen_txn_id: null
     };
     const existing = await readJsonIfPresent(runDirectory, lifecyclePath(runDirectory));
@@ -478,7 +478,7 @@ function compileReopenedPresentation(checkpoint, supersedesPresentationId) {
   };
   const presentationId = contentId('PRES', identity);
   return {
-    schema_version: VERSION, presentation_id: presentationId,
+    schema_version: checkpoint.schema_version, presentation_id: presentationId,
     phase: 'requirements_analysis', supersedes_presentation_id: supersedesPresentationId,
     answered_part_ids: answeredPartIds, remaining_part_ids: remainingPartIds,
     cycle_digest: cycleDigest, run_actions: ['cancel_run'],
@@ -505,7 +505,11 @@ export function compileSemanticReopenSiblingCheckpointV4(
   const parent = record(submittedParentCheckpoint, 'REOPEN_PARENT_CHECKPOINT_INVALID');
   const evidence = record(submittedProjectedEvidence, 'REOPEN_EVIDENCE_INVALID');
   const scopeManifest = record(submittedScopeManifest, 'REOPEN_SCOPE_MANIFEST_INVALID');
-  if (validateSemanticClarificationCheckpointV4(parent).length
+  const contract = v4ContractForIdentity(seed);
+  if (!contract || parent.schema_version !== contract.schema_version
+    || parent.compiler_version !== contract.compiler_version
+    || evidence.schema_version !== contract.schema_version
+    || validateSemanticClarificationCheckpointV4(parent).length
     || canonicalStringify(parent.semantic_gap_ledger) !== canonicalStringify(seed.parent_semantic_gap_ledger)
     || canonicalStringify(parent.clarification_state?.root_states) !== canonicalStringify(seed.parent_root_states)) {
     throw new TypeError('REOPEN_PARENT_CHECKPOINT_INVALID');
@@ -548,7 +552,7 @@ export function compileSemanticReopenSiblingCheckpointV4(
   }).sort((/** @type {any} */ left, /** @type {any} */ right) => compareCodePoints(left.root_issue_id, right.root_issue_id));
   /** @type {any} */
   const checkpoint = {
-    schema_version: VERSION, compiler_version: COMPILER_VERSION,
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: text(seed.run_id, 'REOPEN_SIBLING_SEED_INVALID'), revision: 0,
     commit_profile: 'pre_case_pending',
     source_review_witness: canonicalClone(parent.source_review_witness),
@@ -558,7 +562,7 @@ export function compileSemanticReopenSiblingCheckpointV4(
     // This is revision zero of a new durable run. The immutable parent
     // checkpoint remains available through the content-addressed seed, while
     // the sibling revision transaction must bind its own canonical genesis.
-    base_checkpoint_digest: siblingGenesisDigest(seed.run_id),
+    base_checkpoint_digest: siblingGenesisDigest(seed.run_id, contract),
     reopened_targets: canonicalClone(seed.reopened_targets),
     decision_suspension_ledger: normalizeSuspensionLedger(seed.decision_suspension_ledger),
     decision_reopen_overlay_digest: sha(
@@ -592,6 +596,8 @@ export function compileSemanticReopenSiblingCheckpointV4(
 
 /** @param {string} catalogRoot @param {any} seed */
 async function compileProductionSiblingRevision(catalogRoot, seed) {
+  const contract = v4ContractForIdentity(seed);
+  if (!contract) throw new TypeError('REOPEN_SIBLING_SEED_INVALID');
   const parentCheckpoint = await readInheritedObject(
     catalogRoot, seed.inherited_artifact_refs?.parent_checkpoint
   );
@@ -622,18 +628,18 @@ async function compileProductionSiblingRevision(catalogRoot, seed) {
     seed, parentCheckpoint, projectedEvidence, scopeManifest
   );
   const decisionJournal = {
-    schema_version: VERSION, source_revision: 0,
+    schema_version: contract.schema_version, source_revision: 0,
     decisions: canonicalClone(sourcePack.decision_records)
   };
   const factLedger = {
-    schema_version: VERSION, source_revision: 0,
+    schema_version: contract.schema_version, source_revision: 0,
     facts: canonicalClone(projectedEvidence.fact_ledger)
   };
   const persistedScopeManifest = {
-    schema_version: VERSION, source_revision: 0, ...canonicalClone(scopeManifest)
+    schema_version: contract.schema_version, source_revision: 0, ...canonicalClone(scopeManifest)
   };
   const clarificationState = {
-    schema_version: VERSION, source_revision: 0,
+    schema_version: contract.schema_version, source_revision: 0,
     ...canonicalClone(checkpoint.clarification_state)
   };
   const semanticDigest = canonicalDigest({
@@ -672,8 +678,9 @@ async function compileProductionSiblingRevision(catalogRoot, seed) {
 /** @param {string} catalogRoot @param {string} runDirectory @param {string} runId @param {string} intent */
 async function requireRunInstance(catalogRoot, runDirectory, runId, intent) {
   const snapshot = await readJsonIfPresent(catalogRoot, path.join(runDirectory, 'run-instance.json'));
+  const contract = v4ContractForIdentity(snapshot?.value);
   if (!snapshot || validateAgainstSchema(snapshot.value, runInstanceSchema).length
-    || snapshot.value.schema_version !== VERSION || snapshot.value.compiler_version !== COMPILER_VERSION
+    || !contract
     || snapshot.value.run_id !== runId || snapshot.value.delivery_intent !== intent) {
     throw new RunStoreIntegrityError(`REOPEN_${intent === 'execution_plan' ? 'EXECUTION' : 'CASE_DOCUMENT'}_RUN_INVALID`);
   }
@@ -741,7 +748,11 @@ async function readParentCase(catalogRoot, caseDirectory, reference) {
     journal = JSON.parse(artifactTexts.decision_journal);
   } catch { throw new RunStoreIntegrityError('REOPEN_PARENT_ARTIFACT_INVALID'); }
   if (checkpoint.run_id !== reference.run_id || checkpoint.revision !== revision
-    || checkpoint.schema_version !== VERSION) throw new RunStoreIntegrityError('REOPEN_PARENT_CHECKPOINT_INVALID');
+    || !isV4SchemaVersion(checkpoint.schema_version)
+    || checkpoint.schema_version !== manifest.schema_version
+    || checkpoint.compiler_version !== manifest.compiler_version) {
+    throw new RunStoreIntegrityError('REOPEN_PARENT_CHECKPOINT_INVALID');
+  }
   return { manifest, manifestText, bundleText, artifactTexts, checkpoint, journal };
 }
 
@@ -832,9 +843,9 @@ function validateParentSuspensionLineage(instance, checkpoint) {
 }
 
 /** @param {string} catalogRoot @param {string} executionDirectory @param {string} executionRunId */
-async function activeExecution(catalogRoot, executionDirectory, executionRunId) {
+async function activeExecution(catalogRoot, executionDirectory, executionRunId, /** @type {any} */ contract) {
   const snapshot = await readJsonIfPresent(catalogRoot, lifecyclePath(executionDirectory));
-  if (!snapshot || snapshot.value.schema_version !== VERSION || snapshot.value.run_id !== executionRunId
+  if (!snapshot || snapshot.value.schema_version !== contract.schema_version || snapshot.value.run_id !== executionRunId
     || snapshot.value.delivery_intent !== 'execution_plan' || snapshot.value.status !== 'active'
     || !Number.isSafeInteger(snapshot.value.version)) {
     throw new RunStoreIntegrityError('REOPEN_EXECUTION_NOT_ACTIVE');
@@ -857,7 +868,8 @@ async function phaseHook(hooks, phase) {
 
 /** @param {any} checkpoint @param {any} seed */
 function validateSiblingCheckpoint(checkpoint, seed) {
-  if (!checkpoint || checkpoint.schema_version !== VERSION || checkpoint.compiler_version !== COMPILER_VERSION
+  if (!checkpoint || checkpoint.schema_version !== seed.schema_version
+    || checkpoint.compiler_version !== seed.compiler_version
     || checkpoint.run_id !== seed.run_id || checkpoint.revision !== 0
     || checkpoint.decision_reopen_overlay_digest !== seed.decision_reopen_overlay_digest
     || canonicalStringify(checkpoint.decision_suspension_ledger)
@@ -932,11 +944,18 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
         catalogRoot, services.resolve_run_directory(executionRunId)
       );
       const caseDirectory = requireCatalogDescendant(catalogRoot, services.resolve_run_directory(caseRunId));
-      await requireRunInstance(catalogRoot, executionDirectory, executionRunId, 'execution_plan');
+      const executionInstance = await requireRunInstance(
+        catalogRoot, executionDirectory, executionRunId, 'execution_plan'
+      );
       const caseInstance = await requireRunInstance(
         catalogRoot, caseDirectory, caseRunId, 'case_document'
       );
-      await activeExecution(catalogRoot, executionDirectory, executionRunId);
+      const contract = v4ContractForIdentity(caseInstance);
+      if (!contract || executionInstance.schema_version !== contract.schema_version
+        || executionInstance.compiler_version !== contract.compiler_version) {
+        throw new RunStoreIntegrityError('REOPEN_CONTRACT_MISMATCH');
+      }
+      await activeExecution(catalogRoot, executionDirectory, executionRunId, contract);
       const parent = await readParentCase(catalogRoot, caseDirectory, reference);
       validateParentSuspensionLineage(caseInstance, parent.checkpoint);
       validateTargetVersions(parent.checkpoint, targets);
@@ -981,7 +1000,7 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
         inherited_artifacts: inherited
       };
       const seed = {
-        schema_version: VERSION, compiler_version: COMPILER_VERSION,
+        schema_version: contract.schema_version, compiler_version: contract.compiler_version,
         run_id: siblingRunId, revision: 0,
         parent_checkpoint_digest: refs.parent_checkpoint,
         inherited_artifact_refs: Object.fromEntries(Object.entries(refs).map(([key, digestValue]) =>
@@ -993,7 +1012,7 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
         decision_reopen_overlay_digest: overlay.decision_reopen_overlay_digest
       };
       transaction = {
-        schema_version: VERSION, transaction_kind: 'semantic_reopen',
+        schema_version: contract.schema_version, transaction_kind: 'semantic_reopen',
         txn_id: transactionId, payload_digest: payloadDigest,
         execution_run_id: executionRunId, case_document_run_id: caseRunId,
         reopen_event_id: reopenEventId, sibling_run_id: siblingRunId,
@@ -1012,7 +1031,8 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
     );
     if (transaction.phase === 'reserved') {
       const instance = {
-        schema_version: VERSION, compiler_version: COMPILER_VERSION,
+        schema_version: transaction.seed.schema_version,
+        compiler_version: transaction.seed.compiler_version,
         run_id: transaction.sibling_run_id, delivery_intent: 'case_document',
         created_at: transaction.created_at, lineage: transaction.lineage
       };
@@ -1050,7 +1070,7 @@ export async function executeSemanticReopenTransactionV4(catalogRoot, submittedE
       if (!lifecycle) throw new RunStoreIntegrityError('REOPEN_EXECUTION_NOT_ACTIVE');
       if (lifecycle.value.status === 'active') {
         await atomicWriteJson(catalogRoot, lifecyclePath(executionDirectory), {
-          schema_version: VERSION, run_id: transaction.execution_run_id,
+          schema_version: transaction.seed.schema_version, run_id: transaction.execution_run_id,
           delivery_intent: 'execution_plan', status: 'superseded_by_semantic_reopen',
           version: lifecycle.value.version + 1,
           superseded_by: transaction.sibling_run_id,

@@ -37,6 +37,8 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
+import { isV4SchemaVersion, v4ContractForSchema } from './v4-contract.mjs';
+import { loadV4SourceReadingSummary } from './prd-source-collection-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
 
@@ -138,6 +140,8 @@ function compilePreCaseClarification(
   sourcePack, evidence, runId, priorCheckpoint = null, committedCheckpointBytes = null,
   migrationSeed = null
 ) {
+  const contract = v4ContractForSchema(sourcePack.schema_version);
+  if (!contract) throw new TypeError('V4_CONTRACT_UNSUPPORTED');
   const expected = sourcePack.sources.flatMap((/** @type {any} */ source) =>
     source.semantic_projection.structure.map((/** @type {any} */ unit) => unit.unit_id)
   );
@@ -145,7 +149,8 @@ function compilePreCaseClarification(
     review.units.map((/** @type {any} */ unit) => unit.unit_id)
   );
   const genesis = new TextEncoder().encode(`${canonicalStringify({
-    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: runId, genesis: true
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
+    run_id: runId, genesis: true
   })}\n`);
   const initialRootDispositions = migrationSeed
     ? migrationSeed.clarification_mapping
@@ -157,6 +162,7 @@ function compilePreCaseClarification(
       }))
     : undefined;
   return compileSemanticClarificationCheckpointV4({
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, committed_revision: sourcePack.source_revision,
     committed_checkpoint_bytes: committedCheckpointBytes ?? genesis, discovery_phase: 'pre_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
@@ -179,6 +185,8 @@ function compilePostCaseClarification(
   sourcePack, evidence, behaviorViews, caseDrafts, runId, priorCheckpoint,
   committedCheckpointBytes
 ) {
+  const contract = v4ContractForSchema(sourcePack.schema_version);
+  if (!contract) throw new TypeError('V4_CONTRACT_UNSUPPORTED');
   const expected = sourcePack.sources.flatMap((/** @type {any} */ source) =>
     source.semantic_projection.structure.map((/** @type {any} */ unit) => unit.unit_id)
   );
@@ -186,6 +194,7 @@ function compilePostCaseClarification(
     review.units.map((/** @type {any} */ unit) => unit.unit_id)
   );
   return compileSemanticClarificationCheckpointV4({
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, committed_revision: sourcePack.source_revision,
     committed_checkpoint_bytes: committedCheckpointBytes, discovery_phase: 'post_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
@@ -226,20 +235,20 @@ function baseRevisionArtifacts(runId, sourcePack, evidence, checkpoint) {
   return {
     source_pack: jsonArtifact(sourcePack),
     decision_journal: jsonArtifact({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: sourcePack.schema_version, source_revision: revision,
       decisions: structuredClone(sourcePack.decision_records)
     }),
     evidence_claims: jsonArtifact(evidence),
     fact_ledger: jsonArtifact({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: sourcePack.schema_version, source_revision: revision,
       facts: structuredClone(evidence.fact_ledger)
     }),
     scope_manifest: jsonArtifact({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: sourcePack.schema_version, source_revision: revision,
       ...structuredClone(evidence.scope_manifest)
     }),
     clarification_state: jsonArtifact({
-      schema_version: '4.0.0', source_revision: revision,
+      schema_version: sourcePack.schema_version, source_revision: revision,
       ...structuredClone(checkpoint.clarification_state)
     }),
     checkpoint: jsonArtifact(checkpoint)
@@ -312,6 +321,11 @@ function finalTransaction(
     bundle: jsonArtifact(JSON.parse(materialized.bundle_bytes)),
     markdown: textArtifact(materialized.markdown_bytes),
     worksheet: textArtifact(materialized.worksheet_bytes),
+    ...(sourcePack.schema_version === '4.2.0' ? {
+      html: textArtifact(materialized.html_bytes),
+      table: textArtifact(materialized.table_bytes),
+      source_reading: jsonArtifact(JSON.parse(materialized.source_reading_bytes))
+    } : {}),
     manifest: jsonArtifact(materialized.manifest)
   };
   const appendIdentity = {
@@ -574,7 +588,7 @@ async function committedRevisionMetadata(runDirectory, revision) {
     runDirectory,
     path.join(runDirectory, 'transactions', 'committed', `${revisionName(revision)}.json`)
   );
-  if (!snapshot || snapshot.value?.schema_version !== '4.0.0'
+  if (!snapshot || !isV4SchemaVersion(snapshot.value?.schema_version)
     || snapshot.value?.revision !== revision
     || !SHA256.test(String(snapshot.value?.semantic_digest))) {
     throw new TypeError('V4_COMMITTED_REVISION_RECORD_INVALID');
@@ -974,7 +988,7 @@ async function postCaseArtifactCandidate(
     ? snapshot.parse_diagnostics
     : diagnostics(value, registry.schemas.get(AGENT_STAGE_SCHEMA[stage]));
   if (stageDiagnostics.length || !record(value)
-    || value.schema_version !== '4.0.0' || value.source_revision !== nextRevision) {
+    || value.schema_version !== prior.schema_version || value.source_revision !== nextRevision) {
     return {
       kind: 'reply', reply: revisionReply(
         runDirectory, stage, nextRevision, value,
@@ -1339,6 +1353,9 @@ async function finalizeCaseDocumentRevision(
     }
     const materialized = materializeCaseDocumentDeliveryV4({
       run_id: runId, completed_at: completedAt, bundle: result.bundle,
+      ...(artifacts.source_pack.schema_version === '4.2.0' ? {
+        source_reading: await loadV4SourceReadingSummary(runDirectory, artifacts.source_pack)
+      } : {}),
       render_options: { include_audit_appendix: false },
       non_blocking_diagnostics: structuredClone(nonBlockingDiagnostics)
     });
@@ -1374,19 +1391,19 @@ export async function detectV4Run(runDirectory) {
   if (await readTextIfPresent(runDirectory, sourceAcquisitionStatePathV4(runDirectory)) !== null) return true;
   const staged = await readTextIfPresent(runDirectory, stagingPath(runDirectory, 'source_pack'));
   if (staged !== null) {
-    try { if (JSON.parse(staged)?.schema_version === '4.0.0') return true; } catch { /* routed by the active protocol */ }
+    try { if (isV4SchemaVersion(JSON.parse(staged)?.schema_version)) return true; } catch { /* routed by the active protocol */ }
   }
   const revisions = await acceptedSourceRevisions(runDirectory);
   if (!revisions.length) return false;
   const accepted = await readJson(
     runDirectory, acceptedPath(runDirectory, revisions[revisions.length - 1], 'source_pack')
   );
-  return accepted.value?.schema_version === '4.0.0';
+  return isV4SchemaVersion(accepted.value?.schema_version);
 }
 
 /** Read and validate the immutable accepted prefix for the active v4 revision.
- * @param {string} runDirectory @param {number} revision @param {any} registry @param {string} runInstanceId */
-async function acceptedPrefix(runDirectory, revision, registry, runInstanceId) {
+ * @param {string} runDirectory @param {number} revision @param {any} registry @param {any} runInstance */
+async function acceptedPrefix(runDirectory, revision, registry, runInstance) {
   /** @type {Record<string, any>} */
   const artifacts = {};
   let missing = false;
@@ -1394,9 +1411,9 @@ async function acceptedPrefix(runDirectory, revision, registry, runInstanceId) {
     const stored = await readJsonIfPresent(runDirectory, acceptedPath(runDirectory, revision, stage));
     if (!stored) { missing = true; continue; }
     if (missing) throw new TypeError('V4_ACCEPTED_STAGE_PREFIX_INVALID');
-    if (!record(stored.value) || stored.value.schema_version !== '4.0.0'
+    if (!record(stored.value) || stored.value.schema_version !== runInstance.schema_version
       || stored.value.source_revision !== revision
-      || (stage === 'source_pack' && stored.value.run_instance_id !== runInstanceId)
+      || (stage === 'source_pack' && stored.value.run_instance_id !== runInstance.run_id)
       || diagnostics(stored.value, registry.schemas.get(AGENT_STAGE_SCHEMA[stage])).length) {
       throw new TypeError('V4_ACCEPTED_ARTIFACT_INVALID');
     }
@@ -1408,7 +1425,7 @@ async function acceptedPrefix(runDirectory, revision, registry, runInstanceId) {
 /** Advance a v4 run while the caller holds the run-directory lock.
  * @param {string} runDirectory
  * @param {any} registry
- * @param {{run_instance_id?:string,run_id?:string,created_at:string,delivery_intent?:string}} runInstance
+ * @param {{schema_version:string,compiler_version:string,run_instance_id?:string,run_id?:string,created_at:string,delivery_intent?:string}} runInstance
  * @param {unknown} lockOwnership
  * @param {any|null} migrationSeed
  */
@@ -1440,7 +1457,7 @@ export async function advanceStrictV4Locked(
   let artifacts;
   try {
     artifacts = revisions.length
-      ? await acceptedPrefix(runDirectory, revision, registry, runId) : {};
+      ? await acceptedPrefix(runDirectory, revision, registry, runInstance) : {};
   } catch (error) {
     return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
       error instanceof Error ? error.message : 'Accepted v4 artifacts failed deterministic replay.');
@@ -1556,7 +1573,10 @@ export async function advanceStrictV4Locked(
     runDirectory, nextStage, revision, candidate.value, candidateDiagnostics, runId,
     advancedDiagnostics
   );
-  if (!record(candidate.value) || candidate.value.schema_version !== '4.0.0'
+  if (!record(candidate.value)
+    || (isV4SchemaVersion(runInstance.schema_version)
+      ? candidate.value.schema_version !== runInstance.schema_version
+      : !isV4SchemaVersion(candidate.value.schema_version))
     || candidate.value.source_revision !== revision) {
     return revisionReply(runDirectory, nextStage, revision, candidate.value, [{
       category: 'traceability', code: 'SOURCE_REVISION_MISMATCH', path: '/source_revision',
@@ -1755,7 +1775,10 @@ export async function advanceStrictV4Locked(
   if (nextStage === 'behavior_views') {
     const probe = {
       ...prospective,
-      case_drafts: { schema_version: '4.0.0', source_revision: revision, cases: [] }
+      case_drafts: {
+        schema_version: prospective.source_pack.schema_version,
+        source_revision: revision, cases: []
+      }
     };
     try {
       const result = compileCaseDocumentRevisionV4(

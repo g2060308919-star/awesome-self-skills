@@ -110,7 +110,7 @@ test('v4 final delivery is canonical, business-readable and never starts E2E', a
     load('references/execution-closure-policy.md')
   ]);
   assert.match(skill, /`output\/current\.json`[\s\S]*only authoritative|唯一权威/iu);
-  assert.match(skill, /JSON[\s\S]*Markdown[\s\S]*CSV[\s\S]*same canonical bundle|同一 canonical/iu);
+  assert.match(skill, /JSON[\s\S]*HTML[\s\S]*CSV[\s\S]*Markdown[\s\S]*same canonical Case bundle|同一 canonical/iu);
   assert.match(cases, /已审阅 formal test-point 覆盖[\s\S]*semantic gap[\s\S]*Exploratory[\s\S]*NotApplicable/u);
   assert.match(cases, /one scenario per line|一行一场景[\s\S]*module|模块[\s\S]*priority|优先级[\s\S]*title|标题[\s\S]*status|状态/iu);
   assert.match(execution, /Grounded[\s\S]*Execute[\s\S]*runner_projection\.case_ids/iu);

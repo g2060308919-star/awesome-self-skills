@@ -26,6 +26,7 @@ import { appendedRepair, repairDiagnostics, reusableStages, unconfirmedWorkflow 
 import { groupRiskCounts } from './presentation-summary.mjs';
 import { advanceStrictV4Locked, detectV4Run } from './advance-v4.mjs';
 import { verifyResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
+import { isV4SchemaVersion } from './v4-contract.mjs';
 
 const moduleDirectory = path.dirname(realpathSync(fileURLToPath(import.meta.url)));
 const schemaDirectory = path.resolve(
@@ -158,7 +159,7 @@ function migrationRequired() {
 
 /** @param {unknown} value */
 function supportedArtifactSchemaVersion(value) {
-  return value === '3.0.0' || value === '4.0.0';
+  return value === '3.0.0' || isV4SchemaVersion(value);
 }
 
 /** @param {string} runDirectory @param {string} runId */
@@ -997,9 +998,9 @@ async function advanceStrictExclusive(runDirectory) {
       const migrationSeedPresent = await guardedAwait(() => readTextIfPresent(
         runDirectory, path.join(runDirectory, 'derived', 'migration-replay-seed.json')
       )) !== null;
-      const declaredV4 = runInstanceValue?.schema_version === '4.0.0';
+      const declaredV4 = isV4SchemaVersion(runInstanceValue?.schema_version);
       if ((migrationSeedPresent || declaredV4)
-        && (runInstanceValue?.schema_version !== '4.0.0'
+        && (!isV4SchemaVersion(runInstanceValue?.schema_version)
           || artifactDiagnostics(
             runInstanceValue, registry.schemas.get('run-instance.schema.json')
           ).length > 0)) {
@@ -1025,7 +1026,7 @@ async function advanceStrictExclusive(runDirectory) {
         || await guardedAwait(() => detectV4Run(runDirectory));
       let runInstance;
       if (isV4Run) {
-        runInstance = runInstanceValue?.schema_version === '4.0.0'
+        runInstance = isV4SchemaVersion(runInstanceValue?.schema_version)
           ? { ...runInstanceValue, run_instance_id: runInstanceValue.run_id }
           : await guardedAwait(() => ensureRunInstance(runDirectory));
       } else runInstance = await guardedAwait(() => ensureRunInstance(runDirectory));

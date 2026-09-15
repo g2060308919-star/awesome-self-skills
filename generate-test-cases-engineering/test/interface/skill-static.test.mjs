@@ -273,7 +273,7 @@ test('skill presents business-readable clarification and manual delivery without
   assert.match(skill, /Freeze product, module, role, client, version, region, environment[\s\S]*material scope/iu);
   assert.match(skill, /Do not broaden or narrow scope because later analysis discovers more material/iu);
   assert.match(skill, /已审阅 formal test-point 覆盖[\s\S]*Never claim unbounded “100% requirement coverage”/iu);
-  assert.match(skill, /business Markdown[\s\S]*Internal IDs appear only[\s\S]*audit appendix/iu);
+  assert.match(skill, /test-cases\.html[\s\S]*primary readable artifact[\s\S]*Internal IDs appear only[\s\S]*audit appendix/iu);
 
   assert.match(clarification, /Never show root, Fact, Claim, obligation, question-part, digest, or other internal ID/iu);
   assert.match(clarification, /risk labels[\s\S]*严重\/高\/中\/低/iu);

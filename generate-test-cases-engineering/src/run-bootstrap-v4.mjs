@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { ensureV4RunInstance } from './revision-transaction-v4.mjs';
 import { createResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
+import { CANDIDATE_V4_CONTRACT } from './v4-contract.mjs';
 
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
 const { lstat, mkdir, realpath } = fsPromises;
@@ -65,8 +66,12 @@ export async function createV4RunDirectory(submittedCatalogRoot, request, unexpe
   }
   const deliveryIntent = /** @type {'case_document'|'execution_plan'} */ (request);
   await mkdir(runDirectory);
+  /** @type {any} */
+  const bootstrap = {
+    run_id: runId, delivery_intent: deliveryIntent, contract: CANDIDATE_V4_CONTRACT
+  };
   const run = await ensureV4RunInstance(runDirectory, {
-    run_id: runId, delivery_intent: deliveryIntent
+    ...bootstrap
   });
   return {
     run_id: run.run_id,

@@ -14,8 +14,7 @@ import { canonicalStringify } from './canonical.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
-
-const VERSION = '4.0.0';
+import { v4ContractForSchema } from './v4-contract.mjs';
 
 /** @param {unknown} value */
 function canonicalDigest(value) {
@@ -70,46 +69,51 @@ export function validateRevisionArtifactsV4(input) {
   /** @type {Record<string, any>} */
   const values = {};
   for (const key of Object.keys(texts)) {
-    if (key === 'markdown' || key === 'worksheet') continue;
+    if (['markdown', 'worksheet', 'html', 'table'].includes(key)) continue;
     values[key] = parseCanonicalJson(texts, key);
   }
 
   requireSchema(values.source_pack, sourcePackSchema);
   requireSchema(values.evidence_claims, evidenceClaimsSchema);
   requireSchema(values.checkpoint, checkpointSchema);
+  const contract = v4ContractForSchema(values.source_pack.schema_version);
+  if (!contract || values.checkpoint.schema_version !== contract.schema_version
+    || values.checkpoint.compiler_version !== contract.compiler_version) {
+    throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
+  }
   if (validateSemanticClarificationCheckpointV4(values.checkpoint).length) {
     throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
   }
-  if (values.source_pack.schema_version !== VERSION
+  if (values.source_pack.schema_version !== contract.schema_version
     || values.source_pack.source_revision !== input.revision
     || values.source_pack.run_instance_id !== input.run_id
-    || values.evidence_claims.schema_version !== VERSION
+    || values.evidence_claims.schema_version !== contract.schema_version
     || values.evidence_claims.source_revision !== input.revision) {
     throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
   }
 
   requireExactKeys(values.decision_journal, ['schema_version', 'source_revision', 'decisions']);
   requireSame(values.decision_journal, {
-    schema_version: VERSION, source_revision: input.revision,
+    schema_version: contract.schema_version, source_revision: input.revision,
     decisions: values.source_pack.decision_records
   });
   requireExactKeys(values.fact_ledger, ['schema_version', 'source_revision', 'facts']);
   requireSame(values.fact_ledger, {
-    schema_version: VERSION, source_revision: input.revision,
+    schema_version: contract.schema_version, source_revision: input.revision,
     facts: values.evidence_claims.fact_ledger
   });
   requireExactKeys(values.scope_manifest, [
     'schema_version', 'source_revision', ...Object.keys(values.evidence_claims.scope_manifest)
   ]);
   requireSame(values.scope_manifest, {
-    schema_version: VERSION, source_revision: input.revision,
+    schema_version: contract.schema_version, source_revision: input.revision,
     ...values.evidence_claims.scope_manifest
   });
   requireExactKeys(values.clarification_state, [
     'schema_version', 'source_revision', ...Object.keys(values.checkpoint.clarification_state)
   ]);
   requireSame(values.clarification_state, {
-    schema_version: VERSION, source_revision: input.revision,
+    schema_version: contract.schema_version, source_revision: input.revision,
     ...values.checkpoint.clarification_state
   });
   if (values.checkpoint.fact_ledger_digest !== canonicalDigest(values.evidence_claims.fact_ledger)
@@ -122,7 +126,7 @@ export function validateRevisionArtifactsV4(input) {
     requireSchema(values.test_obligations, testObligationsSchema);
     requireSchema(values.case_drafts, caseDraftsSchema);
     for (const key of ['behavior_views', 'test_obligations', 'case_drafts']) {
-      if (values[key].schema_version !== VERSION || values[key].source_revision !== input.revision) {
+      if (values[key].schema_version !== contract.schema_version || values[key].source_revision !== input.revision) {
         throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
       }
     }
@@ -151,6 +155,7 @@ export function validateRevisionArtifactsV4(input) {
         run_id: input.run_id,
         completed_at: values.manifest.completed_at,
         bundle: values.bundle,
+        ...(contract.candidate ? { source_reading: values.source_reading } : {}),
         render_options: values.manifest.render_options,
         non_blocking_diagnostics: []
       });
@@ -160,6 +165,9 @@ export function validateRevisionArtifactsV4(input) {
     if (materialized.bundle_bytes !== texts.bundle
       || materialized.markdown_bytes !== texts.markdown
       || materialized.worksheet_bytes !== texts.worksheet
+      || (contract.candidate && (materialized.html_bytes !== texts.html
+        || materialized.table_bytes !== texts.table
+        || materialized.source_reading_bytes !== texts.source_reading))
       || `${canonicalStringify(materialized.manifest)}\n` !== texts.manifest) {
       throw new TypeError('CANONICAL_MANIFEST_INVALID');
     }

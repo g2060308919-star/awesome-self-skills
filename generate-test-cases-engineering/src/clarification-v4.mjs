@@ -16,6 +16,7 @@ import {
   sha256CanonicalV4
 } from './semantic-gaps-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
+import { LEGACY_V4_CONTRACT, isV4SchemaVersion, requireV4Contract } from './v4-contract.mjs';
 
 const ACTIONS = Object.freeze([
   'answer_question_part',
@@ -112,7 +113,7 @@ function questionPart(root, presentationId) {
 }
 
 /**
- * @param {{run_id:string,committed_revision:number,committed_checkpoint_digest:string,phase:string,
+ * @param {{schema_version:string,run_id:string,committed_revision:number,committed_checkpoint_digest:string,phase:string,
  * supersedes_presentation_id:string|null,answered_part_ids:string[],roots:any[]}} input
  */
 function buildPresentation(input) {
@@ -132,7 +133,7 @@ function buildPresentation(input) {
   };
   const presentationId = `PRES-${sha256CanonicalV4(identity).slice('sha256:'.length)}`;
   return {
-    schema_version: '4.0.0',
+    schema_version: input.schema_version,
     presentation_id: presentationId,
     phase: input.phase,
     supersedes_presentation_id: input.supersedes_presentation_id,
@@ -182,6 +183,7 @@ function refreshCheckpointPresentation(checkpoint, supersedesPresentationId) {
     .filter((/** @type {any} */ state) => state.status === 'closed_for_delivery')
     .map((/** @type {any} */ state) => state.question_part_id).sort(compareUnicodeScalar);
   const presentation = remainingRoots.length > 0 ? buildPresentation({
+    schema_version: checkpoint.schema_version,
     run_id: checkpoint.run_id,
     committed_revision: checkpoint.revision,
     committed_checkpoint_digest: checkpoint.base_checkpoint_digest,
@@ -215,6 +217,12 @@ function assertCheckpoint(checkpoint) {
  */
 export function compileSemanticClarificationCheckpointV4(submitted) {
   if (!isRecord(submitted)) throw new TypeError('CLARIFICATION_INPUT_INVALID');
+  const contract = submitted.schema_version === undefined && submitted.compiler_version === undefined
+    ? LEGACY_V4_CONTRACT
+    : requireV4Contract({
+        schema_version: submitted.schema_version,
+        compiler_version: submitted.compiler_version
+      });
   const runId = canonicalTextV4(submitted.run_id, 'CLARIFICATION_RUN_INVALID');
   const revision = submitted.committed_revision;
   if (!Number.isSafeInteger(revision) || Number(revision) < 0) throw new TypeError('CLARIFICATION_REVISION_INVALID');
@@ -307,6 +315,7 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
   const previousPresentationId = prior?.clarification_state.latest_presentation_id ?? null;
   const phase = discoveryPhase === 'pre_case' ? 'requirements_analysis' : 'case_design';
   const candidatePresentation = pendingRoots.length > 0 ? buildPresentation({
+    schema_version: contract.schema_version,
     run_id: runId,
     committed_revision: Number(revision),
     committed_checkpoint_digest: committedCheckpointDigest,
@@ -336,8 +345,8 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
       }
     : {};
   const checkpoint = {
-    schema_version: '4.0.0',
-    compiler_version: '0.5.0',
+    schema_version: contract.schema_version,
+    compiler_version: contract.compiler_version,
     run_id: runId,
     revision: Number(revision),
     commit_profile: discoveryPhase === 'pre_case' ? 'pre_case_pending' : 'post_case_pending',
@@ -380,7 +389,7 @@ export function validateSemanticPresentationV4(submitted, context = {}) {
   const diagnostics = validateAgainstSchema(submitted, presentationSchema).map((item) => ({
     code: 'PRESENTATION_SCHEMA_INVALID', path: item.path, message: item.message
   }));
-  if (!isRecord(submitted) || submitted.schema_version !== '4.0.0') {
+  if (!isRecord(submitted) || !isV4SchemaVersion(submitted.schema_version)) {
     diagnostics.push({ code: 'V4_PRESENTATION_REQUIRED', path: '/schema_version', message: 'v4 semantic presentation required' });
     return diagnostics;
   }
@@ -422,7 +431,7 @@ export function validateSemanticClarificationCheckpointV4(submitted) {
   const diagnostics = schemaDiagnostics.map((item) => ({
     code: 'CHECKPOINT_SCHEMA_INVALID', path: item.path, message: item.message
   }));
-  if (!isRecord(submitted) || submitted.schema_version !== '4.0.0') {
+  if (!isRecord(submitted) || !isV4SchemaVersion(submitted.schema_version)) {
     diagnostics.push({ code: 'V4_CHECKPOINT_REQUIRED', path: '/schema_version', message: 'v4 semantic checkpoint required' });
     return diagnostics;
   }
@@ -543,6 +552,7 @@ export function validateSemanticClarificationCheckpointV4(submitted) {
   if (presentation) {
     diagnostics.push(...validateSemanticPresentationV4(presentation));
     const expectedPresentation = buildPresentation({
+      schema_version: checkpoint.schema_version,
       run_id: checkpoint.run_id,
       committed_revision: checkpoint.revision,
       committed_checkpoint_digest: checkpoint.base_checkpoint_digest,

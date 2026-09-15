@@ -67,17 +67,60 @@ async function stage(directory, stageName, value) {
   );
 }
 
+/** @param {any} fixture @param {string} schemaVersion */
+function bindFixtureContract(fixture, schemaVersion) {
+  for (const artifact of Object.values(fixture.artifacts)) {
+    artifact.schema_version = schemaVersion;
+  }
+  return fixture;
+}
+
+/** @param {any} installed @param {string} directory @param {any} reply @param {any} fixture */
+async function stageCandidateCollection(installed, directory, reply, fixture) {
+  const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
+  const schemaVersion = identity.schema_version === '4.2.0' ? '4.2.0' : '4.0.0';
+  bindFixtureContract(fixture, schemaVersion);
+  if (schemaVersion !== '4.2.0') return schemaVersion;
+  const source = fixture.artifacts.source_pack.sources[0];
+  const bytes = new TextEncoder().encode(source.content);
+  await installed.stageV4PrdCollectionObservation(directory, reply, {
+    version: '1.0.0',
+    scope: {
+      mode: 'provided_materials', root_ref: 'provided:installed-adapter-prd',
+      source_version: source.version,
+      collection_window: {
+        started_at: '2026-09-16T00:00:00.000Z', ended_at: '2026-09-16T00:00:01.000Z'
+      }
+    },
+    channels: [
+      { channel: 'body', enumeration_status: 'exhausted', page_count: 1, terminal_page_observed: true, diagnostic_code: null },
+      ...['table', 'image', 'comment', 'reply'].map(channel => ({
+        channel, enumeration_status: 'not_applicable', page_count: 0,
+        terminal_page_observed: false, diagnostic_code: null
+      }))
+    ],
+    items: [{
+      item_id: 'provided-body', parent_item_id: null, channel: 'body', source_id: source.source_id,
+      asset_id: null, unit_ids: source.semantic_projection.structure.map((/** @type {any} */ unit) => unit.unit_id),
+      acquisition_status: 'acquired', review_status: 'reviewed', unavailable_reason: null
+    }]
+  }, [{ item_id: 'provided-body', raw_response_bytes: bytes, capture_bytes: bytes }]);
+  return schemaVersion;
+}
+
 /** @param {any} installed @param {string} directory */
 async function pendingSemanticReply(installed, directory) {
   const initial = await installed.advanceStrict(directory);
   const runId = initial.scope.run_instance_id;
   const fixture = await bendReviewJourneyFixture(runId);
+  const schemaVersion = await stageCandidateCollection(installed, directory, initial, fixture);
   await stage(directory, 'source_pack', fixture.artifacts.source_pack);
-  assert.equal((await installed.advanceStrict(directory)).stage, 'evidence_claims');
+  const sourceReply = await installed.advanceStrict(directory);
+  assert.equal(sourceReply.stage, 'evidence_claims', JSON.stringify(sourceReply));
   await stage(directory, 'evidence_claims', fixture.artifacts.evidence_claims);
   const reply = await installed.advanceStrict(directory);
   assert.equal(reply.status, 'need_user_answers', JSON.stringify(reply));
-  return { runId, fixture, reply };
+  return { runId, fixture, reply, schemaVersion };
 }
 
 test('installed ordinary create-run entry resumes a cancelled parent with a compiler-owned sibling ID', async () => {
@@ -85,9 +128,9 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-cancel-resume-'));
   try {
     const parent = await installed.createV4RunDirectory(catalog, 'case_document');
-    const { runId, reply } = await pendingSemanticReply(installed, parent.run_directory);
+    const { runId, reply, schemaVersion } = await pendingSemanticReply(installed, parent.run_directory);
     const cancel = installed.constructV4Action(reply, { action: 'cancel_run' });
-    const revision = await bendReviewJourneyFixture(runId, 1, [cancel]);
+    const revision = bindFixtureContract(await bendReviewJourneyFixture(runId, 1, [cancel]), schemaVersion);
     await stage(parent.run_directory, 'source_pack', revision.artifacts.source_pack);
     const cancelled = await installed.advanceStrict(parent.run_directory);
     assert.equal(cancelled.status, 'cancelled', JSON.stringify(cancelled));
@@ -143,7 +186,7 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
 /** @param {string} runId @param {any} caseDocumentRef @param {any[]} events @param {number} revision */
 function executionSourcePack(runId, caseDocumentRef, events, revision) {
   return {
-    schema_version: '4.0.0', source_revision: revision, run_instance_id: runId,
+    schema_version: '4.2.0', source_revision: revision, run_instance_id: runId,
     run_scope: `execution:${caseDocumentRef.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: structuredClone(caseDocumentRef), output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },
@@ -158,6 +201,8 @@ async function deliverInstalledCaseDocument(installed, catalog) {
   const directory = created.run_directory;
   const runId = created.run_id;
   const fixture = await bendReviewJourneyFixture(runId);
+  const initial = await installed.advanceStrict(directory);
+  await stageCandidateCollection(installed, directory, initial, fixture);
   fixture.artifacts.evidence_claims.semantic_gaps = [];
   let reply;
   for (const stageName of /** @type {Array<keyof typeof STAGE_FILES>} */ (Object.keys(STAGE_FILES))) {

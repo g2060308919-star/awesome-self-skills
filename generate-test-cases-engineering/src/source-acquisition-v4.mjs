@@ -3,6 +3,7 @@ import { open, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 import sourcePackSchema from '../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
+import sourceReadingSchema from '../skill/generate-test-cases/scripts/schemas/source-reading.schema.json' with { type: 'json' };
 
 import { canonicalStringify, digest } from './canonical.mjs';
 import {
@@ -26,6 +27,10 @@ import {
 import {
   createCompilerSourceRuntimeV4, SOURCE_RUNTIME_REGISTRY_VERSION_V4
 } from './source-runtime-registry-v4.mjs';
+import {
+  bindV4PrdCollectionObservation, loadV4SourceReadingSummary
+} from './prd-source-collection-v4.mjs';
+import { v4ContractForIdentity, v4ContractForSchema } from './v4-contract.mjs';
 
 const SCHEMA_VERSION = '4.0.0';
 const COMPILER_VERSION = '0.5.0';
@@ -116,10 +121,10 @@ async function retireAcquisitionCheckpoint(runDirectory, checkpointText, checkpo
   if (checkpointCreated) await unlink(target);
 }
 
-/** @param {string} runId @param {number} revision */
-function genesisCheckpoint(runId, revision) {
+/** @param {string} runId @param {number} revision @param {{schema_version:string,compiler_version:string}} contract */
+function genesisCheckpoint(runId, revision, contract) {
   return `${canonicalStringify({
-    schema_version: SCHEMA_VERSION, compiler_version: COMPILER_VERSION,
+    schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, revision, phase: 'source_acquisition'
   })}\n`;
 }
@@ -243,14 +248,36 @@ function stateBody(state) {
 
 /** @param {any} state */
 function validateStateShape(state) {
-  const keys = [
+  const legacyKeys = [
     'schema_version', 'compiler_version', 'registry_version', 'run_id', 'committed_revision', 'status',
     'checkpoint_text', 'checkpoint_created', 'artifact_requests', 'resume_ref', 'bindings',
     'request_history', 'base_event_count', 'events',
     'acquisitions', 'source_receipts', 'accepted_source_pack_digest', 'state_digest'
   ];
-  if (!only(state, keys) || state.schema_version !== SCHEMA_VERSION
-    || state.compiler_version !== COMPILER_VERSION
+  const collectionKeys = [
+    'schema_version', 'compiler_version', 'registry_version', 'run_id', 'committed_revision',
+    'status', 'collection_sessions', 'summary', 'source_material_digest',
+    'accepted_source_pack_digest', 'state_digest'
+  ];
+  const contract = v4ContractForIdentity(state);
+  if (contract?.candidate && state.status === 'collected') {
+    if (!only(state, collectionKeys)
+      || state.registry_version !== SOURCE_RUNTIME_REGISTRY_VERSION_V4
+      || typeof state.run_id !== 'string'
+      || !Number.isSafeInteger(state.committed_revision) || state.committed_revision < 0
+      || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1
+      || validateAgainstSchema(state.summary, sourceReadingSchema).length
+      || !HASH.test(state.source_material_digest)
+      || !HASH.test(state.accepted_source_pack_digest)
+      || !HASH.test(state.state_digest) || state.state_digest !== hash(stateBody(state))) {
+      throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+    }
+    return { state, checkpointBytes: null };
+  }
+  const keys = contract?.candidate
+    ? [...legacyKeys.slice(0, -1), 'collection_sessions', 'summary', 'state_digest']
+    : legacyKeys;
+  if (!only(state, keys) || !contract
     || state.registry_version !== SOURCE_RUNTIME_REGISTRY_VERSION_V4
     || typeof state.run_id !== 'string'
     || !Number.isSafeInteger(state.committed_revision) || state.committed_revision < 0
@@ -261,6 +288,9 @@ function validateStateShape(state) {
     || !Array.isArray(state.bindings) || !Array.isArray(state.request_history)
     || state.request_history.length === 0 || !Array.isArray(state.events)
     || !Array.isArray(state.acquisitions) || !Array.isArray(state.source_receipts)
+    || (contract.candidate && (!Array.isArray(state.collection_sessions)
+      || state.collection_sessions.length !== 1
+      || validateAgainstSchema(state.summary, sourceReadingSchema).length))
     || !HASH.test(state.state_digest) || state.state_digest !== hash(stateBody(state))) {
     throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
   }
@@ -551,7 +581,7 @@ export async function stageV4SourceAcquisitionAction(
   }
   const sourcePack = /** @type {any} */ (structuredClone(submittedSourcePack));
   if (validateAgainstSchema(sourcePack, sourcePackSchema).length
-    || sourcePack.schema_version !== SCHEMA_VERSION
+    || sourcePack.schema_version !== state.schema_version
     || sourcePack.run_instance_id !== state.run_id
     || sourcePack.source_revision !== state.committed_revision
     || !Array.isArray(sourcePack.artifact_events)
@@ -740,7 +770,12 @@ async function acquireCandidate(state, candidate, runDirectory) {
  * @param {string} runDirectory @param {any} sourcePack @param {string} runId
  */
 export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId) {
-  const existing = await loadState(runDirectory);
+  const contract = v4ContractForSchema(sourcePack.schema_version);
+  if (!contract) return { kind: 'rejected', code: 'SOURCE_ACQUISITION_CONTRACT_UNSUPPORTED' };
+  let existing = await loadState(runDirectory);
+  if (!existing && contract.candidate && sourcePack.delivery_intent === 'case_document') {
+    existing = await bindV4PrdCollectionObservation(runDirectory, sourcePack);
+  }
   const revision = sourcePack.source_revision;
   const durableCheckpointText = await readTextIfPresent(
     runDirectory, path.join(runDirectory, 'checkpoint.json')
@@ -752,7 +787,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
   const checkpointCreated = laterAcquisition
     ? durableCheckpointText === null : existing?.checkpoint_created ?? checkpointText === null;
   if (checkpointText === null) {
-    checkpointText = genesisCheckpoint(runId, revision);
+    checkpointText = genesisCheckpoint(runId, revision, contract);
   }
   const context = { run_id: runId, committed_revision: revision, checkpoint_bytes: encoder.encode(checkpointText) };
   const continuingPending = existing?.status === 'pending'
@@ -771,10 +806,12 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       if (continuingPending) {
         return { kind: 'need_artifact', reply: stopReply(existing), discard_candidate: true };
       }
-      if (!laterAcquisition) {
+      if (!laterAcquisition && existing.status !== 'collected') {
         return { kind: 'rejected', code: 'ARTIFACT_RESUME_STALE', discard_candidate: true };
       }
-      await loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack);
+      if (existing.status !== 'collected') {
+        await loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack);
+      }
     }
     const resume = createArtifactResumeRef({ ...context, artifact_requests: discovered.requests });
     const priorEvents = existing?.events ?? [];
@@ -788,7 +825,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       }
     ];
     const body = {
-      schema_version: SCHEMA_VERSION, compiler_version: COMPILER_VERSION,
+      schema_version: contract.schema_version, compiler_version: contract.compiler_version,
       registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
       run_id: runId, committed_revision: revision, status: 'pending', checkpoint_text: checkpointText,
       checkpoint_created: checkpointCreated,
@@ -796,7 +833,11 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       request_history: requestHistory,
       base_event_count: priorEvents.length, events: structuredClone(priorEvents),
       acquisitions: structuredClone(priorAcquisitions), source_receipts: structuredClone(priorReceipts),
-      accepted_source_pack_digest: null
+      accepted_source_pack_digest: null,
+      ...(contract.candidate ? {
+        collection_sessions: structuredClone(existing.collection_sessions),
+        summary: structuredClone(existing.summary)
+      } : {})
     };
     const state = { ...body, state_digest: hash(body) };
     if (checkpointCreated) {
@@ -808,6 +849,18 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
   if (!existing) {
     if (sourcePack.artifact_events?.length) return { kind: 'rejected', code: 'ARTIFACT_REQUEST_STALE' };
     return { kind: 'none' };
+  }
+  if (existing.status === 'collected') {
+    if (existing.run_id !== runId || existing.committed_revision > revision) {
+      return { kind: 'rejected', code: 'SOURCE_COLLECTION_BINDING_INVALID' };
+    }
+    try { await loadV4SourceReadingSummary(runDirectory, sourcePack); }
+    catch { return { kind: 'rejected', code: 'SOURCE_COLLECTION_BINDING_INVALID' }; }
+    if (existing.committed_revision === revision
+      && existing.accepted_source_pack_digest !== hash(sourcePack)) {
+      return { kind: 'rejected', code: 'SOURCE_COLLECTION_BINDING_INVALID' };
+    }
+    return { kind: existing.committed_revision === revision ? 'accepted' : 'verified', state: existing };
   }
   if (existing.run_id !== runId || existing.committed_revision > revision) {
     return { kind: 'rejected', code: 'ARTIFACT_RESUME_STALE' };
@@ -855,6 +908,21 @@ export async function replaySourceAcquisitionStopV4(runDirectory, runId) {
 export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
   const state = await loadState(runDirectory);
   if (!state) return null;
+  if (state.status === 'collected') {
+    if (state.run_id !== sourcePack?.run_instance_id
+      || state.committed_revision > sourcePack?.source_revision) {
+      throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+    }
+    await loadV4SourceReadingSummary(runDirectory, sourcePack);
+    if (state.committed_revision === sourcePack.source_revision
+      && state.accepted_source_pack_digest !== hash(sourcePack)) {
+      throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+    }
+    return {
+      verified_source_receipts: [], verified_acquisition_records: [],
+      source_reading_summary: structuredClone(state.summary)
+    };
+  }
   const packEvents = Array.isArray(sourcePack?.artifact_events) ? sourcePack.artifact_events : [];
   if (state.status !== 'acquired'
     || !Number.isSafeInteger(sourcePack?.source_revision)
@@ -902,6 +970,8 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
   }
   return {
     verified_source_receipts: structuredClone(state.source_receipts),
-    verified_acquisition_records: structuredClone(state.acquisitions)
+    verified_acquisition_records: structuredClone(state.acquisitions),
+    ...(state.schema_version === '4.2.0'
+      ? { source_reading_summary: structuredClone(state.summary) } : {})
   };
 }

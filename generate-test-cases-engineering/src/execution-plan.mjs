@@ -7,6 +7,7 @@ import {
   createPresentationSnapshot, replayWorkflowHistory, validateV4CapabilityReceipt
 } from './execution-events.mjs';
 import { compileSemanticCaseDocumentV4 } from './case-semantics-v4.mjs';
+import { v4ContractForIdentity } from './v4-contract.mjs';
 
 const REASON_CODES = new Set([
   'selected_for_run', 'not_applicable', 'user_deferred', 'temporary_rule_unconfirmed',
@@ -587,7 +588,9 @@ export async function compileExecutionPlanFromCaseDocument(request, services) {
     || manifest.run_id !== reference.run_id || manifest.revision !== reference.revision
     || manifest.bundle.digest !== reference.bundle_digest) throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
   const bundle = JSON.parse(bundleBytes);
-  if (bundle.schema_version !== '4.0.0' || bundle.compiler_version !== '0.5.0'
+  const contract = v4ContractForIdentity(bundle);
+  if (!contract || manifest.schema_version !== contract.schema_version
+    || manifest.compiler_version !== contract.compiler_version
     || bundle.delivery_intent !== 'case_document' || bundle.source_revision !== reference.revision
     || !Array.isArray(bundle.cases) || !bundle.cases.length
     || bundle.cases.length !== manifest.case_count
@@ -644,7 +647,7 @@ export async function compileExecutionPlanFromCaseDocument(request, services) {
     || (item.disposition === 'execute' && item.ready));
   const selected = settled ? items.filter((/** @type {any} */ item)=>item.disposition === 'execute').map((/** @type {any} */ item)=>item.case_id) : [];
   return {
-    schema_version:'4.0.0',compiler_version:'0.5.0',delivery_intent:'execution_plan',
+    schema_version:contract.schema_version,compiler_version:contract.compiler_version,delivery_intent:'execution_plan',
     status:settled ? 'finished' : 'need_user_answers',
     result_kind:settled ? (selected.length ? 'execution_ready' : 'no_execution_selected') : null,
     case_document_ref:reference, items,

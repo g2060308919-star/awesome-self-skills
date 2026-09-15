@@ -142,14 +142,20 @@
         "lineage"
       ],
       "properties": {
-        "schema_version": { "const": "4.0.0" },
-        "compiler_version": { "const": "0.5.0" },
+        "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0"] },
         "run_id": { "$ref": "#/$defs/runId" },
         "delivery_intent": { "enum": ["case_document", "execution_plan"] },
         "created_at": { "type": "string", "minLength": 1 },
         "lineage": { "$ref": "#/$defs/v4Lineage" }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [{
+        "oneOf": [
+          { "properties": { "schema_version": { "const": "4.0.0" }, "compiler_version": { "const": "0.5.0" } } },
+          { "properties": { "schema_version": { "const": "4.2.0" }, "compiler_version": { "const": "0.7.0" } } }
+        ]
+      }]
     }
   }
 }

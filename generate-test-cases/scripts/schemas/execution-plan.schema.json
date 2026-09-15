@@ -2,6 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "execution-plan.schema.json",
   "$defs": {
+    "v4ContractVersion": {
+      "oneOf": [
+        {
+          "properties": {
+            "schema_version": { "const": "4.0.0" },
+            "compiler_version": { "const": "0.5.0" }
+          }
+        },
+        {
+          "properties": {
+            "schema_version": { "const": "4.2.0" },
+            "compiler_version": { "const": "0.7.0" }
+          }
+        }
+      ]
+    },
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "string_set": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "default_basis": {
@@ -235,13 +251,14 @@
     },
     "v4PendingExecutionPlan": {
       "type": "object",
+      "allOf": [{ "$ref": "#/$defs/v4ContractVersion" }],
       "required": [
         "schema_version", "compiler_version", "delivery_intent", "status", "result_kind",
         "case_document_ref", "items", "runner_ready", "runner_projection"
       ],
       "properties": {
-        "schema_version": { "const": "4.0.0" },
-        "compiler_version": { "const": "0.5.0" },
+        "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0"] },
         "delivery_intent": { "const": "execution_plan" },
         "status": { "const": "need_user_answers" },
         "result_kind": { "type": "null" },
@@ -254,13 +271,14 @@
     },
     "v4ExecutionReadyPlan": {
       "type": "object",
+      "allOf": [{ "$ref": "#/$defs/v4ContractVersion" }],
       "required": [
         "schema_version", "compiler_version", "delivery_intent", "status", "result_kind",
         "case_document_ref", "items", "runner_ready", "runner_projection"
       ],
       "properties": {
-        "schema_version": { "const": "4.0.0" },
-        "compiler_version": { "const": "0.5.0" },
+        "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0"] },
         "delivery_intent": { "const": "execution_plan" },
         "status": { "const": "finished" },
         "result_kind": { "const": "execution_ready" },
@@ -273,13 +291,14 @@
     },
     "v4NoExecutionSelectedPlan": {
       "type": "object",
+      "allOf": [{ "$ref": "#/$defs/v4ContractVersion" }],
       "required": [
         "schema_version", "compiler_version", "delivery_intent", "status", "result_kind",
         "case_document_ref", "items", "runner_ready", "runner_projection"
       ],
       "properties": {
-        "schema_version": { "const": "4.0.0" },
-        "compiler_version": { "const": "0.5.0" },
+        "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0"] },
         "delivery_intent": { "const": "execution_plan" },
         "status": { "const": "finished" },
         "result_kind": { "const": "no_execution_selected" },

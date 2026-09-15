@@ -8,9 +8,8 @@ import {
   discardStagingSnapshot, readJsonIfPresent, readTextIfPresent, stagingPath
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
+import { v4ContractForIdentity } from './v4-contract.mjs';
 
-const SCHEMA_VERSION = '4.0.0';
-const COMPILER_VERSION = '0.5.0';
 const RUN_ID = /^RUN-[0-9a-fA-F-]{36}$/u;
 const EVENT_ID = /^EVENT-[0-9a-f]{64}$/u;
 const PHASES = new Set([
@@ -75,6 +74,8 @@ export function constructCancelRunEventV4(context) {
 
 /** @param {string} runDirectory @param {any} runInstance @param {any} recordValue */
 async function syncCancelledLifecycle(runDirectory, runInstance, recordValue) {
+  const contract = v4ContractForIdentity(runInstance);
+  if (!contract) throw new RunStoreIntegrityError('CANCEL_RUN_INSTANCE_INVALID');
   const stored = await readJsonIfPresent(runDirectory, lifecyclePath(runDirectory));
   if (stored?.value?.status === 'cancelled') {
     if (stored.value.run_id !== runInstance.run_id
@@ -89,7 +90,7 @@ async function syncCancelledLifecycle(runDirectory, runInstance, recordValue) {
     throw new RunStoreIntegrityError('CANCEL_LIFECYCLE_INVALID');
   }
   await atomicWriteJson(runDirectory, lifecyclePath(runDirectory), {
-    schema_version: SCHEMA_VERSION, run_id: runInstance.run_id,
+    schema_version: contract.schema_version, run_id: runInstance.run_id,
     delivery_intent: runInstance.delivery_intent, status: 'cancelled', version,
     superseded_by: null, semantic_reopen_txn_id: null,
     cancellation_event_id: recordValue.event.event_id
@@ -104,8 +105,9 @@ async function validateCancellationRecord(runDirectory, value) {
     'version', 'event', 'event_digest', 'prior_manifest', 'reply'
   ];
   const event = validateCancelEvent(value.event);
+  const contract = v4ContractForIdentity(value);
   if (Object.keys(value).length !== keys.length || keys.some(key => !Object.hasOwn(value, key))
-    || value.schema_version !== SCHEMA_VERSION || value.compiler_version !== COMPILER_VERSION
+    || !contract
     || value.run_id !== event.run_id || !['case_document', 'execution_plan'].includes(value.delivery_intent)
     || value.status !== 'cancelled' || value.version !== 1
     || value.event_digest !== `sha256:${digest(event)}`
@@ -143,8 +145,9 @@ export async function cancelRunV4WithHeldLock(runDirectory, submittedEvent, owne
   try {
     const event = validateCancelEvent(submittedEvent);
     const run = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'run-instance.json'));
+    const contract = v4ContractForIdentity(run?.value);
     if (!run || validateAgainstSchema(run.value, runInstanceSchema).length
-      || run.value.schema_version !== SCHEMA_VERSION || run.value.run_id !== event.run_id) {
+      || !contract || run.value.run_id !== event.run_id) {
       throw new RunStoreIntegrityError('CANCEL_RUN_INSTANCE_INVALID');
     }
     const existing = await readCancelledRunV4(runDirectory);
@@ -175,7 +178,7 @@ export async function cancelRunV4WithHeldLock(runDirectory, submittedEvent, owne
       non_blocking_diagnostics: []
     };
     const state = {
-      schema_version: SCHEMA_VERSION, compiler_version: COMPILER_VERSION,
+      schema_version: contract.schema_version, compiler_version: contract.compiler_version,
       run_id: event.run_id, delivery_intent: run.value.delivery_intent,
       status: 'cancelled', version: 1, event,
       event_digest: `sha256:${digest(event)}`, prior_manifest: priorManifest, reply
@@ -237,6 +240,8 @@ export async function createResumeCancelledSiblingV4(catalogRoot, input) {
     const parentDirectory = catalogRunDirectory(catalogRoot, input.parent_run_id);
     const parentState = await readCancelledRunV4(parentDirectory);
     if (!parentState) throw new RunStoreIntegrityError('RESUME_CANCELLED_PARENT_NOT_CANCELLED');
+    const contract = v4ContractForIdentity(parentState);
+    if (!contract) throw new RunStoreIntegrityError('RESUME_CANCELLED_PARENT_NOT_CANCELLED');
     const deliveryIntent = parentState.delivery_intent;
     const siblingDirectory = catalogRunDirectory(catalogRoot, input.run_id);
     if (path.resolve(parentDirectory) === path.resolve(siblingDirectory)) {
@@ -245,7 +250,8 @@ export async function createResumeCancelledSiblingV4(catalogRoot, input) {
     const target = path.join(siblingDirectory, 'run-instance.json');
     const existing = await readJsonIfPresent(catalogRoot, target);
     if (existing) {
-      if (existing.value.schema_version !== SCHEMA_VERSION
+      if (existing.value.schema_version !== contract.schema_version
+        || existing.value.compiler_version !== contract.compiler_version
         || existing.value.run_id !== input.run_id
         || existing.value.delivery_intent !== deliveryIntent
         || canonicalStringify(existing.value.lineage) !== canonicalStringify({
@@ -254,7 +260,7 @@ export async function createResumeCancelledSiblingV4(catalogRoot, input) {
       return structuredClone(existing.value);
     }
     const instance = {
-      schema_version: SCHEMA_VERSION, compiler_version: COMPILER_VERSION,
+      schema_version: contract.schema_version, compiler_version: contract.compiler_version,
       run_id: input.run_id, delivery_intent: deliveryIntent,
       created_at: new Date().toISOString(),
       lineage: { parent_run_id: input.parent_run_id, creation_reason: 'resume_cancelled' }
@@ -288,6 +294,8 @@ export async function verifyResumeCancelledSiblingV4(runDirectory, submittedInst
     throw new RunStoreIntegrityError('RESUME_CANCELLED_PARENT_NOT_CANCELLED');
   }
   if (submittedInstance.run_id === parentState.run_id
+    || submittedInstance.schema_version !== parentState.schema_version
+    || submittedInstance.compiler_version !== parentState.compiler_version
     || submittedInstance.delivery_intent !== parentState.delivery_intent) {
     throw new RunStoreIntegrityError('RESUME_CANCELLED_SIBLING_INVALID');
   }

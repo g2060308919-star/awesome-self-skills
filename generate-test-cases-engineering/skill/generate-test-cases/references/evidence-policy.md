@@ -4,6 +4,14 @@ Read this policy before acquiring sources, constructing locators, or writing `so
 
 An execution decision or capability proof is not evidence. Execute, DoNotExecute, Pending, pause, confirmation, environment access, and runner readiness never receive E1/E2/E3, supply an Oracle, alter semantic status, or create NotApplicable.
 
+## Complete the declared PRD collection before interpreting it
+
+For an online document, enumerate the正文、表格、图片、可见评论和回复, including resolved threads. 分页读取必须到达明确的结束页（terminal page）；不能证明到达末页时，记录 `partial`、`unsupported` 或具体错误。A download, URL, filename, alt text, or detached OCR string does not prove image review: actually inspect legible labels, arrows, branches, and spatial relations before binding its image-region units. 评论与回复必须保留父子关系和问题上下文, so a reply such as “同意” is never treated as a standalone rule.
+
+For offline attachments or pasted input, use `provided_materials` and only the supplied collection as scope. Mark channels that genuinely do not exist in that supplied set as `not_applicable`; never claim that the original online PRD or its comments were exhaustively queried. Distinguish no visible item, unread item, unavailable item, and unfinished enumeration. A source version or authoritative byte change after freezing requires the existing new-run path and must not overwrite history.
+
+After the runner requests the first Source Pack, pass the validated request, closed channel/item observation, and exact raw/capture bytes to `stageV4PrdCollectionObservation`. The helper verifies bytes in memory and persists only safe digests and bindings. The采集技术记录不是业务事实、业务证据或业务权威; every acquired canonical unit must still be classified in `source_reviews`, and only accepted Claims or authorized Decisions may enter business truth. Collection, semantic interpretation, and business adoption are three different facts.
+
 ## Keep raw capture and semantic identity separate
 
 Every v4 Source retains both `capture_digest` and `semantic_digest`. `capture_digest` binds the raw captured bytes. `semantic_digest` is SHA-256 over canonical JSON of `semantic_projection`; it excludes run/revision/time/path/retrieval metadata and includes only stable source identity/type, normalized semantic content/structure, and stable assets.

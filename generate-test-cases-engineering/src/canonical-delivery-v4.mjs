@@ -3,8 +3,12 @@ import path from 'node:path';
 import currentPointerSchema from '../skill/generate-test-cases/scripts/schemas/current-pointer.schema.json' with { type: 'json' };
 import executionPlanSchema from '../skill/generate-test-cases/scripts/schemas/execution-plan.schema.json' with { type: 'json' };
 import replySchema from '../skill/generate-test-cases/scripts/schemas/reply.schema.json' with { type: 'json' };
+import sourceReadingSchema from '../skill/generate-test-cases/scripts/schemas/source-reading.schema.json' with { type: 'json' };
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import { renderBusinessMarkdownV4 } from './business-markdown-v4.mjs';
+import {
+  buildCaseDocumentPresentationV4, renderBusinessHtmlV4, renderCaseTableV4
+} from './case-document-presentation-v4.mjs';
 import { canonicalStringify, digest } from './canonical.mjs';
 import { renderExecutionWorksheetCsvV4 } from './canonical-output-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
@@ -33,9 +37,36 @@ function byteDigest(value) {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
 
+/** @param {Record<string, any>} summary */
+function validateSourceReadingRelations(summary) {
+  const ids = new Set();
+  for (const item of summary.items) {
+    if (ids.has(item.item_id)) throw new TypeError('SOURCE_READING_INVALID');
+    ids.add(item.item_id);
+    if (item.channel === 'reply' && item.parent_item_id === null) {
+      throw new TypeError('SOURCE_READING_INVALID');
+    }
+    if (item.channel !== 'reply' && item.parent_item_id !== null) {
+      throw new TypeError('SOURCE_READING_INVALID');
+    }
+    if (item.acquisition_status === 'acquired' && item.review_status === 'unavailable') {
+      throw new TypeError('SOURCE_READING_INVALID');
+    }
+  }
+  for (const item of summary.items) {
+    if (item.parent_item_id !== null && (!ids.has(item.parent_item_id) || item.parent_item_id === item.item_id)) {
+      throw new TypeError('SOURCE_READING_INVALID');
+    }
+  }
+  if (summary.status === 'complete_within_scope' && (summary.limitations.length > 0
+    || summary.items.some((/** @type {any} */ item) => item.acquisition_status !== 'acquired' || item.review_status !== 'reviewed'))) {
+    throw new TypeError('SOURCE_READING_INVALID');
+  }
+}
+
 /** @param {unknown} input */
 function normalizeInput(input) {
-  if (!record(input) || Object.keys(input).some(key => !['run_id', 'completed_at', 'bundle', 'render_options', 'non_blocking_diagnostics'].includes(key))
+  if (!record(input) || Object.keys(input).some(key => !['run_id', 'completed_at', 'bundle', 'source_reading', 'render_options', 'non_blocking_diagnostics'].includes(key))
     || typeof input.run_id !== 'string' || !input.run_id.trim()
     || typeof input.completed_at !== 'string' || !input.completed_at.trim()
     || !record(input.bundle) || !record(input.render_options)
@@ -43,19 +74,32 @@ function normalizeInput(input) {
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
   const expectedKeys = [...BUNDLE_KEYS].sort();
+  const legacy = bundle.schema_version === '4.0.0' && bundle.compiler_version === '0.5.0';
+  const candidate = bundle.schema_version === '4.2.0' && bundle.compiler_version === '0.7.0';
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])
-    || bundle.schema_version !== '4.0.0' || bundle.compiler_version !== '0.5.0'
+    || (!legacy && !candidate)
     || bundle.delivery_intent !== 'case_document' || !Number.isSafeInteger(bundle.source_revision)
     || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
     throw new TypeError('CANONICAL_BUNDLE_INVALID');
   }
   if (validateAgainstSchema(bundle, testBundleSchema).length) throw new TypeError('CANONICAL_BUNDLE_INVALID');
+  let sourceReading = null;
+  if (candidate) {
+    if (!record(input.source_reading)
+      || validateAgainstSchema(input.source_reading, sourceReadingSchema).length) {
+      throw new TypeError('SOURCE_READING_INVALID');
+    }
+    sourceReading = structuredClone(input.source_reading);
+    validateSourceReadingRelations(sourceReading);
+  } else if (Object.hasOwn(input, 'source_reading')) {
+    throw new TypeError('CANONICAL_DELIVERY_INPUT_INVALID');
+  }
   const projection = Object.fromEntries([
     'result_kind', 'ordered_case_ids', 'scope_manifest', 'cases', 'coverage',
     'semantic_root_groups', 'exploratory', 'not_applicable'
   ].map(key => [key, structuredClone(bundle[key])]));
   projection.render_options = structuredClone(input.render_options);
-  return { value: structuredClone(input), bundle, projection };
+  return { value: structuredClone(input), bundle, projection, sourceReading, candidate };
 }
 
 /** @param {Record<string, any>} bundle */
@@ -112,18 +156,26 @@ function validateManifest(manifest) {
 /** @param {Record<string,any>} manifest @param {Record<string,string>} artifacts @param {any[]} nonBlockingDiagnostics */
 function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
   const blockedOnly = manifest.result_kind === 'blocked_only';
+  const candidate = manifest.schema_version === '4.2.0';
   const reply = {
     status: 'finished', phase: 'delivery', run_id: manifest.run_id,
     delivery_intent: 'case_document', result_kind: manifest.result_kind,
     produced_artifacts: [
       { kind: 'case_document', path: manifest.bundle.path, digest: byteDigest(artifacts.bundle) },
       { kind: 'business_markdown', path: manifest.markdown.path, digest: byteDigest(artifacts.markdown) },
-      { kind: 'execution_worksheet', path: manifest.execution_worksheet.path, digest: byteDigest(artifacts.worksheet) }
+      { kind: 'execution_worksheet', path: manifest.execution_worksheet.path, digest: byteDigest(artifacts.worksheet) },
+      ...(candidate ? [
+        { kind: 'business_html', path: manifest.html.path, digest: byteDigest(artifacts.html) },
+        { kind: 'case_table', path: manifest.chat_table.path, digest: byteDigest(artifacts.table) },
+        { kind: 'source_reading_summary', path: manifest.source_reading.path, digest: byteDigest(artifacts.source_reading) }
+      ] : [])
     ],
     incomplete_reason: null,
     user_next_steps: [{
       action: 'read_artifact',
-      description: blockedOnly ? '查看未决业务问题报告和明确关闭的缺口。' : '查看人工功能测试用例和执行工作表。'
+      description: blockedOnly ? '查看未决业务问题报告和明确关闭的缺口。'
+        : candidate ? '优先查看 HTML 人工功能测试用例；对话 Table、JSON、CSV 与 Markdown 来自同一规范投影。'
+          : '查看人工功能测试用例和执行工作表。'
     }],
     recovery: {
       mode: 'create_new_run',
@@ -260,7 +312,7 @@ function executionFinishedReply(manifest, planBytes, diagnostics) {
  * @param {unknown} input
  */
 export function materializeCaseDocumentDeliveryV4(input) {
-  const { value, bundle } = normalizeInput(input);
+  const { value, bundle, sourceReading, candidate } = normalizeInput(input);
   validateFinalRiskReview(bundle);
   const bundleBytes = `${canonicalStringify(bundle)}\n`;
   // Render both human surfaces from the exact canonical JSON bytes that will
@@ -269,23 +321,42 @@ export function materializeCaseDocumentDeliveryV4(input) {
   const { projection } = normalizeInput({ ...value, bundle: canonicalBundle });
   const markdownBytes = renderBusinessMarkdownV4(projection);
   const worksheetBytes = renderExecutionWorksheetCsvV4(canonicalBundle, canonicalBundle.ordered_case_ids);
+  const presentation = candidate ? buildCaseDocumentPresentationV4(canonicalBundle) : null;
+  const sourceReadingBytes = candidate ? `${canonicalStringify(sourceReading)}\n` : null;
+  const canonicalSourceReading = candidate && sourceReadingBytes ? JSON.parse(sourceReadingBytes) : null;
+  const htmlBytes = candidate && presentation && canonicalSourceReading
+    ? renderBusinessHtmlV4(presentation, canonicalSourceReading) : null;
+  const tableBytes = candidate && presentation ? renderCaseTableV4(presentation) : null;
   const revision = canonicalBundle.source_revision;
   const prefix = `output/${revisionName(revision)}`;
+  /** @type {Record<string,any>} */
   const manifest = {
-    run_id: value.run_id, revision, schema_version: '4.0.0', compiler_version: '0.5.0',
+    run_id: value.run_id, revision, schema_version: canonicalBundle.schema_version,
+    compiler_version: canonicalBundle.compiler_version,
     delivery_intent: 'case_document', authority: 'canonical', result_kind: canonicalBundle.result_kind,
     bundle: { path: `${prefix}/test-bundle.json`, digest: byteDigest(bundleBytes) },
     markdown: { path: `${prefix}/test-cases.md`, digest: byteDigest(markdownBytes) },
     execution_worksheet: {
       path: `${prefix}/execution-worksheet.csv`, digest: byteDigest(worksheetBytes), format: 'csv'
     },
+    ...(candidate ? {
+      html: { path: `${prefix}/test-cases.html`, digest: byteDigest(htmlBytes ?? ''), format: 'html' },
+      chat_table: { path: `${prefix}/case-table.txt`, digest: byteDigest(tableBytes ?? ''), format: 'commonmark-table' },
+      source_reading: {
+        path: `${prefix}/source-reading.json`, digest: byteDigest(sourceReadingBytes ?? ''), format: 'json'
+      },
+      primary_readable: 'html'
+    } : {}),
     render_options: structuredClone(value.render_options), ...derivedCounts(canonicalBundle),
     completed_at: value.completed_at
   };
   validateManifest(manifest);
   return {
     manifest, bundle_bytes: bundleBytes, markdown_bytes: markdownBytes,
-    worksheet_bytes: worksheetBytes
+    worksheet_bytes: worksheetBytes,
+    ...(candidate ? {
+      html_bytes: htmlBytes, table_bytes: tableBytes, source_reading_bytes: sourceReadingBytes
+    } : {})
   };
 }
 
@@ -294,14 +365,26 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateManifest(manifest);
   if (manifest.delivery_intent !== 'case_document') throw new TypeError('CANONICAL_MANIFEST_INVALID');
   const prefix = `output/${revisionName(manifest.revision)}`;
+  const candidate = manifest.schema_version === '4.2.0';
   if (manifest.bundle.path !== `${prefix}/test-bundle.json`
     || manifest.markdown.path !== `${prefix}/test-cases.md`
-    || manifest.execution_worksheet.path !== `${prefix}/execution-worksheet.csv`) {
+    || manifest.execution_worksheet.path !== `${prefix}/execution-worksheet.csv`
+    || (candidate && (manifest.html.path !== `${prefix}/test-cases.html`
+      || manifest.chat_table.path !== `${prefix}/case-table.txt`
+      || manifest.source_reading.path !== `${prefix}/source-reading.json`
+      || manifest.primary_readable !== 'html'))) {
     throw new TypeError('CANONICAL_MANIFEST_INVALID');
   }
   /** @type {Record<string,string>} */
   const artifacts = {};
-  for (const [key, name] of [['bundle', 'bundle'], ['markdown', 'markdown'], ['execution_worksheet', 'worksheet']]) {
+  /** @type {Array<[string,string]>} */
+  const artifactEntries = [
+    ['bundle', 'bundle'], ['markdown', 'markdown'], ['execution_worksheet', 'worksheet'],
+    ...(candidate ? /** @type {Array<[string,string]>} */ ([
+      ['html', 'html'], ['chat_table', 'table'], ['source_reading', 'source_reading']
+    ]) : [])
+  ];
+  for (const [key, name] of artifactEntries) {
     let text;
     try { text = await readText(runDirectory, path.join(runDirectory, manifest[key].path)); } catch {
       throw new TypeError('CANONICAL_ARTIFACT_INVALID');
@@ -312,10 +395,16 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   let bundle;
   try { bundle = JSON.parse(artifacts.bundle); } catch { throw new TypeError('CANONICAL_ARTIFACT_INVALID'); }
   if (`${canonicalStringify(bundle)}\n` !== artifacts.bundle) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
-  const normalized = normalizeInput({
+  let sourceReading;
+  if (candidate) {
+    try { sourceReading = JSON.parse(artifacts.source_reading); } catch { throw new TypeError('CANONICAL_ARTIFACT_INVALID'); }
+    if (`${canonicalStringify(sourceReading)}\n` !== artifacts.source_reading) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+  }
+  const normalized = /** @type {any} */ (normalizeInput({
     run_id: manifest.run_id, completed_at: manifest.completed_at, bundle,
+    ...(candidate ? { source_reading: sourceReading } : {}),
     render_options: manifest.render_options, non_blocking_diagnostics: []
-  });
+  }));
   validateFinalRiskReview(normalized.bundle);
   if (normalized.bundle.source_revision !== manifest.revision
     || normalized.bundle.result_kind !== manifest.result_kind
@@ -328,7 +417,14 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
     || renderExecutionWorksheetCsvV4(normalized.bundle, normalized.bundle.ordered_case_ids) !== artifacts.worksheet) {
     throw new TypeError('CANONICAL_ARTIFACT_INVALID');
   }
-  return { bundle: artifacts.bundle, markdown: artifacts.markdown, worksheet: artifacts.worksheet };
+  if (candidate) {
+    const presentation = buildCaseDocumentPresentationV4(normalized.bundle);
+    if (renderBusinessHtmlV4(presentation, normalized.sourceReading) !== artifacts.html
+      || renderCaseTableV4(presentation) !== artifacts.table) {
+      throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+    }
+  }
+  return artifacts;
 }
 
 /**
@@ -349,16 +445,21 @@ export async function verifyCaseDocumentDeliveryV4(runDirectory) {
 }
 
 /**
- * Publish the three immutable revision artifacts, verify exact read-back, and
+ * Publish immutable revision artifacts, verify exact read-back, and
  * only then make them authoritative by atomically replacing current.json.
  * @param {string} runDirectory @param {unknown} input
  */
 export async function publishCaseDocumentDeliveryV4(runDirectory, input) {
-  const materialized = materializeCaseDocumentDeliveryV4(input);
+  const materialized = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
   const paths = outputPaths(runDirectory, materialized.manifest.revision);
   await atomicWriteText(runDirectory, paths.bundle, materialized.bundle_bytes);
   await atomicWriteText(runDirectory, paths.markdown, materialized.markdown_bytes);
   await atomicWriteText(runDirectory, paths.worksheet, materialized.worksheet_bytes);
+  if (materialized.manifest.schema_version === '4.2.0') {
+    await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.html.path), materialized.html_bytes);
+    await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.chat_table.path), materialized.table_bytes);
+    await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.source_reading.path), materialized.source_reading_bytes);
+  }
   await readAndVerifyArtifacts(runDirectory, materialized.manifest);
   await atomicWriteJson(runDirectory, paths.current, materialized.manifest);
   const verified = await verifyCaseDocumentDeliveryV4(runDirectory);
@@ -379,7 +480,8 @@ export async function materializeExecutionPlanDeliveryV4(input, services) {
   const planBytes = `${canonicalStringify(plan)}\n`;
   const prefix = `output/${revisionName(value.revision)}`;
   const manifest = {
-    run_id: value.run_id, revision: value.revision, schema_version: '4.0.0', compiler_version: '0.5.0',
+    run_id: value.run_id, revision: value.revision,
+    schema_version: plan.schema_version, compiler_version: plan.compiler_version,
     delivery_intent: 'execution_plan', authority: 'canonical', result_kind: plan.result_kind,
     case_document_ref: structuredClone(value.case_document_ref),
     execution_plan_artifact: { path: `${prefix}/execution-plan.json`, digest: byteDigest(planBytes) },

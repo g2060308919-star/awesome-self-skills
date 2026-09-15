@@ -105,7 +105,7 @@
         "question_parts"
       ],
       "properties": {
-        "schema_version": { "const": "4.0.0" },
+        "schema_version": { "enum": ["4.0.0", "4.2.0"] },
         "presentation_id": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
         "phase": { "enum": ["requirements_analysis", "case_design"] },
         "supersedes_presentation_id": {
