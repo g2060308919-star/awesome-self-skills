@@ -112,8 +112,8 @@ test("PBH AC-08/09/10/12/14/15/16/31: waiting and resume loop is contextual, rep
   assert.equal(artifact.includes("resume_check"), true);
 });
 
-test("PBH AC-19/20/21/25: HTML is primary, Markdown remains compatible, and dialogue keeps the canonical full table", async () => {
-  const [skill, workflow, resultModel, proxy] = await sources();
+test("v2 AC-02/03/24: HTML is the only persisted report and dialogue keeps the same-model full table", async () => {
+  const [skill, workflow, resultModel, proxy, artifact] = await sources();
   for (const phrase of [
     "默认环境清理只包括本 Run 的代理",
     "无需用户确认",
@@ -121,25 +121,71 @@ test("PBH AC-19/20/21/25: HTML is primary, Markdown remains compatible, and dial
     "用例明确声明的业务副作用清理"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
   assert.equal(proxy.includes("不得释放其他 Run 的锁"), true);
-  assert.equal(skill.includes("copy the complete five-column table from the validated Markdown report into the final reply"), true);
+  assert.equal(skill.includes("chatTableMarkdown"), true);
   assert.equal(resultModel.includes("报告链接不能替代对话内全量表格"), true);
   assert.equal(resultModel.includes("ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因"), true);
   assert.equal(resultModel.includes("report.html"), true);
-  assert.equal(resultModel.includes("reportPath"), true);
-  assert.equal(resultModel.includes("htmlReportPath"), true);
-  assert.equal(workflow.includes("优先提供 `report.html`"), true);
+  assert.equal(resultModel.includes("`reportPath` 和 `htmlReportPath` 均指向 `report.html`"), true);
+  assert.equal(workflow.includes("新版不生成 `report.md`"), true);
+  assert.equal(artifact.includes("`reportFormat: \"html-only-v1\"`"), true);
+  assert.equal(artifact.includes("`chatTableMarkdown`"), true);
+  assert.equal(artifact.includes("历史 v1"), true);
   assert.equal(workflow.includes("密码状态只能显示“已提供”或“待提供”"), true);
   assert.equal(workflow.includes("最终回复不得回显密码"), true);
 });
 
-test("PBH AC-22/23/24: report instructions require escaping, local evidence boundaries, secret blocking, and pair rebuild", async () => {
+test("v2 AC-11/12/29/30: report instructions require escaping, local evidence boundaries, secret blocking, and profile-aware rebuild", async () => {
   const [, , , , artifact, security] = await sources();
   for (const phrase of ["动态文本统一转义", "禁止外部脚本", "普通图片", "符号链接", "HTML 编码不能替代秘密扫描"]) {
     assert.equal(security.includes(phrase), true, phrase);
   }
-  for (const phrase of ["reportPath", "htmlReportPath", "两次 rename", "重新生成两份报告", "无标记历史 Run"]) {
+  for (const phrase of ["reportPath", "htmlReportPath", "reportFormat", "重新生成 `report.html`", "无 profile 的历史 Run"]) {
     assert.equal(artifact.includes(phrase), true, phrase);
   }
+});
+
+test("v2 AC-13..17: instructions require real critical screenshots and honest request-detail capability limits", async () => {
+  const [skill, workflow, , , artifact, security] = await sources();
+  const combined = `${skill}\n${workflow}\n${artifact}\n${security}`;
+  for (const phrase of [
+    "包括通过项",
+    "真实请求详情",
+    "普通页面截图不能代替请求详情截图",
+    "captured` / `failed` / `unavailable",
+    "不得生成或重绘替代图片",
+    "证据状态与产品结果分开"
+  ]) assert.equal(combined.includes(phrase), true, phrase);
+});
+
+test("v2 AC-18..28: instructions separate readiness, execution context, assistance lifecycle, and same-Run recovery", async () => {
+  const [skill, workflow, resultModel, , artifact] = await sources();
+  const combined = `${skill}\n${workflow}\n${resultModel}\n${artifact}`;
+  for (const phrase of [
+    "`verification_scope` 固定为 `execution_context`",
+    "被测权限行为",
+    "assistance_id",
+    "required_user_action",
+    "开放协作",
+    "只暂停真正依赖",
+    "同 Run",
+    "不自动重放"
+  ]) assert.equal(combined.includes(phrase), true, phrase);
+});
+
+test("v2 AC-33..41: workflow routes information gaps through fact-led exploration without fixed scenario branches", async () => {
+  const [, workflow, resultModel, , artifact] = await sources();
+  const combined = `${workflow}\n${resultModel}\n${artifact}`;
+  for (const phrase of [
+    "具体缺少的事实",
+    "一次无结果不等于",
+    "不新增通用固定尝试次数",
+    "不能替换原指定样本",
+    "只暂停真正依赖",
+    "exploration_summary",
+    "exploration_ref",
+    "not_attempted_reason",
+    "cannot_continue_reason"
+  ]) assert.equal(combined.includes(phrase), true, phrase);
 });
 
 test("UAT-02: strict expected text remains failed when page shows a broader label", async () => {

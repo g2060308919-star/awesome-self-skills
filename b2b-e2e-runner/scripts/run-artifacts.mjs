@@ -12,11 +12,13 @@ import {
   validateTestCases
 } from "./lib/contracts.mjs";
 import { assertNoSecrets } from "./lib/redaction.mjs";
-import { aggregateCase, buildReport } from "./lib/report.mjs";
+import { aggregateCase, buildReport, renderChatTableMarkdown } from "./lib/report.mjs";
 import { buildReportModel } from "./lib/report-model.mjs";
 import { buildHtmlReport } from "./lib/report-html.mjs";
 import {
   permissionWorkflowProfile,
+  permissionWorkflowProfileV2,
+  permissionWorkflowProfiles,
   validatePermissionEvent,
   validatePermissionLog
 } from "./lib/permission-batches.mjs";
@@ -96,11 +98,36 @@ async function validateEvidenceEntry(runRoot, entry, checkpointIds) {
   }
   if (entry.path) {
     const absolute = resolveEvidencePath(runRoot, entry.path);
+    const evidenceRoot = path.resolve(runRoot, "evidence");
+    const evidenceRootStats = await lstat(evidenceRoot).catch(error => {
+      if (error.code === "ENOENT") throw consistencyError("evidence/ 目录不存在");
+      throw error;
+    });
+    if (!evidenceRootStats.isDirectory() || evidenceRootStats.isSymbolicLink()) {
+      throw consistencyError("evidence/ 根目录必须是真实目录且不得是符号链接");
+    }
+    let current = evidenceRoot;
+    for (const segment of path.relative(evidenceRoot, absolute).split(path.sep)) {
+      current = path.join(current, segment);
+      const partStats = await lstat(current).catch(error => {
+        if (error.code === "ENOENT") throw consistencyError(`证据文件不存在：${entry.path}`);
+        throw error;
+      });
+      if (partStats.isSymbolicLink()) throw consistencyError(`证据路径不得包含符号链接：${entry.path}`);
+    }
     const stats = await lstat(absolute).catch(error => {
       if (error.code === "ENOENT") throw consistencyError(`证据文件不存在：${entry.path}`);
       throw error;
     });
     if (!stats.isFile() || stats.isSymbolicLink()) throw consistencyError(`证据必须是普通文件：${entry.path}`);
+    if (entry.kind === "screenshot") {
+      const extension = path.extname(entry.path).toLowerCase();
+      const bytes = await readFile(absolute);
+      const png = extension === ".png" && bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+      const jpeg = [".jpg", ".jpeg"].includes(extension) && bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      const webp = extension === ".webp" && bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+      if (!png && !jpeg && !webp) throw consistencyError(`截图图片文件格式与允许类型不一致：${entry.path}`);
+    }
   } else {
     assertNoSecrets(entry.inline);
   }
@@ -108,6 +135,13 @@ async function validateEvidenceEntry(runRoot, entry, checkpointIds) {
 
 async function scanEvidenceDirectory(runRoot) {
   const evidenceRoot = path.join(runRoot, "evidence");
+  const rootStats = await lstat(evidenceRoot).catch(error => {
+    if (error.code === "ENOENT") throw consistencyError("evidence/ 目录不存在");
+    throw error;
+  });
+  if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
+    throw consistencyError("evidence/ 根目录必须是真实目录且不得是符号链接");
+  }
   const pending = [evidenceRoot];
   const textExtensions = new Set([".json", ".txt", ".md", ".log", ".har", ".csv", ".xml", ".html"]);
   while (pending.length) {
@@ -129,7 +163,7 @@ async function scanEvidenceDirectory(runRoot) {
 export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId(), workflowProfile }) {
   ensureRuntime();
   if (!workspaceRoot || !casesPath) throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 必填");
-  if (workflowProfile !== undefined && workflowProfile !== permissionWorkflowProfile) {
+  if (workflowProfile !== undefined && !permissionWorkflowProfiles.includes(workflowProfile)) {
     throw runnerError("INPUT_CONTRACT", "未知 workflow profile");
   }
   if (!/^[A-Za-z0-9._-]+$/.test(runId)) throw runnerError("INPUT_CONTRACT", "Run ID 只能包含字母、数字、点、下划线和连字符");
@@ -247,7 +281,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
       run.log.run.actual_case_order.some(id => !knownCases.has(id))) {
     throw consistencyError("actual_case_order 包含重复或未知用例 ID");
   }
-  const evidenceIds = new Set();
+  const evidenceEntries = new Map();
   for (const [index, event] of (run.log.events ?? []).entries()) {
     if (event.sequence !== index + 1 || !Number.isFinite(Date.parse(event.at))) {
       throw consistencyError(`事件顺序或时间无效：events[${index}]`);
@@ -261,11 +295,29 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
     if (event.evidence !== undefined && !Array.isArray(event.evidence)) throw consistencyError(`events[${index}].evidence 必须是数组`);
     for (const evidence of event.evidence ?? []) {
       await validateEvidenceEntry(path.resolve(runRoot), evidence, expected);
-      if (evidenceIds.has(evidence.evidence_id)) throw consistencyError(`证据 ID 重复：${evidence.evidence_id}`);
-      evidenceIds.add(evidence.evidence_id);
+      if (evidenceEntries.has(evidence.evidence_id)) throw consistencyError(`证据 ID 重复：${evidence.evidence_id}`);
+      evidenceEntries.set(evidence.evidence_id, evidence);
+    }
+    if (event.type === "checkpoint_result" && event.evidence_refs !== undefined) {
+      if (!Array.isArray(event.evidence_refs) || new Set(event.evidence_refs).size !== event.evidence_refs.length) throw consistencyError("checkpoint_result.evidence_refs 必须是无重复字符串数组");
+      for (const evidenceId of event.evidence_refs) {
+        const evidence = evidenceEntries.get(evidenceId);
+        if (!evidence) throw consistencyError(`检查点引用未注册证据：${evidenceId}`);
+        if (!evidence.checkpoint_ids.includes(event.checkpoint_id)) throw consistencyError(`证据 ${evidenceId} 不支持检查点 ${event.checkpoint_id}`);
+      }
     }
   }
   validatePermissionLog(run.testCases, run.log);
+  if (workflowProfile(run.log) === permissionWorkflowProfileV2 && ["awaiting_user", "completed"].includes(run.log.run.status)) {
+    const captureEvents = run.log.events.filter(event => event.type === "evidence_capture");
+    for (const caseId of run.log.run.actual_case_order) {
+      const sourceCase = run.testCases.cases.find(item => item.case_id === caseId);
+      if (!sourceCase || sourceCase.excluded) continue;
+      const ids = new Set(sourceCase.steps.flatMap(step => step.expected.map(oracle => `${caseId}/${step.step_id}/${oracle.oracle_id}`)));
+      const documented = captureEvents.some(event => (event.checkpoint_ids ?? []).some(checkpointId => ids.has(checkpointId)));
+      if (!documented) throw consistencyError(`已执行用例 ${caseId} 缺少成功或明确缺失的截图采集记录`);
+    }
+  }
   const checkpointStatuses = new Set(["pending", "running", "completed", "skipped"]);
   const resultStates = new Set(["passed", "failed", "undetermined", "not_executed"]);
   const evidenceStates = new Set(["complete", "partial", "missing", "not_required"]);
@@ -283,7 +335,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
       if (!checkpointStatuses.has(checkpoint.status) || !evidenceStates.has(checkpoint.evidence_status)) throw consistencyError(`检查点状态无效：${sourceCase.case_id}`);
       if (checkpoint.result !== null && !resultStates.has(checkpoint.result)) throw consistencyError(`检查点结果无效：${sourceCase.case_id}`);
       if (!Array.isArray(checkpoint.observations) || !Array.isArray(checkpoint.evidence_refs)) throw consistencyError(`检查点事实结构无效：${sourceCase.case_id}`);
-      if (checkpoint.evidence_refs.some(id => !evidenceIds.has(id))) throw consistencyError(`检查点引用未知证据：${sourceCase.case_id}`);
+      if (checkpoint.evidence_refs.some(id => !evidenceEntries.has(id))) throw consistencyError(`检查点引用未知证据：${sourceCase.case_id}`);
     });
     const derived = aggregateCase({ excluded: sourceCase.excluded === true, checkpoints: loggedCase.checkpoints });
     if (loggedCase.result !== derived || typeof loggedCase.reason !== "string" || !loggedCase.reason) {
@@ -307,7 +359,10 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
     ]);
     const profile = workflowProfile(run.log);
     const deliveryState = ["awaiting_user", "completed"].includes(run.log.run.status);
-    if (profile === permissionWorkflowProfile && (deliveryState || reportStats || htmlStats) && (!reportStats || !htmlStats)) {
+    if (profile === permissionWorkflowProfileV2) {
+      if (reportStats) throw consistencyError("v2 工作流不得生成 report.md");
+      if ((deliveryState || htmlStats) && !htmlStats) throw consistencyError("v2 阶段或最终交付必须存在 report.html");
+    } else if (profile === permissionWorkflowProfile && (deliveryState || reportStats || htmlStats) && (!reportStats || !htmlStats)) {
       throw consistencyError("新工作流阶段或最终交付必须同时存在 report.md 与 report.html 两份报告");
     }
     const model = buildReportModel(run.testCases, run.log);
@@ -354,7 +409,20 @@ export async function recordEvent(runRoot, event) {
   }
   validatePermissionEvent(run.testCases, run.log, event);
   const ids = expectedCheckpointIds(run.testCases);
-  for (const evidence of event.evidence ?? []) await validateEvidenceEntry(path.resolve(runRoot), evidence, ids);
+  const registeredEvidence = new Map((run.log.events ?? []).flatMap(item => item.evidence ?? []).map(item => [item.evidence_id, item]));
+  for (const evidence of event.evidence ?? []) {
+    await validateEvidenceEntry(path.resolve(runRoot), evidence, ids);
+    if (registeredEvidence.has(evidence.evidence_id)) throw consistencyError(`证据 ID 重复：${evidence.evidence_id}`);
+    registeredEvidence.set(evidence.evidence_id, evidence);
+  }
+  if (event.type === "checkpoint_result" && event.evidence_refs !== undefined) {
+    if (!Array.isArray(event.evidence_refs) || new Set(event.evidence_refs).size !== event.evidence_refs.length) throw consistencyError("checkpoint_result.evidence_refs 必须是无重复字符串数组");
+    for (const evidenceId of event.evidence_refs) {
+      const evidence = registeredEvidence.get(evidenceId);
+      if (!evidence) throw consistencyError(`检查点引用未注册证据：${evidenceId}`);
+      if (!evidence.checkpoint_ids.includes(event.checkpoint_id)) throw consistencyError(`证据 ${evidenceId} 不支持检查点 ${event.checkpoint_id}`);
+    }
+  }
   const logged = {
     ...structuredClone(event),
     ...(event.type === "checkpoint_result" ? {
@@ -400,7 +468,10 @@ export async function recordEvent(runRoot, event) {
     checkpoint.result = event.result;
     checkpoint.reason = event.reason;
     checkpoint.observations.push(event.observation ?? event.reason);
-    checkpoint.evidence_refs = (event.evidence ?? []).map(item => item.evidence_id);
+    checkpoint.evidence_refs = [...new Set([
+      ...(event.evidence_refs ?? []),
+      ...(event.evidence ?? []).map(item => item.evidence_id)
+    ])];
     checkpoint.evidence_status = event.evidence_status;
     checkpoint.blocker = event.blocker ?? null;
     checkpoint.started_at ??= logged.at;
@@ -445,7 +516,7 @@ export async function resumeCheck(runRoot) {
   }
   const previousLastEvent = log.events.at(-1) ?? null;
   log.run.resume_count += 1;
-  if (workflowProfile(log) === permissionWorkflowProfile) {
+  if (permissionWorkflowProfiles.includes(workflowProfile(log))) {
     log.events.push({
       type: "resume_check",
       resume_count: log.run.resume_count,
@@ -496,22 +567,43 @@ export async function generateReport(runRoot) {
   assertNoSecrets(model);
   const generated = buildReport(testCases, log);
   const html = buildHtmlReport(model);
+  const chatTableMarkdown = renderChatTableMarkdown(model);
   assertNoSecrets(generated.markdown);
   assertNoSecrets(html);
+  assertNoSecrets(chatTableMarkdown);
   const reportPath = path.join(path.resolve(runRoot), "report.md");
   const htmlReportPath = path.join(path.resolve(runRoot), "report.html");
-  await writeTextAtomic(reportPath, generated.markdown);
-  await writeTextAtomic(htmlReportPath, html);
-  const [writtenMarkdown, writtenHtml, latestLog] = await Promise.all([
-    readFile(reportPath, "utf8"),
-    readFile(htmlReportPath, "utf8"),
-    readFile(loaded.logPath)
-  ]);
-  assertNoSecrets(writtenMarkdown);
+  const profile = workflowProfile(log);
+  if (profile === permissionWorkflowProfileV2) {
+    await writeTextAtomic(htmlReportPath, html);
+  } else {
+    await writeTextAtomic(reportPath, generated.markdown);
+    await writeTextAtomic(htmlReportPath, html);
+  }
+  const writtenHtml = await readFile(htmlReportPath, "utf8");
+  const latestLog = await readFile(loaded.logPath);
+  if (profile !== permissionWorkflowProfileV2) {
+    const writtenMarkdown = await readFile(reportPath, "utf8");
+    assertNoSecrets(writtenMarkdown);
+    if (writtenMarkdown !== generated.markdown) throw consistencyError("报告写入后内容校验失败");
+  }
   assertNoSecrets(writtenHtml);
-  if (writtenMarkdown !== generated.markdown || writtenHtml !== html) throw consistencyError("报告写入后内容校验失败");
+  if (writtenHtml !== html) throw consistencyError("报告写入后内容校验失败");
   if (digest(latestLog) !== loaded.logHash) throw consistencyError("报告生成期间执行日志发生变化，拒绝交付过期报告");
   await validateRun(runRoot);
+  if (profile === permissionWorkflowProfileV2) {
+    return {
+      reportFormat: "html-only-v1",
+      reportPath: htmlReportPath,
+      htmlReportPath,
+      chatTableMarkdown,
+      snapshotHash: loaded.snapshotHash,
+      eventCount: log.events.length,
+      lastSequence: log.events.at(-1)?.sequence ?? 0,
+      counts: generated.counts,
+      runId: log.run.run_id
+    };
+  }
   return { reportPath, htmlReportPath, counts: generated.counts, runId: log.run.run_id };
 }
 

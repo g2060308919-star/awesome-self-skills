@@ -53,6 +53,12 @@ export function renderMarkdownReport(model) {
   return markdown;
 }
 
+export function renderChatTableMarkdown(model) {
+  const rows = model.rows.map(row => `| ${escapeCell(row.display_id ?? row.case_id)} | ${escapeCell(row.module)} | ${escapeCell(row.title)} | ${row.result_label} | ${escapeCell(row.reason)} |`);
+  return `| ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因 |\n` +
+    `|---|---|---|---|---|\n${rows.join("\n")}`;
+}
+
 export function buildReport(testCases, executionLog) {
   const model = buildReportModel(testCases, executionLog);
   return { markdown: renderMarkdownReport(model), counts: model.counts };

@@ -94,3 +94,29 @@ test("PBH AC-25: CLI accepts the additive workflow profile and returns both comp
     assert.equal(result.htmlReportPath, path.join(initJson.runRoot, "report.html"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("v2 AC-02: CLI emits one JSON object with HTML-only paths and the complete chat table", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner v2 cli "));
+  try {
+    const initialized = await invoke(["init", "--workspace", root, "--cases", fixture, "--workflow-profile", "permission-batches-html-v2"]);
+    assert.equal(initialized.code, 0);
+    assert.equal(initialized.stdout.trim().split("\n").length, 1);
+    const initJson = JSON.parse(initialized.stdout);
+    const eventPath = path.join(root, "plan-v2.json");
+    await writeFile(eventPath, JSON.stringify({
+      type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE-原始-01"]
+    }));
+    assert.equal((await invoke(["record", "--run", initJson.runRoot, "--event", eventPath])).code, 0);
+    const report = await invoke(["report", "--run", initJson.runRoot]);
+    assert.equal(report.code, 0);
+    assert.equal(report.stderr, "");
+    assert.equal(report.stdout.trim().split("\n").length, 1);
+    const result = JSON.parse(report.stdout);
+    assert.equal(result.reportFormat, "html-only-v1");
+    assert.equal(result.reportPath, path.join(initJson.runRoot, "report.html"));
+    assert.equal(result.htmlReportPath, result.reportPath);
+    assert.match(result.chatTableMarkdown, /TC-001/);
+    assert.equal(Number.isInteger(result.eventCount), true);
+    assert.equal(Number.isInteger(result.lastSequence), true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
