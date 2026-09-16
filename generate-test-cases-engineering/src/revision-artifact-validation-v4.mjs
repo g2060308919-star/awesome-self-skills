@@ -9,7 +9,7 @@ import sourcePackSchema from '../skill/generate-test-cases/scripts/schemas/sourc
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import testObligationsSchema from '../skill/generate-test-cases/scripts/schemas/test-obligations.schema.json' with { type: 'json' };
 
-import { materializeCaseDocumentDeliveryV4 } from './canonical-delivery-v4.mjs';
+import { validateCaseDocumentArtifactSetV4 } from './canonical-delivery-v4.mjs';
 import { canonicalStringify } from './canonical.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
@@ -149,26 +149,16 @@ export function validateRevisionArtifactsV4(input) {
       || values.manifest.delivery_intent !== 'case_document') {
       throw new TypeError('CANONICAL_MANIFEST_INVALID');
     }
-    let materialized;
     try {
-      materialized = materializeCaseDocumentDeliveryV4({
+      validateCaseDocumentArtifactSetV4({
         run_id: input.run_id,
         completed_at: values.manifest.completed_at,
         bundle: values.bundle,
         ...(contract.candidate ? { source_reading: values.source_reading } : {}),
         render_options: values.manifest.render_options,
         non_blocking_diagnostics: []
-      });
+      }, texts);
     } catch {
-      throw new TypeError('CANONICAL_MANIFEST_INVALID');
-    }
-    if (materialized.bundle_bytes !== texts.bundle
-      || materialized.markdown_bytes !== texts.markdown
-      || materialized.worksheet_bytes !== texts.worksheet
-      || (contract.candidate && (materialized.html_bytes !== texts.html
-        || materialized.table_bytes !== texts.table
-        || materialized.source_reading_bytes !== texts.source_reading))
-      || `${canonicalStringify(materialized.manifest)}\n` !== texts.manifest) {
       throw new TypeError('CANONICAL_MANIFEST_INVALID');
     }
   }

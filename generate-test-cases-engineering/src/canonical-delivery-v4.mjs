@@ -7,7 +7,8 @@ import sourceReadingSchema from '../skill/generate-test-cases/scripts/schemas/so
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import { renderBusinessMarkdownV4 } from './business-markdown-v4.mjs';
 import {
-  buildCaseDocumentPresentationV4, renderBusinessHtmlV4, renderCaseTableV4
+  buildCaseDocumentPresentationV4, matchCasePresentationFamilyV42,
+  renderBusinessHtmlV4, renderCaseTableV4
 } from './case-document-presentation-v4.mjs';
 import { canonicalStringify, digest } from './canonical.mjs';
 import { renderExecutionWorksheetCsvV4 } from './canonical-output-v4.mjs';
@@ -321,7 +322,8 @@ export function materializeCaseDocumentDeliveryV4(input) {
   const { projection } = normalizeInput({ ...value, bundle: canonicalBundle });
   const markdownBytes = renderBusinessMarkdownV4(projection);
   const worksheetBytes = renderExecutionWorksheetCsvV4(canonicalBundle, canonicalBundle.ordered_case_ids);
-  const presentation = candidate ? buildCaseDocumentPresentationV4(canonicalBundle) : null;
+  const presentation = candidate
+    ? buildCaseDocumentPresentationV4(canonicalBundle, value.render_options) : null;
   const sourceReadingBytes = candidate ? `${canonicalStringify(sourceReading)}\n` : null;
   const canonicalSourceReading = candidate && sourceReadingBytes ? JSON.parse(sourceReadingBytes) : null;
   const htmlBytes = candidate && presentation && canonicalSourceReading
@@ -358,6 +360,50 @@ export function materializeCaseDocumentDeliveryV4(input) {
       html_bytes: htmlBytes, table_bytes: tableBytes, source_reading_bytes: sourceReadingBytes
     } : {})
   };
+}
+
+/**
+ * Validate an already-materialized final artifact set. New writes always use
+ * the current renderer; read/recovery may accept one complete frozen 4.2
+ * presentation family so an otherwise valid historical revision remains
+ * recoverable. HTML and Table must come from the same family.
+ * @param {unknown} input
+ * @param {Record<string,string>} texts
+ */
+export function validateCaseDocumentArtifactSetV4(input, texts) {
+  if (!record(texts)) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+  const materialized = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
+  const candidate = materialized.manifest.schema_version === '4.2.0';
+  if (materialized.bundle_bytes !== texts.bundle
+    || materialized.markdown_bytes !== texts.markdown
+    || materialized.worksheet_bytes !== texts.worksheet
+    || typeof texts.manifest !== 'string') {
+    throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+  }
+  let presentationFamily = null;
+  if (candidate) {
+    if (materialized.source_reading_bytes !== texts.source_reading
+      || typeof texts.html !== 'string' || typeof texts.table !== 'string') {
+      throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+    }
+    const value = /** @type {Record<string,any>} */ (input);
+    const presentation = buildCaseDocumentPresentationV4(
+      JSON.parse(materialized.bundle_bytes), value.render_options
+    );
+    presentationFamily = matchCasePresentationFamilyV42(
+      presentation, JSON.parse(materialized.source_reading_bytes),
+      { html: texts.html, table: texts.table }
+    );
+  }
+  const expectedManifest = structuredClone(materialized.manifest);
+  if (candidate) {
+    expectedManifest.html.digest = byteDigest(texts.html);
+    expectedManifest.chat_table.digest = byteDigest(texts.table);
+  }
+  if (`${canonicalStringify(expectedManifest)}\n` !== texts.manifest) {
+    throw new TypeError('CANONICAL_MANIFEST_INVALID');
+  }
+  return { materialized, presentation_family: presentationFamily };
 }
 
 /** @param {string} runDirectory @param {Record<string,any>} manifest */
@@ -418,9 +464,14 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
     throw new TypeError('CANONICAL_ARTIFACT_INVALID');
   }
   if (candidate) {
-    const presentation = buildCaseDocumentPresentationV4(normalized.bundle);
-    if (renderBusinessHtmlV4(presentation, normalized.sourceReading) !== artifacts.html
-      || renderCaseTableV4(presentation) !== artifacts.table) {
+    const presentation = buildCaseDocumentPresentationV4(
+      normalized.bundle, manifest.render_options
+    );
+    try {
+      matchCasePresentationFamilyV42(presentation, normalized.sourceReading, {
+        html: artifacts.html, table: artifacts.table
+      });
+    } catch {
       throw new TypeError('CANONICAL_ARTIFACT_INVALID');
     }
   }

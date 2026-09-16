@@ -45594,6 +45594,47 @@ var SURFACE_RANK2 = Object.freeze([
   "side_effect",
   "external_observation"
 ]);
+var SURFACE_LABEL2 = Object.freeze({
+  ui: "\u754C\u9762",
+  request: "\u8BF7\u6C42",
+  response: "\u54CD\u5E94",
+  persistence: "\u6301\u4E45\u5316",
+  event: "\u4E8B\u4EF6",
+  callback: "\u56DE\u8C03",
+  compensation: "\u8865\u507F",
+  side_effect: "\u526F\u4F5C\u7528",
+  external_observation: "\u5916\u90E8\u89C2\u5BDF"
+});
+var ACCEPTANCE_ROLE_LABEL = Object.freeze({
+  primary_acceptance: "\u4E3B\u9A8C\u6536",
+  dependency_contract: "\u8FB9\u754C\u5951\u7EA6",
+  context_only: "\u4E0A\u4E0B\u6587"
+});
+var VALUE_ORIGIN_LABEL = Object.freeze({
+  requirement: "\u9700\u6C42\u6307\u5B9A",
+  example: "\u53EF\u66FF\u6362\u793A\u4F8B",
+  derived: "\u5408\u6CD5\u63A8\u5BFC",
+  temporary_assumption: "\u4E34\u65F6\u53E3\u5F84"
+});
+var ACTIVE_ROOT_STATUSES2 = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
+var RESULT_COPY = Object.freeze({
+  delivered_cases: {
+    title: "\u4EBA\u5DE5\u529F\u80FD\u6D4B\u8BD5\u7528\u4F8B",
+    empty: "\u5F53\u524D\u6B63\u5F0F\u7ED3\u679C\u6CA1\u6709 Case\u3002"
+  },
+  delivered_with_gaps: {
+    title: "\u4EBA\u5DE5\u529F\u80FD\u6D4B\u8BD5\u7528\u4F8B\uFF08\u542B\u5F85\u786E\u8BA4\u9879\uFF09",
+    empty: "\u5F53\u524D\u4EC5\u6709\u5F85\u786E\u8BA4\u4E8B\u9879\uFF0C\u6CA1\u6709\u53EF\u4EA4\u4ED8\u7684\u6B63\u5F0F Case\u3002"
+  },
+  blocked_only: {
+    title: "\u672A\u51B3\u4E1A\u52A1\u95EE\u9898\u62A5\u544A",
+    empty: "\u6CA1\u6709\u53EF\u4EA4\u4ED8\u7684\u6B63\u5F0F Case\uFF1B\u4EE5\u4E0B\u672A\u51B3\u4E8B\u9879\u4F1A\u5F71\u54CD\u4E1A\u52A1\u5224\u5B9A\u3002"
+  },
+  no_applicable_cases: {
+    title: "\u65E0\u9002\u7528\u6D4B\u8BD5\u7528\u4F8B\u8BF4\u660E",
+    empty: "\u7ECF\u6709\u4F9D\u636E\u7684\u9002\u7528\u6027\u5BA1\u9605\uFF0C\u5F53\u524D\u8303\u56F4\u6CA1\u6709\u9002\u7528\u7684\u6B63\u5F0F Case\u3002"
+  }
+});
 function record6(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -45608,7 +45649,7 @@ function html(value) {
     ...entities2
   })[character] ?? character);
 }
-function tableCell2(value) {
+function legacyTableCell(value) {
   return String(value ?? "").normalize("NFC").replace(/\s+/gu, " ").trim().replace(/[\\`*_[\]{}()#+\-.!<>|]/gu, "\\$&");
 }
 function orderedOracles(candidate) {
@@ -45620,8 +45661,12 @@ function orderedOracles(candidate) {
     return leftStep - rightStep || SURFACE_RANK2.indexOf(left.surface) - SURFACE_RANK2.indexOf(right.surface) || compareText2(left.expected, right.expected) || compareText2(left.oracle_id, right.oracle_id);
   });
 }
-function buildCaseDocumentPresentationV4(bundle) {
+function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit_appendix: false }) {
   if (!record6(bundle) || !Array.isArray(bundle.cases) || !Array.isArray(bundle.ordered_case_ids) || !record6(bundle.scope_manifest) || !Array.isArray(bundle.scope_manifest.modules)) {
+    throw new TypeError("CASE_DOCUMENT_INVALID");
+  }
+  const resultCopy = RESULT_COPY[bundle.result_kind];
+  if (!resultCopy || !record6(renderOptions) || typeof renderOptions.include_audit_appendix !== "boolean") {
     throw new TypeError("CASE_DOCUMENT_INVALID");
   }
   const modules = new Map(bundle.scope_manifest.modules.map((item) => [item.module_id, item.name]));
@@ -45647,22 +45692,52 @@ function buildCaseDocumentPresentationV4(bundle) {
       title: candidate.title,
       priority: candidate.priority,
       evidence_status: candidate.semantic_status === "Grounded" ? "\u4F9D\u636E\u660E\u786E" : "\u542B\u4E34\u65F6\u53E3\u5F84",
+      acceptance_role: candidate.acceptance_role,
+      acceptance_role_label: ACCEPTANCE_ROLE_LABEL[candidate.acceptance_role],
       primary_test_point_id: candidate.primary_test_point_id,
       business_flow_ref: candidate.ordering.business_flow_ref,
       preconditions: candidate.business_preconditions.map((item) => item.description),
       data_conditions: candidate.data_conditions.map((item) => item.description),
       steps: candidate.steps.map((item, step) => ({ number: step + 1, action: item.action })),
+      test_values: (candidate.test_values ?? []).map((item) => ({
+        field_path: item.field_path,
+        value: structuredClone(item.value),
+        origin: item.value_origin.kind,
+        origin_label: VALUE_ORIGIN_LABEL[item.value_origin.kind]
+      })),
+      baseline: candidate.baseline_spec ? {
+        reference: candidate.baseline_spec.reference,
+        comparison_contract: structuredClone(candidate.baseline_spec.comparison_contract)
+      } : null,
+      semantic_effects: (candidate.semantic_effects ?? []).map((item) => ({
+        kind: item.kind,
+        subject: item.subject,
+        ...Object.hasOwn(item, "before") ? { before: item.before } : {},
+        after: item.after
+      })),
       oracles
     };
   });
   return {
     result_kind: bundle.result_kind,
+    title: resultCopy.title,
+    empty_message: resultCopy.empty,
     case_count: rows.length,
     coverage: structuredClone(bundle.coverage),
+    semantic_roots: bundle.semantic_root_groups.filter((item) => ACTIVE_ROOT_STATUSES2.has(item.status)).map((item) => structuredClone(item)),
+    exploratory: bundle.exploratory.map((item) => ({
+      ...structuredClone(item),
+      module: modules.get(item.module_id)
+    })),
+    not_applicable: bundle.not_applicable.map((item) => ({
+      ...structuredClone(item),
+      module: modules.get(item.module_id)
+    })),
+    render_options: structuredClone(renderOptions),
     rows
   };
 }
-function renderCaseTableV4(presentation) {
+function renderLegacyCaseTableV42(presentation) {
   const lines = [
     "| \u5E8F\u53F7 | \u6A21\u5757 | \u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0 | \u9884\u671F\u7ED3\u679C | \u4F18\u5148\u7EA7 | \u4F9D\u636E\u72B6\u6001 |",
     "| ---: | --- | --- | --- | --- | --- |"
@@ -45674,14 +45749,14 @@ function renderCaseTableV4(presentation) {
     row.oracles.map((item) => item.expected).join("\uFF1B"),
     row.priority,
     row.evidence_status
-  ].map(tableCell2).join(" | ").replace(/^/u, "| ").replace(/$/u, " |"));
+  ].map(legacyTableCell).join(" | ").replace(/^/u, "| ").replace(/$/u, " |"));
   return `${lines.join("\n")}
 `;
 }
 function htmlList(title, values) {
   return `<section><h4>${html(title)}</h4>${values.length ? `<ol>${values.map((value) => `<li>${html(value)}</li>`).join("")}</ol>` : '<p class="empty">\u65E0</p>'}</section>`;
 }
-function renderBusinessHtmlV4(presentation, sourceReading) {
+function renderLegacyBusinessHtmlV42(presentation, sourceReading) {
   const sourceRows = sourceReading.items.map((item) => `<tr><td>${html(item.item_id)}</td><td>${html(item.channel)}</td><td>${html(item.acquisition_status)}</td><td>${html(item.review_status)}</td></tr>`).join("");
   const overviewRows = presentation.rows.map((row) => `<tr><td>${row.ordinal}</td><td>${html(row.module)}</td><td><a href="#${html(row.case_id)}">${html(row.title)}</a></td><td>${html(row.oracles.map((item) => item.expected).join("\uFF1B"))}</td><td>${html(row.priority)}</td><td>${html(row.evidence_status)}</td></tr>`).join("");
   const cases = presentation.rows.map((row) => {
@@ -45694,6 +45769,129 @@ function renderBusinessHtmlV4(presentation, sourceReading) {
 :root{color-scheme:light;--ink:#1d2433;--muted:#657086;--line:#d9dfeb;--paper:#fff;--soft:#f5f7fb;--accent:#174ea6}*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1180px;margin:auto;padding:32px 20px 64px}h1,h2,h3,h4{line-height:1.25}h1{font-size:2rem}h2{margin-top:2.2rem}h3{font-size:1.35rem}.lede,.meta{color:var(--muted)}.panel,article{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #23324d0d}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;background:var(--paper)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3fb;white-space:nowrap}a{color:var(--accent)}.eyebrow,.surface{color:var(--muted);font-size:.88rem}.surface{margin-left:.5em}.steps>li{margin-bottom:1rem}.complete{color:#236b3b}.empty{color:var(--muted)}code{overflow-wrap:anywhere}@media print{body{background:#fff}.panel,article{box-shadow:none;break-inside:avoid}main{max-width:none;padding:0}}
 </style></head><body><main><header><p class="eyebrow">V4 \u589E\u91CF\u589E\u5F3A \xB7 HTML \u4E3B\u9605\u8BFB\u6587\u4EF6</p><h1>\u4EBA\u5DE5\u529F\u80FD\u6D4B\u8BD5\u7528\u4F8B</h1><p class="lede">\u5171 ${presentation.case_count} \u6761\u3002\u6BCF\u6761 Case \u53EA\u6709\u4E00\u4E2A\u4E3B\u8981\u6D4B\u8BD5\u70B9\uFF1B\u5B8C\u6574\u6D41\u7A0B\u4ECD\u662F\u4E00\u6761\u666E\u901A\u591A\u6B65 Case\u3002</p></header><section class="panel"><h2>\u8D44\u6599\u8BFB\u53D6\u6458\u8981</h2><p class="meta">\u8FD9\u662F\u91C7\u96C6\u6280\u672F\u8BB0\u5F55\uFF0C\u4E0D\u662F\u4E1A\u52A1\u4E8B\u5B9E\u6216\u4E1A\u52A1\u8BC1\u636E\u3002</p><p>\u8303\u56F4\uFF1A${html(sourceReading.scope.root_ref)} \xB7 \u6A21\u5F0F\uFF1A${html(sourceReading.scope.mode)} \xB7 \u72B6\u6001\uFF1A${html(sourceReading.status)} \xB7 \u7248\u672C\uFF1A${html(sourceReading.scope.source_version ?? "\u672A\u63D0\u4F9B")}</p><div class="table-wrap"><table><thead><tr><th>\u9879\u76EE</th><th>\u901A\u9053</th><th>\u91C7\u96C6</th><th>\u5BA1\u9605</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>\u9650\u5236</h3>${limitations}</section><section><h2>\u7528\u4F8B\u603B\u89C8</h2><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u6A21\u5757</th><th>\u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0</th><th>\u9884\u671F\u7ED3\u679C</th><th>\u4F18\u5148\u7EA7</th><th>\u4F9D\u636E\u72B6\u6001</th></tr></thead><tbody>${overviewRows}</tbody></table></div></section><section><h2>\u7528\u4F8B\u8BE6\u60C5</h2>${cases || '<div class="panel"><p>\u5F53\u524D\u6CA1\u6709\u9002\u7528\u7684\u6B63\u5F0F Case\u3002</p></div>'}</section></main></body></html>
 `;
+}
+function tableUserText(value) {
+  return String(value ?? "").normalize("NFC").replace(/\r\n?/gu, "\n").split("\n").map((part) => html(part).replace(/([\\`*_[\]|])/gu, "\\$1")).join("<br>");
+}
+function tableCaseDescription(row) {
+  return [
+    tableUserText(row.title),
+    ...row.preconditions.map((value, index) => `\u524D\u63D0 ${index + 1}\uFF1A${tableUserText(value)}`),
+    ...row.data_conditions.map((value, index) => `\u6570\u636E ${index + 1}\uFF1A${tableUserText(value)}`),
+    ...row.steps.map((item) => `\u6B65\u9AA4 ${item.number}\uFF1A${tableUserText(item.action)}`),
+    ...row.test_values.map((item, index) => `\u53D6\u503C ${index + 1}\uFF1A${tableUserText(item.field_path)} = ${tableUserText(JSON.stringify(item.value))}\uFF08${tableUserText(item.origin_label)}\uFF09`),
+    ...row.baseline ? [`\u76F8\u5BF9\u57FA\u7EBF\uFF1A${tableUserText(row.baseline.reference)}\uFF1B${tableUserText(baselineComparison(row.baseline.comparison_contract))}`] : []
+  ].join("<br>");
+}
+function baselineComparison(contract2) {
+  if (contract2.kind === "selected_dimensions") {
+    return `\u6BD4\u8F83${contract2.dimensions.join("\u3001")}\uFF1B\u5141\u8BB8\u5DEE\u5F02\uFF1A${contract2.allowed_differences.length ? contract2.allowed_differences.join("\u3001") : "\u65E0"}`;
+  }
+  return `\u6BD4\u8F83\u9664${contract2.exceptions.length ? contract2.exceptions.join("\u3001") : "\u65E0"}\u4EE5\u5916\u7684\u5168\u90E8\u53EF\u89C2\u5BDF\u884C\u4E3A`;
+}
+function tableExpectations(row) {
+  return [
+    ...row.oracles.map((item) => {
+      const surface = SURFACE_LABEL2[item.surface] ?? item.surface;
+      return `\u6B65\u9AA4 ${item.step_number} \u540E\uFF08${tableUserText(surface)}\uFF09\uFF1A${tableUserText(item.expected)}`;
+    }),
+    ...row.semantic_effects.map((item) => `\u7ED3\u679C\u53D8\u5316\uFF1A${tableUserText(item.subject)}\uFF1A${Object.hasOwn(item, "before") ? `${tableUserText(item.before)} \u2192 ` : ""}${tableUserText(item.after)}`)
+  ].join("<br>");
+}
+function tableContext(presentation) {
+  const lines = ["", `\u7ED3\u679C\u72B6\u6001\uFF1A${tableUserText(presentation.title)}`];
+  if (presentation.semantic_roots.length) {
+    lines.push("", "\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236\uFF1A");
+    for (const root of presentation.semantic_roots) {
+      const affected = root.affected_business_items.map((item) => tableUserText(item.display_name)).join("\uFF1B");
+      lines.push(`- ${tableUserText(root.title)}\uFF1A${tableUserText(root.unresolved_outcome)}\uFF1B\u5F71\u54CD\uFF1A${affected}`);
+    }
+  }
+  if (presentation.not_applicable.length) {
+    lines.push("", "\u5DF2\u786E\u8BA4\u4E0D\u9002\u7528\uFF1A");
+    for (const item of presentation.not_applicable) {
+      lines.push(`- ${tableUserText(item.module)}\uFF5C${tableUserText(item.subject)}\uFF1A${tableUserText(item.reason)}`);
+    }
+  }
+  const coverage = presentation.coverage;
+  lines.push(
+    "",
+    "\u5DF2\u5BA1\u9605 formal test-point \u8986\u76D6\uFF1A",
+    `- \u4E3B\u9A8C\u6536\uFF1A\u5DF2\u8986\u76D6 ${coverage.primary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.primary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.primary.not_applicable_formal_test_point_count} \u9879`,
+    `- \u8FB9\u754C\u5951\u7EA6\uFF1A\u5DF2\u8986\u76D6 ${coverage.boundary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.boundary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.boundary.not_applicable_formal_test_point_count} \u9879`,
+    `- semantic gap\uFF1A${coverage.semantic_gap_count} \u9879\uFF1BExploratory\uFF1A${coverage.exploratory_count} \u9879\uFF1BNotApplicable\uFF1A${coverage.not_applicable_count} \u9879`
+  );
+  return lines;
+}
+function renderCaseTableV4(presentation) {
+  const lines = [
+    "| \u5E8F\u53F7 | \u6A21\u5757 | \u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0 | \u9884\u671F\u7ED3\u679C | \u4F18\u5148\u7EA7 | \u4F9D\u636E\u72B6\u6001 |",
+    "| ---: | --- | --- | --- | --- | --- |"
+  ];
+  for (const row of presentation.rows) lines.push(`| ${row.ordinal} | ${tableUserText(row.module)} | ${tableCaseDescription(row)} | ${tableExpectations(row)} | ${tableUserText(row.priority)} | ${tableUserText(row.acceptance_role_label)} \xB7 ${tableUserText(row.evidence_status)} |`);
+  if (!presentation.rows.length) lines.push("", tableUserText(presentation.empty_message));
+  lines.push(...tableContext(presentation));
+  return `${lines.join("\n")}
+`;
+}
+function htmlItems(values, render) {
+  return values.length ? `<ul>${values.map(render).join("")}</ul>` : '<p class="empty">\u65E0\u3002</p>';
+}
+function htmlOverviewCase(row) {
+  const setup = [
+    ...row.preconditions.map((value, index) => `\u524D\u63D0 ${index + 1}\uFF1A${value}`),
+    ...row.data_conditions.map((value, index) => `\u6570\u636E ${index + 1}\uFF1A${value}`),
+    ...row.steps.map((item) => `\u6B65\u9AA4 ${item.number}\uFF1A${item.action}`),
+    ...row.test_values.map((item, index) => `\u53D6\u503C ${index + 1}\uFF1A${item.field_path} = ${JSON.stringify(item.value)}\uFF08${item.origin_label}\uFF09`),
+    ...row.baseline ? [`\u76F8\u5BF9\u57FA\u7EBF\uFF1A${row.baseline.reference}\uFF1B${baselineComparison(row.baseline.comparison_contract)}`] : []
+  ];
+  const expectations = row.oracles.map((item) => `\u6B65\u9AA4 ${item.step_number} \u540E\uFF08${SURFACE_LABEL2[item.surface] ?? item.surface}\uFF09\uFF1A${item.expected}`);
+  expectations.push(...row.semantic_effects.map((item) => `\u7ED3\u679C\u53D8\u5316\uFF1A${item.subject}\uFF1A${Object.hasOwn(item, "before") ? `${item.before} \u2192 ` : ""}${item.after}`));
+  return `<tr><td>${row.ordinal}</td><td>${html(row.module)}<br><span class="meta">${html(row.acceptance_role_label)}</span></td><td><a href="#case-${row.ordinal}">${html(row.title)}</a>${setup.length ? `<ul class="compact">${setup.map((value) => `<li>${html(value)}</li>`).join("")}</ul>` : ""}</td><td>${htmlItems(expectations, (value) => `<li>${html(value)}</li>`)}</td><td>${html(row.priority)}</td><td>${html(row.evidence_status)}</td></tr>`;
+}
+function htmlCase(row) {
+  const steps = row.steps.map((step) => {
+    const expectations = row.oracles.filter((item) => item.step_number === step.number).map((item) => `<li><strong>\u6B65\u9AA4 ${item.step_number} \u540E\uFF08${html(SURFACE_LABEL2[item.surface] ?? item.surface)}\uFF09\uFF1A</strong>${html(item.expected)}</li>`).join("");
+    return `<li><p>${html(step.action)}</p>${expectations ? `<ul>${expectations}</ul>` : '<p class="empty">\u672C\u6B65\u9AA4\u6CA1\u6709\u72EC\u7ACB\u9884\u671F\u3002</p>'}</li>`;
+  }).join("");
+  const values = row.test_values.map((item) => `${item.field_path} = ${JSON.stringify(item.value)}\uFF08${item.origin_label}\uFF09`);
+  const baseline = row.baseline ? `<section><h4>\u76F8\u5BF9\u57FA\u7EBF</h4><p>${html(row.baseline.reference)}\uFF1B${html(baselineComparison(row.baseline.comparison_contract))}</p></section>` : "";
+  const effects = row.semantic_effects.map((item) => `${item.subject}\uFF1A${Object.hasOwn(item, "before") ? `${item.before} \u2192 ` : ""}${item.after}`);
+  return `<article id="case-${row.ordinal}"><header><p class="eyebrow">${html(row.acceptance_role_label)} \xB7 ${html(row.module)} \xB7 ${html(row.priority)} \xB7 ${html(row.evidence_status)}</p><h3>${html(row.title)}</h3></header>${htmlList("\u4E1A\u52A1\u524D\u7F6E\u6761\u4EF6", row.preconditions)}${htmlList("\u6570\u636E\u6761\u4EF6", row.data_conditions)}${htmlList("\u7ED3\u6784\u5316\u6D4B\u8BD5\u53D6\u503C", values)}${baseline}<section><h4>\u6B65\u9AA4\u4E0E\u9884\u671F</h4><ol class="steps">${steps}</ol></section>${htmlList("\u4E1A\u52A1\u7ED3\u679C\u53D8\u5316", effects)}</article>`;
+}
+function htmlSemanticRoots(presentation) {
+  return htmlItems(presentation.semantic_roots, (root) => `<li><h3>${html(root.title)}</h3><p><strong>\u4E1A\u52A1\u5BF9\u8C61\uFF1A</strong>${html(root.business_object)}</p><p><strong>\u5F85\u786E\u8BA4\u95EE\u9898\uFF1A</strong>${html(root.question)}</p><p><strong>\u539F\u56E0\uFF1A</strong>${html(root.why_needed)}</p><p><strong>\u5F71\u54CD\uFF1A</strong>${html(root.decision_impact)}</p><p><strong>\u5F53\u524D\u5904\u7406\uFF1A</strong>${html(root.unresolved_outcome)}</p><p><strong>\u53D7\u5F71\u54CD\u4E1A\u52A1\u9879\uFF1A</strong></p>${htmlItems(root.affected_business_items, (item) => `<li>${html(item.display_name)}</li>`)}</li>`);
+}
+function htmlCoverage(presentation) {
+  const coverage = presentation.coverage;
+  return `<section class="panel"><h2>\u8986\u76D6\u60C5\u51B5</h2><h3>\u5DF2\u5BA1\u9605 formal test-point \u8986\u76D6</h3><ul><li>\u4E3B\u9A8C\u6536\uFF1A\u5DF2\u8986\u76D6 ${coverage.primary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.primary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.primary.not_applicable_formal_test_point_count} \u9879</li><li>\u8FB9\u754C\u5951\u7EA6\uFF1A\u5DF2\u8986\u76D6 ${coverage.boundary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.boundary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.boundary.not_applicable_formal_test_point_count} \u9879</li><li>semantic gap\uFF1A${coverage.semantic_gap_count} \u9879</li><li>Exploratory\uFF1A${coverage.exploratory_count} \u9879</li><li>NotApplicable\uFF1A${coverage.not_applicable_count} \u9879</li></ul></section>`;
+}
+function htmlAudit(presentation) {
+  if (!presentation.render_options.include_audit_appendix) return "";
+  const cases = presentation.rows.map((row) => `<li><code>${html(row.case_id)}</code> \xB7 Test Point <code>${html(row.primary_test_point_id)}</code>${row.business_flow_ref ? ` \xB7 Flow <code>${html(row.business_flow_ref)}</code>` : ""}</li>`).join("");
+  const roots = presentation.semantic_roots.map((root) => `<li><code>${html(root.root_issue_id)}</code></li>`).join("");
+  return `<details class="panel audit"><summary>\u5BA1\u8BA1\u6807\u8BC6</summary><p class="meta">\u4EE5\u4E0B\u6807\u8BC6\u4EC5\u7528\u4E8E\u673A\u5668\u8FFD\u8E2A\uFF0C\u4E0D\u5C5E\u4E8E\u4E1A\u52A1\u6267\u884C\u6B63\u6587\u3002</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul></details>`;
+}
+function renderBusinessHtmlV4(presentation, sourceReading) {
+  const sourceRows = sourceReading.items.map((item, index) => `<tr><td>${index + 1}</td><td>${html(item.channel)}</td><td>${html(item.acquisition_status)}</td><td>${html(item.review_status)}</td></tr>`).join("");
+  const limitations = sourceReading.limitations.length ? htmlItems(sourceReading.limitations, (item) => `<li>${html(item)}</li>`) : '<p class="complete">\u5F53\u524D\u91C7\u96C6\u8303\u56F4\u5185\u672A\u8BB0\u5F55\u9650\u5236\u3002</p>';
+  const overviewRows = presentation.rows.map(htmlOverviewCase).join("");
+  const cases = presentation.rows.map(htmlCase).join("");
+  const notApplicable = htmlItems(presentation.not_applicable, (item) => `<li>${html(item.module)}\uFF5C${html(item.subject)}\uFF1A${html(item.reason)}</li>`);
+  const exploratory = htmlItems(presentation.exploratory, (item) => `<li>${html(item.module)}\uFF5C${html(item.title)}\uFF1A${html(item.reason)}</li>`);
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${html(presentation.title)}</title><style>
+:root{color-scheme:light;--ink:#1d2433;--muted:#657086;--line:#d9dfeb;--paper:#fff;--soft:#f5f7fb;--accent:#174ea6;--warn:#8a4b00}*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1180px;margin:auto;padding:32px 20px 64px}h1,h2,h3,h4{line-height:1.25}h1{font-size:2rem}h2{margin-top:2.2rem}h3{font-size:1.2rem}.lede,.meta{color:var(--muted)}.panel,article{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #23324d0d}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;background:var(--paper)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3fb;white-space:nowrap}a{color:var(--accent)}.eyebrow,.surface{color:var(--muted);font-size:.88rem}.steps>li{margin-bottom:1rem}.compact{margin:.5rem 0 0;padding-left:1.25rem}.complete{color:#236b3b}.empty{color:var(--muted)}.warning{border-left:4px solid var(--warn)}code{overflow-wrap:anywhere}@media print{body{background:#fff}.panel,article{box-shadow:none;break-inside:avoid}main{max-width:none;padding:0}}
+</style></head><body><main><header><p class="eyebrow">V4 \xB7 HTML \u4E3B\u9605\u8BFB\u6587\u4EF6</p><h1>${html(presentation.title)}</h1><p class="lede">\u5171 ${presentation.case_count} \u6761\u3002\u6BCF\u6761 Case \u53EA\u6709\u4E00\u4E2A\u72EC\u7ACB\u4E3B\u8981\u7ED3\u679C\uFF1B\u5FC5\u8981\u7684\u540C\u5BF9\u8C61\u591A\u6B65\u52A8\u4F5C\u4E0E\u8FC7\u7A0B\u89C2\u5BDF\u4FDD\u6301\u8FDE\u7EED\u3002</p></header><section class="panel"><h2>\u8D44\u6599\u8BFB\u53D6\u6458\u8981</h2><p class="meta">\u8FD9\u662F\u91C7\u96C6\u6280\u672F\u8BB0\u5F55\uFF0C\u4E0D\u662F\u4E1A\u52A1\u4E8B\u5B9E\u6216\u4E1A\u52A1\u8BC1\u636E\u3002</p><p>\u8303\u56F4\uFF1A${html(sourceReading.scope.root_ref)} \xB7 \u6A21\u5F0F\uFF1A${html(sourceReading.scope.mode)} \xB7 \u72B6\u6001\uFF1A${html(sourceReading.status)} \xB7 \u7248\u672C\uFF1A${html(sourceReading.scope.source_version ?? "\u672A\u63D0\u4F9B")}</p><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u901A\u9053</th><th>\u91C7\u96C6</th><th>\u5BA1\u9605</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>\u91C7\u96C6\u9650\u5236</h3>${limitations}</section><section><h2>\u7528\u4F8B\u603B\u89C8</h2><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u6A21\u5757</th><th>\u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0</th><th>\u9884\u671F\u7ED3\u679C</th><th>\u4F18\u5148\u7EA7</th><th>\u4F9D\u636E\u72B6\u6001</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? "" : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>\u7528\u4F8B\u8BE6\u60C5</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? " warning" : ""}"><h2>\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>\u6392\u9664\u4E0E\u63A2\u7D22</h2><h3>\u5DF2\u786E\u8BA4\u4E0D\u9002\u7528</h3>${notApplicable}<h3>\u63A2\u7D22\u5EFA\u8BAE</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>
+`;
+}
+function matchCasePresentationFamilyV42(presentation, sourceReading, artifacts) {
+  if (!record6(artifacts) || typeof artifacts.html !== "string" || typeof artifacts.table !== "string") {
+    throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
+  }
+  if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html && renderCaseTableV4(presentation) === artifacts.table) return "current-4.2";
+  if (renderLegacyBusinessHtmlV42(presentation, sourceReading) === artifacts.html && renderLegacyCaseTableV42(presentation) === artifacts.table) return "legacy-4.2";
+  throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
 }
 
 // src/canonical-delivery-v4.mjs
@@ -45832,7 +46030,7 @@ var BUNDLE_KEYS = Object.freeze([
   "not_applicable",
   "risk_review_ledger"
 ]);
-var ACTIVE_ROOT_STATUSES2 = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
+var ACTIVE_ROOT_STATUSES3 = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
 var RISK_KINDS = Object.freeze([
   "null_or_missing",
   "unknown_enum",
@@ -45910,7 +46108,7 @@ function normalizeInput2(input) {
 }
 function derivedCounts(bundle) {
   const activeRoots = bundle.semantic_root_groups.filter(
-    (root) => ACTIVE_ROOT_STATUSES2.has(root.status)
+    (root) => ACTIVE_ROOT_STATUSES3.has(root.status)
   );
   return {
     case_count: bundle.cases.length,
@@ -46090,7 +46288,7 @@ function materializeCaseDocumentDeliveryV4(input) {
   const { projection } = normalizeInput2({ ...value, bundle: canonicalBundle });
   const markdownBytes = renderBusinessMarkdownV4(projection);
   const worksheetBytes = renderExecutionWorksheetCsvV4(canonicalBundle, canonicalBundle.ordered_case_ids);
-  const presentation = candidate ? buildCaseDocumentPresentationV4(canonicalBundle) : null;
+  const presentation = candidate ? buildCaseDocumentPresentationV4(canonicalBundle, value.render_options) : null;
   const sourceReadingBytes = candidate ? `${canonicalStringify(sourceReading)}
 ` : null;
   const canonicalSourceReading = candidate && sourceReadingBytes ? JSON.parse(sourceReadingBytes) : null;
@@ -46139,6 +46337,46 @@ function materializeCaseDocumentDeliveryV4(input) {
       source_reading_bytes: sourceReadingBytes
     } : {}
   };
+}
+function validateCaseDocumentArtifactSetV4(input, texts) {
+  if (!record8(texts)) throw new TypeError("CANONICAL_ARTIFACT_INVALID");
+  const materialized = (
+    /** @type {any} */
+    materializeCaseDocumentDeliveryV4(input)
+  );
+  const candidate = materialized.manifest.schema_version === "4.2.0";
+  if (materialized.bundle_bytes !== texts.bundle || materialized.markdown_bytes !== texts.markdown || materialized.worksheet_bytes !== texts.worksheet || typeof texts.manifest !== "string") {
+    throw new TypeError("CANONICAL_ARTIFACT_INVALID");
+  }
+  let presentationFamily = null;
+  if (candidate) {
+    if (materialized.source_reading_bytes !== texts.source_reading || typeof texts.html !== "string" || typeof texts.table !== "string") {
+      throw new TypeError("CANONICAL_ARTIFACT_INVALID");
+    }
+    const value = (
+      /** @type {Record<string,any>} */
+      input
+    );
+    const presentation = buildCaseDocumentPresentationV4(
+      JSON.parse(materialized.bundle_bytes),
+      value.render_options
+    );
+    presentationFamily = matchCasePresentationFamilyV42(
+      presentation,
+      JSON.parse(materialized.source_reading_bytes),
+      { html: texts.html, table: texts.table }
+    );
+  }
+  const expectedManifest = structuredClone(materialized.manifest);
+  if (candidate) {
+    expectedManifest.html.digest = byteDigest2(texts.html);
+    expectedManifest.chat_table.digest = byteDigest2(texts.table);
+  }
+  if (`${canonicalStringify(expectedManifest)}
+` !== texts.manifest) {
+    throw new TypeError("CANONICAL_MANIFEST_INVALID");
+  }
+  return { materialized, presentation_family: presentationFamily };
 }
 async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateManifest(manifest);
@@ -46213,8 +46451,16 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
     throw new TypeError("CANONICAL_ARTIFACT_INVALID");
   }
   if (candidate) {
-    const presentation = buildCaseDocumentPresentationV4(normalized.bundle);
-    if (renderBusinessHtmlV4(presentation, normalized.sourceReading) !== artifacts.html || renderCaseTableV4(presentation) !== artifacts.table) {
+    const presentation = buildCaseDocumentPresentationV4(
+      normalized.bundle,
+      manifest.render_options
+    );
+    try {
+      matchCasePresentationFamilyV42(presentation, normalized.sourceReading, {
+        html: artifacts.html,
+        table: artifacts.table
+      });
+    } catch {
       throw new TypeError("CANONICAL_ARTIFACT_INVALID");
     }
   }
@@ -46937,21 +47183,16 @@ function validateRevisionArtifactsV4(input) {
     if (validateCanonicalManifestRelations(values.manifest).length || values.bundle.source_revision !== input.revision || values.manifest.run_id !== input.run_id || values.manifest.revision !== input.revision || values.manifest.delivery_intent !== "case_document") {
       throw new TypeError("CANONICAL_MANIFEST_INVALID");
     }
-    let materialized;
     try {
-      materialized = materializeCaseDocumentDeliveryV4({
+      validateCaseDocumentArtifactSetV4({
         run_id: input.run_id,
         completed_at: values.manifest.completed_at,
         bundle: values.bundle,
         ...contract2.candidate ? { source_reading: values.source_reading } : {},
         render_options: values.manifest.render_options,
         non_blocking_diagnostics: []
-      });
+      }, texts);
     } catch {
-      throw new TypeError("CANONICAL_MANIFEST_INVALID");
-    }
-    if (materialized.bundle_bytes !== texts.bundle || materialized.markdown_bytes !== texts.markdown || materialized.worksheet_bytes !== texts.worksheet || contract2.candidate && (materialized.html_bytes !== texts.html || materialized.table_bytes !== texts.table || materialized.source_reading_bytes !== texts.source_reading) || `${canonicalStringify(materialized.manifest)}
-` !== texts.manifest) {
       throw new TypeError("CANONICAL_MANIFEST_INVALID");
     }
   }

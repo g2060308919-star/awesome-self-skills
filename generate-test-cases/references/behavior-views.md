@@ -28,11 +28,15 @@ Every evidence binding points to the exact element field (for example `/business
 
 Before drafting Cases, identify each source-backed对象、条件、触发动作 and 独立业务结果. Split outcomes by independently decidable result, not punctuation, keyword count, shared click, or number of steps. A closed enumeration, permission allow/deny branch, or explicitly separate input/result mapping produces its own precise outcome inputs and expectations when the source requires them. Multiple observation surfaces that prove the same result remain supporting observations of one outcome.
 
+Read related rules together for the same object and action. Preserve whether conditions are simultaneous (AND), alternatives (OR), prerequisites, or exceptions; select combinations that distinguish those meanings without generating a Cartesian product. The same rejection copy does not merge independently failing restrictions, while an evidence-backed impossible combination is excluded rather than invented as a negative path.
+
 A formal Test Point corresponds to one independently decidable business outcome, not each technical surface. A Fact may produce several outcomes when each has a different expected result (for example separate enum values). UI/API/storage observations of the same outcome are supporting observations, not extra primary Test Points.
 
 Do not unconditionally expand flow edges, before/equal/after, lower/upper, or every integration surface. Formal negative behavior needs normative evidence. An unsourced generic risk is Exploratory; a sourced requirement with missing result is a semantic gap and remains Blocked.
 
 When accepted sources carry an ordered-path signal, use the existing `flow`, `state`, `role`, or `integration` views only as needed to preserve one business object's source-backed start, actions, role handoffs, state continuity, and terminal result. Do not infer a lifecycle from section order, button names, or product conventions. With no path signal, retain the local outcomes and do not invent create/approve/publish/disable stages.
+
+For every supported terminal result, backtrace the required same-object actions and conditions, then walk forward to verify continuity, required role handoffs, and an observable terminal state. Add supported complete-path scenarios without removing local single-point outcomes. If object linkage, business order, start, or terminal result is genuinely missing, keep the known local facts and create the necessary semantic gap instead of completing a familiar product lifecycle from convention.
 
 Every Fact, outcome, Test Point, and later Case retains `acceptance_role`: `primary_acceptance`, `dependency_contract`, or `context_only`. Primary coverage counts only primary acceptance. Boundary-contract coverage is reported separately. Context-only material is traceability, not a formal denominator.
 

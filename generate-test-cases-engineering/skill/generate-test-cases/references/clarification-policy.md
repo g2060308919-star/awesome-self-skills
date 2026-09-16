@@ -12,6 +12,8 @@ The post-case (`case_design`) clarification happens after Case design. Merge onl
 
 At either phase, merge all current fresh answerable roots into one risk-ordered presentation. Do not ask per Case and do not impose a fixed total round count. Non-answerable source, evidence, or process gaps retain their compiler status and recovery guidance; they never become business questions.
 
+An initial request such as “generate the Cases”, or a general “continue” when no current choice has been presented, grants no authority to answer, defer, mark unknown, or request delivery for a semantic gap. A short “agree/continue” may bind only when the validated presentation exposes one unique current choice and the conversational target is unambiguous. Do not add a routine second confirmation once that binding is reliable.
+
 Clarify when an unresolved choice can change the business对象、条件、角色、状态、顺序、输入范围、文案或结果 and accepted evidence or a permitted derivation cannot decide it. Cite the original source location, name the concrete ambiguity and affected items, state what decision is needed, and state the consequence of no answer. Do not ask again when the source already says it, do not turn a generic risk into a question, and never convert acquisition or schema failure into a business Decision.
 
 ## Present business decisions, not protocol
@@ -49,6 +51,8 @@ Only explicit controls change an unanswered part:
 - `request_delivery` -> `closed_for_delivery`, only for its explicit question-part refs.
 
 Unknown, skip, or defer remains a visible semantic gap in the Case Document. It is not NotApplicable and does not create an execution disposition. Never automatically defer omitted parts and never treat a partial reply as an answer to the entire presentation.
+
+After an accepted answer or control, recompile and review every affected Fact, view, formal Test Point, Case, shared gap, coverage count, and rendered limitation. The answer is effective only when the compiler accepts the append; writing staging bytes or acknowledging the chat message is not adoption. A later root version or newly discovered question never inherits an older answer or delivery choice.
 
 ## Construct only advertised events
 

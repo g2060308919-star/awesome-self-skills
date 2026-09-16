@@ -36,6 +36,8 @@ Freeze product, module, role, client, version, region, environment, original sou
 
 Set `output_language` to the user's requested `zh-CN` or `en`, otherwise use the request language. Preserve source quotations and technical names verbatim. Never fill product truth from generic domain knowledge.
 
+After source review and scope closure, briefly state the business understanding in the conversation: who acts on which object, under which relevant conditions, through which supported actions or links, and with which independently decidable results. Include only dimensions present in this request. This is a readable summary of the existing Fact/View path, not a fifth artifact, an evidence source, or a confirmation gate. Continue automatically when no necessary ambiguity exists; when one does, use the existing clarification phase.
+
 When a business Claim carries compiler-consumed structure inside `semantic_value`, use only the exact assertion families and closed item shapes documented in `references/evidence-policy.md`: `relative_baseline_assertions`, `test_value_assertions`, `test_value_derivations`, `risk_review_assertions`, `not_applicable_assertions`, and `ordering_assertions`. Do not place execution readiness or a self-authored compiler ID in these fields.
 
 ## Run the private workflow

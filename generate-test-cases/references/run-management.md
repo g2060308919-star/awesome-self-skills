@@ -19,6 +19,8 @@ Use `run-catalog.json` only as a relationship index. Record real canonical direc
 
 For every recovery or resume, invoke the runner on the same absolute directory first. Do not infer the next stage from chat history, directory listing, a disposable checkpoint, or a highest-looking revision. Validate the returned recovery references before appending anything.
 
+Treat only compiler-accepted events in the recovered checkpoint as submitted. Preserve accepted answers whose exact root version and scope still apply, preserve every pending part, and leave staging-only attempts unaccepted. If the root version, affected scope, or current presentation changed, retain the older answer for audit but do not replay or silently rebind it. Never submit the same accepted answer again merely because conversation context was lost.
+
 ## Preserve append-only revisions
 
 Accepted Source Packs, Decisions, semantic controls, execution actions, lifecycle events, presentations, checkpoints, and preview history are append-only. One accepted user response advances the source revision once. Do not edit or delete an accepted revision, reorder events, reuse an event sequence, or combine unrelated user messages into a fabricated event.

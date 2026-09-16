@@ -6,7 +6,7 @@ An execution decision or capability proof is not evidence. Execute, DoNotExecute
 
 ## Complete the declared PRD collection before interpreting it
 
-For an online document, enumerate the正文、表格、图片、可见评论和回复, including resolved threads. 分页读取必须到达明确的结束页（terminal page）；不能证明到达末页时，记录 `partial`、`unsupported` 或具体错误。A download, URL, filename, alt text, or detached OCR string does not prove image review: actually inspect legible labels, arrows, branches, and spatial relations before binding its image-region units. 评论与回复必须保留父子关系和问题上下文, so a reply such as “同意” is never treated as a standalone rule.
+For an online document, enumerate the正文、表格、图片、可见评论和回复, including resolved threads. 分页读取必须到达明确的结束页（terminal page）；不能证明到达末页时，记录 `partial`、`unsupported` 或具体错误。A download, URL, filename, alt text, or detached OCR string does not prove image review: actually inspect legible labels, arrows, branches, and spatial relations before binding its image-region units. Images are reference material: their pixels, styling, visible copy, or button labels alone never become an exact acceptance requirement. Verify a business clue against effective text or route the necessary ambiguity to clarification. 评论与回复必须保留父子关系和问题上下文, so a reply such as “同意” is never treated as a standalone rule. A suggestion becomes normative only when its surrounding thread establishes adoption or the user authorizes it; recency and resolved status alone do not establish effect.
 
 For offline attachments or pasted input, use `provided_materials` and only the supplied collection as scope. Mark channels that genuinely do not exist in that supplied set as `not_applicable`; never claim that the original online PRD or its comments were exhaustively queried. Distinguish no visible item, unread item, unavailable item, and unfinished enumeration. A source version or authoritative byte change after freezing requires the existing new-run path and must not overwrite history.
 
@@ -83,6 +83,8 @@ Source policy defaults to `single_source`. Use `merge_non_overlapping`, `consens
 Split independently true-or-false propositions into separate Claims. Distinguish requirements, descriptions, examples, and diagnostics. A sentence saying a capability is unsupported and out of scope normally creates two Claims: the behavior fact and independent exclusion proof. NotApplicable requires the latter; “PRD did not mention it” is not exclusion evidence.
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
+
+Before handing facts to modeling, perform both trace directions. From each effective source rule, locate its Fact and eventual outcome/Test Point or an explicit gap/exclusion so valid material is not silently omitted. From each proposed Fact, condition, ordering relation, value, and result, trace back to a locator or permitted replayable derivation that supports that exact object and circumstance. A nearby or merely related citation does not pass this review.
 
 Test-process and output-format instructions are diagnostic context, not product behavior. Environment/resource readiness is execution-plan context, not a Case Document Fact. Product behavior remains formal even when execution resources are unavailable.
 
