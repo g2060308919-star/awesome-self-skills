@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "user_approved_same_session_oracle_aware",
+  "evaluated_on": "2026-09-16",
+  "direct_baseline_commit": "3464c670c8cb185f3803ecc767219af7a20a2c6d",
+  "candidate_identity": "current-worktree-over-direct-baseline",
+  "files": [
+    { "path": "a23-review.md", "sha256": "ee25bfbac730de0c631a105c719fded342b30d01dde020e83e28dbbe54a238c4" },
+    { "path": "acceptance.md", "sha256": "8841ec24e6f82bd55077f2712996fdd243a02f1739512a1ab8d656b7a129c7cd" },
+    { "path": "generated-results.md", "sha256": "b5a97945a14925a7570d10022f8c021dc760260b2bbe3fef583fa12be1d46ad3" },
+    { "path": "matrix.md", "sha256": "cf429548abc8c4ce51c99a4ab083a1d91b2c935fea04b974753a7ca19ccbfaf0" },
+    { "path": "protocol.md", "sha256": "9919e8a4c7f83a9026e11bf22c26f3c06d3c694171c90976967319872a21b96c" },
+    { "path": "report.html", "sha256": "46b5d03fa4c291d2db1822a7bdc5ae55e98a7d513ffc9b70016c22f031c3a85f" }
+  ]
+}

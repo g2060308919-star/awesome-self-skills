@@ -6,9 +6,12 @@ import test from 'node:test';
 import {
   commitRevisionTransactionV4, ensureV4RunInstance
 } from '../../src/revision-transaction-v4.mjs';
+import {
+  buildCaseDocumentPresentationV4, renderLegacyBusinessHtmlV42, renderLegacyCaseTableV42
+} from '../../src/case-document-presentation-v4.mjs';
 import { CANDIDATE_V4_CONTRACT } from '../../src/v4-contract.mjs';
 import {
-  appendRequest, withRun
+  appendRequest, byteDigest, revisionArtifacts, withRun
 } from '../helpers/v4-revision-transaction-fixture.mjs';
 
 /** @param {string} target */
@@ -58,3 +61,37 @@ for (const phase of ['reserved', 'artifacts_committed', 'checkpoint_committed', 
     });
   });
 }
+
+test('A21/A22 final transaction can recover a complete frozen 4.2 presentation family', async () => {
+  await withRun(async directory => {
+    const run = await ensureV4RunInstance(directory, {
+      delivery_intent: 'case_document', contract: CANDIDATE_V4_CONTRACT
+    });
+    const artifacts = revisionArtifacts('final', 0, {
+      run_id: run.run_id, contract: CANDIDATE_V4_CONTRACT
+    });
+    const view = buildCaseDocumentPresentationV4(
+      artifacts.bundle.value, artifacts.manifest.value.render_options
+    );
+    const legacyHtml = renderLegacyBusinessHtmlV42(view, artifacts.source_reading.value);
+    const legacyTable = renderLegacyCaseTableV42(view);
+    artifacts.html.text = legacyHtml;
+    artifacts.table.text = legacyTable;
+    artifacts.manifest.value.html.digest = byteDigest(legacyHtml);
+    artifacts.manifest.value.chat_table.digest = byteDigest(legacyTable);
+
+    const result = await commitRevisionTransactionV4(directory, appendRequest(
+      'final', null, 0, {
+        run_id: run.run_id, contract: CANDIDATE_V4_CONTRACT,
+        append_id: 'APPEND-legacy-42-family', artifacts
+      }
+    ));
+    assert.equal(result.status, 'committed');
+    assert.equal(
+      await readFile(path.join(directory, 'output/r000/test-cases.html'), 'utf8'), legacyHtml
+    );
+    assert.equal(
+      await readFile(path.join(directory, 'output/r000/case-table.txt'), 'utf8'), legacyTable
+    );
+  });
+});

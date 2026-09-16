@@ -14,6 +14,8 @@ Different enumerations, permission branches, or condition/result branches that c
 
 不同枚举、权限或条件分支必须按独立结果拆分，各自保留准确输入与预期；共享操作不构成合并理由。
 
+Use target-discriminating data, not merely data that produces any visible output. For a filter or mapping, include the logical target sample and, when needed to distinguish a plausible false positive, a related nonmatching or differently mapped sample while holding irrelevant conditions stable. Do not assert unknown global counts, ordering, or pagination just to make the counterexample look complete.
+
 ## Preserve single points and add a same-object complete path
 
 When accepted flow evidence defines a main closed path, keep every required 单点 Case and add one complete-path Case. 完整流程必须围绕同一业务对象，从证据明确的起点经过所需动作到达证据明确的终点。Refer to continuity in executable terms such as “本用例创建的记录”; do not invent an identifier field the product never provides. A critical stage stays in the steps instead of being moved into a precondition, and the Case must not silently switch objects midway.
@@ -42,6 +44,8 @@ Every Oracle has `oracle_id`, `observe_after_step_id`, `surface`, concrete `expe
 
 Write a concrete business expectation, not “works”, “normal”, “correct”, or “successful”. Name the exact value/state/event/side effect, where it is observed, and any sourced comparison or time bound. An observation surface alone is not an Oracle. A generic boundary technique, common practice, model consensus, or coverage selection cannot supply expected product truth.
 
+Separate “input was entered”, “input passed validation”, “request was emitted”, and “business operation succeeded” when the target distinguishes them. Prepare capture before an action that emits a transient request or event. Select only the observation surface needed by the target; lack of a current account, URL, selector, or observer remains execution preparation and does not block logical Case generation. Never invent a field, endpoint, success code, timeout, or persistence rule to fill that gap.
+
 HTML and Markdown place each expected result with its owning step. CSV serializes `steps` as `N. action` and `expected_results` as `步骤N：预期`, using the same step order. The conversation Table preserves every Oracle in deterministic step/observation order. JSON, HTML, Table, Markdown, and CSV derive from one canonical Case document; never edit them independently.
 
 ## Record semantic effects only when real
@@ -68,6 +72,10 @@ Never mix fields from different branches, relabel an example as a requirement, o
 ## Preserve evidence and risk boundaries
 
 Every expected value/state and every optional semantic field needs direct accepted Claim evidence or a legal replayable E2 derivation. Run a read-only source rebuttal pass before submission: try to disprove every proposed fact, condition, action, and Oracle. The review must never introduce a new business fact. Contradicted or uncertain semantics remain a gap; do not invent an assumption to rescue them.
+
+Then run a target counterexample pass: ask whether the target could be wrong while the Case's weaker signal still looks normal. If yes, strengthen only the data, action, or observation needed to discriminate the sourced target. Also audit both directions—every effective source outcome must reach a Case, gap, or justified exclusion, and every Case assertion must trace to exact support. Correct multi-step same-object Cases must survive this review; do not reject them merely because they contain more than one action or process observation.
+
+Examples: “create this record, then locate that same record and observe its sourced terminal state” is one valid multi-step Case when the terminal state is the single primary result. “check several invalid inputs and confirm they are handled correctly” is invalid when each restriction can fail independently; write concrete data and expected rejection for each result instead. A Case that silently changes records, omits the terminal observation, or turns an illustrative value into the only allowed value must be repaired upstream.
 
 An unsourced generic risk may become a clearly labelled Exploratory record, never a formal Case or Oracle. Missing formal source behavior remains a semantic gap, not Exploratory. `risk_review_ledger` is compiler-owned from the complete module review; Case drafts must not create or hide its nine mandatory categories.
 
