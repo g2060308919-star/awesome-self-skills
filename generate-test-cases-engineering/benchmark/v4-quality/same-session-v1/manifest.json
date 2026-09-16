@@ -3,13 +3,26 @@
   "mode": "user_approved_same_session_oracle_aware",
   "evaluated_on": "2026-09-16",
   "direct_baseline_commit": "3464c670c8cb185f3803ecc767219af7a20a2c6d",
-  "candidate_identity": "current-worktree-over-direct-baseline",
+  "candidate_identity": "commit-bound-runtime-tree",
+  "candidate_commit": "6f42f19f59d3d3bdb619041af2ccb80bd902fd9d",
+  "candidate_runtime_tree_digest": "sha256:28549e6a31b7502455c5d7fbcb52522e91de1dc4d58749b3581ed1310c540d1b",
+  "baseline_runtime_tree_digest": "sha256:26342d8600f8e4ba641a2d9e95b843b700709cf4be4a7fed67886c0a0b8f382b",
+  "model_context": {
+    "provider": "OpenAI Codex desktop task",
+    "model_family": "GPT-5",
+    "deployment_id": null,
+    "reasoning_effort": null,
+    "availability_note": "The task exposed the model family but not an exact deployment identifier or reasoning-effort setting."
+  },
+  "row_evidence_kind": "reviewer_authored_matrix_observation",
+  "raw_transcripts_retained": false,
+  "release_eligible": false,
   "files": [
     { "path": "a23-review.md", "sha256": "ee25bfbac730de0c631a105c719fded342b30d01dde020e83e28dbbe54a238c4" },
-    { "path": "acceptance.md", "sha256": "8841ec24e6f82bd55077f2712996fdd243a02f1739512a1ab8d656b7a129c7cd" },
-    { "path": "generated-results.md", "sha256": "b5a97945a14925a7570d10022f8c021dc760260b2bbe3fef583fa12be1d46ad3" },
-    { "path": "matrix.md", "sha256": "cf429548abc8c4ce51c99a4ab083a1d91b2c935fea04b974753a7ca19ccbfaf0" },
-    { "path": "protocol.md", "sha256": "9919e8a4c7f83a9026e11bf22c26f3c06d3c694171c90976967319872a21b96c" },
-    { "path": "report.html", "sha256": "46b5d03fa4c291d2db1822a7bdc5ae55e98a7d513ffc9b70016c22f031c3a85f" }
+    { "path": "acceptance.md", "sha256": "5ebc12033b26b6a57388f3ae704f2c5c85e9af25f50e2cb8f58cb305e94bf9d2" },
+    { "path": "generated-results.md", "sha256": "5452810bc05e541e89103d5b8fadb6b9a9773f895499fd6b9923153cb2274f91" },
+    { "path": "matrix.md", "sha256": "5f823dcef22e154894b957ebb19dd60a3a52b6cfca6cef0c4d53a2c226b71247" },
+    { "path": "protocol.md", "sha256": "1f9beb310d77a67fb4ff62395d9ce1793b8e19e7683696144776c0b96a104ffe" },
+    { "path": "report.html", "sha256": "d89ce987f776615a4fde8610bb9ce071f1fce9cfc015111103239f5bc41e09ff" }
   ]
 }

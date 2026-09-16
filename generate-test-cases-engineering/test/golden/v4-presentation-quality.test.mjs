@@ -208,3 +208,47 @@ test('A21 canonical read accepts a whole historical 4.2 family and rejects a dig
     () => verifyCaseDocumentDeliveryV4(directory), /CANONICAL_ARTIFACT_INVALID/u
   );
 });
+
+test('A19/A21 audit mode remains canonical for current and historical 4.2 families', async () => {
+  const input = candidateDeliveryInput();
+  input.render_options.include_audit_appendix = true;
+  const current = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
+  const sourceReading = JSON.parse(current.source_reading_bytes);
+  const view = presentation.buildCaseDocumentPresentationV4(
+    JSON.parse(current.bundle_bytes), input.render_options
+  );
+
+  assert.match(current.html_bytes, /<summary>审计标识<\/summary>/u);
+  assert.match(current.html_bytes, /CASE-flow/u);
+  assert.match(current.html_bytes, /TP-flow/u);
+  assert.match(current.html_bytes, /FLOW-review/u);
+  assert.equal(presentation.matchCasePresentationFamilyV42(view, sourceReading, {
+    html: current.html_bytes, table: current.table_bytes
+  }), 'current-4.2');
+
+  const currentDirectory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v42-current-audit-'));
+  await writeDelivery(currentDirectory, current.manifest, {
+    bundle: current.bundle_bytes, markdown: current.markdown_bytes,
+    worksheet: current.worksheet_bytes, html: current.html_bytes, table: current.table_bytes,
+    source_reading: current.source_reading_bytes
+  });
+  const currentVerified = await verifyCaseDocumentDeliveryV4(currentDirectory);
+  assert.match(currentVerified.artifacts.html, /<summary>审计标识<\/summary>/u);
+
+  const legacyHtml = presentation.renderLegacyBusinessHtmlV42(view, sourceReading);
+  const legacyTable = presentation.renderLegacyCaseTableV42(view);
+  const legacyManifest = structuredClone(current.manifest);
+  legacyManifest.html.digest = byteDigest(legacyHtml);
+  legacyManifest.chat_table.digest = byteDigest(legacyTable);
+  const legacyDirectory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v42-legacy-audit-'));
+  await writeDelivery(legacyDirectory, legacyManifest, {
+    bundle: current.bundle_bytes, markdown: current.markdown_bytes,
+    worksheet: current.worksheet_bytes, html: legacyHtml, table: legacyTable,
+    source_reading: current.source_reading_bytes
+  });
+  const legacyVerified = await verifyCaseDocumentDeliveryV4(legacyDirectory);
+  assert.match(legacyVerified.artifacts.html, /CASE-flow/u);
+  assert.equal(presentation.matchCasePresentationFamilyV42(view, sourceReading, {
+    html: legacyHtml, table: legacyTable
+  }), 'legacy-4.2');
+});

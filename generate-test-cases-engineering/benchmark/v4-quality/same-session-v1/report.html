@@ -9,11 +9,11 @@
   </style>
 </head>
 <body><main>
-  <header><p class="meta">generate-test-cases · V4 增量增强</p><h1>同会话 V4 质量评测</h1><p>基线：<code>3464c670c8cb185f3803ecc767219af7a20a2c6d</code>；候选：当前工作区。</p></header>
+  <header><p class="meta">generate-test-cases · V4 增量增强</p><h1>同会话 V4 质量评测</h1><p>基线：<code>3464c670c8cb185f3803ecc767219af7a20a2c6d</code>；候选：<code>6f42f19f59d3d3bdb619041af2ccb80bd902fd9d</code>。</p></header>
 
-  <section class="panel warning"><h2>证据边界</h2><p>用户明确同意在当前任务会话内完成。本任务已经读取实现历史和验收 Oracle，因此本报告是 oracle-aware same-session evidence，不是独立、盲测或冷上下文证据。原冻结独立协议仍保持未运行。</p></section>
+  <section class="panel warning"><h2>证据边界</h2><p>用户明确同意在当前任务会话内完成。本任务已经读取实现历史和验收 Oracle，因此本报告是 oracle-aware same-session review，不是独立、盲测或冷上下文证据。矩阵是 reviewer-authored observation，没有逐行原始模型 transcript；精确 deployment ID 与 reasoning effort 未向任务暴露。原冻结独立协议仍保持未运行。</p></section>
 
-  <section class="panel"><h2>结论</h2><ul><li>Candidate：25/25 同会话 pass 满足语义和当前完整呈现要求。</li><li>Baseline：语义主干总体保留；旧 Table 缺少前提、数据和步骤，F04 两次还保留了弱信号 false-positive 缺口。</li><li>A23：四类错误候选均被具体拒绝，正确的同对象多步 Case 被接受。</li><li>结论仅限本同会话矩阵：未观察到 candidate 相对 baseline 的对应回归。</li></ul></section>
+  <section class="panel"><h2>结论</h2><ul><li>Candidate：26/26 同会话 review observations 被标记为满足语义和当前完整呈现要求。</li><li>Baseline：语义主干总体保留；旧 Table 缺少前提、数据和步骤，F04 两次还保留了弱信号 false-positive 缺口。</li><li>A23：四类错误候选均被具体拒绝，正确的同对象多步 Case 被接受。</li><li>结论仅限本同会话审阅矩阵：未观察到 candidate 相对 baseline 的对应回归；这不是 replayable run 或发布验收结论。</li></ul></section>
 
   <section><h2>完整配对矩阵</h2><div class="table-wrap"><table><thead><tr><th>Run</th><th>Version</th><th>Input</th><th>Result</th></tr></thead><tbody>
     <tr><td>SS-B-F01-1</td><td>baseline</td><td>F01 repeat 1</td><td class="bad">失败：旧 Table 不完整</td></tr>
@@ -26,6 +26,7 @@
     <tr><td>SS-B-F03-UNKNOWN</td><td>baseline</td><td>F03 unknown</td><td class="ok">通过：gap 保留</td></tr>
     <tr><td>SS-B-F03-DEFER</td><td>baseline</td><td>F03 defer</td><td class="ok">通过：仅当前项 deferred</td></tr>
     <tr><td>SS-B-F03-DELIVERY</td><td>baseline</td><td>F03 delivery</td><td class="ok">通过：未伪造答案</td></tr>
+    <tr><td>SS-B-F03-PARTIAL</td><td>baseline</td><td>F03 partial</td><td class="ok">通过：只回答另一独立项；整个时间问题仍 pending</td></tr>
     <tr><td>SS-B-F03-INVALID</td><td>baseline</td><td>F03 invalid</td><td class="ok">通过：无 revision</td></tr>
     <tr><td>SS-B-F04-1</td><td>baseline</td><td>F04 repeat 1</td><td class="bad">失败：弱信号</td></tr>
     <tr><td>SS-B-F04-2</td><td>baseline</td><td>F04 repeat 2</td><td class="bad">失败：弱信号</td></tr>
@@ -51,6 +52,7 @@
     <tr><td>SS-C-F03-UNKNOWN</td><td>candidate</td><td>F03 unknown</td><td class="ok">通过</td></tr>
     <tr><td>SS-C-F03-DEFER</td><td>candidate</td><td>F03 defer</td><td class="ok">通过</td></tr>
     <tr><td>SS-C-F03-DELIVERY</td><td>candidate</td><td>F03 delivery</td><td class="ok">通过</td></tr>
+    <tr><td>SS-C-F03-PARTIAL</td><td>candidate</td><td>F03 partial</td><td class="ok">通过：只回答另一独立项；整个时间问题仍 pending</td></tr>
     <tr><td>SS-C-F03-INVALID</td><td>candidate</td><td>F03 invalid</td><td class="ok">通过</td></tr>
     <tr><td>SS-C-F04-1</td><td>candidate</td><td>F04 repeat 1</td><td class="ok">通过</td></tr>
     <tr><td>SS-C-F04-2</td><td>candidate</td><td>F04 repeat 2</td><td class="ok">通过</td></tr>
@@ -103,7 +105,7 @@
     <tr><td>F08</td><td>折扣率边界</td><td>0、0.50 与越界值对照</td><td>边界可计算，越界拒绝</td></tr>
     <tr><td>F08</td><td>公式实例</td><td>100 × (1 − 0.20)</td><td>同一订单折后金额 80.00</td></tr>
   </tbody></table></div>
-  <h3>必要停点</h3><ul><li>F06-MISSING：业务接收成功规则未给出，先澄清。</li><li>F07-UNREADABLE：附件未读取，采集限制保留；正文事实不删除。</li><li>F08-MISSING：公式与折扣率范围缺失，先澄清。</li><li>F03 unknown/defer/delivery/invalid：不生成未经授权的时间边界。</li></ul></section>
+  <h3>必要停点</h3><ul><li>F06-MISSING：业务接收成功规则未给出，先澄清。</li><li>F07-UNREADABLE：附件未读取，采集限制保留；正文事实不删除。</li><li>F08-MISSING：公式与折扣率范围缺失，先澄清。</li><li>F03 unknown/defer/delivery/invalid：不生成未经授权的时间边界。</li><li>F03 partial：只回答同批次另一独立项，整个时间边界问题保持 pending。</li></ul></section>
 
   <section class="panel"><h2>A23 审阅</h2><table><thead><tr><th>缺陷</th><th>裁决</th><th>影响</th></tr></thead><tbody><tr><td>缺少目标终点</td><td class="bad">拒绝</td><td>成功提示不能证明金额</td></tr><tr><td>中途换对象</td><td class="bad">拒绝</td><td>订单甲动作不能由订单乙结果证明</td></tr><tr><td>合并独立结果</td><td class="bad">拒绝</td><td>多个独立失败被“均正确”掩盖</td></tr><tr><td>示例升级为规则</td><td class="bad">拒绝</td><td>可替换示例被错误封闭</td></tr><tr><td>正确候选</td><td class="ok">接受</td><td>同对象、多步、一个主要金额结果</td></tr></tbody></table></section>
 </main></body></html>

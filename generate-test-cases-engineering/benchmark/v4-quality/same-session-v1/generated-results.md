@@ -50,6 +50,7 @@ These are the retained business outputs drafted from the frozen raw inputs in th
 | unknown | 不生成时间边界；两个时间分支保留 semantic gap。 |
 | defer | 只将当前问题标为 deferred；不生成答案或关闭未来问题。 |
 | delivery | 只对显式当前问题请求带缺口交付；不把 gap 改成 NotApplicable。 |
+| partial | 只回答同批次的另一个独立项；整个时间边界问题保持 pending，不生成时间 Case，也不让另一项的答案越权影响 F03。 |
 | invalid | 空白或无关文本不形成 Decision，不推进 revision，问题保持当前。 |
 
 最终口径下的 Case：恰好 72 小时的同一通知撤回成功；超过 72 小时的同一通知撤回被拒绝。临时口径使用同样边界结构但状态为 Conditional。

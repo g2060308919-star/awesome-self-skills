@@ -1,6 +1,6 @@
-# Same-session paired matrix
+# Same-session paired review matrix
 
-“通过” means the retained semantic result met the oracle and, for candidate deliveries, the current full Table/HTML contract. “失败” is retained evidence, not discarded. Question/control rows pass when they stop or preserve the gap exactly as required.
+“通过” means the reviewer-authored retained observation met the oracle and, for candidate deliveries, the current full Table/HTML contract. “失败” is retained evidence, not discarded. Question/control rows pass when they stop or preserve the gap exactly as required. Each `Run` value is a unique observation ID, not an independently captured raw model transcript.
 
 | Run | Version | Input / variant | Result | Retained observation |
 | --- | --- | --- | --- | --- |
@@ -14,6 +14,7 @@
 | SS-B-F03-UNKNOWN | baseline | F03 unknown | 通过 | 未猜边界，保留 unknown gap；没有伪造 Case。 |
 | SS-B-F03-DEFER | baseline | F03 defer | 通过 | 只延后当前时间边界，gap 保留。 |
 | SS-B-F03-DELIVERY | baseline | F03 delivery | 通过 | 只关闭所选当前项用于带缺口交付，不生成答案。 |
+| SS-B-F03-PARTIAL | baseline | F03 partial | 通过 | 只回答另一个独立项；整个时间边界问题仍 pending，不生成时间 Case。 |
 | SS-B-F03-INVALID | baseline | F03 invalid | 通过 | 空白/无关回答不形成 Decision，不推进 revision。 |
 | SS-B-F04-1 | baseline | F04 repeat 1 | 失败 | 查询 Case 只验证匹配记录出现，不能识别非匹配记录混入。 |
 | SS-B-F04-2 | baseline | F04 repeat 2 | 失败 | 与 repeat 1 相同的弱信号缺陷被保留。 |
@@ -39,6 +40,7 @@
 | SS-C-F03-UNKNOWN | candidate | F03 unknown | 通过 | unknown 不变成答案或 NotApplicable，缺口留在交付限制。 |
 | SS-C-F03-DEFER | candidate | F03 defer | 通过 | defer 只改变当前项状态，不关闭或回答它。 |
 | SS-C-F03-DELIVERY | candidate | F03 delivery | 通过 | request_delivery 只关闭显式当前项用于交付，不影响未来 root。 |
+| SS-C-F03-PARTIAL | candidate | F03 partial | 通过 | 只回答另一个独立项；整个时间边界问题继续 pending，不提交依赖它的 Case。 |
 | SS-C-F03-INVALID | candidate | F03 invalid | 通过 | 空白/无关文本没有可靠绑定，不形成接受修订。 |
 | SS-C-F04-1 | candidate | F04 repeat 1 | 通过 | 选择与点击查询分开，匹配记录出现且非匹配记录不出现。 |
 | SS-C-F04-2 | candidate | F04 repeat 2 | 通过 | 更换具体逻辑数据后仍以正反样本识别 false positive。 |
@@ -57,6 +59,6 @@
 
 ## Comparison
 
-- Candidate: 25/25 same-session passes met the semantic and current presentation oracle.
+- Candidate: 26/26 same-session review observations were marked pass against the semantic and current presentation oracle.
 - Baseline: semantic strengths were preserved, but the old Table family failed the new full-presentation requirement; F04 repeats 1 and 2 also retained a weak-signal false-positive gap.
-- No candidate regression was observed in this oracle-aware same-session matrix. This sentence is intentionally narrower than the frozen independent-context claim.
+- No candidate regression was observed in this oracle-aware same-session review matrix. Because raw row transcripts and exact deployment settings are unavailable, this sentence is intentionally narrower than a replayable run or frozen independent-context claim.
