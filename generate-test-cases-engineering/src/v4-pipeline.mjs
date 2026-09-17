@@ -5,7 +5,6 @@ import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-
 import { canonicalStringify, digest } from './canonical.mjs';
 import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
 import {
-  compileRelativeBaselineCaseV4,
   compileSemanticCaseDocumentV4,
   validateRelativeBaselineEvidenceV4,
   validateTestValueOriginsV4
@@ -33,6 +32,7 @@ import {
 } from './scope-manifest-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
+import { materializeRelativeBaselinesV4 } from './relative-baseline-materialization-v4.mjs';
 import { compileSourceEvidence } from './source-compiler-v4.mjs';
 import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
 
@@ -345,55 +345,6 @@ function presentNotApplicable(records, behavior) {
   });
 }
 
-/** Materialize the four-step relative-baseline protocol from the verified
- * declaration while preserving the Adapter's business title and selectors.
- * @param {any[]} candidates @param {any} semanticEvidence @param {any[]} claimAssessments */
-function materializeRelativeBaselines(candidates, semanticEvidence, claimAssessments) {
-  const assessmentById = new Map((Array.isArray(claimAssessments) ? claimAssessments : [])
-    .map((/** @type {any} */ item) => [item.claim_id, item]));
-  /** @type {any[]} */ const diagnostics = [];
-  const cases = candidates.map(candidate => {
-    if (!candidate.baseline_spec) return candidate;
-    const assertion = semanticEvidence.baseline_assertions.find((/** @type {any} */ item) =>
-      candidate.baseline_spec.claim_ids.includes(item.claim_id));
-    if (!assertion) return candidate;
-    const support = candidate.baseline_spec.claim_ids.map((/** @type {string} */ claimId) => {
-      const assessment = assessmentById.get(claimId);
-      const source = semanticEvidence.baseline_assertions.find((/** @type {any} */ item) => item.claim_id === claimId);
-      return {
-        claim_id: claimId, level: assessment?.level, scope: source?.scope_ref,
-        support_review: assessment?.support_review
-      };
-    });
-    const result = compileRelativeBaselineCaseV4({
-      case_context: {
-        module_id: candidate.module_id, scope_ref: assertion.scope_ref,
-        business_scope: candidate.title,
-        operation: candidate.steps.map((/** @type {any} */ item) => item.action).join('；'),
-        priority: candidate.priority, ordering: candidate.ordering,
-        acceptance_role: candidate.acceptance_role, fact_ids: candidate.fact_ids,
-        primary_test_point_id: candidate.primary_test_point_id,
-        business_preconditions: candidate.business_preconditions,
-        data_conditions: candidate.data_conditions
-      },
-      baseline_spec: candidate.baseline_spec
-    }, { claim_assessments: support });
-    diagnostics.push(...result.diagnostics);
-    if (result.semantic_gaps.length || result.cases.length !== 1) {
-      diagnostics.push({
-        category: 'adapter_revision', code: 'BASELINE_DECLARATION_INCOMPLETE', path: '/baseline_spec',
-        message: 'A persisted relative baseline must already contain a complete source-declared comparison contract.'
-      });
-      return candidate;
-    }
-    return {
-      ...candidate, steps: result.cases[0].steps, oracles: result.cases[0].oracles,
-      baseline_spec: result.cases[0].baseline_spec
-    };
-  });
-  return { cases, diagnostics };
-}
-
 /** @param {any} coverage @param {any[]} exploratory @param {any[]} notApplicable @param {any[]} gaps */
 function coverageSummary(coverage, exploratory, notApplicable, gaps) {
   /** @param {string} acceptanceRole */
@@ -565,7 +516,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     const diagnostics = validateRelativeBaselineEvidenceV4(candidate, semanticEvidence);
     if (diagnostics.length) return needRevision('case_drafts', diagnostics);
   }
-  const materializedDrafts = materializeRelativeBaselines(
+  const materializedDrafts = materializeRelativeBaselinesV4(
     artifacts.case_drafts.cases, semanticEvidence, system.claim_assessments
   );
   if (materializedDrafts.diagnostics.length) return needRevision('case_drafts', materializedDrafts.diagnostics);
@@ -692,7 +643,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
         views: artifacts.behavior_views.views,
         formal_test_points: behavior.formal_test_points,
         candidate_responsibilities: artifacts.behavior_views.design_assurance.candidate_responsibilities,
-        cases: artifacts.case_drafts.cases
+        cases: materializedDrafts.cases
       });
     } catch (error) {
       return independentReviewRevision(review, null, [{

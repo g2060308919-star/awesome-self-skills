@@ -5,7 +5,7 @@ description: Use when a PRD, module description, module-description, 需求文�
 
 # Generate Test Cases
 
-Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
+Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. New runs use the exact schema/compiler pair `4.3.0/0.8.0`; exact `4.0.0/0.5.0` and `4.2.0/0.7.0` runs retain their bound behavior. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
 
 The compiler owns validation, stable identity, Facts, scope topology, formal Test Points, semantic roots, classification, coverage, ordering, checkpoints, canonical results, and rendering. The Agent writes only the four requested semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
 
@@ -54,7 +54,7 @@ node <skill-dir>/scripts/test-compiler.mjs <absolute-run-directory>
 
 The runner receives one absolute run-directory argument and stdout contains one JSON reply. Validate it against `scripts/schemas/reply.schema.json` before inspecting status or writing anything. Unknown status/stage, a stage/schema mismatch, malformed JSON, extra reply fields, or unverifiable recovery bindings is `PIPELINE_PROTOCOL_ERROR`; write no artifact. stderr is diagnostics only.
 
-Import the private installed Adapter helpers `createV4RunDirectory`, `constructV4Action`, `stageV4PrdCollectionObservation`, and `stageV4SourceAcquisitionAction` from `<skill-dir>/scripts/test-compiler.mjs`. Create each Case Document or Execution Plan sibling with `createV4RunDirectory(<catalog-root>, delivery_intent)` so the compiler issues the run ID and canonical `runs/<run-id>` directory together; never mint a run ID or move an established run directory. Before submitting a displayed action, pass the validated reply plus only the user's semantic answer or choice to `constructV4Action`, then append exactly the returned event to the next Source Pack revision. Never mint or compute an event ID, digest, presentation binding, request binding, or other protocol ID. A stale or unadvertised action is a protocol error; do not hand-build a substitute event.
+Import the private installed Adapter helpers `createV4RunDirectory`, `constructV4Action`, `constructIndependentReviewCompletionV4`, `stageV4PrdCollectionObservation`, and `stageV4SourceAcquisitionAction` from `<skill-dir>/scripts/test-compiler.mjs`. Create each Case Document or Execution Plan sibling with `createV4RunDirectory(<catalog-root>, delivery_intent)` so the compiler issues the run ID and canonical `runs/<run-id>` directory together; never mint a run ID or move an established run directory. Before submitting a displayed action, pass the validated reply plus only the user's semantic answer or choice to `constructV4Action`, then append exactly the returned event to the next Source Pack revision. Never mint or compute an event ID, digest, presentation binding, request binding, or other protocol ID. A stale or unadvertised action is a protocol error; do not hand-build a substitute event.
 
 For a new Case Document, first invoke the runner to obtain its `source_pack` request. Enumerate and actually inspect the declared PRD body, tables, images, visible comments, replies, and resolved threads as required by `references/evidence-policy.md`. Call `stageV4PrdCollectionObservation` with that validated reply, the closed technical observation, and the exact in-memory raw/capture bytes; then stage the reviewed four-artifact `source_pack`. The helper persists safe digests and collection status only. Its technical record is not a fifth semantic artifact and cannot prove or introduce a business fact.
 
@@ -64,8 +64,9 @@ Follow this order:
 source acquisition and canonical capture
 -> source review, atomic Facts, topology review, and scope manifest
 -> pre-case clarification
--> sparse Behavior Views, business outcomes, formal Test Points, and Case Drafts
+-> sparse Behavior Views with design assurance, business outcomes, formal Test Points, and Case Drafts
 -> post-case clarification for newly discovered semantic gaps only
+-> source-first independent review inside the same Case Draft stage
 -> canonical Case Document delivery
 -> optional explicit Execution Plan bound to that immutable Case Document
 ```
@@ -101,13 +102,25 @@ When `incomplete_reason.code` is `STAGE_ARTIFACT_REQUIRED`, open the named Schem
 
 Any other Agent-writable stage is `PIPELINE_PROTOCOL_ERROR`. Never invent a fifth artifact.
 
+For a 4.3 `case_drafts` reply with `INDEPENDENT_REVIEW_REQUIRED` and a
+`review_request`, do not create another artifact or stage. Read the declared
+source-first targets before the generated projection, adjudicate every target
+and finding from exact Claim/Decision support, and call
+`constructIndependentReviewCompletionV4(validatedReply, {target_assessments,
+findings})`. Replace only the unaccepted staging `case_drafts.independent_review`
+with that returned closed object while repeating the same generated content.
+The helper copies target IDs and `review_target_digest`; never guess either.
+A changed Fact, View, formal Test Point, responsibility, Case precondition, data
+condition, step, or Oracle requires a new compiler-issued review request. Review
+prose alone does not create a new target digest.
+
 Allow three repair attempts for the same normalized stage and root cause. The fourth identical no-progress result is `PIPELINE_NO_PROGRESS`, not a compiler fatal or business Blocked item. Reset the counter only on material stage or cause change.
 
 ### Handle `finished`
 
 Re-read `output/current.json`, treat it as the only authoritative manifest, and validate every referenced file and digest before reporting success. Report current state, canonical result kind, produced files/counts, any retained gaps or execution exclusion reason, next available action, and exact recovery run reference.
 
-For a 4.2 Case Document, validate `output/current.json` entries for canonical JSON, `test-cases.html`, `case-table.txt`, CSV, Markdown, and `source-reading.json`. Open `test-cases.html` as the primary readable artifact. Send the CommonMark Table from `case-table.txt` in canonical `ordered_case_ids` order and展示全部 Case 的全量 Table; every generated Case appears exactly once, and a long table is continued in ordered segments without ellipsis or sampling. Its required header is `序号 | 模块 | 用例/流程名称 | 预期结果 | 优先级 | 依据状态`. Display all step-bound Oracles in their deterministic observation order rather than summarizing only the last result.
+For a 4.2 or 4.3 Case Document, validate `output/current.json` entries for canonical JSON, `test-cases.html`, `case-table.txt`, CSV, Markdown, and `source-reading.json`. For 4.3 also verify that the manifest review digest matches canonical JSON. Open `test-cases.html` as the primary readable artifact. Send the CommonMark Table from `case-table.txt` in canonical `ordered_case_ids` order and展示全部 Case 的全量 Table; every generated Case appears exactly once, and a long table is continued in ordered segments without ellipsis or sampling. Its required header is `序号 | 模块 | 用例/流程名称 | 预期结果 | 优先级 | 依据状态`. Display all step-bound Oracles in their deterministic observation order rather than summarizing only the last result.
 
 JSON, HTML, CSV, Markdown, and the full Table are projections of the same canonical Case bundle; `source-reading.json` is separately projected from the bound technical collection record. Markdown remains a compatibility file and begins with a one-scenario-per-line overview showing module, priority, title, and status. Coverage is labelled “已审阅 formal test-point 覆盖” and separately names semantic gap, Exploratory, and NotApplicable counts. Never claim unbounded “100% requirement coverage”. Internal IDs appear only in canonical JSON or an explicitly enabled audit appendix. For a legacy 4.0 task, keep its original manifest and readable artifacts unchanged; do not backfill a false collection-completeness claim.
 
@@ -129,5 +142,6 @@ Report current state, produced and preserved prior artifacts, incomplete reason 
 - Keep one independently diagnosable primary business outcome per Case. Every Oracle binds an existing step with `observe_after_step_id`.
 - Never fabricate a Behavior View field, business rule, ordering dependency, observer, execution resource, or Schema field. Multiple unrelated atomic Claims must not share a whole-document locator.
 - `request_delivery` may close selected semantic gaps for delivery; it never fabricates answers, deletes formal Test Points, or makes an execution plan ready.
+- In 4.3, `request_delivery`, ordinary confirmation, E1 input, defer, unknown, or `resolved_temporary` never resolves a critical acceptance-impact root. Formal delivery requires the compiler's final-resolution basis.
 - JSON is normative. HTML, the full conversation Table, Markdown, and CSV are mechanical views of the same canonical result, never independently edited.
 - Execution results and defect records belong downstream and bind the delivered bundle digest plus Case ID; they are never written into the canonical Case Document.

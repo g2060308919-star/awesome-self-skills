@@ -72,6 +72,66 @@ test('AT05-AT06 retained and merged targets must exist and merge graphs cannot c
   );
 });
 
+test('AT05: representative and merge chains must terminate at a retained candidate', () => {
+  const input = validationInput();
+  const group = input.assurance.rule_groups[0];
+  const retainedCandidateId = group.candidate_ids[0];
+  const excludedCandidateId = 'DESIGN-CANDIDATE-excluded';
+  group.candidate_ids.push(excludedCandidateId);
+  input.assurance.candidate_responsibilities.push({
+    candidate_id: excludedCandidateId, rule_group_id: group.rule_group_id,
+    responsibility: '被排除候选', source_claim_ids: [...group.source_claim_ids]
+  });
+  input.assurance.candidate_dispositions = [
+    {
+      candidate_id: retainedCandidateId, disposition: 'equivalent_merge',
+      retained_candidate_id: excludedCandidateId, rationale: '错误合并到非保留终点'
+    },
+    {
+      candidate_id: excludedCandidateId, disposition: 'evidence_exclusion',
+      source_claim_ids: [...group.source_claim_ids], rationale: '来源证明不适用'
+    }
+  ];
+  assert.match(
+    validateDesignAssuranceV4(input.assurance, input.context).diagnostics
+      .map((item) => item.code).join(','),
+    /DESIGN_ASSURANCE_RETAINED_CHAIN_INVALID/u
+  );
+});
+
+test('AT09: an unknown impacted-batch trigger returns a diagnostic instead of throwing', () => {
+  const input = validationInput();
+  const triggerGroupId = 'RULE-GROUP-unknown-batch';
+  const triggerCandidateId = 'DESIGN-CANDIDATE-unknown-batch';
+  input.assurance.rule_groups.push({
+    rule_group_id: triggerGroupId, batch_id: 'BATCH-unknown',
+    source_claim_ids: [...input.assurance.batches[0].source_claim_ids],
+    objective: '未知批次规则组', method: input.assurance.rule_groups[0].method,
+    candidate_ids: [triggerCandidateId]
+  });
+  input.assurance.candidate_responsibilities.push({
+    candidate_id: triggerCandidateId, rule_group_id: triggerGroupId,
+    responsibility: '未知批次候选',
+    source_claim_ids: [...input.assurance.batches[0].source_claim_ids]
+  });
+  input.assurance.candidate_dispositions.push({
+    candidate_id: triggerCandidateId, disposition: 'retained',
+    retained_element_ids: [input.context.view_element_ids[0]], rationale: '保留'
+  });
+  input.assurance.impacted_prior_batches = [{
+    batch_id: input.assurance.batches[0].batch_id,
+    trigger_rule_group_ids: [triggerGroupId],
+    source_claim_ids: [...input.assurance.batches[0].source_claim_ids],
+    rationale: '未知规则组不能触发重审。'
+  }];
+  assert.doesNotThrow(() => validateDesignAssuranceV4(input.assurance, input.context));
+  assert.match(
+    validateDesignAssuranceV4(input.assurance, input.context).diagnostics
+      .map((item) => item.code).join(','),
+    /DESIGN_ASSURANCE_PRIOR_BATCH_INVALID/u
+  );
+});
+
 test('AT07 exclusion and semantic-gap disposition require current evidence references', () => {
   const exclusion = validationInput();
   exclusion.assurance.candidate_dispositions[0] = {

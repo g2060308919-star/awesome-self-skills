@@ -327,7 +327,9 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
   for (const state of prior?.clarification_state.root_states ?? []) stateByRoot.set(state.root_issue_id, structuredClone(state));
   for (const root of currentRoots) {
     const state = stateByRoot.get(root.root_issue_id);
-    if (state && TERMINAL_ROOT_STATES.has(state.status)) continue;
+    if (state && TERMINAL_ROOT_STATES.has(state.status)
+      && (!isGeneralQualityV4Contract(contract)
+        || state.root_version_digest === root.root_version_digest)) continue;
     const nextRoot = publicRoot(root);
     ledger.set(root.root_issue_id, nextRoot);
     stateByRoot.set(root.root_issue_id, {

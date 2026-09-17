@@ -13,7 +13,8 @@
       "enum": [
         "3.0.0",
         "4.0.0",
-        "4.2.0"
+        "4.2.0",
+        "4.3.0"
       ]
     },
     "source_revision": {
@@ -91,7 +92,7 @@
           ],
           "properties": {
             "schema_version": {
-              "enum": ["4.0.0", "4.2.0"]
+              "enum": ["4.0.0", "4.2.0", "4.3.0"]
             },
             "claims": {
               "items": {
@@ -104,7 +105,23 @@
             "semantic_gaps": {
               "items": { "$ref": "#/$defs/v4SemanticGapInput" }
             }
-          }
+          },
+          "allOf": [{
+            "oneOf": [
+              {
+                "properties": {
+                  "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+                  "semantic_gaps": { "items": { "not": { "required": ["acceptance_impact"] } } }
+                }
+              },
+              {
+                "properties": {
+                  "schema_version": { "const": "4.3.0" },
+                  "semantic_gaps": { "items": { "required": ["acceptance_impact"] } }
+                }
+              }
+            ]
+          }]
         }
       ]
     }
@@ -399,7 +416,36 @@
         "source_claim_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "discovery_phase": { "enum": ["pre_case", "post_case"] },
         "affected_test_point_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        ,"acceptance_impact": { "$ref": "#/$defs/v4AcceptanceImpact" }
       }
+    },
+    "v4AcceptanceImpact": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": { "const": "critical" },
+            "criteria": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": { "enum": ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"] }
+            },
+            "rationale": { "$ref": "#/$defs/v4Text" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": { "const": "noncritical" },
+            "criteria": {
+              "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true,
+              "prefixItems": [{ "const": "does_not_change_required_acceptance" }], "items": false
+            },
+            "rationale": { "$ref": "#/$defs/v4Text" }
+          }
+        }
+      ]
     },
     "v4SourceSha256": {
       "type": "string",

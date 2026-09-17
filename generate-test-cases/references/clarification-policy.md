@@ -16,6 +16,16 @@ An initial request such as “generate the Cases”, or a general “continue”
 
 Clarify when an unresolved choice can change the business对象、条件、角色、状态、顺序、输入范围、文案或结果 and accepted evidence or a permitted derivation cannot decide it. Cite the original source location, name the concrete ambiguity and affected items, state what decision is needed, and state the consequence of no answer. Do not ask again when the source already says it, do not turn a generic risk into a question, and never convert acquisition or schema failure into a business Decision.
 
+For schema `4.3.0`, every in-scope semantic gap also carries the exact closed
+`acceptance_impact` shape from `evidence-claims.schema.json`. Classify it
+`critical` only when an answer changes core acceptance, a required branch, or
+makes a required result undecidable; cite one or more corresponding criteria.
+Classify it `noncritical` only with
+`does_not_change_required_acceptance`. Priority, probability, generic risk,
+missing execution resources, or the number of affected Cases does not decide
+criticality. If impact cannot yet be classified, fail closed and complete the
+analysis rather than defaulting it to noncritical.
+
 ## Present business decisions, not protocol
 
 For each question part show, in the frozen output language:
@@ -61,6 +71,14 @@ An `answer_question_part` binds the latest presentation ID, question part ID, ro
 Show `why_needed`, `decision_impact`, `unresolved_outcome`, action labels, and `recovery` instructions. Keep exact `available_actions` and `action_context` from the validated presentation as hidden submission bindings. A stale presentation, stale root version, missing context field, or cross-part target writes no event. When a late answer reaches the runner after its root was resolved, closed, changed, or made ambiguous, keep it as an internal stale transition and present the current committed state; never report compiler fatal or create a revision for that answer. Candidate changes remain in staging until the compiler commits the entire append; a rejected group creates no accepted revision or checkpoint.
 
 When the user asks for delivery, do not fabricate answers or delete gaps. Submit `request_delivery` for only the explicitly selected current parts. The compiler determines `blocked_only` or `delivered_with_gaps`; those results preserve closed roots and formal coverage accounting.
+
+In 4.3 a critical root has no delivery-bypass action. It is finally resolved
+only by a scope-valid final E3 Decision, a legal replayable E2 derivation, or an
+evidence-backed non-applicability/obsolescence basis. Temporary E1 input,
+`defer_question_part`, `mark_question_unknown`, `request_delivery`, ordinary
+confirmation, `resolved_temporary`, or an old ready manifest cannot clear it.
+Defer/unknown must still leave a current recoverable question. Noncritical
+Conditional delivery remains available under its existing rules.
 
 ## Reopen without mutating history
 

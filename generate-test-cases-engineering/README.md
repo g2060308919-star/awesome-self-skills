@@ -32,7 +32,7 @@ below. The separately retained single-system release benchmark is not a v4
 development prerequisite and makes no comparator-superiority, external-expert,
 or platform-signed Agent identity claim.
 
-## v4 architecture (compiler 0.5.0 / schema 4.0.0)
+## v4 architecture (latest compiler 0.8.0 / schema 4.3.0)
 
 The v4 development track keeps one private module entry point, `advanceStrict(absoluteRunDirectory)`, and exactly four Agent-writable artifacts:
 
@@ -45,9 +45,22 @@ The compiler owns semantic-gap/root identities, decisions, scope verification, b
 
 ```text
 canonical Source → Evidence/Fact/Scope → pre-case clarification
-→ sparse Behavior Views → business outcomes/formal test points → CaseSpecs
-→ post-case clarification → canonical JSON + business Markdown + worksheet CSV
+→ sparse Behavior Views + design assurance → business outcomes/formal test points → CaseSpecs
+→ post-case clarification → source-first independent review in the same Case Draft stage
+→ canonical JSON + HTML + full Table + compatibility Markdown/CSV
 ```
+
+The exact `4.3.0/0.8.0` pair is a candidate contract. It requires auditable
+candidate responsibility/disposition, acceptance-impact classification for
+semantic gaps, a final critical-semantic delivery gate, and a content-bound
+independent review. The review reuses `case_drafts`: a valid pending submission
+causes the compiler to issue the authoritative target inventory and digest, and
+a completed submission repeats the same generated content with an assessment
+bound to that digest. It is not a fifth artifact or public stage.
+
+Exact `4.0.0/0.5.0` and `4.2.0/0.7.0` runs keep their original contracts and
+bytes. Mixed or unknown version pairs fail closed; old runs are never silently
+backfilled with 4.3 metadata.
 
 Missing environment URLs, accounts, sample-data tools, observers, or mocks never block Case Document generation. Execution resources belong only to a separately requested execution-plan run bound to an immutable `case_document_ref`; the Skill prepares a runner projection but never starts E2E execution.
 
@@ -65,7 +78,9 @@ The installed module also exposes shallow Adapter helpers. Use
 compiler-issued ID already coupled to its canonical `runs/<run-id>` directory,
 `constructV4Action(reply, choice)` for displayed semantic/execution actions,
 and `stageV4SourceAcquisitionAction(...)` for a complete verified acquisition
-batch. These helpers do not add a second compiler entry point: every state
+batch. Use `constructIndependentReviewCompletionV4(reply, body)` to bind review
+assessments and findings to the exact compiler-issued source-first inventory and
+content digest. These helpers do not add a second compiler entry point: every state
 transition still runs through `advanceStrict`.
 
 To continue a cancelled run, call the same ordinary create helper with

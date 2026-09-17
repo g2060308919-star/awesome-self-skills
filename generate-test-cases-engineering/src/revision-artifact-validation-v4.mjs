@@ -18,8 +18,10 @@ import {
   compileIndependentReviewTargetV4,
   validateIndependentReviewV4
 } from './independent-review-v4.mjs';
+import { materializeRelativeBaselinesV4 } from './relative-baseline-materialization-v4.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
+import { deriveV4CaseSemanticContext } from './v4-system-context.mjs';
 
 /** @param {unknown} value */
 function canonicalDigest(value) {
@@ -150,6 +152,15 @@ export function validateRevisionArtifactsV4(input) {
     if (isGeneralQualityV4Contract(contract)) {
       let reviewTarget;
       try {
+        const semanticContext = deriveV4CaseSemanticContext(values.evidence_claims);
+        const materialized = materializeRelativeBaselinesV4(
+          values.case_drafts.cases,
+          semanticContext.semantic_evidence,
+          semanticContext.claim_assessments
+        );
+        if (materialized.diagnostics.length) {
+          throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');
+        }
         reviewTarget = compileIndependentReviewTargetV4({
           source_revision: input.revision,
           source_first_targets: values.case_drafts.independent_review?.source_first_targets,
@@ -158,7 +169,7 @@ export function validateRevisionArtifactsV4(input) {
           formal_test_points: values.test_obligations.formal_test_points,
           candidate_responsibilities:
             values.behavior_views.design_assurance.candidate_responsibilities,
-          cases: values.case_drafts.cases
+          cases: materialized.cases
         });
       } catch {
         throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');

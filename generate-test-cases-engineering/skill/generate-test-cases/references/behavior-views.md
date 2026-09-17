@@ -46,6 +46,27 @@ Modules and boundaries come only from the closed `scope_manifest` after topology
 
 For v4 Case ordering, the Adapter later references compiler registry IDs or null. It never submits `depends_on_case_ids`, rank values, or an invented flow.
 
+## Close the 4.3 design-assurance ledger
+
+For a `4.3.0` artifact, populate the Schema-defined `design_assurance` member of
+the same `behavior_views` artifact. It is an auditable design record, not a
+business fact, evidence source, fifth artifact, or new stage. Use the exact
+closed branches in `behavior-views.schema.json`; do not infer fields from this
+summary.
+
+- `plan_revision` identifies the one current complete plan.
+- `batches` are complete, sequenced batches with their actual Claim and rule-group references.
+- `rule_groups` state the source-backed objective, one closed design method, and every candidate ID.
+- `candidate_responsibilities` give each candidate one rule group, one concrete responsibility, and exact Claim support.
+- `candidate_dispositions` dispose every candidate exactly once as `retained`, `representative_value`, `equivalent_merge`, `evidence_exclusion`, `semantic_gap`, or `exploratory`, using only that branch's Schema fields.
+- `impacted_prior_batches` records which completed earlier batches must be reconsidered when a later batch exposes an omitted dependency; use an empty array only when none are affected.
+
+Retained element IDs must exist. Representative/merge targets must exist and
+cannot form cycles. Evidence exclusions require exact Claim support; uncertainty,
+cost, length, or lack of mention is not exclusion evidence. Semantic-gap and
+Exploratory dispositions must reference their real existing records. A partial
+batch or stale plan revision is not formal completion.
+
 ## Complete the interaction audit without inventing semantics
 
 Audit all declared modules and relevant module pairs across `shared-entity`, `role`, `client`, `interface-event`, `time`, `concurrency`, and `side-effect`. A candidate must carry nonempty `source_claim_ids` and closed `semantic_subject_refs` to actual facts, view elements, model elements, or integration surfaces. A side-effect surface is identified by `(side_effect_kind, target)`.

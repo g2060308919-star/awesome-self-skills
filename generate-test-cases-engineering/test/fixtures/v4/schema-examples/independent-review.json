@@ -1,0 +1,135 @@
+{
+  "valid": [
+    {
+      "name": "pending_source_first_inventory",
+      "reason": "A pending review freezes a source-first target before generated content is assessed.",
+      "value": {
+        "protocol_version": "1.0.0",
+        "status": "pending",
+        "review_mode": "independent_source_first",
+        "reviewer_identity": {
+          "identity_class": "independent_context",
+          "separation_basis": "Source targets were recorded before the generated projection was opened."
+        },
+        "source_first_targets": [
+          {
+            "target_kind": "business_result",
+            "acceptance_role": "primary_acceptance",
+            "objective": "An accepted order reaches the accepted state.",
+            "source_claim_ids": ["CLM-order"],
+            "decision_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "completed_bound_review",
+      "reason": "A completed review binds issued targets, exact affected items, findings, adjudication, and rechecks.",
+      "value": {
+        "protocol_version": "1.0.0",
+        "status": "completed",
+        "review_mode": "independent_source_first",
+        "reviewer_identity": {
+          "identity_class": "independent_agent",
+          "separation_basis": "The reviewer received source targets before the generated projection."
+        },
+        "source_first_targets": [
+          {
+            "target_id": "IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "target_kind": "business_result",
+            "acceptance_role": "primary_acceptance",
+            "objective": "An accepted order reaches the accepted state.",
+            "source_claim_ids": ["CLM-order"],
+            "decision_ids": []
+          }
+        ],
+        "review_target_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "target_assessments": [
+          {
+            "target_id": "IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "disposition": "verified",
+            "affected_items": [
+              { "item_kind": "case", "item_id": "CASE-order" }
+            ],
+            "source_claim_ids": ["CLM-order"],
+            "decision_ids": [],
+            "rationale": "The bound Case observes the required terminal result.",
+            "required_recheck": {
+              "status": "passed",
+              "affected_items": [
+                { "item_kind": "case", "item_id": "CASE-order" }
+              ]
+            }
+          }
+        ],
+        "findings": [
+          {
+            "finding_kind": "omission",
+            "source_first_target_ids": ["IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+            "source_claim_ids": ["CLM-order"],
+            "decision_ids": [],
+            "issue": "The terminal result was initially omitted.",
+            "impact": "The required business result would not be accepted.",
+            "affected_items": [
+              { "item_kind": "case", "item_id": "CASE-order" }
+            ],
+            "adjudication": "confirmed",
+            "disposition": "fixed_and_rechecked",
+            "rationale": "The terminal Oracle was restored from the source Claim.",
+            "required_recheck": {
+              "status": "passed",
+              "affected_items": [
+                { "item_kind": "oracle", "item_id": "ORACLE-terminal" }
+              ]
+            }
+          },
+          {
+            "finding_kind": "unsupported_assertion",
+            "source_first_target_ids": ["IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+            "source_claim_ids": ["CLM-order"],
+            "decision_ids": [],
+            "issue": "The reviewer suspected an unsupported timeout.",
+            "impact": "An invented timeout would overstate the product contract.",
+            "affected_items": [
+              { "item_kind": "oracle", "item_id": "ORACLE-terminal" }
+            ],
+            "adjudication": "rejected",
+            "disposition": "rejected_with_evidence",
+            "rationale": "The affected Oracle contains no timeout assertion.",
+            "required_recheck": {
+              "status": "not_required",
+              "affected_items": []
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "completed_review_without_digest",
+      "reason": "A completed review cannot float free of the compiler-issued generated-content digest.",
+      "value": {
+        "protocol_version": "1.0.0",
+        "status": "completed",
+        "review_mode": "independent_source_first",
+        "reviewer_identity": {
+          "identity_class": "independent_context",
+          "separation_basis": "The source-first inventory was established before generated content review."
+        },
+        "source_first_targets": [
+          {
+            "target_id": "IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "target_kind": "business_result",
+            "acceptance_role": "primary_acceptance",
+            "objective": "An accepted order reaches the accepted state.",
+            "source_claim_ids": ["CLM-order"],
+            "decision_ids": []
+          }
+        ],
+        "target_assessments": [],
+        "findings": []
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import {
   compileSemanticClarificationCheckpointV4,
   constructSemanticClarificationEventV4
 } from '../../src/clarification-v4.mjs';
+import { withClarificationState } from '../../src/advance-v4.mjs';
 import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
 import { compileSemanticGapRootsV4 } from '../../src/semantic-gaps-v4.mjs';
 import { GENERAL_QUALITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
@@ -39,7 +40,8 @@ function gap(classification) {
   };
 }
 
-function checkpoint() {
+/** @param {any[]} diagnosticCandidates @param {any} [priorCheckpoint] */
+function compileCheckpoint(diagnosticCandidates, priorCheckpoint = null) {
   return compileSemanticClarificationCheckpointV4({
     schema_version: '4.3.0', compiler_version: '0.8.0', run_id: 'RUN-critical-gate',
     committed_revision: 1, committed_checkpoint_bytes: checkpointBytes,
@@ -52,8 +54,12 @@ function checkpoint() {
       { fact_id: 'FACT-branch', statement: '订单存在审批流程', claim_ids: ['CLM-branch'] },
       { fact_id: 'FACT-label', statement: '订单显示辅助标签', claim_ids: ['CLM-label'] }
     ],
-    diagnostic_candidates: [gap('critical'), gap('noncritical')], prior_checkpoint: null
+    diagnostic_candidates: diagnosticCandidates, prior_checkpoint: priorCheckpoint
   });
+}
+
+function checkpoint() {
+  return compileCheckpoint([gap('critical'), gap('noncritical')]);
 }
 
 test('AT17/AT18: a mixed request_delivery selection fails atomically and critical part has no bypass action', () => {
@@ -106,6 +112,33 @@ test('AT19: defer/unknown keeps a critical question recoverable while noncritica
   const narrowedPresentation = /** @type {any} */ (narrowed.presentation);
   assert.equal(narrowedPresentation.question_parts.length, 1);
   assert.equal(narrowedPresentation.question_parts[0].root_issue_id, criticalPart.root_issue_id);
+});
+
+test('AT27: an acceptance-impact version change reopens a terminal root and invalidates delivery closure', () => {
+  const noncritical = gap('noncritical');
+  const initial = compileCheckpoint([noncritical]);
+  const originalPart = /** @type {any} */ (initial.presentation).question_parts[0];
+  const close = constructSemanticClarificationEventV4(
+    initial.presentation, originalPart, 'request_delivery'
+  );
+  const closed = applyRequestDeliveryV4(initial.checkpoint, close);
+  assert.equal(closed.status, 'clarification_complete');
+
+  const critical = structuredClone(noncritical);
+  critical.acceptance_impact = {
+    classification: 'critical', criteria: ['changes_required_branch'],
+    rationale: '该问题现在会改变必经审批分支。'
+  };
+  const revised = compileCheckpoint([critical], closed.checkpoint);
+  assert.equal(revised.status, 'need_user_answers');
+  const revisedPart = /** @type {any} */ (revised.presentation).question_parts[0];
+  assert.equal(revisedPart.root_issue_id, originalPart.root_issue_id);
+  assert.notEqual(revisedPart.root_version_digest, originalPart.root_version_digest);
+  assert.deepEqual(revisedPart.available_actions, [
+    'answer_question_part', 'defer_question_part', 'mark_question_unknown'
+  ]);
+  assert.deepEqual(revised.checkpoint.clarification_state.closed_for_delivery_part_ids, []);
+  assert.equal(revised.checkpoint.clarification_state.root_states[0].status, 'presented');
 });
 
 /** @param {'critical'|'noncritical'} classification */
@@ -164,6 +197,36 @@ test('AT17/AT20/AT26: final pipeline blocks critical closure but accepts exact f
     }]
   };
   assert.equal(compileCaseDocumentRevisionV4(resolved.fixture.artifacts, resolved.fixture.system).status, 'compiled');
+});
+
+test('AT26: production runner context preserves root version and accepted final E3 journal', () => {
+  const resolved = pipelineFixture('critical');
+  const finalDecision = {
+    target: {
+      root_issue_id: resolved.root.root_issue_id,
+      root_version_digest: resolved.root.root_version_digest
+    },
+    resolution: 'final', evidence_level: 'E3', authority: 'product_final'
+  };
+  const system = withClarificationState(
+    { ...resolved.fixture.system, decisions: undefined },
+    { clarification_state: { root_states: [{
+      root_issue_id: resolved.root.root_issue_id,
+      root_version_digest: resolved.root.root_version_digest,
+      status: 'resolved_final'
+    }] } },
+    [finalDecision]
+  );
+  assert.deepEqual(system.decisions.root_statuses, [{
+    root_issue_id: resolved.root.root_issue_id,
+    root_version_digest: resolved.root.root_version_digest,
+    status: 'resolved_final'
+  }]);
+  assert.deepEqual(system.decisions.records, [finalDecision]);
+  assert.equal(
+    compileCaseDocumentRevisionV4(resolved.fixture.artifacts, system).status,
+    'compiled'
+  );
 });
 
 test('AT21: a high-risk noncritical gap retains 4.3 Conditional delivery semantics', () => {

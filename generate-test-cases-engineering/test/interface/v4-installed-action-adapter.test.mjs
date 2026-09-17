@@ -73,7 +73,20 @@ function bindFixtureContract(fixture, schemaVersion) {
   for (const artifact of Object.values(fixture.artifacts)) {
     artifact.schema_version = schemaVersion;
   }
-  return schemaVersion === '4.3.0' ? bindGeneralQualityFixture(fixture) : fixture;
+  if (schemaVersion !== '4.3.0') return fixture;
+  const bound = bindGeneralQualityFixture(fixture);
+  const completed = bound.artifacts.case_drafts.independent_review;
+  bound.artifacts.case_drafts.independent_review = {
+    protocol_version: completed.protocol_version,
+    status: 'pending',
+    review_mode: completed.review_mode,
+    reviewer_identity: structuredClone(completed.reviewer_identity),
+    source_first_targets: completed.source_first_targets.map((/** @type {any} */ target) => {
+      const { target_id: _targetId, ...sourceTarget } = target;
+      return sourceTarget;
+    })
+  };
+  return bound;
 }
 
 /** @param {any} installed @param {string} directory @param {any} reply @param {any} fixture */
@@ -210,6 +223,34 @@ async function deliverInstalledCaseDocument(installed, catalog) {
     await stage(directory, stageName, fixture.artifacts[stageName]);
     reply = await installed.advanceStrict(directory);
   }
+  if (reply.status === 'need_revision' && reply.review_request) {
+    const projection = reply.review_request.review_target_projection;
+    const assessments = reply.review_request.source_first_targets.map((/** @type {any} */ target) => {
+      const reviewedCase = projection.cases.find((/** @type {any} */ candidate) =>
+        candidate.oracles.some((/** @type {any} */ oracle) =>
+          oracle.claim_ids.some((/** @type {string} */ claimId) =>
+            target.source_claim_ids.includes(claimId)))) ?? projection.cases[0];
+      return {
+        target_id: target.target_id, disposition: 'verified',
+        affected_items: [
+          { item_kind: 'formal_test_point', item_id: reviewedCase.primary_test_point_id },
+          { item_kind: 'case', item_id: reviewedCase.case_id }
+        ],
+        source_claim_ids: target.source_claim_ids,
+        decision_ids: target.decision_ids,
+        rationale: '当前 Case 的可判定 Oracle 验证该来源优先目标。',
+        required_recheck: {
+          status: 'passed', affected_items: [{ item_kind: 'case', item_id: reviewedCase.case_id }]
+        }
+      };
+    });
+    /** @type {any} */ (fixture.artifacts.case_drafts).independent_review =
+      installed.constructIndependentReviewCompletionV4(reply, {
+        target_assessments: assessments, findings: []
+      });
+    await stage(directory, 'case_drafts', fixture.artifacts.case_drafts);
+    reply = await installed.advanceStrict(directory);
+  }
   assert.equal(reply.status, 'finished', JSON.stringify(reply));
   const manifestBytes = await readFile(path.join(directory, 'output/current.json'), 'utf8');
   const manifest = JSON.parse(manifestBytes);
@@ -262,7 +303,7 @@ test('installed private action seam constructs a semantic answer and the install
 
 test('installed private action seam submits every advertised semantic control through the installed runner', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
-  for (const action of ['defer_question_part', 'mark_question_unknown', 'request_delivery', 'cancel_run']) {
+  for (const action of ['defer_question_part', 'mark_question_unknown', 'cancel_run']) {
     const catalog = await mkdtemp(path.join(os.tmpdir(), `gtc-v4-installed-${action}-`));
     const created = await installed.createV4RunDirectory(catalog, 'case_document');
     const directory = created.run_directory;

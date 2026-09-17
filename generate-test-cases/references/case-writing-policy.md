@@ -79,6 +79,34 @@ Examples: “create this record, then locate that same record and observe its so
 
 An unsourced generic risk may become a clearly labelled Exploratory record, never a formal Case or Oracle. Missing formal source behavior remains a semantic gap, not Exploratory. `risk_review_ledger` is compiler-owned from the complete module review; Case drafts must not create or hide its nine mandatory categories.
 
+## Complete the 4.3 source-first review in the same stage
+
+For schema `4.3.0`, `case_drafts.independent_review` is required. It is review
+metadata inside the existing fourth artifact, not business evidence, a fifth
+truth ledger, or another workflow stage.
+
+First submit `status=pending` with `protocol_version=1.0.0`,
+`review_mode=independent_source_first`, an honest `reviewer_identity`, and the
+source-first target inventory derived from accepted Claims/Decisions. Define the
+necessary `business_result`, `condition_distinction`, and `required_relation`
+targets before inspecting the generated Case projection. Do not derive that
+inventory from Case titles or formal-point counts.
+
+The compiler returns `need_revision` with `review_request`, compiler-issued
+target IDs, the exact generated-content projection, and `review_target_digest`.
+Use the Adapter helper described in `SKILL.md` to construct `status=completed`;
+do not calculate IDs/digests or copy an old review. Assess every issued target
+with exact affected item and Claim/Decision references. A confirmed omission or
+unsupported assertion must be fixed and rechecked; a rejected reviewer finding
+requires evidence. A Boolean `reviewed` flag or unsupported prose never passes.
+
+Repeat the same generated content when returning the completed review. Any
+change to Facts, Views, formal Test Points, candidate responsibilities,
+preconditions, data, steps, or Oracles invalidates the prior digest and requires
+a fresh compiler-issued pass. Review identity, rationale, adjudication prose,
+and review-derived summaries are excluded from the digest to prevent
+self-reference, but cannot alter product truth.
+
 ## Render a business-first Case Document
 
 The primary `test-cases.html` document begins with a complete overview in the compiler's canonical order and provides full Case details. Primary Cases and boundary-contract Cases remain distinguishable. Show preconditions and data before actions, then place each expected result immediately after its step. The complete conversation Table uses the same projection and never samples or rewrites expectations.

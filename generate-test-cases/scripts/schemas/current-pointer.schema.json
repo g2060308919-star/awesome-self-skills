@@ -10,6 +10,9 @@
     },
     {
       "$ref": "#/$defs/executionManifest"
+    },
+    {
+      "$ref": "#/$defs/v4NonReady"
     }
   ],
   "$defs": {
@@ -39,6 +42,12 @@
             "schema_version": { "const": "4.2.0" },
             "compiler_version": { "const": "0.7.0" }
           }
+        },
+        {
+          "properties": {
+            "schema_version": { "const": "4.3.0" },
+            "compiler_version": { "const": "0.8.0" }
+          }
         }
       ]
     },
@@ -55,6 +64,21 @@
         "digest": {
           "$ref": "#/$defs/sha256"
         }
+      },
+      "additionalProperties": false
+    },
+    "v4NonReady": {
+      "type": "object",
+      "required": ["status", "schema_version", "compiler_version", "run_id", "active_revision", "reason", "previous_ready_revision", "previous_ready_manifest_digest"],
+      "properties": {
+        "status": {"const": "stale"},
+        "schema_version": {"const": "4.3.0"},
+        "compiler_version": {"const": "0.8.0"},
+        "run_id": {"$ref": "#/$defs/text"},
+        "active_revision": {"$ref": "#/$defs/count"},
+        "reason": {"const": "higher_revision_not_ready"},
+        "previous_ready_revision": {"$ref": "#/$defs/count"},
+        "previous_ready_manifest_digest": {"$ref": "#/$defs/sha256"}
       },
       "additionalProperties": false
     },
@@ -199,10 +223,10 @@
           "$ref": "#/$defs/count"
         },
         "schema_version": {
-          "enum": ["4.0.0", "4.2.0"]
+          "enum": ["4.0.0", "4.2.0", "4.3.0"]
         },
         "compiler_version": {
-          "enum": ["0.5.0", "0.7.0"]
+          "enum": ["0.5.0", "0.7.0", "0.8.0"]
         },
         "delivery_intent": {
           "const": "case_document"
@@ -278,6 +302,7 @@
           "additionalProperties": false
         },
         "primary_readable": { "const": "html" },
+        "review_target_digest": { "$ref": "#/$defs/sha256" },
         "render_options": {
           "type": "object",
           "required": [
@@ -311,16 +336,25 @@
         {
           "oneOf": [
             {
+              "not": {"required": ["review_target_digest"]},
               "properties": {
                 "schema_version": { "const": "4.0.0" },
                 "compiler_version": { "const": "0.5.0" }
               }
             },
             {
+              "not": {"required": ["review_target_digest"]},
               "required": ["html", "chat_table", "source_reading", "primary_readable"],
               "properties": {
                 "schema_version": { "const": "4.2.0" },
                 "compiler_version": { "const": "0.7.0" }
+              }
+            },
+            {
+              "required": ["html", "chat_table", "source_reading", "primary_readable", "review_target_digest"],
+              "properties": {
+                "schema_version": { "const": "4.3.0" },
+                "compiler_version": { "const": "0.8.0" }
               }
             }
           ]
@@ -421,10 +455,10 @@
           "$ref": "#/$defs/count"
         },
         "schema_version": {
-          "enum": ["4.0.0", "4.2.0"]
+          "enum": ["4.0.0", "4.2.0", "4.3.0"]
         },
         "compiler_version": {
-          "enum": ["0.5.0", "0.7.0"]
+          "enum": ["0.5.0", "0.7.0", "0.8.0"]
         },
         "delivery_intent": {
           "const": "execution_plan"

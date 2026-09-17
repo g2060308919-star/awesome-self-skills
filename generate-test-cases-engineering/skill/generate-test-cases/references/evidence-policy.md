@@ -84,6 +84,13 @@ Split independently true-or-false propositions into separate Claims. Distinguish
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
 
+For exact schema `4.3.0`, every semantic-gap input includes the closed
+`acceptance_impact` record described in `clarification-policy.md`. This record is
+analysis metadata, not E3 evidence and not a user answer. It participates in
+the semantic-root version, so changing its classification, criteria, or
+rationale invalidates stale root states and actions instead of silently
+reusing them.
+
 Before handing facts to modeling, perform both trace directions. From each effective source rule, locate its Fact and eventual outcome/Test Point or an explicit gap/exclusion so valid material is not silently omitted. From each proposed Fact, condition, ordering relation, value, and result, trace back to a locator or permitted replayable derivation that supports that exact object and circumstance. A nearby or merely related citation does not pass this review.
 
 Test-process and output-format instructions are diagnostic context, not product behavior. Environment/resource readiness is execution-plan context, not a Case Document Fact. Product behavior remains formal even when execution resources are unavailable.

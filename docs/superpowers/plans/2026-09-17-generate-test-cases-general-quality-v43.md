@@ -12,13 +12,13 @@
 
 ## Global constraints
 
-- [ ] Treat the supplied `03-spec.md` as normative and use the approved design as the implementation contract.
-- [ ] Change maintained source under `generate-test-cases-engineering/`; regenerate the published `generate-test-cases/` tree only through the established build/sync workflow.
-- [ ] Do not change `b2b-e2e-runner` source. Its tests are a read-only consumer check.
-- [ ] Do not overwrite an installed Skill, rewrite historical runs, publish, tag, merge, or push as part of implementation.
-- [ ] Keep exactly four Agent-writable semantic artifacts and no additional public workflow stage.
-- [ ] Keep ordinary confirmation non-authorizing, and keep generation separate from execution.
-- [ ] Run each behavioral slice red-green-refactor; record exact commands and observed results in the evidence document.
+- [x] Treat the supplied `03-spec.md` as normative and use the approved design as the implementation contract.
+- [x] Change maintained source under `generate-test-cases-engineering/`; regenerate the published `generate-test-cases/` tree only through the established build/sync workflow.
+- [x] Do not change `b2b-e2e-runner` source. Its tests are a read-only consumer check.
+- [x] Do not overwrite an installed Skill, rewrite historical runs, publish, tag, merge, or push as part of implementation.
+- [x] Keep exactly four Agent-writable semantic artifacts and no additional public workflow stage.
+- [x] Keep ordinary confirmation non-authorizing, and keep generation separate from execution.
+- [x] Run each behavioral slice red-green-refactor; record exact commands and observed results in the evidence document.
 
 ---
 
@@ -267,16 +267,16 @@
 - Generated: `generate-test-cases/**`
 - Update: `generate-test-cases-engineering/docs/remediation/2026-09-17-general-quality-v43-evidence.md`
 
-- [ ] Update policy text to explain 4.3 design assurance, strict critical gate, two-pass same-stage review, independent metric, and old-version compatibility without asking the Agent to guess fields.
-- [ ] Run the maintained-source build and established repository publication sync:
+- [x] Update policy text to explain 4.3 design assurance, strict critical gate, two-pass same-stage review, independent metric, and old-version compatibility without asking the Agent to guess fields.
+- [x] Run the maintained-source build and established repository publication sync:
 
   ```bash
   cd generate-test-cases-engineering
   npm run build
   ```
 
-- [ ] Confirm `generate-test-cases/` is byte-synchronized with the built Skill and contains schema/compiler identity `4.3.0/0.8.0`.
-- [ ] Run complete validation and record exact counts/durations:
+- [x] Confirm `generate-test-cases/` is byte-synchronized with the built Skill and contains schema/compiler identity `4.3.0/0.8.0`.
+- [x] Run complete validation and record exact counts/durations:
 
   ```bash
   cd generate-test-cases-engineering
@@ -285,16 +285,16 @@
   npm run public-pilot
   ```
 
-- [ ] Run the E2E Runner consumer check without modifying it:
+- [x] Run the E2E Runner consumer check without modifying it:
 
   ```bash
   node --test b2b-e2e-runner/tests/*.test.mjs
   ```
 
-- [ ] Verify `git diff --name-only origin/main...HEAD -- b2b-e2e-runner` is empty.
-- [ ] Verify no installed Skill path outside the repository changed.
-- [ ] Run `git diff --check`, inspect the full diff, and separate implementation-candidate completion from release-acceptance completion in the evidence report.
-- [ ] Commit the final generated publication and verification evidence:
+- [x] Verify `git diff --name-only origin/main...HEAD -- b2b-e2e-runner` is empty.
+- [x] Verify no installed Skill path outside the repository changed.
+- [x] Run `git diff --check`, inspect the full diff, and separate implementation-candidate completion from release-acceptance completion in the evidence report.
+- [x] Commit the final generated publication and verification evidence:
 
   ```bash
   git add generate-test-cases-engineering generate-test-cases
@@ -303,9 +303,9 @@
 
 ## Completion report
 
-- [ ] Report actual source and generated files changed.
-- [ ] Report observed focused, full, benchmark, public-pilot, repeatability, and consumer-check results.
-- [ ] Report AT01-AT31 individually, including any unverified or failed item.
-- [ ] Report old V4 comparison evidence and compatibility risks.
-- [ ] Report installation state explicitly; implementation does not imply installation.
-- [ ] Do not claim release acceptance unless every required external corpus, independent adjudication, repetition, and runtime condition was actually satisfied.
+- [x] Report actual source and generated files changed.
+- [x] Report observed focused, full, benchmark, public-pilot, repeatability, and consumer-check results.
+- [x] Report AT01-AT31 individually, including any unverified or failed item.
+- [x] Report old V4 comparison evidence and compatibility risks.
+- [x] Report installation state explicitly; implementation does not imply installation.
+- [x] Do not claim release acceptance unless every required external corpus, independent adjudication, repetition, and runtime condition was actually satisfied.

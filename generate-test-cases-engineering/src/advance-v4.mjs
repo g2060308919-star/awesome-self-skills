@@ -624,16 +624,19 @@ async function presentationHistory(runDirectory, revision) {
   return history;
 }
 
-/** @param {any} system @param {any|null} checkpoint */
-function withClarificationState(system, checkpoint) {
+/** @param {any} system @param {any|null} checkpoint @param {any[]} decisionRecords */
+export function withClarificationState(system, checkpoint, decisionRecords = []) {
   const states = checkpoint?.clarification_state?.root_states ?? [];
   return {
     ...system,
     decisions: {
       delivery_requested: states.length > 0 && states.every((/** @type {any} */ item) => item.status !== 'presented'),
       root_statuses: states.map((/** @type {any} */ item) => ({
-        root_issue_id: item.root_issue_id, status: item.status
-      }))
+        root_issue_id: item.root_issue_id,
+        root_version_digest: item.root_version_digest,
+        status: item.status
+      })),
+      records: structuredClone(decisionRecords)
     }
   };
 }
@@ -1185,7 +1188,8 @@ async function consumePostCaseAppend(
   let system; let result;
   try {
     system = withClarificationState(
-      await completeSystem(runDirectory, nextArtifacts), applied.checkpoint
+      await completeSystem(runDirectory, nextArtifacts), applied.checkpoint,
+      nextArtifacts.source_pack.decision_records
     );
     result = compileCaseDocumentRevisionV4(nextArtifacts, system);
   } catch (error) {
@@ -1321,7 +1325,10 @@ async function finalizeCaseDocumentRevision(
   try {
     if (!result || result.status !== 'compiled') result = compileCaseDocumentRevisionV4(
       artifacts,
-      withClarificationState(await completeSystem(runDirectory, artifacts), checkpoint)
+      withClarificationState(
+        await completeSystem(runDirectory, artifacts), checkpoint,
+        artifacts.source_pack.decision_records
+      )
     );
   } catch (error) {
     return qualityFailure(runId, 'case_design',
@@ -1709,7 +1716,8 @@ export async function advanceStrictV4Locked(
     let system;
     try {
       system = withClarificationState(
-        await completeSystem(runDirectory, prospective), semanticCheckpoint
+        await completeSystem(runDirectory, prospective), semanticCheckpoint,
+        prospective.source_pack.decision_records
       );
     } catch (error) {
       return revisionReply(runDirectory, 'evidence_claims', revision, prospective.evidence_claims, [{
@@ -1786,7 +1794,8 @@ export async function advanceStrictV4Locked(
     try {
       const result = compileCaseDocumentRevisionV4(
         probe, withClarificationState(
-          await completeSystem(runDirectory, probe), semanticCheckpoint
+          await completeSystem(runDirectory, probe), semanticCheckpoint,
+          prospective.source_pack.decision_records
         )
       );
       if (result.status === 'need_revision' && result.stage !== 'case_drafts') return revisionReply(

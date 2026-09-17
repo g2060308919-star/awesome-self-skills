@@ -38,6 +38,12 @@ const RISK_KINDS = Object.freeze([
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function record(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 
+/** @param {any} left @param {any} right */
+function sameContractIdentity(left, right) {
+  return left?.schema_version === right?.schema_version
+    && left?.compiler_version === right?.compiler_version;
+}
+
 /** @param {string} value */
 function byteDigest(value) {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
@@ -245,6 +251,10 @@ async function resolveCaseDocument(ref, services) {
       && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest)) {
     throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
   }
+  if (!sameContractIdentity(manifest, bundle)) {
+    throw new TypeError('CASE_DOCUMENT_CONTRACT_MISMATCH');
+  }
+  assertSemanticBundleDeliveryGateV4(bundle);
   return { manifest, bundle, manifest_bytes: manifestBytes, bundle_bytes: bundleBytes };
 }
 
@@ -273,6 +283,10 @@ async function normalizeExecutionInput(input, services) {
     throw new TypeError('EXECUTION_PLAN_INVALID');
   }
   const referenced = await resolveCaseDocument(input.case_document_ref, services);
+  if (!sameContractIdentity(plan, referenced.manifest)
+    || !sameContractIdentity(plan, referenced.bundle)) {
+    throw new TypeError('EXECUTION_CONTRACT_MISMATCH');
+  }
   const cases = new Map(referenced.bundle.cases.map((/** @type {any} */ item) => [item.case_id, item]));
   const orderedCaseIds = referenced.bundle.ordered_case_ids;
   if (plan.items.length !== orderedCaseIds.length || new Set(plan.items.map((/** @type {any} */ item) => item?.case_id)).size !== plan.items.length) {
@@ -459,6 +473,10 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   let bundle;
   try { bundle = JSON.parse(artifacts.bundle); } catch { throw new TypeError('CANONICAL_ARTIFACT_INVALID'); }
   if (`${canonicalStringify(bundle)}\n` !== artifacts.bundle) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+  if (!sameContractIdentity(manifest, bundle)) {
+    throw new TypeError('CASE_DOCUMENT_CONTRACT_MISMATCH');
+  }
+  assertSemanticBundleDeliveryGateV4(bundle);
   let sourceReading;
   if (candidate) {
     try { sourceReading = JSON.parse(artifacts.source_reading); } catch { throw new TypeError('CANONICAL_ARTIFACT_INVALID'); }
@@ -597,6 +615,9 @@ export async function verifyExecutionPlanDeliveryV4(runDirectory, services) {
     case_document_ref: manifest.case_document_ref, execution_plan: plan, non_blocking_diagnostics: []
   }, services);
   if (manifest.result_kind !== normalized.plan.result_kind
+    || !sameContractIdentity(manifest, normalized.plan)
+    || !sameContractIdentity(manifest, normalized.referenced.manifest)
+    || !sameContractIdentity(manifest, normalized.referenced.bundle)
     || manifest.runner_ready !== normalized.plan.runner_ready
     || !same(manifest.runner_projection, normalized.plan.runner_projection)) {
     throw new TypeError('EXECUTION_MANIFEST_INVALID');

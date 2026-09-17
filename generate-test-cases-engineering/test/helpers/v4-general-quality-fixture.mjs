@@ -3,6 +3,27 @@ import { compileIndependentReviewTargetV4 } from '../../src/independent-review-v
 import { compileBusinessOutcomesV4 } from '../../src/obligations/business-outcomes-v4.mjs';
 
 /** @param {any} fixture */
+function behaviorEvidence(fixture) {
+  if (fixture.system?.behavior_evidence) return fixture.system.behavior_evidence;
+  const evidence = fixture.artifacts.evidence_claims;
+  return {
+    facts: evidence.fact_ledger.map((/** @type {any} */ fact) => ({
+      fact_id: fact.fact_id,
+      module_id: fact.module_refs[0],
+      acceptance_role: fact.acceptance_role,
+      condition_field: fact.field_path.split('/').filter(Boolean).at(-1)
+    })),
+    claims: evidence.claims.flatMap((/** @type {any} */ claim) => {
+      const assertions = claim.semantic_value?.behavior_assertions;
+      return Array.isArray(assertions) && assertions.length > 0 ? [{
+        claim_id: claim.claim_id, level: claim.level, supported: true,
+        assertions: structuredClone(assertions)
+      }] : [];
+    })
+  };
+}
+
+/** @param {any} fixture */
 export function bindGeneralQualityFixture(fixture) {
   for (const artifact of Object.values(fixture.artifacts)) artifact.schema_version = '4.3.0';
   const behavior = fixture.artifacts.behavior_views;
@@ -38,13 +59,28 @@ export function bindGeneralQualityFixture(fixture) {
     impacted_prior_batches: []
   };
   const evidence = fixture.artifacts.evidence_claims;
-  const claimId = evidence.claims[0].claim_id;
+  for (const gap of evidence.semantic_gaps ?? []) {
+    gap.acceptance_impact = {
+      classification: 'critical', criteria: ['makes_required_result_undecidable'],
+      rationale: '该未决语义直接决定必要验收结果，最终答案前不可正式交付。'
+    };
+  }
+  const compiled = compileBusinessOutcomesV4(behavior, behaviorEvidence(fixture));
+  if (compiled.kind !== 'compiled') throw new TypeError('GENERAL_QUALITY_FIXTURE_OUTCOME_INVALID');
+  const formalPointIds = new Set(compiled.formal_test_points.map(
+    (/** @type {any} */ point) => point.formal_test_point_id
+  ));
+  const reviewedCase = fixture.artifacts.case_drafts.cases.find(
+    (/** @type {any} */ candidate) => formalPointIds.has(candidate.primary_test_point_id)
+  );
+  if (!reviewedCase) throw new TypeError('GENERAL_QUALITY_FIXTURE_CASE_INVALID');
+  const sourceClaimIds = [...new Set(reviewedCase.oracles.flatMap(
+    (/** @type {any} */ oracle) => oracle.claim_ids
+  ))];
   const sourceFirstTargets = [{
     target_kind: 'business_result', acceptance_role: 'primary_acceptance',
-    objective: '有效提交后订单进入已接受状态', source_claim_ids: [claimId], decision_ids: []
+    objective: reviewedCase.title, source_claim_ids: sourceClaimIds, decision_ids: []
   }];
-  const compiled = compileBusinessOutcomesV4(behavior, fixture.system.behavior_evidence);
-  if (compiled.kind !== 'compiled') throw new TypeError('GENERAL_QUALITY_FIXTURE_OUTCOME_INVALID');
   const reviewTarget = compileIndependentReviewTargetV4({
     source_revision: fixture.artifacts.case_drafts.source_revision,
     source_first_targets: sourceFirstTargets,
@@ -55,8 +91,7 @@ export function bindGeneralQualityFixture(fixture) {
     cases: fixture.artifacts.case_drafts.cases
   });
   const targetId = reviewTarget.projection.source_first_targets[0].target_id;
-  const pointId = reviewTarget.projection.formal_test_points[0].formal_test_point_id;
-  const caseId = reviewTarget.projection.cases[0].case_id;
+  const pointId = reviewedCase.primary_test_point_id;
   fixture.artifacts.case_drafts.independent_review = {
     protocol_version: '1.0.0', status: 'completed', review_mode: 'independent_source_first',
     reviewer_identity: {
@@ -66,14 +101,12 @@ export function bindGeneralQualityFixture(fixture) {
     review_target_digest: reviewTarget.digest,
     target_assessments: [{
       target_id: targetId, disposition: 'verified',
-      affected_items: [
-        { item_kind: 'formal_test_point', item_id: pointId },
-        { item_kind: 'case', item_id: caseId }
-      ],
-      source_claim_ids: [claimId], decision_ids: [],
+      affected_items: [{ item_kind: 'formal_test_point', item_id: pointId }],
+      source_claim_ids: sourceClaimIds, decision_ids: [],
       rationale: '当前 Case 的可判定 Oracle 验证该来源目标。',
       required_recheck: {
-        status: 'passed', affected_items: [{ item_kind: 'case', item_id: caseId }]
+        status: 'passed',
+        affected_items: [{ item_kind: 'formal_test_point', item_id: pointId }]
       }
     }],
     findings: []

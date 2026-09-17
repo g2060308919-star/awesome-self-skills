@@ -11,6 +11,7 @@ import { stageV4PrdCollectionObservation } from '../../src/prd-source-collection
 import { createV4RunDirectory } from '../../src/run-bootstrap-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
+import { deriveV4SystemContext } from '../../src/v4-system-context.mjs';
 import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 /** @param {string} directory @param {keyof typeof STAGE_FILES} stage @param {any} value */
@@ -85,6 +86,20 @@ test('AT23/AT24: strict runner retries a pending review without accepting it, th
   const run = await createV4RunDirectory(catalog, 'case_document');
   const fixture = v4GeneralQualityFixture();
   fixture.artifacts.source_pack.run_instance_id = run.run_id;
+  const baselineClaim = fixture.artifacts.evidence_claims.claims[0];
+  baselineClaim.semantic_value.relative_baseline_assertions = [{
+    reference: '当前线上', comparison_contract: {
+      kind: 'all_observable_behavior_except', exceptions: ['新增结算状态']
+    }
+  }];
+  fixture.artifacts.case_drafts.cases[0].baseline_spec = {
+    baseline_id: 'BASELINE-current-production', kind: 'declared_reference',
+    acquisition: 'capture_at_execution', reference: '当前线上',
+    comparison_contract: {
+      kind: 'all_observable_behavior_except', exceptions: ['新增结算状态']
+    },
+    claim_ids: [baselineClaim.claim_id]
+  };
 
   let reply = /** @type {any} */ (await advanceStrict(run.run_directory));
   const source = fixture.artifacts.source_pack.sources[0];
@@ -133,6 +148,7 @@ test('AT23/AT24: strict runner retries a pending review without accepting it, th
   assert.equal(first.status, 'need_revision', JSON.stringify(first));
   assert.equal(first.stage, 'case_drafts');
   assert.ok(first.review_request, JSON.stringify(first));
+  assert.equal(first.review_request.review_target_projection.cases[0].steps.length, 4);
   await assert.rejects(
     readFile(path.join(run.run_directory, 'accepted/r000/case-drafts.json'), 'utf8'), /ENOENT/u
   );
@@ -167,4 +183,42 @@ test('AT24/AT29: 4.3 cannot omit current review while 4.2 retains its frozen Cas
   delete old.artifacts.behavior_views.design_assurance;
   delete old.artifacts.case_drafts.independent_review;
   assert.equal(compileCaseDocumentRevisionV4(old.artifacts, old.system).status, 'compiled');
+});
+
+test('AT24: review binds the materialized relative-baseline Case that is actually delivered', () => {
+  const fixture = v4GeneralQualityFixture();
+  const claim = fixture.artifacts.evidence_claims.claims[0];
+  claim.semantic_value.relative_baseline_assertions = [{
+    reference: '当前线上', comparison_contract: {
+      kind: 'all_observable_behavior_except', exceptions: ['新增结算状态']
+    }
+  }];
+  fixture.artifacts.case_drafts.cases[0].baseline_spec = {
+    baseline_id: 'BASELINE-current-production', kind: 'declared_reference',
+    acquisition: 'capture_at_execution', reference: '当前线上',
+    comparison_contract: {
+      kind: 'all_observable_behavior_except', exceptions: ['新增结算状态']
+    },
+    claim_ids: [claim.claim_id]
+  };
+  fixture.system = deriveV4SystemContext(fixture.artifacts);
+
+  const rawReviewDigest = fixture.artifacts.case_drafts.independent_review.review_target_digest;
+  const first = compileCaseDocumentRevisionV4(fixture.artifacts, fixture.system);
+  assert.equal(first.status, 'need_revision', JSON.stringify(first));
+  assert.equal(first.diagnostics[0].code, 'INDEPENDENT_REVIEW_TARGET_MISMATCH');
+  assert.notEqual(first.review_request.review_target_digest, rawReviewDigest);
+  assert.equal(first.review_request.review_target_projection.cases[0].steps.length, 4);
+
+  fixture.artifacts.case_drafts.independent_review = completedReviewFromRequest(first, fixture);
+  const compiled = compileCaseDocumentRevisionV4(fixture.artifacts, fixture.system);
+  assert.equal(compiled.status, 'compiled', JSON.stringify(compiled));
+  assert.deepEqual(
+    compiled.bundle.cases[0].steps,
+    first.review_request.review_target_projection.cases[0].steps
+  );
+  assert.deepEqual(
+    compiled.bundle.cases[0].oracles,
+    first.review_request.review_target_projection.cases[0].oracles
+  );
 });

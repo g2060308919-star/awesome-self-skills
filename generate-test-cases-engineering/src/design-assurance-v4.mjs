@@ -171,6 +171,9 @@ export function validateDesignAssuranceV4(submitted, submittedContext) {
   }
 
   for (const candidateId of candidateOwners.keys()) {
+    const initialDisposition = dispositions.get(candidateId);
+    if (!initialDisposition
+      || !['representative_value', 'equivalent_merge'].includes(initialDisposition.disposition)) continue;
     const visited = new Set();
     let cursor = candidateId;
     while (true) {
@@ -183,7 +186,19 @@ export function validateDesignAssuranceV4(submitted, submittedContext) {
       }
       visited.add(cursor);
       const disposition = dispositions.get(cursor);
-      if (!disposition || !['representative_value', 'equivalent_merge'].includes(disposition.disposition)) break;
+      if (!disposition || !['representative_value', 'equivalent_merge'].includes(disposition.disposition)) {
+        if (!disposition || disposition.disposition !== 'retained'
+          || disposition.retained_element_ids.some(
+            (/** @type {string} */ id) => !knownElements.has(id)
+          )) {
+          diagnostics.push(problem(
+            'DESIGN_ASSURANCE_RETAINED_CHAIN_INVALID',
+            `/candidate_dispositions/${candidateId}/retained_candidate_id`,
+            'Representative and merge chains must terminate at a retained candidate with current elements.'
+          ));
+        }
+        break;
+      }
       cursor = disposition.retained_candidate_id;
     }
   }
@@ -197,8 +212,11 @@ export function validateDesignAssuranceV4(submitted, submittedContext) {
     impactedIds.add(impact.batch_id);
     const prior = batches.get(impact.batch_id);
     const triggers = impact.trigger_rule_group_ids.map((/** @type {string} */ id) => groups.get(id));
+    const triggerBatches = triggers.map((/** @type {any} */ group) =>
+      group ? batches.get(group.batch_id) : null);
     if (!prior || triggers.some((/** @type {any} */ value) => !value)
-      || triggers.some((/** @type {any} */ group) => batches.get(group.batch_id).sequence <= prior.sequence)) {
+      || triggerBatches.some((/** @type {any} */ value) => !value)
+      || triggerBatches.some((/** @type {any} */ batch) => batch.sequence <= prior.sequence)) {
       diagnostics.push(problem(
         'DESIGN_ASSURANCE_PRIOR_BATCH_INVALID', `/impacted_prior_batches/${index}`,
         'An impacted prior batch must precede every triggering rule group batch.'
