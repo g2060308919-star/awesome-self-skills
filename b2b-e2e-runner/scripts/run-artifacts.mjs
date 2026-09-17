@@ -12,6 +12,8 @@ import {
   validateTestCases
 } from "./lib/contracts.mjs";
 import { assertNoSecrets } from "./lib/redaction.mjs";
+import { readScreenshotSource, writeScreenshotExclusive } from "./lib/evidence-import.mjs";
+import { validateScreenshotBytes } from "./lib/screenshot-validation.mjs";
 import { aggregateCase, buildReport, renderChatTableMarkdown } from "./lib/report.mjs";
 import { buildReportModel } from "./lib/report-model.mjs";
 import { buildHtmlReport } from "./lib/report-html.mjs";
@@ -123,6 +125,12 @@ async function validateEvidenceEntry(runRoot, entry, checkpointIds) {
     if (entry.kind === "screenshot") {
       const extension = path.extname(entry.path).toLowerCase();
       const bytes = await readFile(absolute);
+      if (entry.sha256 !== undefined && (!/^[a-f0-9]{64}$/.test(entry.sha256) || digest(bytes) !== entry.sha256)) {
+        throw consistencyError("截图图片摘要不一致");
+      }
+      if (["tool_file", "tool_image_return"].includes(entry.capture_source)) {
+        await validateScreenshotBytes(bytes);
+      }
       const png = extension === ".png" && bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
       const jpeg = [".jpg", ".jpeg"].includes(extension) && bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
       const webp = extension === ".webp" && bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
@@ -497,6 +505,30 @@ export async function recordEvent(runRoot, event) {
   return { recorded: true, sequence: logged.sequence, runId: run.log.run.run_id };
 }
 
+export async function archiveScreenshot(runRoot, options) {
+  const event = structuredClone(options.event);
+  assertNoSecrets(event);
+  const run = await loadRun(path.resolve(runRoot));
+  if (event?.type !== "evidence_capture" || event.outcome !== "captured" || event.evidence?.length !== 1 || event.evidence[0].kind !== "screenshot") {
+    throw consistencyError("截图归档需要一个成功的 evidence_capture 和一份 screenshot 证据");
+  }
+  validatePermissionEvent(run.testCases, run.log, event);
+  const entry = event.evidence[0];
+  if (run.log.events.some(item => item.evidence?.some(previous => previous.evidence_id === entry.evidence_id))) throw consistencyError("证据 ID 重复");
+  const source = await readScreenshotSource(options);
+  entry.sha256 = source.sha256;
+  entry.capture_source = source.capture_source;
+  const destination = await writeScreenshotExclusive(runRoot, entry.path, source);
+  try {
+    const result = await recordEvent(runRoot, event);
+    return { ...result, evidencePath: entry.path, sha256: entry.sha256 };
+  } catch (error) {
+    // Only this call's exclusively created file may be removed on rejection.
+    await rm(destination, { force: true });
+    throw error;
+  }
+}
+
 export async function resumeCheck(runRoot) {
   await validateRun(runRoot);
   const { log, logPath } = await loadRun(path.resolve(runRoot));
@@ -559,6 +591,23 @@ function workflowProfile(log) {
   return log.events?.find(event => event.type === "workflow_profile")?.profile ?? null;
 }
 
+function reportDelivery(log) {
+  const final = log.run.status === "completed";
+  const early = final && log.events.some(event => event.type === "assistance" && event.phase === "stop_run" && event.decision_source === "user");
+  return { kind: final ? (early ? "early_end" : "final") : "stage", automaticallyPresent: final,
+    label: final ? (early ? "用户明确提前结束，未完成范围见报告" : "本轮测试已明确结束") : "阶段记录，测试尚未结束；默认仅内部保存" };
+}
+
+export async function deliverReport(runRoot, { stageRequested = false } = {}) {
+  const { log } = await loadRun(path.resolve(runRoot));
+  const delivery = reportDelivery(log);
+  if (!delivery.automaticallyPresent && !stageRequested) {
+    return { deliverable: false, runId: log.run.run_id, delivery,
+      nextAction: "仅说明当前进度、阻塞与需要用户完成的动作；继续保存内部阶段产物" };
+  }
+  return { deliverable: true, ...await generateReport(runRoot) };
+}
+
 export async function generateReport(runRoot) {
   await validateRun(runRoot, { checkReport: false });
   const loaded = await loadRun(path.resolve(runRoot));
@@ -600,11 +649,12 @@ export async function generateReport(runRoot) {
       snapshotHash: loaded.snapshotHash,
       eventCount: log.events.length,
       lastSequence: log.events.at(-1)?.sequence ?? 0,
+      delivery: reportDelivery(log),
       counts: generated.counts,
       runId: log.run.run_id
     };
   }
-  return { reportPath, htmlReportPath, counts: generated.counts, runId: log.run.run_id };
+  return { reportPath, htmlReportPath, counts: generated.counts, runId: log.run.run_id, delivery: reportDelivery(log) };
 }
 
 function parseArguments(argv) {
@@ -641,8 +691,25 @@ async function main() {
     result = await validateRun(options.run);
   } else if (command === "report") {
     result = await generateReport(options.run);
+  } else if (command === "deliver") {
+    if (options.stage !== undefined && options.stage !== "requested") throw runnerError("INPUT_CONTRACT", "阶段交付只接受 --stage requested（用户明确要求阶段结果）");
+    result = await deliverReport(options.run, { stageRequested: options.stage === "requested" });
+  } else if (command === "archive-screenshot") {
+    const event = JSON.parse(await readFile(options.event, "utf8"));
+    let returned = {};
+    if (options["image-stdin"] === "true") {
+      const chunks = [];
+      let length = 0;
+      for await (const chunk of process.stdin) {
+        length += chunk.length;
+        if (length > 36 * 1024 * 1024) throw runnerError("INPUT_CONTRACT", "图片输入超过归档上限");
+        chunks.push(chunk);
+      }
+      returned = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    }
+    result = await archiveScreenshot(options.run, { event, sourcePath: options.source, allowedSourceRoot: options["source-root"], imageBase64: returned.data, mimeType: returned.mimeType });
   } else {
-    throw runnerError("INPUT_CONTRACT", "命令必须是 init、record、resume-check、validate 或 report");
+    throw runnerError("INPUT_CONTRACT", "命令必须是 init、record、resume-check、validate、report、deliver 或 archive-screenshot");
   }
   process.stdout.write(JSON.stringify({ ok: true, ...result }) + "\n");
 }
