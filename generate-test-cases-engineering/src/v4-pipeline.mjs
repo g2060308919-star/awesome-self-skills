@@ -84,6 +84,43 @@ function independentReviewRevision(review, target, diagnostics) {
   };
 }
 
+const DESIGN_DISPOSITIONS = Object.freeze([
+  'retained', 'representative_value', 'equivalent_merge',
+  'evidence_exclusion', 'semantic_gap', 'exploratory'
+]);
+
+/** @param {Record<string,any>} assurance */
+function designAssuranceSummary(assurance) {
+  const counts = Object.fromEntries(DESIGN_DISPOSITIONS.map(kind => [kind, 0]));
+  for (const item of assurance.candidate_dispositions) counts[item.disposition] += 1;
+  return {
+    status: 'complete', plan_revision: assurance.plan_revision,
+    batch_count: assurance.batches.length,
+    rule_group_count: assurance.rule_groups.length,
+    candidate_responsibility_count: assurance.candidate_responsibilities.length,
+    candidate_disposition_counts: counts
+  };
+}
+
+/** @param {Record<string,any>} review */
+function independentReviewSummary(review) {
+  /** @type {Record<string,number>} */
+  const assessmentCounts = { verified: 0, semantic_gap: 0, evidence_excluded: 0 };
+  for (const item of review.target_assessments) assessmentCounts[item.disposition] += 1;
+  /** @type {Record<string,number>} */
+  const findingCounts = { confirmed: 0, rejected: 0 };
+  for (const item of review.findings) findingCounts[item.adjudication] += 1;
+  return {
+    status: 'completed', protocol_version: review.protocol_version,
+    review_mode: review.review_mode,
+    reviewer_identity_class: review.reviewer_identity.identity_class,
+    source_first_target_count: review.source_first_targets.length,
+    target_assessment_counts: assessmentCounts,
+    finding_counts: findingCounts,
+    review_target_digest: review.review_target_digest
+  };
+}
+
 /** @param {unknown} artifact @param {any} schema @param {string} stage */
 function validateArtifact(artifact, schema, stage) {
   const diagnostics = validateAgainstSchema(artifact, schema);
@@ -507,6 +544,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
 
   const behaviorSchemaFailure = validateArtifact(artifacts.behavior_views, behaviorSchema, 'behavior_views');
   if (behaviorSchemaFailure) return behaviorSchemaFailure;
+  let currentDesignAssurance = null;
   if (isGeneralQualityV4Contract(contract)) {
     const assurance = validateDesignAssuranceV4(artifacts.behavior_views.design_assurance, {
       source_claim_ids: evidence.claims.map((/** @type {any} */ item) => item.claim_id),
@@ -516,6 +554,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
       )
     });
     if (assurance.diagnostics.length) return needRevision('behavior_views', assurance.diagnostics);
+    currentDesignAssurance = assurance.normalized;
   }
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
   if (behavior.kind === 'need_revision') return needRevision('behavior_views', behavior.diagnostics);
@@ -637,6 +676,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     obligations: obligations.artifact, non_blocking_diagnostics: []
   };
 
+  let currentIndependentReview = null;
   if (isGeneralQualityV4Contract(contract)) {
     const review = artifacts.case_drafts.independent_review;
     if (!record(review)) return independentReviewRevision(null, null, [{
@@ -674,6 +714,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
         message: 'Complete the source-first review against the compiler-issued target.'
       }] : reviewResult.diagnostics);
     }
+    currentIndependentReview = reviewResult.normalized;
   }
 
   let semanticDeliveryGate;
@@ -719,6 +760,10 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   });
   if (outcome.status !== 'finished') return outcome.status === 'fatal'
     ? qualityFailure(outcome.reason_code) : { ...outcome, semantic_roots: openRoots(activeGaps) };
+  if (isGeneralQualityV4Contract(contract)
+    && (!currentDesignAssurance || !currentIndependentReview)) {
+    return qualityFailure('GENERAL_QUALITY_SUMMARY_INPUT_MISSING');
+  }
   const bundle = {
     schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     delivery_intent: 'case_document',
@@ -734,7 +779,15 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
       exploratory_id: item.exploratory_id, module_id: item.module_id,
       title: `探索 ${item.risk_kind}`, reason: `依据 ${item.policy_id}@${item.policy_version} 审阅通用风险。`
     })),
-    not_applicable: presentNotApplicable(notApplicable, behavior), risk_review_ledger: risk.ledger
+    not_applicable: presentNotApplicable(notApplicable, behavior), risk_review_ledger: risk.ledger,
+    ...(isGeneralQualityV4Contract(contract) ? {
+      design_assurance_summary: designAssuranceSummary(
+        /** @type {Record<string,any>} */ (currentDesignAssurance)
+      ),
+      independent_review_summary: independentReviewSummary(
+        /** @type {Record<string,any>} */ (currentIndependentReview)
+      )
+    } : {})
   };
   const bundleDiagnostics = validateAgainstSchema(bundle, testBundleSchema);
   if (bundleDiagnostics.length) return qualityFailure('CANONICAL_BUNDLE_INVALID', bundleDiagnostics);

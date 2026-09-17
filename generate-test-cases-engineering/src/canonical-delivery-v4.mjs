@@ -21,10 +21,13 @@ import { validateAgainstSchema } from './schema-validator.mjs';
 import { isCandidateV4Contract, v4ContractForIdentity } from './v4-contract.mjs';
 import { assertSemanticBundleDeliveryGateV4 } from './semantic-delivery-gate-v4.mjs';
 
-const BUNDLE_KEYS = Object.freeze([
+const BASE_BUNDLE_KEYS = Object.freeze([
   'schema_version', 'compiler_version', 'delivery_intent', 'source_revision', 'result_kind',
   'ordered_case_ids', 'scope_manifest', 'cases', 'coverage', 'semantic_root_groups',
   'exploratory', 'not_applicable', 'risk_review_ledger'
+]);
+const GENERAL_QUALITY_BUNDLE_KEYS = Object.freeze([
+  ...BASE_BUNDLE_KEYS, 'design_assurance_summary', 'independent_review_summary'
 ]);
 const ACTIVE_ROOT_STATUSES = new Set(['presented', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery']);
 const RISK_KINDS = Object.freeze([
@@ -76,8 +79,9 @@ function normalizeInput(input) {
     || !Array.isArray(input.non_blocking_diagnostics)) throw new TypeError('CANONICAL_DELIVERY_INPUT_INVALID');
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
-  const expectedKeys = [...BUNDLE_KEYS].sort();
   const contract = v4ContractForIdentity(bundle);
+  const expectedKeys = [...(contract?.schema_version === '4.3.0'
+    ? GENERAL_QUALITY_BUNDLE_KEYS : BASE_BUNDLE_KEYS)].sort();
   const candidate = contract?.candidate === true;
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])
     || !contract
@@ -101,6 +105,12 @@ function normalizeInput(input) {
     'result_kind', 'ordered_case_ids', 'scope_manifest', 'cases', 'coverage',
     'semantic_root_groups', 'exploratory', 'not_applicable'
   ].map(key => [key, structuredClone(bundle[key])]));
+  if (contract.schema_version === '4.3.0') Object.assign(projection, {
+    schema_version: bundle.schema_version,
+    compiler_version: bundle.compiler_version,
+    design_assurance_summary: structuredClone(bundle.design_assurance_summary),
+    independent_review_summary: structuredClone(bundle.independent_review_summary)
+  });
   projection.render_options = structuredClone(input.render_options);
   return { value: structuredClone(input), bundle, projection, sourceReading, candidate };
 }
@@ -230,7 +240,9 @@ async function resolveCaseDocument(ref, services) {
     || manifest.run_id !== ref.run_id || manifest.revision !== ref.revision
     || manifest.bundle.digest !== ref.bundle_digest
     || bundle.delivery_intent !== 'case_document' || bundle.source_revision !== ref.revision
-    || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count) {
+    || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count
+    || (bundle.schema_version === '4.3.0'
+      && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest)) {
     throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
   }
   return { manifest, bundle, manifest_bytes: manifestBytes, bundle_bytes: bundleBytes };
@@ -350,7 +362,10 @@ export function materializeCaseDocumentDeliveryV4(input) {
       source_reading: {
         path: `${prefix}/source-reading.json`, digest: byteDigest(sourceReadingBytes ?? ''), format: 'json'
       },
-      primary_readable: 'html'
+      primary_readable: 'html',
+      ...(canonicalBundle.schema_version === '4.3.0' ? {
+        review_target_digest: canonicalBundle.independent_review_summary.review_target_digest
+      } : {})
     } : {}),
     render_options: structuredClone(value.render_options), ...derivedCounts(canonicalBundle),
     completed_at: value.completed_at
@@ -457,6 +472,9 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateFinalRiskReview(normalized.bundle);
   if (normalized.bundle.source_revision !== manifest.revision
     || normalized.bundle.result_kind !== manifest.result_kind
+    || (normalized.bundle.schema_version === '4.3.0'
+      && manifest.review_target_digest
+        !== normalized.bundle.independent_review_summary.review_target_digest)
     || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
       case_count: manifest.case_count, blocked_root_count: manifest.blocked_root_count,
       closed_for_delivery_root_count: manifest.closed_for_delivery_root_count,

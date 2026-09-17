@@ -82,6 +82,9 @@ export function buildCaseDocumentPresentationV4(bundle, renderOptions = { includ
   if (!resultCopy || !record(renderOptions) || typeof renderOptions.include_audit_appendix !== 'boolean') {
     throw new TypeError('CASE_DOCUMENT_INVALID');
   }
+  const generalQuality = bundle.schema_version === '4.3.0';
+  if (generalQuality && (!record(bundle.design_assurance_summary)
+    || !record(bundle.independent_review_summary))) throw new TypeError('CASE_DOCUMENT_INVALID');
   const modules = new Map(bundle.scope_manifest.modules.map((/** @type {any} */ item) => [item.module_id, item.name]));
   const cases = new Map(bundle.cases.map((/** @type {any} */ item) => [item.case_id, item]));
   if (cases.size !== bundle.cases.length || bundle.ordered_case_ids.length !== cases.size
@@ -132,6 +135,7 @@ export function buildCaseDocumentPresentationV4(bundle, renderOptions = { includ
     };
   });
   return {
+    schema_version: bundle.schema_version,
     result_kind: bundle.result_kind,
     title: resultCopy.title,
     empty_message: resultCopy.empty,
@@ -146,6 +150,10 @@ export function buildCaseDocumentPresentationV4(bundle, renderOptions = { includ
     not_applicable: bundle.not_applicable.map((/** @type {any} */ item) => ({
       ...structuredClone(item), module: modules.get(item.module_id)
     })),
+    design_assurance_summary: generalQuality
+      ? structuredClone(bundle.design_assurance_summary) : null,
+    independent_review_summary: generalQuality
+      ? structuredClone(bundle.independent_review_summary) : null,
     render_options: structuredClone(renderOptions),
     rows
   };
@@ -236,6 +244,14 @@ function tableExpectations(row) {
 /** @param {ReturnType<typeof buildCaseDocumentPresentationV4>} presentation */
 function tableContext(presentation) {
   const lines = ['', `结果状态：${tableUserText(presentation.title)}`];
+  if (presentation.schema_version === '4.3.0') {
+    const design = presentation.design_assurance_summary;
+    const review = presentation.independent_review_summary;
+    lines.push('', '设计保障与独立审查：',
+      `- 设计保障：计划修订 ${design.plan_revision}；${design.batch_count} 个批次、${design.rule_group_count} 个规则组、${design.candidate_responsibility_count} 项候选验证责任均已处置。`,
+      `- 独立审查：${review.source_first_target_count} 个来源优先目标均已评估；确认发现 ${review.finding_counts.confirmed} 项，驳回发现 ${review.finding_counts.rejected} 项。`,
+      '- 上述记录用于过程审计，不提升业务证据等级。');
+  }
   if (presentation.semantic_roots.length) {
     lines.push('', '待确认事项与交付限制：');
     for (const root of presentation.semantic_roots) {
@@ -319,11 +335,21 @@ function htmlCoverage(presentation) {
 }
 
 /** @param {ReturnType<typeof buildCaseDocumentPresentationV4>} presentation */
+function htmlQualityAssurance(presentation) {
+  if (presentation.schema_version !== '4.3.0') return '';
+  const design = presentation.design_assurance_summary;
+  const review = presentation.independent_review_summary;
+  return `<section class="panel"><h2>设计保障与独立审查</h2><ul><li>设计保障：计划修订 ${design.plan_revision}；${design.batch_count} 个批次、${design.rule_group_count} 个规则组、${design.candidate_responsibility_count} 项候选验证责任均已处置。</li><li>独立审查：${review.source_first_target_count} 个来源优先目标均已评估；确认发现 ${review.finding_counts.confirmed} 项，驳回发现 ${review.finding_counts.rejected} 项。</li></ul><p class="meta">上述记录用于过程审计，不提升业务证据等级。</p></section>`;
+}
+
+/** @param {ReturnType<typeof buildCaseDocumentPresentationV4>} presentation */
 function htmlAudit(presentation) {
   if (!presentation.render_options.include_audit_appendix) return '';
   const cases = presentation.rows.map(row => `<li><code>${html(row.case_id)}</code> · Test Point <code>${html(row.primary_test_point_id)}</code>${row.business_flow_ref ? ` · Flow <code>${html(row.business_flow_ref)}</code>` : ''}</li>`).join('');
   const roots = presentation.semantic_roots.map((/** @type {any} */ root) => `<li><code>${html(root.root_issue_id)}</code></li>`).join('');
-  return `<details class="panel audit"><summary>审计标识</summary><p class="meta">以下标识仅用于机器追踪，不属于业务执行正文。</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul></details>`;
+  const review = presentation.schema_version === '4.3.0'
+    ? `<h3>独立审查目标</h3><p><code>${html(presentation.independent_review_summary.review_target_digest)}</code></p>` : '';
+  return `<details class="panel audit"><summary>审计标识</summary><p class="meta">以下标识仅用于机器追踪，不属于业务执行正文。</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul>${review}</details>`;
 }
 
 /**
@@ -344,7 +370,7 @@ export function renderBusinessHtmlV4(presentation, sourceReading) {
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${html(presentation.title)}</title><style>
 :root{color-scheme:light;--ink:#1d2433;--muted:#657086;--line:#d9dfeb;--paper:#fff;--soft:#f5f7fb;--accent:#174ea6;--warn:#8a4b00}*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1180px;margin:auto;padding:32px 20px 64px}h1,h2,h3,h4{line-height:1.25}h1{font-size:2rem}h2{margin-top:2.2rem}h3{font-size:1.2rem}.lede,.meta{color:var(--muted)}.panel,article{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #23324d0d}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;background:var(--paper)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3fb;white-space:nowrap}a{color:var(--accent)}.eyebrow,.surface{color:var(--muted);font-size:.88rem}.steps>li{margin-bottom:1rem}.compact{margin:.5rem 0 0;padding-left:1.25rem}.complete{color:#236b3b}.empty{color:var(--muted)}.warning{border-left:4px solid var(--warn)}code{overflow-wrap:anywhere}@media print{body{background:#fff}.panel,article{box-shadow:none;break-inside:avoid}main{max-width:none;padding:0}}
-</style></head><body><main><header><p class="eyebrow">V4 · HTML 主阅读文件</p><h1>${html(presentation.title)}</h1><p class="lede">共 ${presentation.case_count} 条。每条 Case 只有一个独立主要结果；必要的同对象多步动作与过程观察保持连续。</p></header><section class="panel"><h2>资料读取摘要</h2><p class="meta">这是采集技术记录，不是业务事实或业务证据。</p><p>范围：${html(sourceReading.scope.root_ref)} · 模式：${html(sourceReading.scope.mode)} · 状态：${html(sourceReading.status)} · 版本：${html(sourceReading.scope.source_version ?? '未提供')}</p><div class="table-wrap"><table><thead><tr><th>序号</th><th>通道</th><th>采集</th><th>审阅</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>采集限制</h3>${limitations}</section><section><h2>用例总览</h2><div class="table-wrap"><table><thead><tr><th>序号</th><th>模块</th><th>用例/流程名称</th><th>预期结果</th><th>优先级</th><th>依据状态</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? '' : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>用例详情</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? ' warning' : ''}"><h2>待确认事项与交付限制</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>排除与探索</h2><h3>已确认不适用</h3>${notApplicable}<h3>探索建议</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>\n`;
+</style></head><body><main><header><p class="eyebrow">V4 · HTML 主阅读文件</p><h1>${html(presentation.title)}</h1><p class="lede">共 ${presentation.case_count} 条。每条 Case 只有一个独立主要结果；必要的同对象多步动作与过程观察保持连续。</p></header><section class="panel"><h2>资料读取摘要</h2><p class="meta">这是采集技术记录，不是业务事实或业务证据。</p><p>范围：${html(sourceReading.scope.root_ref)} · 模式：${html(sourceReading.scope.mode)} · 状态：${html(sourceReading.status)} · 版本：${html(sourceReading.scope.source_version ?? '未提供')}</p><div class="table-wrap"><table><thead><tr><th>序号</th><th>通道</th><th>采集</th><th>审阅</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>采集限制</h3>${limitations}</section>${htmlQualityAssurance(presentation)}<section><h2>用例总览</h2><div class="table-wrap"><table><thead><tr><th>序号</th><th>模块</th><th>用例/流程名称</th><th>预期结果</th><th>优先级</th><th>依据状态</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? '' : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>用例详情</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? ' warning' : ''}"><h2>待确认事项与交付限制</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>排除与探索</h2><h3>已确认不适用</h3>${notApplicable}<h3>探索建议</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>\n`;
 }
 
 /**
@@ -359,7 +385,10 @@ export function matchCasePresentationFamilyV42(presentation, sourceReading, arti
     throw new TypeError('CASE_PRESENTATION_FAMILY_INVALID');
   }
   if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html
-    && renderCaseTableV4(presentation) === artifacts.table) return 'current-4.2';
+    && renderCaseTableV4(presentation) === artifacts.table) {
+    return presentation.schema_version === '4.3.0' ? 'current-4.3' : 'current-4.2';
+  }
+  if (presentation.schema_version === '4.3.0') throw new TypeError('CASE_PRESENTATION_FAMILY_INVALID');
   if (renderLegacyBusinessHtmlV42(presentation, sourceReading) === artifacts.html
     && renderLegacyCaseTableV42(presentation) === artifacts.table) return 'legacy-4.2';
   throw new TypeError('CASE_PRESENTATION_FAMILY_INVALID');

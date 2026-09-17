@@ -24615,6 +24615,64 @@ var init_test_bundle_schema = __esm({
             }
           ]
         },
+        v4DispositionCounts: {
+          type: "object",
+          required: ["retained", "representative_value", "equivalent_merge", "evidence_exclusion", "semantic_gap", "exploratory"],
+          properties: {
+            retained: { type: "integer", minimum: 0 },
+            representative_value: { type: "integer", minimum: 0 },
+            equivalent_merge: { type: "integer", minimum: 0 },
+            evidence_exclusion: { type: "integer", minimum: 0 },
+            semantic_gap: { type: "integer", minimum: 0 },
+            exploratory: { type: "integer", minimum: 0 }
+          },
+          additionalProperties: false
+        },
+        v4DesignAssuranceSummary: {
+          type: "object",
+          required: ["status", "plan_revision", "batch_count", "rule_group_count", "candidate_responsibility_count", "candidate_disposition_counts"],
+          properties: {
+            status: { const: "complete" },
+            plan_revision: { type: "integer", minimum: 1 },
+            batch_count: { type: "integer", minimum: 1 },
+            rule_group_count: { type: "integer", minimum: 1 },
+            candidate_responsibility_count: { type: "integer", minimum: 1 },
+            candidate_disposition_counts: { $ref: "#/$defs/v4DispositionCounts" }
+          },
+          additionalProperties: false
+        },
+        v4IndependentReviewSummary: {
+          type: "object",
+          required: ["status", "protocol_version", "review_mode", "reviewer_identity_class", "source_first_target_count", "target_assessment_counts", "finding_counts", "review_target_digest"],
+          properties: {
+            status: { const: "completed" },
+            protocol_version: { const: "1.0.0" },
+            review_mode: { const: "independent_source_first" },
+            reviewer_identity_class: { enum: ["independent_context", "independent_agent", "qualified_external_reviewer"] },
+            source_first_target_count: { type: "integer", minimum: 1 },
+            target_assessment_counts: {
+              type: "object",
+              required: ["verified", "semantic_gap", "evidence_excluded"],
+              properties: {
+                verified: { type: "integer", minimum: 0 },
+                semantic_gap: { type: "integer", minimum: 0 },
+                evidence_excluded: { type: "integer", minimum: 0 }
+              },
+              additionalProperties: false
+            },
+            finding_counts: {
+              type: "object",
+              required: ["confirmed", "rejected"],
+              properties: {
+                confirmed: { type: "integer", minimum: 0 },
+                rejected: { type: "integer", minimum: 0 }
+              },
+              additionalProperties: false
+            },
+            review_target_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }
+          },
+          additionalProperties: false
+        },
         caseDocumentBundle: {
           type: "object",
           required: [
@@ -24661,13 +24719,19 @@ var init_test_bundle_schema = __esm({
             semantic_root_groups: { type: "array", items: { $ref: "#/$defs/v4SemanticRootGroup" } },
             exploratory: { type: "array", items: { $ref: "#/$defs/v4ExploratoryPresentation" } },
             not_applicable: { type: "array", items: { $ref: "#/$defs/v4NotApplicablePresentation" } },
-            risk_review_ledger: { type: "array", items: { $ref: "#/$defs/v4RiskReviewItem" } }
+            risk_review_ledger: { type: "array", items: { $ref: "#/$defs/v4RiskReviewItem" } },
+            design_assurance_summary: { $ref: "#/$defs/v4DesignAssuranceSummary" },
+            independent_review_summary: { $ref: "#/$defs/v4IndependentReviewSummary" }
           },
           additionalProperties: false,
           allOf: [
             {
               oneOf: [
                 {
+                  allOf: [
+                    { not: { required: ["design_assurance_summary"] } },
+                    { not: { required: ["independent_review_summary"] } }
+                  ],
                   properties: {
                     schema_version: { const: "4.0.0" },
                     compiler_version: { const: "0.5.0" },
@@ -24679,6 +24743,10 @@ var init_test_bundle_schema = __esm({
                   }
                 },
                 {
+                  allOf: [
+                    { not: { required: ["design_assurance_summary"] } },
+                    { not: { required: ["independent_review_summary"] } }
+                  ],
                   properties: {
                     schema_version: { const: "4.2.0" },
                     compiler_version: { const: "0.7.0" },
@@ -24690,6 +24758,7 @@ var init_test_bundle_schema = __esm({
                   }
                 },
                 {
+                  required: ["design_assurance_summary", "independent_review_summary"],
                   properties: {
                     schema_version: { const: "4.3.0" },
                     compiler_version: { const: "0.8.0" },
@@ -27947,6 +28016,9 @@ var init_current_pointer_schema = __esm({
         },
         {
           $ref: "#/$defs/executionManifest"
+        },
+        {
+          $ref: "#/$defs/v4NonReady"
         }
       ],
       $defs: {
@@ -27998,6 +28070,21 @@ var init_current_pointer_schema = __esm({
             digest: {
               $ref: "#/$defs/sha256"
             }
+          },
+          additionalProperties: false
+        },
+        v4NonReady: {
+          type: "object",
+          required: ["status", "schema_version", "compiler_version", "run_id", "active_revision", "reason", "previous_ready_revision", "previous_ready_manifest_digest"],
+          properties: {
+            status: { const: "stale" },
+            schema_version: { const: "4.3.0" },
+            compiler_version: { const: "0.8.0" },
+            run_id: { $ref: "#/$defs/text" },
+            active_revision: { $ref: "#/$defs/count" },
+            reason: { const: "higher_revision_not_ready" },
+            previous_ready_revision: { $ref: "#/$defs/count" },
+            previous_ready_manifest_digest: { $ref: "#/$defs/sha256" }
           },
           additionalProperties: false
         },
@@ -28221,6 +28308,7 @@ var init_current_pointer_schema = __esm({
               additionalProperties: false
             },
             primary_readable: { const: "html" },
+            review_target_digest: { $ref: "#/$defs/sha256" },
             render_options: {
               type: "object",
               required: [
@@ -28254,12 +28342,14 @@ var init_current_pointer_schema = __esm({
             {
               oneOf: [
                 {
+                  not: { required: ["review_target_digest"] },
                   properties: {
                     schema_version: { const: "4.0.0" },
                     compiler_version: { const: "0.5.0" }
                   }
                 },
                 {
+                  not: { required: ["review_target_digest"] },
                   required: ["html", "chat_table", "source_reading", "primary_readable"],
                   properties: {
                     schema_version: { const: "4.2.0" },
@@ -28267,7 +28357,7 @@ var init_current_pointer_schema = __esm({
                   }
                 },
                 {
-                  required: ["html", "chat_table", "source_reading", "primary_readable"],
+                  required: ["html", "chat_table", "source_reading", "primary_readable", "review_target_digest"],
                   properties: {
                     schema_version: { const: "4.3.0" },
                     compiler_version: { const: "0.8.0" }
@@ -45954,7 +46044,16 @@ init_test_bundle_schema();
 // src/business-markdown-v4.mjs
 init_case_semantics_v4();
 var RESULT_KINDS = /* @__PURE__ */ new Set(["delivered_cases", "delivered_with_gaps", "blocked_only", "no_applicable_cases"]);
-var ROOT_STATUSES2 = /* @__PURE__ */ new Set(["presented", "resolved", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]);
+var ROOT_STATUSES2 = /* @__PURE__ */ new Set([
+  "presented",
+  "resolved",
+  "resolved_final",
+  "resolved_temporary",
+  "deferred_by_user",
+  "unknown_by_user",
+  "closed_for_delivery",
+  "obsolete"
+]);
 var ACTIVE_ROOT_STATUSES = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
 var SURFACE_RANK = Object.freeze([
   "ui",
@@ -45980,6 +46079,20 @@ var SURFACE_LABEL = Object.freeze({
 });
 var INTERNAL_ID = /(?:ROOT|FACT|CLM|CLAIM|OBL|OBLIGATION|TP|CASE|EXP|NA)-[A-Za-z0-9_.:/#-]+/u;
 var ROOT_KEYS = ["result_kind", "ordered_case_ids", "scope_manifest", "cases", "coverage", "semantic_root_groups", "exploratory", "not_applicable", "render_options"];
+var GENERAL_QUALITY_ROOT_KEYS = [
+  ...ROOT_KEYS,
+  "schema_version",
+  "compiler_version",
+  "design_assurance_summary",
+  "independent_review_summary"
+];
+var SEMANTIC_ROOT_KEYS = ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"];
+var GENERAL_QUALITY_SEMANTIC_ROOT_KEYS = [
+  ...SEMANTIC_ROOT_KEYS,
+  "root_version_digest",
+  "acceptance_impact",
+  "critical_resolution_basis"
+];
 var CASE_KEYS = [
   "case_id",
   "title",
@@ -46062,12 +46175,62 @@ function validateCanonicalCase(candidate) {
 }
 function validateProjection(raw) {
   if (!record6(raw)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
-  closed6(raw, ROOT_KEYS);
+  const generalQuality = raw.schema_version === "4.3.0";
+  closed6(raw, generalQuality ? GENERAL_QUALITY_ROOT_KEYS : ROOT_KEYS);
+  if (generalQuality && (raw.compiler_version !== "0.8.0" || !record6(raw.design_assurance_summary) || !record6(raw.independent_review_summary))) {
+    throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+  }
   if (!RESULT_KINDS.has(raw.result_kind) || !Array.isArray(raw.cases) || !record6(raw.scope_manifest) || !Array.isArray(raw.semantic_root_groups) || !Array.isArray(raw.exploratory) || !Array.isArray(raw.not_applicable) || !record6(raw.coverage) || !record6(raw.render_options)) {
     throw new TypeError("MARKDOWN_PROJECTION_INVALID");
   }
   closed6(raw.render_options, ["include_audit_appendix"]);
   if (typeof raw.render_options.include_audit_appendix !== "boolean") throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+  if (generalQuality) {
+    const assurance = raw.design_assurance_summary;
+    closed6(assurance, [
+      "status",
+      "plan_revision",
+      "batch_count",
+      "rule_group_count",
+      "candidate_responsibility_count",
+      "candidate_disposition_counts"
+    ]);
+    closed6(assurance.candidate_disposition_counts, [
+      "retained",
+      "representative_value",
+      "equivalent_merge",
+      "evidence_exclusion",
+      "semantic_gap",
+      "exploratory"
+    ]);
+    const dispositionTotal = Object.values(assurance.candidate_disposition_counts).reduce((sum, value) => sum + nonNegativeInteger(value), 0);
+    const planRevision = nonNegativeInteger(assurance.plan_revision);
+    const batchCount = nonNegativeInteger(assurance.batch_count);
+    const ruleGroupCount = nonNegativeInteger(assurance.rule_group_count);
+    const responsibilityCount = nonNegativeInteger(assurance.candidate_responsibility_count);
+    if (assurance.status !== "complete" || planRevision < 1 || batchCount < 1 || ruleGroupCount < 1 || dispositionTotal !== responsibilityCount) {
+      throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    }
+    const review = raw.independent_review_summary;
+    closed6(review, [
+      "status",
+      "protocol_version",
+      "review_mode",
+      "reviewer_identity_class",
+      "source_first_target_count",
+      "target_assessment_counts",
+      "finding_counts",
+      "review_target_digest"
+    ]);
+    closed6(review.target_assessment_counts, ["verified", "semantic_gap", "evidence_excluded"]);
+    closed6(review.finding_counts, ["confirmed", "rejected"]);
+    const assessmentTotal = Object.values(review.target_assessment_counts).reduce((sum, value) => sum + nonNegativeInteger(value), 0);
+    for (const value of Object.values(review.finding_counts)) nonNegativeInteger(value);
+    const sourceFirstTargetCount = nonNegativeInteger(review.source_first_target_count);
+    if (review.status !== "completed" || review.protocol_version !== "1.0.0" || review.review_mode !== "independent_source_first" || !["independent_context", "independent_agent", "qualified_external_reviewer"].includes(review.reviewer_identity_class) || sourceFirstTargetCount < 1 || assessmentTotal !== sourceFirstTargetCount || !/^sha256:[0-9a-f]{64}$/u.test(review.review_target_digest)) {
+      throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    }
+  }
   closed6(raw.scope_manifest, ["primary_surface", "modules", "boundaries"]);
   if (!Array.isArray(raw.scope_manifest.modules) || !Array.isArray(raw.scope_manifest.boundaries)) {
     throw new TypeError("MARKDOWN_PROJECTION_INVALID");
@@ -46124,7 +46287,7 @@ function validateProjection(raw) {
   const rootIds = /* @__PURE__ */ new Set();
   for (const root of raw.semantic_root_groups) {
     if (!record6(root)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
-    closed6(root, ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"]);
+    closed6(root, generalQuality ? GENERAL_QUALITY_SEMANTIC_ROOT_KEYS : SEMANTIC_ROOT_KEYS);
     const rootId = traceId(root.root_issue_id);
     if (rootIds.has(rootId) || !ROOT_STATUSES2.has(root.status) || !Array.isArray(root.affected_business_items) || root.affected_business_items.length === 0) {
       throw new TypeError("MARKDOWN_PROJECTION_INVALID");
@@ -46221,6 +46384,15 @@ function renderCaseSection(lines, title, cases, modules) {
   }
   for (const candidate of cases) renderCase(lines, candidate, modules);
 }
+function renderQualityAssurance(lines, view) {
+  if (view.raw.schema_version !== "4.3.0") return;
+  const design = view.raw.design_assurance_summary;
+  const review = view.raw.independent_review_summary;
+  lines.push("## \u8BBE\u8BA1\u4FDD\u969C\u4E0E\u72EC\u7ACB\u5BA1\u67E5", "");
+  lines.push(`- \u8BBE\u8BA1\u4FDD\u969C\uFF1A\u8BA1\u5212\u4FEE\u8BA2 ${design.plan_revision}\uFF1B${design.batch_count} \u4E2A\u6279\u6B21\u3001${design.rule_group_count} \u4E2A\u89C4\u5219\u7EC4\u3001${design.candidate_responsibility_count} \u9879\u5019\u9009\u9A8C\u8BC1\u8D23\u4EFB\u5747\u5DF2\u5904\u7F6E\u3002`);
+  lines.push(`- \u72EC\u7ACB\u5BA1\u67E5\uFF1A${review.source_first_target_count} \u4E2A\u6765\u6E90\u4F18\u5148\u76EE\u6807\u5747\u5DF2\u8BC4\u4F30\uFF1B\u786E\u8BA4\u53D1\u73B0 ${review.finding_counts.confirmed} \u9879\uFF0C\u9A73\u56DE\u53D1\u73B0 ${review.finding_counts.rejected} \u9879\u3002`);
+  lines.push("_\u4E0A\u8FF0\u8BB0\u5F55\u7528\u4E8E\u8FC7\u7A0B\u5BA1\u8BA1\uFF0C\u4E0D\u63D0\u5347\u4E1A\u52A1\u8BC1\u636E\u7B49\u7EA7\u3002_", "");
+}
 function renderAudit(lines, view) {
   lines.push("## \u5BA1\u8BA1\u9644\u5F55");
   lines.push("");
@@ -46242,6 +46414,9 @@ function renderAudit(lines, view) {
   lines.push("### \u6392\u9664\u4E0E\u63A2\u7D22\u8FFD\u8E2A");
   for (const item of view.raw.not_applicable) lines.push(`- NotApplicable\uFF1A\`${item.not_applicable_record_id}\``);
   for (const item of view.raw.exploratory) lines.push(`- Exploratory\uFF1A\`${item.exploratory_id}\``);
+  if (view.raw.schema_version === "4.3.0") {
+    lines.push(`- \u5F53\u524D\u72EC\u7ACB\u5BA1\u67E5\u76EE\u6807\uFF1A\`${view.raw.independent_review_summary.review_target_digest}\``);
+  }
   lines.push("");
 }
 function renderBusinessMarkdownV4(input) {
@@ -46256,6 +46431,7 @@ function renderBusinessMarkdownV4(input) {
     for (const candidate of orderedCases) lines.push(`| ${tableCell(view.modules.get(candidate.module_id))} | ${candidate.priority} | ${tableCell(candidate.title)} | ${candidate.semantic_status === "Grounded" ? "\u5DF2\u786E\u8BA4" : "\u5F85\u786E\u8BA4"} |`);
   }
   lines.push("");
+  renderQualityAssurance(lines, view);
   renderCaseSection(lines, "\u4E3B\u9A8C\u6536", orderedCases.filter((item) => item.acceptance_role === "primary_acceptance" && item.semantic_status === "Grounded"), view.modules);
   renderCaseSection(lines, "\u8FB9\u754C\u5951\u7EA6", orderedCases.filter((item) => item.acceptance_role === "dependency_contract" && item.semantic_status === "Grounded"), view.modules);
   const contextCases = orderedCases.filter((item) => item.acceptance_role === "context_only" && item.semantic_status === "Grounded");
@@ -46393,6 +46569,8 @@ function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit
   if (!resultCopy || !record7(renderOptions) || typeof renderOptions.include_audit_appendix !== "boolean") {
     throw new TypeError("CASE_DOCUMENT_INVALID");
   }
+  const generalQuality = bundle.schema_version === "4.3.0";
+  if (generalQuality && (!record7(bundle.design_assurance_summary) || !record7(bundle.independent_review_summary))) throw new TypeError("CASE_DOCUMENT_INVALID");
   const modules = new Map(bundle.scope_manifest.modules.map((item) => [item.module_id, item.name]));
   const cases = new Map(bundle.cases.map((item) => [item.case_id, item]));
   if (cases.size !== bundle.cases.length || bundle.ordered_case_ids.length !== cases.size || new Set(bundle.ordered_case_ids).size !== bundle.ordered_case_ids.length || bundle.ordered_case_ids.some((id2) => typeof id2 !== "string" || !cases.has(id2))) {
@@ -46443,6 +46621,7 @@ function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit
     };
   });
   return {
+    schema_version: bundle.schema_version,
     result_kind: bundle.result_kind,
     title: resultCopy.title,
     empty_message: resultCopy.empty,
@@ -46457,6 +46636,8 @@ function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit
       ...structuredClone(item),
       module: modules.get(item.module_id)
     })),
+    design_assurance_summary: generalQuality ? structuredClone(bundle.design_assurance_summary) : null,
+    independent_review_summary: generalQuality ? structuredClone(bundle.independent_review_summary) : null,
     render_options: structuredClone(renderOptions),
     rows
   };
@@ -46524,6 +46705,17 @@ function tableExpectations(row) {
 }
 function tableContext(presentation) {
   const lines = ["", `\u7ED3\u679C\u72B6\u6001\uFF1A${tableUserText(presentation.title)}`];
+  if (presentation.schema_version === "4.3.0") {
+    const design = presentation.design_assurance_summary;
+    const review = presentation.independent_review_summary;
+    lines.push(
+      "",
+      "\u8BBE\u8BA1\u4FDD\u969C\u4E0E\u72EC\u7ACB\u5BA1\u67E5\uFF1A",
+      `- \u8BBE\u8BA1\u4FDD\u969C\uFF1A\u8BA1\u5212\u4FEE\u8BA2 ${design.plan_revision}\uFF1B${design.batch_count} \u4E2A\u6279\u6B21\u3001${design.rule_group_count} \u4E2A\u89C4\u5219\u7EC4\u3001${design.candidate_responsibility_count} \u9879\u5019\u9009\u9A8C\u8BC1\u8D23\u4EFB\u5747\u5DF2\u5904\u7F6E\u3002`,
+      `- \u72EC\u7ACB\u5BA1\u67E5\uFF1A${review.source_first_target_count} \u4E2A\u6765\u6E90\u4F18\u5148\u76EE\u6807\u5747\u5DF2\u8BC4\u4F30\uFF1B\u786E\u8BA4\u53D1\u73B0 ${review.finding_counts.confirmed} \u9879\uFF0C\u9A73\u56DE\u53D1\u73B0 ${review.finding_counts.rejected} \u9879\u3002`,
+      "- \u4E0A\u8FF0\u8BB0\u5F55\u7528\u4E8E\u8FC7\u7A0B\u5BA1\u8BA1\uFF0C\u4E0D\u63D0\u5347\u4E1A\u52A1\u8BC1\u636E\u7B49\u7EA7\u3002"
+    );
+  }
   if (presentation.semantic_roots.length) {
     lines.push("", "\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236\uFF1A");
     for (const root of presentation.semantic_roots) {
@@ -46590,11 +46782,18 @@ function htmlCoverage(presentation) {
   const coverage = presentation.coverage;
   return `<section class="panel"><h2>\u8986\u76D6\u60C5\u51B5</h2><h3>\u5DF2\u5BA1\u9605 formal test-point \u8986\u76D6</h3><ul><li>\u4E3B\u9A8C\u6536\uFF1A\u5DF2\u8986\u76D6 ${coverage.primary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.primary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.primary.not_applicable_formal_test_point_count} \u9879</li><li>\u8FB9\u754C\u5951\u7EA6\uFF1A\u5DF2\u8986\u76D6 ${coverage.boundary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.boundary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.boundary.not_applicable_formal_test_point_count} \u9879</li><li>semantic gap\uFF1A${coverage.semantic_gap_count} \u9879</li><li>Exploratory\uFF1A${coverage.exploratory_count} \u9879</li><li>NotApplicable\uFF1A${coverage.not_applicable_count} \u9879</li></ul></section>`;
 }
+function htmlQualityAssurance(presentation) {
+  if (presentation.schema_version !== "4.3.0") return "";
+  const design = presentation.design_assurance_summary;
+  const review = presentation.independent_review_summary;
+  return `<section class="panel"><h2>\u8BBE\u8BA1\u4FDD\u969C\u4E0E\u72EC\u7ACB\u5BA1\u67E5</h2><ul><li>\u8BBE\u8BA1\u4FDD\u969C\uFF1A\u8BA1\u5212\u4FEE\u8BA2 ${design.plan_revision}\uFF1B${design.batch_count} \u4E2A\u6279\u6B21\u3001${design.rule_group_count} \u4E2A\u89C4\u5219\u7EC4\u3001${design.candidate_responsibility_count} \u9879\u5019\u9009\u9A8C\u8BC1\u8D23\u4EFB\u5747\u5DF2\u5904\u7F6E\u3002</li><li>\u72EC\u7ACB\u5BA1\u67E5\uFF1A${review.source_first_target_count} \u4E2A\u6765\u6E90\u4F18\u5148\u76EE\u6807\u5747\u5DF2\u8BC4\u4F30\uFF1B\u786E\u8BA4\u53D1\u73B0 ${review.finding_counts.confirmed} \u9879\uFF0C\u9A73\u56DE\u53D1\u73B0 ${review.finding_counts.rejected} \u9879\u3002</li></ul><p class="meta">\u4E0A\u8FF0\u8BB0\u5F55\u7528\u4E8E\u8FC7\u7A0B\u5BA1\u8BA1\uFF0C\u4E0D\u63D0\u5347\u4E1A\u52A1\u8BC1\u636E\u7B49\u7EA7\u3002</p></section>`;
+}
 function htmlAudit(presentation) {
   if (!presentation.render_options.include_audit_appendix) return "";
   const cases = presentation.rows.map((row) => `<li><code>${html(row.case_id)}</code> \xB7 Test Point <code>${html(row.primary_test_point_id)}</code>${row.business_flow_ref ? ` \xB7 Flow <code>${html(row.business_flow_ref)}</code>` : ""}</li>`).join("");
   const roots = presentation.semantic_roots.map((root) => `<li><code>${html(root.root_issue_id)}</code></li>`).join("");
-  return `<details class="panel audit"><summary>\u5BA1\u8BA1\u6807\u8BC6</summary><p class="meta">\u4EE5\u4E0B\u6807\u8BC6\u4EC5\u7528\u4E8E\u673A\u5668\u8FFD\u8E2A\uFF0C\u4E0D\u5C5E\u4E8E\u4E1A\u52A1\u6267\u884C\u6B63\u6587\u3002</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul></details>`;
+  const review = presentation.schema_version === "4.3.0" ? `<h3>\u72EC\u7ACB\u5BA1\u67E5\u76EE\u6807</h3><p><code>${html(presentation.independent_review_summary.review_target_digest)}</code></p>` : "";
+  return `<details class="panel audit"><summary>\u5BA1\u8BA1\u6807\u8BC6</summary><p class="meta">\u4EE5\u4E0B\u6807\u8BC6\u4EC5\u7528\u4E8E\u673A\u5668\u8FFD\u8E2A\uFF0C\u4E0D\u5C5E\u4E8E\u4E1A\u52A1\u6267\u884C\u6B63\u6587\u3002</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul>${review}</details>`;
 }
 function renderBusinessHtmlV4(presentation, sourceReading) {
   const sourceRows = sourceReading.items.map((item, index) => `<tr><td>${index + 1}</td><td>${html(item.channel)}</td><td>${html(item.acquisition_status)}</td><td>${html(item.review_status)}</td></tr>`).join("");
@@ -46606,14 +46805,17 @@ function renderBusinessHtmlV4(presentation, sourceReading) {
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${html(presentation.title)}</title><style>
 :root{color-scheme:light;--ink:#1d2433;--muted:#657086;--line:#d9dfeb;--paper:#fff;--soft:#f5f7fb;--accent:#174ea6;--warn:#8a4b00}*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1180px;margin:auto;padding:32px 20px 64px}h1,h2,h3,h4{line-height:1.25}h1{font-size:2rem}h2{margin-top:2.2rem}h3{font-size:1.2rem}.lede,.meta{color:var(--muted)}.panel,article{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #23324d0d}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;background:var(--paper)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3fb;white-space:nowrap}a{color:var(--accent)}.eyebrow,.surface{color:var(--muted);font-size:.88rem}.steps>li{margin-bottom:1rem}.compact{margin:.5rem 0 0;padding-left:1.25rem}.complete{color:#236b3b}.empty{color:var(--muted)}.warning{border-left:4px solid var(--warn)}code{overflow-wrap:anywhere}@media print{body{background:#fff}.panel,article{box-shadow:none;break-inside:avoid}main{max-width:none;padding:0}}
-</style></head><body><main><header><p class="eyebrow">V4 \xB7 HTML \u4E3B\u9605\u8BFB\u6587\u4EF6</p><h1>${html(presentation.title)}</h1><p class="lede">\u5171 ${presentation.case_count} \u6761\u3002\u6BCF\u6761 Case \u53EA\u6709\u4E00\u4E2A\u72EC\u7ACB\u4E3B\u8981\u7ED3\u679C\uFF1B\u5FC5\u8981\u7684\u540C\u5BF9\u8C61\u591A\u6B65\u52A8\u4F5C\u4E0E\u8FC7\u7A0B\u89C2\u5BDF\u4FDD\u6301\u8FDE\u7EED\u3002</p></header><section class="panel"><h2>\u8D44\u6599\u8BFB\u53D6\u6458\u8981</h2><p class="meta">\u8FD9\u662F\u91C7\u96C6\u6280\u672F\u8BB0\u5F55\uFF0C\u4E0D\u662F\u4E1A\u52A1\u4E8B\u5B9E\u6216\u4E1A\u52A1\u8BC1\u636E\u3002</p><p>\u8303\u56F4\uFF1A${html(sourceReading.scope.root_ref)} \xB7 \u6A21\u5F0F\uFF1A${html(sourceReading.scope.mode)} \xB7 \u72B6\u6001\uFF1A${html(sourceReading.status)} \xB7 \u7248\u672C\uFF1A${html(sourceReading.scope.source_version ?? "\u672A\u63D0\u4F9B")}</p><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u901A\u9053</th><th>\u91C7\u96C6</th><th>\u5BA1\u9605</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>\u91C7\u96C6\u9650\u5236</h3>${limitations}</section><section><h2>\u7528\u4F8B\u603B\u89C8</h2><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u6A21\u5757</th><th>\u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0</th><th>\u9884\u671F\u7ED3\u679C</th><th>\u4F18\u5148\u7EA7</th><th>\u4F9D\u636E\u72B6\u6001</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? "" : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>\u7528\u4F8B\u8BE6\u60C5</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? " warning" : ""}"><h2>\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>\u6392\u9664\u4E0E\u63A2\u7D22</h2><h3>\u5DF2\u786E\u8BA4\u4E0D\u9002\u7528</h3>${notApplicable}<h3>\u63A2\u7D22\u5EFA\u8BAE</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>
+</style></head><body><main><header><p class="eyebrow">V4 \xB7 HTML \u4E3B\u9605\u8BFB\u6587\u4EF6</p><h1>${html(presentation.title)}</h1><p class="lede">\u5171 ${presentation.case_count} \u6761\u3002\u6BCF\u6761 Case \u53EA\u6709\u4E00\u4E2A\u72EC\u7ACB\u4E3B\u8981\u7ED3\u679C\uFF1B\u5FC5\u8981\u7684\u540C\u5BF9\u8C61\u591A\u6B65\u52A8\u4F5C\u4E0E\u8FC7\u7A0B\u89C2\u5BDF\u4FDD\u6301\u8FDE\u7EED\u3002</p></header><section class="panel"><h2>\u8D44\u6599\u8BFB\u53D6\u6458\u8981</h2><p class="meta">\u8FD9\u662F\u91C7\u96C6\u6280\u672F\u8BB0\u5F55\uFF0C\u4E0D\u662F\u4E1A\u52A1\u4E8B\u5B9E\u6216\u4E1A\u52A1\u8BC1\u636E\u3002</p><p>\u8303\u56F4\uFF1A${html(sourceReading.scope.root_ref)} \xB7 \u6A21\u5F0F\uFF1A${html(sourceReading.scope.mode)} \xB7 \u72B6\u6001\uFF1A${html(sourceReading.status)} \xB7 \u7248\u672C\uFF1A${html(sourceReading.scope.source_version ?? "\u672A\u63D0\u4F9B")}</p><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u901A\u9053</th><th>\u91C7\u96C6</th><th>\u5BA1\u9605</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>\u91C7\u96C6\u9650\u5236</h3>${limitations}</section>${htmlQualityAssurance(presentation)}<section><h2>\u7528\u4F8B\u603B\u89C8</h2><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u6A21\u5757</th><th>\u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0</th><th>\u9884\u671F\u7ED3\u679C</th><th>\u4F18\u5148\u7EA7</th><th>\u4F9D\u636E\u72B6\u6001</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? "" : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>\u7528\u4F8B\u8BE6\u60C5</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? " warning" : ""}"><h2>\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>\u6392\u9664\u4E0E\u63A2\u7D22</h2><h3>\u5DF2\u786E\u8BA4\u4E0D\u9002\u7528</h3>${notApplicable}<h3>\u63A2\u7D22\u5EFA\u8BAE</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>
 `;
 }
 function matchCasePresentationFamilyV42(presentation, sourceReading, artifacts) {
   if (!record7(artifacts) || typeof artifacts.html !== "string" || typeof artifacts.table !== "string") {
     throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
   }
-  if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html && renderCaseTableV4(presentation) === artifacts.table) return "current-4.2";
+  if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html && renderCaseTableV4(presentation) === artifacts.table) {
+    return presentation.schema_version === "4.3.0" ? "current-4.3" : "current-4.2";
+  }
+  if (presentation.schema_version === "4.3.0") throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
   if (renderLegacyBusinessHtmlV42(presentation, sourceReading) === artifacts.html && renderLegacyCaseTableV42(presentation) === artifacts.table) return "legacy-4.2";
   throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
 }
@@ -46742,7 +46944,7 @@ await init_run_store();
 init_schema_validator();
 init_v4_contract();
 init_semantic_delivery_gate_v4();
-var BUNDLE_KEYS = Object.freeze([
+var BASE_BUNDLE_KEYS = Object.freeze([
   "schema_version",
   "compiler_version",
   "delivery_intent",
@@ -46756,6 +46958,11 @@ var BUNDLE_KEYS = Object.freeze([
   "exploratory",
   "not_applicable",
   "risk_review_ledger"
+]);
+var GENERAL_QUALITY_BUNDLE_KEYS = Object.freeze([
+  ...BASE_BUNDLE_KEYS,
+  "design_assurance_summary",
+  "independent_review_summary"
 ]);
 var ACTIVE_ROOT_STATUSES3 = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
 var RISK_KINDS = Object.freeze([
@@ -46803,8 +47010,8 @@ function normalizeInput2(input) {
   if (!record9(input) || Object.keys(input).some((key) => !["run_id", "completed_at", "bundle", "source_reading", "render_options", "non_blocking_diagnostics"].includes(key)) || typeof input.run_id !== "string" || !input.run_id.trim() || typeof input.completed_at !== "string" || !input.completed_at.trim() || !record9(input.bundle) || !record9(input.render_options) || !Array.isArray(input.non_blocking_diagnostics)) throw new TypeError("CANONICAL_DELIVERY_INPUT_INVALID");
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
-  const expectedKeys = [...BUNDLE_KEYS].sort();
   const contract2 = v4ContractForIdentity(bundle);
+  const expectedKeys = [...contract2?.schema_version === "4.3.0" ? GENERAL_QUALITY_BUNDLE_KEYS : BASE_BUNDLE_KEYS].sort();
   const candidate = contract2?.candidate === true;
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index]) || !contract2 || bundle.delivery_intent !== "case_document" || !Number.isSafeInteger(bundle.source_revision) || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
     throw new TypeError("CANONICAL_BUNDLE_INVALID");
@@ -46830,6 +47037,12 @@ function normalizeInput2(input) {
     "exploratory",
     "not_applicable"
   ].map((key) => [key, structuredClone(bundle[key])]));
+  if (contract2.schema_version === "4.3.0") Object.assign(projection, {
+    schema_version: bundle.schema_version,
+    compiler_version: bundle.compiler_version,
+    design_assurance_summary: structuredClone(bundle.design_assurance_summary),
+    independent_review_summary: structuredClone(bundle.independent_review_summary)
+  });
   projection.render_options = structuredClone(input.render_options);
   return { value: structuredClone(input), bundle, projection, sourceReading, candidate };
 }
@@ -46937,7 +47150,7 @@ async function resolveCaseDocument(ref2, services) {
   }
   if (`${canonicalStringify(manifest)}
 ` !== manifestBytes || `${canonicalStringify(bundle)}
-` !== bundleBytes || validateAgainstSchema(manifest, current_pointer_schema_default).length || validateCanonicalManifestRelations(manifest).length || validateAgainstSchema(bundle, test_bundle_schema_default).length || manifest.delivery_intent !== "case_document" || manifest.authority !== "canonical" || !["delivered_cases", "delivered_with_gaps"].includes(manifest.result_kind) || manifest.run_id !== ref2.run_id || manifest.revision !== ref2.revision || manifest.bundle.digest !== ref2.bundle_digest || bundle.delivery_intent !== "case_document" || bundle.source_revision !== ref2.revision || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count) {
+` !== bundleBytes || validateAgainstSchema(manifest, current_pointer_schema_default).length || validateCanonicalManifestRelations(manifest).length || validateAgainstSchema(bundle, test_bundle_schema_default).length || manifest.delivery_intent !== "case_document" || manifest.authority !== "canonical" || !["delivered_cases", "delivered_with_gaps"].includes(manifest.result_kind) || manifest.run_id !== ref2.run_id || manifest.revision !== ref2.revision || manifest.bundle.digest !== ref2.bundle_digest || bundle.delivery_intent !== "case_document" || bundle.source_revision !== ref2.revision || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count || bundle.schema_version === "4.3.0" && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest) {
     throw new TypeError("CASE_DOCUMENT_MANIFEST_INVALID");
   }
   return { manifest, bundle, manifest_bytes: manifestBytes, bundle_bytes: bundleBytes };
@@ -47047,7 +47260,10 @@ function materializeCaseDocumentDeliveryV4(input) {
         digest: byteDigest2(sourceReadingBytes ?? ""),
         format: "json"
       },
-      primary_readable: "html"
+      primary_readable: "html",
+      ...canonicalBundle.schema_version === "4.3.0" ? {
+        review_target_digest: canonicalBundle.independent_review_summary.review_target_digest
+      } : {}
     } : {},
     render_options: structuredClone(value.render_options),
     ...derivedCounts(canonicalBundle),
@@ -47168,7 +47384,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
     })
   );
   validateFinalRiskReview(normalized.bundle);
-  if (normalized.bundle.source_revision !== manifest.revision || normalized.bundle.result_kind !== manifest.result_kind || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
+  if (normalized.bundle.source_revision !== manifest.revision || normalized.bundle.result_kind !== manifest.result_kind || normalized.bundle.schema_version === "4.3.0" && manifest.review_target_digest !== normalized.bundle.independent_review_summary.review_target_digest || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
     case_count: manifest.case_count,
     blocked_root_count: manifest.blocked_root_count,
     closed_for_delivery_root_count: manifest.closed_for_delivery_root_count,
@@ -49038,6 +49254,36 @@ async function storeCommittedRecord(runDirectory, pending) {
 async function phaseHook(hooks, phase) {
   if (typeof hooks?.after_phase === "function") await hooks.after_phase(phase);
 }
+async function revokeOlderGeneralQualityDelivery(runDirectory, run, pending) {
+  if (!isGeneralQualityV4Contract(run) || pending.commit_mode !== "new_revision" || pending.commit_profile === "final") return;
+  const target = path6.join(runDirectory, "output", "current.json");
+  const current = await readJsonIfPresent(runDirectory, target);
+  if (!current) return;
+  if (current.value.status === "stale") {
+    if (current.value.schema_version !== run.schema_version || current.value.compiler_version !== run.compiler_version || current.value.run_id !== run.run_id || !Number.isSafeInteger(current.value.active_revision) || current.value.active_revision > pending.candidate_revision || !Number.isSafeInteger(current.value.previous_ready_revision) || !SHA2562.test(current.value.previous_ready_manifest_digest)) {
+      throw new RunStoreIntegrityError("CURRENT_NON_READY_CONFLICT");
+    }
+    if (current.value.active_revision === pending.candidate_revision) return;
+    await atomicWriteJson(runDirectory, target, {
+      ...current.value,
+      active_revision: pending.candidate_revision
+    });
+    return;
+  }
+  if (current.value.authority !== "canonical" || current.value.run_id !== run.run_id || current.value.schema_version !== run.schema_version || current.value.compiler_version !== run.compiler_version || current.value.revision !== pending.base_revision) {
+    throw new RunStoreIntegrityError("CURRENT_READY_BINDING_INVALID");
+  }
+  await atomicWriteJson(runDirectory, target, {
+    status: "stale",
+    schema_version: run.schema_version,
+    compiler_version: run.compiler_version,
+    run_id: run.run_id,
+    active_revision: pending.candidate_revision,
+    reason: "higher_revision_not_ready",
+    previous_ready_revision: current.value.revision,
+    previous_ready_manifest_digest: exactDigest(current.text)
+  });
+}
 async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, ownership, hooks = {}) {
   const heldLock = requireHeldLock2(ownership);
   try {
@@ -49165,6 +49411,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
     }
     if (pending.phase === "artifacts_committed") {
       await materializeArtifacts(runDirectory, pending, request.artifacts);
+      await revokeOlderGeneralQualityDelivery(runDirectory, run, pending);
       await commitCheckpoint(runDirectory, pending, request.artifacts);
       pending = movePhase(pending, "checkpoint_committed");
       await atomicWriteJson(runDirectory, pendingPath(runDirectory), pending);
@@ -53460,6 +53707,42 @@ function independentReviewRevision(review, target, diagnostics2) {
     } : null
   };
 }
+var DESIGN_DISPOSITIONS = Object.freeze([
+  "retained",
+  "representative_value",
+  "equivalent_merge",
+  "evidence_exclusion",
+  "semantic_gap",
+  "exploratory"
+]);
+function designAssuranceSummary(assurance) {
+  const counts = Object.fromEntries(DESIGN_DISPOSITIONS.map((kind) => [kind, 0]));
+  for (const item of assurance.candidate_dispositions) counts[item.disposition] += 1;
+  return {
+    status: "complete",
+    plan_revision: assurance.plan_revision,
+    batch_count: assurance.batches.length,
+    rule_group_count: assurance.rule_groups.length,
+    candidate_responsibility_count: assurance.candidate_responsibilities.length,
+    candidate_disposition_counts: counts
+  };
+}
+function independentReviewSummary(review) {
+  const assessmentCounts = { verified: 0, semantic_gap: 0, evidence_excluded: 0 };
+  for (const item of review.target_assessments) assessmentCounts[item.disposition] += 1;
+  const findingCounts = { confirmed: 0, rejected: 0 };
+  for (const item of review.findings) findingCounts[item.adjudication] += 1;
+  return {
+    status: "completed",
+    protocol_version: review.protocol_version,
+    review_mode: review.review_mode,
+    reviewer_identity_class: review.reviewer_identity.identity_class,
+    source_first_target_count: review.source_first_targets.length,
+    target_assessment_counts: assessmentCounts,
+    finding_counts: findingCounts,
+    review_target_digest: review.review_target_digest
+  };
+}
 function validateArtifact(artifact, schema, stage) {
   const diagnostics2 = validateAgainstSchema(artifact, schema);
   return diagnostics2.length ? needRevision(stage, diagnostics2) : null;
@@ -53904,6 +54187,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   }
   const behaviorSchemaFailure = validateArtifact(artifacts.behavior_views, behavior_views_schema_default, "behavior_views");
   if (behaviorSchemaFailure) return behaviorSchemaFailure;
+  let currentDesignAssurance = null;
   if (isGeneralQualityV4Contract(contract2)) {
     const assurance = validateDesignAssuranceV4(artifacts.behavior_views.design_assurance, {
       source_claim_ids: evidence.claims.map((item) => item.claim_id),
@@ -53913,6 +54197,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
       )
     });
     if (assurance.diagnostics.length) return needRevision("behavior_views", assurance.diagnostics);
+    currentDesignAssurance = assurance.normalized;
   }
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
   if (behavior.kind === "need_revision") return needRevision("behavior_views", behavior.diagnostics);
@@ -54050,6 +54335,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     obligations: obligations.artifact,
     non_blocking_diagnostics: []
   };
+  let currentIndependentReview = null;
   if (isGeneralQualityV4Contract(contract2)) {
     const review = artifacts.case_drafts.independent_review;
     if (!record17(review)) return independentReviewRevision(null, null, [{
@@ -54091,6 +54377,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
         message: "Complete the source-first review against the compiler-issued target."
       }] : reviewResult.diagnostics);
     }
+    currentIndependentReview = reviewResult.normalized;
   }
   let semanticDeliveryGate;
   try {
@@ -54135,6 +54422,9 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     } : {}
   });
   if (outcome.status !== "finished") return outcome.status === "fatal" ? qualityFailure2(outcome.reason_code) : { ...outcome, semantic_roots: openRoots(activeGaps) };
+  if (isGeneralQualityV4Contract(contract2) && (!currentDesignAssurance || !currentIndependentReview)) {
+    return qualityFailure2("GENERAL_QUALITY_SUMMARY_INPUT_MISSING");
+  }
   const bundle = {
     schema_version: contract2.schema_version,
     compiler_version: contract2.compiler_version,
@@ -54156,7 +54446,17 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
       reason: `\u4F9D\u636E ${item.policy_id}@${item.policy_version} \u5BA1\u9605\u901A\u7528\u98CE\u9669\u3002`
     })),
     not_applicable: presentNotApplicable(notApplicable, behavior),
-    risk_review_ledger: risk.ledger
+    risk_review_ledger: risk.ledger,
+    ...isGeneralQualityV4Contract(contract2) ? {
+      design_assurance_summary: designAssuranceSummary(
+        /** @type {Record<string,any>} */
+        currentDesignAssurance
+      ),
+      independent_review_summary: independentReviewSummary(
+        /** @type {Record<string,any>} */
+        currentIndependentReview
+      )
+    } : {}
   };
   const bundleDiagnostics = validateAgainstSchema(bundle, test_bundle_schema_default);
   if (bundleDiagnostics.length) return qualityFailure2("CANONICAL_BUNDLE_INVALID", bundleDiagnostics);
@@ -57963,7 +58263,7 @@ var schemaDirectory = path12.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "5918562e0e0e933ff94f7259f21ff75735752fad78d462adbf8dda9080261734" : void 0;
+var embeddedManifestDigest = true ? "adf89bd2caa41b8f4485ff506355989ee14f83c8f76f625b0f02666f57d1a653" : void 0;
 var embeddedSchemaVersion = true ? "4.3.0" : void 0;
 var embeddedCompilerVersion = true ? "0.8.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;

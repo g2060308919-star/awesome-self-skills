@@ -217,14 +217,14 @@
 - Create: `generate-test-cases-engineering/test/golden/v4-general-quality-presentation.test.mjs`
 - Create: `generate-test-cases-engineering/test/recovery/v4-general-quality-delivery.test.mjs`
 
-- [ ] Add failing golden/recovery tests requiring full root finality, design-assurance summary, independent-review summary, and current review digest in 4.3 canonical JSON.
-- [ ] Retain `resolved_final` versus `resolved_temporary` in the authoritative 4.3 root ledger.
-- [ ] Generate HTML primary reading output, full conversation Table, Markdown, CSV, manifest, checkpoint, and summaries solely from canonical JSON.
-- [ ] Verify JSON/HTML/Table/Markdown/CSV carry identical Case identities, counts, enum/permission coverage, and result meaning.
-- [ ] Ensure a newer non-ready revision prevents an older ready manifest becoming current.
-- [ ] Preserve byte-exact 4.2 candidate golden families.
-- [ ] Run focused goldens, all existing v4 presentation tests, and candidate transaction recovery green.
-- [ ] Commit atomically.
+- [x] Add failing golden/recovery tests requiring full root finality, design-assurance summary, independent-review summary, and current review digest in 4.3 canonical JSON.
+- [x] Retain `resolved_final` versus `resolved_temporary` in the authoritative 4.3 root ledger.
+- [x] Generate HTML primary reading output, full conversation Table, Markdown, CSV, manifest, checkpoint, and summaries solely from canonical JSON.
+- [x] Verify JSON/HTML/Table/Markdown/CSV carry identical Case identities, counts, enum/permission coverage, and result meaning.
+- [x] Ensure a newer non-ready revision prevents an older ready manifest becoming current.
+- [x] Preserve byte-exact 4.2 candidate golden families.
+- [x] Run focused goldens, all existing v4 presentation tests, and candidate transaction recovery green.
+- [x] Commit atomically.
 
 ---
 

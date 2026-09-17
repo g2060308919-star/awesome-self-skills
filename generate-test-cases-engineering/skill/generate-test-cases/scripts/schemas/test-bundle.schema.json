@@ -5916,6 +5916,64 @@
         }
       ]
     },
+    "v4DispositionCounts": {
+      "type": "object",
+      "required": ["retained", "representative_value", "equivalent_merge", "evidence_exclusion", "semantic_gap", "exploratory"],
+      "properties": {
+        "retained": {"type": "integer", "minimum": 0},
+        "representative_value": {"type": "integer", "minimum": 0},
+        "equivalent_merge": {"type": "integer", "minimum": 0},
+        "evidence_exclusion": {"type": "integer", "minimum": 0},
+        "semantic_gap": {"type": "integer", "minimum": 0},
+        "exploratory": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "v4DesignAssuranceSummary": {
+      "type": "object",
+      "required": ["status", "plan_revision", "batch_count", "rule_group_count", "candidate_responsibility_count", "candidate_disposition_counts"],
+      "properties": {
+        "status": {"const": "complete"},
+        "plan_revision": {"type": "integer", "minimum": 1},
+        "batch_count": {"type": "integer", "minimum": 1},
+        "rule_group_count": {"type": "integer", "minimum": 1},
+        "candidate_responsibility_count": {"type": "integer", "minimum": 1},
+        "candidate_disposition_counts": {"$ref": "#/$defs/v4DispositionCounts"}
+      },
+      "additionalProperties": false
+    },
+    "v4IndependentReviewSummary": {
+      "type": "object",
+      "required": ["status", "protocol_version", "review_mode", "reviewer_identity_class", "source_first_target_count", "target_assessment_counts", "finding_counts", "review_target_digest"],
+      "properties": {
+        "status": {"const": "completed"},
+        "protocol_version": {"const": "1.0.0"},
+        "review_mode": {"const": "independent_source_first"},
+        "reviewer_identity_class": {"enum": ["independent_context", "independent_agent", "qualified_external_reviewer"]},
+        "source_first_target_count": {"type": "integer", "minimum": 1},
+        "target_assessment_counts": {
+          "type": "object",
+          "required": ["verified", "semantic_gap", "evidence_excluded"],
+          "properties": {
+            "verified": {"type": "integer", "minimum": 0},
+            "semantic_gap": {"type": "integer", "minimum": 0},
+            "evidence_excluded": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "finding_counts": {
+          "type": "object",
+          "required": ["confirmed", "rejected"],
+          "properties": {
+            "confirmed": {"type": "integer", "minimum": 0},
+            "rejected": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "review_target_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
     "caseDocumentBundle": {
       "type": "object",
       "required": [
@@ -5962,13 +6020,19 @@
         "semantic_root_groups": {"type": "array", "items": {"$ref": "#/$defs/v4SemanticRootGroup"}},
         "exploratory": {"type": "array", "items": {"$ref": "#/$defs/v4ExploratoryPresentation"}},
         "not_applicable": {"type": "array", "items": {"$ref": "#/$defs/v4NotApplicablePresentation"}},
-        "risk_review_ledger": {"type": "array", "items": {"$ref": "#/$defs/v4RiskReviewItem"}}
+        "risk_review_ledger": {"type": "array", "items": {"$ref": "#/$defs/v4RiskReviewItem"}},
+        "design_assurance_summary": {"$ref": "#/$defs/v4DesignAssuranceSummary"},
+        "independent_review_summary": {"$ref": "#/$defs/v4IndependentReviewSummary"}
       },
       "additionalProperties": false,
       "allOf": [
         {
           "oneOf": [
             {
+              "allOf": [
+                {"not": {"required": ["design_assurance_summary"]}},
+                {"not": {"required": ["independent_review_summary"]}}
+              ],
               "properties": {
                 "schema_version": { "const": "4.0.0" },
                 "compiler_version": { "const": "0.5.0" },
@@ -5980,6 +6044,10 @@
               }
             },
             {
+              "allOf": [
+                {"not": {"required": ["design_assurance_summary"]}},
+                {"not": {"required": ["independent_review_summary"]}}
+              ],
               "properties": {
                 "schema_version": { "const": "4.2.0" },
                 "compiler_version": { "const": "0.7.0" },
@@ -5991,6 +6059,7 @@
               }
             },
             {
+              "required": ["design_assurance_summary", "independent_review_summary"],
               "properties": {
                 "schema_version": { "const": "4.3.0" },
                 "compiler_version": { "const": "0.8.0" },
