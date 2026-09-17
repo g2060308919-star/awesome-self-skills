@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflow-state.schema.json",
+  "type": "object",
+  "required": ["schema_version", "run_id", "created_at", "updated_at", "stage", "status", "completion_kind", "transition_seq", "applied_event_ids", "next_action", "waiting_for_user", "minimum_missing_input", "refs", "history"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "stage": { "enum": ["intake", "generating_cases", "awaiting_semantic_input", "cases_ready", "planning_execution", "awaiting_execution_confirmation", "compiling_runner_input", "runner_preflight", "awaiting_execution_resource", "executing", "completed", "blocked", "cancelled"] },
+    "status": { "enum": ["active", "awaiting_user", "completed", "blocked", "cancelled"] },
+    "completion_kind": { "enum": [null, "executed", "no_execution_selected"] },
+    "transition_seq": { "type": "integer", "minimum": 0 },
+    "applied_event_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "next_action": {
+      "enum": [
+        null,
+        "start_case_generation", "run_case_generation", "resume_case_generation", "await_semantic_input",
+        "start_execution_planning", "run_execution_planning", "resume_execution_planning", "await_execution_confirmation",
+        "compile_runner_input", "validate_runner_preflight", "runner_resume_check", "await_runner_resource",
+        "execute_or_resume_runner"
+      ]
+    },
+    "waiting_for_user": { "type": "boolean" },
+    "minimum_missing_input": { "type": ["string", "null"] },
+    "refs": {
+      "type": "object",
+      "required": ["generation", "execution_plan", "runner_input", "runner_run", "final_index"],
+      "properties": {
+        "generation": { "type": ["object", "null"] },
+        "execution_plan": { "type": ["object", "null"] },
+        "runner_input": { "type": ["object", "null"] },
+        "runner_run": { "type": ["object", "null"] },
+        "final_index": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["seq", "event_id", "type", "from", "to", "at"],
+        "properties": {
+          "seq": { "type": "integer", "minimum": 1 },
+          "event_id": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "from": { "$ref": "#/$defs/stage" },
+          "to": { "$ref": "#/$defs/stage" },
+          "at": { "type": "string", "format": "date-time" },
+          "reason": { "type": "string", "minLength": 1, "pattern": "\\S" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "enum": ["intake", "generating_cases", "awaiting_semantic_input", "cases_ready", "planning_execution", "awaiting_execution_confirmation", "compiling_runner_input", "runner_preflight", "awaiting_execution_resource", "executing", "completed", "blocked", "cancelled"]
+    }
+  },
+  "additionalProperties": false
+}

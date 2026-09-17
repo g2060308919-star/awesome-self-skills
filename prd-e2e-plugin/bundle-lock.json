@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "plugin": "prd-e2e",
+  "contracts": {
+    "generate_test_cases_schema": "4.2.0",
+    "generate_test_cases_compiler": "0.7.0",
+    "b2b_runner_input_schema": "2.0"
+  },
+  "skills": {
+    "run-prd-e2e": {
+      "path": "skills/run-prd-e2e",
+      "source": "workspace-build",
+      "tree_sha256": "cbb12a7f0946cd0c45460ad8482ebca2ad16d36de9b8a8ca0c8f37181639f460"
+    },
+    "generate-test-cases": {
+      "path": "skills/generate-test-cases",
+      "source": "validated-installed-snapshot",
+      "tree_sha256": "101748a54f4d44acd60331015ec137263fb70c89f1db0fa0b7525059f9a81e21"
+    },
+    "b2b-e2e-runner": {
+      "path": "skills/b2b-e2e-runner",
+      "source": "validated-installed-snapshot",
+      "tree_sha256": "085d3a0ff850d6ef8bdeb6d0cf38ec8f2815b8ec8a8a7c5332093d682eb65679"
+    }
+  }
+}

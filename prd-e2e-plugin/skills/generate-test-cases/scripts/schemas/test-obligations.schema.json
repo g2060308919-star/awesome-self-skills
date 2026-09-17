@@ -1,0 +1,698 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test-obligations.schema.json",
+  "oneOf": [{ "$ref": "#/$defs/v3Artifact" }, { "$ref": "#/$defs/v4Artifact" }],
+  "$defs": {
+  "v3Artifact": { "type": "object",
+  "required": ["schema_version", "source_revision", "obligations", "fact_routes", "interaction_routes"],
+  "properties": {
+    "schema_version": { "const": "3.0.0" },
+    "source_revision": { "type": "integer", "minimum": 0 },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "primary_operation_refs", "scenario_partition_ref", "required_oracle_refs", "required_capabilities"],
+            "properties": {
+              "obligation_id": { "type": "string", "minLength": 1 },
+              "kind": { "enum": ["flow", "decision", "state", "input-domain", "role", "timing", "integration", "interaction"] },
+              "caseable": { "const": true },
+              "primary_operation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+              "scenario_partition_ref": { "type": "string", "minLength": 1 },
+              "risk": { "enum": ["critical", "high", "medium", "low"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "view_element_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_oracle_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "combination_vector": {
+                "type": "object",
+                "required": ["policy_id", "strength", "owner", "assignments", "forbid_evidence_refs"],
+                "properties": {
+                  "policy_id": { "const": "twise-candidate-cap-v1" },
+                  "strength": { "type": "integer", "minimum": 2 },
+                  "owner": {
+                    "type": "object",
+                    "required": ["view_id", "fact_ids", "view_element_refs"],
+                    "properties": {
+                      "view_id": { "type": "string", "minLength": 1 },
+                      "fact_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+                      "view_element_refs": { "type": "array", "items": { "type": "object", "required": ["view_id", "element_id"], "properties": { "view_id": { "type": "string", "minLength": 1 }, "element_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 1, "uniqueItems": true }
+                    },
+                    "additionalProperties": false
+                  },
+                  "assignments": { "type": "array", "items": { "type": "object", "required": ["parameter_id", "value_id", "evidence_claim_id"], "properties": { "parameter_id": { "type": "string", "minLength": 1 }, "value_id": { "type": "string", "minLength": 1 }, "evidence_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }, "minItems": 3, "uniqueItems": true },
+                  "forbid_evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["obligation_id", "kind", "caseable", "risk", "scope", "source_claim_ids", "view_element_refs", "required_oracle_refs", "required_capabilities", "gap_issue"],
+            "properties": {
+              "obligation_id": { "type": "string", "minLength": 1 },
+              "kind": { "const": "requirement-gap" },
+              "caseable": { "const": false },
+              "risk": { "enum": ["critical", "high", "medium", "low"] },
+              "scope": { "type": "string", "minLength": 1 },
+              "source_claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+              "view_element_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_oracle_refs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "required_capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "gap_issue": {
+                "type": "object",
+                "required": ["root_issue_id", "root_issue_key", "missing_type", "semantic_refs", "scope", "answerable", "reasons", "evidence_refs"],
+                "properties": {
+                  "root_issue_id": { "type": "string", "minLength": 1 },
+                  "root_issue_key": { "type": "string", "minLength": 1 },
+                  "missing_type": { "type": "string", "minLength": 1 },
+                  "semantic_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+                  "scope": { "type": "string", "minLength": 1 },
+                  "answerable": { "type": "boolean" },
+                  "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                  "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "fact_routes": {
+      "type": "array",
+      "items": { "oneOf": [
+        { "type": "object", "required": ["fact_id", "route_type", "obligation_ids"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "obligations" }, "obligation_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true } }, "additionalProperties": false },
+        { "type": "object", "required": ["fact_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "blocked" }, "blocker_root_issue_id": { "type": "string", "minLength": 1 }, "gap_obligation_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["fact_id", "route_type", "not_applicable_claim_id"], "properties": { "fact_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "not_applicable" }, "not_applicable_claim_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+      ] }
+    },
+    "interaction_routes": {
+      "type": "array",
+      "items": { "oneOf": [
+        { "type": "object", "required": ["candidate_id", "route_type", "formal_view_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "formal-view" }, "formal_view_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["candidate_id", "route_type", "blocker_root_issue_id", "gap_obligation_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "blocked" }, "blocker_root_issue_id": { "type": "string", "minLength": 1 }, "gap_obligation_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["candidate_id", "route_type", "exploratory_id"], "properties": { "candidate_id": { "type": "string", "minLength": 1 }, "route_type": { "const": "exploratory" }, "exploratory_id": { "type": "string", "minLength": 1 } }, "additionalProperties": false }
+      ] }
+    }
+  },
+  "additionalProperties": false
+  },
+  "text": {
+    "type": "string",
+    "minLength": 1,
+    "pattern": "\\S"
+  },
+  "idArray": {
+    "type": "array",
+    "items": {
+      "$ref": "#/$defs/text"
+    },
+    "minItems": 1,
+    "uniqueItems": true
+  },
+  "refs": {
+    "type": "array",
+    "items": {
+      "$ref": "#/$defs/text"
+    },
+    "minItems": 0,
+    "uniqueItems": true
+  },
+  "acceptanceRole": {
+    "enum": [
+      "primary_acceptance",
+      "dependency_contract",
+      "context_only"
+    ]
+  },
+  "jsonValue": {
+    "oneOf": [
+      {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      },
+      {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/jsonValue"
+        },
+        "minItems": 0
+      },
+      {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValue"
+        }
+      }
+    ]
+  },
+  "condition": {
+    "type": "object",
+    "additionalProperties": {
+      "$ref": "#/$defs/jsonValue"
+    }
+  },
+  "evidenceBasis": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "kind",
+      "claim_ids"
+    ],
+    "properties": {
+      "kind": {
+        "const": "evidence"
+      },
+      "claim_ids": {
+        "$ref": "#/$defs/idArray"
+      }
+    }
+  },
+  "scopeDecisionBasis": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "kind",
+      "decision_ids"
+    ],
+    "properties": {
+      "kind": {
+        "const": "scope_decision"
+      },
+      "decision_ids": {
+        "$ref": "#/$defs/idArray"
+      }
+    }
+  },
+  "exclusionBasis": {
+    "oneOf": [
+      {
+        "$ref": "#/$defs/evidenceBasis"
+      },
+      {
+        "$ref": "#/$defs/scopeDecisionBasis"
+      }
+    ]
+  },
+  "semanticGapBasis": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "kind",
+      "subject_fact_ids",
+      "missing_aspect"
+    ],
+    "properties": {
+      "kind": {
+        "const": "semantic_gap_analysis"
+      },
+      "subject_fact_ids": {
+        "$ref": "#/$defs/idArray"
+      },
+      "missing_aspect": {
+        "$ref": "#/$defs/text"
+      }
+    }
+  },
+  "riskCatalogBasis": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "kind",
+      "policy_id",
+      "policy_version"
+    ],
+    "properties": {
+      "kind": {
+        "const": "risk_catalog"
+      },
+      "policy_id": {
+        "$ref": "#/$defs/text"
+      },
+      "policy_version": {
+        "$ref": "#/$defs/text"
+      }
+    }
+  },
+  "riskReviewBase": {
+    "type": "object",
+    "required": [
+      "module_id",
+      "risk_kind",
+      "acceptance_role",
+      "status"
+    ],
+    "properties": {
+      "module_id": {
+        "$ref": "#/$defs/text"
+      },
+      "risk_kind": {
+        "enum": [
+          "null_or_missing",
+          "unknown_enum",
+          "api_failure",
+          "loading_failure",
+          "sync_delay",
+          "long_content",
+          "pagination",
+          "refresh",
+          "business_permission_boundary"
+        ]
+      },
+      "acceptance_role": {
+        "$ref": "#/$defs/acceptanceRole"
+      },
+      "status": {
+        "enum": [
+          "formal",
+          "semantic_gap",
+          "exploratory",
+          "not_applicable"
+        ]
+      }
+    }
+  },
+  "riskFormal": {
+    "allOf": [
+      {
+        "$ref": "#/$defs/riskReviewBase"
+      },
+      {
+        "type": "object",
+        "required": [
+          "status",
+          "review_basis",
+          "formal_test_point_ids"
+        ],
+        "properties": {
+          "status": {
+            "const": "formal"
+          },
+          "review_basis": {
+            "$ref": "#/$defs/evidenceBasis"
+          },
+          "formal_test_point_ids": {
+            "$ref": "#/$defs/idArray"
+          }
+        }
+      }
+    ],
+    "unevaluatedProperties": false
+  },
+  "riskSemanticGap": {
+    "allOf": [
+      {
+        "$ref": "#/$defs/riskReviewBase"
+      },
+      {
+        "type": "object",
+        "required": [
+          "status",
+          "review_basis",
+          "semantic_gap_ids"
+        ],
+        "properties": {
+          "status": {
+            "const": "semantic_gap"
+          },
+          "review_basis": {
+            "$ref": "#/$defs/semanticGapBasis"
+          },
+          "semantic_gap_ids": {
+            "$ref": "#/$defs/idArray"
+          }
+        }
+      }
+    ],
+    "unevaluatedProperties": false
+  },
+  "riskExploratory": {
+    "allOf": [
+      {
+        "$ref": "#/$defs/riskReviewBase"
+      },
+      {
+        "type": "object",
+        "required": [
+          "status",
+          "review_basis",
+          "exploratory_ids"
+        ],
+        "properties": {
+          "status": {
+            "const": "exploratory"
+          },
+          "review_basis": {
+            "$ref": "#/$defs/riskCatalogBasis"
+          },
+          "exploratory_ids": {
+            "$ref": "#/$defs/idArray"
+          }
+        }
+      }
+    ],
+    "unevaluatedProperties": false
+  },
+  "riskNotApplicable": {
+    "allOf": [
+      {
+        "$ref": "#/$defs/riskReviewBase"
+      },
+      {
+        "type": "object",
+        "required": [
+          "status",
+          "review_basis",
+          "not_applicable_record_ids"
+        ],
+        "properties": {
+          "status": {
+            "const": "not_applicable"
+          },
+          "review_basis": {
+            "$ref": "#/$defs/exclusionBasis"
+          },
+          "not_applicable_record_ids": {
+            "$ref": "#/$defs/idArray"
+          }
+        }
+      }
+    ],
+    "unevaluatedProperties": false
+  },
+  "riskReviewItem": {
+    "oneOf": [
+      {
+        "$ref": "#/$defs/riskFormal"
+      },
+      {
+        "$ref": "#/$defs/riskSemanticGap"
+      },
+      {
+        "$ref": "#/$defs/riskExploratory"
+      },
+      {
+        "$ref": "#/$defs/riskNotApplicable"
+      }
+    ]
+  },
+  "notApplicableSubject": {
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "formal_test_point_id"
+        ],
+        "properties": {
+          "kind": {
+            "const": "formal_test_point"
+          },
+          "formal_test_point_id": {
+            "$ref": "#/$defs/text"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "module_id",
+          "risk_kind"
+        ],
+        "properties": {
+          "kind": {
+            "const": "risk"
+          },
+          "module_id": {
+            "$ref": "#/$defs/text"
+          },
+          "risk_kind": {
+            "enum": [
+              "null_or_missing",
+              "unknown_enum",
+              "api_failure",
+              "loading_failure",
+              "sync_delay",
+              "long_content",
+              "pagination",
+              "refresh",
+              "business_permission_boundary"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "notApplicableRecord": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "not_applicable_record_id",
+      "subject",
+      "acceptance_role",
+      "reason_code",
+      "reason",
+      "basis"
+    ],
+    "properties": {
+      "not_applicable_record_id": {
+        "type": "string",
+        "pattern": "^NA-[0-9a-f]{64}$"
+      },
+      "subject": {
+        "$ref": "#/$defs/notApplicableSubject"
+      },
+      "acceptance_role": {
+        "$ref": "#/$defs/acceptanceRole"
+      },
+      "reason_code": {
+        "enum": [
+          "out_of_scope",
+          "inapplicable_condition",
+          "superseded_requirement"
+        ]
+      },
+      "reason": {
+        "$ref": "#/$defs/text"
+      },
+      "basis": {
+        "$ref": "#/$defs/exclusionBasis"
+      }
+    }
+  },
+  "outcome": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "outcome_id",
+      "fact_id",
+      "condition",
+      "expected",
+      "acceptance_role",
+      "claim_ids"
+    ],
+    "properties": {
+      "outcome_id": {
+        "type": "string",
+        "pattern": "^OUT-[0-9a-f]{64}$"
+      },
+      "fact_id": {
+        "$ref": "#/$defs/text"
+      },
+      "condition": {
+        "$ref": "#/$defs/condition"
+      },
+      "expected": {
+        "$ref": "#/$defs/text"
+      },
+      "acceptance_role": {
+        "$ref": "#/$defs/acceptanceRole"
+      },
+      "claim_ids": {
+        "$ref": "#/$defs/idArray"
+      }
+    }
+  },
+  "formalTestPoint": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "formal_test_point_id",
+      "outcome_id",
+      "semantic_gap_refs"
+    ],
+    "properties": {
+      "formal_test_point_id": {
+        "type": "string",
+        "pattern": "^TP-[0-9a-f]{64}$"
+      },
+      "outcome_id": {
+        "$ref": "#/$defs/text"
+      },
+      "semantic_gap_refs": {
+        "$ref": "#/$defs/refs"
+      }
+    }
+  },
+  "supportingObservation": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "supporting_observation_id",
+      "outcome_id",
+      "surface",
+      "assertion",
+      "claim_ids"
+    ],
+    "properties": {
+      "supporting_observation_id": {
+        "type": "string",
+        "pattern": "^OBS-[0-9a-f]{64}$"
+      },
+      "outcome_id": {
+        "$ref": "#/$defs/text"
+      },
+      "surface": {
+        "enum": [
+          "ui",
+          "request",
+          "response",
+          "persistence",
+          "event",
+          "callback",
+          "compensation",
+          "side_effect",
+          "external_observation"
+        ]
+      },
+      "assertion": {
+        "$ref": "#/$defs/text"
+      },
+      "claim_ids": {
+        "$ref": "#/$defs/idArray"
+      }
+    }
+  },
+  "exploratory": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "module_id",
+      "risk_kind",
+      "acceptance_role",
+      "exploratory_id",
+      "policy_id",
+      "policy_version"
+    ],
+    "properties": {
+      "module_id": {
+        "$ref": "#/$defs/text"
+      },
+      "risk_kind": {
+        "enum": [
+          "null_or_missing",
+          "unknown_enum",
+          "api_failure",
+          "loading_failure",
+          "sync_delay",
+          "long_content",
+          "pagination",
+          "refresh",
+          "business_permission_boundary"
+        ]
+      },
+      "acceptance_role": {
+        "$ref": "#/$defs/acceptanceRole"
+      },
+      "exploratory_id": {
+        "$ref": "#/$defs/text"
+      },
+      "policy_id": {
+        "$ref": "#/$defs/text"
+      },
+      "policy_version": {
+        "$ref": "#/$defs/text"
+      }
+    }
+  },
+  "v4Artifact": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "source_revision",
+      "outcomes",
+      "formal_test_points",
+      "supporting_observations",
+      "risk_review_ledger",
+      "not_applicable_records",
+      "exploratory"
+    ],
+    "properties": {
+      "schema_version": {
+        "enum": ["4.0.0", "4.2.0"]
+      },
+      "source_revision": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "outcomes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/outcome"
+        },
+        "minItems": 0
+      },
+      "formal_test_points": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/formalTestPoint"
+        },
+        "minItems": 0
+      },
+      "supporting_observations": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/supportingObservation"
+        },
+        "minItems": 0
+      },
+      "risk_review_ledger": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/riskReviewItem"
+        },
+        "minItems": 0
+      },
+      "not_applicable_records": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/notApplicableRecord"
+        },
+        "minItems": 0
+      },
+      "exploratory": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/exploratory"
+        },
+        "minItems": 0
+      }
+    }
+  }
+  }
+}
