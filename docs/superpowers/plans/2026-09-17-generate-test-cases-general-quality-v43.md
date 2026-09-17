@@ -86,9 +86,9 @@
 - Create: `generate-test-cases-engineering/test/core/v4-source-fidelity-protection.test.mjs`
 - Create: `generate-test-cases-engineering/test/core/v4-design-assurance.test.mjs`
 
-- [ ] Add source-fidelity protection tests for AT01-AT03: all readable channels, AND/OR/exception conservation, conflicting sources, and readable omission versus semantic ambiguity.
-- [ ] Add failing AT04-AT09 tests for missing rule groups, missing responsibilities, duplicate/unknown candidates, invalid retained targets, cyclic merges, unsupported exclusions, incomplete batches, and stale plan revisions.
-- [ ] Define the closed 4.3 `behavior_views.design_assurance` shape with:
+- [x] Add source-fidelity protection tests for AT01-AT03: all readable channels, AND/OR/exception conservation, conflicting sources, and readable omission versus semantic ambiguity.
+- [x] Add failing AT04-AT09 tests for missing rule groups, missing responsibilities, duplicate/unknown candidates, invalid retained targets, cyclic merges, unsupported exclusions, incomplete batches, and stale plan revisions.
+- [x] Define the closed 4.3 `behavior_views.design_assurance` shape with:
 
   ```text
   plan_revision
@@ -99,12 +99,12 @@
   impacted_prior_batches[]
   ```
 
-- [ ] Restrict disposition to `retained`, `representative_value`, `equivalent_merge`, `evidence_exclusion`, `semantic_gap`, or `exploratory`.
-- [ ] Implement `validateDesignAssuranceV4(input, context) -> { diagnostics, normalized }` with total disposition, exact-reference, non-cyclic target, batch-completion, and current-plan checks.
-- [ ] Reject source-free exclusion and merge claims; do not promote design rationale to E3 evidence.
-- [ ] Integrate validation only for `4.3.0/0.8.0`; preserve older artifact shapes and results.
-- [ ] Re-run focused tests and the existing source/compiler/view suites green.
-- [ ] Commit atomically:
+- [x] Restrict disposition to `retained`, `representative_value`, `equivalent_merge`, `evidence_exclusion`, `semantic_gap`, or `exploratory`.
+- [x] Implement `validateDesignAssuranceV4(input, context) -> { diagnostics, normalized }` with total disposition, exact-reference, non-cyclic target, batch-completion, and current-plan checks.
+- [x] Reject source-free exclusion and merge claims; do not promote design rationale to E3 evidence.
+- [x] Integrate validation only for `4.3.0/0.8.0`; preserve older artifact shapes and results.
+- [x] Re-run focused tests and the existing source/compiler/view suites green.
+- [x] Commit atomically:
 
   ```bash
   git add generate-test-cases-engineering/src generate-test-cases-engineering/schemas generate-test-cases-engineering/test

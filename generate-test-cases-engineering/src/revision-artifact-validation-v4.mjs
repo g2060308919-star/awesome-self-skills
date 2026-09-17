@@ -13,8 +13,9 @@ import { validateCaseDocumentArtifactSetV4 } from './canonical-delivery-v4.mjs';
 import { canonicalStringify } from './canonical.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
+import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
-import { v4ContractForSchema } from './v4-contract.mjs';
+import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
 
 /** @param {unknown} value */
 function canonicalDigest(value) {
@@ -129,6 +130,18 @@ export function validateRevisionArtifactsV4(input) {
       if (values[key].schema_version !== contract.schema_version || values[key].source_revision !== input.revision) {
         throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
       }
+    }
+    if (isGeneralQualityV4Contract(contract) && validateDesignAssuranceV4(
+      values.behavior_views.design_assurance,
+      {
+        source_claim_ids: values.evidence_claims.claims.map((/** @type {any} */ item) => item.claim_id),
+        semantic_gap_ids: values.evidence_claims.semantic_gaps.map((/** @type {any} */ item) => item.semantic_gap_id),
+        view_element_ids: values.behavior_views.views.flatMap(
+          (/** @type {any} */ view) => view.elements.map((/** @type {any} */ item) => item.element_id)
+        )
+      }
+    ).diagnostics.length) {
+      throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
     }
     if (values.checkpoint.behavior_views_digest !== canonicalDigest(values.behavior_views)
       || values.checkpoint.case_drafts_digest !== canonicalDigest(values.case_drafts)) {

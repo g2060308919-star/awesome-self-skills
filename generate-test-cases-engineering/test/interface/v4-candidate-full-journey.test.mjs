@@ -11,7 +11,7 @@ import { stageV4PrdCollectionObservation } from '../../src/prd-source-collection
 import { constructCancelRunEventV4 } from '../../src/run-cancellation-v4.mjs';
 import { createV4RunDirectory } from '../../src/run-bootstrap-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
-import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
+import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stage @param {any} value */
 async function stageArtifact(runDirectory, stage, value) {
@@ -26,8 +26,7 @@ test('A22 latest runner commits one complete deterministic Case Document transac
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v43-journey-'));
   t.after(() => rm(catalog, { recursive: true, force: true }));
   const run = await createV4RunDirectory(catalog, 'case_document');
-  const fixture = v4PipelineFixture();
-  for (const artifact of Object.values(fixture.artifacts)) artifact.schema_version = '4.3.0';
+  const fixture = v4GeneralQualityFixture();
   fixture.artifacts.source_pack.run_instance_id = run.run_id;
 
   let reply = /** @type {any} */ (await advanceStrict(run.run_directory));

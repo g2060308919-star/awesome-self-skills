@@ -3,6 +3,7 @@ import caseDraftsSchema from '../skill/generate-test-cases/scripts/schemas/case-
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 
 import { canonicalStringify, digest } from './canonical.mjs';
+import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
 import {
   compileRelativeBaselineCaseV4,
   compileSemanticCaseDocumentV4,
@@ -25,7 +26,7 @@ import {
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { compileSourceEvidence } from './source-compiler-v4.mjs';
-import { v4ContractForSchema } from './v4-contract.mjs';
+import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
 
 const ALLOWED_SYSTEM_KEYS = new Set([
   'source', 'topology', 'interaction', 'behavior_evidence', 'ordering',
@@ -463,6 +464,16 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
 
   const behaviorSchemaFailure = validateArtifact(artifacts.behavior_views, behaviorSchema, 'behavior_views');
   if (behaviorSchemaFailure) return behaviorSchemaFailure;
+  if (isGeneralQualityV4Contract(contract)) {
+    const assurance = validateDesignAssuranceV4(artifacts.behavior_views.design_assurance, {
+      source_claim_ids: evidence.claims.map((/** @type {any} */ item) => item.claim_id),
+      semantic_gap_ids: evidence.semantic_gaps.map((/** @type {any} */ item) => item.semantic_gap_id),
+      view_element_ids: artifacts.behavior_views.views.flatMap(
+        (/** @type {any} */ view) => view.elements.map((/** @type {any} */ item) => item.element_id)
+      )
+    });
+    if (assurance.diagnostics.length) return needRevision('behavior_views', assurance.diagnostics);
+  }
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
   if (behavior.kind === 'need_revision') return needRevision('behavior_views', behavior.diagnostics);
   if (behavior.kind !== 'compiled') return qualityFailure('BUSINESS_OUTCOME_COMPILATION_FAILED', behavior.diagnostics);

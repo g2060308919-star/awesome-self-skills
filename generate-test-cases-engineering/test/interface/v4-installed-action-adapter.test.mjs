@@ -19,6 +19,7 @@ import { createV4ExecutionPendingReply } from '../../src/execution-run-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
+import { bindGeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 const bundlePath = fileURLToPath(new URL(
   '../../skill/generate-test-cases/scripts/test-compiler.mjs', import.meta.url
@@ -72,7 +73,7 @@ function bindFixtureContract(fixture, schemaVersion) {
   for (const artifact of Object.values(fixture.artifacts)) {
     artifact.schema_version = schemaVersion;
   }
-  return fixture;
+  return schemaVersion === '4.3.0' ? bindGeneralQualityFixture(fixture) : fixture;
 }
 
 /** @param {any} installed @param {string} directory @param {any} reply @param {any} fixture */

@@ -179,7 +179,9 @@
   "new_definitions": {
     "behavior-views.schema.json": [
       "v3Artifact", "text", "idArray", "jsonValue", "condition", "evidenceBinding", "surface", "semanticEffect",
-      "partition", "v4ElementBase", "v4InputDomain", "v4Integration", "v4DeclaredOutcome", "v4Element", "v4View", "v4Artifact"
+      "partition", "v4ElementBase", "v4InputDomain", "v4Integration", "v4DeclaredOutcome", "v4Element", "v4View",
+      "v4DesignBatch", "v4DesignRuleGroup", "v4CandidateResponsibility", "v4CandidateDisposition",
+      "v4ImpactedPriorBatch", "v4DesignAssurance", "v4Artifact"
     ],
     "case-drafts.schema.json": [
       "nonBlank", "idArray", "stringSet", "caseCondition", "casePrecondition", "caseOracle", "semanticEffect",
