@@ -96,14 +96,8 @@
         "answer_options": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "risk_level": { "enum": ["critical", "high", "medium", "low"] },
         "available_actions": {
-          "type": "array", "minItems": 4, "maxItems": 4,
-          "prefixItems": [
-            { "const": "answer_question_part" },
-            { "const": "defer_question_part" },
-            { "const": "mark_question_unknown" },
-            { "const": "request_delivery" }
-          ],
-          "items": false
+          "type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+          "items": { "enum": ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] }
         },
         "action_context": { "$ref": "#/$defs/v4ActionContext" }
       }
@@ -135,7 +129,24 @@
         "run_actions": { "type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{ "const": "cancel_run" }], "items": false },
         "recovery": { "$ref": "#/$defs/v4Recovery" },
         "question_parts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/v4QuestionPart" } }
-      }
+      },
+      "allOf": [{
+        "oneOf": [
+          {
+            "properties": {
+              "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+              "question_parts": { "items": { "properties": {
+                "available_actions": {
+                  "type": "array", "minItems": 4, "maxItems": 4,
+                  "prefixItems": [{ "const": "answer_question_part" }, { "const": "defer_question_part" }, { "const": "mark_question_unknown" }, { "const": "request_delivery" }],
+                  "items": false
+                }
+              } } }
+            }
+          },
+          { "properties": { "schema_version": { "const": "4.3.0" } } }
+        ]
+      }]
     }
   },
   "oneOf": [

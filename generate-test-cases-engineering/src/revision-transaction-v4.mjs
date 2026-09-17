@@ -15,6 +15,7 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { validateRevisionArtifactsV4 } from './revision-artifact-validation-v4.mjs';
+import { assertSemanticBundleDeliveryGateV4 } from './semantic-delivery-gate-v4.mjs';
 import {
   LEGACY_V4_CONTRACT, isV4SchemaVersion, requireV4Contract, v4ContractForIdentity
 } from './v4-contract.mjs';
@@ -860,6 +861,10 @@ export async function commitRevisionTransactionV4WithHeldLock(
     if (pending.phase === 'checkpoint_committed') {
       await storeCommittedRecord(runDirectory, pending);
       if (pending.commit_profile === 'final') {
+        // Recovery may resume immediately before authority publication. Recheck
+        // the canonical ledger here instead of trusting an earlier process's
+        // in-memory result or a staged manifest.
+        assertSemanticBundleDeliveryGateV4(request.artifact_values.bundle);
         await writeExactIfDifferent(
           runDirectory, path.join(runDirectory, 'output', 'current.json'), request.artifacts.manifest
         );

@@ -151,8 +151,8 @@
 - Create: `generate-test-cases-engineering/test/interface/v4-critical-delivery-journey.test.mjs`
 - Create: `generate-test-cases-engineering/test/recovery/v4-critical-delivery-recovery.test.mjs`
 
-- [ ] Add failing AT16-AT22 and AT26-AT27 tests that distinguish semantic impact from risk and block all formal delivery paths for unresolved critical roots.
-- [ ] Extend 4.3 semantic gaps with closed `acceptance_impact` records:
+- [x] Add failing AT16-AT22 and AT26-AT27 tests that distinguish semantic impact from risk and block all formal delivery paths for unresolved critical roots.
+- [x] Extend 4.3 semantic gaps with closed `acceptance_impact` records:
 
   ```json
   {
@@ -162,17 +162,17 @@
   }
   ```
 
-- [ ] Permit critical criteria only from `changes_core_acceptance`, `changes_required_branch`, and `makes_required_result_undecidable`; permit noncritical only with `does_not_change_required_acceptance`.
-- [ ] Include impact in semantic-root identity so changed classification invalidates stale answers and choices.
-- [ ] Implement `deriveSemanticDeliveryGateV4({ contract, roots, rootStates, decisions })` and `availableSemanticActionsV4(root, state)`.
-- [ ] Treat only a scope-valid final E3 Decision, legal replayable E2 derivation, or evidence-backed non-applicability/obsolescence as final critical resolution.
-- [ ] Keep temporary E1, defer, unknown, `resolved_temporary`, `request_delivery`, ordinary confirmation, stale events, and old ready manifests non-resolving.
-- [ ] Make mixed critical/noncritical `request_delivery` selection fail atomically; continue to allow noncritical Conditional delivery.
-- [ ] Preserve deferred/unknown critical roots as recoverable presentable questions.
-- [ ] Recheck the gate in final outcome, finalization, materialization, current-pointer publication, and transaction recovery.
-- [ ] Prove old 4.2 runs retain their prior delivery semantics.
-- [ ] Run focused core/interface/recovery tests plus existing partial-answer, delivery-intent, two-phase clarification, and candidate transaction suites green.
-- [ ] Commit atomically.
+- [x] Permit critical criteria only from `changes_core_acceptance`, `changes_required_branch`, and `makes_required_result_undecidable`; permit noncritical only with `does_not_change_required_acceptance`.
+- [x] Include impact in semantic-root identity so changed classification invalidates stale answers and choices.
+- [x] Implement `deriveSemanticDeliveryGateV4({ contract, roots, rootStates, decisions })` and `availableSemanticActionsV4(root, state)`.
+- [x] Treat only a scope-valid final E3 Decision, legal replayable E2 derivation, or evidence-backed non-applicability/obsolescence as final critical resolution.
+- [x] Keep temporary E1, defer, unknown, `resolved_temporary`, `request_delivery`, ordinary confirmation, stale events, and old ready manifests non-resolving.
+- [x] Make mixed critical/noncritical `request_delivery` selection fail atomically; continue to allow noncritical Conditional delivery.
+- [x] Preserve deferred/unknown critical roots as recoverable presentable questions.
+- [x] Recheck the gate in final outcome, finalization, materialization, current-pointer publication, and transaction recovery.
+- [x] Prove old 4.2 runs retain their prior delivery semantics.
+- [x] Run focused core/interface/recovery tests plus existing partial-answer, delivery-intent, two-phase clarification, and candidate transaction suites green.
+- [x] Commit atomically.
 
 ---
 

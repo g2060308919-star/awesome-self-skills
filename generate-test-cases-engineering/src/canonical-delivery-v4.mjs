@@ -19,6 +19,7 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { isCandidateV4Contract, v4ContractForIdentity } from './v4-contract.mjs';
+import { assertSemanticBundleDeliveryGateV4 } from './semantic-delivery-gate-v4.mjs';
 
 const BUNDLE_KEYS = Object.freeze([
   'schema_version', 'compiler_version', 'delivery_intent', 'source_revision', 'result_kind',
@@ -315,6 +316,7 @@ function executionFinishedReply(manifest, planBytes, diagnostics) {
  */
 export function materializeCaseDocumentDeliveryV4(input) {
   const { value, bundle, sourceReading, candidate } = normalizeInput(input);
+  assertSemanticBundleDeliveryGateV4(bundle);
   validateFinalRiskReview(bundle);
   const bundleBytes = `${canonicalStringify(bundle)}\n`;
   // Render both human surfaces from the exact canonical JSON bytes that will

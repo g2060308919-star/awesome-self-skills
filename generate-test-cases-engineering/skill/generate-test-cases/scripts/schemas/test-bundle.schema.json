@@ -5776,16 +5776,54 @@
       "required": ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"],
       "properties": {
         "root_issue_id": {"$ref": "#/$defs/v4Text"},
-        "status": {"enum": ["presented", "resolved", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]},
+        "status": {"enum": ["presented", "resolved", "resolved_final", "resolved_temporary", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]},
         "title": {"$ref": "#/$defs/v4Text"},
         "business_object": {"$ref": "#/$defs/v4Text"},
         "question": {"$ref": "#/$defs/v4Text"},
         "why_needed": {"$ref": "#/$defs/v4Text"},
         "decision_impact": {"$ref": "#/$defs/v4Text"},
         "unresolved_outcome": {"$ref": "#/$defs/v4Text"},
-        "affected_business_items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/v4AffectedBusinessItem"}}
+        "affected_business_items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/v4AffectedBusinessItem"}},
+        "root_version_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "acceptance_impact": {"$ref": "#/$defs/v4AcceptanceImpact"},
+        "critical_resolution_basis": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["root_issue_id", "root_version_digest", "basis_kind"],
+              "properties": {
+                "root_issue_id": {"$ref": "#/$defs/v4Text"},
+                "root_version_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                "basis_kind": {"enum": ["final_e3_decision", "replayable_e2_derivation", "evidence_not_applicable", "evidence_obsolete"]}
+              }
+            }
+          ]
+        }
       },
       "additionalProperties": false
+    },
+    "v4AcceptanceImpact": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": {"const": "critical"},
+            "criteria": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"]}},
+            "rationale": {"$ref": "#/$defs/v4Text"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": {"const": "noncritical"},
+            "criteria": {"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{"const": "does_not_change_required_acceptance"}], "items": false},
+            "rationale": {"$ref": "#/$defs/v4Text"}
+          }
+        }
+      ]
     },
     "v4ExploratoryPresentation": {
       "type": "object",
@@ -5933,19 +5971,33 @@
             {
               "properties": {
                 "schema_version": { "const": "4.0.0" },
-                "compiler_version": { "const": "0.5.0" }
+                "compiler_version": { "const": "0.5.0" },
+                "semantic_root_groups": {"items": {"allOf": [
+                  {"not": {"required": ["root_version_digest"]}},
+                  {"not": {"required": ["acceptance_impact"]}},
+                  {"not": {"required": ["critical_resolution_basis"]}}
+                ]}}
               }
             },
             {
               "properties": {
                 "schema_version": { "const": "4.2.0" },
-                "compiler_version": { "const": "0.7.0" }
+                "compiler_version": { "const": "0.7.0" },
+                "semantic_root_groups": {"items": {"allOf": [
+                  {"not": {"required": ["root_version_digest"]}},
+                  {"not": {"required": ["acceptance_impact"]}},
+                  {"not": {"required": ["critical_resolution_basis"]}}
+                ]}}
               }
             },
             {
               "properties": {
                 "schema_version": { "const": "4.3.0" },
-                "compiler_version": { "const": "0.8.0" }
+                "compiler_version": { "const": "0.8.0" },
+                "semantic_root_groups": {"items": {
+                  "required": ["root_version_digest", "acceptance_impact", "critical_resolution_basis"],
+                  "properties": {"status": {"not": {"const": "resolved"}}}
+                }}
               }
             }
           ]

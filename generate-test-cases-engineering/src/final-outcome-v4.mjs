@@ -4,6 +4,9 @@ const DOCUMENT_KEYS = new Set([
   'open_semantic_gap_count', 'not_applicable_count', 'all_reviewed_formal_points_not_applicable',
   'delivery_requested'
 ]);
+const STRICT_DOCUMENT_KEYS = new Set([
+  ...DOCUMENT_KEYS, 'strict_semantic_delivery', 'unresolved_critical_semantic_gap_count'
+]);
 const EXECUTION_KEYS = new Set([
   'delivery_intent', 'cancelled', 'selected_case_count', 'all_execution_gates_passed',
   'pending_execution_count'
@@ -37,11 +40,12 @@ export function classifyFinalOutcomeV4(input) {
   if (!['case_document', 'execution_plan'].includes(state.delivery_intent)
     || typeof state.cancelled !== 'boolean') throw new TypeError('FINAL_OUTCOME_INPUT_INVALID');
   if (state.delivery_intent === 'case_document') {
-    requireClosed(state, DOCUMENT_KEYS);
+    const strict = state.strict_semantic_delivery === true;
+    requireClosed(state, strict ? STRICT_DOCUMENT_KEYS : DOCUMENT_KEYS);
     const counts = [state.case_count, state.applicable_formal_test_point_count,
       state.decidable_primary_acceptance_count, state.blocked_root_count,
       state.closed_for_delivery_root_count, state.open_semantic_gap_count,
-      state.not_applicable_count];
+      state.not_applicable_count, ...(strict ? [state.unresolved_critical_semantic_gap_count] : [])];
     if (!countsValid(counts)
       || typeof state.all_reviewed_formal_points_not_applicable !== 'boolean'
       || typeof state.delivery_requested !== 'boolean'
@@ -53,6 +57,9 @@ export function classifyFinalOutcomeV4(input) {
       throw new TypeError('FINAL_OUTCOME_INPUT_INVALID');
     }
     if (state.cancelled) return { status: 'cancelled', result_kind: 'cancelled', reason_code: 'USER_CANCELLED' };
+    if (strict && state.unresolved_critical_semantic_gap_count > 0) {
+      return { status: 'need_user_answers', result_kind: null, reason_code: 'CRITICAL_SEMANTIC_GAPS_REMAIN' };
+    }
     if (state.blocked_root_count > 0) {
       if (state.open_semantic_gap_count > 0 || !state.delivery_requested) {
         return { status: 'need_user_answers', result_kind: null, reason_code: 'SEMANTIC_GAPS_REMAIN' };
