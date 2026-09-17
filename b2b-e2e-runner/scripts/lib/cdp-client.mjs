@@ -22,12 +22,10 @@ export class CdpClient {
     this.#socket = socket;
     listen(socket, "message", event => this.#receive(JSON.parse(typeof event === "string" ? event : event.data)));
     listen(socket, "close", () => {
-      this.#emit("", "__transport_closed__", { reason: "close" });
-      this.#closePending("CDP 连接已关闭");
+      this.#disconnect("close", "CDP 连接已关闭");
     });
     listen(socket, "error", error => {
-      this.#emit("", "__transport_closed__", { reason: error?.message ?? "error" });
-      this.#closePending(`CDP 连接错误：${error?.message ?? "unknown"}`);
+      this.#disconnect(error?.message ?? "error", `CDP 连接错误：${error?.message ?? "unknown"}`);
     });
   }
 
@@ -72,6 +70,16 @@ export class CdpClient {
     this.#closed = true;
     this.#closePending("CDP 连接已关闭");
     try { this.#socket.close(); } catch { /* transport close race */ }
+  }
+
+  #disconnect(reason, message) {
+    if (this.#closed) return;
+    // Mark terminal before notifying owners: their cleanup must fail fast,
+    // never enqueue commands on a dead socket and hold a Target lock.
+    this.#closed = true;
+    this.#closePending(message);
+    try { this.#socket.close(); } catch { /* transport already failed */ }
+    this.#emit("", "__transport_closed__", { reason });
   }
 
   #receive(message) {
