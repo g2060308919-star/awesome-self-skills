@@ -126,7 +126,7 @@
           "type": "object", "additionalProperties": false,
           "required": ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
           "properties": {
-            "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+            "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] },
             "presentation_id": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
             "phase": { "enum": ["requirements_analysis", "case_design"] },
             "supersedes_presentation_id": { "type": ["string", "null"], "pattern": "^PRES-[0-9a-f]{64}$" },
@@ -246,7 +246,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["schema_version", "compiler_version", "run_id", "revision", "commit_profile", "source_review_witness", "fact_ledger_digest", "scope_manifest_digest", "behavior_views_digest", "case_drafts_digest", "base_checkpoint_digest", "semantic_gap_ledger", "clarification_state"],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0"] }, "compiler_version": { "enum": ["0.5.0", "0.7.0"] },
+        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] }, "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0"] },
         "run_id": { "type": "string", "minLength": 1 }, "revision": { "type": "integer", "minimum": 0 },
         "commit_profile": { "enum": ["pre_case_pending", "post_case_pending", "final"] },
         "source_review_witness": {
@@ -288,7 +288,8 @@
         {
           "oneOf": [
             { "properties": { "schema_version": { "const": "4.0.0" }, "compiler_version": { "const": "0.5.0" } } },
-            { "properties": { "schema_version": { "const": "4.2.0" }, "compiler_version": { "const": "0.7.0" } } }
+            { "properties": { "schema_version": { "const": "4.2.0" }, "compiler_version": { "const": "0.7.0" } } },
+            { "properties": { "schema_version": { "const": "4.3.0" }, "compiler_version": { "const": "0.8.0" } } }
           ]
         },
         {

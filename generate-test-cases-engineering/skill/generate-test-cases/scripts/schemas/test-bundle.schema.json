@@ -5897,10 +5897,10 @@
       ],
       "properties": {
         "schema_version": {
-          "enum": ["4.0.0", "4.2.0"]
+          "enum": ["4.0.0", "4.2.0", "4.3.0"]
         },
         "compiler_version": {
-          "enum": ["0.5.0", "0.7.0"]
+          "enum": ["0.5.0", "0.7.0", "0.8.0"]
         },
         "delivery_intent": {
           "const": "case_document"
@@ -5940,6 +5940,12 @@
               "properties": {
                 "schema_version": { "const": "4.2.0" },
                 "compiler_version": { "const": "0.7.0" }
+              }
+            },
+            {
+              "properties": {
+                "schema_version": { "const": "4.3.0" },
+                "compiler_version": { "const": "0.8.0" }
               }
             }
           ]

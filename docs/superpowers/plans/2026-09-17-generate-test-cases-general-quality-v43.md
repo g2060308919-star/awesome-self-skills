@@ -38,7 +38,7 @@
 - Test: `generate-test-cases-engineering/test/core/v4-general-quality-contract.test.mjs`
 - Test: `generate-test-cases-engineering/test/interface/v4-general-quality-versioning.test.mjs`
 
-- [ ] Add a failing contract test asserting these exact exports:
+- [x] Add a failing contract test asserting these exact exports:
 
   ```js
   export const GENERAL_QUALITY_V4_CONTRACT = Object.freeze({
@@ -52,20 +52,20 @@
   export function isGeneralQualityV4Contract(value) {}
   ```
 
-- [ ] Assert that new run bootstrap and default artifact construction use `4.3.0/0.8.0`.
-- [ ] Assert that exact legacy pairs `4.0.0/0.5.0` and `4.2.0/0.7.0` remain accepted, while mixed or unknown pairs fail closed.
-- [ ] Run the focused tests and capture the expected red result:
+- [x] Assert that new run bootstrap and default artifact construction use `4.3.0/0.8.0`.
+- [x] Assert that exact legacy pairs `4.0.0/0.5.0` and `4.2.0/0.7.0` remain accepted, while mixed or unknown pairs fail closed.
+- [x] Run the focused tests and capture the expected red result:
 
   ```bash
   cd generate-test-cases-engineering
   node --test test/core/v4-general-quality-contract.test.mjs test/interface/v4-general-quality-versioning.test.mjs
   ```
 
-- [ ] Implement one shared version-pair registry and replace scattered candidate-only checks with named predicates.
-- [ ] Update every artifact schema `const`/version union and schema-manifest binding to recognize `4.3.0`, without relaxing `additionalProperties: false`.
-- [ ] Keep generated `test-compiler.mjs` and schema manifest build-owned; do not edit them directly.
-- [ ] Re-run the focused tests, `test/core/v4-candidate-contract.test.mjs`, and `test/interface/schema-integrity.test.mjs` green.
-- [ ] Commit atomically:
+- [x] Implement one shared version-pair registry and replace scattered candidate-only checks with named predicates.
+- [x] Update every artifact schema `const`/version union and schema-manifest binding to recognize `4.3.0`, without relaxing `additionalProperties: false`.
+- [x] Keep generated `test-compiler.mjs` and schema manifest build-owned; do not edit them directly.
+- [x] Re-run the focused tests, `test/core/v4-candidate-contract.test.mjs`, and `test/interface/schema-integrity.test.mjs` green.
+- [x] Commit atomically:
 
   ```bash
   git add generate-test-cases-engineering

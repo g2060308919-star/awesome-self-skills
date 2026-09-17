@@ -78,9 +78,9 @@ function bindFixtureContract(fixture, schemaVersion) {
 /** @param {any} installed @param {string} directory @param {any} reply @param {any} fixture */
 async function stageCandidateCollection(installed, directory, reply, fixture) {
   const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
-  const schemaVersion = identity.schema_version === '4.2.0' ? '4.2.0' : '4.0.0';
+  const schemaVersion = identity.schema_version;
   bindFixtureContract(fixture, schemaVersion);
-  if (schemaVersion !== '4.2.0') return schemaVersion;
+  if (!['4.2.0', '4.3.0'].includes(schemaVersion)) return schemaVersion;
   const source = fixture.artifacts.source_pack.sources[0];
   const bytes = new TextEncoder().encode(source.content);
   await installed.stageV4PrdCollectionObservation(directory, reply, {
@@ -186,7 +186,7 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
 /** @param {string} runId @param {any} caseDocumentRef @param {any[]} events @param {number} revision */
 function executionSourcePack(runId, caseDocumentRef, events, revision) {
   return {
-    schema_version: '4.2.0', source_revision: revision, run_instance_id: runId,
+    schema_version: '4.3.0', source_revision: revision, run_instance_id: runId,
     run_scope: `execution:${caseDocumentRef.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: structuredClone(caseDocumentRef), output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },
@@ -262,9 +262,11 @@ test('installed private action seam constructs a semantic answer and the install
 test('installed private action seam submits every advertised semantic control through the installed runner', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
   for (const action of ['defer_question_part', 'mark_question_unknown', 'request_delivery', 'cancel_run']) {
-    const directory = await mkdtemp(path.join(os.tmpdir(), `gtc-v4-installed-${action}-`));
+    const catalog = await mkdtemp(path.join(os.tmpdir(), `gtc-v4-installed-${action}-`));
+    const created = await installed.createV4RunDirectory(catalog, 'case_document');
+    const directory = created.run_directory;
     try {
-      const { runId, fixture, reply } = await pendingSemanticReply(installed, directory);
+      const { runId, fixture, reply, schemaVersion } = await pendingSemanticReply(installed, directory);
       const part = reply.semantic_presentation.question_parts[0];
       const event = installed.constructV4Action(
         reply, action === 'cancel_run'
@@ -274,7 +276,9 @@ test('installed private action seam submits every advertised semantic control th
       assert.deepEqual(validateAgainstSchema(event, {
         $defs: sourcePackSchema.$defs, $ref: '#/$defs/v4SemanticClarificationEvent'
       }), [], action);
-      const revision = await bendReviewJourneyFixture(runId, 1, [event]);
+      const revision = bindFixtureContract(
+        await bendReviewJourneyFixture(runId, 1, [event]), schemaVersion
+      );
       await stage(directory, 'source_pack', revision.artifacts.source_pack);
       const accepted = await installed.advanceStrict(directory);
       if (action === 'cancel_run') {
@@ -287,7 +291,7 @@ test('installed private action seam submits every advertised semantic control th
       }
       assert.equal(fixture.artifacts.source_pack.run_instance_id, runId);
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await rm(catalog, { recursive: true, force: true });
     }
   }
 });

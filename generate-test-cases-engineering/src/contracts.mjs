@@ -25,7 +25,7 @@ export const DIAGNOSTIC_CATEGORY = Object.freeze([
  * @returns {Array<{category:string,code:string,path:string,message:string}>}
  */
 export function validateCanonicalManifestRelations(manifest) {
-  if (!['4.0.0', '4.2.0'].includes(manifest.schema_version)) return [];
+  if (!['4.0.0', '4.2.0', '4.3.0'].includes(manifest.schema_version)) return [];
   const diagnostics = [];
   if (manifest.delivery_intent === 'case_document'
     && ['delivered_with_gaps', 'blocked_only'].includes(manifest.result_kind)

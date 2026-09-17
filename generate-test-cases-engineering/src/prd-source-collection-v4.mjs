@@ -5,7 +5,7 @@ import { canonicalStringify, digest } from './canonical.mjs';
 import {
   atomicWriteJson, readJsonIfPresent
 } from './run-store.mjs';
-import { CANDIDATE_V4_CONTRACT, v4ContractForIdentity } from './v4-contract.mjs';
+import { v4ContractForIdentity } from './v4-contract.mjs';
 import { SOURCE_RUNTIME_REGISTRY_VERSION_V4 } from './source-runtime-registry-v4.mjs';
 
 const CHANNELS = Object.freeze(['body', 'table', 'image', 'comment', 'reply']);
@@ -273,8 +273,8 @@ export async function stageV4PrdCollectionObservation(
   const observation = validateObservation(submittedObservation);
   const session = materializeSession(observation, submittedMaterials);
   const body = {
-    schema_version: CANDIDATE_V4_CONTRACT.schema_version,
-    compiler_version: CANDIDATE_V4_CONTRACT.compiler_version,
+    schema_version: contract.schema_version,
+    compiler_version: contract.compiler_version,
     registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
     run_id: identity.run_id, source_revision: revision, collection_session: session
   };
@@ -298,16 +298,18 @@ export async function bindV4PrdCollectionObservation(
 ) {
   const staged = await readJsonIfPresent(runDirectory, stagingPath(runDirectory));
   const sourcePack = /** @type {any} */ (structuredClone(submittedSourcePack));
-  if (!staged || !record(sourcePack) || staged.value.schema_version !== '4.2.0'
-    || sourcePack.schema_version !== '4.2.0' || staged.value.run_id !== sourcePack.run_instance_id
+  const contract = staged ? v4ContractForIdentity(staged.value) : null;
+  if (!staged || !contract?.candidate || !record(sourcePack)
+    || sourcePack.schema_version !== contract.schema_version
+    || staged.value.run_id !== sourcePack.run_instance_id
     || staged.value.source_revision !== sourcePack.source_revision) {
     throw new TypeError('SOURCE_COLLECTION_BINDING_INVALID');
   }
   const session = bindSession(staged.value.collection_session, sourcePack);
   const summary = summaryFor(session, sourcePack);
   const body = {
-    schema_version: CANDIDATE_V4_CONTRACT.schema_version,
-    compiler_version: CANDIDATE_V4_CONTRACT.compiler_version,
+    schema_version: contract.schema_version,
+    compiler_version: contract.compiler_version,
     registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
     run_id: sourcePack.run_instance_id, committed_revision: sourcePack.source_revision,
     status: 'collected', collection_sessions: [session], summary,

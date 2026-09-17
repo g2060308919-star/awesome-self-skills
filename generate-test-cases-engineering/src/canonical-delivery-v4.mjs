@@ -18,6 +18,7 @@ import {
   atomicWriteJson, atomicWriteText, outputPaths, readText, revisionName
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
+import { isCandidateV4Contract, v4ContractForIdentity } from './v4-contract.mjs';
 
 const BUNDLE_KEYS = Object.freeze([
   'schema_version', 'compiler_version', 'delivery_intent', 'source_revision', 'result_kind',
@@ -75,10 +76,10 @@ function normalizeInput(input) {
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
   const expectedKeys = [...BUNDLE_KEYS].sort();
-  const legacy = bundle.schema_version === '4.0.0' && bundle.compiler_version === '0.5.0';
-  const candidate = bundle.schema_version === '4.2.0' && bundle.compiler_version === '0.7.0';
+  const contract = v4ContractForIdentity(bundle);
+  const candidate = contract?.candidate === true;
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])
-    || (!legacy && !candidate)
+    || !contract
     || bundle.delivery_intent !== 'case_document' || !Number.isSafeInteger(bundle.source_revision)
     || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
     throw new TypeError('CANONICAL_BUNDLE_INVALID');
@@ -157,7 +158,7 @@ function validateManifest(manifest) {
 /** @param {Record<string,any>} manifest @param {Record<string,string>} artifacts @param {any[]} nonBlockingDiagnostics */
 function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
   const blockedOnly = manifest.result_kind === 'blocked_only';
-  const candidate = manifest.schema_version === '4.2.0';
+  const candidate = isCandidateV4Contract(manifest);
   const reply = {
     status: 'finished', phase: 'delivery', run_id: manifest.run_id,
     delivery_intent: 'case_document', result_kind: manifest.result_kind,
@@ -373,7 +374,7 @@ export function materializeCaseDocumentDeliveryV4(input) {
 export function validateCaseDocumentArtifactSetV4(input, texts) {
   if (!record(texts)) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
   const materialized = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
-  const candidate = materialized.manifest.schema_version === '4.2.0';
+  const candidate = isCandidateV4Contract(materialized.manifest);
   if (materialized.bundle_bytes !== texts.bundle
     || materialized.markdown_bytes !== texts.markdown
     || materialized.worksheet_bytes !== texts.worksheet
@@ -411,7 +412,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateManifest(manifest);
   if (manifest.delivery_intent !== 'case_document') throw new TypeError('CANONICAL_MANIFEST_INVALID');
   const prefix = `output/${revisionName(manifest.revision)}`;
-  const candidate = manifest.schema_version === '4.2.0';
+  const candidate = isCandidateV4Contract(manifest);
   if (manifest.bundle.path !== `${prefix}/test-bundle.json`
     || manifest.markdown.path !== `${prefix}/test-cases.md`
     || manifest.execution_worksheet.path !== `${prefix}/execution-worksheet.csv`
@@ -506,7 +507,7 @@ export async function publishCaseDocumentDeliveryV4(runDirectory, input) {
   await atomicWriteText(runDirectory, paths.bundle, materialized.bundle_bytes);
   await atomicWriteText(runDirectory, paths.markdown, materialized.markdown_bytes);
   await atomicWriteText(runDirectory, paths.worksheet, materialized.worksheet_bytes);
-  if (materialized.manifest.schema_version === '4.2.0') {
+  if (isCandidateV4Contract(materialized.manifest)) {
     await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.html.path), materialized.html_bytes);
     await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.chat_table.path), materialized.table_bytes);
     await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.source_reading.path), materialized.source_reading_bytes);

@@ -37,7 +37,9 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
-import { isV4SchemaVersion, v4ContractForSchema } from './v4-contract.mjs';
+import {
+  isCandidateV4SchemaVersion, isV4SchemaVersion, v4ContractForSchema
+} from './v4-contract.mjs';
 import { loadV4SourceReadingSummary } from './prd-source-collection-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
@@ -321,7 +323,7 @@ function finalTransaction(
     bundle: jsonArtifact(JSON.parse(materialized.bundle_bytes)),
     markdown: textArtifact(materialized.markdown_bytes),
     worksheet: textArtifact(materialized.worksheet_bytes),
-    ...(sourcePack.schema_version === '4.2.0' ? {
+    ...(isCandidateV4SchemaVersion(sourcePack.schema_version) ? {
       html: textArtifact(materialized.html_bytes),
       table: textArtifact(materialized.table_bytes),
       source_reading: jsonArtifact(JSON.parse(materialized.source_reading_bytes))
@@ -1353,7 +1355,7 @@ async function finalizeCaseDocumentRevision(
     }
     const materialized = materializeCaseDocumentDeliveryV4({
       run_id: runId, completed_at: completedAt, bundle: result.bundle,
-      ...(artifacts.source_pack.schema_version === '4.2.0' ? {
+      ...(isCandidateV4SchemaVersion(artifacts.source_pack.schema_version) ? {
         source_reading: await loadV4SourceReadingSummary(runDirectory, artifacts.source_pack)
       } : {}),
       render_options: { include_audit_appendix: false },

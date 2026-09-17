@@ -46,7 +46,7 @@ const LEGACY_PROFILE_ARTIFACTS = Object.freeze({
 
 /** @param {string} schemaVersion */
 function profileArtifacts(schemaVersion) {
-  return schemaVersion === '4.2.0' ? {
+  return ['4.2.0', '4.3.0'].includes(schemaVersion) ? {
     pre_case_pending: BASE_ARTIFACTS,
     post_case_pending: POST_CASE_ARTIFACTS,
     final: CANDIDATE_FINAL_ARTIFACTS

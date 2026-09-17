@@ -548,7 +548,7 @@ var init_behavior_views_schema = __esm({
           additionalProperties: false,
           required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
             source_revision: { type: "integer", minimum: 0 },
             views: { type: "array", items: { $ref: "#/$defs/v4View" } },
             interaction_matrix: { $ref: "#/$defs/v3Artifact/properties/interaction_matrix" },
@@ -915,7 +915,8 @@ var init_case_drafts_schema = __esm({
           enum: [
             "3.0.0",
             "4.0.0",
-            "4.2.0"
+            "4.2.0",
+            "4.3.0"
           ]
         },
         source_revision: {
@@ -3556,7 +3557,7 @@ var init_case_drafts_schema = __esm({
         {
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             }
           },
           allOf: [
@@ -3589,7 +3590,8 @@ var init_evidence_claims_schema = __esm({
           enum: [
             "3.0.0",
             "4.0.0",
-            "4.2.0"
+            "4.2.0",
+            "4.3.0"
           ]
         },
         source_revision: {
@@ -3667,7 +3669,7 @@ var init_evidence_claims_schema = __esm({
               ],
               properties: {
                 schema_version: {
-                  enum: ["4.0.0", "4.2.0"]
+                  enum: ["4.0.0", "4.2.0", "4.3.0"]
                 },
                 claims: {
                   items: {
@@ -8045,7 +8047,8 @@ var init_source_pack_schema = __esm({
           enum: [
             "3.0.0",
             "4.0.0",
-            "4.2.0"
+            "4.2.0",
+            "4.3.0"
           ]
         },
         source_revision: {
@@ -8928,7 +8931,7 @@ var init_source_pack_schema = __esm({
           ],
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             execution_events: {
               type: "array",
@@ -9438,7 +9441,7 @@ var init_source_capture_audit = __esm({
 
 // src/contracts.mjs
 function validateCanonicalManifestRelations(manifest) {
-  if (!["4.0.0", "4.2.0"].includes(manifest.schema_version)) return [];
+  if (!["4.0.0", "4.2.0", "4.3.0"].includes(manifest.schema_version)) return [];
   const diagnostics2 = [];
   if (manifest.delivery_intent === "case_document" && ["delivered_with_gaps", "blocked_only"].includes(manifest.result_kind) && manifest.closed_for_delivery_root_count !== manifest.blocked_root_count) {
     diagnostics2.push({
@@ -11151,7 +11154,7 @@ var init_checkpoint_schema = __esm({
               additionalProperties: false,
               required: ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
               properties: {
-                schema_version: { enum: ["4.0.0", "4.2.0"] },
+                schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
                 presentation_id: { type: "string", pattern: "^PRES-[0-9a-f]{64}$" },
                 phase: { enum: ["requirements_analysis", "case_design"] },
                 supersedes_presentation_id: { type: ["string", "null"], pattern: "^PRES-[0-9a-f]{64}$" },
@@ -11301,8 +11304,8 @@ var init_checkpoint_schema = __esm({
           additionalProperties: false,
           required: ["schema_version", "compiler_version", "run_id", "revision", "commit_profile", "source_review_witness", "fact_ledger_digest", "scope_manifest_digest", "behavior_views_digest", "case_drafts_digest", "base_checkpoint_digest", "semantic_gap_ledger", "clarification_state"],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
-            compiler_version: { enum: ["0.5.0", "0.7.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+            compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
             run_id: { type: "string", minLength: 1 },
             revision: { type: "integer", minimum: 0 },
             commit_profile: { enum: ["pre_case_pending", "post_case_pending", "final"] },
@@ -11353,7 +11356,8 @@ var init_checkpoint_schema = __esm({
             {
               oneOf: [
                 { properties: { schema_version: { const: "4.0.0" }, compiler_version: { const: "0.5.0" } } },
-                { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } }
+                { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } },
+                { properties: { schema_version: { const: "4.3.0" }, compiler_version: { const: "0.8.0" } } }
               ]
             },
             {
@@ -11557,7 +11561,7 @@ var init_presentation_schema = __esm({
           additionalProperties: false,
           required: ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
             presentation_id: { type: "string", pattern: "^PRES-[0-9a-f]{64}$" },
             phase: { enum: ["requirements_analysis", "case_design"] },
             supersedes_presentation_id: { type: ["string", "null"], pattern: "^PRES-[0-9a-f]{64}$" },
@@ -11814,12 +11818,18 @@ function v4ContractForIdentity(value) {
 function isV4SchemaVersion(schemaVersion) {
   return v4ContractForSchema(schemaVersion) !== null;
 }
+function isCandidateV4Contract(value) {
+  return v4ContractForIdentity(value)?.candidate === true;
+}
+function isCandidateV4SchemaVersion(schemaVersion) {
+  return v4ContractForSchema(schemaVersion)?.candidate === true;
+}
 function requireV4Contract(value) {
   const contract2 = v4ContractForIdentity(value);
   if (!contract2) throw new TypeError("V4_CONTRACT_UNSUPPORTED");
   return contract2;
 }
-var LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, CONTRACTS;
+var LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, GENERAL_QUALITY_V4_CONTRACT, CONTRACTS;
 var init_v4_contract = __esm({
   "src/v4-contract.mjs"() {
     "use strict";
@@ -11833,7 +11843,17 @@ var init_v4_contract = __esm({
       compiler_version: "0.7.0",
       candidate: true
     });
-    CONTRACTS = Object.freeze([LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT]);
+    GENERAL_QUALITY_V4_CONTRACT = Object.freeze({
+      schema_version: "4.3.0",
+      compiler_version: "0.8.0",
+      candidate: true,
+      strict_semantic_delivery: true
+    });
+    CONTRACTS = Object.freeze([
+      LEGACY_V4_CONTRACT,
+      CANDIDATE_V4_CONTRACT,
+      GENERAL_QUALITY_V4_CONTRACT
+    ]);
   }
 });
 
@@ -23999,10 +24019,10 @@ var init_test_bundle_schema = __esm({
           ],
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             compiler_version: {
-              enum: ["0.5.0", "0.7.0"]
+              enum: ["0.5.0", "0.7.0", "0.8.0"]
             },
             delivery_intent: {
               const: "case_document"
@@ -24042,6 +24062,12 @@ var init_test_bundle_schema = __esm({
                   properties: {
                     schema_version: { const: "4.2.0" },
                     compiler_version: { const: "0.7.0" }
+                  }
+                },
+                {
+                  properties: {
+                    schema_version: { const: "4.3.0" },
+                    compiler_version: { const: "0.8.0" }
                   }
                 }
               ]
@@ -24712,7 +24738,7 @@ var init_test_obligations_schema = __esm({
           ],
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             source_revision: {
               type: "integer",
@@ -27321,6 +27347,12 @@ var init_current_pointer_schema = __esm({
                 schema_version: { const: "4.2.0" },
                 compiler_version: { const: "0.7.0" }
               }
+            },
+            {
+              properties: {
+                schema_version: { const: "4.3.0" },
+                compiler_version: { const: "0.8.0" }
+              }
             }
           ]
         },
@@ -27481,10 +27513,10 @@ var init_current_pointer_schema = __esm({
               $ref: "#/$defs/count"
             },
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             compiler_version: {
-              enum: ["0.5.0", "0.7.0"]
+              enum: ["0.5.0", "0.7.0", "0.8.0"]
             },
             delivery_intent: {
               const: "case_document"
@@ -27604,6 +27636,13 @@ var init_current_pointer_schema = __esm({
                     schema_version: { const: "4.2.0" },
                     compiler_version: { const: "0.7.0" }
                   }
+                },
+                {
+                  required: ["html", "chat_table", "source_reading", "primary_readable"],
+                  properties: {
+                    schema_version: { const: "4.3.0" },
+                    compiler_version: { const: "0.8.0" }
+                  }
                 }
               ]
             }
@@ -27703,10 +27742,10 @@ var init_current_pointer_schema = __esm({
               $ref: "#/$defs/count"
             },
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             compiler_version: {
-              enum: ["0.5.0", "0.7.0"]
+              enum: ["0.5.0", "0.7.0", "0.8.0"]
             },
             delivery_intent: {
               const: "execution_plan"
@@ -27931,7 +27970,7 @@ var init_reply_schema = __esm({
             "question_parts"
           ],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
             presentation_id: { type: "string", pattern: "^PRES-[0-9a-f]{64}$" },
             phase: { enum: ["requirements_analysis", "case_design"] },
             supersedes_presentation_id: {
@@ -41717,8 +41756,8 @@ var init_run_instance_schema = __esm({
             "lineage"
           ],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
-            compiler_version: { enum: ["0.5.0", "0.7.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+            compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
             run_id: { $ref: "#/$defs/runId" },
             delivery_intent: { enum: ["case_document", "execution_plan"] },
             created_at: { type: "string", minLength: 1 },
@@ -41728,7 +41767,8 @@ var init_run_instance_schema = __esm({
           allOf: [{
             oneOf: [
               { properties: { schema_version: { const: "4.0.0" }, compiler_version: { const: "0.5.0" } } },
-              { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } }
+              { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } },
+              { properties: { schema_version: { const: "4.3.0" }, compiler_version: { const: "0.8.0" } } }
             ]
           }]
         }
@@ -44794,6 +44834,12 @@ var execution_plan_schema_default = {
             schema_version: { const: "4.2.0" },
             compiler_version: { const: "0.7.0" }
           }
+        },
+        {
+          properties: {
+            schema_version: { const: "4.3.0" },
+            compiler_version: { const: "0.8.0" }
+          }
         }
       ]
     },
@@ -45052,8 +45098,8 @@ var execution_plan_schema_default = {
         "runner_projection"
       ],
       properties: {
-        schema_version: { enum: ["4.0.0", "4.2.0"] },
-        compiler_version: { enum: ["0.5.0", "0.7.0"] },
+        schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+        compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
         delivery_intent: { const: "execution_plan" },
         status: { const: "need_user_answers" },
         result_kind: { type: "null" },
@@ -45079,8 +45125,8 @@ var execution_plan_schema_default = {
         "runner_projection"
       ],
       properties: {
-        schema_version: { enum: ["4.0.0", "4.2.0"] },
-        compiler_version: { enum: ["0.5.0", "0.7.0"] },
+        schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+        compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
         delivery_intent: { const: "execution_plan" },
         status: { const: "finished" },
         result_kind: { const: "execution_ready" },
@@ -45106,8 +45152,8 @@ var execution_plan_schema_default = {
         "runner_projection"
       ],
       properties: {
-        schema_version: { enum: ["4.0.0", "4.2.0"] },
-        compiler_version: { enum: ["0.5.0", "0.7.0"] },
+        schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+        compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
         delivery_intent: { const: "execution_plan" },
         status: { const: "finished" },
         result_kind: { const: "no_execution_selected" },
@@ -45900,6 +45946,7 @@ init_canonical();
 // src/canonical-output-v4.mjs
 init_canonical();
 init_case_semantics_v4();
+init_v4_contract();
 var EXECUTION_WORKSHEET_COLUMNS = Object.freeze([
   "case_id",
   "acceptance_role",
@@ -45954,7 +46001,7 @@ function validateCanonicalCase2(candidate) {
   if (diagnostics2.length || dependencies.some((id2) => typeof id2 !== "string" || !id2) || new Set(dependencies).size !== dependencies.length) throw new TypeError("CANONICAL_CASE_INVALID");
 }
 function renderExecutionWorksheetCsvV4(input, orderedCaseIds) {
-  if (!record7(input) || !["4.0.0", "4.2.0"].includes(input.schema_version) || input.delivery_intent !== "case_document" || !Array.isArray(input.cases) || !record7(input.scope_manifest) || !Array.isArray(input.scope_manifest.modules) || !Array.isArray(orderedCaseIds)) {
+  if (!record7(input) || !isV4SchemaVersion(input.schema_version) || input.delivery_intent !== "case_document" || !Array.isArray(input.cases) || !record7(input.scope_manifest) || !Array.isArray(input.scope_manifest.modules) || !Array.isArray(orderedCaseIds)) {
     throw new TypeError("CASE_DOCUMENT_INVALID");
   }
   const cases = structuredClone(input.cases);
@@ -46015,6 +46062,7 @@ init_contracts();
 init_non_blocking_diagnostics_v4();
 await init_run_store();
 init_schema_validator();
+init_v4_contract();
 var BUNDLE_KEYS = Object.freeze([
   "schema_version",
   "compiler_version",
@@ -46077,9 +46125,9 @@ function normalizeInput2(input) {
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
   const expectedKeys = [...BUNDLE_KEYS].sort();
-  const legacy = bundle.schema_version === "4.0.0" && bundle.compiler_version === "0.5.0";
-  const candidate = bundle.schema_version === "4.2.0" && bundle.compiler_version === "0.7.0";
-  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index]) || !legacy && !candidate || bundle.delivery_intent !== "case_document" || !Number.isSafeInteger(bundle.source_revision) || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
+  const contract2 = v4ContractForIdentity(bundle);
+  const candidate = contract2?.candidate === true;
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index]) || !contract2 || bundle.delivery_intent !== "case_document" || !Number.isSafeInteger(bundle.source_revision) || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
     throw new TypeError("CANONICAL_BUNDLE_INVALID");
   }
   if (validateAgainstSchema(bundle, test_bundle_schema_default).length) throw new TypeError("CANONICAL_BUNDLE_INVALID");
@@ -46151,7 +46199,7 @@ function validateManifest(manifest) {
 }
 function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
   const blockedOnly = manifest.result_kind === "blocked_only";
-  const candidate = manifest.schema_version === "4.2.0";
+  const candidate = isCandidateV4Contract(manifest);
   const reply = {
     status: "finished",
     phase: "delivery",
@@ -46344,7 +46392,7 @@ function validateCaseDocumentArtifactSetV4(input, texts) {
     /** @type {any} */
     materializeCaseDocumentDeliveryV4(input)
   );
-  const candidate = materialized.manifest.schema_version === "4.2.0";
+  const candidate = isCandidateV4Contract(materialized.manifest);
   if (materialized.bundle_bytes !== texts.bundle || materialized.markdown_bytes !== texts.markdown || materialized.worksheet_bytes !== texts.worksheet || typeof texts.manifest !== "string") {
     throw new TypeError("CANONICAL_ARTIFACT_INVALID");
   }
@@ -46382,7 +46430,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateManifest(manifest);
   if (manifest.delivery_intent !== "case_document") throw new TypeError("CANONICAL_MANIFEST_INVALID");
   const prefix = `output/${revisionName(manifest.revision)}`;
-  const candidate = manifest.schema_version === "4.2.0";
+  const candidate = isCandidateV4Contract(manifest);
   if (manifest.bundle.path !== `${prefix}/test-bundle.json` || manifest.markdown.path !== `${prefix}/test-cases.md` || manifest.execution_worksheet.path !== `${prefix}/execution-worksheet.csv` || candidate && (manifest.html.path !== `${prefix}/test-cases.html` || manifest.chat_table.path !== `${prefix}/case-table.txt` || manifest.source_reading.path !== `${prefix}/source-reading.json` || manifest.primary_readable !== "html")) {
     throw new TypeError("CANONICAL_MANIFEST_INVALID");
   }
@@ -47243,7 +47291,7 @@ var LEGACY_PROFILE_ARTIFACTS = Object.freeze({
   final: FINAL_ARTIFACTS
 });
 function profileArtifacts(schemaVersion) {
-  return schemaVersion === "4.2.0" ? {
+  return ["4.2.0", "4.3.0"].includes(schemaVersion) ? {
     pre_case_pending: BASE_ARTIFACTS,
     post_case_pending: POST_CASE_ARTIFACTS,
     final: CANDIDATE_FINAL_ARTIFACTS
@@ -53425,6 +53473,7 @@ init_canonical();
 init_source_canonicalization();
 init_schema_validator();
 await init_run_store();
+init_v4_contract();
 
 // src/prd-source-collection-v4.mjs
 init_canonical();
@@ -53634,8 +53683,8 @@ async function stageV4PrdCollectionObservation(runDirectory, submittedReply, sub
   const observation = validateObservation(submittedObservation);
   const session = materializeSession(observation, submittedMaterials);
   const body = {
-    schema_version: CANDIDATE_V4_CONTRACT.schema_version,
-    compiler_version: CANDIDATE_V4_CONTRACT.compiler_version,
+    schema_version: contract2.schema_version,
+    compiler_version: contract2.compiler_version,
     registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
     run_id: identity2.run_id,
     source_revision: revision,
@@ -53662,14 +53711,15 @@ async function bindV4PrdCollectionObservation(runDirectory, submittedSourcePack)
     /** @type {any} */
     structuredClone(submittedSourcePack)
   );
-  if (!staged || !record16(sourcePack) || staged.value.schema_version !== "4.2.0" || sourcePack.schema_version !== "4.2.0" || staged.value.run_id !== sourcePack.run_instance_id || staged.value.source_revision !== sourcePack.source_revision) {
+  const contract2 = staged ? v4ContractForIdentity(staged.value) : null;
+  if (!staged || !contract2?.candidate || !record16(sourcePack) || sourcePack.schema_version !== contract2.schema_version || staged.value.run_id !== sourcePack.run_instance_id || staged.value.source_revision !== sourcePack.source_revision) {
     throw new TypeError("SOURCE_COLLECTION_BINDING_INVALID");
   }
   const session = bindSession(staged.value.collection_session, sourcePack);
   const summary = summaryFor(session, sourcePack);
   const body = {
-    schema_version: CANDIDATE_V4_CONTRACT.schema_version,
-    compiler_version: CANDIDATE_V4_CONTRACT.compiler_version,
+    schema_version: contract2.schema_version,
+    compiler_version: contract2.compiler_version,
     registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
     run_id: sourcePack.run_instance_id,
     committed_revision: sourcePack.source_revision,
@@ -54547,7 +54597,7 @@ async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
   return {
     verified_source_receipts: structuredClone(state.source_receipts),
     verified_acquisition_records: structuredClone(state.acquisitions),
-    ...state.schema_version === "4.2.0" ? { source_reading_summary: structuredClone(state.summary) } : {}
+    ...isCandidateV4SchemaVersion(state.schema_version) ? { source_reading_summary: structuredClone(state.summary) } : {}
   };
 }
 
@@ -54819,7 +54869,7 @@ function finalTransaction(runId, sourcePack, evidence, behaviorViews, obligation
     bundle: jsonArtifact2(JSON.parse(materialized.bundle_bytes)),
     markdown: textArtifact(materialized.markdown_bytes),
     worksheet: textArtifact(materialized.worksheet_bytes),
-    ...sourcePack.schema_version === "4.2.0" ? {
+    ...isCandidateV4SchemaVersion(sourcePack.schema_version) ? {
       html: textArtifact(materialized.html_bytes),
       table: textArtifact(materialized.table_bytes),
       source_reading: jsonArtifact2(JSON.parse(materialized.source_reading_bytes))
@@ -56017,7 +56067,7 @@ async function finalizeCaseDocumentRevision(runDirectory, runId, completedAt, ar
       run_id: runId,
       completed_at: completedAt,
       bundle: result.bundle,
-      ...artifacts.source_pack.schema_version === "4.2.0" ? {
+      ...isCandidateV4SchemaVersion(artifacts.source_pack.schema_version) ? {
         source_reading: await loadV4SourceReadingSummary(runDirectory, artifacts.source_pack)
       } : {},
       render_options: { include_audit_appendix: false },
@@ -56602,9 +56652,9 @@ var schemaDirectory = path12.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "09992d955ae67dd3039a53d223cc688b8c6cd6814f61fc16af6071d74fcb256e" : void 0;
-var embeddedSchemaVersion = true ? "4.2.0" : void 0;
-var embeddedCompilerVersion = true ? "0.7.0" : void 0;
+var embeddedManifestDigest = true ? "89e03000be6a8e5e714d06c797b9f70ebf81129ddf5a56c86ad392e96b287427" : void 0;
+var embeddedSchemaVersion = true ? "4.3.0" : void 0;
+var embeddedCompilerVersion = true ? "0.8.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
@@ -58756,7 +58806,7 @@ async function createV4RunDirectory(submittedCatalogRoot, request, unexpected) {
   const bootstrap = {
     run_id: runId,
     delivery_intent: deliveryIntent,
-    contract: CANDIDATE_V4_CONTRACT
+    contract: GENERAL_QUALITY_V4_CONTRACT
   };
   const run = await ensureV4RunInstance(runDirectory, {
     ...bootstrap
@@ -58778,7 +58828,7 @@ function fatalReply2(code2, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-    const compilerVersion = true ? "0.7.0" : "0.7.0";
+    const compilerVersion = true ? "0.8.0" : "0.8.0";
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1 ? fatalReply2(
       "RUNNER_ARGUMENTS_INVALID",

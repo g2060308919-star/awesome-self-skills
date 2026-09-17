@@ -27,6 +27,7 @@ import {
 import {
   createCompilerSourceRuntimeV4, SOURCE_RUNTIME_REGISTRY_VERSION_V4
 } from './source-runtime-registry-v4.mjs';
+import { isCandidateV4SchemaVersion } from './v4-contract.mjs';
 import {
   bindV4PrdCollectionObservation, loadV4SourceReadingSummary
 } from './prd-source-collection-v4.mjs';
@@ -971,7 +972,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
   return {
     verified_source_receipts: structuredClone(state.source_receipts),
     verified_acquisition_records: structuredClone(state.acquisitions),
-    ...(state.schema_version === '4.2.0'
+    ...(isCandidateV4SchemaVersion(state.schema_version)
       ? { source_reading_summary: structuredClone(state.summary) } : {})
   };
 }

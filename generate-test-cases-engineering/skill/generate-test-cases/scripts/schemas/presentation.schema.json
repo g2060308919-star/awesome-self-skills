@@ -125,7 +125,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] },
         "presentation_id": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
         "phase": { "enum": ["requirements_analysis", "case_design"] },
         "supersedes_presentation_id": { "type": ["string", "null"], "pattern": "^PRES-[0-9a-f]{64}$" },
